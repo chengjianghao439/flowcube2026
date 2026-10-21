@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RegisterPaymentDialog } from './RegisterPaymentDialog'
+import { useAuthStore } from '@/store/authStore'
+
+beforeEach(() => useAuthStore.setState({ user: { roleId: 5, permissions: ['payment.execute'] } as never }))
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -95,11 +98,30 @@ async function setAmount(v: string) {
 }
 
 afterEach(() => {
+  useAuthStore.setState({ user: null })
   roots.splice(0).forEach(r => { try { r.unmount() } catch { /* 已卸载 */ } })
   hosts.splice(0).forEach(h => h.remove())
   qc.clear()
   fixture.statusCalls.length = 0; fixture.payCalls.length = 0; fixture.toasts.length = 0
   fixture.failWith = null; closeCount = 0; fixture.balance = 1000; fixture.pendingConfirm = null
+})
+
+it('余额不足确认已打开时撤权，原确认回调不能发送付款请求', async () => {
+  fixture.balance = 0
+  const { root } = await mount(REC(1, 'AP-A-1'))
+  await act(async () => {
+    const sel = document.querySelector<HTMLSelectElement>('select')!
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(sel, '1')
+    sel.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  await setAmount('7')
+  await act(async () => button('确认登记').click())
+  expect(fixture.pendingConfirm).toBeTypeOf('function')
+  await act(async () => useAuthStore.setState({ user: { roleId: 5, permissions: ['payment.view'] } as never }))
+  await act(async () => { fixture.pendingConfirm?.(); await Promise.resolve() })
+  expect(fixture.payCalls).toHaveLength(0)
+  expect(document.querySelector('button[type="submit"]')).toBeNull()
+  await act(async () => root.unmount())
 })
 
 it('★ 付款「查询上次结果」要按本次账款 ID 定位；切到另一笔后查询上一笔成功不得关掉当前弹窗，提示要点出原单号', async () => {

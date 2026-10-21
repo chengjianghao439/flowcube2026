@@ -64,6 +64,9 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
   const actionLabel = isPayableType(type) ? '付款' : '收款'
 
   const { can } = usePermission()
+  const canExecute = can(PERMISSIONS.PAYMENT_EXECUTE)
+  const permissionRef = useRef(canExecute)
+  permissionRef.current = canExecute
   const [partyId, setPartyId] = useState<number | null>(null)
   const [finderOpen, setFinderOpen] = useState(false)
   const [partyName, setPartyName] = useState('')
@@ -191,6 +194,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
 
   const mut = useMutation({
     mutationFn: async ({ backfillReason }: { backfillReason?: string } = {}) => {
+      if (!permissionRef.current) throw new Error('没有登记核销权限')
       if (totalUnits == null || totalUnits <= 0n || !validAllocations || unallocatedUnits < 0n) throw Object.assign(Error('金额与核销金额须按分填写且不能超过余额'), { status: 400 })
       // 继续核销：把本次的 receiptId 绑进查询 action（并在提示条上带单号，便于区分同名的两张单）
       const settleTargetId = isContinue && receipt ? receipt.id : null
@@ -274,7 +278,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button disabled={!canSubmit} onClick={() => {
+            {canExecute && <Button disabled={!canSubmit} onClick={() => {
               // 应付付款(新建收付款单，从账户出账)透支前二次确认；继续核销(isContinue)不动账户、无需确认
               const acc = (accounts || []).find(a => String(a.id) === accountId)
               if (!isContinue && isPayableType(type) && acc && totalAmount > acc.currentBalance + 1e-6) {
@@ -290,7 +294,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
               mut.mutate({})
             }}>
               {mut.isPending ? '提交中…' : (allocatedTotal > 0 ? `确认核销 ${money(allocatedTotal)}` : '仅登记不核销')}
-            </Button>
+            </Button>}
           </div>
         }
       >

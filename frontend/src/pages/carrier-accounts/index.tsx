@@ -34,6 +34,8 @@ export default function CarrierAccountsPage() {
   const createAttempt = useRef({ signature: '', key: '' })
   const busy = useRef(false)
   const { can } = usePermission()
+  const permissionRef = useRef(can)
+  permissionRef.current = can
   const canCreate = can(PERMISSIONS.CARRIER_CREATE)
   const canEdit = can(PERMISSIONS.CARRIER_UPDATE)
   const client = useQueryClient()
@@ -76,6 +78,7 @@ export default function CarrierAccountsPage() {
   }
   async function refreshCarriers() { await client.invalidateQueries({ queryKey: ['carriers'] }) }
   async function save(input: SaveCarrierAccountBinding | PauseCarrierAccountBinding) {
+    if (!permissionRef.current(PERMISSIONS.CARRIER_UPDATE)) return
     if (busy.current) return
     busy.current = true; setSaving(true)
     try {
@@ -86,6 +89,7 @@ export default function CarrierAccountsPage() {
     } finally { busy.current = false; setSaving(false) }
   }
   async function create(data: NewCarrierAccount) {
+    if (!permissionRef.current(PERMISSIONS.CARRIER_CREATE)) return
     if (busy.current) return
     busy.current = true; setSaving(true)
     const signature = JSON.stringify(data)

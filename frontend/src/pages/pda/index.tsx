@@ -104,14 +104,13 @@ export default function PdaWorkbench() {
   const splitRecovery = usePdaSplitRecovery({ active: false })
   const hasSplitRecovery = splitRecovery.records.some(r => r.endpoint === splitEndpoint())
   const [moreOpen, setMoreOpen] = useState(false)
-  // 作业待办通知：按设备绑定仓库聚合各作业待办数，30s 轮询
-  const { data: todoCounts } = usePdaTodoCounts()
-
   // 绑定状态在渲染时读一次即可：绑定/解绑都会离开本页再回来，回来时组件重新挂载
   const deviceCredential = getDeviceCredential()
   const deviceBound = !!deviceCredential
   const deviceCode = deviceCredential?.deviceCode ?? ''
   const sessionReady = !!getDeviceSession()
+  // 未绑定不查计数；禁用query仍可能保留缓存，展示也须使用同一绑定门。
+  const { data: todoCounts } = usePdaTodoCounts(deviceBound)
 
   const allowedOps = ALL_OPS.filter(op => op.perms ? canAll(op.perms) : can(op.perm))
   const commonOps = allowedOps.filter(op => !op.more)
@@ -158,20 +157,7 @@ export default function PdaWorkbench() {
         {/* 设备绑定状态。设备会话是硬性要求，未绑定的机器点任何作业都会被拒，
             所以这块必须显眼且常驻——否则员工只会看到一堆点不动的按钮，
             却找不到「哪里能绑定」。 */}
-        {!deviceBound ? (
-          <button
-            type="button"
-            onClick={() => navigate('/pda/bind')}
-            className="mb-4 w-full rounded-2xl border-2 border-destructive/40 bg-destructive/5 p-4 text-left motion-safe:active:scale-95 transition-all motion-reduce:transition-none"
-          >
-            <div className="flex items-center gap-2 text-base font-semibold text-destructive-ink">
-              <Smartphone className="h-5 w-5" />本机尚未绑定设备
-            </div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              未绑定的机器无法执行任何作业。点击此处扫描管理员提供的绑定二维码。
-            </p>
-          </button>
-        ) : !sessionReady ? (
+        {deviceBound && !sessionReady ? (
           <button
             type="button"
             onClick={() => navigate('/pda/bind')}
@@ -183,7 +169,7 @@ export default function PdaWorkbench() {
         ) : null}
 
         {/* 作业待办汇总条：有可数待办且当前账号有权限时显示，点击直接进入对应作业 */}
-        {totalTodo > 0 && (
+        {deviceBound && totalTodo > 0 && (
           <div className="mb-4 rounded-2xl border border-border bg-card p-3">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold text-foreground">待办任务</p>
@@ -206,7 +192,7 @@ export default function PdaWorkbench() {
         )}
 
         <div>
-          <p className="text-xs text-muted-foreground mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>
+          {deviceBound && <p className="text-xs text-muted-foreground mb-3">{roleLabel} 可用作业（{allowedOps.length} 项）</p>}
           {!deviceBound ? (
             <PdaEmptyCard
               icon={<Smartphone className="h-12 w-12 text-warning-ink" />}

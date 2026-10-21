@@ -6,7 +6,7 @@ import { money } from '@/lib/format'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -113,6 +113,10 @@ function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
 export default function ExpenseClaimsPage() {
   const qc = useQueryClient()
   const { can } = usePermission()
+  const currentPermission = useRef(can)
+  currentPermission.current = can
+  const canCreate = can(PERMISSIONS.FINANCE_EXPENSE_CREATE)
+  const canUpdate = can(PERMISSIONS.FINANCE_EXPENSE_UPDATE)
   const canApprove = can(PERMISSIONS.FINANCE_EXPENSE_APPROVE)
   const canPay = can(PERMISSIONS.FINANCE_EXPENSE_PAY)
 
@@ -192,8 +196,10 @@ export default function ExpenseClaimsPage() {
     // 报销付款从账户出账，改变看板收支与费用构成，看板缓存一并失效
     qc.invalidateQueries({ queryKey: ['finance-dashboard'] })
   }
-  const act = (fn: () => Promise<unknown>, msg: string) =>
-    fn().then(() => { invalidate(); toast.success(msg) }).catch(() => {})
+  const act = (permission: Parameters<typeof can>[0], fn: () => Promise<unknown>, msg: string) => {
+    if (!currentPermission.current(permission)) return Promise.resolve()
+    return fn().then(() => { invalidate(); toast.success(msg) }).catch(() => {})
+  }
 
   // 只计入将被真正保存的有效明细（有类别且金额>0），与提交 payload 的过滤口径一致——
   // 否则「填了金额但没选类别」的行会被算进合计、按钮可点，但后端只收有效行，显示与保存对不上。
@@ -203,6 +209,7 @@ export default function ExpenseClaimsPage() {
 
   const saveMut = useMutation({
     mutationFn: () => {
+      if (!currentPermission.current(editingId ? PERMISSIONS.FINANCE_EXPENSE_UPDATE : PERMISSIONS.FINANCE_EXPENSE_CREATE)) throw new Error('没有保存报销单权限')
       const payload = {
         title: title || undefined,
         remark: remark || undefined,
@@ -223,6 +230,7 @@ export default function ExpenseClaimsPage() {
     // id 从调用参数取而不是读 payTarget 闭包：补录弹窗的确认回调是旧渲染里存下的函数，
     // 读闭包会拿到过期的单据。请求键同理由 guard 持有。
     mutationFn: ({ id, backfillReason }: { id: number; backfillReason?: string }) => {
+      if (!currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_PAY)) throw new Error('没有报销付款权限')
       guard.remember(`报销付款 ${money(payTarget?.totalAmount ?? 0)} · ${payTarget?.claimNo ?? ''}`)
       return payExpenseClaimApi(id, { accountId: Number(payAccount) }, guard.keyRef.current, backfillReason, { skipGlobalError: true })
     },
@@ -259,15 +267,21 @@ export default function ExpenseClaimsPage() {
     },
   })
   const rejectMut = useMutation({
-    mutationFn: () => rejectExpenseClaimApi(rejectTarget!.id, rejectReason.trim()),
+    mutationFn: () => {
+      if (!currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_APPROVE)) throw new Error('没有审批报销权限')
+      return rejectExpenseClaimApi(rejectTarget!.id, rejectReason.trim())
+    },
     onSuccess: () => { invalidate(); setRejectTarget(null); toast.success('已驳回') },
   })
 
   function openCreate() {
+    if (!canCreate) return
     setEditingId(null); setEditingNo(''); setTitle(''); setRemark(''); setItems([emptyItem()]); setFormOpen(true)
   }
   async function openEdit(c: ExpenseClaim) {
+    if (!canUpdate) return
     const d = await getExpenseClaimApi(c.id)
+    if (!currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_UPDATE)) return
     setEditingId(c.id); setEditingNo(c.claimNo || ''); setTitle(d.title ?? ''); setRemark(d.remark ?? '')
     setItems(d.items.map(i => ({
       categoryId: String(i.categoryId), amount: String(i.amount),
@@ -292,21 +306,21 @@ export default function ExpenseClaimsPage() {
       const c = row as ExpenseClaim
       const menu: Array<{ label: string; onClick: () => void }> = []
       if (c.status === 1) {
-        menu.push({ label: '编辑', onClick: () => void openEdit(c) })
-        menu.push({ label: '提交审批', onClick: () => void act(() => submitExpenseClaimApi(c.id), '已提交审批') })
+        if (canUpdate) menu.push({ label: '编辑', onClick: () => void openEdit(c) })
+        if (canCreate) menu.push({ label: '提交审批', onClick: () => void act(PERMISSIONS.FINANCE_EXPENSE_CREATE, () => submitExpenseClaimApi(c.id), '已提交审批') })
       }
       if (c.status === 2) {
-        menu.push({ label: '撤回', onClick: () => void act(() => withdrawExpenseClaimApi(c.id), '已撤回为草稿') })
+        if (canCreate) menu.push({ label: '撤回', onClick: () => void act(PERMISSIONS.FINANCE_EXPENSE_CREATE, () => withdrawExpenseClaimApi(c.id), '已撤回为草稿') })
         if (canApprove) {
-          menu.push({ label: '批准', onClick: () => void act(() => approveExpenseClaimApi(c.id), '已批准，可付款') })
+          menu.push({ label: '批准', onClick: () => void act(PERMISSIONS.FINANCE_EXPENSE_APPROVE, () => approveExpenseClaimApi(c.id), '已批准，可付款') })
           menu.push({ label: '驳回', onClick: () => { setRejectTarget(c); setRejectReason('') } })
         }
       }
       if (c.status === 3 && canPay) {
         menu.push({ label: '付款', onClick: () => { setPayTarget(c); setPayAccount('') } })
       }
-      if ([1, 2, 5].includes(c.status)) {
-        menu.push({ label: '取消', onClick: () => void act(() => cancelExpenseClaimApi(c.id), '已取消') })
+      if (canCreate && [1, 2, 5].includes(c.status)) {
+        menu.push({ label: '取消', onClick: () => void act(PERMISSIONS.FINANCE_EXPENSE_CREATE, () => cancelExpenseClaimApi(c.id), '已取消') })
       }
       return (
         <TableActionsMenu
@@ -330,7 +344,7 @@ export default function ExpenseClaimsPage() {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => downloadExport('/export/expense-claims').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            <Button onClick={openCreate}>新建报销单</Button>
+            {canCreate && <Button onClick={openCreate}>新建报销单</Button>}
           </div>
         )}
       />
@@ -414,9 +428,9 @@ export default function ExpenseClaimsPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
-            <Button disabled={totalAmount <= 0 || saveMut.isPending} onClick={() => saveMut.mutate()}>
+            {(editingId ? canUpdate : canCreate) && <Button disabled={totalAmount <= 0 || saveMut.isPending} onClick={() => saveMut.mutate()}>
               {saveMut.isPending ? '保存中…' : `${editingId ? '保存修改' : '保存'}（${money(totalAmount)}）`}
-            </Button>
+            </Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -470,7 +484,7 @@ export default function ExpenseClaimsPage() {
       </Dialog>
 
       {/* 付款 */}
-      <Dialog open={!!payTarget} onOpenChange={v => !v && setPayTarget(null)}>
+      <Dialog open={!!payTarget && canPay} onOpenChange={v => !v && setPayTarget(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>报销付款 — {payTarget?.claimNo}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
@@ -534,7 +548,7 @@ export default function ExpenseClaimsPage() {
       />
 
       {/* 驳回 */}
-      <Dialog open={!!rejectTarget} onOpenChange={v => !v && setRejectTarget(null)}>
+      <Dialog open={!!rejectTarget && canApprove} onOpenChange={v => !v && setRejectTarget(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>驳回报销单 — {rejectTarget?.claimNo}</DialogTitle></DialogHeader>
           <div className="space-y-1">

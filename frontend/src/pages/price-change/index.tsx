@@ -24,6 +24,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import ProductFinderModal from '@/components/shared/ProductFinderModal'
 import { payloadClient } from '@/api/client'
 import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { readNullableIntParam } from '@/lib/urlSearchParams'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -87,7 +88,8 @@ export default function PriceChangePage() {
   const [rejectReason, setRejectReason] = useState('')
   const [cancelTarget, setCancelTarget] = useState<PriceChangeRequest | null>(null)
   const { can } = usePermission()
-  const canApprove = can('approval.task.view')
+  const canUpdate = can(PERMISSIONS.PRODUCT_UPDATE)
+  const canApprove = can(PERMISSIONS.APPROVAL_TASK_VIEW)
   const [manualDetailOpen, setManualDetailOpen] = useState(false)
   const handoff = useApprovalDetailHandoff('/price-change', 'product.view', readPriceChange, createOpen || productFinderOpen || !!rejectTarget || !!cancelTarget || manualDetailOpen)
   const scope = useApprovalReadScope()
@@ -95,7 +97,7 @@ export default function PriceChangePage() {
 
   // 商品列表「申请改价」跳转（?productId=）时预填商品并打开申请弹窗
   const preselectProductId = readNullableIntParam(searchParams, 'productId')
-  const canPreselectProduct = ownPath === '/price-change' && active && !searchParams.has('detailId') && can('product.view')
+  const canPreselectProduct = ownPath === '/price-change' && active && !searchParams.has('detailId') && can(PERMISSIONS.PRODUCT_VIEW) && canUpdate
     && !createOpen && !productFinderOpen && !rejectTarget && !cancelTarget && !manualDetailOpen && !handoff.open
   const consumedProduct = useRef('')
   useEffect(() => {
@@ -124,7 +126,10 @@ export default function PriceChangePage() {
   const list: PriceChangeRequest[] = data?.list ?? []
 
   const createMut = useMutation({
-    mutationFn: () => payloadClient.post<CreateResult>('/price-change', { productId: product!.id, priceType, newPrice: Number(newPrice), reason }),
+    mutationFn: () => {
+      if (!can(PERMISSIONS.PRODUCT_UPDATE)) throw new Error('没有申请改价权限')
+      return payloadClient.post<CreateResult>('/price-change', { productId: product!.id, priceType, newPrice: Number(newPrice), reason })
+    },
     onSuccess: (d) => {
       qc.invalidateQueries({ queryKey: ['price-change'] })
       setCreateOpen(false)
@@ -135,13 +140,19 @@ export default function PriceChangePage() {
   })
 
   const submitMut = useMutation({
-    mutationFn: (id: number) => payloadClient.post(`/price-change/${id}/submit`),
+    mutationFn: (id: number) => {
+      if (!can(PERMISSIONS.PRODUCT_UPDATE)) throw new Error('没有提交改价权限')
+      return payloadClient.post(`/price-change/${id}/submit`)
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); invalidate('approval_pending_changed'); toast.success('已提交审批') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '提交失败'),
   })
 
   const approveMut = useMutation({
-    mutationFn: (id: number) => payloadClient.post<ApproveResult>(`/price-change/${id}/approve`),
+    mutationFn: (id: number) => {
+      if (!can(PERMISSIONS.APPROVAL_TASK_VIEW)) throw new Error('没有审批权限')
+      return payloadClient.post<ApproveResult>(`/price-change/${id}/approve`)
+    },
     onSuccess: (d) => {
       qc.invalidateQueries({ queryKey: ['price-change'] })
       invalidate('approval_pending_changed')
@@ -154,13 +165,19 @@ export default function PriceChangePage() {
   })
 
   const rejectMut = useMutation({
-    mutationFn: ({ id, reason: r }: { id: number; reason: string }) => payloadClient.post(`/price-change/${id}/reject`, { reason: r }),
+    mutationFn: ({ id, reason: r }: { id: number; reason: string }) => {
+      if (!can(PERMISSIONS.APPROVAL_TASK_VIEW)) throw new Error('没有审批权限')
+      return payloadClient.post(`/price-change/${id}/reject`, { reason: r })
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); invalidate('approval_pending_changed'); setRejectTarget(null); setRejectReason(''); toast.success('已驳回') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '驳回失败'),
   })
 
   const cancelMut = useMutation({
-    mutationFn: (id: number) => payloadClient.post(`/price-change/${id}/cancel`),
+    mutationFn: (id: number) => {
+      if (!can(PERMISSIONS.PRODUCT_UPDATE)) throw new Error('没有取消改价权限')
+      return payloadClient.post(`/price-change/${id}/cancel`)
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['price-change'] }); invalidate('approval_pending_changed'); setCancelTarget(null); toast.success('已取消') },
     onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '取消失败'),
   })
@@ -181,10 +198,10 @@ export default function PriceChangePage() {
         ]} />
         {row.status === 1 && (
           <>
-            <Button size="sm" variant="outline" onClick={() => submitMut.mutate(row.id)} disabled={submitMut.isPending}>提交</Button>
+            {canUpdate && <Button size="sm" variant="outline" onClick={() => submitMut.mutate(row.id)} disabled={submitMut.isPending}>提交</Button>}
             {canApprove && <Button size="sm" onClick={() => approveMut.mutate(row.id)} disabled={approveMut.isPending}>通过</Button>}
             {canApprove && <Button size="sm" variant="outline" className="text-destructive-ink" onClick={() => { setRejectTarget(row); setRejectReason('') }}>驳回</Button>}
-            <Button size="sm" variant="ghost" onClick={() => setCancelTarget(row)}>取消</Button>
+            {canUpdate && <Button size="sm" variant="ghost" onClick={() => setCancelTarget(row)}>取消</Button>}
           </>
         )}
       </div>
@@ -194,7 +211,7 @@ export default function PriceChangePage() {
   return (
     <div className="space-y-4">
       <PageHeader title="商品改价申请" description="改价走审批流，审批通过后自动生效并留变更历史" actions={
-        <Button onClick={() => setCreateOpen(true)}>+ 申请改价</Button>
+        canUpdate && <Button onClick={() => setCreateOpen(true)}>+ 申请改价</Button>
       } />
       <FilterCard>
         <Input placeholder="搜索单号/商品…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e) => { if (e.key === 'Enter') { setKeyword(search); } }} />
@@ -239,7 +256,7 @@ export default function PriceChangePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>取消</Button>
-            <Button onClick={() => createMut.mutate()} disabled={!product || !newPrice || createMut.isPending}>创建申请</Button>
+            {canUpdate && <Button onClick={() => createMut.mutate()} disabled={!product || !newPrice || createMut.isPending}>创建申请</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -261,13 +278,13 @@ export default function PriceChangePage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectTarget(null)}>取消</Button>
-            <Button variant="destructive" onClick={() => rejectTarget && rejectMut.mutate({ id: rejectTarget.id, reason: rejectReason })} disabled={rejectMut.isPending}>确认驳回</Button>
+            {canApprove && <Button variant="destructive" onClick={() => rejectTarget && rejectMut.mutate({ id: rejectTarget.id, reason: rejectReason })} disabled={rejectMut.isPending}>确认驳回</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <ConfirmDialog
-        open={!!cancelTarget}
+        open={!!cancelTarget && canUpdate}
         title="取消改价申请"
         description={`取消「${cancelTarget?.productName}」的改价申请？`}
         confirmText="取消申请"

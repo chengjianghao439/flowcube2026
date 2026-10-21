@@ -36,6 +36,8 @@ test('PDA 页面与组件不允许主动 focus 输入框，只有手动输入按
 test('PdaScanner 只在点「手动输入」后聚焦，不提供自动聚焦入口', () => {
   const code = readFileSync(join(pdaComponentsDir, 'PdaScanner.tsx'), 'utf8')
   expect(code.match(/\.focus\(\)/g) ?? []).toHaveLength(1)
-  expect(code).toMatch(/function enterManualMode\(\)\s*\{[\s\S]*?\.focus\(\)/)
+  // 手输失败可以恢复当前手输的焦点；挂载/硬件扫码仍由真实行为用例守住不弹键盘。
+  expect(code).toMatch(/manualInputRef\.current\.focus\(\)/)
+  expect(code).toMatch(/function enterManualMode\(\)\s*\{[\s\S]*?focusManualInput\(\)/)
   expect(code).not.toMatch(/autoFocus\??\s*:/)
 })

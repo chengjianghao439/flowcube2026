@@ -7,8 +7,10 @@ import TaxFilingPage from './index'
 const calls = vi.hoisted(() => ({ submissions: [] as Array<{ tab: string; onSuccess: () => void }> }))
 vi.mock('@/hooks/useActiveWorkspaceTab', () => ({ useActiveWorkspaceTab: () => true }))
 vi.mock('@/store/companyStore', () => ({ useCompanyStore: () => ({ companyId: 1 }) }))
+// 草稿用例明确具有调整权限；只读与真实查询边界由 read-state.test.tsx 验证。
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }))
 vi.mock('@/hooks/useTax', () => ({
-  useTaxVat: () => ({}), useTaxIncome: () => ({}), useTaxAdjustments: () => ({ data: [] }),
+  useTaxVat: () => ({ data: {}, isSuccess: true }), useTaxIncome: () => ({ data: {}, isSuccess: true }), useTaxAdjustments: () => ({ data: [], isSuccess: true }),
   useCreateTaxAdjustment: (_c: number, _p: string, tab: string) => ({ mutate: (_d: unknown, callbacks: { onSuccess: () => void }) => calls.submissions.push({ tab, ...callbacks }), isPending: false }),
   useDeleteTaxAdjustment: () => ({ mutate: vi.fn() }),
 }))

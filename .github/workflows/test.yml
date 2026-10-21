@@ -486,6 +486,9 @@ jobs:
       - name: 单元测试 — 前后端权限码一致性（纯静态，无需 DB）
         run: npm run test:permissions
 
+      - name: QA 回归 — 分类资源参数与税务期间（无需 DB）
+        run: npm run test:qa-remediation
+
       - name: 契约测试 — 所有写路由必须挂 requirePermission（例外须登记理由且可验证）
         run: npm run test:route-permission-contract
 

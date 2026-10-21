@@ -25,6 +25,8 @@ import { CreateManualPayableDialog } from '@/components/shared/payments/CreateMa
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { FinanceOrderLink } from '@/components/shared/payments/FinanceOrderLink'
+import { useNavigate } from 'react-router-dom'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 
 /** 账款页只管现结；月结走对账页，两边合起来才是全量 */
 const IMMEDIATE_SCOPE = IMMEDIATE_SETTLEMENT_TYPES.join(',')
@@ -63,6 +65,8 @@ const COPY = {
 } as const
 
 export default function PaymentsView({ type }: { type: PaymentType }) {
+  const navigate = useNavigate()
+  const addTab = useWorkspaceStore(state => state.addTab)
   const active = useActiveWorkspaceTab()
   const copy = COPY[type]
   const isPayable = type === 1
@@ -163,15 +167,25 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
             <Button variant="outline" onClick={() => receiptRef.current?.exportExcel()}>导出 Excel</Button>
-            <Button onClick={() => receiptRef.current?.openRegister()}>登记{isPayable ? '付款' : '收款'}</Button>
+            {can(PERMISSIONS.PAYMENT_EXECUTE) && <Button onClick={() => receiptRef.current?.openRegister()}>登记{isPayable ? '付款' : '收款'}</Button>}
           </div>
         )}
       />
 
+      <div role="note" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+        <span>本页仅显示现结账款；资金账龄还包含月结账款。</span>
+        {can(PERMISSIONS.REPORT_VIEW) && <Button variant="link" size="sm" className="h-auto px-0" onClick={() => {
+          if (!can(PERMISSIONS.REPORT_VIEW)) return
+          const path = `/reports/reconciliation/${isPayable ? 'payable' : 'receivable'}`
+          addTab({ key: path, path, title: `${copy.party}往来` })
+          navigate(path)
+        }}>查看月结账款</Button>}
+      </div>
+
       <nav aria-label={`${copy.title}登记方式`} className="flex gap-1 border-b border-border">
         {([
-          { key: 'records' as const, label: '按单登记' },
-          { key: 'receipts' as const, label: `${isPayable ? '付款' : '收款'}核销` },
+          { key: 'records' as const, label: can(PERMISSIONS.PAYMENT_EXECUTE) ? '按单登记' : '账款明细' },
+          { key: 'receipts' as const, label: `${isPayable ? '付款' : '收款'}${can(PERMISSIONS.PAYMENT_EXECUTE) ? '核销' : '流水'}` },
         ]).map(item => (
           <button
             key={item.key}

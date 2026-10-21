@@ -20,6 +20,9 @@ import {
 } from '@/hooks/useTax'
 import type { TableColumn } from '@/types'
 import { beijingPeriod } from '@/lib/dateTime'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 
 export default function TaxFilingPage() {
@@ -56,19 +59,29 @@ export default function TaxFilingPage() {
 // 固定税种实例持有自己的草稿，异步回执只更新提交所属的实例。
 function TaxReport({ companyId, period, tab }: { companyId: number; period: string; tab: 'vat' | 'income' }) {
   const active = useActiveWorkspaceTab()
+  const { can } = usePermission()
+  const canManage = can(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE)
+  const validPeriod = /^\d{4}(0[1-9]|1[0-2])$/.test(period)
   const [adjItem, setAdjItem] = useState('')
   const [adjAmount, setAdjAmount] = useState('')
   const draftRevision = useRef(0)
 
   const taxType = tab === 'vat' ? 1 : 2
-  const { data: vat } = useTaxVat(companyId, period, active && tab === 'vat' && !!period)
-  const { data: income } = useTaxIncome(companyId, period, active && tab === 'income' && !!period)
-  const { data: adjustments } = useTaxAdjustments(companyId, period, taxType, active && !!period)
+  const vatQuery = useTaxVat(companyId, period, active && tab === 'vat' && validPeriod)
+  const incomeQuery = useTaxIncome(companyId, period, active && tab === 'income' && validPeriod)
+  const adjustmentsQuery = useTaxAdjustments(companyId, period, taxType, active && validPeriod)
+  const reportQuery = tab === 'vat' ? vatQuery : incomeQuery
+  const { data: vat } = vatQuery
+  const { data: income } = incomeQuery
+  const { data: adjustments } = adjustmentsQuery
+  const readReady = validPeriod && reportQuery.isSuccess && adjustmentsQuery.isSuccess
+    && !reportQuery.isPaused && !adjustmentsQuery.isPaused
 
   const { mutate: addAdj, isPending } = useCreateTaxAdjustment(companyId, period, tab)
   const { mutate: removeAdj } = useDeleteTaxAdjustment(companyId, period, tab)
 
   function submitAdjustment() {
+    if (!active || !canManage || !readReady) return
     const submittedRevision = draftRevision.current
     addAdj({ adjustItem: adjItem, amount: Number(adjAmount) }, {
       onSuccess: () => {
@@ -88,8 +101,17 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
     { key: 'adjustItem', title: '调整项' },
     { key: 'amount', title: '金额', width: 120, align: 'right', render: v => <span className={`tabular-nums ${Number(v) !== 0 ? 'text-amber-600 font-medium' : ''}`}>{money(Number(v))}</span> },
     { key: 'remark', title: '备注', expandableText: true, render: v => String(v || '—') },
-    { key: 'id', title: '操作', width: 80, render: (_, r) => <Button size="sm" variant="ghost" className="text-destructive-ink" onClick={() => removeAdj(r.id)}>删除</Button> },
   ]
+  if (canManage) adjColumns.push({ key: 'id', title: '操作', width: 80, render: (_, r) => <Button size="sm" variant="ghost" className="text-destructive-ink" onClick={() => { if (active && canManage && readReady) removeAdj(r.id) }}>删除</Button> })
+
+  if (!validPeriod) return <p role="status" className="py-6 text-sm text-muted-foreground">请输入有效的申报期间（YYYYMM）</p>
+  if (reportQuery.isPaused || adjustmentsQuery.isPaused) return <p role="status" className="py-6 text-sm text-muted-foreground">报税数据读取已暂停，请恢复网络连接后重试</p>
+  if (reportQuery.isError || adjustmentsQuery.isError) return <QueryErrorState
+    title="报税数据加载失败"
+    error={reportQuery.error || adjustmentsQuery.error}
+    onRetry={() => { if (active && validPeriod) { void reportQuery.refetch(); void adjustmentsQuery.refetch() } }}
+  />
+  if (!readReady) return <p role="status" className="py-6 text-sm text-muted-foreground">正在加载报税数据…</p>
 
   return (
     <>
@@ -108,11 +130,11 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
           <div className="space-y-2">
             <div className="rounded-lg border border-border">
               <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">税会差异调整（增值税）</div>
-              <div className="flex gap-2 p-3">
+              {canManage && <div className="flex gap-2 p-3">
                 <Input placeholder="调整项，如：视同销售" value={adjItem} onChange={e => { draftRevision.current += 1; setAdjItem(e.target.value) }} className="h-9" />
                 <Input placeholder="金额" type="number" value={adjAmount} onChange={e => { draftRevision.current += 1; setAdjAmount(e.target.value) }} className="h-9 w-28 text-right" />
                 <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={submitAdjustment}>添加</Button>
-              </div>
+              </div>}
             </div>
             <DataTable columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
           </div>
@@ -134,11 +156,11 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
           <div className="space-y-2">
             <div className="rounded-lg border border-border">
               <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">税会差异调整（所得税）</div>
-              <div className="flex gap-2 p-3">
+              {canManage && <div className="flex gap-2 p-3">
                 <Input placeholder="调整项，如：业务招待费调增" value={adjItem} onChange={e => { draftRevision.current += 1; setAdjItem(e.target.value) }} className="h-9" />
                 <Input placeholder="金额" type="number" value={adjAmount} onChange={e => { draftRevision.current += 1; setAdjAmount(e.target.value) }} className="h-9 w-28 text-right" />
                 <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={submitAdjustment}>添加</Button>
-              </div>
+              </div>}
             </div>
             <DataTable columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
           </div>

@@ -424,3 +424,9 @@ GET /auth/me仅增加hasUnrestrictedWarehouseScope只读布尔，严格来自当
 290新增普通销售净额basis及receipt，291增加每张SR的nullable净额意图标记（旧NULL不自动改成新净额语义），原SOI/SKU/仓/量价身份冻结；receipt以实际RTI唯一，不把SRI设唯一，允许同来源行合法分次。无向SO的外键反锁；迁移按information_schema列序/类型/默认/主键/索引/auto_increment及无额外FK/trigger形状fail-loud核，不DROP未知表、不回填或改已执行迁移。执行仅显式原guard迁移，不借preview自动bootstrap。
 
 结账采购builder可选准确orderIds在原来源断言前限定候选；本期业务日期和本期凭证关联根均纳入，原金额/税额/来源错误继续复用，不吞外层异常掩盖本期缺口。未传范围的原全量生成路径保持。
+
+### 分类路径编号校验（2026-10-21）
+
+分类详情、更新、删除与状态切换的路径 `id` 共用 `validateParams`：只接受无前导零的正十进制整数字符串，且转换后必须满足 `Number.isSafeInteger`。非法编号返回 400 `VALIDATION_ERROR`，不进入 service；合法编号不存在仍沿原 404。认证与各路由原有分类查看、更新、删除权限先于编号校验，`/tree`、`/flat`、`/leaves` 保留在 `/:id` 之前。
+
+`node --test tests/categories-route-params.test.js` 使用真实 HTTP、Express 路由、认证/权限/参数中间件、controller 与统一错误处理，service 和认证持久层为隔离夹具；不连接数据库，不替代真实登录或数据库验收。

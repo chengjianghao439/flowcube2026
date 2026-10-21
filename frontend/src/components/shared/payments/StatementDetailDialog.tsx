@@ -13,6 +13,8 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { FinanceOrderLink } from './FinanceOrderLink'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 /** 1草稿 = 还能改 · 2已确认 = 锁定可发对方 · 3已核销 = 收完款 */
 const ST_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'success' }
@@ -33,6 +35,7 @@ interface Props {
  * StatementPanel.tsx 里）。移出后失效的 query key 与原实现一致，列表随之刷新。
  */
 export function StatementDetailDialog({ open, onClose, statementId, type }: Props) {
+  const { can } = usePermission()
   const qc = useQueryClient()
   const active = useActiveWorkspaceTab()
   const isPayable = type === 1
@@ -47,7 +50,10 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
   const detail = !query.isError && query.data?.id === statementId && query.data.type === type ? query.data : undefined
   const canNavigate = open && active && !!detail && !query.isFetching && !query.isPaused && !query.isError
   const removeItemMut = useMutation({
-    mutationFn: ({ id, recordId }: { id:number; recordId:number }) => removeStatementItemApi(id, recordId),
+    mutationFn: ({ id, recordId }: { id:number; recordId:number }) => {
+      if (!can(PERMISSIONS.PAYMENT_EXECUTE)) throw new Error('没有调整对账单权限')
+      return removeStatementItemApi(id, recordId)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payment-statements'] })
       qc.invalidateQueries({ queryKey: ['payment-statement-detail'] })
@@ -114,7 +120,7 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
                 <th className="px-2 py-1.5 text-right">已{isPayable ? '付' : '收'}</th>
                 <th className="px-2 py-1.5 text-right">余额</th>
                 <th className="px-2 py-1.5 text-left">到期日</th>
-                {detail?.status === 1 && <th className="px-2 py-1.5"></th>}
+                {detail?.status === 1 && can(PERMISSIONS.PAYMENT_EXECUTE) && <th className="px-2 py-1.5"></th>}
               </tr>
             </thead>
             <tbody>
@@ -127,7 +133,7 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
                     {it.balance > 0 ? <span className="text-destructive-ink">{money(it.balance)}</span> : <span className="text-success-ink">已结清</span>}
                   </td>
                   <td className="px-2 py-1.5 text-xs text-muted-foreground">{it.dueDate ? formatDisplayDate(it.dueDate) : '—'}</td>
-                  {detail.status === 1 && (
+                  {detail.status === 1 && can(PERMISSIONS.PAYMENT_EXECUTE) && (
                     <td className="px-2 py-1.5 text-right">
                       <Button size="sm" variant="ghost" disabled={!canNavigate || removeItemMut.isPending}
                         onClick={() => removeVerified(detail.id, it.recordId)}>

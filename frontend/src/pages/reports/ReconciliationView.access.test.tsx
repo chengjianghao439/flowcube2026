@@ -12,9 +12,11 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
+import { downloadExport } from '@/lib/exportDownload'
 
 // 真实月结leaf、所有panel/弹窗与API client；仅在HTTP边界提供离线响应。
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+vi.mock('@/lib/exportDownload', () => ({ downloadExport: vi.fn(async () => undefined) }))
 const originalAdapter = api.defaults.adapter
 let root: Root, host: HTMLDivElement, qc: QueryClient
 let calls: InternalAxiosRequestConfig[]
@@ -46,6 +48,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   useAuthStore.getState().login('offline', null, { id: 7, username: 'offline', realName: '测试', roleId: 5, roleName: '月结', permissions: granted })
   calls = []
+  vi.mocked(downloadExport).mockClear()
   api.defaults.adapter = async config => {
     calls.push(config)
     const user = useAuthStore.getState().user
@@ -69,6 +72,33 @@ beforeEach(() => {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
+
+test.each([1, 2] as const)('月结%s默认直接展示跨日期未结账款，导出保持同一范围', async type => {
+  await render(type)
+  const request = calls.find(call => call.url === '/reports/reconciliation')
+  expect(request?.params).toMatchObject({ type: String(type), status: 'unsettled', settlementTypes: '2' })
+  expect(request?.params.startDate).toBeUndefined()
+  expect(request?.params.endDate).toBeUndefined()
+  expect(calls.some(call => call.url === '/payments/statements')).toBe(false)
+  expect(host.textContent).toContain('未结清')
+  await click('导出 Excel', host)
+  expect(downloadExport).toHaveBeenCalledWith('/export/reconciliation', expect.objectContaining({ type: String(type), status: 'unsettled', settlementTypes: '2' }))
+})
+
+test('月结账款筛选栏重置与查询弹窗清空均保持全日期', async () => {
+  await render(); await click('全部账款', host)
+  await click('重置', host)
+  let request = calls.filter(call => call.url === '/reports/reconciliation').at(-1)!
+  expect(request.params.startDate).toBeUndefined()
+  expect(request.params.endDate).toBeUndefined()
+  expect(request.params.status).toBeUndefined()
+  await click('查询', host)
+  const dialog = document.querySelector('[role="dialog"]')!
+  await click('清空', dialog); await click('查询', dialog)
+  request = calls.filter(call => call.url === '/reports/reconciliation').at(-1)!
+  expect(request.params.startDate).toBeUndefined()
+  expect(request.params.endDate).toBeUndefined()
+})
 afterEach(async () => {
   await act(async () => root.unmount()); host.remove(); qc.clear(); api.defaults.adapter = originalAdapter
   useAuthStore.getState().logout()
@@ -88,19 +118,22 @@ test.each([1, 2] as const)('REPORT_VIEW-only 月结%s默认原报表账款，不
   expect(calls.map(call => call.url)).toEqual(['/reports/reconciliation'])
 })
 
-test('同时有账款查看权保持默认汇总；写动作仍需要执行权', async () => {
+test('默认展示原账款，主动进入汇总及核销仍需查看权；写动作仍需要执行权', async () => {
   permissions([P.REPORT_VIEW, P.PAYMENT_VIEW]); await render()
-  expect(calls.map(call => call.url)).toEqual(['/payments/statements'])
+  expect(calls.map(call => call.url)).toEqual(['/reports/reconciliation'])
+  await click('汇总对账', host)
+  expect(calls.map(call => call.url)).toEqual(['/reports/reconciliation', '/payments/statements'])
   expect(host.textContent).toContain('ST-offline')
   expect(visibleButton('新建对账单')).toBeUndefined()
-  await click('收款核销', host)
+  expect(visibleButton('收款核销', host)).toBeUndefined()
+  await click('收款流水', host)
   expect(visibleButton('登记收款')).toBeUndefined()
-  expect(calls.map(call => call.url)).toEqual(['/payments/statements', '/payments/receipts'])
+  expect(calls.map(call => call.url)).toEqual(['/reports/reconciliation', '/payments/statements', '/payments/receipts'])
 })
 
 test.each(['statements', 'receipts'] as const)('撤回查看权停止%s读与浮层，重新授权恢复请求子页、筛选及未应用输入', async kind => {
   await render()
-  if (kind === 'receipts') await click('收款核销', host)
+  await click(kind === 'receipts' ? '收款核销' : '汇总对账', host)
   await click('查询', host)
   await change(document.querySelector<HTMLInputElement>('[role="dialog"] input')!, 'FILTER-kept')
   await click('查询', document.querySelector('[role="dialog"]')!)
@@ -111,7 +144,9 @@ test.each(['statements', 'receipts'] as const)('撤回查看权停止%s读与浮
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   expect(visibleButton('汇总对账', host)).toBeUndefined()
   expect(visibleButton('收款核销', host)).toBeUndefined()
-  expect(calls.at(-1)?.url).toBe('/reports/reconciliation')
+  // 默认已加载原账款；回退可复用同范围缓存，不能为证明回退而强迫多发请求。
+  expect(calls.some(call => call.url === '/reports/reconciliation')).toBe(true)
+  expect(host.textContent).toContain('月结原账款')
   await act(async () => {
     await qc.invalidateQueries({ queryKey: ['payment-statements'] })
     await qc.invalidateQueries({ queryKey: ['payment-receipts'] })
@@ -149,7 +184,8 @@ test('确认弹窗撤回查看或确认权均暂停原detail读与浮层，恢�
 
 test.each([1, 2] as const)('合法月结%s选择往来方按真实主数据查看权读取并保留查询原值', async type => {
   permissions([...granted, P.CUSTOMER_VIEW, P.SUPPLIER_VIEW]); await render(type)
-  expect(calls.map(call => call.url)).toEqual(['/payments/statements'])
+  await click('汇总对账', host)
+  expect(calls.map(call => call.url)).toEqual(['/reports/reconciliation', '/payments/statements'])
   await click('查询', host)
   await change(document.querySelector<HTMLInputElement>('[role="dialog"] input')!, 'DOC-kept')
   await click(type === 1 ? '选择供应商' : '选择客户')

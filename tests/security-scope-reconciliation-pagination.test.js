@@ -57,6 +57,23 @@ test('reconciliation summary, count and rows apply identical authoritative sourc
     }
   }
 })
+test('reconciliation unsettled uses the same positive-balance status predicate in summary, count and rows', async () => {
+  for (const type of [1, 2]) for (const scopeWarehouseIds of [null, [], [2]]) {
+    const h = fixture('backend/src/modules/reports/reports.query.js')
+    await h.svc.fetchReconciliationRows({ type, status: 'unsettled', settlementTypes: '2', scopeWarehouseIds })
+    assert.equal(h.calls.length, 3)
+    for (const q of h.calls) {
+      const where = q.sql.slice(q.sql.lastIndexOf('WHERE pr.type = ?'))
+      assert.match(where, /pr\.status IN \(1,2\) AND pr\.balance>0/)
+      assert.equal(q.params[0], type)
+      assert.ok(q.params.every(value => typeof value !== 'number' || Number.isFinite(value)), 'unsettled must not bind NaN')
+      if (Array.isArray(scopeWarehouseIds)) {
+        if (!scopeWarehouseIds.length) assert.match(where, /1=0/)
+        else assert.equal(q.params.filter(value => Array.isArray(value)).length, 3)
+      }
+    }
+  }
+})
 test('reconciliation controller forwards trusted scope and public pagination', async () => {
   let options
   const svc = load('backend/src/modules/reports/reports.controller.js', { '../../utils/response': { successResponse: () => {} }, './reports.service': { reconciliationReport: async q => { options = q; return {} } } })

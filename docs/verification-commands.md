@@ -1099,3 +1099,11 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 `npm run test:approval-list-batches` 保留原待办/范围检查，并运行 `credit-approval-consistency.test.js` 与 `credit-approval-validity.test.js`，覆盖业务负例、商业内容、自批/当前节点、失效原因和固定批量效力读取。`npm run smoke:credit-override` 串行运行默认岗位迁移、原申请、审批一致性和失效重申回归；仅限显式测试环境/专属合成实例，覆盖独立申请/审批权限、实时自批/范围、同键及异键并发、节点审计、普通仓管部分出库、预占守恒、改价/过期/无证明旧批准直接重申、有效/进行中防重复、并发只建一单、原历史保留及不自动复活旧批准。295岗位回归用连接临时表影射真实结构，逐条固定删除23项/增加8项及完整前后差集、自定义保留、稳定编码、重放与回滚；本次同步不改295或任何已有迁移。`test:permissions` 包含独立审批纯规则反例；前端全量包含申请/审批按钮分权、失效重新申请和明确409恢复，未知结果恢复门不变。仅箱贴完成为合成ACK，不作真机/出纸或独立验收结论。详见 [授信审批一致性](credit-approval-consistency-2026-10-19.md) 与 [岗位及客户范围边界](role-defaults-approval-2026-10-19.md)。
 
 同一`smoke:credit-override`现追加`credit-pending-expiry.smoke.test.js`：过期待审列表/详情、直接及并发重申、原历史保留、拒绝过期审批和占库、未过期正例、证明锁等待跨截止时间及旧节点不恢复。API定位最小申请人的仓库目录/待办403，并保留有权账号目录正例。前端全量含`ReserveAllocationDialog.authorization.test.tsx`的闭合网络调用与真实403展示/提交正例，及`index.pending-expiry.test.tsx`的列表、普通/交接详情、显式重申和无申请权反例；不以组件测试代替真实业务或独立验收。
+
+## 2026-10-21 QA 修复批次验证
+
+新增 `npm run test:qa-remediation` 在 Tests 的 static job 执行：真实Express路由参数边界与真实税务服务期间校验，仅替换外部认证存储/DB边界，76项。往来 `unsettled` 的列表/COUNT/汇总/导出范围守卫追加在既有 `security-scope-reconciliation-pagination.test.js`，沿 `test:security-scan-remediation` 接线；前端新真实组件回归由原全量 `test:unit` 自动发现。
+
+本地 Node22 本轮执行：两端 lint、`frontend/node_modules/.bin/tsc --noEmit -p frontend/tsconfig.app.json`、`CI=true npm --prefix frontend run test:unit -- --maxWorkers=4`（395文件/3600项）、新增76项，以及 `node --test tests/security-scope-reconciliation-pagination.test.js tests/deployment-resources.test.js`（46项）；权限、写路由/API路由、前端命名/日期/轮询/会话、SQL标识符、只读查询循环、导出筛选和文档引用守卫通过。Scanner清理ref的小改后补跑manual/native两文件9项及前端lint；末尾只读导航文案补充后，四文件41项、前端lint、正确项目tsc及两种构建再次通过。ERP/PDA分别用原 `build` / `build:pda`，`--outDir` 指定本任务 `/tmp` 目录，通过，不同步Android或安装包。
+
+真实页面用本任务命名浏览器、回环Vite与关闭外呼的真实后端；数据库为本轮具任务label的容器/卷、随机回环端口和完整295迁移的新测试库，仅合成身份和夹具。往来矩阵含未付/部分/结清/零余额、现结/月结、全日期/今天、来源缺失下限仓拒绝及实际XLSX导出；合成只读投影不是完整采购/销售闭环。原生产报税崩溃未重现、正式角色导出/认可表未到；正式历史两笔、完整后端和业务专属库发版矩阵、PDA真机/出库/实物打印仍待验收。逐项结果见 [QA修复记录](qa-remediation-2026-10-21.md)。

@@ -12,7 +12,7 @@ import { useId, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
-import PdaScanner from '@/components/pda/PdaScanner'
+import PdaScanner, { type PdaScanOutcome } from '@/components/pda/PdaScanner'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaFlash from '@/components/pda/PdaFlash'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
@@ -28,7 +28,7 @@ import { usePdaRole } from '@/hooks/usePdaRole'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { plasticReadContext, usePdaPlasticReadGuard } from '@/hooks/usePdaPlasticReadGuard'
 import { usePdaSplitRecovery } from '@/hooks/usePdaSplitRecovery'
-import { formatPdaActionError } from '@/utils/displayFormatters'
+import { formatPdaActionError, formatPdaInventoryError } from '@/utils/displayFormatters'
 
 type Mode = 'repack' | 'split'
 const LEGACY_PAGE_TITLE = '塑料盒作业'
@@ -87,22 +87,18 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
 
   const loadMut = useMutation({
     mutationFn: async ({ bc, owner }: { bc: string; owner: ReturnType<typeof captureRead> }) => {
-      const res = await getContainerByBarcodeApi(bc, owner.config)
-      return res!
+      const d = await getContainerByBarcodeApi(bc, owner.config)
+      if (!owner.current()) return null
+      if (d.containerStatus === 'waiting_putaway') throw new Error('待上架库存条码不能操作')
+      if (d.lockedByTaskId) throw new Error(`该条码已被拣货任务 ${d.lockedByTaskNo ?? `#${d.lockedByTaskId}`} 锁定，不能操作`)
+      const isBox = d.containerKind === 'plastic_box'
+      if (fixedMode && (fixedMode === 'repack') !== isBox) throw new Error(fixedMode === 'repack' ? '本动作须扫塑料盒B码，不能扫整件库存码' : '本动作须扫整件库存I码，不能扫塑料盒')
+      return d
     },
     onSuccess: (d, { owner }) => {
-      if (!owner.current()) return
+      if (!d || !owner.current()) return
       setFormContext(owner.contextKey)
-      if (d.containerStatus === 'waiting_putaway') {
-        err('待上架库存条码不能操作')
-        return
-      }
-      if (d.lockedByTaskId) {
-        err(`该条码已被拣货任务 ${d.lockedByTaskNo ?? `#${d.lockedByTaskId}`} 锁定，不能操作`)
-        return
-      }
       const isBox = d.containerKind === 'plastic_box'
-      if (fixedMode && (fixedMode === 'repack') !== isBox) { err(fixedMode === 'repack' ? '本动作须扫塑料盒B码，不能扫整件库存码' : '本动作须扫整件库存I码，不能扫塑料盒'); return }
       setDimension({ productId: d.productId, warehouseId: d.warehouseId })
       setMode(isBox ? 'repack' : 'split')
       setBoxId(d.containerId)
@@ -116,7 +112,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
       setStep('form')
       ok(`已识别 ${d.barcode}：${isBox ? '还原整件' : '拆出散件盒'}`)
     },
-    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaActionError(e, '查询失败')) },
+    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaInventoryError(e, '查询失败')) },
   })
 
   /** 还原整件：B → 逐箱 qty → 生成 I（useCriticalPdaAction 提交，pending 时挂回查原回执） */
@@ -243,14 +239,18 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
     finishReset()
   }
 
-  const handleScan = useCallback((raw: string) => {
-    if (!active || !canExecute || splitAction.blocked || repackAction.submitBlocked) return
+  const handleScan = useCallback(async (raw: string): Promise<PdaScanOutcome> => {
+    if (!active || !canExecute || splitAction.blocked || repackAction.submitBlocked) return 'ignored'
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'container' && parsed.type !== 'unknown') {
       err('扫描库存条码或塑料盒条码')
-      return
+      return 'rejected'
     }
-    loadMut.mutate({ bc: raw.trim(), owner: captureRead() })
+    const owner = captureRead()
+    try {
+      const data = await loadMut.mutateAsync({ bc: raw.trim(), owner })
+      return data && owner.current() ? 'accepted' : 'ignored'
+    } catch { return owner.current() ? 'rejected' : 'ignored' }
   }, [err, loadMut, active, canExecute, captureRead, splitAction.blocked, repackAction.submitBlocked])
 
   // 未确认期间锁住输入与模式：不能一边等回执一边改目标/改数量（防止「按当前输入猜成功」）

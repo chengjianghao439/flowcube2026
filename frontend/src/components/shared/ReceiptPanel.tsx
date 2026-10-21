@@ -1,6 +1,8 @@
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { money } from '@/lib/format'
-import { useState, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -53,6 +55,10 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
   { type, settlementTypes, target = 'record', hideToolbar = false }, ref,
 ) {
   const active = useActiveWorkspaceTab()
+  const { can } = usePermission()
+  const canExecute = can(PERMISSIONS.PAYMENT_EXECUTE)
+  const executePermissionRef = useRef(canExecute)
+  executePermissionRef.current = canExecute
   const isPayable = type === 1
   const actionLabel = isPayable ? '付款' : '收款'
   const partyLabel = isPayable ? '供应商' : '客户'
@@ -91,7 +97,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
   // 工具条按钮被父级挪进 PageHeader 后，通过 ref 触发面板内部的查询/登记/导出
   useImperativeHandle(ref, () => ({
     openQuery: () => setQueryOpen(true),
-    openRegister: () => { setContinueTarget(null); setFormOpen(true) },
+    openRegister: () => { if (!executePermissionRef.current) return; setContinueTarget(null); setFormOpen(true) },
     exportExcel: handleExport,
   }))
 
@@ -112,7 +118,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
     { key: 'id', title: '操作', width: 180, render: (_, row) => {
       const r = row as PaymentReceipt
       // 与「按单登记」tab 一致：主按钮 + 下拉次操作（有余额→继续核销为主、明细进下拉；已核销完→只有明细）
-      return r.balance > 0 ? (
+      return canExecute && r.balance > 0 ? (
         <TableActionsMenu
           primaryLabel="继续核销"
           onPrimaryClick={() => { setContinueTarget(r); setFormOpen(true) }}
@@ -134,7 +140,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
           <div className="ml-auto flex gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" onClick={handleExport}>导出 Excel</Button>
-            <Button onClick={() => { setContinueTarget(null); setFormOpen(true) }}>登记{actionLabel}</Button>
+            {canExecute && <Button onClick={() => { setContinueTarget(null); setFormOpen(true) }}>登记{actionLabel}</Button>}
           </div>
         </div>
       )}

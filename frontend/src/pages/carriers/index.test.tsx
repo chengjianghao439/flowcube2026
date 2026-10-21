@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, test, vi } from 'vitest'
 import CarriersPage from './index'
 import type { Carrier } from '@/types/carriers'
+import { useAuthStore } from '@/store/authStore'
 const api = vi.hoisted(() => ({ createCarrierApi: vi.fn().mockResolvedValue({ id: 7 }), updateCarrierApi: vi.fn(), getCarriersApi: vi.fn(), deleteCarrierApi: vi.fn() }))
 vi.mock('@/api/carriers', () => api)
 vi.mock('@/components/shared/BaseCrudPage', () => ({ default: (props: { onOpen: (row: Carrier | null) => void; renderForm: (row: Carrier | null) => React.ReactNode; submitForm: (row: Carrier | null) => Promise<unknown> }) => <div><button onClick={() => props.onOpen(null)}>新建</button>{props.renderForm(null)}<button onClick={() => void props.submitForm(null)}>提交</button></div> }))
@@ -21,6 +22,7 @@ vi.mock('@/components/ui/select', () => ({
 }))
 
 async function render() {
+  useAuthStore.setState({ user: { roleId: 5, permissions: ['carrier.create', 'carrier.update'] } as never })
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   const host = document.createElement('div'); document.body.append(host); const root = createRoot(host)
   const client = new QueryClient()
@@ -31,7 +33,7 @@ async function render() {
     // 平台下拉 /「电子面单取号」下拉都通过所在行的文案定位，避免依赖 DOM 顺序
     pick: (label: string) => selects.find(s => s.parentElement?.parentElement?.textContent?.includes(label))!,
     submit: async () => act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === '提交')!.click()),
-    close: async () => { await act(async () => root.unmount()); host.remove(); client.clear() },
+    close: async () => { await act(async () => root.unmount()); host.remove(); client.clear(); useAuthStore.setState({ user: null }) },
   }
 }
 

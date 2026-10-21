@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { confirmPaymentApi, getSettlementDetailApi } from '@/api/payments'
 import { toast } from '@/lib/toast'
 import { usePaymentViewInvalidation } from './usePaymentViewInvalidation'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 interface Props {
   open: boolean
@@ -20,6 +22,7 @@ interface Props {
  * AppDialog 承载，表格区自己滚动而不是把整张弹窗撑长（2026-09-18 弹窗重构）。
  */
 export function SettlementConfirmDialog({ open, onClose, record }: Props) {
+  const { can } = usePermission()
   const invalidatePaymentViews = usePaymentViewInvalidation()
 
   const { data: settlement, isPending, isError, error, refetch } = useVisibleQuery({
@@ -28,7 +31,10 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
     enabled: open && !!record,
   })
   const confirmMut = useMutation({
-    mutationFn: (id: number) => confirmPaymentApi(id),
+    mutationFn: (id: number) => {
+      if (!can(PERMISSIONS.PAYMENT_CONFIRM)) throw new Error('没有确认结算权限')
+      return confirmPaymentApi(id)
+    },
     onSuccess: () => {
       invalidatePaymentViews()
       onClose()
@@ -49,9 +55,9 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={confirmMut.isPending || isPending || isError || !settlement} onClick={() => { if (record) confirmMut.mutate(record.id) }}>
+          {can(PERMISSIONS.PAYMENT_CONFIRM) && <Button disabled={confirmMut.isPending || isPending || isError || !settlement} onClick={() => { if (record) confirmMut.mutate(record.id) }}>
             {confirmMut.isPending ? '确认中…' : '确认结算金额'}
-          </Button>
+          </Button>}
         </div>
       }
     >

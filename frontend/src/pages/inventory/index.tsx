@@ -3,6 +3,8 @@ import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/V
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep } from '@/lib/qtyStep'
@@ -95,6 +97,7 @@ const LOG_DEFAULT_RANGE_DAYS = 7
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function InventoryPage() {
+  const { can } = usePermission()
   const active = useActiveWorkspaceTab()
   const tabPath = useContext(TabPathContext)
   const [locationSearchParams, setSearchParams] = useSearchParams()
@@ -179,6 +182,7 @@ export default function InventoryPage() {
   }
 
   function openOp(t: OpType) {
+    if (!can(PERMISSIONS.INVENTORY_ADJUST)) return
     setOpType(t)
     const original = recovery?.record?.body
     setForm(original ? { ...emptyOp, productId: String(original.productId), productName: recovery.record?.display?.productName || `商品 #${original.productId}`, warehouseId: String(original.warehouseId), warehouseName: recovery.record?.display?.warehouseName || '', quantity: String(original.quantity), unitPrice: original.unitPrice == null ? '' : String(original.unitPrice), remark: original.remark || '' } : emptyOp)
@@ -186,7 +190,7 @@ export default function InventoryPage() {
   }
   function handleOp(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (opFrozen) return
+    if (opFrozen || !can(PERMISSIONS.INVENTORY_ADJUST)) return
     const base = { productId: +form.productId, warehouseId: +form.warehouseId, quantity: +form.quantity, remark: form.remark || undefined }
     outbound({ ...base, supplierId: null, unitPrice: form.unitPrice ? +form.unitPrice : null }, { onSuccess: () => setOpOpen(false) })
   }
@@ -276,6 +280,7 @@ export default function InventoryPage() {
 
   // 库存初始化导入：下载模板 → 填数上传 → 后端逐行建容器/落库（POST /import/stock）
   async function handleImportStock(file: File) {
+    if (!can(PERMISSIONS.IMPORT_STOCK_EXECUTE)) return
     setImporting(true)
     try {
       const res = await importStockApi(file)
@@ -319,9 +324,9 @@ export default function InventoryPage() {
               ...(effectiveLogEndDate ? { endDate: effectiveLogEndDate } : {}),
             } : undefined,
           ).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
-          <Button variant="outline" onClick={() => setImportOpen(true)} disabled={tab !== 'overview'}>导入库存</Button>
-          <Button variant="outline" onClick={() => openOp('outbound')}>出库</Button>
-          <Button variant="outline" asChild><Link to="/stockcheck">库存盘点</Link></Button>
+          {can(PERMISSIONS.IMPORT_STOCK_EXECUTE) && <Button variant="outline" onClick={() => setImportOpen(true)} disabled={tab !== 'overview'}>导入库存</Button>}
+          {can(PERMISSIONS.INVENTORY_ADJUST) && <Button variant="outline" onClick={() => openOp('outbound')}>出库</Button>}
+          {can(PERMISSIONS.STOCKCHECK_VIEW) && <Button variant="outline" asChild><Link to="/stockcheck">查看盘点</Link></Button>}
         </div>
       } />
 
@@ -422,7 +427,7 @@ export default function InventoryPage() {
         {recovery.record && <p className="text-xs text-muted-foreground">{recovery.record.display?.productName || `商品 #${recovery.record.body.productId}`} · {recovery.record.display?.warehouseName || `仓库 #${recovery.record.body.warehouseId}`} · 数量 {formatQty(recovery.record.body.quantity)}{recovery.record.body.remark ? ` · ${recovery.record.body.remark}` : ''}</p>}
         <div className="flex gap-2">
           <Button size="sm" variant="outline" disabled={recovery.busy} onClick={() => { void recovery.query().then(r => { if (r?.status === 'success') setOpOpen(false) }).catch(e => toast.error(e.message)) }}>查询上次结果</Button>
-          {recovery.record?.phase === 'pending' && <Button size="sm" variant="outline" disabled={recovery.busy || !!recovery.error} onClick={() => { void recovery.retry().then(r => { if (r?.status === 'success') setOpOpen(false) }).catch(e => toast.error(e.message)) }}>按原内容重试</Button>}
+          {can(PERMISSIONS.INVENTORY_ADJUST) && recovery.record?.phase === 'pending' && <Button size="sm" variant="outline" disabled={recovery.busy || !!recovery.error} onClick={() => { if (!can(PERMISSIONS.INVENTORY_ADJUST)) return; void recovery.retry().then(r => { if (r?.status === 'success') setOpOpen(false) }).catch(e => toast.error(e.message)) }}>按原内容重试</Button>}
         </div>
       </div>}
 
@@ -448,7 +453,7 @@ export default function InventoryPage() {
             <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpOpen(false)} disabled={isPending}>取消</Button>
-              <Button type="submit" disabled={opFrozen || !form.productId || !form.warehouseId || !form.quantity}>{isPending ? '提交中…' : '出库'}</Button>
+              {can(PERMISSIONS.INVENTORY_ADJUST) && <Button type="submit" disabled={opFrozen || !form.productId || !form.warehouseId || !form.quantity}>{isPending ? '提交中…' : '出库'}</Button>}
             </DialogFooter>
           </form>
         </DialogContent>
@@ -469,9 +474,9 @@ export default function InventoryPage() {
               <Label>选择文件（.xlsx）</Label>
               <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) void handleImportStock(f); e.target.value = '' }} />
-              <Button variant="outline" className="w-full" onClick={() => importFileRef.current?.click()} disabled={importing}>
+              {can(PERMISSIONS.IMPORT_STOCK_EXECUTE) && <Button variant="outline" className="w-full" onClick={() => importFileRef.current?.click()} disabled={importing}>
                 {importing ? '导入中…' : '选择文件并上传'}
-              </Button>
+              </Button>}
             </div>
             } />
             {importResult && (

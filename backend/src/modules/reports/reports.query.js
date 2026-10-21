@@ -578,7 +578,9 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
     const list = raw.map(Number).filter(isValidSettlementType)
     return list.length ? list : null
   })()
-  if (status) {
+  if (status === 'unsettled') {
+    conds.push('pr.status IN (1,2) AND pr.balance>0')
+  } else if (status) {
     conds.push('pr.status = ?')
     params.push(Number(status))
   }

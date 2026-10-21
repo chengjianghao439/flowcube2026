@@ -1,4 +1,6 @@
 import { money } from '@/lib/format'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { useState } from 'react'
 import { EmptyState } from './EmptyState'
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
@@ -24,6 +26,7 @@ import { SettlementConfirmDialog } from '@/components/shared/payments/Settlement
  * 本 hook 只保留选中行、打开状态、操作列与只读的流水小弹窗。
  */
 export function usePaymentActions(type: 1 | 2) {
+  const { can } = usePermission()
   const isPayable = type === 1
   const [selected, setSelected] = useState<PaymentRecord | null>(null)
   const [payOpen, setPayOpen] = useState(false)
@@ -40,7 +43,7 @@ export function usePaymentActions(type: 1 | 2) {
 
   function renderActions(r: PaymentRecord) {
     const needsConfirm = isPayable && r.confirmStatus === 0
-    if (r.status === 3) {
+    if (r.status === 3 || (needsConfirm ? !can(PERMISSIONS.PAYMENT_CONFIRM) : !can(PERMISSIONS.PAYMENT_EXECUTE))) {
       return <Button size="sm" variant="outline" onClick={() => { setSelected(r); setEntriesOpen(true) }}>流水</Button>
     }
     if (needsConfirm) {

@@ -18,7 +18,7 @@ import { getTaskByIdApi, sortDoneApi } from '@/api/warehouse-tasks'
 import PdaHeader, { PdaRefreshButton } from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
-import PdaScanner from '@/components/pda/PdaScanner'
+import PdaScanner, { type PdaScanOutcome, type PdaScanResolution } from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaEmptyCard, PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
@@ -26,7 +26,7 @@ import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
-import { formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
 import PdaNextStep from '@/components/pda/PdaNextStep'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
@@ -55,6 +55,8 @@ export default function PdaSortPage() {
   const [hint, setHint]     = useState<BinHint | null>(null)
   const [scanning, setScanning] = useState(false)
   const [checkTask, setCheckTask] = useState<{ id: number; taskNo: string } | null>(null)
+  const [pendingScanKey, setPendingScanKey] = useState<string | null>(null)
+  const [scanResolution, setScanResolution] = useState<PdaScanResolution | null>(null)
   const scanGeneration = useRef(0)
   const submittedSort = useRef<{
     requestKey: string
@@ -71,6 +73,7 @@ export default function PdaSortPage() {
       // 只有「查回执」的恢复路径在这里提示；正常提交的提示由 handleBinScan 按任务真实状态给出，
       // 否则会双发。恢复也必须**按回执区分部分进度与整任务完成**——查到回执 ≠ 任务分拣完成。
       if (!ctx.recovered) return
+      setScanResolution({ requestKey: ctx.requestKey, outcome: 'accepted' })
       // run 的即时兜底仍使用提交前闭包（pendingRecord 可能为空），原提交定位另绑原键。
       // 不推进扫码代次，否则同一次 run 返回后的正常收尾也会被误当迟到结果。
       const submission = submittedSort.current?.requestKey === ctx.requestKey ? submittedSort.current : null
@@ -130,20 +133,22 @@ export default function PdaSortPage() {
     refetchInterval: 15_000,
   })
 
-  async function handleProductScan(raw: string) {
+  async function handleProductScan(raw: string): Promise<PdaScanOutcome> {
     // 待确认期间冻结：不能再扫新的商品/取货码，否则会把「原目标」换掉、与冻结记录不一致
-    if (sortAction.submitBlocked) { err(sortAction.blockedReason || '上次分拣结果待确认，请先确认后再扫商品'); return }
-    if (sortAction.networkStatus !== 'online') { err('网络已断开，分拣作业已阻断，请恢复网络后再继续'); return }
+    if (sortAction.submitBlocked) { err(sortAction.blockedReason || '上次分拣结果待确认，请先确认后再扫商品'); return 'rejected' }
+    if (sortAction.networkStatus !== 'online') { err('网络已断开，分拣作业已阻断，请恢复网络后再继续'); return 'rejected' }
     const code = raw.trim()
-    if (!code) return
+    if (!code) return 'ignored'
+    setPendingScanKey(null)
+    setScanResolution(null)
     scanGeneration.current += 1
     setCheckTask(null)
     setScanning(true)
     try {
       const res = await scanProductForSortApi(code)
       const result = res
-      if (!result) { err('无拣货中订单，请核对条码'); return }
-      if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 待分配分拣格，请联系主管补分配，刷新后重新扫商品`); return }
+      if (!result) { err('无拣货中订单，请核对条码'); return 'rejected' }
+      if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 待分配分拣格，请联系主管补分配，刷新后重新扫商品`); return 'rejected' }
       const isPickCode = Boolean(result.isPickCode)
       setHint({
         binCode: result.sortingBinCode, productCode: result.productCode, productName: result.productName,
@@ -157,17 +162,18 @@ export default function PdaSortPage() {
         scannedCode: code,
       })
       setStep('confirm-bin')
-    } catch { err('查询失败，请重试') }
+      return 'accepted'
+    } catch (error) { err(formatPdaActionError(error, '查询失败，请重试')); return 'rejected' }
     finally { setScanning(false) }
   }
 
-  async function handleBinScan(raw: string) {
-    if (sortAction.submitBlocked) { err(sortAction.blockedReason || '当前不可提交'); return }
+  async function handleBinScan(raw: string): Promise<PdaScanOutcome> {
+    if (sortAction.submitBlocked) { err(sortAction.blockedReason || '当前不可提交'); return 'rejected' }
     const code = raw.trim()
-    if (!code || !hint) return
+    if (!code || !hint) return 'ignored'
     if (code.toUpperCase() !== hint.binCode.toUpperCase()) {
       err(`放错格：请放 ${hint.binCode}`)
-      return
+      return 'rejected'
     }
     const generation = scanGeneration.current
     setScanning(true)
@@ -192,29 +198,39 @@ export default function PdaSortPage() {
           .then((res) => res as { allSorted: boolean; progress?: string; warning?: string | null })
       }, metadata)
       if (submitted.kind === 'pending') {
+        setPendingScanKey(submitted.requestKey)
         warn('网络中断，分拣结果待确认。请先确认结果，再决定是否重扫。')
-        return
+        return { kind: 'pending', requestKey: submitted.requestKey }
       }
       const result = submitted.data
-      const latest = await getTaskByIdApi(metadata.taskId, { skipGlobalError: true })
-      if (scanGeneration.current === generation && latest.id === metadata.taskId && latest.status === WT_STATUS.CHECKING) setCheckTask(latest)
-      if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
-        ok(stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName))
-      } else if (result?.allSorted) {
-        warn(`分拣请求已返回完成，但系统里的任务状态仍为「${latest.statusName ?? latest.status}」。请稍后刷新确认，暂勿重复扫码。`)
-      } else if (result?.warning) {
-        warn(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）· ${result.warning}`)
-      } else {
-        ok(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）`)
+      // 原写入已确认；后续只读失败不能变成原码可重发的写失败。
+      try {
+        const latest = await getTaskByIdApi(metadata.taskId, { skipGlobalError: true })
+        if (scanGeneration.current !== generation) return 'ignored'
+        if (latest.id === metadata.taskId && latest.status === WT_STATUS.CHECKING) setCheckTask(latest)
+        if (taskReachedStatus(latest, WT_STATUS.CHECKING)) {
+          ok(stateConfirmedMessage(`任务 ${latest.taskNo} 分拣`, latest.statusName))
+        } else if (result?.allSorted) {
+          warn(`分拣请求已返回完成，但系统里的任务状态仍为「${latest.statusName ?? latest.status}」。请稍后刷新确认，暂勿重复扫码。`)
+        } else if (result?.warning) {
+          warn(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）· ${result.warning}`)
+        } else {
+          ok(`✓ 已放入 ${hint.binCode}（${result?.progress ?? '?'}）`)
+        }
+      } catch (error) {
+        if (scanGeneration.current !== generation) return 'ignored'
+        warn(`本次分拣已确认，${formatPdaActionError(error, '暂时无法读取任务状态')}，请刷新核对后继续。`)
       }
+      if (scanGeneration.current === generation) {
+        setStep('scan-product')
+        setHint(null)
+      }
+      return 'accepted'
     } catch (error: unknown) {
       err(formatPdaErrorMessage((error as { message?: string })?.message, '分拣失败，请刷新任务后重试'))
+      return 'rejected'
     }
     finally { if (scanGeneration.current === generation) setScanning(false) }
-    if (scanGeneration.current === generation) {
-      setStep('scan-product')
-      setHint(null)
-    }
   }
 
   const occupiedBins = (bins ?? []).filter(b => b.status === 2)
@@ -226,9 +242,9 @@ export default function PdaSortPage() {
         onBack={() => nav('/pda')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />}
       />
+      <PdaFlash flash={flash} />
 
       <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
-        <PdaFlash flash={flash} />
         <PdaCriticalActionNotice
           blockedReason={sortAction.blockedReason}
           pendingRecord={sortAction.pendingRecord}
@@ -348,7 +364,9 @@ export default function PdaSortPage() {
       </div>
       <PdaBottomBar>
         <PdaScanner
-          onScan={(code) => { if (step === 'scan-product') void handleProductScan(code); else void handleBinScan(code) }}
+          onScan={step === 'scan-product' ? handleProductScan : handleBinScan}
+          resolution={pendingScanKey && sortAction.phase === 'failed'
+            ? { requestKey: pendingScanKey, outcome: 'rejected' } : scanResolution}
           placeholder={step === 'scan-product' ? '扫描商品条码' : '扫描分拣格条码'}
           disabled={scanning || sortAction.submitBlocked || isError}
           busy={scanning}

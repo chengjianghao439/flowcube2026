@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { CreateStatementDialog } from './CreateStatementDialog'
+import { useAuthStore } from '@/store/authStore'
+
+beforeEach(() => useAuthStore.setState({ user: { roleId: 5, permissions: ['payment.execute'] } as never }))
+afterEach(() => useAuthStore.setState({ user: null }))
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 

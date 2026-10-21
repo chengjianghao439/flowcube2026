@@ -8,10 +8,10 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { DEFAULT_LABEL_ELEMENTS } from '@/constants/printFieldDefs'
 import PrintTemplateEditor from './editor'
 
-const mocks = vi.hoisted(() => ({ detail: vi.fn(), sample: vi.fn(), save: vi.fn(), generation: 1 }))
+const mocks = vi.hoisted(() => ({ detail: vi.fn(), sample: vi.fn(), save: vi.fn(), generation: 1, permissions: ['print.template.manage'] }))
 vi.mock('@/api/print-templates', () => ({ getPrintTemplateDetailApi: mocks.detail, getPrintTemplatePreviewApi: mocks.sample, updatePrintTemplateApi: mocks.save, createPrintTemplateApi: mocks.save, renderLabelPreviewApi: async () => ({ imageDataUrl: 'data:image/png;base64,AA' }) }))
 vi.mock('@/api/settings', () => ({ getLogoApi: async () => ({ url: '' }) }))
-vi.mock('@/store/authStore', () => ({ useAuthStore: (select: (s: { sessionGeneration: number; isAuthenticated: boolean }) => unknown) => select({ sessionGeneration: mocks.generation, isAuthenticated: true }) }))
+vi.mock('@/store/authStore', () => ({ useAuthStore: (select: (s: { sessionGeneration: number; isAuthenticated: boolean; user: { roleId: number; permissions: string[] } }) => unknown) => select({ sessionGeneration: mocks.generation, isAuthenticated: true, user: { roleId: 5, permissions: mocks.permissions } }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), warning: vi.fn(), error: vi.fn() } }))
 let root: Root
 let host: HTMLDivElement
@@ -20,7 +20,7 @@ const tpl = { id: 10, type: 8, name: '商品标签', paperSize: 'thermal75', lay
 const real = { type: 8, kind: 'label', sourceLabel: 'REAL-001', data: { product_code: 'REAL-001', product_name: '真实测试商品', spec: '真实型号' } }
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: class { observe() {} disconnect() {} unobserve() {} } })
-  mocks.generation = 1; mocks.detail.mockReset().mockResolvedValue(tpl); mocks.sample.mockReset().mockResolvedValue(real); mocks.save.mockReset().mockResolvedValue(null)
+  mocks.generation = 1; mocks.permissions = ['print.template.manage']; mocks.detail.mockReset().mockResolvedValue(tpl); mocks.sample.mockReset().mockResolvedValue(real); mocks.save.mockReset().mockResolvedValue(null)
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
 })
@@ -31,6 +31,14 @@ async function render(path = '/settings/print-templates/10') {
 }
 function btn(text: string) { return [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === text || b.getAttribute('aria-label') === text)! }
 async function click(text: string) { await act(async () => { btn(text).click() }); await act(async () => { await new Promise(r => setTimeout(r, 20)) }) }
+
+test('模板编辑器查看权不授予保存，撤销管理权即时隐藏保存', async () => {
+  mocks.permissions = ['print.template.view']
+  await render(); expect(host.textContent).toContain('真实测试商品'); expect(btn('保存')).toBeUndefined()
+  mocks.permissions.push('print.template.manage'); await render(); expect(btn('保存')).toBeTruthy()
+  mocks.permissions = ['print.template.view']; await render(); expect(btn('保存')).toBeUndefined()
+  expect(mocks.save).not.toHaveBeenCalled()
+})
 
 test('打开模板自动使用真实字段，保存不包含预览值', async () => {
   await render(); expect(host.textContent).toContain('真实测试商品'); expect(host.textContent).toContain('REAL-001')

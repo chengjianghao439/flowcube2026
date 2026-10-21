@@ -47,6 +47,11 @@ function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map =
 export default function ProductsPage() {
   // 2026-09-17 验收修复（G-10）：写入口必须按权限渲染，只读角色不应看到"新增/批量导入"
   const { can } = usePermission()
+  const canUpdate = can(PERMISSIONS.PRODUCT_UPDATE)
+  const canDelete = can(PERMISSIONS.PRODUCT_DELETE)
+  const canPrint = can(PERMISSIONS.PRODUCT_PRINT_LABEL)
+  const printPermissionRef = useRef(canPrint)
+  printPermissionRef.current = canPrint
   const navigate = useNavigate()
   // Router 的 navigate 引用随其他工作区路径变化；事件调用最新导航，表格列保持稳定。
   const navigateRef = useRef(navigate)
@@ -101,7 +106,7 @@ export default function ProductsPage() {
   }
 
   const handlePrintProductLabel = useCallback(async (p: Product) => {
-    if (printingIds.has(p.id)) return
+    if (!printPermissionRef.current || printingIds.has(p.id)) return
     setPrintingIds((prev) => new Set(prev).add(p.id))
     try {
       const d = await printProductLabelApi(p.id)
@@ -187,18 +192,18 @@ export default function ProductsPage() {
     { key:'isActive', title:'状态', width:70, render:(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} /> },
     { key:'id', title:'操作', width:140, render:(_,r)=>(
       <TableActionsMenu
-        primaryLabel="编辑"
+        primaryLabel={canUpdate ? '编辑' : '查看'}
         primaryVariant="outline"
         onPrimaryClick={()=>navigateFromTable(`/products/${r.id}`)}
         items={[
-          { label:'打印标签', onClick:()=>void handlePrintProductLabel(r), disabled: printingIds.has(r.id) },
+          ...(canPrint ? [{ label:'打印标签', onClick:()=>void handlePrintProductLabel(r), disabled: printingIds.has(r.id) }] : []),
           // 改价走审批（v0.5.1 价格体系）：跳转改价申请页并预填商品
-          { label:'申请改价', onClick:()=>navigateFromTable(`/price-change?productId=${r.id}`) },
-          { label:'删除', onClick:()=>setConfirmProduct(r), destructive:true, separatorBefore:true },
+          ...(canUpdate ? [{ label:'申请改价', onClick:()=>navigateFromTable(`/price-change?productId=${r.id}`) }] : []),
+          ...(canDelete ? [{ label:'删除', onClick:()=>setConfirmProduct(r), destructive:true, separatorBefore:true }] : []),
         ]}
       />
     )},
-  ], [categoryPathMap, navigateFromTable, handlePrintProductLabel, printingIds, hasKeyword])
+  ], [categoryPathMap, navigateFromTable, handlePrintProductLabel, printingIds, hasKeyword, canUpdate, canDelete, canPrint])
 
   return (
     <div className="space-y-4">
@@ -272,7 +277,7 @@ export default function ProductsPage() {
         description={`删除商品「${confirmProduct?.name}」？商品被单据、库存或任务引用后不能删除；如需停用，请编辑并取消启用。`}
         variant="destructive"
         confirmText="删除"
-        onConfirm={() => { del(confirmProduct!.id); setConfirmProduct(null) }}
+        onConfirm={() => { if (!can(PERMISSIONS.PRODUCT_DELETE) || !confirmProduct) return; del(confirmProduct.id); setConfirmProduct(null) }}
         onCancel={() => setConfirmProduct(null)}
       />
       <ProductQueryDialog

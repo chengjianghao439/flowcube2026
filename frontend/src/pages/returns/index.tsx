@@ -2,7 +2,7 @@ import { useWorkspaceSearchParams, useWorkspacePath } from '@/hooks/useWorkspace
 import { money } from '@/lib/format'
 import { returnNet } from './sale/form/returnSourcePresentation'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -11,6 +11,8 @@ import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPurchaseReturnsApi, confirmPurchaseReturnApi, cancelPurchaseReturnApi, getSaleReturnsApi, confirmSaleReturnApi, cancelSaleReturnApi } from '@/api/returns'
@@ -35,6 +37,9 @@ const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已确认',
 const DEFAULT_RANGE_DAYS = 7
 
 export default function ReturnsPage() {
+  const { can } = usePermission()
+  const permissionRef = useRef(can)
+  permissionRef.current = can
   const qc = useQueryClient()
   const navigate = useNavigate()
   const ownPath = useWorkspacePath()
@@ -106,6 +111,7 @@ export default function ReturnsPage() {
   const partyKey = type === 'purchase' ? 'supplierName' : 'customerName'
 
   const mut = (fn: () => Promise<unknown>, id?: number) => {
+    if (!permissionRef.current(PERMISSIONS.RETURN_ORDER_CONFIRM)) return
     if (id) setPendingId(id)
     fn()
       .then(inv)
@@ -117,6 +123,7 @@ export default function ReturnsPage() {
   // 货要等仓库按出库流程退回客户后这张退货单才真正取消。必须把单号告诉用户，
   // 否则用户以为已经取消、仓库那边却还挂着一张待出库任务。
   const cancelReturn = (row: RowType) => {
+    if (!permissionRef.current(PERMISSIONS.RETURN_ORDER_CANCEL)) return
     setPendingId(row.id)
     cancelFn(row.id)
       .then((res) => {
@@ -151,6 +158,7 @@ export default function ReturnsPage() {
   }, [])
 
   function goToNew() {
+    if (!can(PERMISSIONS.RETURN_ORDER_CREATE)) return
     const path = `/returns/${type}/new`
     addTab({ key: path, title: type === 'purchase' ? '新建采购退货单' : '新建销售退货单', path })
     navigate(path)
@@ -260,13 +268,13 @@ export default function ReturnsPage() {
           primaryVariant="outline"
           onPrimaryClick={() => goToDetail(r)}
           items={[
-            ...(r.status === 1 ? [{
+            ...(r.status === 1 && can(PERMISSIONS.RETURN_ORDER_CONFIRM) ? [{
               label: pendingId === r.id ? '处理中…' : '确认',
               onClick: () => mut(() => confirmFn(r.id), r.id),
               disabled: pendingId === r.id,
             }] : []),
             { label: '打印', onClick: () => setPrintTarget(r) },
-            ...((r.status === 1 || r.status === 2) ? [{
+            ...((r.status === 1 || r.status === 2) && can(PERMISSIONS.RETURN_ORDER_CANCEL) ? [{
               label: pendingId === r.id ? '处理中…' : '取消',
               onClick: () => openConfirm(
                 '取消退货单',
@@ -297,7 +305,7 @@ export default function ReturnsPage() {
               导出 Excel
             </Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            <Button onClick={goToNew}>+ 新建{type === 'purchase' ? '采购' : '销售'}退货单</Button>
+            {can(PERMISSIONS.RETURN_ORDER_CREATE) && <Button onClick={goToNew}>+ 新建{type === 'purchase' ? '采购' : '销售'}退货单</Button>}
           </>
         }
       />

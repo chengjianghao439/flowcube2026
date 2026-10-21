@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { CreateManualPayableDialog } from './CreateManualPayableDialog'
+import { useAuthStore } from '@/store/authStore'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -83,6 +84,7 @@ vi.mock('@/api/operation-requests', () => ({
 const hosts: HTMLDivElement[] = []
 let closeCount = 0
 const qc = newClient()
+beforeEach(() => useAuthStore.setState({ user: { roleId: 5, permissions: ['payment.create'] } as never }))
 
 async function mount(open = true) {
   const host = document.createElement('div'); document.body.append(host); hosts.push(host)
@@ -119,10 +121,21 @@ async function fillValid(host: HTMLElement, account = '6602') {
 }
 
 afterEach(() => {
+  useAuthStore.setState({ user: null })
   hosts.splice(0).forEach(h => h.remove())
   qc.clear()
   fixture.calls.length = 0; fixture.failWith = null; fixture.toasts.length = 0; closeCount = 0
   fixture.receiptStatus = 'pending'
+})
+
+it('撤销创建权限后已打开手工应付表单不能提交', async () => {
+  const { host, root } = await mount()
+  await fillValid(host)
+  await act(async () => useAuthStore.setState({ user: { roleId: 5, permissions: ['payment.view'] } as never }))
+  await act(async () => host.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(fixture.calls).toHaveLength(0)
+  expect(host.querySelector('button[type="submit"]')).toBeNull()
+  await act(async () => root.unmount())
 })
 
 it('★ 回执查不到（not_found）视为仍未确认：不换请求键，也不算「确定失败」', async () => {

@@ -12,6 +12,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Power, FolderOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { Button }  from '@/components/ui/button'
 import { Input }   from '@/components/ui/input'
 import { Label }   from '@/components/ui/label'
@@ -48,6 +50,8 @@ interface FormDialogProps {
 }
 
 function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDialogProps) {
+  const { can } = usePermission()
+  const canSave = can(mode === 'create' ? PERMISSIONS.CATEGORY_CREATE : PERMISSIONS.CATEGORY_UPDATE)
   const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM)
   const { mutate: create, isPending: creating } = useCreateCategory()
   const { mutate: update, isPending: updating } = useUpdateCategory()
@@ -86,6 +90,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!canSave) return
     if (mode === 'create') {
       const d: CreateCategoryParams = {
         name:      form.name!,
@@ -180,7 +185,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-            <Button type="submit" disabled={isPending || !form.name}>{isPending ? '保存中…' : (mode === 'edit' ? '保存修改' : '保存')}</Button>
+            {canSave && <Button type="submit" disabled={isPending || !form.name}>{isPending ? '保存中…' : (mode === 'edit' ? '保存修改' : '保存')}</Button>}
           </DialogFooter>
         </form>
       </DialogContent>
@@ -213,6 +218,7 @@ function findPathToCategory(nodes: Category[], targetId: number, trail: Category
 }
 
 function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expandedIds, onToggle }: NodeProps) {
+  const { can } = usePermission()
   const hasChildren = !!(cat.children && cat.children.length > 0)
   const expanded = expandedIds.has(cat.id)
 
@@ -253,7 +259,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
         />
 
         <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          {cat.level < 4 && (
+          {can(PERMISSIONS.CATEGORY_CREATE) && cat.level < 4 && (
             <Button
               size="sm" variant="ghost"
               className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
@@ -263,15 +269,15 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
               <Plus className="h-3.5 w-3.5" />
             </Button>
           )}
-          <Button
+          {can(PERMISSIONS.CATEGORY_UPDATE) && <Button
             size="sm" variant="ghost"
             className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
             title="编辑"
             onClick={() => onEdit(cat)}
           >
             <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
+          </Button>}
+          {can(PERMISSIONS.CATEGORY_UPDATE) && <Button
             size="sm" variant="ghost"
             className={cn(
               'h-7 w-7 p-0',
@@ -283,15 +289,15 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
             onClick={() => onToggleStatus(cat)}
           >
             <Power className="h-3.5 w-3.5" />
-          </Button>
-          <Button
+          </Button>}
+          {can(PERMISSIONS.CATEGORY_DELETE) && <Button
             size="sm" variant="ghost"
             className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink"
             title="删除"
             onClick={() => onDelete(cat)}
           >
             <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+          </Button>}
         </div>
       </div>
 
@@ -318,6 +324,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function CategoriesPage() {
+  const { can } = usePermission()
   const { data: tree = [], isLoading } = useCategoryTree()
   const { mutate: del,    isPending: deleting  } = useDeleteCategory()
   const { mutate: toggle, isPending: toggling  } = useToggleCategoryStatus()
@@ -337,6 +344,7 @@ export default function CategoriesPage() {
   const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
 
   function handleAddRoot() {
+    if (!can(PERMISSIONS.CATEGORY_CREATE)) return
     setFormMode('create')
     setParentCat(null)
     setEditCat(null)
@@ -344,6 +352,7 @@ export default function CategoriesPage() {
   }
 
   function handleAddChild(cat: Category) {
+    if (!can(PERMISSIONS.CATEGORY_CREATE)) return
     setFormMode('create')
     setParentCat(cat)
     setEditCat(null)
@@ -351,6 +360,7 @@ export default function CategoriesPage() {
   }
 
   function handleEdit(cat: Category) {
+    if (!can(PERMISSIONS.CATEGORY_UPDATE)) return
     setFormMode('edit')
     setEditCat(cat)
     setParentCat(null)
@@ -366,12 +376,12 @@ export default function CategoriesPage() {
   }
 
   function confirmDelete() {
-    if (!deleteTarget) return
+    if (!deleteTarget || !can(PERMISSIONS.CATEGORY_DELETE)) return
     del(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) })
   }
 
   function confirmToggle() {
-    if (!toggleTarget) return
+    if (!toggleTarget || !can(PERMISSIONS.CATEGORY_UPDATE)) return
     toggle(
       { id: toggleTarget.id, status: toggleTarget.status === 0 },
       { onSuccess: () => setToggleTarget(null) },
@@ -388,7 +398,7 @@ export default function CategoriesPage() {
         title="商品分类"
         description={`支持 4 级分类，共 ${totalCount} 个`}
         actions={
-          <Button onClick={handleAddRoot}>
+          can(PERMISSIONS.CATEGORY_CREATE) && <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />
             新增一级分类
           </Button>
@@ -454,7 +464,7 @@ export default function CategoriesPage() {
 
       {/* 删除确认 */}
       <ConfirmDialog
-        open={!!deleteTarget}
+        open={!!deleteTarget && can(PERMISSIONS.CATEGORY_DELETE)}
         variant="destructive"
         title={`删除分类「${deleteTarget?.name}」`}
         description="删除后不可恢复。若该分类下存在子分类或已绑定商品，将无法删除。"
@@ -466,7 +476,7 @@ export default function CategoriesPage() {
 
       {/* 停用/启用确认 */}
       <ConfirmDialog
-        open={!!toggleTarget}
+        open={!!toggleTarget && can(PERMISSIONS.CATEGORY_UPDATE)}
         title={`${toggleTarget?.status ? '停用' : '启用'}分类「${toggleTarget?.name}」`}
         description={
           toggleTarget?.status

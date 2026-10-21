@@ -96,6 +96,19 @@ export function formatPdaActionError(error: unknown, fallback = '操作失败，
   return formatPdaErrorMessage(e?.response?.data?.message ?? e?.response?.message ?? e?.message, fallback)
 }
 
+export const PDA_INVENTORY_NOT_FOUND = '未找到可用的库存条码，请核对条码后重试'
+
+/** 仅统一两条库存读取接口的已知未命中；权限、网络和其它中文原因保持。 */
+export function formatPdaInventoryError(error: unknown, fallback = '条码查询失败'): string {
+  const e = error as { code?: unknown; response?: { code?: unknown; data?: { code?: unknown } } } | null
+  const message = formatPdaActionError(error, fallback)
+  const code = e?.response?.data?.code ?? e?.response?.code ?? e?.code
+  return code === 'INVENTORY_BARCODE_NOT_FOUND'
+    || message === '库存条码不存在或已失效'
+    || message === '未找到该条码对应的库存条码'
+    ? PDA_INVENTORY_NOT_FOUND : message
+}
+
 export function formatErrorMessage(messageOrCode: unknown, fallback = '操作失败，请检查网络或联系管理员'): string {
   const raw = asTrimmedString(messageOrCode)
   if (!raw) return fallback
