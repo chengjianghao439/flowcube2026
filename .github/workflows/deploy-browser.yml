@@ -1,300 +1,170 @@
+# Manual release only. No push, workflow_run or workflow_call publication.
 name: Deploy Browser App
-
-on:
-  push:
-    branches:
-      - main
+'on':
   workflow_dispatch:
-
+    inputs:
+      checkout_ref:
+        description: 必须填写 main 历史中完整的 40 位 SHA；不接受分支、标签或短 SHA。
+        required: true
+        type: string
+      approval_comment_id:
+        description: 老大在 GitHub 回复 发 加完整 SHA 的评论 ID。
+        required: true
+        type: string
+      backup_comment_id:
+        description: 同一主题内，运维先提交的备份就绪评论 ID。
+        required: true
+        type: string
 permissions:
   contents: read
-  actions: write # 删除本次临时镜像 artifact，避免长期占用 Actions 存储配额。
-
-# 并发保护（2026-08-11 生产事故修复）：main 上连续多次 push 会触发多个 Deploy 并发在服务器
-# 跑 docker compose up --build 互相抢容器。concurrency 让同一时间只跑一个 Deploy——
-# 已开始的部署必须完成或走回退，不在应用切换中途取消；待运行队列保留最新提交。
-concurrency:
-  # 与 build-desktop / build-pda-apk 共用同一个 group：三者都要 SSH 到同一台服务器操作
-  # （服务器端还有 flock 兜底，但那把锁只等 5 分钟，等不到就会被外层 timeout 强杀——
-  #  2026-09-16 发 v0.9.17 时就这样失败过）。用同一个 group 让 GitHub 侧先排队，
-  # 从源头上避免同时抢锁。
-  group: flowcube-server-deploy
-  cancel-in-progress: false
-
+  actions: read
+  issues: read
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 jobs:
-  deploy:
-    if: github.ref == 'refs/heads/main'
+  resolve-release-target:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
     runs-on: ubuntu-latest
-    # 故障预算：检查 30 + 构建 20 + artifact 3 + 部署 165 + 清理 3；job 另留 3 分钟。
-    timeout-minutes: 224
-
+    timeout-minutes: 35
+    outputs:
+      sha: ${{ steps.target.outputs.sha }}
+      main_sha: ${{ github.workflow_sha }}
+      artifact_id: ${{ steps.checks.outputs.artifact-id }}
     steps:
-      - name: Checkout code
+      - name: Checkout immutable trusted release tools
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
-
-      - name: Setup Node 22
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
-
-      - name: Wait for Tests and Security Scan on this commit
-        timeout-minutes: 30
+      - name: Validate immutable release target
+        id: target
+        env:
+          RELEASE_MANUAL_ONLY: '1'
+          RELEASE_CHECKOUT_REF: ${{ inputs.checkout_ref }}
+        run: node scripts/resolve-release-target.cjs
+      - name: Verify GitHub approval, Tests and actual npm audit jobs
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/wait-release-checks.js
-
+          TARGET_SHA: ${{ steps.target.outputs.sha }}
+          APPROVAL_COMMENT_ID: ${{ inputs.approval_comment_id }}
+          BACKUP_COMMENT_ID: ${{ inputs.backup_comment_id }}
+          RELEASE_CHECKS_OUTPUT: checks.json
+        run: node scripts/manual-release/verify-gates.cjs
+      - name: Retain verified gate evidence
+        id: checks
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: manual-release-checks
+          path: checks.json
+          retention-days: 7
+          if-no-files-found: error
+  build:
+    needs: resolve-release-target
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    outputs:
+      artifact_id: ${{ steps.bundle.outputs.artifact-id }}
+    steps:
+      - name: Checkout selected application SHA
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ needs.resolve-release-target.outputs.sha }}
+          path: source
+          persist-credentials: false
+      - name: Checkout immutable trusted release tools
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          path: trusted
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Download verified gate evidence
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          artifact-ids: ${{ needs.resolve-release-target.outputs.artifact_id }}
+          path: gate
+          merge-multiple: true
       - name: Build application images on GitHub runner
-        timeout-minutes: 20
         env:
-          DEPLOY_IMAGE_OUTPUT: ${{ runner.temp }}/flowcube-images.tar.gz
-          FLOWCUBE_IMAGE_REPORT_DIR: ${{ runner.temp }}/flowcube-image-reports
-        run: |
-          bash scripts/build-deploy-images.sh
-          bash scripts/generate-image-sbom.sh "$DEPLOY_IMAGE_OUTPUT"
-
-      - name: Retain image SBOM and provenance
+          GITHUB_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+          FLOWCUBE_BUILD_ROOT: ${{ github.workspace }}/source
+          DEPLOY_IMAGE_OUTPUT: ${{ runner.temp }}/payload/images.tar.gz
+          FLOWCUBE_IMAGE_REPORT_DIR: ${{ runner.temp }}/payload
+        run: |-
+          mkdir -p "$RUNNER_TEMP/payload"
+          bash trusted/scripts/build-deploy-images.sh
+          bash trusted/scripts/generate-image-sbom.sh "$DEPLOY_IMAGE_OUTPUT"
+      - name: Create full immutable release envelope
+        env:
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+        run: >-
+          python3 -B trusted/scripts/manual-release/make-bundle.py browser source "$RUNNER_TEMP/payload" gate/checks.json
+          "$RUNNER_TEMP/release.tar"
+      - name: Retain full bundle, SBOM, provenance and digest manifest
+        id: bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: image-provenance-${{ github.sha }}-${{ github.run_id }}
-          path: ${{ runner.temp }}/flowcube-image-reports/
-          retention-days: 30
-          if-no-files-found: error
-
-      - name: Stage image archive for HTTPS transfer
-        id: image_artifact
-        # HTTPS 是可选快路径；配额/服务异常时保留原 SCP 传输。
-        continue-on-error: true
-        timeout-minutes: 3
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: deploy-images-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/flowcube-images.tar.gz
+          name: browser-release-bundle
+          path: ${{ runner.temp }}/release.tar
           compression-level: 0
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: error
-
-      - name: Resolve deploy config
-        id: deploy_config
-        shell: bash
-        env:
-          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
-          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
-          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
-          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
-          SERVER_APP_PATH_VAR: ${{ vars.FLOWCUBE_SERVER_APP_PATH }}
-        run: |
-          set -euo pipefail
-          if node scripts/read-deploy-config.js >/tmp/flowcube-deploy-config.json 2>/tmp/flowcube-deploy-config.err; then
-            {
-              echo "erp_origin=$(node scripts/read-deploy-config.js erpOrigin)"
-              echo "server_host=$(node scripts/read-deploy-config.js server.host)"
-              echo "server_user=$(node scripts/read-deploy-config.js server.user)"
-              echo "server_ssh_port=$(node scripts/read-deploy-config.js server.sshPort)"
-              echo "server_app_path=$(node scripts/read-deploy-config.js server.appPath)"
-            } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          ERP_ORIGIN="${ERP_ORIGIN_VAR:-}"
-          [ -n "$ERP_ORIGIN" ] || { echo "::error::缺少部署配置：设置 deploy/production.local.json 或 GitHub Variable VITE_ERP_PRODUCTION_ORIGIN"; cat /tmp/flowcube-deploy-config.err || true; exit 1; }
-          SERVER_HOST="${SERVER_HOST_VAR:-$(node -e "const u=new URL(process.argv[1]); console.log(u.hostname)" "$ERP_ORIGIN")}"
-          SERVER_USER="${SERVER_USER_VAR:-root}"
-          SERVER_SSH_PORT="${SERVER_SSH_PORT_VAR:-22}"
-          SERVER_APP_PATH="${SERVER_APP_PATH_VAR:-/opt/flowcube}"
-          {
-            echo "erp_origin=$ERP_ORIGIN"
-            echo "server_host=$SERVER_HOST"
-            echo "server_user=$SERVER_USER"
-            echo "server_ssh_port=$SERVER_SSH_PORT"
-            echo "server_app_path=$SERVER_APP_PATH"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Validate deploy inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          [ -n "${{ steps.deploy_config.outputs.erp_origin }}" ] || { echo "::error::缺少 erp_origin"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_host }}" ] || { echo "::error::缺少 server_host"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_user }}" ] || { echo "::error::缺少 server_user"; exit 1; }
-          [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::缺少 server_app_path"; exit 1; }
-          [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
-
-      - name: Setup SSH agent
-        shell: bash
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          KEY_FILE=~/.ssh/flowcube_ci_key
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
-          chmod 600 "$KEY_FILE"
-          eval "$(ssh-agent -s)"
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
-          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
-          ssh-add "$KEY_FILE"
-          # 同一台服务器的预检、上传和执行复用 SSH，避免短连接触发 sshd 限流。
-          cat >> ~/.ssh/config <<EOF
-          Host ${{ steps.deploy_config.outputs.server_host }}
-            ControlMaster auto
-            ControlPath ~/.ssh/flowcube-%C
-            ControlPersist 300
-            ServerAliveInterval 30
-            ServerAliveCountMax 10
-          EOF
-          chmod 600 ~/.ssh/config
-          # 仅输出连接策略；不建立连接，也不输出凭据或主机配置全文。
-          ssh -G "${{ steps.deploy_config.outputs.server_host }}" | awk '/^(controlmaster|controlpersist|serveraliveinterval|serveralivecountmax) /'
-
-      - name: Add SSH known_hosts
-        id: ssh_trust
-        shell: bash
-        env:
-          FLOWCUBE_SSH_HOST: ${{ steps.deploy_config.outputs.server_host }}
-          FLOWCUBE_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
-          FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
-        run: bash scripts/setup-ci-ssh-trust.sh
-
-      - name: Deploy backend and frontend on server
-        # 故障预算：HTTPS/中转尝试 1145s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3300s + 预检等 300s。
-        # 总计 9855s（约 165 分钟）；新增迁移前备份独占 300s，不挤占原部署或回退预算。
-        timeout-minutes: 165
-        shell: bash
+  deploy:
+    needs:
+      - resolve-release-target
+      - build
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 215
+    environment: manual-release
+    permissions:
+      contents: read
+      actions: read
+      issues: read
+      id-token: write
+    concurrency:
+      group: flowcube-server-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Checkout immutable trusted release tools
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Recheck live GitHub gates and authenticated approval
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          DEPLOY_ARTIFACT_ID: ${{ steps.image_artifact.outputs.artifact-id }}
-          SMOKE_USERNAME: ${{ secrets.SMOKE_USERNAME }}
-          SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
-          SMOKE_LIMITED_USERNAME: ${{ secrets.SMOKE_LIMITED_USERNAME }}
-          SMOKE_LIMITED_PASSWORD: ${{ secrets.SMOKE_LIMITED_PASSWORD }}
-        run: |
-          set -euo pipefail
-          # 缺少任何一组验收凭据时，必须在 SSH、上传或迁移前停止。
-          : "${SMOKE_USERNAME:?缺少 SMOKE_USERNAME}"
-          : "${SMOKE_PASSWORD:?缺少 SMOKE_PASSWORD}"
-          : "${SMOKE_LIMITED_USERNAME:?缺少 SMOKE_LIMITED_USERNAME}"
-          : "${SMOKE_LIMITED_PASSWORD:?缺少 SMOKE_LIMITED_PASSWORD}"
-          # 将新发布器带到旧 checkout，首次迁移清单必须早于 Git 更新。
-          BOOTSTRAP_SCRIPT="/tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
-          IMAGE_ARCHIVE="/tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz"
-          IMAGE_SHA256="$(sha256sum "$RUNNER_TEMP/flowcube-images.tar.gz" | cut -d' ' -f1)"
-          ARCHIVE_BYTES=$(stat -c%s "$RUNNER_TEMP/flowcube-images.tar.gz")
-          SSH_TARGET="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
-          SSH_PORT="${{ steps.deploy_config.outputs.server_ssh_port }}"
-          SSH_COMMON=(-o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=10)
-          # 上传前预检临时目录与应用目录，保留余量；不触发 Docker 全盘扫描。
-          # **余量不足必须自解释**：原先写的是 `test "$(df -Pm ...)" -ge 6144`，余量不够时 ssh 只返回
-          # 1、一行输出都没有，与「SSH 连不上/密钥失效」在日志里长得完全一样。2026-09-19 11:04 起
-          # 连续 3 轮部署都以「##[endgroup] 之后 3~4 秒静默 exit 1」失败，日志里没有任何可诊断信息，
-          # 事后才推断出是服务器磁盘低于 6 GiB。现在先打印实际余量，再据此判定并给出可执行的处置提示。
-          DISK_USAGE="$(timeout -k 5 30 ssh "${SSH_COMMON[@]}" -p "${{ steps.deploy_config.outputs.server_ssh_port }}" \
-            "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
-            "df -Pm /tmp '${{ steps.deploy_config.outputs.server_app_path }}' | awk 'NR>1 {print \$6, \$4 \"MB\"}'")" \
-            || { echo "::error::无法读取服务器磁盘余量（SSH 连接或认证失败），部署中止"; exit 1; }
-          echo "服务器可用空间（挂载点 可用）："
-          printf '%s\n' "$DISK_USAGE"
-          printf '%s\n' "$DISK_USAGE" | awk '
-            NF < 2 { print "::error::服务器磁盘预检没有拿到可用空间，部署中止"; bad = 1; next }
-            { mb = $NF; sub(/MB$/, "", mb)
-              if (mb + 0 < 6144) { printf "::error::%s 可用 %s，低于部署预检下限 6144MB：请先清理服务器磁盘再重跑（不得清除回退镜像）\n", $1, $NF; bad = 1 } }
-            END { exit bad ? 1 : 0 }'
-          # 先尝试服务器拉取 HTTPS artifact；签名 URL 仅走 stdin，不写日志/进程参数。
-          # token 留在 runner。快路径失败时只有传输降级，部署门禁不会降级。
-          RECEIVER_SCRIPT="/tmp/flowcube-receive-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.py"
-          HTTPS_OK=0
-          if [ -n "$DEPLOY_ARTIFACT_ID" ] && timeout -k 5 30 scp "${SSH_COMMON[@]}" -P "$SSH_PORT" \
-            scripts/receive-deploy-artifact.py "$SSH_TARGET:$RECEIVER_SCRIPT"; then
-            if node scripts/deploy-artifact-url.js | timeout -k 10 1100 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" "$SSH_TARGET" \
-              "python3 '$RECEIVER_SCRIPT' '$IMAGE_ARCHIVE' '$IMAGE_SHA256' '$ARCHIVE_BYTES'"; then
-              HTTPS_OK=1
-            fi
-          fi
-          if [ "$HTTPS_OK" != 1 ]; then
-            echo '::warning::HTTPS 快路径不可用，回退分片 SCP；请记录实际传输路径与耗时'
-            # 此 runner 的复用连接可能已失效；只释放本目标的本地 master，随后重新建连。
-            timeout -k 5 10 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -O exit "$SSH_TARGET" >/dev/null 2>&1 || true
-            # ── 镜像归档上传：分片并行 ──────────────────────────────────────
-            # 跨境链路有方向差异；服务器向外下载的速率不能作为 runner 向服务器上传的预算依据。
-            # 分片**不改变归档字节**：服务器端按序合并后 sha256 与 runner 侧完全一致，
-            # server-update.sh 的归档摘要与 OCI revision 校验一律不变。
-            UPLOAD_STREAMS=8
-            PART_TIMEOUT=2700
-            # 实测 runner→服务器 方向：单流 27 KB/s、8 流聚合约 97 KB/s（仅提升 3.6 倍）；
-            # 而反方向（服务器→GitHub）同样 8 流可达 8.4 MB/s——慢的是**跨境入站方向本身**，
-            # 不是 runner 不会并发。192MB 按 97 KB/s 需约 33 分钟，所以整批预算按 45 分钟给；
-            # 2026-09-21 第一次跑时用的是 1200 秒，实测传到 19% 就被杀。
-            UPLOAD_BUDGET=2700
-            # 八片同时上传且不重试，每片需有同样的 45 分钟；900 秒会先杀掉全部慢分片。
-            PARTS_DIR="/tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-            LOCAL_PARTS="$RUNNER_TEMP/image-parts"
-            rm -rf "$LOCAL_PARTS"; mkdir -p "$LOCAL_PARTS"
-            PART_BYTES=$(( (ARCHIVE_BYTES + UPLOAD_STREAMS - 1) / UPLOAD_STREAMS ))
-            split -b "$PART_BYTES" -d -a 3 "$RUNNER_TEMP/flowcube-images.tar.gz" "$LOCAL_PARTS/part-"
-            echo "==> 分片并行上传：归档 ${ARCHIVE_BYTES} 字节，并行度 ${UPLOAD_STREAMS}"
-            timeout -k 5 60 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
-              "rm -rf '$PARTS_DIR' && mkdir -p '$PARTS_DIR'"
-            # 控制命令共用主连接；数据流各用独立控制连接，避免八片复用同一 TCP 后失去跨境并行效果。
-            (cd "$LOCAL_PARTS" && printf '%s\n' part-*) | timeout -k 20 "$UPLOAD_BUDGET" xargs -P "$UPLOAD_STREAMS" -I{} \
-              timeout -k 10 "$PART_TIMEOUT" scp "${SSH_COMMON[@]}" -o ControlPath="$RUNNER_TEMP/scp-{}-%C" -P "$SSH_PORT" "$LOCAL_PARTS/{}" "$SSH_TARGET:$PARTS_DIR/{}"
-            echo "==> 服务器端按序合并分片并核对字节数"
-            MERGED_BYTES=$(timeout -k 10 600 ssh "${SSH_COMMON[@]}" -p "$SSH_PORT" -o BatchMode=yes "$SSH_TARGET" \
-              "cat '$PARTS_DIR'/part-* > '$IMAGE_ARCHIVE' && rm -rf '$PARTS_DIR' && stat -c%s '$IMAGE_ARCHIVE'")
-            [ "$MERGED_BYTES" = "$ARCHIVE_BYTES" ] \
-              || { echo "::error::服务器端合并后字节数不一致（${MERGED_BYTES} ≠ ${ARCHIVE_BYTES}），拒绝继续部署"; exit 1; }
-            echo "==> 合并校验通过：${MERGED_BYTES} 字节（sha256 由 server-update.sh 继续核对）"
-          fi
-          timeout -k 5 60 scp -o ConnectTimeout=20 -P "${{ steps.deploy_config.outputs.server_ssh_port }}" scripts/publish-pda.sh \
-            "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}:$BOOTSTRAP_SCRIPT"
-          # %q 只转义非敏感配置；验收口令通过 stdin 传给远程 shell 内建 read。
-          printf -v REMOTE_COMMAND '%q ' env \
-            "SERVER_APP_PATH=${{ steps.deploy_config.outputs.server_app_path }}" \
-            "EXPECTED_COMMIT=$GITHUB_SHA" "BOOTSTRAP_SCRIPT=$BOOTSTRAP_SCRIPT" \
-            "DEPLOY_IMAGE_ARCHIVE=$IMAGE_ARCHIVE" "DEPLOY_IMAGE_SHA256=$IMAGE_SHA256" \
-            "DEPLOY_PUBLIC_ORIGIN=${{ steps.deploy_config.outputs.erp_origin }}" \
-            bash -s
-          bash scripts/ssh-smoke-stdin.sh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 -o ConnectTimeout=20 \
-            -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" "$REMOTE_COMMAND" <<'EOF'
-          set -euo pipefail
-          cd "$SERVER_APP_PATH"
-          exec 9>/tmp/flowcube-deploy.lock
-          # 等锁上限与 PDA 发布（build-pda-apk.yml）保持一致：一次完整部署可能十几分钟，
-          # 5 分钟会在与其它发布流程错峰时抢锁超时（2026-09-16 v0.9.17 即为此失败）。
-          flock -w 1800 9
-          trap 'rm -f "$BOOTSTRAP_SCRIPT" "$DEPLOY_IMAGE_ARCHIVE"' EXIT
-          if [ ! -f backend/apk/published-version.json ] && [ -f backend/apk/version.json ] && [ -f backend/apk/app-release.apk ]; then
-            bash "$BOOTSTRAP_SCRIPT" backend/apk/app-release.apk backend/apk/version.json backend/apk
-          fi
-          if git diff --name-only --diff-filter=U | grep -q .; then
-            echo "==> 检测到服务器 Git 工作区存在未解决冲突，重置到当前发布提交"
-            git reset --hard HEAD
-          fi
-          timeout -k 5 120 git fetch origin main
-          git reset --hard "$EXPECTED_COMMIT"
-          # 发布门禁（release-gate）随部署执行：页面烟雾 + 对账回跳。凭据由 GitHub Secrets 注入，
-          # 服务器不再 SKIP_RELEASE_GATE=1——坏版本（渲染错误/路由失效）会在部署时被当场拦下。
-          # 600 秒清理窗口覆盖两轮健康等待(420s)、Docker 管理/清理和失败通知。
-          FLOWCUBE_DEPLOY_TIMEOUT_GROUP=1 DEPLOY_LOCK_FD=9 SKIP_GIT_PULL=1 timeout -k 600 2700 bash scripts/server-update.sh
-          EOF
-
-      - name: Remove this run's temporary upload
-        if: always() && steps.ssh_trust.outcome == 'success' && steps.deploy_config.outputs.server_host != ''
-        timeout-minutes: 2
-        shell: bash
-        run: |
-          # 分片目录也必须清；注释必须放在命令前，不能插在反斜杠续行中截断 SSH 参数。
-          timeout -k 5 60 ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=10 -o ServerAliveCountMax=2 \
-            -p "${{ steps.deploy_config.outputs.server_ssh_port }}" "${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}" \
-            "rm -f /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.relay.pending /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.relay /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.relay.partial /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.partial /tmp/flowcube-receive-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.py /tmp/flowcube-pda-bootstrap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh; rm -rf /tmp/flowcube-image-parts-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} /tmp/flowcube-images-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.tar.gz.https-*" \
-            || echo '::warning::临时上传清理失败，请检查本次 run 对应的 /tmp 文件'
-
-      - name: Remove this run's temporary image artifact
-        if: always() && steps.image_artifact.outputs.artifact-id != ''
-        timeout-minutes: 1
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+          APPROVAL_COMMENT_ID: ${{ inputs.approval_comment_id }}
+          BACKUP_COMMENT_ID: ${{ inputs.backup_comment_id }}
+          RELEASE_CHECKS_OUTPUT: current-checks.json
+        run: node scripts/manual-release/verify-gates.cjs
+      - name: Download this run exact release bundle
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: bundle
+          merge-multiple: true
+      - name: Verify target SHA, locks and full bundle before secrets
         env:
-          GH_TOKEN: ${{ github.token }}
-          ARTIFACT_ID: ${{ steps.image_artifact.outputs.artifact-id }}
-        run: timeout 30 gh api --method DELETE "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID"
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+        run: python3 -B scripts/manual-release/verify-local.py bundle/release.tar verified current-checks.json
+      - name: Direct restricted SSH transfer from GitHub runner
+        env:
+          FLOWCUBE_SSH_HOST: ${{ vars.FLOWCUBE_SERVER_HOST }}
+          FLOWCUBE_SSH_PORT: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
+          FLOWCUBE_RELEASE_USER: ${{ vars.FLOWCUBE_RELEASE_USER }}
+          FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
+          FLOWCUBE_RELEASE_SSH_KEY: ${{ secrets.FLOWCUBE_RELEASE_SSH_KEY }}
+        run: python3 -B scripts/manual-release/send-bundle.py bundle/release.tar

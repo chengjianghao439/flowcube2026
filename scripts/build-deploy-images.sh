@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 在 GitHub runner 构建，生产 server-update.sh 不调用本脚本。
 set -euo pipefail
-cd "$(dirname "$0")/.."
+TOOL_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "${FLOWCUBE_BUILD_ROOT:-$TOOL_DIR/..}"
 sha="${GITHUB_SHA:-}"
 [[ "$sha" =~ ^[a-f0-9]{40}$ ]] && [ "$(git rev-parse HEAD)" = "$sha" ] || { echo '!! 构建 SHA 不匹配' >&2; exit 1; }
 [ "${GITHUB_ACTIONS:-}" = true ] || { echo '!! 应用发布镜像只在 GitHub Actions 构建' >&2; exit 1; }

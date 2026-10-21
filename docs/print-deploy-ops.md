@@ -12,6 +12,12 @@
 
 公开仓库不得存放含本机凭据、生产取证或真实业务数据的归档、Git bundle 与清单。单机归档只防误删，不等于异地备份；在有授权的加密备份目标之前，必须明确记录这个限制。2026-09-25 的逐分支结果、归档位置与恢复方式见 `docs/worktree-retention-2026-09-25.md`。
 
+## 手动应用发版（代码候选，待运维安装与审批）
+
+[运行手册](manual-release.md) 为网页/PDA新流程事实源：只有workflow_dispatch；老大GitHub身份、“发 + 完整SHA”、运维先备份评论、run/attempt与整包摘要绑定。构建与部署秘密隔离，GitHub标准runner直接SSH到强制命令接收器，服务器离线验身份/完整包及镜像ID。现有Compose顺序组合与数据库8.0.46锁文件原样保留；无Git更新、首次数据库启动、参数或cron更改。失败停止，无自动回滚；运维依备份恢复。旧Mac串联/relay CLI停用，自动smoke不代替运维检查和真浏览器人工QA。
+
+本次未安装/配置/触发/部署；新key及权限交运维，旧key停用必须先清单后老大另批。测试见 `npm run test:manual-release`；#95/#96旧离线数据库工具不改、不用于本流程身份或安全放行。下文涉及旧自动部署、Mac中转或自动回滚的描述属于历史，不再作为应用发布入口。
+
 ## 现行业务与发布约束
 
 - **0.13.5迁移后的写入回退（2026-10-14）**：288的当前商品数量政策、289的收货来源量、290–291的同源普通退货净额证明、292的按分资金执行证明均由新后端维护。0.13.4不认识这些证明及其消费者；字段可空、SQL可启动或240记账契约存在均不能证明其继续写入安全。新镜像声明 `io.flowcube.quantity-return-cash-contract=1`，部署在停写前核目标标签；进入迁移窗口后，旧实际镜像须同时具备此标签与原240契约才允许应用自动回退。缺标签、核验失败或迁移未完成时失败保持后端停止，不自动复活0.13.4；重试仍按实际旧镜像核验，不能凭已执行迁移放行。恢复必须核查迁移/新事实，再从同SHA完整CI产物向前发布兼容后端；数据库不降级，也不用旧备份覆盖新数据。`tests/audit-deployment.test.js`执行实际部署shell的隔离CLI回归，并反证删除目标门或旧镜像门会错误执行迁移/恢复旧写入；不连接业务库，不包含两项受阻业务探针。
@@ -38,14 +44,14 @@
 - HTML 单据模板 image 与 ZPL 标签分开；编辑器预览与打印渲染、旧 layout_json 默认值保持一致。
 - 条码标签 type 5–10 支持按需拖入商品身份、仓库、库位、批次/日期及对应货架/箱子信息，原默认布局不变。真实预览与打印共享取值；缺字段留空，容器取数复用调用事务，保存不固化样例业务值。字段清单与取值口径见 `docs/label-optional-fields-2026-09-09.md`。
 - 打印模板新建/编辑默认用对应类型最新可查看业务记录辅助排版与预览；取数同时要求模板查看与原业务查看权限，沿用仓库范围。无记录/无权限保留当前空白或既有占位，网络错误明确提示并可重试；真实记录缺字段不混入示例值。初始空画布有记录时提供可撤销的默认字段排版，不覆盖已有布局或后续编辑；保存仅包含字段与几何，不包含样例业务值。空数据回归使用本测试新建仓库范围，不假设共享测试库全局为空；全局打印类型绑定夹具须保存并完整恢复原记录，不重复插入已有唯一键。取数只读、不入队，类型/登录会话隔离，隐藏页不新取数。接口、类型映射与验证见 `docs/print-template-real-preview-2026-09-09.md`。
-- `main` 是发布来源，push main 触发检查与部署；浏览器、桌面发布前必须等待**实际待发布 SHA** 的 Tests 与 Security Scan 成功，旧 SHA/失败/取消/超时不放行。桌面手动 checkout_ref 也用实际 git HEAD，版本输入必须匹配其 package。PDA 还需同 SHA 浏览器部署成功；仅推 main 不等于桌面发版。
-- **部署临界区共用 `flowcube-server-deploy` 且不取消执行中的任务**：浏览器部署、桌面正式发布与 PDA 的 publish job 串行；桌面 push main 仅验证构建，PDA 等待浏览器的 job 不占部署组。服务器 `flock -w 1800` 是兜底。浏览器部署步骤 150 分钟 / job 210 分钟，预算覆盖上传 2700 秒、合并 610 秒、等锁 1800 秒、部署 2400 秒及回退宽限 600 秒，另容纳 HTTPS/中转尝试 545 秒和预检等开销；不能只增加内层而让外层先强杀。
-- 跨境直连不可用时，已授权操作端可中转**本次 run/attempt 的同一 GitHub artifact**：可先创建同路径 `.relay.pending` 申请最多 300 秒等待，再验证 GitHub artifact ZIP 的 `digest`、唯一归档条目和大小，再通过复用 SSH 上传到 `/tmp/flowcube-images-<run>-<attempt>.tar.gz.relay.partial`，上传完成后原子改名为 `.relay`。接收器在直连前及下载失败后检查该文件，必须匹配 runner 计算的归档字节数与 SHA256 才采用；符号链接、大小/摘要不符均拒绝。不得本地重建镜像或绕过后续 OCI revision、迁移、页面和回退门禁。CI 收尾清理本轮中转文件。
+- `main` 是发布来源，push main 只触发检查；网页/PDA发布须按上述手动运行手册批准和触发。历史链路：浏览器、桌面发布前必须等待**实际待发布 SHA** 的 Tests 与 Security Scan 成功，旧 SHA/失败/取消/超时不放行。桌面手动 checkout_ref 也用实际 git HEAD，版本输入必须匹配其 package。PDA 还需同 SHA 浏览器部署成功；仅推 main 不等于桌面发版。
+- 网页/PDA与独立桌面发布仍共用GitHub `flowcube-server-deploy` 组且不取消执行中发布；新接收器以真实flock和持久版本/SHA/code占位阻断并发或重复。PDA不自动等待或触发网页工作流，服务器只接受同一成功网页SHA。
+- 旧Mac中转CLI已停用。新网页/PDA只有GitHub runner向受限receive-v1单次上传；网络失败停止，先由运维核收据，不自动改走服务器下载、SCP或个人电脑。
 - GitHub 草稿 Release 可能无法按 tag 查询；附件核对与重试清理须使用已取得的 Release ID，发现已有草稿则复用，不能重复创建。若桌面安装包已上线且附件已上传，仅草稿转正失败，运行 `recover-release-asset.yml`，传原 tag、tag 构建 run ID 和已核验的正式 HTTPS 站点（不依赖历史 `ERP_ORIGIN` Secret）：只下载原 CI artifact，校验原构建 SHA、同提交测试/浏览器/PDA、线上包摘要及 GitHub 附件摘要后转正，不重新构建或改写线上包。原失败运行保留，补发布运行独立记录。
-- PDA 与桌面包统一调用 `scripts/transfer-release-asset.sh`：PDA 传递本轮 APK artifact ID，桌面 EXE artifact 必须在正式发布前上传；接收器只接受指定的唯一 APK/EXE 文件名，并核对 runner 字节数与摘要，SCP 回退同样复算摘要。中转路径分别为 `/tmp/flowcube-pda-<run>-<attempt>.apk.relay`、`/tmp/flowcube-desktop-release/v<version>/<原始EXE文件名>.relay`；可提前以 `.relay.partial` 写入再原子改名，所有中转路径由 EXIT trap 收尾。
+- PDA改用完整身份绑定的受限传输包；独立桌面现有传输与下载目录契约保持，不能借其旧key绕过新应用接收器。旧key停用由运维先列清单，老大另批。
 - 账款与对账验收使用拆分后的 `/payments/{payable,receivable}` 和 `/reports/reconciliation/{payable,receivable}`；旧入口会重定向，不可断言停留在旧地址。真实浏览器夹具须读取项目 HashRouter 别名规则，不能用不跳转的模拟页面掩盖失配。
-- 镜像 HTTPS 接收器须兼容生产 Python 3.6：文本输入使用 `universal_newlines=True`，临时文件清理捕获 `FileNotFoundError`；禁止依赖 `text=True` / `unlink(missing_ok=True)`。完整成功路径兼容回归见 `tests/deploy-artifact.test.js`。
-- **跨境上传按实际方向核对**：runner → 服务器上传和服务器 → 外网下载不能互相推算。历史记录的入站聚合约 97 KB/s 只说明当时链路慢，不证明当前网络完全不可达，也不保证增加并行度一定加速。镜像优先由服务器通过 HTTPS 下载本次 CI 的临时 artifact，150 秒下载预算、1100 秒远程执行预算（含最多 900 秒中转等待）；签名 URL 仅走 stdin，GitHub token 留在 runner。ZIP 只允许唯一预期归档，核对大小和 SHA256 后原子落盘；无 Python/curl、网络错误、摘要不符均明确降级。失败时保留 8 片并行 SCP 上传；单片和整批同为 2700 秒，避免 900 秒的单片先结束。按序合并后核对字节数，随后仍由 `server-update.sh` 核对 SHA-256 与 OCI revision。SSH 控制指令复用连接，八个 SCP 数据流各用独立控制连接以保留并行 TCP。`always()` 清理步骤只清本次 run/attempt 的归档、bootstrap、接收脚本、下载临时目录和分片目录，并删除本次 Actions 临时镜像 artifact（保底保留期 1 天）；SSH 续行中不得插入注释截断远程命令。
+- 旧桌面HTTPS接收器的Python兼容回归仍保留；新应用接收器事先由运维安装Python3与OpenSSL，生产发版不下载依赖。两者不是同一授权入口。
+- 上传吞吐必须在隔离演练实测。新流程没有服务器下载或Mac/SCP兜底；外层预算涵盖检查、上传、等锁、加载、备份、迁移和页面门禁，失败或未知先核结果，不自动重跑。
 - **用户已取消固定 15 分钟目标，可靠性与可恢复性优先**：统一入口 `npm run release:prod` 等同 SHA 的 Tests、Security、Browser、PDA、桌面 main 验证构建完成后才推桌面 tag，再等待对应 tag 的桌面发布并核对线上版本。桌面 Release 附件失败必须报红；main 验证构建不能代替 tag 发布。最终逐包流式下载 EXE/APK、核对 SHA256，不再仅检查清单字段；现行代码每包最多 120 秒 / 1 GiB，取消总时长目标不改变已有阶段超时。网络降级或 runner 排队须如实报告。历史实施与本地证据见 `docs/release-flow-speed-2026-09-22.md`。
 - 发布技能已补齐原包恢复、实际发布顺序和结果记录要求。一次成功、恢复完成与真机验收分别报告；跨境人工中转不能算无人值守验证。一次构建、统一编排与同地域产物存储属于待实施建议，见 `docs/release-pipeline-optimization-2026-09-22.md`；v0.10.3 的实际耗时与失败记录见 `docs/release-v0.10.3-result.md`。
 - **正式发布固定使用本机代理中转**：唯一入口 `npm run release:prod` 在 push 前读取 `HTTPS_PROXY`（或 `FLOWCUBE_RELAY_PROXY`）并预检 `flowcube-prod` SSH 别名（可由 `FLOWCUBE_RELAY_SSH_TARGET` 指向实际别名）；缺配置或 SSH 不通立即停下。Mac 必须保持在线。入口启动有界 watcher，绑定同 SHA、push 事件、main/tag、工作流及 run attempt；从 GitHub 下载原 artifact ZIP，验证摘要与唯一成员，再经复用 SSH 交付，生产接收器独立核对 runner 的大小/SHA256。旧 attempt 的同名 artifact 必须等新 attempt 产物出现后才处理。CI 的 HTTPS/SCP 保留为内部有界回退，操作者不在多条发布命令之间选择；记录实际采用路径，`ready` 不能代替接收完成。退出清理本任务进程、暂存文件和 SSH socket。不新增付费资源；v0.10.8 的直连/SCP 失败与中转恢复证据见 `docs/release-v0.10.8-result.md`。
@@ -184,7 +190,7 @@
 - SBOM 扫描两镜像串行，各容器限制 2 GiB 内存（含 tmpfs、不追加 swap）、2 CPU，缓存 tmpfs 上限 1 GiB 且显式 `mode=1777`，继续禁止网络、额外 capability 和根文件系统写入。固定 Syft 镜像原 `/tmp` 为 root 的 0755；挂载未声明权限时，runner UID 不能创建缓存或提取层。按 [Syft 1.54.0 官方配置](https://oss.anchore.com/docs/reference/syft/configuration/) 设置 `SYFT_CHECK_FOR_APP_UPDATE=false`，不放开网络。Syft 缓存全部未压缩镜像层；固定 Node amd64 层、当前锁定的生产依赖和 Linux musl canvas 的最低合计 294607349 字节已超过旧 256 MiB，尚未计字体、npm cache 及新增层。`tests/security-image-sbom.test.js` 校验实际 CLI 预算、UID 与临时目录权限，并反证旧上限和删除权限设置。固定摘要的真实 Syft 已对两份含真实 npm 包元数据的 tiny 镜像归档复现旧权限失败、修后生成两份非空 CycloneDX SBOM；这不代表最终应用镜像 SBOM，完整镜像仍须最终 SHA 的 CI 实扫，扫描失败不得跳过。
 - Gitleaks fallback 与 Syft 容器显式使用 runner 的 UID/GID 写报告；固定镜像默认 root 在 `cap-drop=ALL` 下不能写 runner 拥有的 755 绑定目录。两套 CLI 回归保留删除用户绑定即失败的反证，不通过放宽报告目录权限或扫描豁免解决。
 - 独占临时 MySQL runner 就绪只认容器内 `127.0.0.1:3306` 的 TCP `SELECT 1` 使用本批随机口令认证成功；初始化时 `--skip-networking` 的临时 socket server 不算就绪，`mysqladmin ping` 在 Access denied 时仍返回 0。保留 90 轮重试、2 秒失败间隔及末次确认，单次连接限 2 秒，最后认证未通过即非 0；不输出口令、不改变实例归属门与精确清理。入口守卫及 stub CLI 覆盖延迟就绪、永久认证失败、仅 socket 服务和删除 TCP 绑定的失败反证；真实独占实例及最终 SHA CI 单独验证。
-- 常规应用部署保留唯一、running/healthy 的现有 MySQL 容器，停写前对该容器执行 TCP 认证 `SELECT 1`；口令只在容器内通过 `MYSQL_PWD` 展开。现有容器停止、不健康、缺健康状态、重复或认证失败均明确失败，不自动恢复、重建或按新版 Compose pin 拉取数据库镜像。没有容器时，先确认声明为固定摘要且该镜像已在本机，再以 `--pull never --no-deps` 首次启动并核健康与实际 SQL；缺镜像须在维护窗口预装，禁止联网兜底或改用浮动 tag。首次观察设 30 秒截止点、最多 15 次，不重复启动；执行中的命令仍受各 5 秒超时与 10 秒强杀宽限约束，单次连接限 2 秒。应用切换及回退均带 `--no-deps`，数据库镜像升级另走维护窗口。`tests/audit-deployment.test.js` 执行隔离 CLI 的真实部署 shell，覆盖两种启动路径、认证/健康失败，以及删除健康门或应用 `--no-deps` 的失败反证；真实数据库与生产容器是否保持原 ID/启动时间由独立运行核验。
+- 常规应用部署保留唯一现有MySQL，核running/healthy、同一容器TCP认证SQL及实际版本/镜像ID。没有容器也失败，不自动首次启动或重建。两应用使用实际Compose组合加image-only override，切换强制no-deps/no-build/pull-never；数据库锁字节、参数和cron均不更改。
 
 2026-10-07 发版前实时 audit 新发现三项公告，按官方修复版本最小升级：[proxy-addr 2.0.8](https://github.com/advisories/GHSA-jqcg-44mw-7w3h)、[Capacitor Android/Core 8.4.3](https://github.com/advisories/GHSA-rvm3-566m-v7fv)、[source-map-js 1.2.2](https://github.com/advisories/GHSA-68fv-2mgg-jv7q)。Android/Core 固定同版满足 peer；保留现有 CLI、Gradle、SDK 和自定义插件。四目录完整 audit 归零；前端 1714 用例、lint、类型、ERP/PDA 构建与 sync、原生单测和 clean assembleRelease 均通过。8.4.3 SystemBars 的键盘/安全区行为须真机后补；同 SHA CI、签名和下载摘要仍分别核验。
 
@@ -257,9 +263,9 @@ PDA 会话表由迁移 `080_create_pda_device_sessions.sql` 创建，只有 `exp
 
 ## 2026-10-17 · A37 迁移前备份门禁
 
-本批独立于 cron 日常备份：在部署锁、业务停写及原兼容性闸门内，先为候选完整 SHA 创建全新 0700 目录，执行转储并生成 0600 原子回执，再独立核字节摘要、来源和迁移前记录，最后才授予迁移权限。旧备份、旧 SHA/运行回执、来源变化、转储/容量/文件权限/中断失败均不能继续迁移；非标准 Docker 来源或无同等备份契约的非 Docker 路径拒绝，不猜库。没有执行 cron 的保留期删除，也不新建云资源或凭据。
+本批独立于 cron 日常备份：在部署锁、业务停写及原兼容性闸门内，先为候选完整 SHA 创建全新 0700 目录，执行转储并生成 0600 原子回执，再独立核字节摘要、来源和迁移前记录，最后才执行目标镜像自带迁移。旧备份、旧 SHA/运行回执、来源变化、转储/容量/文件权限/中断失败均不能继续迁移；非标准 Docker 来源或无同等备份契约的非 Docker 路径拒绝，不猜库。没有执行 cron 的保留期删除，也不新建云资源或凭据。
 
-现行源码预算更新为：备份创建/回执核验合计 300 秒、部署 2700 秒 + 600 秒回退，部署步骤 165 分钟、job 224 分钟；PDA 225 分钟脚本与 230 分钟等待步骤未缩短。本段取代本文件较早的 2400 秒/150 或 160 分钟预算快照。实现细节与失败边界见 `docs/DEPLOY.md` 新增 A37 节。
+新手动流程预算及失败处理已改用 `docs/DEPLOY.md` 与 `docs/manual-release.md`；保留300秒创建/独立回执核验窗口，无参数修改或自动回滚。下文历史A37记录不构成当前生产已安装的证明。
 
 回执记录实际源镜像 ID/数据库 UUID/版本/迁移状态和备份摘要，但固定 `restorationVerified=false`，不把 gzip/建表检查称为已可恢复。迁移失败继续沿用停写/向前恢复与 288–292 写契约，切旧镜像不撤销 DDL、不自动覆盖数据库。离线假命令与文件回归仅验证代码保护，真实 MySQL、备份和恢复演练尚未执行；A43 的异地备份及恢复镜像来源闭环仍未完成。
 
