@@ -56,6 +56,18 @@ function period(value: string) {
   const input = host.querySelector<HTMLInputElement>('input[placeholder="YYYYMM"]')!
   act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) })
 }
+test('运维返回形状：金额全0且调整项为空时，两税种真实表格可显示', async () => {
+  amount = 0
+  await render(); await settle()
+  expect(visibleText()).toContain('¥0.00')
+  expect(visibleText()).toContain('无调整项')
+  expect(visibleText()).not.toContain('报税数据加载失败')
+  await act(async () => button('所得税')!.click()); await settle()
+  expect(visibleText()).toContain('¥0.00')
+  expect(visibleText()).toContain('无调整项')
+  expect(visibleText()).not.toContain('报税数据加载失败')
+  expect(requests.every(request => request.method === 'get')).toBe(true)
+})
 test('真实hook与表格：读取未完成不显示假零额或空调整项', async () => {
   defer = true
   await render()

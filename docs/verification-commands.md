@@ -1100,10 +1100,10 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 
 同一`smoke:credit-override`现追加`credit-pending-expiry.smoke.test.js`：过期待审列表/详情、直接及并发重申、原历史保留、拒绝过期审批和占库、未过期正例、证明锁等待跨截止时间及旧节点不恢复。API定位最小申请人的仓库目录/待办403，并保留有权账号目录正例。前端全量含`ReserveAllocationDialog.authorization.test.tsx`的闭合网络调用与真实403展示/提交正例，及`index.pending-expiry.test.tsx`的列表、普通/交接详情、显式重申和无申请权反例；不以组件测试代替真实业务或独立验收。
 
-## 2026-10-21 QA 修复批次验证
+## 2026-10-21 QA 候选验证
 
-新增 `npm run test:qa-remediation` 在 Tests 的 static job 执行：真实Express路由参数边界与真实税务服务期间校验，仅替换外部认证存储/DB边界，76项。往来 `unsettled` 的列表/COUNT/汇总/导出范围守卫追加在既有 `security-scope-reconciliation-pagination.test.js`，沿 `test:security-scan-remediation` 接线；前端新真实组件回归由原全量 `test:unit` 自动发现。
+新增 `npm run test:qa-remediation` 在Tests static job执行分类真实Express资源参数与税务服务期间边界，外部身份/DB隔离，76项。前端新真实组件测试由原全量test:unit发现。首轮快照395文件3600项通过及两端lint、正确项目tsc、ERP/PDA构建保留为阶段记录，不代表正式验收。
 
-本地 Node22 本轮执行：两端 lint、`frontend/node_modules/.bin/tsc --noEmit -p frontend/tsconfig.app.json`、`CI=true npm --prefix frontend run test:unit -- --maxWorkers=4`（395文件/3600项）、新增76项，以及 `node --test tests/security-scope-reconciliation-pagination.test.js tests/deployment-resources.test.js`（46项）；权限、写路由/API路由、前端命名/日期/轮询/会话、SQL标识符、只读查询循环、导出筛选和文档引用守卫通过。Scanner清理ref的小改后补跑manual/native两文件9项及前端lint；末尾只读导航文案补充后，四文件41项、前端lint、正确项目tsc及两种构建再次通过。ERP/PDA分别用原 `build` / `build:pda`，`--outDir` 指定本任务 `/tmp` 目录，通过，不同步Android或安装包。
+续办按运维事实撤回第5条后，原 `security-scope-reconciliation-pagination.test.js` 恢复基线，仍沿既有安全套件运行；本轮与导出筛选共19项通过。只读/原往来权限保留3文件33项通过；报税明确“金额全0+空列表”真实hooks/表格形状及相邻用例2文件16项通过。本轮最终全量394文件3593项通过，前端lint、正确项目tsc及ERP/PDA构建通过。真实浏览器分别查看验收基线及候选，均未复现崩溃、console error与page error均0。不能据此写成正式原故障已解决。
 
-真实页面用本任务命名浏览器、回环Vite与关闭外呼的真实后端；数据库为本轮具任务label的容器/卷、随机回环端口和完整295迁移的新测试库，仅合成身份和夹具。往来矩阵含未付/部分/结清/零余额、现结/月结、全日期/今天、来源缺失下限仓拒绝及实际XLSX导出；合成只读投影不是完整采购/销售闭环。原生产报税崩溃未重现、正式角色导出/认可表未到；正式历史两笔、完整后端和业务专属库发版矩阵、PDA真机/出库/实物打印仍待验收。逐项结果见 [QA修复记录](qa-remediation-2026-10-21.md)。
+本地预览仅本任务具label的专属新库、随机回环端口、完整295迁移与合成身份，不连接生产；不启动scheduler、显式关闭相关外呼worker/告警。只使用命名会话并close核验、按归属清理预览资源。最终检查结果和阶段边界见 [QA实测记录](qa-remediation-2026-10-21.md)，岗位待认可表见 [正式岗位核对](qa-role-review-2026-10-21.md)。独立测试环境、完整后端业务矩阵、同SHA CI及真机/实物分别验收。

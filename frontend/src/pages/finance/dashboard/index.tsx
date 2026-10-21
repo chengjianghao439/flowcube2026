@@ -24,7 +24,6 @@ import { StatTile } from '@/components/dashboard/StatTile'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import { limitTopSeries } from '@/lib/topSeries'
-import { resolveRoutePermission } from '@/router/routeDefinitions'
 
 const wan = (n: number) => Math.abs(n) >= 10000 ? `${(n / 10000).toFixed(n >= 1e6 ? 0 : 1)}万` : String(Math.round(n))
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
@@ -74,13 +73,8 @@ function ShareBar({ label, amount, share, tone = 'primary' }: {
 }
 
 /** 敞口概览小卡：总敞口 + 逾期额（红字）+ 笔数 */
-function ExposureTile({ title, side, tone, type, canViewMonthly, onOpen }: {
-  title: string; side: AgingSide; tone: 'info' | 'warning'; type: 1 | 2
-  canViewMonthly: boolean; onOpen: (path: string, title: string) => void
-}) {
+function ExposureTile({ title, side, tone }: { title: string; side: AgingSide; tone: 'info' | 'warning' }) {
   const ring = tone === 'warning' ? 'border-warning/30' : 'border-info/30'
-  const party = type === 2 ? '客户' : '供应商'
-  const direction = type === 2 ? 'receivable' : 'payable'
   return (
     <div className={`card-base ${ring} p-4`}>
       <div className="flex items-center justify-between">
@@ -93,10 +87,6 @@ function ExposureTile({ title, side, tone, type, canViewMonthly, onOpen }: {
           ? <span className="text-destructive-ink">其中逾期 {money(side.overdueAmount)}（{side.overdueCount} 笔）</span>
           : <span className="text-success-ink">暂无逾期</span>}
       </p>
-      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-        <Button variant="link" size="sm" className="h-auto px-0" onClick={() => onOpen(`/payments/${direction}`, `${party}往来`)}>现结{party}账款</Button>
-        {canViewMonthly && <Button variant="link" size="sm" className="h-auto px-0" onClick={() => onOpen(`/reports/reconciliation/${direction}`, `${party}往来`)}>月结{party}账款</Button>}
-      </div>
     </div>
   )
 }
@@ -168,8 +158,6 @@ export default function FinanceDashboardPage() {
   })
 
   function openPath(path: string, title: string) {
-    const required = resolveRoutePermission(path)
-    if (!required || !can(required)) return
     addTab({ key: path, title, path })
     navigate(path)
   }
@@ -275,12 +263,12 @@ export default function FinanceDashboardPage() {
             <section className="space-y-4">
               <div className="flex items-baseline justify-between">
                 <h2 className="text-section-title">应收 / 应付账龄</h2>
-                <span className="text-xs text-muted-foreground">截至 {aging.asOf} · 包含现结和月结账款</span>
+                <span className="text-xs text-muted-foreground">截至 {aging.asOf} · 全量未结清敞口</span>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <ExposureTile title="应收账款（待收回）" side={aging.receivable} tone="info" type={2} canViewMonthly={can(PERMISSIONS.REPORT_VIEW)} onOpen={openPath} />
-                <ExposureTile title="应付账款（待支付）" side={aging.payable} tone="warning" type={1} canViewMonthly={can(PERMISSIONS.REPORT_VIEW)} onOpen={openPath} />
+                <ExposureTile title="应收账款（待收回）" side={aging.receivable} tone="info" />
+                <ExposureTile title="应付账款（待支付）" side={aging.payable} tone="warning" />
               </div>
 
               <div className="card-base p-4">

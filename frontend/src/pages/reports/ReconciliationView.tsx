@@ -29,8 +29,6 @@ export type StatementType = 1 | 2
 
 /** 对账页只管月结往来方；现结走账款页，两边合起来才是全量 */
 const MONTHLY_SCOPE = String(SETTLEMENT_TYPE.MONTHLY)
-const ALL_DATES_QUERY: PaymentQueryValues = { ...EMPTY_PAYMENT_QUERY, startDate: '', endDate: '' }
-const DEFAULT_RECORD_QUERY: PaymentQueryValues = { ...ALL_DATES_QUERY, status: 'unsettled' }
 
 /**
  * 月结供应商对账与月结客户对账读同一张 `payment_records`、走同一个接口，页面结构完全一致，
@@ -45,7 +43,7 @@ const COPY = {
     paidCol: '已付',
     payPath: '/payments/payable',
     payTitle: '现结供应商账款',
-    statusOptions: [['unsettled', '未结清（含部分付款）'], ['1', '未付'], ['2', '部分付'], ['3', '已付清']] as const,
+    statusOptions: [['1', '未付'], ['2', '部分付'], ['3', '已付清']] as const,
   },
   2: {
     title: '月结客户对账',
@@ -54,7 +52,7 @@ const COPY = {
     paidCol: '已收',
     payPath: '/payments/receivable',
     payTitle: '现结客户账款',
-    statusOptions: [['unsettled', '未结清（含部分收款）'], ['1', '未收'], ['2', '部分收'], ['3', '已收清']] as const,
+    statusOptions: [['1', '未收'], ['2', '部分收'], ['3', '已收清']] as const,
   },
 } as const
 
@@ -78,11 +76,11 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   const canExecutePayments = can(PERMISSIONS.PAYMENT_EXECUTE)
   const canConfirmPayments = canViewPayments && can(PERMISSIONS.PAYMENT_CONFIRM)
   const [confirmRecord, setConfirmRecord] = useState<ReconciliationRecord | null>(null)
-  const [tab, setTab] = useState<'statements' | 'receipts' | 'records'>('records')
+  const [tab, setTab] = useState<'statements' | 'receipts' | 'records'>('statements')
   // 保留用户请求的子页偏好；查看权暂不可用时只切换有效视图，不改筛选与草稿。
   const effectiveTab = canViewPayments ? tab : 'records'
-  // 默认跨日期查询未结账款，可在查询弹窗里自行筛选；列表仍沿原单批上限。
-  const [query, setQuery] = useState<PaymentQueryValues>(DEFAULT_RECORD_QUERY)
+  // 查询条件统一收在弹窗里；不设默认日期，进来即全量（可在查询弹窗里自行按日期筛）
+  const [query, setQuery] = useState<PaymentQueryValues>(EMPTY_PAYMENT_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
   // 汇总对账 / 核销 tab 的动作按钮挪到本页 PageHeader（与「全部账款」tab 对齐），通过 ref 驱动面板
   const statementRef = useRef<StatementPanelHandle>(null)
@@ -96,7 +94,6 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   }
   const exportParams = {
     type: String(type),
-    settlementTypes: MONTHLY_SCOPE,
     ...(query.docNo ? { orderNo: query.docNo } : {}),
     ...(query.partyName ? { partyName: query.partyName } : {}),
     ...(query.status ? { status: query.status } : {}),
@@ -110,7 +107,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
 
   const reconciliationQ = useVisibleQuery({
     queryKey: ['reconciliation', type, query],
-    queryFn: () => getReconciliationApi({ ...exportParams, pageSize: 500 }),
+    queryFn: () => getReconciliationApi({ ...exportParams, pageSize: 500, settlementTypes: MONTHLY_SCOPE }),
     enabled: active && effectiveTab === 'records',
   })
 
@@ -245,14 +242,13 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
       <KeepAliveSection active={canViewPayments && effectiveTab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar /></KeepAliveSection>
 
       <KeepAliveSection active={effectiveTab === 'records'} className="space-y-4">
-      <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} clearValue={ALL_DATES_QUERY} />
+      <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
 
       <PaymentQueryDialog
         open={queryOpen}
         initial={query}
         onClose={() => setQueryOpen(false)}
         onApply={setQuery}
-        clearValue={ALL_DATES_QUERY}
         labels={queryLabels}
         partyType={type}
         statusOptions={copy.statusOptions}

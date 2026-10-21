@@ -25,8 +25,6 @@ import { CreateManualPayableDialog } from '@/components/shared/payments/CreateMa
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { FinanceOrderLink } from '@/components/shared/payments/FinanceOrderLink'
-import { useNavigate } from 'react-router-dom'
-import { useWorkspaceStore } from '@/store/workspaceStore'
 
 /** 账款页只管现结；月结走对账页，两边合起来才是全量 */
 const IMMEDIATE_SCOPE = IMMEDIATE_SETTLEMENT_TYPES.join(',')
@@ -65,8 +63,6 @@ const COPY = {
 } as const
 
 export default function PaymentsView({ type }: { type: PaymentType }) {
-  const navigate = useNavigate()
-  const addTab = useWorkspaceStore(state => state.addTab)
   const active = useActiveWorkspaceTab()
   const copy = COPY[type]
   const isPayable = type === 1
@@ -171,16 +167,6 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
           </div>
         )}
       />
-
-      <div role="note" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-        <span>本页仅显示现结账款；资金账龄还包含月结账款。</span>
-        {can(PERMISSIONS.REPORT_VIEW) && <Button variant="link" size="sm" className="h-auto px-0" onClick={() => {
-          if (!can(PERMISSIONS.REPORT_VIEW)) return
-          const path = `/reports/reconciliation/${isPayable ? 'payable' : 'receivable'}`
-          addTab({ key: path, path, title: `${copy.party}往来` })
-          navigate(path)
-        }}>查看月结账款</Button>}
-      </div>
 
       <nav aria-label={`${copy.title}登记方式`} className="flex gap-1 border-b border-border">
         {([
