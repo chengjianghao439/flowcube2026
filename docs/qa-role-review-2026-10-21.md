@@ -1,73 +1,529 @@
-# 正式岗位改前 / 改后对照表（待认可，资料不完整）
+# 正式13角色改前 / 改后对照表（提案v2，待用户认可）
 
-2026-10-21 用户转述运维只读导出：正式共有13个角色。本条消息提供6个角色名称，其中 sales / warehouse / viewer 仅列出部分权限；warehouse 明确截断，财务专员和会计未列完整权限及数量，其余7个角色未提供。以下“改前”只记录用户明确提供的事实，“改后”是建议，不是已执行结果。未编写、运行或发布权限补丁；本表尚不能作为补丁输入。不能用仓库旧夹具或预置角色填补正式导出的缺项。
+本表只提方案，**尚未获认可，未编写、运行或发布权限补丁**。2026-10-21经用户授权，在Grok Bot私聊“极序运维”取得附件 `jixu-roles-20261021.json`。运维声明它来自当日10:53（北京时间）的正式系统只读导出，线上版本 `8db3e40f`；本任务未直接查询生产数据库。附件仅含角色元数据和权限码，源文件SHA-256：`578e8524e4778cb32e9fb41ad5e180323015fc97ac27489bec793a7dbd20b1cb`。
+
+已逐项核对13个唯一ID/编码、每个完整权限数组与声明数量一致、无重复权限。此前用户转交的warehouse摘要确实截断；**现在已取得完整85项**，下方逐项表替代之前的6角色摘要及7个占位。不以旧测试夹具代替正式事实。
 
 ## 逐角色总表
 
-| 序号 | 正式角色 | 改前（所获摘要） | 改后建议，等待认可 | 尚缺资料 |
-|---|---|---|---|---|
-| 1 | 系统管理员 `admin` | 存储2项：`approval.task.view`、`print:client` | 两项及管理员权限判定均保持。若正式角色ID=1，普通权限门和菜单由代码直接放行 | 正式ID、名称、remark、is_system，确认ID确为1 |
-| 2 | 销售员 `sales` | 总49项，明确列出17项财务相关权限，详见下表 | 撤回下表14项会计/资金/发票/运费对账权限；建议保留个人报销3项。授信申请/查看仅在完整集确认缺少且获认可后补入。通用报表及旧直接放行权限另见后文 | 完整49项及角色元数据；当前是否有 `finance.expense.view.all`、`report.view`、授信独立申请/查看和旧直放码 |
-| 3 | 仓库管理员 `warehouse` | 总85项（截断），明确7项：资金账户查看、收付款查看/创建/执行、个人报销创建/修改/查看 | 已知4项资金/收付款权限撤回；建议个人报销3项保留。`product.view` 仅在缺少且获认可时增加；不按旧别名 `warehouse_manager` 自动匹配 | **完整85项必须补齐**，另需ID/名称/remark/is_system，及报表/全部报销等未列权限 |
-| 4 | 只读查看 `viewer` | 总40项，明确4项：`finance.account.view`、`finance.expense.view`、`payment.view`、`audit.log.view` | 建议移除这4项，保留其他已核对的非财务读取权限；不增加任何写权限。审计查看的影响见后文 | 完整40项及元数据；其他会计、发票、报表、资金或管理权限是否仍存在 |
-| 5 | 财务专员 `preset_finance_specialist` | 应有财务权限；完整集合及数量未提供 | 保留本职的收付款、资金账户查看、费用报销、发票及相关审批权限；不套用销售/仓管撤权清单，不按旧预置数量重置 | 正式完整权限及元数据，逐项确认额外管理/结账/授信申请权限 |
-| 6 | 会计 `preset_accountant` | 应有财务权限；完整集合及数量未提供 | 保留本职会计科目、凭证、账簿、发票及财务读取权限；不自动增加收付款执行、资金调整或结账管理 | 正式完整权限及元数据，逐项核对职责及额外授权 |
-| 7 | 第7个角色（未提供） | 未提供 | 待完整导出逐项建议；不猜名称或权限 | 名称、代码、元数据、完整权限 |
-| 8 | 第8个角色（未提供） | 未提供 | 同上 | 同上 |
-| 9 | 第9个角色（未提供） | 未提供 | 同上 | 同上 |
-| 10 | 第10个角色（未提供） | 未提供 | 同上 | 同上 |
-| 11 | 第11个角色（未提供） | 未提供 | 同上 | 同上 |
-| 12 | 第12个角色（未提供） | 未提供 | 同上 | 同上 |
-| 13 | 第13个角色（未提供） | 未提供 | 同上 | 同上 |
+“改后”均为待认可目标，非执行结果。未列为变更的权限全部保留；每项精确前后状态在后文。ID、code、name、remark、is_system全部保持导出值，不为凑数量重置角色。
 
-不报最终“改后数量”：sales 的49项、viewer 的40项当前都只有摘要，warehouse明确截断；授信和商品查看是否已具备也未知。先核全量集合再计算最终数量，不能用净减数量代替逐项对照。
+| ID | 角色及编码 | 改前存储项数 | 建议改后项数 | 撤回 / 新增 | 建议及影响 |
+|---|---|---:|---:|---|---|
+| 1 | 系统管理员 `admin` | 2 | 2 | -0 / +0 | 保持2项；实际普通权限由ID1豁免，见下文。 |
+| 2 | 仓库管理员 `warehouse` | 85 | 81 | -5 / +1 | 撤回资金账户/收付款4项及通用报表；补商品查看。保留本人报销和现有仓库作业。 |
+| 3 | 采购员 `purchaser` | 46 | 40 | -6 / +0 | 撤回收付款查看、通用报表、物流管理及3项销售授信放行/申请权限。保留采购、物流查看、本人报销。 |
+| 4 | 销售员 `sales` | 49 | 35 | -16 / +2 | 撤回14项会计/资金/发票/运费对账、通用报表及旧直放码；增加独立授信申请/申请查看，不授审批。保留本人报销及销售经营权限。 |
+| 5 | 只读查看 `viewer` | 40 | 35 | -5 / +0 | 撤回资金账户、报销、收付款、审计日志及通用报表5项；其余业务读取保留，不授写权限。 |
+| 6 | Smoke受限 `smoke_limited` | 2 | 2 | -0 / +0 | 原样保留；自定义标记不改，不因名称自动删除或授予权限。 |
+| 7 | 仓库作业员 `preset_warehouse_operator` | 22 | 22 | -0 / +0 | 原样保留，已有warehouse.task.ship，无需重复补发货权。 |
+| 8 | 库存专员 `preset_stock_controller` | 15 | 14 | -1 / +0 | 仅撤回通用报表；库存查询/盘点保留，暂时不能查看库存报表。 |
+| 9 | 采购主管 `preset_purchase_manager` | 23 | 22 | -1 / +0 | 仅撤回通用报表；采购审批与主档权限保留，暂时不能查看采购报表。 |
+| 10 | 销售主管 `preset_sales_manager` | 23 | 22 | -1 / +0 | 仅撤回通用报表；销售经营与授信申请查看保留，不自动增加申请或审批权。 |
+| 11 | 财务专员 `preset_finance_specialist` | 16 | 16 | -0 / +0 | 原样保留全部16项：收付款、发票、全员报销查看、财务报表和授信独立审批符合财务职责。 |
+| 12 | 会计 `preset_accountant` | 13 | 13 | -0 / +0 | 原样保留全部13项：会计、发票及财务读取符合职责；不增加收付款执行或期间管理。 |
+| 13 | 客服专员 `preset_customer_service` | 15 | 15 | -0 / +0 | 原样保留；没有上述资金/会计/通用报表权限，客户与销售经营权限保留。 |
 
-## sales 已知17项逐项对照
+合计：存储权限351→319，撤回35条角色授权、新增3条角色授权。此数量仅用于复核，不能代替完整集合比较。
 
-| 权限 | 改前 | 改后建议 | 影响 |
-|---|---|---|---|
-| `accounting.account.manage` | 有 | 无 | 不能管理会计科目 |
-| `accounting.account.view` | 有 | 无 | 不能查看会计科目页 |
-| `accounting.ledger.view` | 有 | 无 | 不能读取账簿、会计报表、报税等沿此权限的页面 |
-| `accounting.period.manage` | 有 | 无 | 不能结账及管理期间/税务调整 |
-| `accounting.voucher.export` | 有 | 无 | 不能导出凭证 |
-| `accounting.voucher.manage` | 有 | 无 | 不能管理凭证 |
-| `accounting.voucher.view` | 有 | 无 | 不能查看凭证 |
-| `finance.account.view` | 有 | 无 | 不能查看资金账户及相关工作区 |
-| `finance.expense.create` | 有 | 保留，限本人流程 | 可提交自己的报销 |
-| `finance.expense.update` | 有 | 保留，限本人及原状态门 | 可修改自己的合格状态报销 |
-| `finance.expense.view` | 有 | 保留，限本人 | 可看自己的报销，不能借此查看他人 |
-| `invoice.manage` | 有 | 无 | 不能管理发票 |
-| `invoice.view` | 有 | 无 | 不能看发票列表；当前不能仅靠该权限区分本人客户 |
-| `logistics.freight.reconcile` | 有 | 无 | 不能做运费对账 |
-| `payment.create` | 有 | 无 | 不能创建手工账款 |
-| `payment.execute` | 有 | 无 | 不能登记/执行收付款与核销 |
-| `payment.view` | 有 | 无 | 不能读取收付款、账龄、对账等沿此权限的数据 |
+## 需要认可的职责取舍
 
-以上14撤回/3保留的建议比旧295的职责差量更严格，尤其包括 `payment.view` 和 `invoice.view`；**尚未经用户认可**，不会直接写入补丁。若销售/仓管连自己的报销也不应使用，则其3项报销权限也应移除，由用户明确选择。
+1. **7个非财务角色撤回 `report.view`**：warehouse、purchaser、sales、viewer、库存专员、采购主管、销售主管。当前 `reports.routes.js` 用同一权限保护普通销售/采购/库存/PDA报表，也保护利润、成本、月结对账等财务报表。提案选择先撤回整项，代价是这些角色同时失去普通报表。若仍需普通报表，应另外认可并设计报表权限拆分；本表不假装现有单项权限可按财务字段区分。
+2. **保留销售、采购、仓管的本人报销3项**：`finance.expense.create/update/view`。完整导出确认三者均无 `finance.expense.view.all`。当前 `finance.controller.js` 在非ID1、无view.all时强制把列表与详情限定为当前申请人；service修改另查本人及状态。财务专员继续保留view.all，普通viewer撤回报销查看。
+3. **销售申请与财务审批分权**：sales撤回旧 `sale.credit.override`，补已有审批链所需的apply/view两项；不补approve。purchaser撤回旧码及误配apply/view；物流管理一并按既有岗位职责纠偏建议撤回，物流查看保留。旧码本身当前不能直接放行，不写成尚可绕过审批。
+4. **仓管补 `product.view`**：完整85项只有旧 `page:products`，没有当前商品接口要求的product.view。建议补1项，允许完整商品主档读取；它可能包含价格信息，不能把它称为仅名称/数量查询。
+5. **保留经营金额与现有客户授信读取，尚不实现“仅本人客户”**：此表针对资金/会计工作区、宽财务报表及审计入口收权。sales、warehouse、purchaser及销售主管等现有 `sale.credit.view` 仍保留，会读取客户已用/可用授信；授信申请查看也沿现有单据范围。客户、商品、销售/采购单等原业务权限仍可返回额度、价格或单据金额。当前无客户负责人/协作关系，不能靠角色集合实现本人客户隔离。
+6. **仍有共享金额入口，不能据本表承诺全面遮蔽财务金额**：各角色保留的 `dashboard.view` 后端summary/top-stock会返回库存价值、incoming-purchases会返回采购总额；相应代码尚无独立财务字段权限。若“不能看到财务数据”也包含库存价值、采购金额及全局授信用量，需要后续明确字段职责并收紧接口投影/拆分权限，本轮未写补丁。这项与前一项是本提案的明确限制，不是已经解决的结果。
+7. **财务专员16项、会计13项全部保留**：前者有正常收付款/全员报销/发票及独立授信审批，后者有会计/发票/资金读取；不按销售撤权清单处理，不自动扩大到收付款执行、资金调整或结账。smoke_limited的2项原样保留，是否删除测试角色不在本次授权范围。
 
-## 为什么不把所有 finance.expense 权限一律撤掉
+`audit.log.view` 返回经敏感字段清洗的requestBody，但仍可能包含业务金额；普通viewer不再具备该宽审计能力。viewer的原remark“全部模块只读”是导出事实，本提案不改名称/备注；认可范围应以此表完整权限集为准。
 
-当前后端 `finance.controller.js` 的 expenseList/expenseDetail 在缺少 `finance.expense.view.all` 且非ID1管理员时，强制按当前操作人限制到本人，覆盖客户端自传applicantId；修改也有本人和状态门。因此建议销售和仓管保留个人报销能力，但必须从完整集合确认没有 `finance.expense.view.all`、审批/付款等额外权限。代码证据仅说明当前实现，不证明这些正式角色的完整集合已经符合条件。
+## admin为什么只存2项仍可管理
 
-只读角色的报销查看建议撤回，是本表对“非财务通用只读岗位”的职责建议；是否允许看本人报销同样须认可。
+完整导出确认系统管理员为 **ID=1、code=admin**。`backend/src/middleware/auth.js` 的hasPermission默认对roleId=1返回true，`frontend/src/lib/permissions.ts`亦对roleId===1返回true，因此确实由代码放行普通权限检查，存储2项不代表仅有2项有效能力。判断依据是ID，其他角色改名为admin不会获得此能力。
 
-## 仍可能绕回财务数据的共享入口
+豁免不跳过有效登录、设备/仓库、业务状态、期间或审批节点规则。本表保留 `approval.task.view` 与 `print:client`，不向admin填入所有权限，不扩大豁免条件。
 
-- `report.view` 同时保护销售/库存/PDA等普通报表与利润、月结对账、平均成本等财务报表。必须核对 sales、warehouse、viewer 和其余角色的完整集；若要求禁止财务报表，建议移除该宽权限，但会同时失去普通经营报表。若需保留普通报表，须另行认可拆分权限方案，不能声称只撤上表即可屏蔽全部财务数据。
-- `audit.log.view` 的操作日志接口会返回requestBody，可能包含各业务的登记内容；没有按“只读岗位只能看非财务操作”做切分。建议从普通viewer撤回，财务审计需求由明确职责角色承接，等待用户认可。
-- `sale.credit.release` 是旧直放码，当前独立审批不靠它放行。完整集合中若仍有此码，建议按旧已认可职责清单撤回；不能从摘要推定它存在。申请方的 `sale.credit.override.apply`、`sale.credit.override.view` 与审批方的 `sale.credit.override.approve` 分开核对，不自动互补。
+## 完整逐项对照
 
-## admin 为什么只存2项仍可管理
+“有→保留”为不变，“有→撤回”为删除，“无→新增”为增加。每个角色的完整改前集合取所有“有”行，完整目标集合取所有“保留/新增”行。权限逐字匹配，旧权限码也列出，不能因已弃用就从基线省略。角色元数据均列在每节，建议改后保持不变。
 
-当前 `backend/src/middleware/auth.js` 的 hasPermission 默认对 `roleId=1` 返回true；前端 `frontend/src/lib/permissions.ts` 同样对 `roleId===1` 返回true。依据是角色ID，**不是code或名称**。所以若正式admin的ID为1，存储两项不代表只有两项有效能力；若ID不是1，不能据code=admin认定豁免。
+### 1 系统管理员（admin）
 
-此豁免只针对普通权限检查，不代表跳过有效登录、设备、状态、期间、审批节点或其它业务规则。表内不建议为“凑权限数量”向admin批量新增全部权限。
+- id：`1`；code：`admin`；name：系统管理员；is_system：`1`。
+- remark：拥有全部权限。
+- 权限数量：2→2，均为存储集合。
 
-## 认可后补丁必须满足的合同（本轮仅文档，不写补丁）
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `approval.task.view` | 有 | 保留 |
+| `print:client` | 有 | 保留 |
 
-1. 认可表须含正式13角色的精确身份、完整改前集合、逐项撤回/新增/保留及完整改后集合。角色别名、名称、remark/is_system及ID1保护显式核对；历史295不改，新编号取届时最大+1。
-2. 对全部13角色先预检，再按稳定ID顺序加锁并在同一事务当前重读；任一角色缺失、多重匹配、元数据或权限不符，在任何权限写入前整体停止。
-3. 报错逐角色列出代码/名称/ID、预期与实际数量、缺少权限和多出权限；使用区分大小写的完整集合比较，列表不截断，不以“数量一样”判相等，不静默跳过。
-4. 首次执行只接受认可的完整改前集合。重跑只接受同一认可版本的明确应用回执及完整改后集合；人工后改、混合半应用或未知状态均报错，不自行修平。
-5. 所有授权变更与修订回执在同一事务；任一错误全部回滚。未变角色也参加认可基线校验。正式执行、测试环境验收与发布分别授权/记录，不把表格或本地夹具当作已改权。
+### 2 仓库管理员（warehouse）
+
+- id：`2`；code：`warehouse`；name：仓库管理员；is_system：`1`。
+- remark：仓库/库存/盘点/商品。
+- 权限数量：85→81，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `action:inventory:adjust` | 有 | 保留 |
+| `action:inventory:inbound` | 有 | 保留 |
+| `action:inventory:outbound` | 有 | 保留 |
+| `action:stockcheck:create` | 有 | 保留 |
+| `action:stockcheck:submit` | 有 | 保留 |
+| `approval.task.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `finance.account.view` | 有 | 撤回 |
+| `finance.expense.create` | 有 | 保留 |
+| `finance.expense.update` | 有 | 保留 |
+| `finance.expense.view` | 有 | 保留 |
+| `import.stock.execute` | 有 | 保留 |
+| `inbound.order.view` | 有 | 保留 |
+| `inbound.print.reprint` | 有 | 保留 |
+| `inbound.putaway.execute` | 有 | 保留 |
+| `inbound.receive.execute` | 有 | 保留 |
+| `inventory.adjust` | 有 | 保留 |
+| `inventory.container.move` | 有 | 保留 |
+| `inventory.container.split` | 有 | 保留 |
+| `inventory.view` | 有 | 保留 |
+| `location.view` | 有 | 保留 |
+| `logistics.manage` | 有 | 保留 |
+| `logistics.view` | 有 | 保留 |
+| `page:dashboard` | 有 | 保留 |
+| `page:inbound` | 有 | 保留 |
+| `page:inventory` | 有 | 保留 |
+| `page:products` | 有 | 保留 |
+| `page:stockcheck` | 有 | 保留 |
+| `page:warehouses` | 有 | 保留 |
+| `payment.create` | 有 | 撤回 |
+| `payment.execute` | 有 | 撤回 |
+| `payment.view` | 有 | 撤回 |
+| `picking.wave.manage` | 有 | 保留 |
+| `picking.wave.view` | 有 | 保留 |
+| `print.client.consume` | 有 | 保留 |
+| `print.job.create` | 有 | 保留 |
+| `print.job.reprint` | 有 | 保留 |
+| `print.job.view` | 有 | 保留 |
+| `print.printer.manage` | 有 | 保留 |
+| `print.printer.view` | 有 | 保留 |
+| `print.template.manage` | 有 | 保留 |
+| `print.template.view` | 有 | 保留 |
+| `procurement.plan.view` | 有 | 保留 |
+| `product.view` | 无 | 新增 |
+| `purchase.requisition.create` | 有 | 保留 |
+| `purchase.requisition.view` | 有 | 保留 |
+| `rack.view` | 有 | 保留 |
+| `report.view` | 有 | 撤回 |
+| `return.order.cancel` | 有 | 保留 |
+| `return.order.confirm` | 有 | 保留 |
+| `return.order.create` | 有 | 保留 |
+| `return.order.execute` | 有 | 保留 |
+| `return.order.view` | 有 | 保留 |
+| `sale.credit.view` | 有 | 保留 |
+| `scan.log.create` | 有 | 保留 |
+| `scan.log.view` | 有 | 保留 |
+| `sorting.bin.manage` | 有 | 保留 |
+| `sorting.bin.view` | 有 | 保留 |
+| `stockcheck.abc.manage` | 有 | 保留 |
+| `stockcheck.abc.view` | 有 | 保留 |
+| `stockcheck.cancel` | 有 | 保留 |
+| `stockcheck.create` | 有 | 保留 |
+| `stockcheck.submit` | 有 | 保留 |
+| `stockcheck.update` | 有 | 保留 |
+| `stockcheck.view` | 有 | 保留 |
+| `transfer.order.cancel` | 有 | 保留 |
+| `transfer.order.confirm` | 有 | 保留 |
+| `transfer.order.create` | 有 | 保留 |
+| `transfer.order.execute` | 有 | 保留 |
+| `transfer.order.view` | 有 | 保留 |
+| `warehouse.task.adjust` | 有 | 保留 |
+| `warehouse.task.adjust.view` | 有 | 保留 |
+| `warehouse.task.assign` | 有 | 保留 |
+| `warehouse.task.cancel` | 有 | 保留 |
+| `warehouse.task.cancel_return` | 有 | 保留 |
+| `warehouse.task.cancel_return.view` | 有 | 保留 |
+| `warehouse.task.check` | 有 | 保留 |
+| `warehouse.task.check_done` | 有 | 保留 |
+| `warehouse.task.pack` | 有 | 保留 |
+| `warehouse.task.pack_done` | 有 | 保留 |
+| `warehouse.task.pick` | 有 | 保留 |
+| `warehouse.task.priority` | 有 | 保留 |
+| `warehouse.task.ship` | 有 | 保留 |
+| `warehouse.task.sort` | 有 | 保留 |
+| `warehouse.task.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+### 3 采购员（purchaser）
+
+- id：`3`；code：`purchaser`；name：采购员；is_system：`1`。
+- remark：采购/供应商/商品/库存查看。
+- 权限数量：46→40，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `action:purchase:confirm` | 有 | 保留 |
+| `action:purchase:create` | 有 | 保留 |
+| `action:purchase:receive` | 有 | 保留 |
+| `approval.task.view` | 有 | 保留 |
+| `category.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `finance.expense.create` | 有 | 保留 |
+| `finance.expense.update` | 有 | 保留 |
+| `finance.expense.view` | 有 | 保留 |
+| `import.product.execute` | 有 | 保留 |
+| `inbound.order.create` | 有 | 保留 |
+| `inbound.order.submit` | 有 | 保留 |
+| `inbound.order.view` | 有 | 保留 |
+| `inbound.print.reprint` | 有 | 保留 |
+| `logistics.manage` | 有 | 撤回 |
+| `logistics.view` | 有 | 保留 |
+| `page:dashboard` | 有 | 保留 |
+| `page:inbound` | 有 | 保留 |
+| `page:inventory` | 有 | 保留 |
+| `page:products` | 有 | 保留 |
+| `page:purchase` | 有 | 保留 |
+| `page:suppliers` | 有 | 保留 |
+| `payment.view` | 有 | 撤回 |
+| `print.client.consume` | 有 | 保留 |
+| `procurement.plan.manage` | 有 | 保留 |
+| `procurement.plan.view` | 有 | 保留 |
+| `product.view` | 有 | 保留 |
+| `purchase.order.cancel` | 有 | 保留 |
+| `purchase.order.confirm` | 有 | 保留 |
+| `purchase.order.create` | 有 | 保留 |
+| `purchase.order.view` | 有 | 保留 |
+| `purchase.requisition.convert` | 有 | 保留 |
+| `purchase.requisition.create` | 有 | 保留 |
+| `purchase.requisition.view` | 有 | 保留 |
+| `report.view` | 有 | 撤回 |
+| `return.order.cancel` | 有 | 保留 |
+| `return.order.confirm` | 有 | 保留 |
+| `return.order.create` | 有 | 保留 |
+| `return.order.view` | 有 | 保留 |
+| `sale.credit.override` | 有 | 撤回 |
+| `sale.credit.override.apply` | 有 | 撤回 |
+| `sale.credit.override.view` | 有 | 撤回 |
+| `sale.credit.view` | 有 | 保留 |
+| `stockcheck.abc.view` | 有 | 保留 |
+| `supplier.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+### 4 销售员（sales）
+
+- id：`4`；code：`sales`；name：销售员；is_system：`1`。
+- remark：销售/客户/商品/库存查看。
+- 权限数量：49→35，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `accounting.account.manage` | 有 | 撤回 |
+| `accounting.account.view` | 有 | 撤回 |
+| `accounting.ledger.view` | 有 | 撤回 |
+| `accounting.period.manage` | 有 | 撤回 |
+| `accounting.voucher.export` | 有 | 撤回 |
+| `accounting.voucher.manage` | 有 | 撤回 |
+| `accounting.voucher.view` | 有 | 撤回 |
+| `action:sale:confirm` | 有 | 保留 |
+| `action:sale:create` | 有 | 保留 |
+| `action:sale:ship` | 有 | 保留 |
+| `approval.task.view` | 有 | 保留 |
+| `carrier.view` | 有 | 保留 |
+| `customer.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `finance.account.view` | 有 | 撤回 |
+| `finance.expense.create` | 有 | 保留 |
+| `finance.expense.update` | 有 | 保留 |
+| `finance.expense.view` | 有 | 保留 |
+| `invoice.manage` | 有 | 撤回 |
+| `invoice.view` | 有 | 撤回 |
+| `logistics.freight.reconcile` | 有 | 撤回 |
+| `logistics.view` | 有 | 保留 |
+| `page:customers` | 有 | 保留 |
+| `page:dashboard` | 有 | 保留 |
+| `page:inventory` | 有 | 保留 |
+| `page:products` | 有 | 保留 |
+| `page:sale` | 有 | 保留 |
+| `payment.create` | 有 | 撤回 |
+| `payment.execute` | 有 | 撤回 |
+| `payment.view` | 有 | 撤回 |
+| `price.list.view` | 有 | 保留 |
+| `product.view` | 有 | 保留 |
+| `report.view` | 有 | 撤回 |
+| `return.order.cancel` | 有 | 保留 |
+| `return.order.confirm` | 有 | 保留 |
+| `return.order.create` | 有 | 保留 |
+| `return.order.execute` | 有 | 保留 |
+| `return.order.view` | 有 | 保留 |
+| `sale.credit.override` | 有 | 撤回 |
+| `sale.credit.override.apply` | 无 | 新增 |
+| `sale.credit.override.view` | 无 | 新增 |
+| `sale.credit.view` | 有 | 保留 |
+| `sale.order.cancel` | 有 | 保留 |
+| `sale.order.create` | 有 | 保留 |
+| `sale.order.release` | 有 | 保留 |
+| `sale.order.reserve` | 有 | 保留 |
+| `sale.order.ship` | 有 | 保留 |
+| `sale.order.update` | 有 | 保留 |
+| `sale.order.view` | 有 | 保留 |
+| `warehouse.task.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+### 5 只读查看（viewer）
+
+- id：`5`；code：`viewer`；name：只读查看；is_system：`1`。
+- remark：全部模块只读。
+- 权限数量：40→35，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `approval.task.view` | 有 | 保留 |
+| `audit.log.view` | 有 | 撤回 |
+| `carrier.view` | 有 | 保留 |
+| `category.view` | 有 | 保留 |
+| `customer.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `finance.account.view` | 有 | 撤回 |
+| `finance.expense.view` | 有 | 撤回 |
+| `inbound.order.view` | 有 | 保留 |
+| `inventory.view` | 有 | 保留 |
+| `location.view` | 有 | 保留 |
+| `page:customers` | 有 | 保留 |
+| `page:dashboard` | 有 | 保留 |
+| `page:inbound` | 有 | 保留 |
+| `page:inventory` | 有 | 保留 |
+| `page:products` | 有 | 保留 |
+| `page:purchase` | 有 | 保留 |
+| `page:sale` | 有 | 保留 |
+| `page:suppliers` | 有 | 保留 |
+| `page:warehouses` | 有 | 保留 |
+| `payment.view` | 有 | 撤回 |
+| `picking.wave.view` | 有 | 保留 |
+| `price.list.view` | 有 | 保留 |
+| `print.job.view` | 有 | 保留 |
+| `print.printer.view` | 有 | 保留 |
+| `print.template.view` | 有 | 保留 |
+| `product.view` | 有 | 保留 |
+| `purchase.order.view` | 有 | 保留 |
+| `purchase.requisition.view` | 有 | 保留 |
+| `rack.view` | 有 | 保留 |
+| `report.view` | 有 | 撤回 |
+| `return.order.view` | 有 | 保留 |
+| `sale.order.view` | 有 | 保留 |
+| `scan.log.view` | 有 | 保留 |
+| `sorting.bin.view` | 有 | 保留 |
+| `stockcheck.view` | 有 | 保留 |
+| `supplier.view` | 有 | 保留 |
+| `transfer.order.view` | 有 | 保留 |
+| `warehouse.task.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+### 6 Smoke受限（smoke_limited）
+
+- id：`6`；code：`smoke_limited`；name：Smoke受限；is_system：`0`。
+- remark：smoke test limited role。
+- 权限数量：2→2，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `dashboard.view` | 有 | 保留 |
+| `inbound.order.view` | 有 | 保留 |
+
+### 7 仓库作业员（preset_warehouse_operator）
+
+- id：`7`；code：`preset_warehouse_operator`；name：仓库作业员；is_system：`1`。
+- remark：系统预置岗位：收货、上架、拣货、复核与打包。
+- 权限数量：22→22，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `dashboard.view` | 有 | 保留 |
+| `inbound.order.view` | 有 | 保留 |
+| `inbound.putaway.execute` | 有 | 保留 |
+| `inbound.receive.execute` | 有 | 保留 |
+| `inventory.view` | 有 | 保留 |
+| `location.view` | 有 | 保留 |
+| `print.job.create` | 有 | 保留 |
+| `print.job.reprint` | 有 | 保留 |
+| `print.job.view` | 有 | 保留 |
+| `product.view` | 有 | 保留 |
+| `rack.view` | 有 | 保留 |
+| `scan.log.create` | 有 | 保留 |
+| `scan.log.view` | 有 | 保留 |
+| `warehouse.task.check` | 有 | 保留 |
+| `warehouse.task.check_done` | 有 | 保留 |
+| `warehouse.task.pack` | 有 | 保留 |
+| `warehouse.task.pack_done` | 有 | 保留 |
+| `warehouse.task.pick` | 有 | 保留 |
+| `warehouse.task.ship` | 有 | 保留 |
+| `warehouse.task.sort` | 有 | 保留 |
+| `warehouse.task.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+### 8 库存专员（preset_stock_controller）
+
+- id：`8`；code：`preset_stock_controller`；name：库存专员；is_system：`1`。
+- remark：系统预置岗位：库存查询与盘点管理。
+- 权限数量：15→14，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `dashboard.view` | 有 | 保留 |
+| `inventory.trace.view` | 有 | 保留 |
+| `inventory.view` | 有 | 保留 |
+| `location.view` | 有 | 保留 |
+| `product.view` | 有 | 保留 |
+| `rack.view` | 有 | 保留 |
+| `report.view` | 有 | 撤回 |
+| `stockcheck.abc.view` | 有 | 保留 |
+| `stockcheck.cancel` | 有 | 保留 |
+| `stockcheck.create` | 有 | 保留 |
+| `stockcheck.submit` | 有 | 保留 |
+| `stockcheck.update` | 有 | 保留 |
+| `stockcheck.view` | 有 | 保留 |
+| `transfer.order.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+### 9 采购主管（preset_purchase_manager）
+
+- id：`9`；code：`preset_purchase_manager`；name：采购主管；is_system：`1`。
+- remark：系统预置岗位：采购计划、请购与采购审批。
+- 权限数量：23→22，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `approval.task.view` | 有 | 保留 |
+| `category.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `inbound.order.cancel` | 有 | 保留 |
+| `inbound.order.create` | 有 | 保留 |
+| `inbound.order.submit` | 有 | 保留 |
+| `inbound.order.view` | 有 | 保留 |
+| `procurement.plan.manage` | 有 | 保留 |
+| `procurement.plan.view` | 有 | 保留 |
+| `product.view` | 有 | 保留 |
+| `purchase.order.approve` | 有 | 保留 |
+| `purchase.order.cancel` | 有 | 保留 |
+| `purchase.order.confirm` | 有 | 保留 |
+| `purchase.order.create` | 有 | 保留 |
+| `purchase.order.view` | 有 | 保留 |
+| `purchase.requisition.approve` | 有 | 保留 |
+| `purchase.requisition.convert` | 有 | 保留 |
+| `purchase.requisition.view` | 有 | 保留 |
+| `report.view` | 有 | 撤回 |
+| `supplier.create` | 有 | 保留 |
+| `supplier.update` | 有 | 保留 |
+| `supplier.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+### 10 销售主管（preset_sales_manager）
+
+- id：`10`；code：`preset_sales_manager`；name：销售主管；is_system：`1`。
+- remark：系统预置岗位：销售单、客户与销售退货管理。
+- 权限数量：23→22，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `approval.task.view` | 有 | 保留 |
+| `carrier.view` | 有 | 保留 |
+| `customer.create` | 有 | 保留 |
+| `customer.update` | 有 | 保留 |
+| `customer.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `price.list.view` | 有 | 保留 |
+| `product.view` | 有 | 保留 |
+| `report.view` | 有 | 撤回 |
+| `return.order.cancel` | 有 | 保留 |
+| `return.order.confirm` | 有 | 保留 |
+| `return.order.create` | 有 | 保留 |
+| `return.order.view` | 有 | 保留 |
+| `sale.credit.override.view` | 有 | 保留 |
+| `sale.credit.view` | 有 | 保留 |
+| `sale.order.cancel` | 有 | 保留 |
+| `sale.order.create` | 有 | 保留 |
+| `sale.order.release` | 有 | 保留 |
+| `sale.order.reserve` | 有 | 保留 |
+| `sale.order.ship` | 有 | 保留 |
+| `sale.order.update` | 有 | 保留 |
+| `sale.order.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+### 11 财务专员（preset_finance_specialist）
+
+- id：`11`；code：`preset_finance_specialist`；name：财务专员；is_system：`1`。
+- remark：系统预置岗位：收付款、费用与发票日常处理。
+- 权限数量：16→16，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `approval.task.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `finance.account.view` | 有 | 保留 |
+| `finance.expense.create` | 有 | 保留 |
+| `finance.expense.update` | 有 | 保留 |
+| `finance.expense.view` | 有 | 保留 |
+| `finance.expense.view.all` | 有 | 保留 |
+| `invoice.manage` | 有 | 保留 |
+| `invoice.view` | 有 | 保留 |
+| `payment.create` | 有 | 保留 |
+| `payment.execute` | 有 | 保留 |
+| `payment.view` | 有 | 保留 |
+| `report.view` | 有 | 保留 |
+| `sale.credit.override.approve` | 有 | 保留 |
+| `sale.credit.override.view` | 有 | 保留 |
+| `sale.credit.view` | 有 | 保留 |
+
+### 12 会计（preset_accountant）
+
+- id：`12`；code：`preset_accountant`；name：会计；is_system：`1`。
+- remark：系统预置岗位：会计科目、凭证与账簿。
+- 权限数量：13→13，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `accounting.account.manage` | 有 | 保留 |
+| `accounting.account.view` | 有 | 保留 |
+| `accounting.ledger.view` | 有 | 保留 |
+| `accounting.voucher.export` | 有 | 保留 |
+| `accounting.voucher.manage` | 有 | 保留 |
+| `accounting.voucher.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `finance.account.view` | 有 | 保留 |
+| `finance.expense.view` | 有 | 保留 |
+| `invoice.manage` | 有 | 保留 |
+| `invoice.view` | 有 | 保留 |
+| `payment.view` | 有 | 保留 |
+| `report.view` | 有 | 保留 |
+
+### 13 客服专员（preset_customer_service）
+
+- id：`13`；code：`preset_customer_service`；name：客服专员；is_system：`1`。
+- remark：系统预置岗位：客户、订单与物流查询。
+- 权限数量：15→15，均为存储集合。
+
+| 权限码 | 改前 | 建议改后 |
+|---|---|---|
+| `customer.create` | 有 | 保留 |
+| `customer.update` | 有 | 保留 |
+| `customer.view` | 有 | 保留 |
+| `dashboard.view` | 有 | 保留 |
+| `inventory.view` | 有 | 保留 |
+| `logistics.view` | 有 | 保留 |
+| `price.list.view` | 有 | 保留 |
+| `product.view` | 有 | 保留 |
+| `return.order.create` | 有 | 保留 |
+| `return.order.view` | 有 | 保留 |
+| `sale.order.create` | 有 | 保留 |
+| `sale.order.update` | 有 | 保留 |
+| `sale.order.view` | 有 | 保留 |
+| `warehouse.task.view` | 有 | 保留 |
+| `warehouse.view` | 有 | 保留 |
+
+## 认可后补丁必须满足的合同（仅文档，未写补丁）
+
+1. 认可版本锁定上述13角色的精确身份、元数据、完整改前及完整改后集合；不能按code别名猜角色，不能只核数量，不改历史295，新编号取届时最大+1。
+2. 全部13角色先预检，再按稳定ID顺序加锁并在同一事务当前重读；缺失、多重匹配、新增未认可角色、元数据或任意权限不符，都须在任何权限写入前整体停止。未改角色也参加基线校验。
+3. 报错逐角色列ID/code/name、预期与实际数量、元数据差异、缺少及多出的全部权限码；区分大小写，列表不截断，不静默跳过。数量相同而内容不同也必须失败。
+4. 首次只接受认可的完整改前状态；重跑只接受同一认可版本的应用回执及全体完整改后状态。人工后改、混合半应用或未知状态均明确失败，不自行修平。
+5. 所有授权变更和修订回执同事务，任一错误全部回滚。测试覆盖等数量换权、大小写/元数据漂移、未改角色漂移、并发改权、失败零写入、重放、半应用及回滚；只能用任务专属合成测试库。
+6. 本表提交/推送不等于用户认可，运维提供事实也不代表批准方案。用户认可后才编写补丁；正式执行、独立测试环境验收与发布分别记录，合并/发版仍等待用户明确回复“发”。
