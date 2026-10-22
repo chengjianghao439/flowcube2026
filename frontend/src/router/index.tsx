@@ -9,11 +9,12 @@ import { DesktopQuitUnloadBridge } from '@/components/desktop/DesktopQuitUnloadB
 import DesktopPrintClientBridge from '@/components/desktop/DesktopPrintClientBridge'
 
 import { pdaRoutes } from './pdaRoutes'
-import { resolveErpLoginDestination } from './erpLoginDestination'
+import { ERP_NO_ACCESS_PATH, resolveErpLoginDestination } from './erpLoginDestination'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
 const ForbiddenPage   = lazy(() => import('@/pages/403'))
+const NoAccessPage    = lazy(() => import('@/pages/no-access'))
 const LandingPage     = lazy(() => import('@/pages/landing'))
 
 function PageLoader() {
@@ -122,6 +123,7 @@ export default function AppRouter() {
 
           {/* ── ERP 已登录路由 ── */}
           <Route element={<ErpProtectedRoute />}>
+            <Route path={ERP_NO_ACCESS_PATH} element={<NoAccessPage />} />
             <Route path="/sales" element={<Navigate to="/sale" replace />} />
             {/* 应付/应收、供应商/客户对账原本各是一个页面的两个 tab，拆开后旧链接与旧工作区标签仍要能打开 */}
             <Route path="/payments" element={<Navigate to="/payments/payable" replace />} />

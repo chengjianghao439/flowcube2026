@@ -15,10 +15,11 @@ const cli = (...args) => execFileSync('agent-browser', ['--session', session, ..
 const evaluate = expression => JSON.parse(cli('eval', expression, '--json')).data.result
 const inspect = () => evaluate('window.__loginSupplierInspect()')
 const results = []
-function capture(name) {
+function capture(name, allowForbidden = false) {
   const state = inspect()
   assert.deepEqual(state.errors, [])
-  assert.equal(state.routes.includes('#/403'), false)
+  if (!allowForbidden) assert.equal(state.routes.includes('#/403'), false)
+  assert.equal(state.permissionError, false)
   const screenshot = path.join(output, name + '.png')
   cli('screenshot', screenshot)
   results.push({ check: name, ...state, screenshot })
@@ -28,7 +29,14 @@ function login(code, expected) {
   cli('fill', '#username', code); cli('fill', '#password', 'synthetic-browser-password')
   cli('find', 'role', 'button', 'click', '--name', '登录工作区', '--exact')
   cli('wait', '--fn', `location.hash === ${JSON.stringify('#' + expected)}`)
-  cli('wait', '--fn', `document.querySelector('h1')?.textContent === ${JSON.stringify(expected === '/dashboard' ? '仪表盘' : '待办中心')}`)
+  const title = {
+    '/dashboard': '仪表盘',
+    '/reports/role-workbench': '待办中心',
+    '/payments/payable': '供应商往来',
+    '/no-access': '当前账号没有可用页面，请联系管理员分配权限',
+  }[expected]
+  assert.ok(title, '登录期望地址必须有对应页面标题')
+  cli('wait', '--fn', `document.querySelector('h1')?.textContent === ${JSON.stringify(title)}`)
 }
 async function main() {
   let started = false
@@ -52,16 +60,42 @@ async function main() {
       cli('--allow-file-access', 'open', pathToFileURL(html).href + '?mode=' + mode + '#' + route)
       cli('set', 'viewport', '1440', '1000')
     }
-    for (const code of ['admin', 'preset_finance_specialist', 'sales', 'warehouse', 'viewer', 'preset_warehouse_operator']) {
+    for (const code of ['admin', 'preset_finance_specialist', 'preset_accountant', 'sales', 'purchaser', 'warehouse', 'viewer', 'preset_warehouse_operator']) {
       open('login-' + code, '/reports/role-workbench')
-      login(code, ['admin', 'preset_finance_specialist'].includes(code) ? '/reports/role-workbench' : '/dashboard')
+      login(code, ['admin', 'preset_finance_specialist', 'preset_accountant'].includes(code) ? '/reports/role-workbench' : '/dashboard')
       capture('login-' + code)
     }
     open('finance-default', '/login'); login('preset_finance_specialist', '/reports/role-workbench'); capture('finance-default-workbench')
+    open('accountant-default', '/login'); login('preset_accountant', '/reports/role-workbench'); capture('accountant-default-workbench')
     open('admin-switch', '/reports/role-workbench'); login('admin', '/reports/role-workbench')
     evaluate('window.__loginSupplierSwitchAccount()')
     login('sales', '/dashboard')
     assert.deepEqual(inspect().tabs, ['/dashboard']); capture('admin-to-sales-with-cached-tabs')
+    for (const [code, expected] of [['payment-only', '/payments/payable'], ['no-permissions', '/no-access']]) {
+      for (const [source, route] of [['default', '/login'], ['dashboard', '/dashboard'], ['workbench', '/reports/role-workbench']]) {
+        open(code + '-' + source, route)
+        login(code, expected)
+        assert.equal(inspect().calls.some(call => call.url?.startsWith('/dashboard/')), false, '低权限登录不得发仪表盘请求')
+        capture(code + '-' + source)
+      }
+      if (code === 'payment-only') {
+        cli('find', 'role', 'tab', 'click', '--name', '仪表盘', '--exact')
+        cli('wait', '--url', '**#/403'); cli('wait', '--text', '无访问权限')
+        assert.equal(inspect().calls.some(call => call.url?.startsWith('/dashboard/')), false)
+        capture('payment-only-dashboard-denied', true)
+        cli('find', 'role', 'button', 'click', '--name', '返回可用页面', '--exact')
+        cli('wait', '--url', '**#/payments/payable'); cli('wait', '--text', '供应商往来')
+        assert.equal(inspect().calls.some(call => call.url?.startsWith('/dashboard/')), false)
+        capture('payment-only-safe-return', true)
+      }
+    }
+    cli('set', 'viewport', '390', '844')
+    assert.equal(inspect().overflow, false); capture('no-permissions-narrow')
+    cli('find', 'role', 'button', 'click', '--name', '退出登录', '--exact')
+    cli('wait', '--url', '**#/login'); cli('wait', '--text', '登录工作区')
+    assert.equal(inspect().authenticated, false)
+    assert.deepEqual(inspect().tabs, ['/dashboard'])
+    capture('no-permissions-logout')
     open('supplier', '/payments/payable')
     cli('wait', '--text', 'PO-MONTHLY-NO-STATEMENT'); cli('wait', '--text', 'PO-CASH')
     const state = inspect()

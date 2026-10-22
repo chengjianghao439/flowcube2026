@@ -1125,9 +1125,10 @@ CI五处新库初始化显式使用 `tests/helpers/prepareQaRoleTestDatabase.js`
 
 ### 2026-10-22 登录权限落地与月结欠款
 
-- `npm --prefix frontend run test:unit -- src/router/login-landing.test.tsx src/pages/payments/supplier-monthly.test.tsx`：真实ERP路由/表单/登录hook/store/KeepAlive与供应商合并页，受控HTTP。覆盖认可六岗位、财务待办、无权来源回仪表盘、异步先跳转、管理员旧标签恢复后换业务员、查询参数保留及PDA登录尾斜杠兼容；无对账单月结应付默认可见、月结与现结分区分数、5001笔截断仍用全范围汇总、无报表权限的原账款查看、失败重试及隐藏页停止读取。沿既有前端全量单测进入static CI。
-- `npm run smoke:login-supplier-browser`：实际AppRouter/AppLayout和产品页面/CSS，合成HTTP，不连接数据库。六岗位和同机换人均通过实际表单登录，供应商默认页检查月结33.13与现结70独立显示、未读对账单、没有月结逐笔付款动作，另检查900px视口和月结失败不影响现结。沿既有browser-smoke-runtime CI执行；专属命名会话在finally关闭并用session list核实，截图/结果写入ignored的output/login-supplier-balances。
+- `npm --prefix frontend run test:unit -- src/router/login-landing.test.tsx src/pages/payments/supplier-monthly.test.tsx`：真实ERP路由/表单/登录hook/store/KeepAlive与供应商合并页，受控HTTP。覆盖管理员、六预设岗位和只读角色、财务与会计待办、无权来源回有权默认页、异步先跳转、管理员旧标签恢复后换业务员、查询参数保留及PDA登录尾斜杠兼容；无对账单月结应付默认可见、月结与现结分区分数、5001笔截断仍用全范围汇总、无报表权限的原账款查看、失败重试及隐藏页停止读取。沿既有前端全量单测进入static CI。
+- `npm --prefix frontend run test:unit -- src/router/erpLoginDestination.test.ts src/router/login-landing.test.tsx`：登录目的地纯函数反例及实际路由/表单/useLogin/store/KeepAlive回归。无权限绝不回仪表盘；仅 `payment.view` 回供应商往来；合法来源保留 query，无权限来源按有权默认页落地；覆盖无权限提示与统一退出、异步同步、管理员/六预设岗位和只读角色、同机换人、既有403和PDA换票。已登录低权限账号主动访问仪表盘也须403且不挂载仪表盘；403返回账号有权默认页或无权限提示。纯函数与组件用例均沿前端全量单测进入static CI。把解析函数恢复成“一律回仪表盘”必须使反例失败。
+- `npm run smoke:login-supplier-browser`：实际AppRouter/AppLayout和产品页面/CSS，合成HTTP，不连接数据库。管理员、财务专员、会计、仓管、销售、采购、作业员及只读角色通过实际表单登录；无权限与仅账款角色分别覆盖无来源、仪表盘/待办来源，必须没有仪表盘请求及403红框。无权限页另核390px视口与实际退出回登录。供应商默认页检查月结33.13与现结70独立显示、未读对账单、没有月结逐笔付款动作，另检查900px视口和月结失败不影响现结。沿既有browser-smoke-runtime CI执行；专属命名会话在finally关闭并用session list核实，截图/结果写入ignored的output/login-supplier-balances。
 
 修前红例必须保留在测试执行记录；界面及受控HTTP回归不替代正式账号、真实数据库来源计算或生产验收。不为这次前端修复执行数据库迁移、权限写入或历史数据清理；发版仍须独立授权并执行原全量门禁。
 
-原 `scripts/smoke-pages.node.js` 与 `scripts/smoke-reconciliation-jumps.node.js` 的API注入式验收同步接受权限决定的仪表盘/待办中心，并严格核对对应地址和页面文本，不再把登录即403当成成功；供应商当前视图明确核“账款概览”及新说明，客户“现结账款”检查保持。`npm run test:browser-smoke` 保留原所有错误/旧标题/当前视图/链接/组件/权限/回跳反例，新增 `limited-login-403`：受限账号登录即403必须令脚本失败。反向放宽登录谓词允许403时，新反例准确报错（脚本错误退出0，测试期望1）；恢复后通过。该脚本夹具不替代新11项实际产品页面验证。
+原 `scripts/smoke-pages.node.js` 与 `scripts/smoke-reconciliation-jumps.node.js` 的API注入式验收同步接受其验收账号权限决定的仪表盘/待办中心，并严格核对对应地址和页面文本，不再把登录即403当成成功；供应商当前视图明确核“账款概览”及新说明，客户“现结账款”检查保持。`npm run test:browser-smoke` 保留原所有错误/旧标题/当前视图/链接/组件/权限/回跳反例，新增 `limited-login-403`：受限账号登录即403必须令脚本失败。反向放宽登录谓词允许403时，新反例准确报错（脚本错误退出0，测试期望1）；恢复后通过。该脚本夹具不替代实际产品页面验证。
