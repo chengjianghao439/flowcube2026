@@ -1129,3 +1129,5 @@ CI五处新库初始化显式使用 `tests/helpers/prepareQaRoleTestDatabase.js`
 - `npm run smoke:login-supplier-browser`：实际AppRouter/AppLayout和产品页面/CSS，合成HTTP，不连接数据库。六岗位和同机换人均通过实际表单登录，供应商默认页检查月结33.13与现结70独立显示、未读对账单、没有月结逐笔付款动作，另检查900px视口和月结失败不影响现结。沿既有browser-smoke-runtime CI执行；专属命名会话在finally关闭并用session list核实，截图/结果写入ignored的output/login-supplier-balances。
 
 修前红例必须保留在测试执行记录；界面及受控HTTP回归不替代正式账号、真实数据库来源计算或生产验收。不为这次前端修复执行数据库迁移、权限写入或历史数据清理；发版仍须独立授权并执行原全量门禁。
+
+原 `scripts/smoke-pages.node.js` 与 `scripts/smoke-reconciliation-jumps.node.js` 的API注入式验收同步接受权限决定的仪表盘/待办中心，并严格核对对应地址和页面文本，不再把登录即403当成成功；供应商当前视图明确核“账款概览”及新说明，客户“现结账款”检查保持。`npm run test:browser-smoke` 保留原所有错误/旧标题/当前视图/链接/组件/权限/回跳反例，新增 `limited-login-403`：受限账号登录即403必须令脚本失败。反向放宽登录谓词允许403时，新反例准确报错（脚本错误退出0，测试期望1）；恢复后通过。该脚本夹具不替代新11项实际产品页面验证。

@@ -41,8 +41,8 @@ export default function SupplierMonthlyPayables() {
       {can(PERMISSIONS.REPORT_VIEW) && <Link className="text-sm text-primary underline-offset-4 hover:underline" to="/reports/reconciliation/payable">月结对账</Link>}
     </div>
     {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="月结欠款加载失败" compact />
-      : isPaused ? <p role="status" className="text-sm text-muted-foreground">月结欠款读取已暂停，请恢复网络后重试。</p>
-      : isPending ? <p role="status" className="text-sm text-muted-foreground">正在读取月结欠款…</p>
+      : isPaused ? <p role="status" className="text-sm text-muted-foreground">月结欠款加载已暂停，请恢复网络后重试。</p>
+      : isPending ? <p role="status" className="text-sm text-muted-foreground">正在加载月结欠款…</p>
       : data && <>
         <SummaryStrip items={[{ label: '月结未结清金额', value: money(data.summary.balance) }]} />
         <DataTable virtualized columns={columns} data={data.list} emptyText="暂无月结欠款" />

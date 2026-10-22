@@ -55,7 +55,7 @@ async function login() {
   await runPwOpen(['open', `${BASE_URL}/#/login`])
   await runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(authStorage)}), true)`])
   await runtime.reload()
-  await runtime.waitFor("location.hash.includes('/dashboard')", { timeout: PAGE_TIMEOUT })
+  await runtime.waitFor("(location.hash === '#/dashboard' && (document.body.innerText || '').includes('仪表盘')) || (location.hash === '#/reports/role-workbench' && (document.body.innerText || '').includes('待办中心'))", { timeout: PAGE_TIMEOUT })
 }
 
 async function openPath(path, label) {

@@ -108,10 +108,8 @@ function assertNoErrorText() {
 let AUTH_STORAGE_JSON = ''
 
 // 用指定账号登录，把登录态写入当前浏览器标签页并等待进入系统。
-// expectedHash 用于区分 ERP 登录（/dashboard）与受限账号登录（可能无仪表盘权限时用其他入口）。
-// expectedTexts 为「任一匹配即通过」的文本列表：受限账号登录后可能落仪表盘，
-// 也可能被历史 workspace tabs 弹到 403 页，两者都是合法登录后页面。
-async function loginAs(username, password, { expectedText = '仪表盘', expectedTexts = null, fallbackHash = '/dashboard' } = {}) {
+// ERP按当前账号权限进入仪表盘或待办中心；任何账号登录后进入403都必须失败。
+async function loginAs(username, password) {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method: 'POST',
     signal: AbortSignal.timeout(20000),
@@ -131,14 +129,11 @@ async function loginAs(username, password, { expectedText = '仪表盘', expecte
 
   await runPwOpen(['open', `${BASE_URL}/#/login`])
   await runPw(['eval', `(sessionStorage.setItem('flowcube-auth-v3', ${jsQuote(AUTH_STORAGE_JSON)}), true)`])
-  // 清掉上次会话的 workspace tabs（localStorage 持久化）：受限账号登录后若恢复出
-  // 无权限的 tab，KeepAliveOutlet 权限拦截会把它弹到 403，导致「等待进入系统」超时
+  // API注入登录态的验收路径也清理上次账号的工作区；实际表单登录仍由useLogin清理。
   await runPw(['eval', '(localStorage.removeItem(\'flowcube-workspace\'), true)'])
   await runtime.reload()
-  const texts = expectedTexts || [expectedText]
-  const textCond = texts.map(t => `(document.body.innerText || '').includes(${jsQuote(t)})`).join(' || ')
   await waitFor(
-    `location.hash.includes(${jsQuote(fallbackHash)}) && (${textCond})`,
+    "(location.hash === '#/dashboard' && (document.body.innerText || '').includes('仪表盘')) || (location.hash === '#/reports/role-workbench' && (document.body.innerText || '').includes('待办中心'))",
     { label: `${username} 登录后进入系统` },
   )
 }
@@ -262,7 +257,7 @@ async function main() {
   await openAndCheck('/sale/1')
   await openAndCheck('/customers')
   await openAndCheck('/suppliers')
-  await openAndCheck('/payments/payable', '供应商往来', '', '现结账款', '现结供应商：到货即结')
+  await openAndCheck('/payments/payable', '供应商往来', '', '账款概览', '现结与月结欠款分别展示')
   await openAndCheck('/payments/receivable', '客户往来', '', '现结账款', '现结客户：出库即结')
   await openAndCheck('/carriers')
   await openAndCheck('/locations')
@@ -282,8 +277,8 @@ async function main() {
   // ── 403 权限场景（长期保留的受限账号，凭据从环境变量安全注入）──
   // 用显式注入的受限账号（仅 inbound.order.view + dashboard.view）访问需要
   // picking.wave.view 的页面，应被前端权限拦截转到 403 页。
-  // 登录断言用任一匹配：落仪表盘（有 dashboard.view）或被弹 403 都算登录成功。
-  await loginAs(SMOKE_LIMITED_USERNAME, SMOKE_LIMITED_PASSWORD, { expectedTexts: ['仪表盘', '无访问权限'], fallbackHash: '/' })
+  // 登录本身只能进入允许的安全落地页，之后才主动访问无权页面验证403。
+  await loginAs(SMOKE_LIMITED_USERNAME, SMOKE_LIMITED_PASSWORD)
   await assertForbidden('/picking-waves')
   // 受限账号有权访问的页面不应 403（对照：inbound.order.view 授权了新建收货订单）
   await setHashAndConfirm('/inbound-tasks/new')

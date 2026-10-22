@@ -78,6 +78,7 @@ async function runFixture(script, scenario = 'success') {
         const auth=JSON.parse(sessionStorage.getItem('flowcube-auth-v3')||'null');
         let route=location.hash.slice(1).split('?')[0];
         if(!auth){ document.body.innerText='登录'; return }
+        if(route==='/login'&&scenario==='limited-login-403'&&auth.state.user.username==='fixture-limited'){location.hash='/403';return}
         if(route==='/login'||route==='/pda/login'){location.hash=pda?'/pda':'/dashboard';return}
         if(route.startsWith('/pda')!==pda){location.hash=pda?'/pda':'/dashboard';return}
         if(redirects[route]){location.hash=redirects[route];return}
@@ -129,7 +130,7 @@ test('真实浏览器完成 ERP、四个 PDA 页面、受限权限和授权对�
   for (const route of Object.keys(titles)) assert.ok(r.seen.includes(route), `漏验收 ${route}`)
   t.diagnostic(`fixture elapsed ${r.elapsed} ms; distinct routes ${new Set(r.seen).size}`)
 })
-for (const scenario of ['broken-pda', 'broken-permission', 'render-error', 'stale-merged-title', 'wrong-merged-view', 'wrong-merged-href', 'wrong-finance-component']) {
+for (const scenario of ['broken-pda', 'broken-permission', 'render-error', 'stale-merged-title', 'wrong-merged-view', 'wrong-merged-href', 'wrong-finance-component', 'limited-login-403']) {
   test(`真实浏览器发现 ${scenario} 时必须失败并退出`, { timeout: 95000 }, async () => {
     const r = await runFixture('smoke-pages.node.js', scenario)
     assert.equal(r.status, 1, r.output)
