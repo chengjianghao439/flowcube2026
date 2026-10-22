@@ -487,6 +487,15 @@ function runRunner(opts = {}) {
   fs.mkdirSync(stubDir, { recursive: true })
   fs.mkdirSync(configDir, { recursive: true })
   fs.mkdirSync(tmpRoot, { recursive: true })
+  // The production helper is not loaded by this shell/Docker fixture. Keep the
+  // new explicit preparation boundary observable without any real database.
+  fs.mkdirSync(path.join(tmpRoot, 'tests/helpers'), { recursive: true })
+  fs.writeFileSync(path.join(tmpRoot, 'tests/helpers/prepareQaRoleTestDatabase.js'), [
+    "const fs = require('node:fs')",
+    "fs.appendFileSync(process.env.FC_STUB_LOG, JSON.stringify(['qa-role-fixture']) + '\\n')",
+    "process.exit(process.env.FC_STUB_QA_FAIL === '1' ? 1 : 0)",
+  ].join('\n'))
+
 
   fs.writeFileSync(path.join(stubDir, 'docker'), DOCKER_STUB, { mode: 0o755 })
   // npm stub：模拟迁移与 smoke 成功，同时把归属文件复制一份供测试检查（真实 smoke 运行时该文件
@@ -525,6 +534,7 @@ function runRunner(opts = {}) {
       PATH: `${stubDir}:${process.env.PATH}`,
       FC_STUB_LOG: log,
       FC_STUB_STATE: statePath,
+      FC_STUB_QA_FAIL: opts.qaFixtureFails ? '1' : '0',
       FC_STUB_BAD_CONTEXT: opts.badContext ? '1' : '0',
       FC_STUB_CREATE_FAIL: opts.createFail ? '1' : '0',
       FC_STUB_STUCK_CONTAINER: opts.stuckContainer ? '1' : '0',
@@ -556,6 +566,7 @@ function runRunner(opts = {}) {
 const NPM_STUB = [
   '#!/usr/bin/env node',
   "const fs = require('node:fs')",
+  "fs.appendFileSync(process.env.FC_STUB_LOG, JSON.stringify(['npm', ...process.argv.slice(2)]) + '\\n')",
   'const src = process.env.FLOWCUBE_REPAIR_INSTANCE_FILE',
   'const dst = process.env.FC_STUB_OWNERSHIP_COPY',
   'if (src && dst) { try { fs.copyFileSync(src, dst) } catch {} }',
@@ -615,6 +626,9 @@ test('runner：正常路径先验 context、先建卷再建容器、建库前自
   assert.ok(firstCreate > firstVolumeCreate, '数据卷必须先于容器创建')
   assert.ok(firstStart > firstCreate, '容器必须先 create 再 start')
   assert.ok(firstDb > firstStart, '建库必须在容器起来之后')
+  const prepare = run.calls.findIndex(c => c[0] === 'qa-role-fixture')
+  const migration = run.calls.findIndex(c => c[0] === 'npm')
+  assert.ok(prepare > firstDb && migration > prepare, '认可岗位合成准备须在专属建库后、普通迁移前')
   assert.ok(
     run.calls.slice(0, firstDb).some((c) => c.includes('inspect') && c.includes('-f')),
     '建库之前必须已做容器/卷归属自检（inspect -f）',
@@ -729,9 +743,20 @@ test('runner：清理标记只在 docker 实际创建成功之后置位', () => 
 test('runner：$VAR 之后不得紧跟非 ASCII 字符（必须写 ${VAR}）', () => {
   const offenders = []
   stripBashComments(RUNNER_SRC).split('\n').forEach((line, i) => {
+    // eslint-disable-next-line no-control-regex -- This guard intentionally detects non-ASCII suffixes by their byte range.
     const re = /\$([A-Za-z_][A-Za-z0-9_]*)(?=[^\x00-\x7F])/g
     let m
     while ((m = re.exec(line))) offenders.push(`第 ${i + 1} 行 $${m[1]}（${line.trim()}）`)
   })
   assert.deepEqual(offenders, [], `以下位置在全角字符前直接引用变量，真实运行会 unbound variable：\n${offenders.join('\n')}`)
+})
+
+test('runner：认可岗位夹具准备失败即停，不执行迁移或smoke且资源仍清理', t => {
+  const run = runRunner({ qaFixtureFails: true })
+  t.after(() => run.cleanup())
+  assert.notEqual(run.result.status, 0)
+  assert.ok(run.calls.some(c => c[0] === 'qa-role-fixture'))
+  assert.ok(!run.calls.some(c => c[0] === 'npm'))
+  assert.equal(run.state().containers.filter(c => c.exists).length, 0)
+  assert.equal(run.state().volumes.length, 0)
 })

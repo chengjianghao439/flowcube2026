@@ -70,7 +70,7 @@ export default function CarriersPage() {
     { key: 'name', title: '承运商 / 编号', width: 260, render: (_, row) => <RecordIdentity title={row.name} code={row.code} /> },
     { key: 'platformCode', title: '对接平台', width: 130, render: v => WAYBILL_PLATFORM_ALL.find(o => o.value === v)?.label || '未设置' },
     { key: 'monthlyAccount', title: '月结账号', width: 160, render: v => (v as string) || '未填写' },
-    { key: 'accountBinding', title: '快递账号', width: 130, render: (_, row) => (!row.platformCode || ['sf', 'deppon'].includes(row.platformCode)) ? <Button variant="link" className="px-0" onClick={() => navigate(`/carrier-accounts?carrierId=${row.id}`)}>管理月结账号</Button> : '—' },
+    { key: 'accountBinding', title: '快递账号', width: 130, render: (_, row) => (!row.platformCode || ['sf', 'deppon'].includes(row.platformCode)) && can(PERMISSIONS.CARRIER_VIEW) ? <Button variant="link" className="px-0" onClick={() => navigate(`/carrier-accounts?carrierId=${row.id}`)}>{can(PERMISSIONS.CARRIER_UPDATE) ? '管理月结账号' : '查看月结账号'}</Button> : '—' },
     { key: 'type',     title: '类型', width: 80,
       render: v => CARRIER_TYPE_LABELS[v as CarrierType] },
     { key: 'contact',  title: '联系人',
@@ -99,7 +99,7 @@ export default function CarriersPage() {
       saveSuccessMessage={(editing) => editing ? '承运商已保存' : '承运商已创建'}
       formWidthClass="max-w-3xl"
       headerActions={<>
-        <Button variant="outline" onClick={() => navigate('/carrier-accounts')}>绑定快递账号</Button>
+        {can(PERMISSIONS.CARRIER_UPDATE) && <Button variant="outline" onClick={() => navigate('/carrier-accounts')}>绑定快递账号</Button>}
         <Button variant="outline" onClick={() => downloadExport('/export/carriers').catch(e => toast.error((e as Error).message))}>导出</Button>
       </>}
       onOpen={handleOpen}
@@ -152,10 +152,10 @@ export default function CarriersPage() {
               <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
                 <p>顺丰/德邦的月结账号、常用服务与「电子面单取号」开关在「快递账号绑定」页维护，这里仅供查看。</p>
                 <p className="mt-2 text-muted-foreground">当前：月结账号 {form.monthlyAccount || '未绑定'} · 取号 {form.waybillEnabled ? '已启用' : '未启用'}</p>
-                <Button type="button" variant="outline" size="sm" className="mt-3"
+                {can(PERMISSIONS.CARRIER_UPDATE) && <Button type="button" variant="outline" size="sm" className="mt-3"
                   onClick={() => navigate(editing ? `/carrier-accounts?carrierId=${editing.id}` : '/carrier-accounts')}>
                   去管理月结账号
-                </Button>
+                </Button>}
               </div>
             ) : <>
             <div className="flex items-center justify-between">
@@ -198,6 +198,7 @@ export default function CarriersPage() {
         </div>
       )}
       submitForm={(editing) => {
+        if (!can(editing ? PERMISSIONS.CARRIER_UPDATE : PERMISSIONS.CARRIER_CREATE)) return Promise.reject(new Error('没有保存承运商权限'))
         const base = { name: form.name, type: form.type, contact: form.contact, phone: form.phone, remark: form.remark, ...platformPayload(form) }
         return editing
           ? updateCarrierApi(editing.id, { ...base, isActive: form.isActive }, { skipGlobalError: true })

@@ -224,7 +224,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
       <div className="flex gap-1 border-b border-border">
         {([
           { key: 'statements' as const, label: '汇总对账' },
-          { key: 'receipts' as const, label: `${type === 1 ? '付款' : '收款'}核销` },
+          { key: 'receipts' as const, label: `${type === 1 ? '付款' : '收款'}${canExecutePayments ? '核销' : '流水'}` },
           { key: 'records' as const, label: '全部账款' },
         ]).filter(item => item.key === 'records' || canViewPayments).map(item => (
           <button

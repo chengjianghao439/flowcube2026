@@ -12,11 +12,11 @@ import { useNavigate } from 'react-router-dom'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
-import PdaScanner from '@/components/pda/PdaScanner'
+import PdaScanner, { type PdaScanOutcome } from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { queryInventoryByBarcodeApi, type InventoryQueryContainer } from '@/api/inventory'
-import { formatPdaActionError } from '@/utils/displayFormatters'
+import { formatPdaInventoryError, PDA_INVENTORY_NOT_FOUND } from '@/utils/displayFormatters'
 import { formatDisplayDate } from '@/lib/dateTime'
 
 function formatDate(v: string | null): string {
@@ -61,23 +61,26 @@ export default function PdaInventoryQueryPage() {
   const [results, setResults] = useState<InventoryQueryContainer[] | null>(null)
   const [lastBarcode, setLastBarcode] = useState('')
   const [querying, setQuerying] = useState(false)
-  const doQuery = useCallback(async (raw: string) => {
+  const doQuery = useCallback(async (raw: string): Promise<PdaScanOutcome> => {
     const bc = raw.trim()
-    if (!bc || querying) return
+    if (!bc || querying) return 'ignored'
     setQuerying(true)
     try {
       const list = await queryInventoryByBarcodeApi(bc)
       setResults(list)
       setLastBarcode(bc)
       if (list.length === 0) {
-        err('未找到该条码对应的库存信息')
+        err(PDA_INVENTORY_NOT_FOUND)
+        return 'rejected'
       } else {
         ok(`找到 ${list.length} 个库存条码`)
+        return 'accepted'
       }
     } catch (e: unknown) {
       setResults(null)
       setLastBarcode(bc)
-      err(formatPdaActionError(e, '条码查询失败'))
+      err(formatPdaInventoryError(e))
+      return 'rejected'
     } finally {
       setQuerying(false)
     }
@@ -86,6 +89,7 @@ export default function PdaInventoryQueryPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title="库存查询" subtitle="扫描库存条码查看在库信息" onBack={() => navigate('/pda')} />
+      <PdaFlash flash={flash} />
       <div className="max-w-md mx-auto flex-1 space-y-3 overflow-y-auto p-3 w-full">
         {results !== null && (
           <>
@@ -103,9 +107,8 @@ export default function PdaInventoryQueryPage() {
           </>
         )}
       </div>
-      <PdaFlash flash={flash} />
       <PdaBottomBar>
-        <PdaScanner onScan={(code) => { void doQuery(code) }} placeholder="扫描库存条码（I…/B…）" disabled={querying} busy={querying} />
+        <PdaScanner onScan={doQuery} placeholder="扫描库存条码（I…/B…）" disabled={querying} busy={querying} />
       </PdaBottomBar>
     </div>
   )

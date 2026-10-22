@@ -9,7 +9,7 @@ import { Truck, CircleCheck, Package } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
-import PdaScanner from '@/components/pda/PdaScanner'
+import PdaScanner, { type PdaScanOutcome } from '@/components/pda/PdaScanner'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaSection from '@/components/pda/PdaSection'
@@ -67,6 +67,7 @@ export default function PdaShipPage() {
   const [info, setInfo]       = useState<PackageShipInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [done, setDone]       = useState(false)
+  const [pendingScanKey, setPendingScanKey] = useState<string | null>(null)
   // 待出库的退货任务（采购退货 / 销售退货返货）：这两类跳过了打包，**没有包裹也没有物流箱码**，
   // 上面那条「扫箱码 → 反查包裹」的路径对它们无从下手。没有这个列表，货拣完了也出不了库，
   // 退货单就永远收不了口。列表常驻，扫到箱码时让位给单据详情。
@@ -128,23 +129,38 @@ export default function PdaShipPage() {
   })
 
   // 扫码后自动查询；可出库即自动出库
-  const handleScan = useCallback(async (raw: string) => {
+  const handleScan = useCallback(async (raw: string): Promise<PdaScanOutcome> => {
     const parsed = parseBarcode(raw)
-    if (parsed.type !== 'box') { err('扫描物流条码'); return }
+    if (parsed.type !== 'box') {
+      err(parsed.type === 'unknown'
+        ? '未识别为物流条码，请扫描箱贴上的物流条码（L…/BOX…）'
+        : `这是${parsed.label}，请扫描箱贴上的物流条码（L…/BOX…）`)
+      return 'rejected'
+    }
+    setPendingScanKey(null)
     setLoading(true)
     try {
       const res  = await getPackageByBarcodeApi(raw)
       const data = res!
-      if (warehouseStatus(data) === WT_STATUS.SHIPPED)   { err('该任务已完成出库'); return }
-      if (warehouseStatus(data) === WT_STATUS.CANCELLED) { err('该任务已取消'); return }
+      if (warehouseStatus(data) === WT_STATUS.SHIPPED)   { err('该任务已完成出库'); return 'rejected' }
+      if (warehouseStatus(data) === WT_STATUS.CANCELLED) { err('该任务已取消'); return 'rejected' }
       setInfo(data)
       if (!canShip(data)) {
         err(shipBlockedMessage(data))
-        return
+        return 'rejected'
       }
-      shipMut.mutate({ taskId: data.warehouseTaskId })
+      // mutation接管写失败反馈；读取成功不等于出库成功。
+      try {
+        const result = await shipMut.mutateAsync({ taskId: data.warehouseTaskId })
+        if (result.kind === 'pending') {
+          setPendingScanKey(result.requestKey)
+          return { kind: 'pending', requestKey: result.requestKey }
+        }
+        return 'accepted'
+      } catch { return 'rejected' }
     } catch (e: unknown) {
       err(formatPdaActionError(e, '出库失败，请确认任务状态或联系管理员'))
+      return 'rejected'
     } finally { setLoading(false) }
   }, [err, shipMut])
 
@@ -329,7 +345,8 @@ export default function PdaShipPage() {
             <span className="text-sm font-bold text-foreground">{totalBoxes} 箱</span>
           </PdaCard>
         ) : null}
-        <PdaScanner onScan={handleScan} placeholder="扫描物流条码" disabled={loading || shipMut.isPending || shipAction.submitBlocked} />
+        <PdaScanner onScan={handleScan} placeholder="扫描物流条码" disabled={loading || shipMut.isPending || shipAction.submitBlocked}
+          resolution={pendingScanKey && shipAction.phase === 'failed' ? { requestKey: pendingScanKey, outcome: 'rejected' } : null} />
         {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">出库中…</span></div>}
       </PdaBottomBar>
 

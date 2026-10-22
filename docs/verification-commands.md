@@ -629,7 +629,7 @@ R2 服务器订阅补正可定向运行 `bash scripts/with-dev-env.sh npm --pref
 
 先红证据分别为 `/tmp/go-live-r3-backend-red.log`（旧pool双连接读取及路由单权）、`/tmp/go-live-r3-frontend-red.log`（document NULL身份拒绝/层级与rowkey）、`/tmp/go-live-r3-invalidation-red.log`（原成功回调未刷新统一待办）；均自然exit1。这些证据仅证明离线源码/组件行为，不代表MySQL、EXPLAIN、真实GUI/仓库或生产；全批统一lint/类型/构建和数据库现场验收另行执行。
 
-最终离线服务9项自然exit0见 `/tmp/go-live-r3-approval-green.log`；与首批原单草稿/详情、默认API取齐及R2服务器setter相邻回归合计前端9文件89项自然exit0见 `/tmp/go-live-r3-frontend-final.log`。反向把role1误设为自批豁免，目标自批用例自然exit1（`/tmp/go-live-r3-self-guard-reverse.log`），恢复产品字节后再次9项通过。SQL标识符、只读查询循环、权限、路由、轮询及主题文档守卫分别验证，不代替上述真实业务链边界。
+最终离线服务9项自然exit0见 `/tmp/go-live-r3-approval-green.log`；与首批原单草稿/详情、默认API取齐及R2服务器setter相邻回归合计前端9文件90项自然exit0见 `/tmp/go-live-r3-frontend-final.log`。反向把role1误设为自批豁免，目标自批用例自然exit1（`/tmp/go-live-r3-self-guard-reverse.log`），恢复产品字节后再次9项通过。SQL标识符、只读查询循环、权限、路由、轮询及主题文档守卫分别验证，不代替上述真实业务链边界。
 
 六类成功动作缓存接线补正：`useApprovals.invalidation.test.tsx` 真实授信hook、改价页面及请购form的13个新增动作，409/网络未知后不刷新，真实成功才失效两待办key；原3项保留。先自然exit1（13红/3绿）见 `/tmp/go-live-r3-engine-invalidation-red.log`，修后16项自然exit0见 `/tmp/go-live-r3-engine-invalidation-green.log`。请购沿真实form.run/refetch链，不虚构专用hook；改价未finished保留原商品缓存规则，草稿创建不启动引擎。
 
@@ -1099,3 +1099,26 @@ Node22 定向 `node --test tests/export-list-filters-passthrough.test.js tests/o
 `npm run test:approval-list-batches` 保留原待办/范围检查，并运行 `credit-approval-consistency.test.js` 与 `credit-approval-validity.test.js`，覆盖业务负例、商业内容、自批/当前节点、失效原因和固定批量效力读取。`npm run smoke:credit-override` 串行运行默认岗位迁移、原申请、审批一致性和失效重申回归；仅限显式测试环境/专属合成实例，覆盖独立申请/审批权限、实时自批/范围、同键及异键并发、节点审计、普通仓管部分出库、预占守恒、改价/过期/无证明旧批准直接重申、有效/进行中防重复、并发只建一单、原历史保留及不自动复活旧批准。295岗位回归用连接临时表影射真实结构，逐条固定删除23项/增加8项及完整前后差集、自定义保留、稳定编码、重放与回滚；本次同步不改295或任何已有迁移。`test:permissions` 包含独立审批纯规则反例；前端全量包含申请/审批按钮分权、失效重新申请和明确409恢复，未知结果恢复门不变。仅箱贴完成为合成ACK，不作真机/出纸或独立验收结论。详见 [授信审批一致性](credit-approval-consistency-2026-10-19.md) 与 [岗位及客户范围边界](role-defaults-approval-2026-10-19.md)。
 
 同一`smoke:credit-override`现追加`credit-pending-expiry.smoke.test.js`：过期待审列表/详情、直接及并发重申、原历史保留、拒绝过期审批和占库、未过期正例、证明锁等待跨截止时间及旧节点不恢复。API定位最小申请人的仓库目录/待办403，并保留有权账号目录正例。前端全量含`ReserveAllocationDialog.authorization.test.tsx`的闭合网络调用与真实403展示/提交正例，及`index.pending-expiry.test.tsx`的列表、普通/交接详情、显式重申和无申请权反例；不以组件测试代替真实业务或独立验收。
+
+## 2026-10-21 QA 候选验证
+
+首轮新增 `npm run test:qa-remediation` 在Tests static job执行分类真实Express资源参数与税务服务期间边界，外部身份/DB隔离，原76项；认可角色后扩为90项，见下方296专项。前端新真实组件测试由原全量test:unit发现。首轮快照395文件3600项通过及两端lint、正确项目tsc、ERP/PDA构建保留为阶段记录，不代表正式验收。
+
+续办按运维事实撤回第5条后，原 `security-scope-reconciliation-pagination.test.js` 恢复基线，仍沿既有安全套件运行；本轮与导出筛选共19项通过。只读/原往来权限保留3文件33项通过；报税明确“金额全0+空列表”真实hooks/表格形状及相邻用例2文件16项通过。本轮最终全量394文件3593项通过，前端lint、正确项目tsc及ERP/PDA构建通过。真实浏览器分别查看验收基线及候选，均未复现崩溃、console error与page error均0。不能据此写成正式原故障已解决。
+
+本地预览仅本任务具label的专属新库、随机回环端口、完整295迁移与合成身份，不连接生产；不启动scheduler、显式关闭相关外呼worker/告警。只使用命名会话并close核验、按归属清理预览资源。最终检查结果和阶段边界见 [QA实测记录](qa-remediation-2026-10-21.md)，岗位认可基线见 [正式岗位核对](qa-role-review-2026-10-21.md)。独立测试环境、完整后端业务矩阵、同SHA CI及真机/实物分别验收。
+
+
+### 2026-10-21 已认可角色296专项
+
+`test:qa-remediation` 增加 `qa-role-migration.test.js`（诊断/回滚/认可表比对/显式前缀/CLI完整输出）及 `qa-role-test-fixture.test.js`（非测试目标、同数漂移、已有活跃用户/业务拒绝、精确种子准备及已有296不重置）；连同原分类/期间共90项。`smoke:credit-override` 保留全部原入口，串行增加 `qa-role-migration.smoke.test.js` 与 `qa-role-concurrency.smoke.test.js`，共40项新增MySQL/真实HTTP门及并发回归。33条有效撤权逐项200→403，7角色12报表全403；controller/身份存储为合成边界，权限读实际迁移表。
+
+CI五处新库初始化显式使用 `tests/helpers/prepareQaRoleTestDatabase.js`：NODE_ENV=test、回环且独立test库名，001—295后还需精确旧12种子、仅禁用默认admin、空业务，才能装载认可13角色before，再执行普通296。已有296只运行后续普通迁移，不重置权限。生产默认迁移不会调用此入口，也不接受未知新库默认集合；不能把测试准备当作正式初始化工具。专属实例runner继续核归属及资源收尾，准备失败即停并清理，旧普通迁移步骤保留。
+
+真实新建归属实例的 `smoke:pda-audit-log-migration-owned` 40项在完整296初始化后通过且确认清理；原完整授信链、28项权限、56项相邻契约、19项归属守卫分别通过，不把它们算成同一层证据。所有运行只用本任务新建回环实例及合成数据，不读真实env或访问生产。
+
+### 2026-10-21 QA 验收续修的验证入口
+
+`npm run smoke:qa-role-upgrade` 使用显式独立测试环境，串行执行岗位迁移 MySQL/HTTP 反例、持久表并发与新库初始化实测。测试自行创建随机 schema 并按原名清理；不能指向生产或共享开发库。Tests CI 将其放在独立的“岗位权限与空库初始化（独立数据库）”job，先显式准备认可的合成改前集合，再真实执行反例，不受回归门禁前序步骤失败影响。原授信业务链保留在 `smoke:credit-override`，不重复执行已拆出的岗位专项。
+
+`npm run test:qa-remediation` 增加新装入口的离线顺序、非空对象拒绝与错误停止测试。新装的实际操作命令与中断边界见 `docs/DEPLOY.md`；测试准备脚本不是部署初始化入口。CI 配置、运行结果和独立验收结论分别记录。

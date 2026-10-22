@@ -1,6 +1,8 @@
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { money } from '@/lib/format'
-import { useState, forwardRef, useImperativeHandle } from 'react'
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -50,6 +52,11 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
 ) {
   const qc = useQueryClient()
   const active = useActiveWorkspaceTab()
+  const { can } = usePermission()
+  const canExecute = can(PERMISSIONS.PAYMENT_EXECUTE)
+  const executePermissionRef = useRef(canExecute)
+  executePermissionRef.current = canExecute
+  const canConfirm = can(PERMISSIONS.PAYMENT_CONFIRM)
   const isPayable = type === 1
   const partyLabel = isPayable ? '供应商' : '客户'
 
@@ -92,16 +99,22 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
   // 工具条按钮被父级挪进 PageHeader 后，通过 ref 触发面板内部的查询/新建/导出
   useImperativeHandle(ref, () => ({
     openQuery: () => setQueryOpen(true),
-    openCreate: () => setCreateOpen(true),
+    openCreate: () => { if (executePermissionRef.current) setCreateOpen(true) },
     exportExcel: handleExport,
   }))
 
   const confirmMut = useMutation({
-    mutationFn: (id: number) => confirmStatementApi(id),
+    mutationFn: (id: number) => {
+      if (!can(PERMISSIONS.PAYMENT_CONFIRM)) throw new Error('没有确认对账单权限')
+      return confirmStatementApi(id)
+    },
     onSuccess: () => { invalidate(); toast.success('对账单已确认，可导出发对方核对') },
   })
   const unlockMut = useMutation({
-    mutationFn: (id: number) => unlockStatementApi(id),
+    mutationFn: (id: number) => {
+      if (!can(PERMISSIONS.PAYMENT_CONFIRM)) throw new Error('没有解锁对账单权限')
+      return unlockStatementApi(id)
+    },
     onSuccess: () => { invalidate(); toast.success('已解锁为草稿，可继续调整明细') },
   })
   const columns: TableColumn<ReconciliationStatement>[] = [
@@ -126,10 +139,11 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
       const r = row as ReconciliationStatement
       // 与「按单登记」tab 一致：主按钮 + 下拉次操作，随状态变化
       const items: TableActionItem[] = [{ label: '明细', afterMenuClose: true, onClick: () => setDetailId(r.id) }]
-      if (r.status === 2 && r.settledAmount === 0) {
+      if (canConfirm && r.status === 2 && r.settledAmount === 0) {
         items.push({ label: '解锁', onClick: () => unlockMut.mutate(r.id), disabled: unlockMut.isPending })
       }
       // 草稿：主操作=确认；已确认/已核销：主操作=导出对账单发对方
+      if (r.status === 1 && !canConfirm) return <TableActionsMenu primaryLabel="明细" primaryVariant="outline" onPrimaryClick={() => setDetailId(r.id)} items={[]} />
       return r.status === 1 ? (
         <TableActionsMenu primaryLabel="确认" onPrimaryClick={() => confirmMut.mutate(r.id)} primaryDisabled={confirmMut.isPending} items={items} />
       ) : (
@@ -153,7 +167,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
           <div className="ml-auto flex gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" onClick={handleExport}>导出汇总</Button>
-            <Button onClick={() => setCreateOpen(true)}>新建对账单</Button>
+            {canExecute && <Button onClick={() => setCreateOpen(true)}>新建对账单</Button>}
           </div>
         </div>
       )}

@@ -20,7 +20,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
-import PdaScanner from '@/components/pda/PdaScanner'
+import PdaScanner, { type PdaScanOutcome, type PdaScanResolution } from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { useOfflineScan } from '@/hooks/useOfflineScan'
@@ -32,7 +32,7 @@ import PdaNextStep from '@/components/pda/PdaNextStep'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
-import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
+import { formatPdaActionError, formatPdaErrorMessage, PDA_INVENTORY_NOT_FOUND } from '@/utils/displayFormatters'
 
 /**
  * 拣货扫码回执（批 B1/B2）：`picked` 仅在「扫盒取货」分支出现——新取货码 + 数量 + 打印状态。
@@ -141,6 +141,8 @@ export default function PdaTaskPage() {
   const [scanning, setScanning]   = useState(false)
   const [finished, setFinished] = useState<number | null>(null)
   const [sortTask, setSortTask] = useState<{ id: number; taskNo: string } | null>(null)
+  const [scanResolution, setScanResolution] = useState<PdaScanResolution | null>(null)
+  const [pendingScan, setPendingScan] = useState<{ requestKey: string; action: 'pick' | 'ready' } | null>(null)
   const currentTaskId = useRef(taskId)
   currentTaskId.current = taskId
   /**
@@ -176,6 +178,7 @@ export default function PdaTaskPage() {
     requestAction: 'scan-log.pick',
     label: `拣货任务 ${taskId}`,
     onConfirmed: async (data, ctx) => {
+      if (ctx.recovered) setScanResolution({ requestKey: ctx.requestKey, outcome: 'accepted' })
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       // 拣货动作会改变任务状态，必须同时作废列表缓存：PDA 拣货列表（订单视图与
       // 商品汇总视图）在 keep-alive 下不会自动重取，曾出现「订单列表已空、商品
@@ -207,7 +210,8 @@ export default function PdaTaskPage() {
     action: `warehouse.ready.${taskId}`,
     requestAction: 'warehouse.ready-to-ship',
     label: `完成拣货任务 ${taskId}`,
-    onConfirmed: async () => {
+    onConfirmed: async (_data, ctx) => {
+      if (ctx.recovered) setScanResolution({ requestKey: ctx.requestKey, outcome: 'accepted' })
       if (currentTaskId.current !== taskId) return
       setFinished(taskId)
       setSortTask(null)
@@ -256,19 +260,19 @@ export default function PdaTaskPage() {
   const lastScanRef = useRef<{ barcode: string; time: number } | null>(null)
 
   // ── Scan handler ─────────────────────────────────────────────────────
-  async function handleScan(barcode: string) {
+  async function handleScan(barcode: string): Promise<PdaScanOutcome> {
     const b = barcode.trim()
-    if (!b || !task?.items?.length) return
+    if (!b || !task?.items?.length) return 'ignored'
     if (parseBarcode(b).type !== 'container') {
-      err(`${b} 识别失败，请重扫`)
+      err(PDA_INVENTORY_NOT_FOUND)
       logError({ taskId, barcode: b, reason: `条码格式无效：${b}` })
-      return
+      return 'rejected'
     }
 
     // ── 防重复扫码：同一条码 1 秒内不重复 ──────────────────────────────────
     const now = Date.now()
     if (lastScanRef.current?.barcode === b && now - lastScanRef.current.time < 1000) {
-      err('重复扫码，请稍候'); return
+      err('重复扫码，请稍候'); return 'rejected'
     }
     lastScanRef.current = { barcode: b, time: now }
 
@@ -288,18 +292,19 @@ export default function PdaTaskPage() {
         // 容器不在推荐里，尝试直接查
         const c = await getContainerByBarcodeApi(b, { skipGlobalError: true })
         const item = task.items.find(i => i.productId === c.productId)
-        if (!item) { err(formatPdaErrorMessage('该商品不属于当前任务')); return }
-        if (item.pickedQty >= item.requiredQty) { err('该商品已全部拣完'); return }
+        if (!item) { err(formatPdaErrorMessage('该商品不属于当前任务')); return 'rejected' }
+        if (item.pickedQty >= item.requiredQty) { err('该商品已全部拣完'); return 'rejected' }
         const addQty = roundQuantity(Math.min(c.remainingQty || 1, item.requiredQty - item.pickedQty))
-        if (item.allowDecimalQty === false && !Number.isSafeInteger(addQty)) { err('原出货任务要求整数数量，请核对库存条码'); return }
+        if (item.allowDecimalQty === false && !Number.isSafeInteger(addQty)) { err('原出货任务要求整数数量，请核对库存条码'); return 'rejected' }
         pickedName = item.productName || b
         pickedQty = addQty
         const scanResult = await pickAction.run((requestKey) =>
           submitScan<PickScanResult>({ taskId, itemId: item.id, containerId: c.containerId, barcode: b, productId: c.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: c.locationCode ?? undefined }, requestKey),
         )
         if (scanResult.kind === 'pending') {
+          setPendingScan({ requestKey: scanResult.requestKey, action: 'pick' })
           warn('网络中断，拣货扫码结果待确认。请先确认结果，避免重复扫描。')
-          return
+          return { kind: 'pending', requestKey: scanResult.requestKey }
         }
         if (scanResult.kind === 'success' && scanResult.data?.picked) {
           const p = scanResult.data.picked
@@ -307,18 +312,19 @@ export default function PdaTaskPage() {
         }
         await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       } else {
-        if (match.remaining <= 0) { err('该商品已全部拣完'); return }
+        if (match.remaining <= 0) { err('该商品已全部拣完'); return 'rejected' }
         const addQty = roundQuantity(Math.min(container.remainingQty || 1, match.remaining))
         const sourceItem = task.items.find(item => item.id === match.id)
-        if (sourceItem?.allowDecimalQty === false && !Number.isSafeInteger(addQty)) { err('原出货任务要求整数数量，请核对库存条码'); return }
+        if (sourceItem?.allowDecimalQty === false && !Number.isSafeInteger(addQty)) { err('原出货任务要求整数数量，请核对库存条码'); return 'rejected' }
         pickedName = match.productName || b
         pickedQty = addQty
         const scanResult = await pickAction.run((requestKey) =>
           submitScan<PickScanResult>({ taskId, itemId: match.id, containerId: container.containerId, barcode: b, productId: match.productId, qty: addQty, scanMode: addQty > 1 ? '整件' : '散件', locationCode: container.locationCode ?? undefined }, requestKey),
         )
         if (scanResult.kind === 'pending') {
+          setPendingScan({ requestKey: scanResult.requestKey, action: 'pick' })
           warn('网络中断，拣货扫码结果待确认。请先确认结果，避免重复扫描。')
-          return
+          return { kind: 'pending', requestKey: scanResult.requestKey }
         }
         if (scanResult.kind === 'success' && scanResult.data?.picked) {
           const p = scanResult.data.picked
@@ -340,15 +346,18 @@ export default function PdaTaskPage() {
             readyToShipApi(taskId, requestKey).then(() => ({ taskId })),
           )
           if (readyResult.kind === 'pending') {
+            setPendingScan({ requestKey: readyResult.requestKey, action: 'ready' })
             warn('网络中断，完成拣货的结果待确认。请先确认是否已进入待分拣。')
-            return
+            return { kind: 'pending', requestKey: readyResult.requestKey }
           }
         }
       }
+      return 'accepted'
     } catch (e: unknown) {
       const rawMsg = formatPdaActionError(e, '扫码失败，请检查条码或任务状态')
       err(rawMsg)
       logError({ taskId, barcode: b, reason: rawMsg })
+      return 'rejected'
     } finally { setScanning(false) }
   }
 
@@ -398,12 +407,16 @@ export default function PdaTaskPage() {
             onConfirm={() => {
               const handler = pickAction.pendingRecord ? pickAction : readyAction.pendingRecord ? readyAction : taskNoticeAction
               if (!handler) return
+              const requestKey = handler.pendingRecord?.requestKey
               void handler.confirmPending().then((status) => {
                 if (!status) return
                 if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
                 if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
                 if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次提交记录；请先刷新任务后再重试'))
-                if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '扫码失败，请检查条码或任务状态'))
+                if (status.status === 'failed') {
+                  if (requestKey) setScanResolution({ requestKey, outcome: 'rejected' })
+                  err(formatPdaErrorMessage(status.message, '扫码失败，请检查条码或任务状态'))
+                }
               })
             }}
             onClear={() => {
@@ -434,6 +447,8 @@ export default function PdaTaskPage() {
       <PdaBottomBar>
         <PdaScanner
           onScan={handleScan}
+          resolution={pendingScan && (pendingScan.action === 'pick' ? pickAction : readyAction).phase === 'failed'
+            ? { requestKey: pendingScan.requestKey, outcome: 'rejected' } : scanResolution}
           placeholder="扫描库存条码"
           disabled={isLoading || taskError || suggestionError || scanning || finished === taskId || pickAction.submitBlocked || readyAction.submitBlocked}
           onDuplicate={() => err('重复扫码，请稍候')}

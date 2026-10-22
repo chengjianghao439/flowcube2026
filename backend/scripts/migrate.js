@@ -28,6 +28,7 @@ runMigrations()
     process.exit(0)
   })
   .catch((error) => {
-    console.error('[Migrate] failed:', error)
-    process.exit(1)
+    // Long role differences must finish writing to stderr before termination.
+    console.error('[Migrate] failed:', error.message || String(error))
+    process.exitCode = 1
   })

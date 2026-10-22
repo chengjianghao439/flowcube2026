@@ -25,6 +25,7 @@ vi.mock('@/api/products', () => ({
   getProductsForFinderApi: vi.fn(),
 }))
 vi.mock('@/api/settings', () => ({ getSettingsApi: vi.fn(async () => ({ map: {} })) }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => ['product.create', 'product.update'].includes(permission) }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }))
 

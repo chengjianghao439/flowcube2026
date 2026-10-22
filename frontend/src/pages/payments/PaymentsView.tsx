@@ -163,15 +163,15 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
             <Button variant="outline" onClick={() => receiptRef.current?.exportExcel()}>导出 Excel</Button>
-            <Button onClick={() => receiptRef.current?.openRegister()}>登记{isPayable ? '付款' : '收款'}</Button>
+            {can(PERMISSIONS.PAYMENT_EXECUTE) && <Button onClick={() => receiptRef.current?.openRegister()}>登记{isPayable ? '付款' : '收款'}</Button>}
           </div>
         )}
       />
 
       <nav aria-label={`${copy.title}登记方式`} className="flex gap-1 border-b border-border">
         {([
-          { key: 'records' as const, label: '按单登记' },
-          { key: 'receipts' as const, label: `${isPayable ? '付款' : '收款'}核销` },
+          { key: 'records' as const, label: can(PERMISSIONS.PAYMENT_EXECUTE) ? '按单登记' : '账款明细' },
+          { key: 'receipts' as const, label: `${isPayable ? '付款' : '收款'}${can(PERMISSIONS.PAYMENT_EXECUTE) ? '核销' : '流水'}` },
         ]).map(item => (
           <button
             key={item.key}

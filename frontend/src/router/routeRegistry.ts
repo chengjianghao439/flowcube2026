@@ -12,6 +12,7 @@ const mergedPage = lazy(() => import('@/components/shared/MergedPage'))
 
 // 仅 ERP 渲染入口加载页面；工作区元数据不再把所有页面带入 PDA。
 const components: Record<definitions.RouteComponentKey, RouteComponent> = {
+  WarehouseShippingPage: lazy(() => import('@/pages/warehouse-shipping')),
   SupplierRefundPage: lazy(() => import('@/pages/supplier-refunds')),
   SupplierRefundCreatePage: lazy(() => import('@/pages/supplier-refunds/CreateRefundPage')),
   RefundRecoveryPage: lazy(() => import('@/pages/supplier-refunds/RefundRecoveryPage')),

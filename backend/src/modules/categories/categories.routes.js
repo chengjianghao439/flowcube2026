@@ -3,7 +3,7 @@ const { z }      = require('zod')
 const ctrl       = require('./categories.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
-const { validateBody } = require('../../utils/route')
+const { validateBody, validateParams } = require('../../utils/route')
 
 const router = Router()
 router.use(authMiddleware)
@@ -24,16 +24,21 @@ const updateSchema = z.object({
   remark:    z.string().max(500).optional().nullable(),
 })
 
+const idParamSchema = z.object({
+  id: z.string().regex(/^[1-9]\d*$/, '分类编号必须为正整数')
+    .refine(value => Number.isSafeInteger(Number(value)), '分类编号超出有效范围'),
+})
+
 // GET 接口
 router.get('/tree',   requirePermission(PERMISSIONS.CATEGORY_VIEW), ctrl.tree)
 router.get('/flat',   requirePermission(PERMISSIONS.CATEGORY_VIEW), ctrl.flat)
 router.get('/leaves', requirePermission(PERMISSIONS.CATEGORY_VIEW), ctrl.leaves)
-router.get('/:id',    requirePermission(PERMISSIONS.CATEGORY_VIEW), ctrl.detail)
+router.get('/:id',    requirePermission(PERMISSIONS.CATEGORY_VIEW), validateParams(idParamSchema), ctrl.detail)
 
 // 写入接口
 router.post('/',                   requirePermission(PERMISSIONS.CATEGORY_CREATE), validateBody(createSchema), ctrl.create)
-router.put('/:id',                 requirePermission(PERMISSIONS.CATEGORY_UPDATE), validateBody(updateSchema), ctrl.update)
-router.delete('/:id',              requirePermission(PERMISSIONS.CATEGORY_DELETE), ctrl.remove)
-router.patch('/:id/status',        requirePermission(PERMISSIONS.CATEGORY_UPDATE), validateBody(z.object({ status: z.boolean() })), ctrl.toggle)
+router.put('/:id',                 requirePermission(PERMISSIONS.CATEGORY_UPDATE), validateParams(idParamSchema), validateBody(updateSchema), ctrl.update)
+router.delete('/:id',              requirePermission(PERMISSIONS.CATEGORY_DELETE), validateParams(idParamSchema), ctrl.remove)
+router.patch('/:id/status',        requirePermission(PERMISSIONS.CATEGORY_UPDATE), validateParams(idParamSchema), validateBody(z.object({ status: z.boolean() })), ctrl.toggle)
 
 module.exports = router

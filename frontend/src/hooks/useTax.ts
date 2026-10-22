@@ -91,6 +91,14 @@ export function useDeleteTaxAdjustment(companyId: number, period: string, tab: '
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => deleteTaxAdjustmentApi(id, companyId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tax-adjustments', companyId, period, tab === 'vat' ? 1 : 2] }),
+    onMutate: () => ({ companyId, period, taxType: tab === 'vat' ? 1 : 2 }),
+    onSuccess: (_data, _id, scope) => {
+      if (!scope) return
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: ['tax-adjustments', scope.companyId, scope.period, scope.taxType] }),
+        qc.invalidateQueries({ queryKey: ['tax-vat', scope.companyId, scope.period] }),
+        qc.invalidateQueries({ queryKey: ['tax-income', scope.companyId, scope.period] }),
+      ])
+    },
   })
 }

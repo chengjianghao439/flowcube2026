@@ -641,3 +641,26 @@ test('AST 文案与数量覆盖守卫须在已安装 TypeScript 的 job 中执�
   for (const job of Object.values(broken)) job.steps = (job.steps || []).filter(step => !/npm --prefix frontend ci/.test(String(step.run || '')))
   assert.throws(() => verify(broken), /TypeScript/, '反向验证：删安装步骤必须失败')
 })
+
+test('QA角色撤权实库反例与空库初始化在独立CI job中实际执行且不得跳过', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8'))
+  const job = workflow.jobs['qa-role-upgrade']
+  assert.ok(job, '岗位权限实库回归必须独立于可能提前失败的回归门禁')
+  assert.equal(job.env.NODE_ENV, 'test')
+  assert.equal(job.env.DB_HOST, '127.0.0.1')
+  assert.equal(job.env.DB_NAME, 'flowcube_qa_roles_test')
+  assert.ok(job.services.mysql)
+  const setup = job.steps.find(s => s.run === 'node tests/helpers/prepareQaRoleTestDatabase.js')
+  const runtime = job.steps.find(s => s.run === 'npm run smoke:qa-role-upgrade')
+  assert.ok(setup && runtime, '必须先装载认可合成基线，再运行真实MySQL/HTTP反例')
+  for (const step of [setup, runtime]) {
+    assert.equal(step.if, undefined, '不可用条件跳过关键反例')
+    assert.notEqual(step['continue-on-error'], true)
+  }
+  assert.ok(job.steps.indexOf(setup) < job.steps.indexOf(runtime))
+  const scripts = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts
+  for (const file of ['qa-role-migration.smoke.test.js', 'qa-role-concurrency.smoke.test.js', 'qa-new-database.smoke.test.js']) {
+    assert.ok(scripts['smoke:qa-role-upgrade']?.includes(`tests/${file}`), `CI必须实际执行${file}`)
+  }
+})

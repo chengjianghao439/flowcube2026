@@ -52,6 +52,7 @@ export default function ProductFormPage() {
   const editId = isNew ? null : Number(tabPath.split('/').pop())
   const isEdit = !!editId
   const { can } = usePermission()
+  const canSave = can(isNew ? PERMISSIONS.PRODUCT_CREATE : PERMISSIONS.PRODUCT_UPDATE)
   const globalPolicy = useGlobalPolicyWriteCapability(can(isNew ? PERMISSIONS.PRODUCT_CREATE : PERMISSIONS.PRODUCT_UPDATE))
 
   const navigate = useNavigate()
@@ -169,6 +170,7 @@ export default function ProductFormPage() {
   ] as const
 
   async function handleSubmit() {
+    if (!canSave) return
     if (!form.categoryId) { toast.warning('请选择商品分类'); return }
     if (!form.supplierId) { toast.warning('请选择供应商'); return }
     if (!form.unit.trim()) { toast.warning('请输入单位'); return }
@@ -307,11 +309,11 @@ export default function ProductFormPage() {
         rightActions={
           <>
 
-            <Button onClick={handleSubmit} disabled={submitting || !form.name} className="gap-1.5">
+            {canSave && <Button onClick={handleSubmit} disabled={submitting || !form.name} className="gap-1.5">
               {submitting
                 ? <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
                 : <><Save className="h-4 w-4" />{isEdit ? '保存修改' : '保存'}</>}
-            </Button>
+            </Button>}
           </>
         }
       />

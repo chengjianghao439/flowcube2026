@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
-import PdaScanner from '@/components/pda/PdaScanner'
+import PdaScanner, { type PdaScanOutcome } from '@/components/pda/PdaScanner'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaFlash from '@/components/pda/PdaFlash'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
@@ -23,7 +23,7 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { usePendingRequests } from '@/hooks/usePendingRequests'
 import { plasticReadContext, usePdaPlasticReadGuard } from '@/hooks/usePdaPlasticReadGuard'
-import { formatPdaActionError } from '@/utils/displayFormatters'
+import { formatPdaActionError, formatPdaInventoryError } from '@/utils/displayFormatters'
 
 interface ScannedSource {
   containerId: number
@@ -125,28 +125,17 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
   /** 扫来源：必须是整件库存条码（塑料盒不能作为放货来源） */
   const sourceMut = useMutation({
     mutationFn: async ({ bc, owner }: { bc: string; owner: ReturnType<typeof captureRead> }) => {
-      const res = await getContainerByBarcodeApi(bc, owner.config)
-      return res!
+      const d = await getContainerByBarcodeApi(bc, owner.config)
+      if (!owner.current()) return null
+      if (d.containerKind === 'plastic_box') throw new Error('塑料盒不能作为放货来源，请扫整件库存条码')
+      if (d.containerStatus !== 'stored') throw new Error('来源须为「在库」状态的整件库存条码')
+      if (d.lockedByTaskId) throw new Error('该来源已被拣货任务锁定，不能放货')
+      if (!(d.remainingQty > 0)) throw new Error('该来源已无余量')
+      return d
     },
     onSuccess: (d, { owner }) => {
-      if (!owner.current()) return
+      if (!d || !owner.current()) return
       setFormContext(owner.contextKey)
-      if (d.containerKind === 'plastic_box') {
-        err('塑料盒不能作为放货来源，请扫整件库存条码')
-        return
-      }
-      if (d.containerStatus !== 'stored') {
-        err('来源须为「在库」状态的整件库存条码')
-        return
-      }
-      if (d.lockedByTaskId) {
-        err('该来源已被拣货任务锁定，不能放货')
-        return
-      }
-      if (!(d.remainingQty > 0)) {
-        err('该来源已无余量')
-        return
-      }
       setSource({
         containerId: d.containerId,
         barcode: d.barcode,
@@ -156,31 +145,26 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
       setStep('target')
       ok(`来源 ${d.barcode}：${d.remainingQty} 件，请扫目标塑料盒`)
     },
-    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaActionError(e, '查询来源失败')) },
+    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaInventoryError(e, '查询来源失败')) },
   })
 
   /** 扫目标盒：必须是塑料盒（同商品同仓库由后端把关；设备仓由后端 PDA 分支把关） */
   const boxMut = useMutation({
     mutationFn: async ({ bc, owner }: { bc: string; owner: ReturnType<typeof captureRead> }) => {
-      const res = await getContainerByBarcodeApi(bc, owner.config)
-      return res!
+      const d = await getContainerByBarcodeApi(bc, owner.config)
+      if (!owner.current()) return null
+      if (d.containerKind !== 'plastic_box') throw new Error('目标必须是塑料盒条码（B 开头）')
+      if (d.lockedByTaskId) throw new Error('该塑料盒已被拣货任务锁定，不能放货')
+      return d
     },
     onSuccess: (d, { owner }) => {
-      if (!owner.current()) return
+      if (!d || !owner.current()) return
       setFormContext(owner.contextKey)
-      if (d.containerKind !== 'plastic_box') {
-        err('目标必须是塑料盒条码（B 开头）')
-        return
-      }
-      if (d.lockedByTaskId) {
-        err('该塑料盒已被拣货任务锁定，不能放货')
-        return
-      }
       setBox({ containerId: d.containerId, barcode: d.barcode })
       setStep('confirm')
       ok(`目标盒 ${d.barcode}`)
     },
-    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaActionError(e, '查询塑料盒失败')) },
+    onError: (e: unknown, { owner }) => { if (owner.current()) err(formatPdaInventoryError(e, '查询塑料盒失败')) },
   })
 
   const submit = useCallback(async () => {
@@ -209,19 +193,23 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
     }
   }, [active, contextCurrent, fillAction, source, box, err])
 
-  const handleScan = useCallback((raw: string) => {
-    if (!active || !contextCurrent) return
+  const handleScan = useCallback(async (raw: string): Promise<PdaScanOutcome> => {
+    if (!active || !contextCurrent) return 'ignored'
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'container' && parsed.type !== 'unknown') {
       err('请扫描库存条码或塑料盒条码')
-      return
+      return 'rejected'
     }
     if (fillAction.submitBlocked) {
       err(fillAction.blockedReason ?? '当前不可提交')
-      return
+      return 'rejected'
     }
-    if (step === 'source') sourceMut.mutate({ bc: raw.trim(), owner: captureRead() })
-    else if (step === 'target') boxMut.mutate({ bc: raw.trim(), owner: captureRead() })
+    if (step !== 'source' && step !== 'target') return 'ignored'
+    const owner = captureRead()
+    try {
+      const result = await (step === 'source' ? sourceMut : boxMut).mutateAsync({ bc: raw.trim(), owner })
+      return result && owner.current() ? 'accepted' : 'ignored'
+    } catch { return owner.current() ? 'rejected' : 'ignored' }
   }, [active, contextCurrent, captureRead, step, err, sourceMut, boxMut, fillAction])
 
   const busy = fillAction.phase === 'submitting'

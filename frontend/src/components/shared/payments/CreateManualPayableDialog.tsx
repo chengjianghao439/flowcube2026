@@ -14,6 +14,8 @@ import { createRequestKey } from '@/lib/requestKey'
 import { todayYmd, shiftYmd, beijingYmd } from '@/lib/dateTime'
 import { toast } from '@/lib/toast'
 import { usePaymentViewInvalidation } from './usePaymentViewInvalidation'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 const FORM_ID = 'manual-payable-create-form'
 /** 与后端 payments.service.createManual 的 beginCreationOperationRequest action 一致（回执查询用） */
@@ -67,6 +69,8 @@ interface Props {
  *     键在弹窗打开时生成一次、成功后换新，连点两次/断网重试不会落两条。
  */
 export function CreateManualPayableDialog({ open, onClose }: Props) {
+  const { can } = usePermission()
+  const canCreate = can(PERMISSIONS.PAYMENT_CREATE)
   const invalidatePaymentViews = usePaymentViewInvalidation()
   const [orderNo, setOrderNo] = useState(defaultOrderNo)
   const [partyName, setPartyName] = useState('')
@@ -108,16 +112,19 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
   const selectedAccount = (options || []).find(a => a.code === debitAccountCode)
 
   const mut = useMutation({
-    mutationFn: () => createPaymentApi({
-      type: 1,
-      orderNo: orderNo.trim(),
-      partyName: partyName.trim(),
-      totalAmount: Number(totalAmount),
-      settlementType: settlementType === SETTLE_MONTHLY ? SETTLE_MONTHLY : SETTLE_CASH,
-      dueDate: dueDate || undefined,
-      debitAccountCode,
-      remark: remark || undefined,
-    }, requestKey),
+    mutationFn: () => {
+      if (!can(PERMISSIONS.PAYMENT_CREATE)) throw new Error('没有创建应付账款权限')
+      return createPaymentApi({
+        type: 1,
+        orderNo: orderNo.trim(),
+        partyName: partyName.trim(),
+        totalAmount: Number(totalAmount),
+        settlementType: settlementType === SETTLE_MONTHLY ? SETTLE_MONTHLY : SETTLE_CASH,
+        dueDate: dueDate || undefined,
+        debitAccountCode,
+        remark: remark || undefined,
+      }, requestKey)
+    },
     onSuccess: () => {
       markUncertain(false)
       // 列表由失效缓存自动刷新（现结进「现结供应商账款」页、月结进「月结供应商对账」页）
@@ -180,6 +187,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
 
   function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (!can(PERMISSIONS.PAYMENT_CREATE)) return
     setError('')
     if (!orderNo.trim()) { setError('请填写单号'); return }
     if (!partyName.trim()) { setError('请填写供应商名称'); return }
@@ -208,9 +216,9 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
             </Button>
           )}
           <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-          <Button type="submit" form={FORM_ID} disabled={mut.isPending}>
+          {canCreate && <Button type="submit" form={FORM_ID} disabled={mut.isPending}>
             {mut.isPending ? '创建中…' : '创建'}
-          </Button>
+          </Button>}
         </div>
       }
     >

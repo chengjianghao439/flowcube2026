@@ -299,6 +299,14 @@ fi
 
 log "迁移 ${DB_NAME}（目标：127.0.0.1:${HOST_PORT}）…"
 cd "$ROOT"
+if [[ -z "${JWT_SECRET:-}" ]]; then
+  JWT_SECRET="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(32).toString("hex"))')"
+  export JWT_SECRET
+fi
+# Fresh owned test databases explicitly install the approved synthetic role baseline.
+# The ordinary production migrator retains its strict before-state assertions.
+NODE_ENV=test DB_HOST=127.0.0.1 DB_PORT="$HOST_PORT" DB_NAME="$DB_NAME" DB_USER=root \
+  DB_PASSWORD="$ROOT_PW" node tests/helpers/prepareQaRoleTestDatabase.js
 if [[ "$SUITE" = '--inbound-edit' || "$SUITE" = '--retention-reprint' || "$SUITE" = '--change-records' || "$SUITE" = '--pda-audit-log-migration' || "$SUITE" = '--pda-audit-log-api' ]]; then
   # Direct migration executor consumes only explicit synthetic env; scripts/migrate.js loads backend/.env.
   NODE_ENV=test DB_HOST=127.0.0.1 DB_PORT="$HOST_PORT" DB_NAME="$DB_NAME" DB_USER=root \

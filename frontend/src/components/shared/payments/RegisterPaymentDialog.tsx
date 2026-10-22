@@ -1,5 +1,7 @@
 import { money } from '@/lib/format'
 import { useRef, useState } from 'react'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { useMutation } from '@tanstack/react-query'
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -41,6 +43,10 @@ interface Props {
  * 外壳换成可拖拽、带尺寸记忆的 AppDialog 工作区弹窗（2026-09-18 弹窗重构）。
  */
 export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
+  const { can } = usePermission()
+  const canExecute = can(PERMISSIONS.PAYMENT_EXECUTE)
+  const permissionRef = useRef(canExecute)
+  permissionRef.current = canExecute
   const isPayable = type === 1
   const actionLabel = isPayable ? '登记付款' : '登记收款'
   const partyLabel = isPayable ? '供应商' : '客户'
@@ -85,6 +91,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
       /** 提交时快照：切到别的账款后这些不能再用当前表单值 */
       orderNo?: string; amountText?: string; dateText?: string
     }) => {
+      if (!permissionRef.current) throw new Error('没有登记收付款权限')
       // 幂等身份必须绑定**本次实际写入的那一笔**（mutation 参数 id），不是当前 record：
       // 「余额不足确认」与「跨期补录重发」的回调可能持有更早那次提交的 id，两者可能不同。
       // 单号/金额/日期同样取提交时快照，避免切到 B 后把 A 的提交记成 B。
@@ -134,7 +141,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
 
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!record || !payAmount) return
+    if (!permissionRef.current || !record || !payAmount) return
     const cents = cashCents(payAmount)
     if (cents == null || cents <= 0n) { toast.error('金额须大于零且最多两位小数'); return }
     if (!guard.uncertain && (balanceCents == null || cents > balanceCents)) { toast.error(legacyBalance ? '历史余额含不足一分的尾差，请先核对' : '登记金额不能超过本笔余额'); return }
@@ -172,7 +179,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
       footer={
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>取消</Button>
-          <Button type="submit" form={FORM_ID} disabled={payMut.isPending || legacyBalance && !guard.uncertain}>确认登记</Button>
+          {canExecute && <Button type="submit" form={FORM_ID} disabled={payMut.isPending || legacyBalance && !guard.uncertain}>确认登记</Button>}
         </div>
       }
     >

@@ -53,3 +53,22 @@ test('扫码条只负责接收条码，不提前显示绿色操作成功提示',
   expect(host.textContent).not.toContain('已识别')
   expect(host.querySelector('[data-testid="pda-scan-area"]')?.className).not.toContain('bg-emerald')
 })
+
+test('手输打开时的广播仍走同一异步业务入口，失败保留原手输但不强制聚焦', async () => {
+  let finish!: (result: 'rejected') => void
+  const onScan = vi.fn(() => new Promise<'rejected'>(resolve => { finish = resolve }))
+  await act(async () => { root.render(<><PdaScanner onScan={onScan} /><button id="other">其他动作</button></>) })
+  await act(async () => { [...host.querySelectorAll('button')].find(b => b.textContent === '手动输入')!.click() })
+  const input = host.querySelector<HTMLInputElement>('[data-scanner-manual]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '原手输')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    native.listener?.({ barcode: 'I000123' })
+  })
+  const other = host.querySelector<HTMLButtonElement>('#other')!
+  other.focus()
+  expect(onScan).toHaveBeenCalledWith('I000123')
+  expect(host.querySelector('input')).toBe(input)
+  await act(async () => finish('rejected'))
+  expect(input.value).toBe('原手输'); expect(document.activeElement).toBe(other)
+})

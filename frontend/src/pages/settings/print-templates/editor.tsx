@@ -14,6 +14,8 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { usePrintTemplatePreview } from '@/hooks/usePrintTemplatePreview'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { defaultPreviewElements, type PreviewTableRow } from '@/lib/printTemplatePreview'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import {
@@ -1063,6 +1065,8 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
 // ──────────────────────────────────────────────────────────────────────────
 
 export default function PrintTemplateEditor() {
+  const { can } = usePermission()
+  const canManage = can(PERMISSIONS.PRINT_TEMPLATE_MANAGE)
   const gridPatternUid = useId().replace(/:/g, '')
   const tabPath = useContext(TabPathContext)
   const isNew   = tabPath.endsWith('/new') || tabPath === ''
@@ -1297,7 +1301,10 @@ export default function PrintTemplateEditor() {
 
   // ── Save mutations ───────────────────────────────────────────
   const createMut = useMutation({
-    mutationFn: createPrintTemplateApi,
+    mutationFn: (data: Parameters<typeof createPrintTemplateApi>[0]) => {
+      if (!can(PERMISSIONS.PRINT_TEMPLATE_MANAGE)) throw new Error('没有管理打印模板权限')
+      return createPrintTemplateApi(data)
+    },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['print-templates'] })
       toast.success('模板已保存')
@@ -1308,7 +1315,10 @@ export default function PrintTemplateEditor() {
   })
 
   const updateMut = useMutation({
-    mutationFn: updatePrintTemplateApi,
+    mutationFn: (data: Parameters<typeof updatePrintTemplateApi>[0]) => {
+      if (!can(PERMISSIONS.PRINT_TEMPLATE_MANAGE)) throw new Error('没有管理打印模板权限')
+      return updatePrintTemplateApi(data)
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['print-templates'] })
       qc.invalidateQueries({ queryKey: ['print-template', id] })
@@ -1615,6 +1625,7 @@ export default function PrintTemplateEditor() {
   }
 
   function handleSave() {
+    if (!can(PERMISSIONS.PRINT_TEMPLATE_MANAGE)) return
     if (isZplLabelType(type) && elements.length === 0) {
       toast.error('标签模板至少需要一个画布元素')
       return
@@ -2121,10 +2132,10 @@ export default function PrintTemplateEditor() {
               {preview ? '退出预览' : '预览'}
             </Button>
 
-            <Button size="sm" onClick={handleSave} disabled={isPending} className="gap-1.5">
+            {canManage && <Button size="sm" onClick={handleSave} disabled={isPending} className="gap-1.5">
               {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
               {isPending ? '保存中…' : '保存'}
-            </Button>
+            </Button>}
           </div>
         </div>
 

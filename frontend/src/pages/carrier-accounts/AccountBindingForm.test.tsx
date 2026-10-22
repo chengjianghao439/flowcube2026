@@ -10,7 +10,7 @@ async function render(data = base, canEdit = true) {
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host); const save = vi.fn().mockResolvedValue(undefined)
   await act(async () => root.render(<AccountBindingForm data={data} canEdit={canEdit} onSave={save} saving={false} />))
-  return { host, save, cleanup: () => { act(() => root.unmount()); host.remove() } }
+  return { host, save, setPermission: async (allowed: boolean) => { await act(async () => root.render(<AccountBindingForm data={data} canEdit={allowed} onSave={save} saving={false} />)) }, cleanup: () => { act(() => root.unmount()); host.remove() } }
 }
 function button(host: HTMLElement, text: string) {
   return Array.from(host.querySelectorAll('button')).find(b => b.textContent?.trim() === text)
@@ -85,6 +85,17 @@ test('只有查看权限不能修改；已启用账号须先暂停再编辑', as
     expect(button(h.host, '编辑')).toBeUndefined()
     const pause = button(h.host, '暂停自动下单')!
     await act(async () => { pause.click() }); expect(h.save.mock.calls[0][0]).toEqual({ action: 'pause', revision: base.revision })
+  } finally { h.cleanup() }
+})
+
+test('撤销编辑权限后原生表单提交不能保存', async () => {
+  const h = await render({ ...base, monthlyAccount: 'M001' })
+  try {
+    await act(async () => button(h.host, '编辑')!.click())
+    const form = h.host.querySelector('form')!
+    await h.setPermission(false)
+    await act(async () => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+    expect(h.save).not.toHaveBeenCalled()
   } finally { h.cleanup() }
 })
 

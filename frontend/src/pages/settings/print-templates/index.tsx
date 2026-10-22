@@ -18,8 +18,12 @@ import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 import { getPrintTemplateListApi, deletePrintTemplateApi } from '@/api/print-templates'
 import type { PrintTemplate } from '@/types/print-template'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 export default function PrintTemplatesPage() {
+  const { can } = usePermission()
+  const canManage = can(PERMISSIONS.PRINT_TEMPLATE_MANAGE)
   const qc = useQueryClient()
   const navigate = useNavigate()
   const { addTab } = useWorkspaceStore()
@@ -33,19 +37,23 @@ export default function PrintTemplatesPage() {
   function invalidate() { qc.invalidateQueries({ queryKey: ['print-templates'] }) }
 
   const deleteMut = useMutation({
-    mutationFn: (id: number) => deletePrintTemplateApi(id, { skipGlobalError: true }),
+    mutationFn: (id: number) => {
+      if (!can(PERMISSIONS.PRINT_TEMPLATE_MANAGE)) throw new Error('没有管理打印模板权限')
+      return deletePrintTemplateApi(id, { skipGlobalError: true })
+    },
     onSuccess: () => { toast.success('已删除'); invalidate() },
     onError: () => toast.error('删除失败'),
   })
 
   function goToNew() {
+    if (!can(PERMISSIONS.PRINT_TEMPLATE_MANAGE)) return
     addTab({ key: '/settings/print-templates/new', title: '新建打印模板', path: '/settings/print-templates/new' })
     navigate('/settings/print-templates/new')
   }
 
   function goToEdit(tpl: PrintTemplate) {
     const path = `/settings/print-templates/${tpl.id}`
-    addTab({ key: path, title: `编辑模板 #${tpl.id}`, path })
+    addTab({ key: path, title: `${canManage ? '编辑' : '查看'}模板 #${tpl.id}`, path })
     navigate(path)
   }
 
@@ -59,7 +67,7 @@ export default function PrintTemplatesPage() {
       render: v => formatDisplayDateTime(v) },
     {
       key: 'id', title: '操作', width: 120,
-      render: (_, row) => (
+      render: (_, row) => canManage ? (
         <TableActionsMenu
           primaryLabel="编辑"
           primaryVariant="outline"
@@ -68,7 +76,7 @@ export default function PrintTemplatesPage() {
             { label: '删除', destructive: true, onClick: () => setDeleteTarget(row) },
           ]}
         />
-      ),
+      ) : <Button size="sm" variant="outline" onClick={() => goToEdit(row)}>查看</Button>,
     },
   ]
 
@@ -77,7 +85,7 @@ export default function PrintTemplatesPage() {
       <PageHeader
         title="打印模板"
         description="管理销售单、采购单等打印模板"
-        actions={<Button onClick={goToNew}>+ 新建模板</Button>}
+        actions={canManage && <Button onClick={goToNew}>+ 新建模板</Button>}
       />
 
       {isError ? (
@@ -90,7 +98,7 @@ export default function PrintTemplatesPage() {
       />}
 
       <ConfirmDialog
-        open={!!deleteTarget}
+        open={!!deleteTarget && canManage}
         title="删除模板"
         description={`确认删除模板「${deleteTarget?.name}」？`}
         variant="destructive"

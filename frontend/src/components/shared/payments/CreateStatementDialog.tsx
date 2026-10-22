@@ -11,6 +11,8 @@ import { createStatementApi, getStatementCandidatesApi } from '@/api/payments'
 import { getRelativeDateRange } from '@/lib/dateRange'
 import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 
 interface Props {
@@ -29,6 +31,8 @@ interface Props {
  * （2026-09-18 弹窗重构，原先内联在 StatementPanel.tsx 里）。
  */
 export function CreateStatementDialog({ open, onClose, type, onCreated }: Props) {
+  const { can } = usePermission()
+  const canExecute = can(PERMISSIONS.PAYMENT_EXECUTE)
   const active = useActiveWorkspaceTab()
   const partyLabel = type === 1 ? '供应商' : '客户'
   const recent30d = getRelativeDateRange(30)
@@ -68,10 +72,13 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
   )
 
   const mut = useMutation({
-    mutationFn: () => createStatementApi({
-      type, partyName: applied!.partyName, periodStart: applied!.startDate, periodEnd: applied!.endDate,
-      recordIds: validPicked, remark: remark || undefined,
-    }),
+    mutationFn: () => {
+      if (!can(PERMISSIONS.PAYMENT_EXECUTE)) throw new Error('没有创建对账单权限')
+      return createStatementApi({
+        type, partyName: applied!.partyName, periodStart: applied!.startDate, periodEnd: applied!.endDate,
+        recordIds: validPicked, remark: remark || undefined,
+      })
+    },
     onSuccess: (res) => { toast.success(`对账单 ${res.statementNo} 已生成`); onCreated() },
   })
 
@@ -88,9 +95,9 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button disabled={!validPicked.length || mut.isPending} onClick={() => mut.mutate()}>
+          {canExecute && <Button disabled={!validPicked.length || mut.isPending} onClick={() => mut.mutate()}>
             {mut.isPending ? '生成中…' : `生成对账单（${validPicked.length} 笔 / ${money(pickedTotal)}）`}
-          </Button>
+          </Button>}
         </div>
       }
     >

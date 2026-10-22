@@ -4,12 +4,13 @@ import { getEffectiveApiOrigin } from '@/config/api'
 import { updatePrinterApi } from '@/hooks/usePrinters'
 import { triggerPrintPoll } from '@/lib/printQueue'
 import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 /**
  * 打印机管理页面
  * 路由：/settings/printers
  * 添加打印机：仅在极序 Flow 桌面端从本机系统已安装列表中选择（与系统「打印机」设置一致）。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -133,7 +134,9 @@ function sourceBadgeLabel(source?: string) {
 
 export default function PrintersPage() {
   const { can } = usePermission()
-  const canManagePrinters = can('print.printer.manage')
+  const canManagePrinters = can(PERMISSIONS.PRINT_PRINTER_MANAGE)
+  const managePermissionRef = useRef(canManagePrinters)
+  managePermissionRef.current = canManagePrinters
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [systemList, setSystemList] = useState<SystemPrinterRow[]>([])
   const [listLoading, setListLoading] = useState(false)
@@ -164,12 +167,14 @@ export default function PrintersPage() {
   }, [canUseSystemPrinters, canManagePrinters])
 
   async function registerThisDesktop() {
+    if (!managePermissionRef.current) return
     const origin = getEffectiveApiOrigin()
     const bridge = window.flowcubeDesktop
     if (!origin || !bridge?.resetPrintClientIdentity || !bridge.setPrintClientCredential || !warehouseId) { toast.error('请升级桌面端并选择本机所属仓库'); return }
     setRegistering(true)
     try {
       const old = await bridge.getClientInfo?.()
+      if (!managePermissionRef.current) return
       if (old) {
         try { await apiClient.post(`/printers/clients/${encodeURIComponent(old.clientId)}/revoke`, {}, { baseURL: `${origin}/api`, skipGlobalError: true }) }
         catch (e) {
@@ -177,7 +182,9 @@ export default function PrintersPage() {
           if ((failure.status ?? failure.response?.status) !== 404) throw e
         }
       }
+      if (!managePermissionRef.current) return
       const info = await bridge.resetPrintClientIdentity()
+      if (!managePermissionRef.current) return
       const result = await apiClient.post<{ credential: string }>('/printers/clients/register', { ...info, warehouseId: Number(warehouseId) }, { baseURL: `${origin}/api`, skipGlobalError: true })
       const saved = await bridge.setPrintClientCredential(origin, result.credential)
       toast.success(saved.persisted ? '本机已注册，请将本机打印机关联到本机' : '本机已注册；系统安全存储不可用，重启后需重新注册')
@@ -187,6 +194,7 @@ export default function PrintersPage() {
   }
 
   async function associateWithThisDesktop(printer: Printer) {
+    if (!managePermissionRef.current) return
     const origin = getEffectiveApiOrigin()
     const bridge = window.flowcubeDesktop
     if (!bridge || !origin || !warehouseId || !await bridge.getPrintClientCredential?.(origin)) { toast.error('请先选择仓库并注册本机'); return }
@@ -194,6 +202,7 @@ export default function PrintersPage() {
     const installed = await bridge.getSystemPrinters?.()
     if (!info || !pickSystemPrinterRow(installed ?? [], printer.name)) { toast.error('该打印机未安装在本机，不能关联'); return }
     try {
+      if (!managePermissionRef.current) return
       await updatePrinterApi(printer.id, { clientId: info.clientId, warehouseId: Number(warehouseId) }, { skipGlobalError: true })
       await refetchPrinters(); triggerPrintPoll(); toast.success('已关联本机')
     } catch (e) { toast.error(e instanceof Error ? e.message : '关联失败') }
@@ -260,6 +269,7 @@ export default function PrintersPage() {
   const bindBusy = bindMutation.isPending || unbindMutation.isPending
 
   function togglePrinterBinding(type: BindType, printer: Printer) {
+    if (!managePermissionRef.current) return
     const row = bindings[type]
     const isBoundHere = row?.printer_code === printer.code
     if (isBoundHere) {
@@ -286,7 +296,7 @@ export default function PrintersPage() {
   }
 
   function saveAlias(p: Printer) {
-    if (!p.clientId) return
+    if (!p.clientId || !managePermissionRef.current) return
     const aliasName = (aliasDraft[p.clientId] ?? p.clientAliasName ?? '').trim()
     aliasMutation.mutate({ clientId: p.clientId, aliasName }, {
       onSuccess: () => toast.success('设备名称已更新'),
@@ -295,6 +305,7 @@ export default function PrintersPage() {
   }
 
   async function confirmAddFromSystem() {
+    if (!managePermissionRef.current) return
     if (!canUseSystemPrinters || !selectedName) {
       toast.error('请选择本机打印机')
       return
@@ -318,6 +329,7 @@ export default function PrintersPage() {
     const origin = getEffectiveApiOrigin()
     if (!warehouseId || !origin || !await window.flowcubeDesktop?.getPrintClientCredential?.(origin)) { toast.error('请先选择仓库并注册本机'); return }
     const clientInfo = await window.flowcubeDesktop?.getClientInfo?.().catch(() => null)
+    if (!managePermissionRef.current) return
     addPrinter.mutate({
       name,
       code,
@@ -336,6 +348,7 @@ export default function PrintersPage() {
   }
 
   function openAddDialog() {
+    if (!managePermissionRef.current) return
     if (!canUseSystemPrinters) {
       toast.error('添加打印机需在 极序 Flow 桌面客户端中操作，这样系统才能读取到本机已安装的打印机。')
       return
@@ -371,7 +384,7 @@ export default function PrintersPage() {
         <SoftStatusLabel
           label={p.status === 1 ? '在线' : '离线'}
           tone={activeTone(p.status === 1)}
-          onClick={() => toggleStatus.mutate(p)}
+          onClick={canManagePrinters ? () => { if (managePermissionRef.current) toggleStatus.mutate(p) } : undefined}
         />
       ),
     },
@@ -390,7 +403,7 @@ export default function PrintersPage() {
       render: (_, p) => p.clientId ? (
         <div className="space-y-1">
           <div className="font-medium text-foreground">🖥️ {getDeviceName(p)}</div>
-          <div className="flex items-center gap-2">
+          {canManagePrinters && <div className="flex items-center gap-2">
             <input
               className="input h-8 w-32"
               placeholder={p.clientHostname || p.clientId}
@@ -400,7 +413,7 @@ export default function PrintersPage() {
             <Button size="sm" variant="outline" onClick={() => saveAlias(p)} disabled={aliasMutation.isPending}>
               保存
             </Button>
-          </div>
+          </div>}
         </div>
       ) : '-',
     },
@@ -408,7 +421,7 @@ export default function PrintersPage() {
       key: 'bindings', title: '绑定', width: 160,
       render: (_, p) => (
         <div>
-          <Button size="sm" variant="outline" onClick={() => setBindTarget(p)}>绑定用途</Button>
+          {canManagePrinters && <Button size="sm" variant="outline" onClick={() => setBindTarget(p)}>绑定用途</Button>}
           {getBoundLabels(p.code) && <div className="mt-1 text-xs text-blue-700">{getBoundLabels(p.code)}</div>}
         </div>
       ),
@@ -446,7 +459,7 @@ export default function PrintersPage() {
         </p>
       )}
 
-      <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+      <Dialog open={showAddDialog && canManagePrinters} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>从本机添加打印机</DialogTitle>
@@ -523,7 +536,7 @@ export default function PrintersPage() {
 
       <DataTable columns={cols} data={printers} loading={isLoading} rowKey="id" emptyText="暂无打印机" />
 
-      {bindTarget && (
+      {bindTarget && canManagePrinters && (
         <BindDialog
           printer={bindTarget}
           bindings={bindings}
@@ -534,14 +547,14 @@ export default function PrintersPage() {
       )}
 
       <ConfirmDialog
-        open={!!deleteTarget}
+        open={!!deleteTarget && canManagePrinters}
         title="确认删除"
         description={deleteTarget ? `确定删除打印机「${deleteTarget.name}」(${deleteTarget.code})？` : ''}
         variant="destructive"
         confirmText="删除"
         loading={del.isPending}
         onConfirm={() => {
-          if (!deleteTarget) return
+          if (!deleteTarget || !managePermissionRef.current) return
           del.mutate(deleteTarget.id, {
             onSuccess: () => { toast.success('已删除'); setDeleteTarget(null) },
             onError: (e: any) => toast.error(e?.response?.data?.message || '删除失败'),

@@ -203,7 +203,8 @@ async function main() {
       } finally {c.release()}
     })
     await check('普通仓管通过真实作业接口部分出库，余量和应收守恒',async()=>{
-      const [[warehouseRole]]=await pool.query("SELECT id FROM sys_roles WHERE code='warehouse_manager'")
+      const [[warehouseRole]]=await pool.query("SELECT id FROM sys_roles WHERE id=2 AND BINARY code=BINARY 'warehouse'")
+      assert.ok(warehouseRole, '认可岗位基线必须包含ID2 warehouse')
       const worker=await user('Warehouse',0,warehouseRole.id)
       const deviceSecret=crypto.randomBytes(24).toString('hex')
       await pool.query("INSERT INTO pda_devices (device_code,device_name,warehouse_id,status,secret_hash) VALUES (?, '合成授信PDA', ?, 'active', ?)",[ref,ctx.warehouse.id,bcrypt.hashSync(deviceSecret,4)])

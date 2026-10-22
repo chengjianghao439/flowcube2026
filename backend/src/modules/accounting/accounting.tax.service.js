@@ -126,6 +126,7 @@ async function listAdjustments({ companyId = 1, period, taxType }) {
 async function upsertAdjustment({ companyId = 1, period, taxType, adjustItem, amount, remark }, operatorId) {
   const cid = Number(companyId) || 1
   if (!/^\d{6}$/.test(String(period || ''))) throw new AppError('请提供期间 YYYYMM', 400)
+  periodRange(period)
   if (![1, 2].includes(Number(taxType))) throw new AppError('税种无效：1增值税 2所得税', 400)
   if (!String(adjustItem || '').trim()) throw new AppError('请填写调整项名称', 400)
   await pool.query(

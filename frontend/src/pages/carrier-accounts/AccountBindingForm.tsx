@@ -37,6 +37,7 @@ export function AccountBindingForm({ data, onSave, canEdit, saving, onDirtyChang
             : !data.productReady ? '请选择合同服务并保存'
               : '资料已就绪，可启用自动下单'
   async function submit(enabled: boolean) {
+    if (!canEdit || saving) return
     setError('')
     const submitted = { monthlyAccount: monthlyAccount.trim(), shippingProduct, shippingDeliveryType }
     try {
@@ -54,6 +55,7 @@ export function AccountBindingForm({ data, onSave, canEdit, saving, onDirtyChang
     setMonthly(data.monthlyAccount); setProduct(data.shippingProduct); setDelivery(data.shippingDeliveryType); setError(''); setEditing(false)
   }
   async function unbind() {
+    if (!canEdit || saving) return
     setError('')
     try { await onSave({ action: 'unbind', revision: data.revision }); setConfirmUnbind(false) }
     catch (e) { setError(e instanceof Error ? e.message : '解绑失败，请刷新后重试'); setConfirmUnbind(false) }
@@ -120,7 +122,7 @@ export function AccountBindingForm({ data, onSave, canEdit, saving, onDirtyChang
       </div> : <p className="text-sm text-muted-foreground">你有查看权限；修改绑定资料请联系拥有承运商编辑权限的同事。</p>}
       {dirty && <p role="status" className="text-sm text-muted-foreground">有未保存的修改</p>}
     </form>
-    <ConfirmDialog open={confirmUnbind} title="解绑月结账号" description={`将清除「${data.carrierName}」在本系统保存的月结账号和常用服务，保留承运商及历史订单。不会解除快递官网授权。有待处理运单时无法解绑。`} confirmText="确认解绑" variant="destructive" loading={saving} onConfirm={() => void unbind()} onCancel={() => setConfirmUnbind(false)} />
+    <ConfirmDialog open={confirmUnbind && canEdit} title="解绑月结账号" description={`将清除「${data.carrierName}」在本系统保存的月结账号和常用服务，保留承运商及历史订单。不会解除快递官网授权。有待处理运单时无法解绑。`} confirmText="确认解绑" variant="destructive" loading={saving} onConfirm={() => void unbind()} onCancel={() => setConfirmUnbind(false)} />
 
   </div>
 }
