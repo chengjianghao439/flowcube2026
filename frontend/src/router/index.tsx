@@ -9,6 +9,7 @@ import { DesktopQuitUnloadBridge } from '@/components/desktop/DesktopQuitUnloadB
 import DesktopPrintClientBridge from '@/components/desktop/DesktopPrintClientBridge'
 
 import { pdaRoutes } from './pdaRoutes'
+import { resolveErpLoginDestination } from './erpLoginDestination'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
@@ -59,12 +60,14 @@ function ErpProtectedRoute() {
   return <Outlet />
 }
 
-/** ERP 游客守卫：已登录跳回受保护页（无来源则 /dashboard） */
+/** ERP 游客守卫与登录回调共用当前账号的落地权限判断。 */
 function ErpGuestRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const user = useAuthStore((s) => s.user)
   const location = useLocation()
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
-  if (isAuthenticated) return <Navigate to={from || '/dashboard'} replace />
+  const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from
+  const requestedPath = from?.pathname ? from.pathname + (from.search || '') : undefined
+  if (isAuthenticated) return <Navigate to={resolveErpLoginDestination(user, requestedPath)} replace />
   return <Outlet />
 }
 

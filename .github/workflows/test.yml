@@ -157,6 +157,7 @@ jobs:
       - run: npm run test:dirty-navigation
       - run: npm run test:style-compat
       - run: npm run smoke:qa-followup-browser
+      - run: npm run smoke:login-supplier-browser
 
   desktop-download-compat:
     name: 桌面下载失败路径与补丁契约

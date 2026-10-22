@@ -12,8 +12,9 @@ import './login.css'
 export default function LoginPage() {
   const location = useLocation()
   // 落地页能力卡片 → 未登录被 ErpProtectedRoute 拦截后带 state.from；登录成功后回到该页
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
-  const { mutate: login, isPending, error } = useLogin(from || '/dashboard')
+  const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from
+  const requestedPath = from?.pathname ? from.pathname + (from.search || '') : undefined
+  const { mutate: login, isPending, error } = useLogin(requestedPath)
 
   const [username, setUsername] = useState(() => loadSavedLoginForm().username)
   const [password, setPassword] = useState('')

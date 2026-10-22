@@ -1122,3 +1122,10 @@ CI五处新库初始化显式使用 `tests/helpers/prepareQaRoleTestDatabase.js`
 `npm run smoke:qa-role-upgrade` 使用显式独立测试环境，串行执行岗位迁移 MySQL/HTTP 反例、持久表并发与新库初始化实测。测试自行创建随机 schema 并按原名清理；不能指向生产或共享开发库。Tests CI 将其放在独立的“岗位权限与空库初始化（独立数据库）”job，先显式准备认可的合成改前集合，再真实执行反例，不受回归门禁前序步骤失败影响。原授信业务链保留在 `smoke:credit-override`，不重复执行已拆出的岗位专项。
 
 `npm run test:qa-remediation` 增加新装入口的离线顺序、非空对象拒绝与错误停止测试。新装的实际操作命令与中断边界见 `docs/DEPLOY.md`；测试准备脚本不是部署初始化入口。CI 配置、运行结果和独立验收结论分别记录。
+
+### 2026-10-22 登录权限落地与月结欠款
+
+- `npm --prefix frontend run test:unit -- src/router/login-landing.test.tsx src/pages/payments/supplier-monthly.test.tsx`：真实ERP路由/表单/登录hook/store/KeepAlive与供应商合并页，受控HTTP。覆盖认可六岗位、财务待办、无权来源回仪表盘、异步先跳转、管理员旧标签恢复后换业务员、查询参数保留及PDA登录尾斜杠兼容；无对账单月结应付默认可见、月结与现结分区分数、5001笔截断仍用全范围汇总、无报表权限的原账款查看、失败重试及隐藏页停止读取。沿既有前端全量单测进入static CI。
+- `npm run smoke:login-supplier-browser`：实际AppRouter/AppLayout和产品页面/CSS，合成HTTP，不连接数据库。六岗位和同机换人均通过实际表单登录，供应商默认页检查月结33.13与现结70独立显示、未读对账单、没有月结逐笔付款动作，另检查900px视口和月结失败不影响现结。沿既有browser-smoke-runtime CI执行；专属命名会话在finally关闭并用session list核实，截图/结果写入ignored的output/login-supplier-balances。
+
+修前红例必须保留在测试执行记录；界面及受控HTTP回归不替代正式账号、真实数据库来源计算或生产验收。不为这次前端修复执行数据库迁移、权限写入或历史数据清理；发版仍须独立授权并执行原全量门禁。
