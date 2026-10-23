@@ -43,7 +43,12 @@ api.defaults.adapter = async config => {
     currentUser = userOf(input.username)
     data = { token: 'synthetic-browser-token', refreshToken: null, user: currentUser }
   } else if (config.url === '/settings/logo') data = { url: '' }
-  else if (config.url === '/printer-bindings') data = { defaultBindings: {} }
+  else if (config.url === '/printer-bindings') {
+    if (!hasPermission(currentUser?.permissions, 'print.printer.view', currentUser?.roleId)) {
+      throw new AxiosError('无操作权限', 'ERR_BAD_REQUEST', config, undefined, { config, status: 403, statusText: 'Forbidden', headers: {}, data: { success: false, message: '无操作权限' } })
+    }
+    data = { defaultBindings: {} }
+  }
   else if (config.url === '/notifications') data = { items: [], total: 0 }
   else if (config.url === '/reports/role-workbench') data = { sections: [], summary: { totalAlerts: 0 }, topAlert: null }
   else if (config.url?.startsWith('/dashboard/') && !hasPermission(currentUser?.permissions, 'dashboard.view', currentUser?.roleId)) {

@@ -146,7 +146,7 @@ async function seedReceivedTask(ctx, token, { supplier, warehouse, location, lab
 
 async function main() {
   const log = createLogger()
-  const ctx = await prepareSmokeContext()
+  const ctx = await prepareSmokeContext({ supplierSettlementType: 1 })
   const { pool, http, warehouse, location, supplier } = ctx
   const cleanup = { productIds: [], poIds: [] }
   let step = 'init'

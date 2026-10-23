@@ -283,12 +283,14 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
     await generate('202505')
     assert.equal(await net('purchase_settle', po.id, '202505', '2202'), -200)
     await http(`/payments/${payable.id}/confirm`, {})
+    const statement = await http('/payments/statements', { type: 1, partyName: ref, recordIds: [payable.id] }, { expect: 201 })
+    await http(`/payments/statements/${statement.id}/confirm`, {}, { bearer: approver })
     const funds = async () => ({
       account: await one('SELECT type,opening_balance,current_balance FROM finance_accounts WHERE id=?', [accountId]),
-      entries: await rows('SELECT id,record_id,account_id,amount,payment_date FROM payment_entries WHERE record_id=? ORDER BY id', [payable.id]),
+      entries: await rows('SELECT id,record_id,receipt_id,statement_id,account_id,amount,payment_date FROM payment_entries WHERE record_id=? ORDER BY id', [payable.id]),
       txns: await rows('SELECT id,account_id,direction,amount,biz_type,biz_id,backfill_id FROM finance_account_transactions WHERE account_id=? ORDER BY id', [accountId]),
       events: await rows("SELECT id,payload_json FROM payment_record_events WHERE payment_record_id=? AND event_type='PAYMENT_RECORDED' ORDER BY id", [payable.id]),
-      party: await rows("SELECT id,type,party_id,record_id,entry_id,order_id,delta,business_date FROM party_ledger_events WHERE record_id=? AND event_type='DIRECT_PAYMENT' ORDER BY id", [payable.id]),
+      party: await rows("SELECT id,type,party_id,receipt_id,record_id,entry_id,order_id,delta,business_date FROM party_ledger_events WHERE receipt_id IN (SELECT receipt_id FROM payment_entries WHERE record_id=?) AND event_type='RECEIPT' ORDER BY id", [payable.id]),
     })
     async function assertFunds(amounts, balance) {
       const f = await funds()
@@ -297,12 +299,13 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
       for (const list of [f.entries, f.txns, f.events, f.party]) assert.equal(list.length, amounts.length, 'one entry/fund transaction/payment event/party event per payment')
       for (const [i, amount] of amounts.entries()) {
         const entry = f.entries[i], txn = f.txns[i], party = f.party[i]
-        assert.deepEqual([Number(entry.record_id), Number(entry.account_id), Number(entry.amount)], [Number(payable.id), Number(accountId), amount])
-        assert.deepEqual([Number(txn.account_id), Number(txn.direction), Number(txn.amount), Number(txn.biz_type), Number(txn.biz_id)], [Number(accountId), 2, amount, 2, Number(entry.id)])
+        assert.deepEqual([Number(entry.record_id), entry.account_id, Number(entry.statement_id), Number(entry.amount)], [Number(payable.id), null, Number(statement.id), amount])
+        assert.ok(Number(entry.receipt_id) > 0)
+        assert.deepEqual([Number(txn.account_id), Number(txn.direction), Number(txn.amount), Number(txn.biz_type), Number(txn.biz_id)], [Number(accountId), 2, amount, 2, Number(entry.receipt_id)])
         assert.equal(txn.backfill_id == null ? null : Number(txn.backfill_id), i ? Number(own.backfillId) : null)
         const payload = typeof f.events[i].payload_json === 'string' ? JSON.parse(f.events[i].payload_json) : f.events[i].payload_json
-        assert.deepEqual([Number(payload.entryId), Number(payload.amount)], [Number(entry.id), amount])
-        assert.deepEqual([Number(party.type), Number(party.party_id), Number(party.record_id), Number(party.entry_id), Number(party.order_id), Number(party.delta)], [1, Number(supplierId), Number(payable.id), Number(entry.id), Number(po.id), -amount])
+        assert.deepEqual([Number(payload.receiptId), Number(payload.amount)], [Number(entry.receipt_id), amount])
+        assert.deepEqual([Number(party.type), Number(party.party_id), Number(party.receipt_id), party.record_id, party.entry_id, party.order_id, Number(party.delta)], [1, Number(supplierId), Number(entry.receipt_id), null, null, null, -amount])
         assert.equal(ymd(party.business_date), ymd(entry.payment_date))
       }
       own.fundSnapshots ||= []
@@ -310,10 +313,14 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
       return f
     }
     await assertFunds([], 1000)
-    const firstPay = { amount: 50, paymentDate: '2025-05-03', method: '现金', accountId, remark: ref }, firstPayKey = randomUUID()
-    const firstPayReceipt = await http(`/payments/${payable.id}/pay`, firstPay, { key: firstPayKey })
+    for (const amount of [200, 300]) {
+      assert.equal((await request(`/payments/${payable.id}/pay`, { amount, paymentDate: '2025-05-03', accountId }, { expect: 409 })).code, 'MONTHLY_PAYMENT_REQUIRES_STATEMENT')
+    }
+    await assertFunds([], 1000)
+    const firstPay = { type: 1, partyId: supplierId, partyName: ref, amount: 50, paymentDate: '2025-05-03', method: '现金', accountId, remark: ref, allocations: [{ statementId: statement.id, amount: 50 }] }, firstPayKey = randomUUID()
+    const firstPayReceipt = await http('/payments/receipts', firstPay, { key: firstPayKey, expect: 201 })
     const paidFunds = await assertFunds([50], 950)
-    assert.deepEqual(await http(`/payments/${payable.id}/pay`, firstPay, { key: firstPayKey }), firstPayReceipt)
+    assert.deepEqual(await http('/payments/receipts', firstPay, { key: firstPayKey, expect: 201 }), firstPayReceipt)
     assert.deepEqual(await assertFunds([50], 950), paidFunds, 'same-key payment replay cannot move the cash account or repeat events')
     assert.equal(Number((await one('SELECT paid_amount FROM payment_records WHERE id=?', [payable.id])).paid_amount), 50)
     const pr = await http('/returns/purchase', { supplierId, supplierName: ref, warehouseId, warehouseName: ref, purchaseOrderId: po.id, purchaseOrderNo: po.orderNo, items: [{ sourceItemId: po.itemId, productId: purchased.id, productCode: purchased.code, productName: purchased.name, unit: '个', quantity: 2, unitPrice: 10 }] }, { expect: 201 })
@@ -351,14 +358,15 @@ test('C2/C4真实履约、财务和受控来源日期跨期入账', async () => 
     await closed('202505')
     const frozenPurchase = await snapshotVouchers('purchase_settle', po.id)
     await http(`/payments/${payable.id}/confirm`, {})
-    const pay = { amount: 10, paymentDate: '2025-05-05', method: '现金', accountId, remark: ref }
+    const pay = { type: 1, partyId: supplierId, partyName: ref, amount: 10, paymentDate: '2025-05-05', method: '现金', accountId, remark: ref, allocations: [{ statementId: statement.id, amount: 10 }] }
     const beforePay = await read(`/payments/${payable.id}/settlement-detail`)
     assert.deepEqual([beforePay.record.totalAmount, beforePay.record.paidAmount, beforePay.record.balance], [380, 50, 330])
     const beforeFunds = await assertFunds([50], 950)
-    assert.equal((await request(`/payments/${payable.id}/pay`, pay, { expect: 409 })).code, 'FINANCE_PERIOD_CLOSED')
+    assert.equal((await request(`/payments/${payable.id}/pay`, { amount: 10, paymentDate: '2025-05-05', accountId }, { expect: 409 })).code, 'MONTHLY_PAYMENT_REQUIRES_STATEMENT', '旧月结快照不能随供应商后来改现结而直付')
+    assert.equal((await request('/payments/receipts', pay, { expect: 409 })).code, 'FINANCE_PERIOD_CLOSED')
     assert.deepEqual(await read(`/payments/${payable.id}/settlement-detail`), beforePay)
     assert.deepEqual(await funds(), beforeFunds, 'closed-period rejection cannot move money or create payment facts')
-    const applied = await http(`/payments/${payable.id}/pay`, { ...pay, backfillRequest: true, backfillReason: '专属测试库跨期验收' }, { expect: 202 })
+    const applied = await http('/payments/receipts', { ...pay, backfillRequest: true, backfillReason: '专属测试库跨期验收' }, { expect: 202 })
     own.backfillId = applied.id
     assert.deepEqual(await assertFunds([50], 950), beforeFunds, 'an application cannot move money before approval')
     await http(`/accounting/backfills/${applied.id}/approve`, { remark: '独立审批人验收' }, { bearer: approver })

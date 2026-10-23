@@ -29,6 +29,10 @@ function login(code, expected) {
   cli('fill', '#username', code); cli('fill', '#password', 'synthetic-browser-password')
   cli('find', 'role', 'button', 'click', '--name', '登录工作区', '--exact')
   cli('wait', '--fn', `location.hash === ${JSON.stringify('#' + expected)}`)
+  const loginCalls = inspect().calls
+  const lastLogin = loginCalls.findLastIndex(call => call.url === '/auth/login')
+  const bindingCalls = loginCalls.slice(lastLogin + 1).filter(call => call.url === '/printer-bindings')
+  assert.equal(bindingCalls.length, ['admin', 'warehouse', 'viewer'].includes(code) ? 1 : 0, `${code}打印绑定请求必须匹配查看权限`)
   const title = {
     '/dashboard': '仪表盘',
     '/reports/role-workbench': '待办中心',

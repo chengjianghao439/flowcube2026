@@ -1022,3 +1022,6 @@ ERP 游客守卫和登录成功回调共用 `router/erpLoginDestination.ts`：�
 供应商往来默认子视图改称“账款概览”，其中月结欠款与现结账款分区显示、分别汇总。月结区域按原账款结算方式快照读取全部日期的未结清应付，包含未生成对账单的采购；独立显示月结未结清金额，不与现结合成一个数字。现结筛选/查询/导出/登记保持原范围，月结只读区域不提供逐笔付款，原“月结对账”流程及权限保持。页面读取失败隐藏该区域旧金额并可独立重试，不能将未知金额当零；隐藏页停止读取。列表沿既有有界取齐和5000行限制，截断时明确提示，金额使用服务端同范围汇总。
 
 自动回归 `router/login-landing.test.tsx`、`pages/payments/supplier-monthly.test.tsx` 使用实际路由、表单/登录hook、store、合并页及受控HTTP；预设角色权限取认可夹具的after集合，不复制或改写权限表。`npm run smoke:login-supplier-browser` 使用实际AppRouter/AppLayout/页面及CSS，在合成HTTP边界检查预设岗位和低权限账号登录、同机换人、无权限提示/退出、默认月结欠款、现结反例及窄屏/失败状态，低权限账号不应发起任何仪表盘请求或出现权限错误提示，结束核实专属浏览器会话退出。组件及浏览器夹具证据不代表正式账号或生产数据库验收。
+
+
+登录后的打印机绑定读取（PR #99）：`lib/pdaRuntime.ts` 自动同步与 `hooks/usePrinterBindings.ts` 查询都要求当前已登录且持有 `print.printer.view`（管理员沿原豁免）；无权账号不请求 `/printer-bindings`。hook 的手动 refetch 也在请求边界复核，避免撤权后绕过 enabled。有权账号仍加载绑定，已缓存的 PDA 标签打印机仍可复用；辅助读取偶发403保留查询错误，但不触发全局红框。后端查看/管理权限不放宽。`hooks/usePrinterBindings.test.tsx` 使用真实 API 错误拦截器验证请求数与403提示；浏览器专项在实际登录流程中逐角色验证有权请求、无权零请求。

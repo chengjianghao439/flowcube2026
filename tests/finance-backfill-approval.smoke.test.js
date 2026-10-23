@@ -277,7 +277,7 @@ async function main() {
   const log = createLogger()
   // 本套件是多阶段的资金/审批闭环，某一步挂住（后端等行锁）时希望明确失败而不是无限等待，
   // 所以显式要求单请求超时；这是本套件自己的选择，不改动其它套件的等待语义。
-  const ctx = await prepareSmokeContext({ requestTimeoutMs: 30000 })
+  const ctx = await prepareSmokeContext({ requestTimeoutMs: 30000, supplierSettlementType: 1 })
   const { pool, http, warehouse, location, supplier } = ctx
   const EXP_PERIOD = expectedPostingPeriod()
   const cleanup = {

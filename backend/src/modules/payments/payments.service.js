@@ -256,11 +256,22 @@ async function createManual({ type, orderNo, partyName, totalAmount, dueDate, re
   }
 }
 
+function assertDirectPaymentAllowed(record) {
+  if (Number(record?.settlement_type) === SETTLEMENT_TYPE.MONTHLY) {
+    throw new AppError('月结账款请通过对账单核销付款', 409, 'MONTHLY_PAYMENT_REQUIRES_STATEMENT')
+  }
+}
+
 async function recordPayment(id, { amount, paymentDate, method, remark, accountId }, operator, requestKey, { backfill = null, conn: sharedConn = null } = {}) {
   cashCents(amount, { label: '实际收付款金额' })
   const amountUnits = moneyUnits(amount)
   if (amountUnits <= 0n) throw new AppError('付款金额必须大于 0', 400)
   const amountText = moneyText(amountUnits)
+  // 结算方式取账款快照。先拒绝月结，涵盖补录申请和历史成功键的重试；
+  // 历史回执仍可通过请求状态查询读取，不删除或改写原回执。这里不加锁，锁内再复核。
+  const [[settlementRecord]] = await (sharedConn || pool).query('SELECT settlement_type FROM payment_records WHERE id=?', [id])
+  if (!settlementRecord) throw new AppError('账款记录不存在', 404)
+  assertDirectPaymentAllowed(settlementRecord)
   // 跨期补录的**申请**分支（2026-09-26 一致性审查 · 任务 7）：业务日期落在已结账期间时，
   // 只落一张待审批申请单，业务数据一行不写——批准前这笔钱不进账。放在业务事务**之前**：
   // 申请单必须独立提交，若与业务同事务，「业务没写成」会把申请单一起回滚，
@@ -392,6 +403,7 @@ async function recordPayment(id, { amount, paymentDate, method, remark, accountI
 
     const [[record]] = await conn.query('SELECT * FROM payment_records WHERE id=? FOR UPDATE', [id])
     if (!record) throw new AppError('账款记录不存在', 404)
+    assertDirectPaymentAllowed(record)
     for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(record[field], `原账款${field}`)
     if (record.status === 3) throw new AppError('该账款已付清', 400)
     // 应付确认闸门：自动结算的应付须财务确认后才允许登记付款（分权：仓库结算、财务确认、出纳付款）

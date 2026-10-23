@@ -1132,3 +1132,8 @@ CI五处新库初始化显式使用 `tests/helpers/prepareQaRoleTestDatabase.js`
 修前红例必须保留在测试执行记录；界面及受控HTTP回归不替代正式账号、真实数据库来源计算或生产验收。不为这次前端修复执行数据库迁移、权限写入或历史数据清理；发版仍须独立授权并执行原全量门禁。
 
 原 `scripts/smoke-pages.node.js` 与 `scripts/smoke-reconciliation-jumps.node.js` 的API注入式验收同步接受其验收账号权限决定的仪表盘/待办中心，并严格核对对应地址和页面文本，不再把登录即403当成成功；供应商当前视图明确核“账款概览”及新说明，客户“现结账款”检查保持。`npm run test:browser-smoke` 保留原所有错误/旧标题/当前视图/链接/组件/权限/回跳反例，新增 `limited-login-403`：受限账号登录即403必须令脚本失败。反向放宽登录谓词允许403时，新反例准确报错（脚本错误退出0，测试期望1）；恢复后通过。该脚本夹具不替代实际产品页面验证。
+
+
+PR #99 月结直付与打印绑定续修：`npm run test:accounting` 已包含 `tests/payment-input-precision.test.js` 的月结拒绝/现结成功反例；`npm run smoke:finance` 用真实HTTP和MySQL验证月结200/300拒绝、无付款明细、对账单核销成功，并保留现结直付与幂等。`smoke:audit-20260926` 的期间/补录/撤回收货直付夹具明确选现结；`smoke:product-finance-period` 保留月结快照及供应商后来改现结不改旧快照，通过对账单付款和补录复核资金、往来、凭证及幂等；`smoke:go-live-runtime` 保留月结对账单退款并另验证现结直付原来源。数据库专项只运行在专属测试实例。
+
+`npm --prefix frontend run test:unit -- src/hooks/usePrinterBindings.test.tsx src/router/erpLoginDestination.test.ts src/router/login-landing.test.tsx`：打印读取无权零请求、有权成功、撤权/手动refetch、缓存复用与403无全局红框，连同第1条全部登录反例。`npm run smoke:login-supplier-browser` 同时检查每个登录角色的绑定请求数；HTTP夹具对无权绑定请求真实模拟403，不能统一返回200掩盖回归。新增单测沿既有前端全量单测与 accounting 命令进入CI，不另加工作流或修改检查数量。

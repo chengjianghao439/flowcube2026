@@ -6,6 +6,8 @@ import { payloadClient, setApiClientBaseURL } from '@/api/client'
 import { API_BASE_STORAGE_KEY, isHealthyApiPayload, normalizeApiBase } from '@/config/api'
 import { ERP_PRODUCTION_ORIGIN, PDA_FALLBACK_API_ORIGIN } from '@/config/env'
 import { useAuthStore } from '@/store/authStore'
+import { hasPermission } from '@/lib/permissions'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { toast } from '@/lib/toast'
 import { getDeviceSession } from '@/lib/pdaDeviceBinding'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
@@ -116,7 +118,8 @@ export async function syncPdaLabelPrinterBinding(): Promise<number | null> {
   if (typeof window === 'undefined') return null
   const stored = readStoredPdaPrinterId()
   if (stored) return stored
-  if (!useAuthStore.getState().token) return null
+  const { token, user } = useAuthStore.getState()
+  if (!token || !user || !hasPermission(user.permissions, PERMISSIONS.PRINT_PRINTER_VIEW, user.roleId)) return null
 
   try {
     const res = await payloadClient.get<{

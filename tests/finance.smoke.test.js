@@ -490,19 +490,24 @@ async function scenarioStatement(ctx, log, token, accountId) {
   log.assert('★ 已核销完的对账单不能再核销', overSettle.status === 400,
     `status=${overSettle.status} ${JSON.stringify(overSettle.data?.message || '')}`)
 
-  // 纵深防御：对账单成员账款若被 /payments/:id/pay 直付（绕开对账单核销这条路），对账单的
-  // settled_amount/状态也必须刷新。修复前 recordPayment 不碰对账单，会让投影停在旧值漂移（存疑③）。
-  const dpParty = randomRef('直付客户')
+  // 月结快照不能通过旧直付接口绕过对账单，拒绝后仍可正常核销。
+  const dpParty = randomRef('月结客户')
   const dp1 = await seedRecord(http, token, pool, { type: 2, partyName: dpParty, amount: 500, settlementType: 2 })
   const dpCreated = await http.post('/api/payments/statements', { token, json: { type: 2, partyName: dpParty, recordIds: [dp1] } })
   const dpStId = Number(dpCreated.data?.data?.id)
   await http.post(`/api/payments/statements/${dpStId}/confirm`, { token })
-  const directPay = await http.post(`/api/payments/${dp1}/pay`, { token, json: { amount: 500, paymentDate: today() } })
-  log.assert('对账单成员账款可被直付', directPay.ok, `status=${directPay.status} ${JSON.stringify(directPay.data?.message || '')}`)
+  for (const amount of [200, 300]) {
+    const directPay = await http.post(`/api/payments/${dp1}/pay`, { token, headers: { 'X-Request-Key': randomRef('KEY') }, json: { amount, paymentDate: today(), accountId } })
+    log.assert(`★ 月结直付${amount}明确拒绝`, directPay.status === 409 && directPay.data?.code === 'MONTHLY_PAYMENT_REQUIRES_STATEMENT', JSON.stringify(directPay.data))
+  }
+  const [unchanged] = await dbQuery(pool, 'SELECT paid_amount,balance FROM payment_records WHERE id=?', [dp1])
+  const [noEntries] = await dbQuery(pool, 'SELECT COUNT(*) AS n FROM payment_entries WHERE record_id=?', [dp1])
+  log.assert('月结拒绝直付后账款和付款明细不变', money(unchanged.paid_amount) === 0 && money(unchanged.balance) === 500 && Number(noEntries.n) === 0)
+  const monthlyReceipt = await http.post('/api/payments/receipts', { token, headers: { 'X-Request-Key': randomRef('KEY') }, json: { type: 2, partyName: dpParty, amount: 500, paymentDate: today(), accountId, allocations: [{ statementId: dpStId, amount: 500 }] } })
+  log.assert('★ 月结仍可通过对账单核销', monthlyReceipt.ok, JSON.stringify(monthlyReceipt.data))
   const [dpSt] = await dbQuery(pool, 'SELECT * FROM reconciliation_statements WHERE id=?', [dpStId])
-  log.assert('★ 直付对账单成员账款后，对账单 settled_amount/状态同步刷新（纵深防御）',
-    money(dpSt.settled_amount) === 500 && money(dpSt.balance) === 0 && Number(dpSt.status) === 3,
-    `settled=${dpSt.settled_amount} balance=${dpSt.balance} status=${dpSt.status}`)
+  log.assert('★ 月结对账单核销后汇总与状态刷新', money(dpSt.settled_amount) === 500 && money(dpSt.balance) === 0 && Number(dpSt.status) === 3)
+
 }
 
 // ── 4b. 对账单口径：投影过期时四处必须同源 ────────────────────────────────────
