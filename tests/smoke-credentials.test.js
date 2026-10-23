@@ -47,7 +47,7 @@ test('两组凭据完整时使用显式值，保留受限账号的 403 与授权
   assert.equal(result.error, result.boundary)
   assert.equal(result.childCalls, 1)
   for (const [name, value] of Object.entries(credentials)) assert.equal(vm.runInContext(name, result.context), value)
-  assert.match(source, /loginAs\(SMOKE_LIMITED_USERNAME, SMOKE_LIMITED_PASSWORD,/)
+  assert.match(source, /loginAs\(SMOKE_LIMITED_USERNAME, SMOKE_LIMITED_PASSWORD\)/)
   assert.match(source, /await assertForbidden\('\/picking-waves'\)/)
   assert.match(source, /await setHashAndConfirm\('\/inbound-tasks\/new'\)/)
 })

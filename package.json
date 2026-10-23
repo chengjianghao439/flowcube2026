@@ -97,6 +97,7 @@
     "test:sale-revenue-discount": "node tests/sale-revenue-discount.test.js",
     "test:audit-tooling": "node --test tests/audit-tooling.test.js tests/audit-deployment.test.js tests/smoke-credentials.test.js tests/browser-smoke-runtime.test.js tests/deploy-artifact.test.js tests/release-orchestration.test.js",
     "smoke:qa-followup-browser": "node scripts/browser-smoke/qa-followup.cjs",
+    "smoke:login-supplier-browser": "node scripts/browser-smoke/login-supplier.cjs",
     "test:browser-smoke": "node --test tests/browser-smoke-live.test.js",
     "test:release-tooling": "node --test tests/release-asset-publish.test.js tests/release-live-verify.test.js tests/local-release-relay.test.js",
     "release:verify": "node scripts/verify-live-release.cjs",

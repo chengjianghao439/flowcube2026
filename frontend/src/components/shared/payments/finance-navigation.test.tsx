@@ -97,7 +97,9 @@ for(const type of [1,2] as const) test(`对账明细${type}真实原单导航`,a
   await click('对账原单');expect(close).toHaveBeenCalledOnce();expect(host.querySelector('output')?.textContent).toBe(`/${type===2?'sale':'purchase'}/81`)
 })
 for(const type of [1,2] as const) test(`现结${type}按单列表原单导航`,async()=>{
-  mocks.payments.mockResolvedValue({list:[{id:9,type,orderId:81,orderNo:'现结原单',totalAmount:100,paidAmount:30,balance:70,status:2}],pagination:{total:1}})
+  mocks.payments.mockImplementation(async (params: { settlementTypes: string }) => params.settlementTypes === '2'
+    ? {list:[],pagination:{total:0},summary:{totalAmount:0,paidAmount:0,balance:0}}
+    : {list:[{id:9,type,orderId:81,orderNo:'现结原单',totalAmount:100,paidAmount:30,balance:70,status:2}],pagination:{total:1},summary:{totalAmount:100,paidAmount:30,balance:70}})
   await render(<PaymentsView type={type}/>)
   await click('现结原单');expect(host.querySelector('output')?.textContent).toBe(`/${type===2?'sale':'purchase'}/81`)
 })

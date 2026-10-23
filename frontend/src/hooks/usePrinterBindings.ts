@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { payloadClient as apiClient } from '@/api/client'
+import { useAuthStore } from '@/store/authStore'
+import { hasPermission } from '@/lib/permissions'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 export const PRINTER_BINDINGS_QUERY_KEY = 'printer-bindings'
 
@@ -10,7 +13,7 @@ export type PrinterBindingsPayload = {
 }
 
 export function getPrinterBindingsApi() {
-  return apiClient.get<PrinterBindingsPayload>('/printer-bindings')
+  return apiClient.get<PrinterBindingsPayload>('/printer-bindings', { skipGlobalError: true })
 }
 export function bindPrinterApi(type: string, printerId: number, config?: Parameters<typeof apiClient.put>[2]) {
   return apiClient.put(`/printer-bindings/${type}`, { printerId }, config)
@@ -19,10 +22,19 @@ export function unbindPrinterApi(type: string, config?: Parameters<typeof apiCli
   return apiClient.delete(`/printer-bindings/${encodeURIComponent(type)}`, config)
 }
 
+function canReadPrinterBindings() {
+  const { token, user } = useAuthStore.getState()
+  return Boolean(token && user && hasPermission(user.permissions, PERMISSIONS.PRINT_PRINTER_VIEW, user.roleId))
+}
+
 export function usePrinterBindings() {
+  const token = useAuthStore(s => s.token)
+  const user = useAuthStore(s => s.user)
   return useQuery<BindingMap>({
     queryKey: [PRINTER_BINDINGS_QUERY_KEY],
-    queryFn: async () => (await getPrinterBindingsApi())?.defaultBindings ?? {},
+    enabled: Boolean(token && user && hasPermission(user.permissions, PERMISSIONS.PRINT_PRINTER_VIEW, user.roleId)),
+    // refetch可绕过enabled；撤权或退出后也必须在请求边界检查。
+    queryFn: async () => canReadPrinterBindings() ? (await getPrinterBindingsApi())?.defaultBindings ?? {} : {},
   })
 }
 

@@ -198,10 +198,17 @@ async function prepareSmokeContext(options = {}) {
   }
   const product = products[0]
 
-  let [suppliers] = await pool.query('SELECT id, name FROM supply_suppliers WHERE deleted_at IS NULL LIMIT 1')
+  // 直付/期间专项显式选现结供应商，不能把既有月结账款改成现结来适配测试。
+  const supplierSettlementType = options.supplierSettlementType
+  let [suppliers] = await pool.query(
+    'SELECT id, name FROM supply_suppliers WHERE deleted_at IS NULL' + (supplierSettlementType ? ' AND settlement_type=?' : '') + ' LIMIT 1',
+    supplierSettlementType ? [supplierSettlementType] : [],
+  )
   if (!suppliers.length) {
-    const [r] = await pool.query("INSERT INTO supply_suppliers (code, name) VALUES ('SMOKE-SUP', 'Smoke供应商')")
-    suppliers = [{ id: r.insertId, name: 'Smoke供应商' }]
+    const code = supplierSettlementType ? `SMOKE-SUP-${supplierSettlementType}` : 'SMOKE-SUP'
+    const name = supplierSettlementType ? `Smoke供应商-${supplierSettlementType}` : 'Smoke供应商'
+    const [r] = await pool.query('INSERT INTO supply_suppliers (code, name, settlement_type) VALUES (?,?,?)', [code, name, supplierSettlementType || 2])
+    suppliers = [{ id: r.insertId, name }]
   }
   const supplier = suppliers[0]
 

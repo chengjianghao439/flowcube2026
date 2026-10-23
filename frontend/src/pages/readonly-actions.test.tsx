@@ -58,7 +58,7 @@ function dataFor(path: string) {
   if (path === '/printers') return [printer]
   if (path === '/printers/registration-warehouses') return [{ id: 31, name: '合成仓库' }]
   if (path === '/printer-bindings') return {}
-  if (path === '/payments') return list([payment])
+  if (path === '/payments') return { ...list([payment]), summary: { totalAmount: 10, paidAmount: 0, balance: 10 } }
   if (path === '/payments/receipts') return list([receipt])
   if (path === '/payments/statements') return list([statement])
   if (path === '/payments/statements/candidates') return [{ ...payment, id: 6 }]

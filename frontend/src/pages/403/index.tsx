@@ -1,9 +1,13 @@
 import { useNavigate } from 'react-router-dom'
 import { ShieldOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAuthStore } from '@/store/authStore'
+import { resolveErpLoginDestination } from '@/router/erpLoginDestination'
 
 export default function ForbiddenPage() {
   const navigate = useNavigate()
+  const user = useAuthStore(s => s.user)
+  const returnPath = resolveErpLoginDestination(user, '/dashboard')
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-8">
@@ -22,8 +26,8 @@ export default function ForbiddenPage() {
         </p>
 
         <div className="flex justify-center gap-3">
-          <Button onClick={() => navigate('/dashboard')}>
-            回到仪表盘
+          <Button onClick={() => navigate(returnPath)}>
+            {returnPath === '/dashboard' ? '回到仪表盘' : '返回可用页面'}
           </Button>
         </div>
       </div>

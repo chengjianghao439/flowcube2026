@@ -14,7 +14,7 @@ export const MERGED_PAGE_GROUPS: MergedPageGroup[] = [
     { path: '/reports/reconciliation/receivable', label: '月结对账', permission: PERMISSIONS.REPORT_VIEW },
   ] },
   { key: '/payments/payable', title: '供应商往来', tabTitle: 'group', views: [
-    { path: '/payments/payable', label: '现结账款', permission: PERMISSIONS.PAYMENT_VIEW },
+    { path: '/payments/payable', label: '账款概览', permission: PERMISSIONS.PAYMENT_VIEW },
     { path: '/reports/reconciliation/payable', label: '月结对账', permission: PERMISSIONS.REPORT_VIEW },
   ] },
   { key: '/finance/dashboard', title: '资金工作区', tabTitle: 'group', views: [

@@ -58,14 +58,15 @@ function budget(view, expected) {
   for (const [name, value] of Object.entries(expected)) assert.equal(view.budget[name], value, `[BUSINESS] ${name}`)
 }
 async function statement(purchase) {
-  const result = await ctx.ok('POST', '/payments/statements', { type: 1, partyName: ctx.supplier.name, recordIds: [purchase.apId] }, {}, 'FIXTURE')
+  const result = await ctx.ok('POST', '/payments/statements', { type: 1, partyName: purchase.supplier.name, recordIds: [purchase.apId] }, {}, 'FIXTURE')
   await ctx.ok('POST', `/payments/statements/${result.id}/confirm`, {}, { user: 'approver' }, 'FIXTURE')
   return result
 }
-async function pay(purchase, amount, { receipt = false, statementId = null } = {}) {
+async function pay(purchase, amount, { receipt = true, statementId = null } = {}) {
   if (receipt) {
-    const result = await ctx.ok('POST', '/payments/receipts', { type: 1, partyId: ctx.supplier.id, partyName: ctx.supplier.name, amount, paymentDate: ctx.today,
-      accountId: ctx.payer.id, allocations: [{ ...(statementId ? { statementId } : { recordId: purchase.apId }), amount }] }, {}, 'FIXTURE')
+    statementId ||= (await statement(purchase)).id
+    const result = await ctx.ok('POST', '/payments/receipts', { type: 1, partyId: purchase.supplier.id, partyName: purchase.supplier.name, amount, paymentDate: ctx.today,
+      accountId: ctx.payer.id, allocations: [{ statementId, amount }] }, {}, 'FIXTURE')
     const entry = await ctx.one('SELECT * FROM payment_entries WHERE receipt_id=? AND record_id=?', [result.id, purchase.apId])
     assert.ok(entry, '[FIXTURE] 真实汇款核销未返回准确原分配')
     return entry
@@ -134,7 +135,7 @@ async function assertReceived(purchase, rf, received, before, original) {
   assert.deepEqual(allocations.map(row => [Number(row.entry_id), text4(row.amount), row.budget_state]), rf.body.allocations.map(row => [row.entryId, text4(row.amount), 'received']).sort((a, b) => a[0] - b[0]))
   const events = await ctx.rows("SELECT * FROM party_ledger_events WHERE event_type='SUPPLIER_REFUND_IN' AND baseline_key=?", [`supplier_refund:${rf.id}`])
   assert.equal(events.length, 1)
-  assert.deepEqual([Number(events[0].party_id), Number(events[0].record_id), Number(events[0].order_id), text4(events[0].delta), events[0].business_date], [ctx.supplier.id, purchase.apId, purchase.id, text4(rf.body.amount), rf.body.refundDate])
+  assert.deepEqual([Number(events[0].party_id), Number(events[0].record_id), Number(events[0].order_id), text4(events[0].delta), events[0].business_date], [purchase.supplier.id, purchase.apId, purchase.id, text4(rf.body.amount), rf.body.refundDate])
   const read = await ctx.ok('GET', `/finance/accounts/${ctx.income.id}/transactions?bizType=6&keyword=${encodeURIComponent(rf.refundNo)}`)
   assert.equal(read.list.length, 1)
   assert.equal(read.list[0].id, received.ack.fundTransactionId)
@@ -142,7 +143,7 @@ async function assertReceived(purchase, rf, received, before, original) {
   assert.equal(text4(read.list[0].amount), text4(rf.body.amount))
   return after
 }
-async function assertVoucher(rf, received, projected, voucherDate = rf.body.refundDate) {
+async function assertVoucher(rf, received, projected, voucherDate = rf.body.refundDate, supplier = ctx.supplier) {
   const head = await ctx.one('SELECT voucher_id,voucher_generate_error FROM supplier_refund_orders WHERE id=?', [rf.id])
   const vouchers = await ctx.rows("SELECT * FROM acct_vouchers WHERE company_id=1 AND source_type='supplier_refund_in' AND source_id=? ORDER BY id", [received.ack.fundTransactionId])
   if (projected === '0.00') {
@@ -162,7 +163,7 @@ async function assertVoucher(rf, received, projected, voucherDate = rf.body.refu
   assert.equal(text4(voucher.total_credit), text4(projected))
   const legs = await ctx.rows('SELECT account_code,direction,amount,aux_type,aux_id,aux_name FROM acct_voucher_entries WHERE voucher_id=? ORDER BY line_no', [voucher.id])
   assert.deepEqual(legs.map(row => [row.account_code, Number(row.direction), text4(row.amount)]), [['1002', 1, text4(projected)], ['2202', 2, text4(projected)]])
-  assert.deepEqual([Number(legs[1].aux_type), Number(legs[1].aux_id), legs[1].aux_name], [1, ctx.supplier.id, ctx.supplier.name])
+  assert.deepEqual([Number(legs[1].aux_type), Number(legs[1].aux_id), legs[1].aux_name], [1, supplier.id, supplier.name])
 }
 
 test('本轮真实事务与API验收', { concurrency: false }, async t => {
@@ -313,14 +314,14 @@ test('本轮真实事务与API验收', { concurrency: false }, async t => {
 
   await t.test('F准确原付款：部分分位回款、AP/资金/对账/往来/凭证及实物退货无二次现金', async () => {
     const purchase = await ctx.purchase({ packages: [4, 6] }), st = await statement(purchase)
-    const direct = await pay(purchase, 60), receipt = await pay(purchase, 40, { receipt: true, statementId: st.id })
+    const firstReceipt = await pay(purchase, 60, { statementId: st.id }), receipt = await pay(purchase, 40, { receipt: true, statementId: st.id })
     const pr = await ctx.returnPurchase(purchase, 4), original = await originalPayments(purchase)
     assert.equal(original.entries.length, 2); assert.equal(original.outputs.length, 2)
     const invalidConfirm = await ctx.post(`/returns/purchase/${pr.id}/confirm`, {}, { user: 'approver' })
     rejected(invalidConfirm, 409, 'PURCHASE_RETURN_REFUND_REQUIRED')
     assert.equal(invalidConfirm.data.data.purchaseReturnId, pr.id)
     // The wrong entry is a real positive payment/OUT from another real received PO.
-    const otherPurchase = await ctx.purchase(), otherEntry = await pay(otherPurchase, 100)
+    const otherPurchase = await ctx.purchase({ supplier: ctx.cashSupplier }), otherEntry = await pay(otherPurchase, 100, { receipt: false })
     assert.notEqual(Number(otherEntry.record_id), purchase.apId)
     const otherOriginal = await originalPayments(otherPurchase)
     assert.equal(otherOriginal.entries.length, 1); assert.equal(otherOriginal.outputs.length, 1)
@@ -341,14 +342,14 @@ test('本轮真实事务与API验收', { concurrency: false }, async t => {
     assert.deepEqual(await originalPayments(otherPurchase), otherOriginal)
     const read = await ctx.ok('GET', `/supplier-refunds/source?purchaseReturnId=${pr.id}`)
     assert.deepEqual([read.purchaseOrderId, read.purchaseReturnId, read.paymentRecordId, read.grossAmount, read.currentPaidAmount, read.availableAmount], [purchase.id, pr.id, purchase.apId, '40.0000', '100.0000', '40.0000'])
-    const directProof = read.entries.find(row => row.entryId === Number(direct.id)), receiptProof = read.entries.find(row => row.entryId === Number(receipt.id))
-    assert.equal(directProof.receiptId, null)
-    assert.equal(directProof.out.bizNo, purchase.orderNo)
+    const firstProof = read.entries.find(row => row.entryId === Number(firstReceipt.id)), receiptProof = read.entries.find(row => row.entryId === Number(receipt.id))
+    assert.equal(firstProof.receiptId, Number(firstReceipt.receipt_id))
+    assert.equal(Number(firstProof.out.bizId), Number(firstReceipt.receipt_id))
     assert.equal(receiptProof.receiptId, Number(receipt.receipt_id))
     assert.equal(receiptProof.entryAccountId, null)
-    assert.equal(receiptProof.out.bizNo, original.receipts[0].receipt_no)
+    assert.equal(receiptProof.out.bizNo, original.receipts.find(row => Number(row.id) === Number(receipt.receipt_id)).receipt_no)
     assert.equal(Number(receiptProof.out.bizId), Number(receipt.receipt_id))
-    const rf = await refund(pr, direct, '30.1200')
+    const rf = await refund(pr, firstReceipt, '30.1200')
     const before = await funds(purchase)
     await confirmRefund(rf)
     assert.deepEqual(await funds(purchase), before, '确认只占额度，不收钱')
@@ -405,6 +406,23 @@ test('本轮真实事务与API验收', { concurrency: false }, async t => {
     assert.deepEqual((await refundOwn(got.body.operationUuid, `supplier.refund.receive.${rf.id}`, got.key)).data, got.ack)
     assert.deepEqual(await ctx.ok('POST', `/supplier-refunds/${rf.id}/receive`, got.body, { key: got.key }), got.ack)
     await assertVoucher(rf, got, '30.12')
+  })
+
+  await t.test('F现结仍可按单直付并按准确原付款退款', async () => {
+    const purchase = await ctx.purchase({ supplier: ctx.cashSupplier })
+    assert.equal(Number((await ctx.one('SELECT settlement_type FROM payment_records WHERE id=?', [purchase.apId])).settlement_type), 1)
+    const entry = await pay(purchase, 100, { receipt: false })
+    const pr = await ctx.returnPurchase(purchase, 1), original = await originalPayments(purchase)
+    const source = await ctx.ok('GET', `/supplier-refunds/source?purchaseReturnId=${pr.id}`)
+    const proof = source.entries.find(row => row.entryId === Number(entry.id))
+    assert.equal(proof.receiptId, null)
+    assert.equal(proof.out.bizNo, purchase.orderNo)
+    assert.equal(Number(proof.entryAccountId), ctx.payer.id)
+    const rf = await refund(pr, entry, '10.0000'), before = await funds(purchase)
+    await confirmRefund(rf)
+    const got = await receive(rf)
+    await assertReceived(purchase, rf, got, before, original)
+    await assertVoucher(rf, got, '10.00', undefined, ctx.cashSupplier)
   })
 
   await t.test('F非分输入：0.0001拒绝且原付款/AP/资金/回执不变，PR取消无现金', async () => {

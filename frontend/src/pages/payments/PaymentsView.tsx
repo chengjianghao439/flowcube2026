@@ -25,8 +25,10 @@ import { CreateManualPayableDialog } from '@/components/shared/payments/CreateMa
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { FinanceOrderLink } from '@/components/shared/payments/FinanceOrderLink'
+import { SummaryStrip } from '@/components/shared/SummaryStrip'
+import SupplierMonthlyPayables from './SupplierMonthlyPayables'
 
-/** 账款页只管现结；月结走对账页，两边合起来才是全量 */
+/** 按单登记保持现结范围；供应商月结欠款另作只读展示，付款仍走对账。 */
 const IMMEDIATE_SCOPE = IMMEDIATE_SETTLEMENT_TYPES.join(',')
 const ALL_DATES_QUERY: PaymentQueryValues = { ...EMPTY_PAYMENT_QUERY, startDate: '', endDate: '' }
 const DEFAULT_RECORD_QUERY: PaymentQueryValues = { ...ALL_DATES_QUERY, status: 'unsettled' }
@@ -44,7 +46,7 @@ export type PaymentType = 1 | 2
 const COPY = {
   1: {
     title: '现结供应商账款',
-    description: '现结供应商：到货即结，逐笔确认结算后登记付款；月结供应商见「月结供应商对账」',
+    description: '现结与月结欠款分别展示；查询、导出及按单登记用于现结，月结仍通过对账单核销付款。',
     party: '供应商',
     amountCol: '已付金额',
     payAction: '登记付款',
@@ -188,11 +190,17 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
       <KeepAliveSection active={tab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={IMMEDIATE_SCOPE} hideToolbar /></KeepAliveSection>
 
       <KeepAliveSection active={tab === 'records'} className="space-y-4">
+      {isPayable && <SupplierMonthlyPayables />}
+
+      <section aria-label="现结账款" className="space-y-4">
+      {isPayable && <h2 className="text-base font-semibold">现结账款</h2>}
       <PaymentQueryBar query={query} onChange={(q) => { setQuery(q); }} labels={queryLabels} clearValue={ALL_DATES_QUERY} />
 
+      {isPayable && !isError && !isLoading && data && <SummaryStrip items={[{ label: '现结余额', value: money(data.summary.balance) }]} />}
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} />}
 
       {!isError && !isLoading && data && <ListSummary total={total} unit="笔" />}
+      </section>
 
       <PaymentQueryDialog
         open={queryOpen}

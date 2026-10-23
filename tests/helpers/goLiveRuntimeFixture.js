@@ -125,6 +125,7 @@ function makeGoLiveRuntimeFixture() {
     ctx.location = { id: await insert('INSERT INTO warehouse_locations(warehouse_id,code,name) VALUES (?,?,?)', [ctx.warehouse.id, mark, mark]) }
     await ctx.pool.query('INSERT INTO sorting_bins(warehouse_id,code) VALUES (?,?)', [ctx.warehouse.id, `${mark}S`])
     ctx.supplier = { id: await insert('INSERT INTO supply_suppliers(code,name,settlement_type,payment_terms_days) VALUES (?,?,2,30)', [mark, `验收合成供应商-${mark}`]), name: `验收合成供应商-${mark}` }
+    ctx.cashSupplier = { id: await insert('INSERT INTO supply_suppliers(code,name,settlement_type,payment_terms_days) VALUES (?,?,1,0)', [`${mark}-CASH`, `验收现结供应商-${mark}`]), name: `验收现结供应商-${mark}` }
     ctx.customer = { id: await insert('INSERT INTO sale_customers(code,name,credit_limit,settlement_type) VALUES (?,?,NULL,2)', [mark, `验收合成客户-${mark}`]), name: `验收合成客户-${mark}` }
     for (const name of ['creator', 'approver', 'denied', 'scoped']) {
       const roleId = await insert('INSERT INTO sys_roles(code,name,is_system) VALUES (?,?,0)', [`${mark}-${name}`, `${mark}-${name}`])
@@ -172,10 +173,10 @@ function makeGoLiveRuntimeFixture() {
     ctx.remember('products', id)
     return { id, code, name: code, unit: '个' }
   }
-  ctx.purchase = async ({ quantity = 10, price = 10, packages = [quantity], product } = {}) => {
+  ctx.purchase = async ({ quantity = 10, price = 10, packages = [quantity], product, supplier = ctx.supplier } = {}) => {
     product ||= await ctx.product()
     assert.equal(packages.reduce((sum, qty) => sum + qty, 0), quantity, '[FIXTURE] 收货箱量必须等于采购基本量')
-    const po = await ctx.ok('POST', '/purchase', { supplierId: ctx.supplier.id, supplierName: ctx.supplier.name, warehouseId: ctx.warehouse.id, warehouseName: ctx.warehouse.name,
+    const po = await ctx.ok('POST', '/purchase', { supplierId: supplier.id, supplierName: supplier.name, warehouseId: ctx.warehouse.id, warehouseName: ctx.warehouse.name,
       items: [{ productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity, unitPrice: price }] }, {}, 'FIXTURE')
     ctx.remember('purchases', po.id)
     await ctx.ok('POST', `/purchase/${po.id}/confirm`, {}, {}, 'FIXTURE')
@@ -190,9 +191,9 @@ function makeGoLiveRuntimeFixture() {
     const ap = await ctx.one('SELECT * FROM payment_records WHERE type=1 AND order_id=?', [po.id])
     assert.ok(ap, '[FIXTURE] 上架完成没有原应付')
     await ctx.ok('POST', `/payments/${ap.id}/confirm`, {}, { user: 'approver' }, 'FIXTURE')
-    return { ...po, product, itemId: Number(item.id), price, quantity, taskId: inbound.taskId, containers: received.containers, apId: Number(ap.id) }
+    return { ...po, product, supplier, itemId: Number(item.id), price, quantity, taskId: inbound.taskId, containers: received.containers, apId: Number(ap.id) }
   }
-  ctx.prBody = (purchase, quantity, extra = {}) => ({ supplierId: ctx.supplier.id, supplierName: ctx.supplier.name, warehouseId: ctx.warehouse.id, warehouseName: ctx.warehouse.name,
+  ctx.prBody = (purchase, quantity, extra = {}) => ({ supplierId: purchase.supplier.id, supplierName: purchase.supplier.name, warehouseId: ctx.warehouse.id, warehouseName: ctx.warehouse.name,
     purchaseOrderId: purchase.id, purchaseOrderNo: purchase.orderNo,
     items: [{ sourceItemId: purchase.itemId, productId: purchase.product.id, productCode: purchase.product.code, productName: purchase.product.name, unit: purchase.product.unit, quantity, unitPrice: purchase.price }], ...extra })
   ctx.returnPurchase = async (purchase, quantity, extra = {}) => {

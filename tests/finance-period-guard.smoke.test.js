@@ -169,7 +169,7 @@ async function balanceOf(pool, accountId) {
 
 async function main() {
   const log = createLogger()
-  const ctx = await prepareSmokeContext()
+  const ctx = await prepareSmokeContext({ supplierSettlementType: 1 })
   const { pool, http, warehouse, location, supplier } = ctx
   const cleanup = {
     productIds: [],

@@ -15,7 +15,7 @@ function load(file, deps, transform = source => source) {
   } }, { filename })
   return module.exports
 }
-function fixture({ total = '0.3000', paid = '0.1000', replay = false, transform } = {}) {
+function fixture({ total = '0.3000', paid = '0.1000', replay = false, settlementType = 1, type = 2, lockedSettlementType = settlementType, transform } = {}) {
   const writes = [], events = [], calls = [], items = []
   let acquired = 0
   const conn = {
@@ -28,7 +28,7 @@ function fixture({ total = '0.3000', paid = '0.1000', replay = false, transform 
         if (sql.startsWith('INSERT INTO expense_claim_items')) items.push(BigInt(Math.round(Number(params[3]) * 10000))) // SQL-double DECIMAL(14,4), not the service's guard.
         return [{ insertId: 21, affectedRows: 1 }]
       }
-      if (sql.includes('FROM payment_records WHERE id=')) return [[{ id: 5, type: 2, order_no: 'SYNTHETIC-AR5', total_amount: total, paid_amount: paid, balance: money.moneyText(money.moneyUnits(total) - money.moneyUnits(paid)), status: 1, confirm_status: 1 }]]
+      if (/FROM payment_records WHERE id\s*=/.test(sql)) return [[{ settlement_type: sql.includes('FOR UPDATE') ? lockedSettlementType : settlementType, id: 5, type, order_no: 'SYNTHETIC-AR5', total_amount: total, paid_amount: paid, balance: money.moneyText(money.moneyUnits(total) - money.moneyUnits(paid)), status: 1, confirm_status: 1 }]]
       if (sql.includes('statement_id FROM reconciliation_statement_items')) return [[]]
       if (sql.includes('SELECT id FROM finance_accounts')) return [[{ id: 8 }]]
       if (sql.includes('FROM expense_categories')) return [[{ id: 3, name: 'SYNTHETIC-CATEGORY' }]]
@@ -139,4 +139,40 @@ test('反向删报销输入分闸门会先写错误明细才被合计后卫409�
   const f = fixture({ transform: source => source.replace("cashCents(it.amount, { label: '报销明细金额' })", '') })
   await assert.rejects(f.claims.create(claim([12.3456]), operator), e => e.statusCode === 409 && e.code === 'CASH_LEGACY_PRECISION_REVIEW_REQUIRED')
   assert.ok(f.writes.length > 0)
+})
+
+const monthlyDirectError = e => e.statusCode === 409 && e.code === 'MONTHLY_PAYMENT_REQUIRES_STATEMENT' && e.message === '月结账款请通过对账单核销付款'
+test('月结快照拒绝200/300逐笔付款，不能写账款、entry、事件、资金或回执', async () => {
+  for (const type of [1, 2]) for (const settlementType of [2, '2']) for (const amount of [200, 300]) {
+    const f = fixture({ total: '1000.0000', paid: '0.0000', settlementType, type })
+    await assert.rejects(pay(f, amount, 8), monthlyDirectError)
+    assert.equal(f.writes.length, 0)
+    assert.equal(f.events.length, 0, '月结在事务/幂等回执/资金写入前拒绝')
+  }
+})
+test('月结旧成功键也不能绕过直付限制；不改写历史回执', async () => {
+  const f = fixture({ settlementType: 2, replay: true })
+  await assert.rejects(pay(f, 0.2, 8), monthlyDirectError)
+  assert.equal(f.writes.length, 0); assert.equal(f.events.length, 0)
+})
+test('月结跨期补录申请与批准执行也拒绝直付', async () => {
+  for (const mode of ['apply', 'execute']) {
+    const f = fixture({ settlementType: 2 })
+    await assert.rejects(f.payments.recordPayment(5, { amount: 0.2, paymentDate: '2026-10-14', accountId: 8 }, operator, 'key', { backfill: { mode } }), monthlyDirectError)
+    assert.equal(f.writes.length, 0); assert.equal(f.events.length, 0)
+  }
+})
+test('锁内复核结算快照，预检后变月结仍然拒绝且回滚', async () => {
+  const f = fixture({ settlementType: 1, lockedSettlementType: 2 })
+  await assert.rejects(pay(f, 0.2, 8), monthlyDirectError)
+  assert.equal(f.writes.length, 0); assert.ok(f.events.includes('rollback'))
+  assert.ok(!f.events.some(e => e.paymentEvent || e.account || e.receipt))
+})
+
+test('现结应付仍可逐笔付款，账户/账款/entry与事件正常写入', async () => {
+  const f = fixture({ type: 1 }), result = await pay(f, 0.2, 8)
+  assert.equal(result.newBalance, 0); assert.equal(result.status, 3)
+  assert.equal(f.writes.filter(x => x.sql.startsWith('INSERT INTO payment_entries')).length, 1)
+  assert.equal(f.events.filter(x => x.account).length, 1)
+  assert.equal(f.events.filter(x => x.paymentEvent).length, 1)
 })

@@ -24,7 +24,7 @@ const samples = [
   { path: '/payments/payable', Component: () => <PaymentsView type={1} />, prefix: 'payments' },
 ]
 const row = { id: 7, code: 'OLD7', name: '旧缓存单', bizNo: '旧缓存单', voucherNo: '旧缓存单', orderNo: '旧缓存单', status: 1, statusName: '未结清', totalAmount: 99, paidAmount: 0, balance: 99, totalDebit: 99, totalCredit: 99, bizType: 1, direction: 1, amount: 99, balanceAfter: 99, happenedAt: '2026-10-08', voucherDate: '2026-10-08', sourceType: 'manual', sourceTypeName: '手工', isActive: true, settlementType: 1, confirmStatus: 1 }
-const success = (rows: object[] = []) => ({ list: rows, pagination: { total: rows.length }, summary: { inAmount: 99, outAmount: 0 } })
+const success = (rows: object[] = []) => ({ list: rows, pagination: { total: rows.length }, summary: { inAmount: 99, outAmount: 0, totalAmount: rows.length ? 99 : 0, paidAmount: 0, balance: rows.length ? 99 : 0 } })
 const flush = async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) }) }
 const button = (host: ParentNode, text: string) => [...host.querySelectorAll('button')].find(button => button.textContent?.trim() === text)
 beforeEach(() => {
@@ -45,15 +45,20 @@ async function page(sample: typeof samples[number], run: (host: HTMLDivElement, 
 test.each(samples)('$path 首次读取失败不显示暂无/零总数，重试沿用筛选恢复真实空结果', async sample => {
   fixture.list.mockRejectedValue(new Error('财务读取失败夹具'))
   await page(sample, async host => {
+    // 供应商页新增独立月结读取；本例继续核对原现结查询与其重试，不依赖最后一个并发请求。
+    const scope = sample.path === '/payments/payable' ? host.querySelector<HTMLElement>('section[aria-label="现结账款"]')! : host
+    const recordCalls = () => sample.path === '/payments/payable'
+      ? fixture.list.mock.calls.filter(call => call[0]?.settlementTypes === '1')
+      : fixture.list.mock.calls
     expect(host.textContent).toContain('财务读取失败夹具')
     expect(host.textContent).not.toContain('暂无')
     expect(host.textContent).not.toMatch(/共\s*0/)
     expect(host.textContent).not.toContain('期间收入')
-    const previousParams = fixture.list.mock.calls.at(-1)?.[0]
+    const previousParams = recordCalls().at(-1)?.[0]
     fixture.list.mockResolvedValue(success())
-    expect(button(host, '重试')).toBeTruthy()
-    await act(async () => button(host, '重试')!.click()); await flush()
-    expect(fixture.list.mock.calls.at(-1)?.[0]).toEqual(previousParams)
+    expect(button(scope, '重试')).toBeTruthy()
+    await act(async () => button(scope, '重试')!.click()); await flush()
+    expect(recordCalls().at(-1)?.[0]).toEqual(previousParams)
     expect(host.textContent).toContain('暂无')
     expect(host.textContent).toMatch(/共\s*0/)
   })

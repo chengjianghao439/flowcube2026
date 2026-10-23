@@ -1,7 +1,7 @@
 {
-  "version": "0.13.6",
-  "versionCode": 157,
+  "version": "0.13.7",
+  "versionCode": 158,
   "filename": "app-release.apk",
-  "releaseNote": "- 本版继续仅供使用合成数据的安装验收。异常历史关联记录的仓库权限缺口仍未完成，不据此用于真实业务验收。",
-  "publishedAt": "2026-10-18T10:01:09.979Z"
+  "releaseNote": "低权限账号登录后进入自己有权限的页面；月结账款须通过对账单核销，不能按单直接付款。",
+  "publishedAt": "2026-10-23T06:35:45.982Z"
 }

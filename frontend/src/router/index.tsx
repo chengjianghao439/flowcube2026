@@ -9,10 +9,12 @@ import { DesktopQuitUnloadBridge } from '@/components/desktop/DesktopQuitUnloadB
 import DesktopPrintClientBridge from '@/components/desktop/DesktopPrintClientBridge'
 
 import { pdaRoutes } from './pdaRoutes'
+import { ERP_NO_ACCESS_PATH, resolveErpLoginDestination } from './erpLoginDestination'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
 const ForbiddenPage   = lazy(() => import('@/pages/403'))
+const NoAccessPage    = lazy(() => import('@/pages/no-access'))
 const LandingPage     = lazy(() => import('@/pages/landing'))
 
 function PageLoader() {
@@ -59,12 +61,14 @@ function ErpProtectedRoute() {
   return <Outlet />
 }
 
-/** ERP 游客守卫：已登录跳回受保护页（无来源则 /dashboard） */
+/** ERP 游客守卫与登录回调共用当前账号的落地权限判断。 */
 function ErpGuestRoute() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const user = useAuthStore((s) => s.user)
   const location = useLocation()
-  const from = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
-  if (isAuthenticated) return <Navigate to={from || '/dashboard'} replace />
+  const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from
+  const requestedPath = from?.pathname ? from.pathname + (from.search || '') : undefined
+  if (isAuthenticated) return <Navigate to={resolveErpLoginDestination(user, requestedPath)} replace />
   return <Outlet />
 }
 
@@ -119,6 +123,7 @@ export default function AppRouter() {
 
           {/* ── ERP 已登录路由 ── */}
           <Route element={<ErpProtectedRoute />}>
+            <Route path={ERP_NO_ACCESS_PATH} element={<NoAccessPage />} />
             <Route path="/sales" element={<Navigate to="/sale" replace />} />
             {/* 应付/应收、供应商/客户对账原本各是一个页面的两个 tab，拆开后旧链接与旧工作区标签仍要能打开 */}
             <Route path="/payments" element={<Navigate to="/payments/payable" replace />} />

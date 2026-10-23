@@ -109,6 +109,9 @@ export function KeepAliveOutlet() {
   const { tabs, syncFromLocation } = useWorkspaceStore()
   const { can } = usePermission()
   const locationRegistration = buildWorkspaceTabRegistration(location.pathname, location.search)
+  const normalizedCurrentPath = normalizePath(getFullPath(location.pathname, location.search))
+  const currentPermission = resolveRoutePermission(normalizedCurrentPath === '/' ? HOME_TAB.path : normalizedCurrentPath)
+  const accessDenied = Boolean(currentPermission && !can(currentPermission))
   // 新地址必须先通过容量登记，不能临时挂载第31页后再删掉原草稿。
   const activeKey = tabs.some(tab => tab.key === locationRegistration.key) ? locationRegistration.key : ''
 
@@ -135,19 +138,18 @@ export function KeepAliveOutlet() {
       return
     }
 
+    // 固定首页标签也必须过权限门；渲染阶段同样阻止无权组件先挂载发请求。
+    if (accessDenied) {
+      navigate('/403', { replace: true })
+      return
+    }
+
     if (normalizedPath === '/' || normalizedPath === '/dashboard') {
       syncFromLocation(HOME_TAB.path, HOME_TAB.title)
       return
     }
 
     if (!isRegisteredErpRoute(normalizedPath)) return
-
-    // 权限拦截
-    const requiredPerm = resolveRoutePermission(normalizedPath)
-    if (requiredPerm && !can(requiredPerm)) {
-      navigate('/403', { replace: true })
-      return
-    }
 
     // 如果 tab 已存在（由导航发起方提前 addTab），则只激活；
     // 否则用 PATH_TITLES 或动态默认标题注册新 tab。
@@ -156,11 +158,9 @@ export function KeepAliveOutlet() {
       const workspace = useWorkspaceStore.getState()
       navigate(workspace.tabs.find(tab => tab.key === workspace.activeKey)?.path ?? HOME_TAB.path, { replace: true })
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, location.search])
+  }, [location.pathname, location.search, navigate, syncFromLocation, accessDenied])
 
-  const currentPath = getFullPath(location.pathname, location.search)
-  const normalizedCurrentPath = normalizePath(currentPath)
+  if (accessDenied) return null
   if (normalizedCurrentPath !== '/' && normalizedCurrentPath !== '/dashboard' && !isRegisteredErpRoute(normalizedCurrentPath)) {
     return (
       <div className="flex h-full items-center justify-center p-6">
