@@ -1,0 +1,207 @@
+{
+  "version": "0.13.8",
+  "finalApplicationSha": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+  "pdaVersionCode": 159,
+  "candidateCommits": [
+    "e1fe59bc2f0a42233e03b886c93cca031a83f41c",
+    "4a61411f23d76c5b133311160c425aee77d6b1c5",
+    "54cef45522212f37c9a7fb1152d66e7fce7513ec"
+  ],
+  "earlierWorkflowRuns": {
+    "uiCandidate": {
+      "Tests": 40106788493,
+      "Security Scan": 40106788689,
+      "Deploy Browser App": 40106788469,
+      "Build Desktop Installer": 40106788473,
+      "Build PDA APK": 40106788474
+    },
+    "securityCandidate": {
+      "Tests": 40107414323,
+      "Security Scan": 40107414288,
+      "Deploy Browser App": 40107414308,
+      "Build Desktop Installer": 40107414303,
+      "Build PDA APK": 40107414271
+    }
+  },
+  "firstReleaseEntryStart": "2026-10-24T15:23:07Z",
+  "finalEntryStart": "2026-10-24T15:37:12Z",
+  "localEvidence": {
+    "frontendUnit": {
+      "files": 416,
+      "tests": 3775,
+      "passed": true
+    },
+    "typecheck": true,
+    "frontendLint": true,
+    "backendLint": true,
+    "frontendBuild": [
+      "electron",
+      "pda"
+    ],
+    "offlineStatic": {
+      "passedCommands": 36,
+      "environmentBlockedCommands": [
+        "nginx: default Docker socket unavailable; subsequently passed via colima-flowcube"
+      ]
+    },
+    "offlineRegression": {
+      "passedCommands": 39,
+      "environmentBlockedCommands": [
+        "print purge: missing explicit isolated DB; no writes executed"
+      ]
+    },
+    "finalSchemaCompatibility": {
+      "tests": 13,
+      "status": "passed"
+    },
+    "backendAudit": {
+      "vulnerabilities": 0
+    },
+    "desktopAudit": {
+      "vulnerabilities": 0
+    },
+    "frontendAudit": {
+      "moderate": 2,
+      "high": 0,
+      "critical": 0
+    },
+    "ownedFullRegression": {
+      "commands": 48,
+      "nonzeroCommands": 0,
+      "exit": 0,
+      "cleanupConfirmed": [
+        "container",
+        "volume",
+        "ownership",
+        "downloads"
+      ],
+      "resourceName": "flowcube-repair-ephemeral-20261024234109-f5e2f5"
+    },
+    "nginxHeadersViaColima": true
+  },
+  "finalWorkflowRuns": {
+    "Tests": 40107809275,
+    "Security Scan": 40107809279,
+    "Deploy Browser App": 40107809322,
+    "Build PDA APK": 40107809280,
+    "Build Desktop Installer (main)": 40107809281,
+    "Build Desktop Installer (tag)": 40109410913
+  },
+  "browserTransport": {
+    "localRelayAccepted": false,
+    "directHttpsAccepted": true,
+    "scpFallbackRequested": false,
+    "scpArchiveMerged": false
+  },
+  "releaseStatus": "completed_after_fixes",
+  "acceptanceAt": "2026-10-24T16:06:48Z",
+  "releaseFinishedAt": "2026-10-24T16:04:49Z",
+  "workflowResults": [
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-24T15:58:41Z",
+      "databaseId": 40109410913,
+      "headBranch": "v0.13.8",
+      "headSha": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "status": "completed",
+      "updatedAt": "2026-10-24T16:04:35Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40109410913",
+      "workflowName": "Build Desktop Installer"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-24T15:37:19Z",
+      "databaseId": 40107809281,
+      "headBranch": "main",
+      "headSha": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "status": "completed",
+      "updatedAt": "2026-10-24T15:44:08Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40107809281",
+      "workflowName": "Build Desktop Installer"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-24T15:37:19Z",
+      "databaseId": 40107809279,
+      "headBranch": "main",
+      "headSha": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "status": "completed",
+      "updatedAt": "2026-10-24T15:41:30Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40107809279",
+      "workflowName": "Security Scan"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-24T15:37:19Z",
+      "databaseId": 40107809280,
+      "headBranch": "main",
+      "headSha": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "status": "completed",
+      "updatedAt": "2026-10-24T15:58:25Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40107809280",
+      "workflowName": "Build PDA APK"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-24T15:37:19Z",
+      "databaseId": 40107809275,
+      "headBranch": "main",
+      "headSha": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "status": "completed",
+      "updatedAt": "2026-10-24T15:53:38Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40107809275",
+      "workflowName": "Tests"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2026-10-24T15:37:19Z",
+      "databaseId": 40107809322,
+      "headBranch": "main",
+      "headSha": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "status": "completed",
+      "updatedAt": "2026-10-24T15:57:34Z",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40107809322",
+      "workflowName": "Deploy Browser App"
+    }
+  ],
+  "desktop": {
+    "version": "0.13.8",
+    "url": "/versions/v0.13.8/FlowCube-Setup-0.13.8.exe",
+    "sha256": "325683965187cc8986891b1f7768830bef5cae654abb4c78b7af5bd65d16f8a3",
+    "bytes": 112917853,
+    "githubAssetName": "Jixu-Flow-Setup-0.13.8.exe",
+    "githubAssetDigest": "sha256:325683965187cc8986891b1f7768830bef5cae654abb4c78b7af5bd65d16f8a3"
+  },
+  "pda": {
+    "version": "0.13.8",
+    "versionCode": 159,
+    "sha256": "8e210ab1b7595463b25eab4bdd8efe8cdfad10d87e79513232e9c60dac4ddd62"
+  },
+  "releaseEntryExit": 0,
+  "independentVerificationExit": 0,
+  "independentVerificationPassed": 12,
+  "imageProvenanceArtifacts": [
+    {
+      "digest": "sha256:b3bb3cc7ae37f614d8b512d84cae016c220a536b65a1b78a00b7fe735720f67d",
+      "expired": false,
+      "id": 12565444494,
+      "name": "image-provenance-54cef45522212f37c9a7fb1152d66e7fce7513ec-40107809322",
+      "size_in_bytes": 246054
+    }
+  ],
+  "cleanup": {
+    "browserTabClosed": true,
+    "ownedDbContainerRemoved": true,
+    "ownedDbVolumeRemoved": true,
+    "ownedDbProofRemoved": true,
+    "ownedDownloadsRemoved": true,
+    "sshMasterClosed": true,
+    "productionImagesRemoved": 0
+  },
+  "timingSeconds": {
+    "firstEntryToAcceptance": 2621,
+    "finalApplicationCommitToAcceptance": 1776,
+    "finalEntryToExit": 1657,
+    "orchestratorReported": 1652
+  }
+}
