@@ -264,7 +264,8 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
 
   return (
     <>
-      <AppDialog
+      <AppDialog descriptionInHeader
+        description={isContinue && totalUnits == null ? <span className="text-warning-ink">原余额 ¥{String(receipt?.balance)}，含不足一分的尾差，请先核对</span> : "核对收付款信息并选择本次核销账款。"}
         open={open}
         onOpenChange={v => { if (!v) { onClose(); closePrompt() } }}
         dialogId="payment-receipt-settle"
@@ -342,7 +343,6 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)}
                 disabled={isContinue}
               />
-              {isContinue && totalUnits == null && <p className="text-xs text-warning-ink">原余额 ¥{String(receipt?.balance)}，含不足一分的尾差，请先核对</p>}
             </div>
             <div className="space-y-1">
               <Label>日期 *</Label>

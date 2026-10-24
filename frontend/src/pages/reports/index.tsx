@@ -1,17 +1,20 @@
+import { ChartContainer } from '@/components/shared/ChartContainer'
+import { MonthlyAmountChart } from '@/components/shared/MonthlyAmountChart'
+import { ChartTooltipContent } from '@/components/shared/ChartPresentation'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import { getInventoryStatsApi, getPurchaseStatsApi, getSaleStatsApi, getPurchasePriceTrendApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/shared/DatePicker'
 import ProductFinderModal from '@/components/shared/ProductFinderModal'
-import { chartTooltip, axisTick, money } from '@/components/dashboard/chartTheme'
+import { chartGrid, CHART_TONES, axisTick, money } from '@/components/dashboard/chartTheme'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { todayYmd } from '@/lib/dateTime'
@@ -61,18 +64,6 @@ const turnoverColumns: TableColumn<{
   },
 ]
 
-function AmountBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? (value / max) * 100 : 0
-  return (
-    <div className="flex items-center gap-2">
-      <div className="h-3 flex-1 overflow-hidden rounded bg-gray-100">
-        <div className="h-full rounded bg-blue-400" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="w-24 shrink-0 text-left text-xs">¥{value.toFixed(0)}</span>
-    </div>
-  )
-}
-
 export default function ReportsPage() {
   const active = useActiveWorkspaceTab()
   const [tab, setTab] = useState<SummaryTab>('purchase')
@@ -119,14 +110,13 @@ export default function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         title="报表中心"
-        description="采购、销售、库存三类基础统计一屏总览。"
+        description="查看采购、销售与库存统计。"
       />
 
       <section className="rounded-lg border border-border bg-card p-5 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <h2 className="text-card-title">经营总览</h2>
-            <p className="text-muted-body">保持采购、销售、库存三类基础统计，作为核对和分析前的总览入口。</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-muted-body">日期范围：</span>
@@ -191,18 +181,7 @@ export default function ReportsPage() {
                   <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">按月趋势</h3>
                     {!purchaseQ.data.byMonth.length && <EmptyState variant="no-data" compact />}
-                    {purchaseQ.data.byMonth.map(row => (
-                      <div key={row.month} className="mb-2">
-                        <div className="mb-1 flex justify-between text-sm">
-                          <span>{row.month}</span>
-                          <span className="text-muted-foreground">{row.orderCount} 单</span>
-                        </div>
-                        <AmountBar
-                          value={row.totalAmount}
-                          max={Math.max(...purchaseQ.data!.byMonth.map(item => item.totalAmount))}
-                        />
-                      </div>
-                    ))}
+                    {!!purchaseQ.data.byMonth.length && <MonthlyAmountChart rows={purchaseQ.data.byMonth} label="采购金额" />}
                   </div>
                   <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">供应商排名 Top 10</h3>
@@ -254,19 +233,19 @@ export default function ReportsPage() {
                     <p className="py-8 text-center text-muted-foreground">加载中…</p>
                   ) : priceTrendQ.data && priceTrendQ.data.length > 0 ? (
                     <div className="h-72">
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ChartContainer width="100%" height="100%">
                         <LineChart data={priceTrendQ.data} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                          <XAxis dataKey="month" tick={axisTick} />
-                          <YAxis tick={axisTick} width={64} tickFormatter={(v) => money(Number(v))} domain={['auto', 'auto']} />
+                          <CartesianGrid {...chartGrid} />
+                          <XAxis axisLine={false} tickLine={false} tickMargin={10} dataKey="month" padding={{ left: 12, right: 24 }} tick={axisTick} />
+                          <YAxis axisLine={false} tickLine={false} tick={axisTick} width={64} tickFormatter={(v) => money(Number(v))} domain={['auto', 'auto']} />
                           <Tooltip
                             formatter={(v) => [money(Number(v ?? 0)), '均价']}
-                            contentStyle={chartTooltip}
+                            content={<ChartTooltipContent />}
                             cursor={{ stroke: 'hsl(var(--border))' }}
                           />
-                          <Line type="monotone" dataKey="avgPrice" name="均价" stroke="hsl(var(--warning))" strokeWidth={2} dot={{ r: 3 }} />
+                          <Line type="monotone" dataKey="avgPrice" name="均价" stroke={CHART_TONES.warning} strokeWidth={2} dot={{ r: 2.5, strokeWidth: 0, fill: CHART_TONES.warning }} activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--card))' }} />
                         </LineChart>
-                      </ResponsiveContainer>
+                      </ChartContainer>
                     </div>
                   ) : (
                     <p className="py-8 text-center text-muted-body">该区间内没有已收齐的采购记录</p>
@@ -286,18 +265,7 @@ export default function ReportsPage() {
                   <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">按月销售趋势</h3>
                     {!saleQ.data.byMonth.length && <EmptyState variant="no-data" compact />}
-                    {saleQ.data.byMonth.map(row => (
-                      <div key={row.month} className="mb-2">
-                        <div className="mb-1 flex justify-between text-sm">
-                          <span>{row.month}</span>
-                          <span className="text-muted-foreground">{row.orderCount} 单</span>
-                        </div>
-                        <AmountBar
-                          value={row.totalAmount}
-                          max={Math.max(...saleQ.data!.byMonth.map(item => item.totalAmount))}
-                        />
-                      </div>
-                    ))}
+                    {!!saleQ.data.byMonth.length && <MonthlyAmountChart rows={saleQ.data.byMonth} label="销售金额" />}
                   </div>
                   <div className="rounded-lg border border-border bg-card p-5">
                     <h3 className="mb-4 text-card-title">客户销售排名 Top 10</h3>

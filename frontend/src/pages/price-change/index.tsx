@@ -7,6 +7,7 @@ import { money } from '@/lib/format'
 import { invalidateAfterPriceChange } from '@/hooks/useProducts'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { Plus } from 'lucide-react'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
@@ -210,11 +211,13 @@ export default function PriceChangePage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="商品改价申请" description="改价走审批流，审批通过后自动生效并留变更历史" actions={
-        canUpdate && <Button onClick={() => setCreateOpen(true)}>+ 申请改价</Button>
+      <PageHeader title="商品改价申请"
+        description="改价走审批流，审批通过后自动生效并留变更历史"  actions={
+        canUpdate && <Button onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" aria-hidden />申请改价</Button>
       } />
+
       <FilterCard>
-        <Input placeholder="搜索单号/商品…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e) => { if (e.key === 'Enter') { setKeyword(search); } }} />
+        <Input aria-label="搜索改价单号或商品" placeholder="搜索单号/商品…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e) => { if (e.key === 'Enter') { setKeyword(search); } }} />
         <Button size="sm" variant="outline" onClick={() => { setKeyword(search); }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); }}>重置</Button>}
       </FilterCard>
@@ -227,9 +230,9 @@ export default function PriceChangePage() {
       ]} />}
       {/* 新建改价申请 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>申请改价</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
+        <DialogContent className="fc-form-dialog max-w-2xl">
+          <DialogHeader description={"选择商品并填写目标价格与原因。"}><DialogTitle>申请改价</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-4">
             <div>
               <p className="mb-1 text-sm font-medium">商品</p>
               <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal py-2 text-left" onClick={() => setProductFinderOpen(true)}>
@@ -239,7 +242,7 @@ export default function PriceChangePage() {
             <div>
               <p className="mb-1 text-sm font-medium">价格类型</p>
               <Select value={priceType} onValueChange={setPriceType}>
-                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="价格类型" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(PRICE_TYPE_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                 </SelectContent>
@@ -247,11 +250,11 @@ export default function PriceChangePage() {
             </div>
             <div>
               <p className="mb-1 text-sm font-medium">新价格</p>
-              <Input type="number" min="0" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="输入新价格" />
+              <Input aria-label="新价格" type="number" min="0" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="输入新价格" />
             </div>
             <div>
               <p className="mb-1 text-sm font-medium">申请理由</p>
-              <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="选填" />
+              <Input aria-label="申请理由" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="选填" />
             </div>
           </div>
           <DialogFooter>
@@ -270,11 +273,11 @@ export default function PriceChangePage() {
 
       {/* 驳回 */}
       <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o) setRejectTarget(null) }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>驳回改价申请</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">商品「{rejectTarget?.productName}」：¥{rejectTarget?.oldPrice ?? '—'} → ¥{rejectTarget?.newPrice}</p>
-            <Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="驳回理由（选填）" />
+        <DialogContent className="fc-form-dialog max-w-lg">
+          <DialogHeader description={<>{<>商品「{rejectTarget?.productName}」：¥{rejectTarget?.oldPrice ?? '—'} → ¥{rejectTarget?.newPrice}</>}</>}><DialogTitle>驳回改价申请</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-4">
+
+            <label className="block space-y-2"><span className="text-sm font-medium">驳回理由（选填）</span><Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="驳回理由（选填）" /></label>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRejectTarget(null)}>取消</Button>

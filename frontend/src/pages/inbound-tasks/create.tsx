@@ -159,9 +159,10 @@ export default function InboundTaskCreatePage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="desktop-inbound-form flex flex-col gap-4">
       <ActionBar
         title="新建收货订单"
+        description="填写收货来源、仓库与商品明细。"
         rightActions={
           <>
 
@@ -190,7 +191,7 @@ export default function InboundTaskCreatePage() {
       </div>}
       {createInbound.error && <p role="alert" className="text-sm text-destructive-ink">{createInbound.error}</p>}
       <SectionCard title="订单信息" compact>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className="desktop-inbound-create-fields grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
             <label htmlFor={`${fieldPrefix}-supplier`} className="text-sm font-medium">供应商 *</label>
             <PickerField id={`${fieldPrefix}-supplier`}
@@ -224,7 +225,7 @@ export default function InboundTaskCreatePage() {
                   <td className="text-center"><Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive-ink" disabled={blocked} aria-label={`删除 ${item.purchaseOrderNo} ${item.productName}`} onClick={() => removeLine(item.purchaseItemId)}>✕</Button></td>
                 </tr>} />
               </div>
-              <div className="border-t border-border px-3 py-2 text-sm text-muted-body">商品明细：{selectedRows.length} 行</div>
+              <div className="desktop-order-total border-t border-border px-3 py-2 text-sm text-muted-body">商品明细：{selectedRows.length} 行</div>
             </>
           )}
       </SectionCard>

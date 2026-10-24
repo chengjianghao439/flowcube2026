@@ -15,16 +15,17 @@ const fixture = vi.hoisted(() => ({
     { id: 21, orderNo: 'PC001', totalAmount: 50, paidAmount: 0, balance: 50, status: 1, createdAt: '2026-09-24' },
     { id: 22, orderNo: 'PC002', totalAmount: 30, paidAmount: 0, balance: 30, status: 1, createdAt: '2026-09-24' },
   ],
+  isFetching: false,
   submitted: [] as Array<{ type: number; recordIds: number[] }>,
   queryKeys: [] as unknown[][],
 }))
 vi.mock('@/hooks/useActiveWorkspaceTab', () => ({ useActiveWorkspaceTab: () => true }))
-vi.mock('@/components/shared/AppDialog', () => ({ AppDialog: ({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) => <div>{children}{footer}</div> }))
+vi.mock('@/components/shared/AppDialog', () => ({ AppDialog: ({ description, children, footer }: { description?: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode }) => <div><div className="fc-dialog-caption">{description}</div>{children}{footer}</div> }))
 vi.mock('@/components/shared/DatePicker', () => ({ DatePicker: () => <div /> }))
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({ enabled, queryKey }: { enabled: boolean; queryKey: unknown[] }) => {
     fixture.queryKeys.push(queryKey)
-    return { data: enabled ? fixture.candidates : undefined, isFetching: false }
+    return { data: enabled ? fixture.candidates : undefined, isFetching: fixture.isFetching }
   },
   useMutation: ({ mutationFn, onSuccess }: { mutationFn: () => Promise<unknown>; onSuccess: (result: unknown) => void }) => ({
     isPending: false,
@@ -45,6 +46,9 @@ async function mount(type: 1 | 2) {
   const host = document.createElement('div'); document.body.append(host); hosts.push(host)
   const root = createRoot(host)
   await act(async () => root.render(<CreateStatementDialog open onClose={() => {}} type={type} onCreated={() => {}} />))
+  expect(host.querySelector('.fc-dialog-caption')?.textContent).toBe(`填写${type === 1 ? '供应商' : '客户'}与期间后点「查待对账账款」`)
+  expect(host.textContent?.split('与期间后点「查待对账账款」')).toHaveLength(2)
+  expect(host.textContent).not.toContain('选择往来方、账期与本次对账的账款。')
   const party = host.querySelector<HTMLInputElement>('input[placeholder="输入供应商名称"],input[placeholder="输入客户名称"]')!
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
@@ -52,9 +56,10 @@ async function mount(type: 1 | 2) {
     party.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => Array.from(host.querySelectorAll('button')).find(b => b.textContent === '查待对账账款')!.click())
+  expect(host.querySelector('.fc-dialog-caption')?.textContent).toBe('选择往来方、账期与本次对账的账款。')
   return { host, root }
 }
-afterEach(() => { hosts.splice(0).forEach(h => h.remove()); fixture.submitted.length = 0; fixture.queryKeys.length = 0 })
+afterEach(() => { hosts.splice(0).forEach(h => h.remove()); fixture.submitted.length = 0; fixture.queryKeys.length = 0; fixture.isFetching = false })
 
 for (const type of [1, 2] as const) {
   it(`对账类型 ${type} 用候选 id 建单，全选、取消选中后数量正确`, async () => {
@@ -85,6 +90,15 @@ it('全选、取消全选及候选刷新后不会提交失效 ID', async () => {
   expect(host.textContent).toContain('已选 1 笔')
   await act(async () => button('生成对账单（1 笔 / ¥30.00）').click())
   expect(fixture.submitted.at(-1)?.recordIds).toEqual([22])
+  fixture.isFetching = true
+  await act(async () => root.render(<CreateStatementDialog open onClose={() => {}} type={1} onCreated={() => {}} />))
+  expect(host.querySelector('.fc-dialog-caption')?.textContent).toBe('加载中…')
+  expect(host.textContent?.split('加载中…')).toHaveLength(2)
+  fixture.isFetching = false; fixture.candidates = []
+  await act(async () => root.render(<CreateStatementDialog open onClose={() => {}} type={1} onCreated={() => {}} />))
+  expect(host.querySelector('.fc-dialog-caption')?.textContent).toBe('该期间内没有未对账的月结账款')
+  expect(host.textContent?.split('该期间内没有未对账的月结账款')).toHaveLength(2)
+  expect((Array.from(host.querySelectorAll('button')).find(b => b.textContent?.startsWith('生成对账单')) as HTMLButtonElement).disabled).toBe(true)
   await act(async () => root.unmount())
   fixture.candidates = [
     { id: 21, orderNo: 'PC001', totalAmount: 50, paidAmount: 0, balance: 50, status: 1, createdAt: '2026-09-24' },

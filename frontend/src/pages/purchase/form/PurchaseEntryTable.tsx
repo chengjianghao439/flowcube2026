@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { TableColumn } from '@/types'
 import { useTableColumns } from '@/components/shared/useTableColumns'
-import { TableColumnResizeHandle } from '@/components/shared/TableColumnResizeHandle'
+import { TableColumnHeader } from '@/components/shared/TableColumnHeader'
 
 const columns: TableColumn<Record<string, unknown>>[] = [
   { key: 'product', title: '商品', width: 36, minWidth: 220 },
@@ -20,9 +20,7 @@ export function PurchaseEntryTable({ children, rowCount, stickyHeader }: { child
     style={layout.usesPercent ? { width: '100%', minWidth: layout.percentMinWidth } : { width: layout.tableWidth, minWidth: layout.hasCustomWidths ? 0 : '100%' }}>
     <colgroup ref={layout.colgroupRef}>{columns.map(col => <col key={String(col.key)} style={{ width: layout.usesPercent ? layout.getPercentColumnWidth(col) : layout.getColumnWidth(col) }} />)}</colgroup>
     <thead data-resizable className={`data-table-header ${stickyHeader ? 'sticky top-0 z-10' : ''}`}><tr>
-      {columns.map(col => <th key={String(col.key)} scope="col" className="relative"><div className={`flex min-w-0 items-center pr-3 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}>
-        <span>{col.title}</span><TableColumnResizeHandle column={col} layout={layout} />
-      </div></th>)}
+      {columns.map(col => <TableColumnHeader key={String(col.key)} column={col} layout={layout} />)}
     </tr></thead>
     {children}
   </table>

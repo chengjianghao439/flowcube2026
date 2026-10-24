@@ -76,3 +76,9 @@ test('关键字回车应用当前草稿，不自行关闭弹窗', async () => {
   expect(apply).toHaveBeenCalledExactlyOnceWith({ ...applied, keyword: '回车草稿' })
   expect(close).not.toHaveBeenCalled()
 })
+
+test('打开查询直接聚焦关键字，键盘输入不必先经过关闭按钮', async () => {
+  await draw()
+  expect(document.activeElement).toBe(keyword())
+  expect(apply).not.toHaveBeenCalled()
+})

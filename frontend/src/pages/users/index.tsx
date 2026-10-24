@@ -131,7 +131,7 @@ export default function UsersPage() {
     <div className="space-y-4">
       <PageHeader
         title="用户管理"
-        description={operatorRoleId === 1 ? '可编辑登录账号；原密码无法查看，需要更换时请使用“重置密码”' : '管理系统登录账号与角色权限'}
+        description={!isError && !isLoading && data?.truncated ? <><span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 个，请缩小查询范围。</span>{operatorRoleId === 1 && ' 可编辑登录账号；原密码无法查看，需要更换时请使用“重置密码”'}</> : operatorRoleId === 1 ? '可编辑登录账号；原密码无法查看，需要更换时请使用“重置密码”' : '维护登录账号、角色与启用状态。'}
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/users', { keyword, hideDevelopment }).catch(e => toast.error((e as Error).message))}>导出</Button>
@@ -144,8 +144,10 @@ export default function UsersPage() {
         }
       />
 
+
       <FilterCard>
         <Input
+          aria-label="搜索账号或姓名"
           placeholder="搜索账号或姓名"
           value={search}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
@@ -184,9 +186,7 @@ export default function UsersPage() {
             preserveFocus
             retainFocusedRow={formOpen || resetOpen || !!deleteTarget || !!scopeTarget}
           />
-          {!isLoading && data && (data.truncated
-            ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 个，请缩小查询范围。</div>
-            : <ListSummary total={total} unit="个" />)}
+          {!isLoading && data && !data.truncated && <ListSummary total={total} unit="个" />}
         </>
       )}
 

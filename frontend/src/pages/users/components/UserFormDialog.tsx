@@ -10,7 +10,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -145,18 +144,18 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
     <>
     <Dialog open={open} onOpenChange={v => { if (!v) draft.requestClose() }}>
       <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="shrink-0 px-6 pb-4 pt-6">
+        <DialogHeader description={<>{<>
+            {isEdit && editUser
+              ? <>正在编辑账号 <span className="font-medium text-foreground">{editUser.username}</span>。{isOperatorSuperAdmin ? '修改账号后，下次登录需使用新账号。' : '只有超级管理员可以修改登录账号。'}原密码无法查看，可在用户列表中重置。</>
+              : '填写登录信息并选择角色；新账号创建后默认启用。'}
+          </>}</>} className="shrink-0 px-6 pb-4 pt-6">
           {/* 编辑态与默认（新增）态一眼可分 */}
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {isEdit ? '编辑用户' : '新增用户'}
             {isEdit && <EditModeBadge />}
             <UnsavedBadge show={dirty} />
           </DialogTitle>
-          <DialogDescription className="text-foreground/80">
-            {isEdit && editUser
-              ? <>正在编辑账号 <span className="font-medium text-foreground">{editUser.username}</span>。{isOperatorSuperAdmin ? '修改账号后，下次登录需使用新账号。' : '只有超级管理员可以修改登录账号。'}原密码无法查看，可在用户列表中重置。</>
-              : '填写登录信息并选择角色；新账号创建后默认启用。'}
-          </DialogDescription>
+
         </DialogHeader>
 
         <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-col overflow-hidden">

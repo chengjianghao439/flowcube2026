@@ -20,8 +20,10 @@ export function OrderActivityDialog({ type, id, title, fields, open: controlledO
     onOpenChange?.(next)
   }
   return <>{!hideTrigger && <Button size="sm" variant="outline" onClick={() => setOpen(true)}>详情 / 记录</Button>}
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
-      <OrderDetailSections type={type} id={id}><dl className="grid grid-cols-2 gap-x-8 gap-y-4 rounded-lg border p-4 text-sm">{fields.map(([label, value]) => <div key={label}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap break-words">{value ?? '—'}</dd></div>)}</dl></OrderDetailSections>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent className="fc-order-activity max-w-6xl max-h-[90dvh]"><DialogHeader description={"核对申请内容、处理进度与操作记录。"}><DialogTitle>{title}</DialogTitle></DialogHeader>
+      <div className="fc-order-activity-body min-h-0 min-w-0 overflow-y-auto">
+        <OrderDetailSections type={type} id={id} compactTabs><dl className="fc-order-facts grid grid-cols-1 gap-x-8 text-sm sm:grid-cols-2">{fields.map(([label, value]) => <div key={label} className="min-w-0" data-long={typeof value === 'string' && (value.includes('\n') || value.length > 120) || undefined}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere]">{value ?? '—'}</dd></div>)}</dl></OrderDetailSections>
+      </div>
     </DialogContent></Dialog>
   </>
 }

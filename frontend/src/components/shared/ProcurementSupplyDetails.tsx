@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -19,7 +19,7 @@ import { getPurchasePolicyApi, savePurchasePolicyApi, prepareProcurementTransfer
 
 export default function ProcurementSupplyDetails({ supply, supplierId, snapshot, mode = 'plan' }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId?: number | null; mode?: 'plan' | 'replenishment' }) {
   const [open, setOpen] = useState(false)
-  return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>需求与覆盖</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl"><DialogHeader><DialogTitle>{supply.productName} · {supply.warehouseName}</DialogTitle><DialogDescription>按本次读取的数据核对需求、已有供给与交期，查看包装规则。</DialogDescription></DialogHeader>{open && <SupplyBody snapshot={snapshot} supply={supply} supplierId={supplierId ?? supply.supplierId} mode={mode} onNavigate={() => setOpen(false)} />}</DialogContent></Dialog></>
+  return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>需求与覆盖</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl"><DialogHeader description={<>{<>按本次读取的数据核对需求、已有供给与交期，查看包装规则。</>}</>}><DialogTitle>{supply.productName} · {supply.warehouseName}</DialogTitle></DialogHeader>{open && <SupplyBody snapshot={snapshot} supply={supply} supplierId={supplierId ?? supply.supplierId} mode={mode} onNavigate={() => setOpen(false)} />}</DialogContent></Dialog></>
 }
 function SupplyBody({ supply: r, supplierId, snapshot, mode, onNavigate }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId: number | null; mode: 'plan' | 'replenishment'; onNavigate: () => void }) {
   const navigate = useNavigate()

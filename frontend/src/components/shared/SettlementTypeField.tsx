@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { Label } from '@/components/ui/label'
+import { FormField } from './FormField'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   MONTHLY_TERMS_OPTIONS,
@@ -46,37 +46,33 @@ export function SettlementTypeField({ settlementType, paymentTermsDays, onChange
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4">
-      <div className="space-y-1">
-        <Label htmlFor={typeId}>结算方式</Label>
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <FormField id={typeId} label="结算方式" description={HINT[settlementType] ?? ''}>{field => (
         <Select value={String(settlementType)} onValueChange={handleTypeChange} disabled={disabled}>
-          <SelectTrigger id={typeId}><SelectValue /></SelectTrigger>
+          <SelectTrigger {...field}><SelectValue /></SelectTrigger>
           <SelectContent>
             {Object.entries(SETTLEMENT_TYPE_NAME).map(([value, label]) => (
               <SelectItem key={value} value={value}>{label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <p className="text-helper">{HINT[settlementType] ?? ''}</p>
-      </div>
+      )}</FormField>
 
       {isMonthly && (
-        <div className="space-y-1">
-          <Label htmlFor={termsId}>{termsLabel}</Label>
+        <FormField id={termsId} label={termsLabel} description={`至少每 ${paymentTermsDays || 30} 天结算一次`}>{field => (
           <Select
             value={String(paymentTermsDays || 30)}
             onValueChange={v => { if (!disabled) onChange({ settlementType, paymentTermsDays: Number(v) }) }}
             disabled={disabled}
           >
-            <SelectTrigger id={termsId}><SelectValue /></SelectTrigger>
+            <SelectTrigger {...field}><SelectValue /></SelectTrigger>
             <SelectContent>
               {MONTHLY_TERMS_OPTIONS.map(d => (
                 <SelectItem key={d} value={String(d)}>{d} 天</SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-helper">至少每 {paymentTermsDays || 30} 天结算一次</p>
-        </div>
+        )}</FormField>
       )}
     </div>
   )

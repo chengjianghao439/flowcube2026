@@ -1,7 +1,6 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
-import { AppDialog } from '@/components/shared/AppDialog'
-import { Button } from '@/components/ui/button'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProductFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
@@ -45,25 +44,14 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o
 
   return (
     <>
-      <AppDialog
+      <QueryDialog
         open={open}
-        onOpenChange={v => { if (!v) onClose() }}
         dialogId="inventory-logs-query"
         title="查询出入库记录"
-        resizable={false}
-        defaultWidth={520}
-        defaultHeight={420}
-        minWidth={420}
-        minHeight={380}
-        footer={
-          <div className="flex justify-between gap-2">
-            <Button variant="ghost" onClick={() => setDraft(resetDraft())}>重置</Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>取消</Button>
-              <Button onClick={() => onApply(draft)}>查询</Button>
-            </div>
-          </div>
-        }
+        width={520}
+        onClose={onClose}
+        onReset={() => setDraft(resetDraft())}
+        onApply={() => onApply(draft)}
       >
         <QueryFormLayout>
           <label className="flex flex-col gap-1">
@@ -99,18 +87,18 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o
             onClear={() => setDraft(d => ({ ...d, productId: null, productCode: '', productName: '' }))}
           />
 
-          <label className="flex flex-col gap-1">
+          <label className="fc-query-date-start flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">日期（起）</span>
-            <DatePicker value={draft.startDate} max={draft.endDate || undefined}
+            <DatePicker aria-label="日期（起）" value={draft.startDate} max={draft.endDate || undefined}
               onChange={v => setDraft(d => ({ ...d, startDate: v }))} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">日期（止）</span>
-            <DatePicker value={draft.endDate} min={draft.startDate || undefined}
+            <DatePicker aria-label="日期（止）" value={draft.endDate} min={draft.startDate || undefined}
               onChange={v => setDraft(d => ({ ...d, endDate: v }))} className="h-9" />
           </label>
         </QueryFormLayout>
-      </AppDialog>
+      </QueryDialog>
 
       <ProductFinder
         open={productOpen}

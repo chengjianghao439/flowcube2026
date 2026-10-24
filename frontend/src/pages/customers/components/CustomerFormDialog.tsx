@@ -5,6 +5,7 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Input } from '@/components/ui/input'
+import { FormField } from '@/components/shared/FormField'
 import { Label } from '@/components/ui/label'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { SettlementTypeField } from '@/components/shared/SettlementTypeField'
@@ -86,55 +87,33 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
   return (
     <>
     <Dialog open={open} onOpenChange={value => { if (!value) draft.requestClose() }}>
-      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="max-w-3xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog max-w-3xl max-h-[90vh]">
         {/* 编辑态与默认（新增）态必须一眼可分：带「编辑中」标识 + 编辑对象 + 未保存提示 */}
-        <DialogHeader>
+        <DialogHeader description={isEdit && customer ? <>
+              正在编辑：<span className="font-medium text-foreground">{customer.code} · {customer.name}</span>
+            </> : ("填写客户资料、联系方式与结算信息。")}>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {isEdit ? '编辑客户' : '新增客户'}
             {isEdit && <EditModeBadge />}
             <UnsavedBadge show={isDirty} />
           </DialogTitle>
-          {isEdit && customer && (
-            <p className="text-helper mt-1">
-              正在编辑：<span className="font-medium text-foreground">{customer.code} · {customer.name}</span>
-            </p>
-          )}
+
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <fieldset disabled={loading} className="space-y-5 py-2">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="fc-form-dialog-body">
+          <fieldset disabled={loading} className="min-w-0 space-y-5">
           <h3 className="text-sm font-medium">客户与联系方式</h3>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
             {isEdit && (
-              <div className="space-y-1">
-                <Label htmlFor="customer-code">客户编码</Label>
-                <Input id="customer-code" value={customer?.code ?? ''} disabled className="bg-muted/50 font-mono text-sm" />
-              </div>
+              <FormField id="customer-code" label="客户编码">{field => <Input {...field} value={customer?.code ?? ''} disabled className="bg-muted/50 font-mono text-sm" />}</FormField>
             )}
-            <div className="space-y-1">
-              <Label htmlFor="customer-name">客户名称 *</Label>
-              <LimitedInput maxLength={PARTY_PROFILE_LIMITS.name} lengthMode="unicode" id="customer-name" value={f.name} onChange={set('name')} placeholder="公司/个人名称" required />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="customer-contact">联系人</Label>
-              <LimitedInput maxLength={PARTY_PROFILE_LIMITS.contact} lengthMode="unicode" id="customer-contact" value={f.contact} onChange={set('contact')} placeholder="联系人姓名" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="customer-phone">联系电话</Label>
-              <LimitedInput maxLength={PARTY_PROFILE_LIMITS.phone} lengthMode="unicode" id="customer-phone" value={f.phone} onChange={set('phone')} placeholder="手机、座机或国际电话" inputMode="tel" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="customer-email">邮箱</Label>
-              <Input id="customer-email" value={f.email} onChange={set('email')} placeholder="example@email.com" type="email" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="customer-address">地址</Label>
-              <LimitedInput maxLength={PARTY_PROFILE_LIMITS.address} lengthMode="unicode" id="customer-address" value={f.address} onChange={set('address')} placeholder="详细地址" />
-            </div>
+            <FormField id="customer-name" label="客户名称 *">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.name} lengthMode="unicode" {...field} value={f.name} onChange={set('name')} placeholder="公司/个人名称" required />}</FormField>
+            <FormField id="customer-contact" label="联系人">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.contact} lengthMode="unicode" {...field} value={f.contact} onChange={set('contact')} placeholder="联系人姓名" />}</FormField>
+            <FormField id="customer-phone" label="联系电话">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.phone} lengthMode="unicode" {...field} value={f.phone} onChange={set('phone')} placeholder="手机、座机或国际电话" inputMode="tel" />}</FormField>
+            <FormField id="customer-email" label="邮箱">{field => <Input {...field} value={f.email} onChange={set('email')} placeholder="example@email.com" type="email" />}</FormField>
+            <FormField id="customer-address" label="地址">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.address} lengthMode="unicode" {...field} value={f.address} onChange={set('address')} placeholder="详细地址" />}</FormField>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="customer-remark">备注</Label>
-            <LimitedInput maxLength={PARTY_PROFILE_LIMITS.remark} lengthMode="unicode" id="customer-remark" value={f.remark} onChange={set('remark')} placeholder="备注信息" />
-          </div>
+          <FormField id="customer-remark" label="备注">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.remark} lengthMode="unicode" {...field} value={f.remark} onChange={set('remark')} placeholder="备注信息" />}</FormField>
           <h3 className="border-t pt-4 text-sm font-medium">结算与授信</h3>
           <SettlementTypeField
             side="receivable"
@@ -150,11 +129,8 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
               启用授信信控
             </label>
             {f.creditEnabled ? (
-              <div className="space-y-1">
-                <Label htmlFor="customer-creditLimit">授信额度</Label>
-                <Input type="number" min="0" step="0.01" id="customer-creditLimit" value={f.creditLimit} onChange={set('creditLimit')} disabled={loading}
-                  placeholder="输入授信额度，0 表示不允许赊欠" />
-              </div>
+              <FormField id="customer-creditLimit" label="授信额度">{field => <Input type="number" min="0" step="0.01" {...field} value={f.creditLimit} onChange={set('creditLimit')} disabled={loading}
+                  placeholder="输入授信额度，0 表示不允许赊欠" />}</FormField>
             ) : (
               <p className="text-xs text-muted-foreground">未启用时，不对该客户执行授信额度校验。</p>
             )}
@@ -168,11 +144,12 @@ export default function CustomerFormDialog({ open, onClose, customer }: Props) {
               <span className="text-xs text-muted-foreground">停用后不能用于新建业务，历史单据保留。</span>
             </div>
           )}
-          <DialogFooter className="border-t pt-4">
+          </fieldset>
+          </div>
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={draft.requestClose} disabled={loading}>取消</Button>
             <Button type="submit" disabled={loading}>{loading ? '保存中…' : (isEdit ? '保存修改' : '保存')}</Button>
           </DialogFooter>
-          </fieldset>
         </form>
       </DialogContent>
     </Dialog>

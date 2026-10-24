@@ -42,7 +42,11 @@ test.each([8, 10, 15])('%i 列等权列表给操作保留 128px，其余列随�
   expect(widths.every(value => value === 100 / count)).toBe(true)
   expect(host.querySelector('[data-table-scroll]')?.classList.contains('overflow-x-auto')).toBe(true)
   expect(host.textContent).toContain('GL76c9c150P0完整商品身份')
-  expect(host.querySelector('tbody td:last-child')?.classList.contains('sticky')).toBe(true)
+  // 操作与普通列共用同一表面，不再固定右侧或单独加深分隔线。
+  const bodyCells = host.querySelectorAll('tbody td')
+  const headerCells = host.querySelectorAll('thead th')
+  expect(bodyCells[bodyCells.length - 1].className).toBe(bodyCells[0].className)
+  expect(headerCells[headerCells.length - 1].className).toBe(headerCells[0].className)
   expect(localStorage.getItem(storageKey)).toBeNull()
 })
 

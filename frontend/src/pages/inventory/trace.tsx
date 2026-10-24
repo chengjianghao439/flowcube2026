@@ -129,7 +129,7 @@ export default function TracePage() {
     <div className="space-y-4">
       <PageHeader
         title="批次追溯"
-        description="按库存条码或塑料盒条码，追踪单个库存条码从入库到出库的全部流水"
+        description="按库存或塑料盒条码追踪流转记录。"
       />
 
       <FilterCard>

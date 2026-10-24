@@ -80,13 +80,12 @@ export function PurchaseItemPickerDialog({ open, supplierId, initialSelection, o
     } catch (failure) { if (current === generation.current) setVerifyError(failure) }
     finally { setChecking(false) }
   }
-  return <AppDialog open={open} onOpenChange={value => { if (!value && !checking) onClose() }} captureFocusOnOpen dialogId="inbound-purchase-item-picker" title="选择收货商品" defaultWidth={1100} defaultHeight={620} minWidth={600} minHeight={420}
+  return <AppDialog descriptionInHeader description={!error && data?.truncated ? <span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 条采购明细；请搜索缩小范围，已选项会保留。</span> : '选择原采购明细并填写本次到货数量。'} open={open} onOpenChange={value => { if (!value && !checking) onClose() }} captureFocusOnOpen dialogId="inbound-purchase-item-picker" title="选择收货商品" defaultWidth={1100} defaultHeight={620} minWidth={600} minHeight={420}
     footer={<div className="flex w-full items-center justify-between"><span className="text-sm text-muted-foreground">已选 {Object.values(selection).filter(row => Number((row.qtyInput ?? String(row.qty)).trim()) > 0).length} 项</span><div className="flex gap-2"><Button variant="outline" onClick={onClose} disabled={checking}>取消</Button><Button onClick={() => { void handleConfirm() }} disabled={!allowed() || !data || !!error || isLoading || isFetching || checking}>{checking ? '核对中…' : '确定'}</Button></div></div>}>
     <div className="flex h-full flex-col gap-3">
       <div className="flex items-center gap-2"><Input className="flex-1" aria-label="搜索采购单或商品" placeholder="采购单号 / SKU / 商品名称" value={search} disabled={checking} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') setKeyword(search.trim()) }} /><Button variant="outline" disabled={checking} onClick={() => setKeyword(search.trim())}>搜索</Button><Button variant="outline" disabled={checking} onClick={() => { setSearch(''); setKeyword('') }}>清空</Button></div>
       {error && <QueryErrorState compact error={error} title="采购明细读取失败" onRetry={() => { if (allowed()) void refetch() }} />}
       {verifyError != null && <QueryErrorState compact error={verifyError} title="已选明细核对未通过" onRetry={() => { void handleConfirm() }} />}
-      {!error && data?.truncated && <p role="status" className="text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 条采购明细；请搜索缩小范围，已选项会保留。</p>}
       <div className="min-h-0 flex-1 overflow-auto" data-workspace-scroll>
         {isLoading ? <p className="p-6 text-sm text-muted-foreground">加载中…</p> : !error && candidates.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">暂无可用采购明细</p> : !error && <InboundEntryTable picker data={candidates} getRowKey={item => item.purchaseItemId} renderRow={item => <tr key={item.purchaseItemId} className="border-b border-border/40">
           <td><InboundProductIdentity item={item} /></td>

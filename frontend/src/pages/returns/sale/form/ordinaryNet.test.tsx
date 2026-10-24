@@ -55,6 +55,9 @@ async function click(host: HTMLElement, name: string) {
 test('ordinary source permits partial quantity and omission without guessing discounted net amount', async () => {
   api.create.mockRejectedValue({ status: 409, code: 'SALE_RETURN_NET_BASIS_REQUIRED', message: '来源需核对' })
   await mounted(path, async host => {
+    expect(host.querySelector('.desktop-page-description')?.textContent).toContain('已关联原单')
+    expect(host.querySelector('.desktop-page-description')?.textContent).toContain('净冲减金额提交后核定')
+    expect(host.textContent?.match(/已关联原单/g)).toHaveLength(1)
     const qty = host.querySelectorAll<HTMLInputElement>('[aria-label="退货数量"]')
     expect(qty[0].disabled).toBe(false); expect(qty[0].max).toBe('8')
     await set(qty[0], '3.25')

@@ -68,7 +68,10 @@ export default function AvgCostReconciliationPage() {
     <div className="space-y-4">
       <PageHeader
         title="成本对账"
-        description="对比实际库存与账面数量的差异，发现差异后可执行校正。"
+        description={(data && data.driftedCount > 0) || (data?.truncated && typeof data.matchedRows === 'number' && data.matchedRows > data.totalRows) ? <>
+          {data && data.driftedCount > 0 && <span className="text-destructive-ink">检测到 {data.driftedCount} 项账面差异，总价值差 {money(data.totalDiffValue)}。请点击「刷新」重新比对，或联系管理员执行校正。 </span>}
+          {data?.truncated && typeof data.matchedRows === 'number' && data.matchedRows > data.totalRows && <span>当前显示 {data.totalRows} / {data.matchedRows} 行，价值差合计为已显示范围。</span>}
+        </> : '对比实际库存与账面数量的差异，发现差异后可执行校正。'}
         actions={
           <div className="flex items-center gap-2">
             {data && (
@@ -87,16 +90,7 @@ export default function AvgCostReconciliationPage() {
         }
       />
 
-      {data && data.driftedCount > 0 && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive-ink">
-          检测到 {data.driftedCount} 项账面差异，总价值差 {money(data.totalDiffValue)}。
-          请点击「刷新」重新比对，或联系管理员执行校正。
-        </div>
-      )}
 
-      {data?.truncated && typeof data.matchedRows === 'number' && data.matchedRows > data.totalRows && (
-        <p className="rounded border bg-muted/30 px-3 py-2 text-sm">当前显示 {data.totalRows} / {data.matchedRows} 行，价值差合计为已显示范围。</p>
-      )}
       {isError && !data ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="对账加载失败" compact />
       ) : (

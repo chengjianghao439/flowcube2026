@@ -87,7 +87,7 @@ export function usePaymentActions(type: 1 | 2) {
       {/* 付款 / 收款流水 */}
       <Dialog open={entriesOpen} onOpenChange={setEntriesOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{isPayable ? '付款流水' : '收款流水'} — <span className="text-doc-code-strong">{selected?.orderNo}</span></DialogTitle></DialogHeader>
+          <DialogHeader description={"核对该笔账款的收付款登记记录。"}><DialogTitle>{isPayable ? '付款流水' : '收款流水'} — <span className="text-doc-code-strong">{selected?.orderNo}</span></DialogTitle></DialogHeader>
           {!entries?.length && <EmptyState variant="no-data" title="暂无流水记录" compact />}
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {entries?.map((e: PaymentEntry) => (

@@ -1,3 +1,4 @@
+import { ResizableTable } from '@/components/shared/ResizableTable'
 import { useCallback, useRef } from 'react'
 import { moveFinderFocus } from '@/lib/finderNavigation'
 import type { FinderColumn } from '@/types/finder'
@@ -23,10 +24,9 @@ export function FinderDataTable<T extends Record<string, unknown>>({ columns, da
       {column.render ? column.render(row[column.key], row) : row[column.key] != null && row[column.key] !== '' ? String(row[column.key]) : '—'}
     </td>)}
   </tr>
-  return <table role="grid" aria-label="查询结果" aria-readonly="true" aria-busy={isLoading} aria-rowcount={data.length + 1} className="w-full min-w-[580px] table-fixed">
-    <colgroup>{columns.map(col => <col key={col.key} style={{ width: col.width }} />)}</colgroup>
-    <thead className="sticky top-0 z-10 data-table-header"><tr role="row">{columns.map(col => <th role="columnheader" key={col.key} className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">{col.title}</th>)}</tr></thead>
+  return <ResizableTable columns={columns.map(column => ({ key: column.key, title: column.title, align: column.align, width: typeof column.width === 'number' ? column.width : typeof column.width === 'string' && /^\d+(?:\.\d+)?px$/.test(column.width) ? Number.parseFloat(column.width) : 160 }))}
+    columnStorageKey={`finder:${columns.map(column => `${column.key}:${column.title}`).join('|')}`} minWidth={580} stickyHeader role="grid" aria-label="查询结果" aria-readonly="true" aria-busy={isLoading} aria-rowcount={data.length + 1}>
     {data.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={data} columns={columns.length} getRowKey={getRowKey} renderRow={renderRow} onScrollToIndexReady={registerScroll} /> : <tbody>{data.map(renderRow)}</tbody>}
     {!data.length && <tbody><tr><td colSpan={columns.length} className="px-4 py-12 text-center text-sm text-muted-foreground">{isLoading ? '正在查询…' : emptyText}</td></tr></tbody>}
-  </table>
+  </ResizableTable>
 }

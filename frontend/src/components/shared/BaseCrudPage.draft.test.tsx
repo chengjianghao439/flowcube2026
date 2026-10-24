@@ -54,7 +54,7 @@ function FormFixture({ active = true, save = async () => {}, canCreate = true, c
   return <QueryClientProvider client={queryClient}>
     <TabPathContext.Provider value={tabPath}>
       <SectionVisibilityContext.Provider value={active}>
-        <BaseCrudPage title="供应商管理" columns={[{ key: 'name', title: '名称' }]}
+        <BaseCrudPage description="核对资料并维护记录。" title="供应商管理" columns={[{ key: 'name', title: '名称' }]}
           queryKey={['draft-review']} listQuery={async () => [row]}
           deleteApi={async () => null} deleteMessage="删除合成供应商"
           canCreate={canCreate} canEdit={canEdit} canDelete={canDelete}
@@ -203,9 +203,9 @@ test('提交中 Escape、遮罩、取消与关闭均保留原草稿；失败解�
 })
 
 test.each([
-  { canCreate: false, canEdit: false, canDelete: false, absent: ['+ 新建', '编辑', '删除'] },
+  { canCreate: false, canEdit: false, canDelete: false, absent: ['新建', '编辑', '删除'] },
   { canCreate: true, canEdit: false, canDelete: false, absent: ['编辑', '删除'] },
-  { canCreate: false, canEdit: false, canDelete: true, absent: ['+ 新建', '编辑'] },
+  { canCreate: false, canEdit: false, canDelete: true, absent: ['新建', '编辑'] },
 ])('逐动作写权限限制入口 $canCreate/$canEdit/$canDelete', async ({ absent, ...permissions }) => {
   await render(permissions)
   for (const name of absent) expect([...host.querySelectorAll('button')].some(node => node.textContent === name)).toBe(false)

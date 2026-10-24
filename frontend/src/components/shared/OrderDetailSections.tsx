@@ -1,9 +1,9 @@
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { useContext, useEffect, useId, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
 import { Activity, ClipboardList, History, PackageCheck, Printer, ScanLine } from 'lucide-react'
 import type { ActivityView, DocumentType } from '@/api/document-activity'
 import { DocumentActivityPanel } from './DocumentActivityPanel'
-import KeepAliveSection from './KeepAliveSection'
+import { ContentTabs } from './ContentTabs'
 interface Props { type: DocumentType; id: number; children: ReactNode; progress?: ReactNode; printProgress?: ReactNode; initialView?: 'info' | ActivityView; compactTabs?: boolean }
 
 /**
@@ -26,7 +26,6 @@ function receiveView(type: DocumentType, id: number, path: string): 'progress' |
 }
 export function OrderDetailSections(props: Props) { return props.id > 0 ? <DetailSections key={`${props.type}-${props.id}`} {...props} /> : <>{props.children}</> }
 function DetailSections({ type, id, children, progress, printProgress, initialView, compactTabs = false }: Props) {
-  const prefix = useId()
   const tabPath = useContext(TabPathContext)
   const scoped = type === 'purchase' || type === 'inbound'
   const [selected, setSelected] = useState<'info' | ActivityView>(initialView || (scoped ? receiveView(type, id, tabPath || window.location.hash.slice(1)) || 'info' : (typeof window !== 'undefined' && /[?&]focus=/.test(window.location.hash) ? (/[?&]focus=print(?:&|$)/.test(window.location.hash) ? 'print' : 'progress') : 'info')))
@@ -62,16 +61,11 @@ function DetailSections({ type, id, children, progress, printProgress, initialVi
     // 2026-09-14 用户决定：收货订单只显示任务进度，不展示打印记录（补打只在打印记录页）。
     ...(['sale-return', 'wave'].includes(type) ? [{ key: 'print' as const, label: type === 'wave' ? '装箱与打印' : '标签打印', Icon: Printer }] : []),
     { key: 'log' as const, label: '操作记录', Icon: History }]
-  return <div className="space-y-3">
-    <div role="tablist" aria-label="订单详情" className="flex gap-1 overflow-x-auto rounded-lg border border-border bg-muted/30 p-1">
-      {tabs.map(({ key, label, Icon }, index) => <button key={key} id={`${prefix}-${key}-tab`} type="button" role="tab" aria-selected={selected === key} aria-controls={`${prefix}-${key}-panel`} tabIndex={selected === key ? 0 : -1}
-        onClick={() => setSelected(key)} onKeyDown={event => {
-          const next = event.key === 'ArrowRight' ? (index + 1) % tabs.length : event.key === 'ArrowLeft' ? (index + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1
-          if (next < 0) return
-          event.preventDefault(); setSelected(tabs[next].key); document.getElementById(`${prefix}-${tabs[next].key}-tab`)?.focus()
-        }} className={`flex min-w-28 flex-1 items-center justify-center gap-2 whitespace-nowrap rounded-md px-3 ${compactTabs ? 'py-1.5' : 'py-2'} text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selected === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}><Icon className="h-4 w-4" />{label}</button>)}
-    </div>
-    <KeepAliveSection active={selected === 'info'} role="tabpanel" id={`${prefix}-info-panel`} aria-labelledby={`${prefix}-info-tab`}><div className="space-y-3">{children}</div></KeepAliveSection>
-    {tabs.filter(tab => tab.key !== 'info').map(tab => <KeepAliveSection key={tab.key} active={selected === tab.key} role="tabpanel" id={`${prefix}-${tab.key}-panel`} aria-labelledby={`${prefix}-${tab.key}-tab`}><DocumentActivityPanel type={type} id={id} view={tab.key as ActivityView} extra={tab.key === 'progress' ? progress : tab.key === 'print' ? printProgress : undefined} /></KeepAliveSection>)}
-  </div>
+  return <ContentTabs label="订单详情" value={selected} onValueChange={setSelected}
+    className={compactTabs ? 'fc-content-tabs-compact' : undefined}
+    tabs={tabs.map(tab => ({
+      value: tab.key, label: tab.label, Icon: tab.Icon,
+      content: tab.key === 'info' ? <div className="space-y-3">{children}</div>
+        : <DocumentActivityPanel type={type} id={id} view={tab.key as ActivityView} extra={tab.key === 'progress' ? progress : tab.key === 'print' ? printProgress : undefined} />,
+    }))} />
 }

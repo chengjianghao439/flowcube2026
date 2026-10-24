@@ -1,8 +1,10 @@
+import { ResizableTable } from '@/components/shared/ResizableTable'
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useId } from 'react'
 import { SaleEntryTable } from './SaleEntryTable'
 import type { EntryIssue } from '@/lib/orderEntry'
 import { money } from '@/lib/format'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -89,7 +91,7 @@ export function SaleOrderItemsTable({
               {quantityIssue && <p id={quantityErrorId} role="alert" className="mt-1 text-xs leading-5 text-destructive-ink">{quantityIssue.message}</p>}
             </td>
             return <tr key={item._key} className="border-b border-border/40 transition-colors hover:bg-muted/20">
-              {compact ? <td className="align-top">{productButton}</td> : <ProductIdentityCells product={item} nameContent={productButton} />}
+              {compact ? <td className="align-top">{productButton}</td> : <ProductIdentityCells compact product={item} nameContent={productButton} />}
               {compact ? <>{quantityCell}{unitCell}</> : <>{unitCell}{quantityCell}</>}
               <td className="px-3 py-3 align-top">
                 <Input
@@ -130,16 +132,7 @@ export function SaleOrderItemsTable({
 
 function TableShell({ compact, children }: { compact: boolean; children: React.ReactNode }) {
   if (compact) return <SaleEntryTable>{children}</SaleEntryTable>
-  return <table className="w-full min-w-[1320px] text-sm">
-    <thead className="data-table-header"><tr className="border-b text-table-head">
-      <ProductIdentityHeaders />
-      <th className="w-16 px-2 py-2.5 text-center">单位</th>
-      <th className="w-28 px-3 py-2.5 text-right">数量</th>
-      <th className="w-32 px-3 py-2.5 text-right">单价 (¥)</th>
-      <th className="w-32 px-3 py-2.5 text-right">金额</th>
-      <th className="w-44 px-3 py-2.5 text-left">备注</th>
-      <th className="w-10 px-2 py-2.5" />
-    </tr></thead>
+  return <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 112, align: 'right' }, { key: 'unitPrice', title: '单价 (¥)', width: 128, align: 'right' }, { key: 'amount', title: '金额', width: 128, align: 'right' }, { key: 'remark', title: '备注', width: 176 }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="sale-ordinary-entry-items" minWidth={1000}>
     {children}
-  </table>
+  </ResizableTable>
 }

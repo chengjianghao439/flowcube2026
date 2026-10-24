@@ -1,4 +1,5 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { ReportTable } from '@/components/shared/ReportTable'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
 
@@ -15,10 +16,10 @@ export default function StockShortageDialog({ open, onClose, shortages }: Props)
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
       <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive-ink" />可用库存不足</DialogTitle></DialogHeader>
-        <DialogDescription>以下商品本次占库数量超过可用库存，请关闭后回占库弹窗调整数量：</DialogDescription>
+        <DialogHeader description={<>{<>以下商品本次占库数量超过可用库存，请关闭后回占库弹窗调整数量：</>}</>}><DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive-ink" />可用库存不足</DialogTitle></DialogHeader>
+
         <div className="max-h-72 overflow-auto rounded-md border">
-          <table className="w-full text-sm">
+          <ReportTable className="w-full text-sm">
             <thead className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr><th className="px-3 py-2 text-left font-medium">商品</th><th className="px-3 py-2 text-right font-medium">本次需占</th><th className="px-3 py-2 text-right font-medium">可用数量</th></tr>
             </thead>
@@ -31,7 +32,7 @@ export default function StockShortageDialog({ open, onClose, shortages }: Props)
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ReportTable>
         </div>
         <DialogFooter>
           <Button onClick={onClose}>关闭，调整数量</Button>

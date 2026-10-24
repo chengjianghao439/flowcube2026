@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { money } from '@/lib/format'
 import { useMutation } from '@tanstack/react-query'
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
@@ -43,7 +44,10 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
   })
 
   return (
-    <AppDialog
+    <AppDialog descriptionInHeader description={<>{<>
+          该应付由收货上架自动结算生成。请核对以下明细（实际上架量 × 采购单价）后确认；确认后才可登记付款。
+          若结算金额后续被重算改变（补收货/退货/撤回收货），会自动打回待确认。
+        </>}</>}
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="payment-settlement-confirm"
@@ -62,16 +66,13 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
       }
     >
       <div className="flex h-full flex-col gap-3 p-5">
-        <p className="text-sm text-muted-foreground">
-          该应付由收货上架自动结算生成。请核对以下明细（实际上架量 × 采购单价）后确认；确认后才可登记付款。
-          若结算金额后续被重算改变（补收货/退货/撤回收货），会自动打回待确认。
-        </p>
+
         {isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive-ink">
           <span>结算明细加载失败：{error instanceof Error ? error.message : '请检查网络后重试'}</span>
           <Button variant="outline" size="sm" onClick={() => void refetch()}>重试</Button>
         </div>}
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
-          <table className="w-full text-sm">
+          <ReportTable className="w-full text-sm">
             <thead className="bg-muted/50 text-xs text-muted-foreground">
               <tr><th className="px-2 py-1.5 text-left">收货单</th><th className="px-2 py-1.5 text-left">商品</th><th className="px-2 py-1.5 text-right">上架量</th><th className="px-2 py-1.5 text-right">采购单价</th><th className="px-2 py-1.5 text-right">金额</th></tr>
             </thead>
@@ -97,7 +98,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
                 <tr><td colSpan={5} className="px-2 py-4 text-center text-muted-foreground">加载中…</td></tr>
               )}
             </tbody>
-          </table>
+          </ReportTable>
         </div>
         <p className="text-right text-sm">应付合计：<span className="font-bold tabular-nums">{money(record?.totalAmount)}</span></p>
       </div>

@@ -1,4 +1,5 @@
 import PageHeader from '@/components/shared/PageHeader'
+import { Check, Monitor } from 'lucide-react'
 import { payloadClient as apiClient } from '@/api/client'
 import { getEffectiveApiOrigin } from '@/config/api'
 import { updatePrinterApi } from '@/hooks/usePrinters'
@@ -15,7 +16,6 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -81,13 +81,13 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>绑定业务用途</DialogTitle></DialogHeader>
-        <p className="mb-1 text-muted-body">
+        <DialogHeader description={<>{<>
           {printer.name} <span className="text-doc-code">({printer.code})</span>
-        </p>
-        <p className="mb-4 text-helper leading-relaxed">
+        </>} {<>
           与添加打印机时的「设备类型」不同：此处指定各业务场景使用的打印机。已绑定本项时再次点击可解除绑定。
-        </p>
+        </>}</>}><DialogTitle>绑定业务用途</DialogTitle></DialogHeader>
+
+
         <div className="grid grid-cols-2 gap-3">
           {BIND_TYPES.map(t => {
             const isBound = bindings[t.key]?.printer_code === printer.code
@@ -97,6 +97,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
                 key={t.key}
                 type="button"
                 disabled={busy}
+                aria-pressed={isBound}
                 onClick={() => onToggleBind(t.key, printer)}
                 className={[
                   'w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:opacity-60',
@@ -108,7 +109,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
                 {currentCode && !isBound && (
                   <div className="mt-1 text-xs text-warning-ink">当前已绑：{currentCode}</div>
                 )}
-                {isBound && <div className="mt-1 text-xs font-medium text-primary">✓ 已绑定本机 · 再点解除</div>}
+                {isBound && <div className="mt-1 flex items-center gap-1 text-xs font-medium text-primary"><Check className="h-3.5 w-3.5 shrink-0" aria-hidden />已绑定本机 · 再点解除</div>}
               </button>
             )
           })}
@@ -402,10 +403,11 @@ export default function PrintersPage() {
       key: 'clientId', title: '所属设备', width: 240,
       render: (_, p) => p.clientId ? (
         <div className="space-y-1">
-          <div className="font-medium text-foreground">🖥️ {getDeviceName(p)}</div>
+          <div className="flex items-start gap-2 font-medium text-foreground"><Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden /><span className="min-w-0">{getDeviceName(p)}</span></div>
           {canManagePrinters && <div className="flex items-center gap-2">
             <input
               className="input h-8 w-32"
+              aria-label={`设备别名 ${getDeviceName(p)}`}
               placeholder={p.clientHostname || p.clientId}
               value={aliasDraft[p.clientId] ?? p.clientAliasName ?? ''}
               onChange={e => setAliasDraft(s => ({ ...s, [p.clientId!]: e.target.value }))}
@@ -433,8 +435,9 @@ export default function PrintersPage() {
   ]
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="打印机管理" description="管理打印设备、标签用途与任务绑定" actions={canManagePrinters ? <Button disabled={registering} onClick={openAddDialog}>添加打印机</Button> : undefined} />
+    <div className="space-y-4">
+      <PageHeader title="打印机管理"
+        description={canUseSystemPrinters ? '核对打印设备、用途与任务绑定。' : isDesktop ? '本机打印机读取暂不可用，请重新打开极序 Flow；若仍无法读取，请联系管理员。' : '如需添加本机打印机，请在极序 Flow 桌面客户端打开本页。'}  actions={canManagePrinters ? <Button disabled={registering} onClick={openAddDialog}>添加打印机</Button> : undefined} />
 
       {canUseSystemPrinters ? (
         <div className="rounded-lg border border-border bg-card p-4">
@@ -451,21 +454,15 @@ export default function PrintersPage() {
             点击「添加打印机」选择本机已安装的设备，再绑定标签用途。打印机名称需与系统中的名称保持一致。
           </p>
         </div>
-      ) : (
-        <p className="text-muted-body">
-          {isDesktop
-            ? '本机打印机读取暂不可用，请重新打开极序 Flow；若仍无法读取，请联系管理员。'
-            : '如需添加本机打印机，请在极序 Flow 桌面客户端打开本页。'}
-        </p>
-      )}
+      ) : null}
 
       <Dialog open={showAddDialog && canManagePrinters} onOpenChange={setShowAddDialog}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>从本机添加打印机</DialogTitle>
-            <DialogDescription>
+          <DialogHeader description={<>{<>
               仅可选择当前操作系统中已安装的打印机（与「设置 → 打印机」列表一致）。浏览器中无法枚举本机设备，请使用桌面客户端。
-            </DialogDescription>
+            </>}</>}>
+            <DialogTitle>从本机添加打印机</DialogTitle>
+
           </DialogHeader>
           <div className="space-y-4">
             {listLoading && <p className="text-muted-body">正在加载本机打印机…</p>}

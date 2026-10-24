@@ -59,8 +59,8 @@ export interface AppDialogProps {
   /** 顶部标题（Header 区域） */
   title: React.ReactNode
 
-  /** Body 区域内容（flex-1 + overflow-hidden，内部自行控制滚动） */
-  children: React.ReactNode
+  /** 正文；默认由调用方控制滚动，sizeToContent模式由共用正文滚动。 */
+  children?: React.ReactNode
 
   /** Footer 区域内容（固定在底部，通常放操作按钮） */
   footer?: React.ReactNode
@@ -83,12 +83,19 @@ export interface AppDialogProps {
    */
   resizable?: boolean
 
+  /** 少量字段的固定弹窗按内容收紧；可调整尺寸的窗口保留原尺寸与记忆。 */
+  sizeToContent?: boolean
+  /** 确认类正文说明，沿Radix Description关联给弹窗。 */
+  description?: React.ReactNode
+  /** 电脑端显式启用标题下唯一说明；默认正文位置保持兼容。 */
+  descriptionInHeader?: boolean
+
   /**
    * Radix 打开时自动聚焦的拦截钩子（透传给 Dialog.Content）。
    * 登记/核销类大弹窗用它拒绝默认聚焦，避免首个可编辑字段是日期时自动展开日历遮挡明细。
    * 不传时保持 Radix 默认行为。
    */
-  /** 销售选择器显式启用：在搜索框 autoFocus 前记下触发控件。 */
+  /** 查找选择器显式启用：在门户内的搜索框取得焦点前记下触发控件。 */
   captureFocusOnOpen?: boolean
   onOpenAutoFocus?: (event: Event) => void
   onCloseAutoFocus?: (event: Event) => void
@@ -127,6 +134,9 @@ export function AppDialog({
   minWidth      = 600,
   minHeight     = 400,
   resizable     = true,
+  sizeToContent = false,
+  description,
+  descriptionInHeader = false,
   onOpenAutoFocus,
   onCloseAutoFocus,
   captureFocusOnOpen = false,
@@ -152,6 +162,7 @@ export function AppDialog({
   // 只限制呈现尺寸，不把临时窄窗口覆盖到用户已保存的尺寸偏好。
   const width = Math.min(preferredWidth, Math.floor(viewport.width * .95))
   const height = Math.min(preferredHeight, Math.floor(viewport.height * .9))
+  const contentSized = sizeToContent && !resizable
 
   /**
    * 弹窗位置：
@@ -183,10 +194,12 @@ export function AppDialog({
 
         {/* 弹窗主体：使用 Radix Content 原语，完全控制位置和尺寸 */}
         <DialogPrimitive.Content
-          aria-describedby={undefined}
+          {...(description ? {} : { 'aria-describedby': undefined })}
+          data-dialog-id={dialogId}
+          data-content-sized={contentSized || undefined}
           {...focusReturn}
           className={cn(
-            'fixed z-50 flex flex-col rounded-lg border bg-background shadow-xl',
+            'fc-app-dialog fixed z-50 flex flex-col rounded-lg border bg-background shadow-xl',
             'focus:outline-none',
             // 进入/退出动画
             'data-[state=open]:animate-in   data-[state=open]:fade-in-0   data-[state=open]:zoom-in-95',
@@ -195,19 +208,24 @@ export function AppDialog({
           )}
           style={{
             left:   Math.min(pos.left, Math.max(0, viewport.width - width)),
-            top:    Math.min(pos.top, Math.max(0, viewport.height - height)),
+            top:    contentSized ? 0 : Math.min(pos.top, Math.max(0, viewport.height - height)),
             width,
-            height,
+            ...(contentSized
+              ? { bottom: 0, marginBlock: 'auto', height: 'fit-content', maxHeight: Math.floor(viewport.height * .9), overflow: 'hidden' }
+              : { height }),
           }}
         >
-          {/* ── Header（固定，h-14） ── */}
-          <div className="flex h-14 shrink-0 items-center justify-between border-b px-5">
-            <DialogPrimitive.Title className="text-base font-semibold text-foreground">
+          {/* ── Header（固定，至少56px；长标题允许换行） ── */}
+          <div className="fc-app-dialog-header flex min-h-14 shrink-0 items-start justify-between gap-4 border-b px-5 py-3.5">
+            {descriptionInHeader ? <div className="min-w-0 flex-1">
+              <DialogPrimitive.Title className="break-words text-base font-semibold leading-6 text-foreground">{title}</DialogPrimitive.Title>
+              {description && <DialogPrimitive.Description asChild><div className="fc-dialog-caption text-xs leading-5 text-muted-foreground">{description}</div></DialogPrimitive.Description>}
+            </div> : <DialogPrimitive.Title className="min-w-0 flex-1 break-words text-base font-semibold leading-6 text-foreground">
               {title}
-            </DialogPrimitive.Title>
+            </DialogPrimitive.Title>}
             <DialogPrimitive.Close
               className={cn(
-                'rounded-md p-1.5 text-muted-foreground transition-colors',
+                'shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors',
                 'hover:bg-muted hover:text-foreground',
                 'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
               )}
@@ -217,14 +235,15 @@ export function AppDialog({
             </DialogPrimitive.Close>
           </div>
 
-          {/* ── Body（flex-1，overflow-hidden，内部自行控制滚动） ── */}
-          <div className="min-h-0 flex-1 overflow-hidden">
+          {/* ── Body（固定尺寸保留原滚动协议，内容尺寸模式由此承载滚动） ── */}
+          <div className={cn('fc-app-dialog-body min-h-0', contentSized ? 'flex-[0_1_auto] overflow-y-auto' : 'flex-1 overflow-hidden')}>
+            {!descriptionInHeader && description && <DialogPrimitive.Description className="fc-app-dialog-description whitespace-pre-wrap break-words px-5 py-5 text-sm leading-6 text-muted-foreground">{description}</DialogPrimitive.Description>}
             {children}
           </div>
 
           {/* ── Footer（固定，仅在有内容时渲染） ── */}
           {footer && (
-            <div className="shrink-0 border-t bg-muted/20 px-5 py-3">
+            <div className="fc-app-dialog-footer shrink-0 border-t bg-muted/20 px-5 py-3">
               {footer}
             </div>
           )}

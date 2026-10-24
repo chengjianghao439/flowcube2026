@@ -17,6 +17,8 @@ test('sale collection limit is explicit, while an unread total is not shown as z
   try {
     state.value = { data: { list: Array.from({ length: 5000 }), pagination: { total: 5001 }, truncated: true } }; draw()
     expect(host.textContent).toMatch(/已显示\s*5,000\s*\/\s*共\s*5,001\s*单/)
+    expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围')
+    expect(host.textContent?.match(/请缩小查询范围/g)).toHaveLength(1)
     state.value = { error: new Error('查询失败'), refetch: vi.fn() }; draw()
     expect(host.textContent).not.toMatch(/共\s*0\s*单/)
     state.value = { isLoading: true }; draw()

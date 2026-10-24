@@ -26,7 +26,6 @@ import { captureDisposalOwner, disposalOwnerCurrent, disposalConfig, disposalEpo
 import { getSupplierRefundTraceApi } from '@/api/finance'
 import type { TableColumn } from '@/types'
 
-
 /** 与后端 finance-accounts.service 的 BIZ_TYPE 对齐 */
 const BIZ_TYPE_OPTIONS = [
   ['1', '收款'], ['2', '付款'], ['3', '费用报销'], ['4', '余额调整'], ['5', '退货退款'], ['6', '供应商退款'],
@@ -61,7 +60,7 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
   return (
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
       <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>查询资金流水</DialogTitle></DialogHeader>
+        <DialogHeader description={"设置资金流水的筛选条件。"}><DialogTitle>查询资金流水</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -235,6 +234,7 @@ export default function FinanceTransactionsPage() {
         )}
       />
 
+
       {summary && !isError && <SummaryStrip items={[{ label: '期间收入', value: cashLabel(summary.inAmount), tone: 'text-success-ink' }, { label: '期间支出', value: cashLabel(summary.outAmount), tone: 'text-destructive-ink' }, { label: '净额', value: cashLabel(netAmount), tone: netAmount < 0 ? 'text-destructive-ink' : 'text-foreground' }]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => { setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' }); }} />
@@ -244,7 +244,7 @@ export default function FinanceTransactionsPage() {
       {!isError && !isLoading && data && <ListSummary total={total} unit="笔" />}
 
       <Dialog open={traceCurrent} onOpenChange={open=>{if(!open&&traceCurrent)setTrace(null)}}>
-        <DialogContent aria-describedby={undefined}><DialogHeader><DialogTitle>供应商退款</DialogTitle></DialogHeader>
+        <DialogContent><DialogHeader description={"核对供应商、退款金额与收款信息。"}><DialogTitle>供应商退款</DialogTitle></DialogHeader>
           {traceQuery.isError ? <QueryErrorState compact error={traceQuery.error} onRetry={() => void traceQuery.refetch()} /> : <>
           {traceQuery.isLoading && <p>正在加载原退款单…</p>}
           {traceCurrent && traceQuery.data && !traceData && <p>原退款单与这笔流水不符，请人工核对。</p>}

@@ -220,3 +220,14 @@ test('⑨ 查回执得 pending（仍在服务器处理）⇒ 不换键', async (
   expect(keys()).toHaveLength(2)
   expect(keys()[1]).toBe(keys()[0])
 })
+
+test('详情回填完整商品身份，组合列保留接口已有的型号、颜色和供应商型号', async () => {
+  const complete = { ...detail, items: [{ ...detail.items[0], articleNumber: 'SUP-009', spec: '110°', color: '镀镍' }] }
+  mocks.getRequisitionApi.mockResolvedValue(complete)
+  client.setQueryData(['requisition', 1], complete)
+  render()
+  await act(async () => { await Promise.resolve() })
+  expect(host.textContent).toContain('型号 110°')
+  expect(host.textContent).toContain('颜色 镀镍')
+  expect(host.textContent).toContain('供应商型号 SUP-009')
+})

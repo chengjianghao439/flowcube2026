@@ -51,7 +51,7 @@ function DuplicateRoleDialog({ role, onClose }: { role: Role | null; onClose: ()
   return (
     <Dialog open={!!role} onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+        <DialogHeader description={<>{<>复制会连同该角色的全部权限一起带入新角色，之后可在本页单独调整。</>}</>}>
           <DialogTitle>复制角色</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
@@ -71,7 +71,7 @@ function DuplicateRoleDialog({ role, onClose }: { role: Role | null; onClose: ()
             <Label>备注</Label>
             <Input className="mt-1" value={remark} onChange={e => setRemark(e.target.value)} maxLength={255} />
           </div>
-          <p className="text-xs text-muted-foreground">复制会连同该角色的全部权限一起带入新角色，之后可在本页单独调整。</p>
+
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>取消</Button>
@@ -103,7 +103,7 @@ function CreateRoleDialog({ open, onClose }: { open: boolean; onClose: () => voi
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+        <DialogHeader description={"填写角色编码、名称与备注。"}>
           <DialogTitle>新增角色</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-2">
@@ -200,15 +200,8 @@ export default function PermissionsPage() {
     <div className="space-y-6">
       <PageHeader
         title="权限管理"
-        description={editing ? (
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <EditModeBadge />
-            <UnsavedBadge show={isDirty} />
-            <span>正在编辑「{roleList.find(r => r.id === selectedRole)?.name ?? ''}」的权限，保存后回到查看状态。</span>
-          </span>
-        ) : (isSuperAdmin
-          ? '当前为查看状态；需要调整权限请点右上角「编辑」。'
-          : '动态配置各角色可访问的功能')}
+        description="提示：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改；系统内置角色不可删除。"
+        status={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /><span className="text-sm text-muted-foreground">{roleList.find(r => r.id === selectedRole)?.name ?? ''}</span></> : undefined}
         actions={isSuperAdmin ? (
           editing ? (
             <>
@@ -323,9 +316,6 @@ export default function PermissionsPage() {
             </div>
           )}
 
-          <div className="border border-warning/20 bg-warning/5 rounded-lg p-4 text-sm text-warning-ink">
-            提示：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改；系统内置角色不可删除。
-          </div>
         </section>
       </div>
 

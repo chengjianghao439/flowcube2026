@@ -2,6 +2,7 @@
 import { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { getByRole } from '@testing-library/dom'
 import { DatePicker } from './DatePicker'
 import { AppDialog } from './AppDialog'
 // Keep the real Popover/FocusScope; the calendar date rules are outside this
@@ -26,6 +27,19 @@ test('两个日期字段在隐式和显式标签下保持各自可访问名称',
   expect(start.labels?.item(0)?.textContent).toBe('创建日期（起）')
   expect(end.labels?.item(0)?.textContent).toBe('创建日期（止）')
   expect(start.value).toBe('2026-10-02'); expect(end.value).toBe('2026-10-08')
+})
+test('查询日期的固定名称不混入展开日历的月份、按钮或日期文字', async () => {
+  const change = vi.fn()
+  act(() => root.render(<label>创建日期（起）<DatePicker aria-label="创建日期（起）" value="2026-10-08" onChange={change} /></label>))
+  const input = host.querySelector('input')!
+  act(() => input.focus())
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+  expect(getByRole(document.body, 'textbox', { name: '创建日期（起）' })).toBe(input)
+  act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+  await until(() => !document.querySelector('[role="dialog"]'))
+  expect(getByRole(document.body, 'textbox', { name: '创建日期（起）' })).toBe(input)
+  expect(input.value).toBe('2026-10-08')
+  expect(change).not.toHaveBeenCalled()
 })
 test('Escape关闭日历后返回该日期输入，不再次展开或提交日期', async () => {
   const change = vi.fn()

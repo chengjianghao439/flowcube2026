@@ -41,46 +41,43 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
   const set = (k: keyof typeof form) => (v: string) => setForm(prev => ({ ...prev, [k]: v }))
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader><DialogTitle>新增固定资产</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-2">
+      <DialogContent className="fc-form-dialog sm:max-w-3xl">
+        <DialogHeader description="直线法月折旧 = 原值 × (1 − 残值率) ÷ 使用月数；购置当月开始计提。示例：12000×(1−5%)÷36 = ¥316.67/月。"><DialogTitle>新增固定资产</DialogTitle></DialogHeader>
+        <div className="fc-form-dialog-body space-y-3 py-2">
           <div className="space-y-1">
             <Label>资产名称 *</Label>
-            <Input value={form.assetName} onChange={e => set('assetName')(e.target.value)} placeholder="如：联想台式机" />
+            <Input aria-label="资产名称" value={form.assetName} onChange={e => set('assetName')(e.target.value)} placeholder="如：联想台式机" />
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>类别</Label>
-              <Input value={form.category} onChange={e => set('category')(e.target.value)} placeholder="电子设备" />
+              <Input aria-label="类别" value={form.category} onChange={e => set('category')(e.target.value)} placeholder="电子设备" />
             </div>
             <div className="space-y-1">
               <Label>使用部门</Label>
-              <Input value={form.departmentName} onChange={e => set('departmentName')(e.target.value)} placeholder="财务部" />
+              <Input aria-label="使用部门" value={form.departmentName} onChange={e => set('departmentName')(e.target.value)} placeholder="财务部" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>购置日期 *</Label>
-              <DatePicker value={form.acquireDate} onChange={v => set('acquireDate')(v)} />
+              <DatePicker aria-label="购置日期" value={form.acquireDate} onChange={v => set('acquireDate')(v)} />
             </div>
             <div className="space-y-1">
               <Label>原值（元）*</Label>
-              <Input type="number" value={form.originalCost} onChange={e => set('originalCost')(e.target.value)} placeholder="12000" className="text-right" />
+              <Input aria-label="原值（元）" type="number" value={form.originalCost} onChange={e => set('originalCost')(e.target.value)} placeholder="12000" className="text-right" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>残值率（默认 5%）</Label>
-              <Input type="number" value={form.residualRate} onChange={e => set('residualRate')(e.target.value)} step="0.01" className="text-right" />
+              <Input aria-label="残值率" type="number" value={form.residualRate} onChange={e => set('residualRate')(e.target.value)} step="0.01" className="text-right" />
             </div>
             <div className="space-y-1">
               <Label>使用年限（月）*</Label>
-              <Input type="number" value={form.usefulMonths} onChange={e => set('usefulMonths')(e.target.value)} className="text-right" />
+              <Input aria-label="使用年限（月）" type="number" value={form.usefulMonths} onChange={e => set('usefulMonths')(e.target.value)} className="text-right" />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            直线法月折旧 = 原值 × (1 − 残值率) ÷ 使用月数；购置当月开始计提。示例：12000×(1−5%)÷36 = ¥316.67/月。
-          </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
@@ -107,9 +104,9 @@ function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: 
   if (!asset) return null
   return (
     <Dialog open onOpenChange={v => !v && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>处置资产 · {asset.assetName}</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-2">
+      <DialogContent className="fc-form-dialog sm:max-w-2xl">
+        <DialogHeader description={"核对资产净值、处置方式与日期。"}><DialogTitle>处置资产 · {asset.assetName}</DialogTitle></DialogHeader>
+        <div className="fc-form-dialog-body space-y-3 py-2">
           <div className="rounded-md bg-muted/60 px-3 py-2 text-sm">
             账面净值 <span className="font-semibold">{money(asset.netBookValue)}</span>（累计折旧 {money(asset.accumDepr)}）
           </div>
@@ -206,6 +203,7 @@ export default function FixedAssetsPage() {
           </div>
         }
       />
+
 
       <FilterCard>
         <Input placeholder="编号 / 名称 / 类别" value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && setApplied({ keyword })} className="w-56" />

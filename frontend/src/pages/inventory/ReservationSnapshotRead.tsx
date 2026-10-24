@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useInfiniteQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
@@ -109,11 +110,11 @@ export function ReservationSnapshotRead({ item, owner, server, generation, rende
         <div data-table-scroll aria-label="预占来源明细" tabIndex={0} className="max-h-[44vh] overflow-auto rounded-md border"
           onScroll={event => { const el = event.currentTarget; if (el.scrollHeight - el.scrollTop - el.clientHeight < 300) more() }}
           onKeyDown={event => { if (event.key === 'End') more() }}>
-          <table className="w-full text-sm"><thead className="sticky top-0 z-10 bg-background"><tr>
+          <ReportTable className="w-full text-sm"><thead className="sticky top-0 z-10 bg-background"><tr>
             <th className="p-2 text-left font-medium">销售原单</th><th className="p-2 text-left font-medium">预占与绑定</th><th className="p-2 text-left font-medium">采购来源</th>
           </tr></thead>{rows.length >= VIRTUAL_TABLE_THRESHOLD
             ? <VirtualTableBody data={rows} columns={3} getRowKey={rowKey} renderRow={renderRow} preserveFocus />
-            : <tbody>{rows.length ? rows.map(renderRow) : <tr><td className="p-4" colSpan={3}>当前没有匹配且可查看的销售原单。</td></tr>}</tbody>}</table>
+            : <tbody>{rows.length ? rows.map(renderRow) : <tr><td className="p-4" colSpan={3}>当前没有匹配且可查看的销售原单。</td></tr>}</tbody>}</ReportTable>
         </div>
         <p className="text-xs" role="status">已读取 {rows.length} / {first.snapshot.totalRows} 行 · 读取于 {formatDisplayDateTime(first.snapshot.readAt)}
           {query.isFetchingNextPage ? ' · 正在继续读取…' : query.hasNextPage ? ' · 向下滚动继续读取' : ' · 已读完整'}</p>

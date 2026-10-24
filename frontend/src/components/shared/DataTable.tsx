@@ -3,7 +3,7 @@ import { useTableColumns, isAction } from './useTableColumns'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from './VirtualTableBody'
 import { Inbox } from 'lucide-react'
 import { TableTextPreview } from './TableTextPreview'
-import { TableColumnResizeHandle } from './TableColumnResizeHandle'
+import { TableColumnHeader } from './TableColumnHeader'
 import type { TableColumn } from '@/types'
 
 interface DataTableProps<T extends object> {
@@ -18,6 +18,8 @@ interface DataTableProps<T extends object> {
   retainFocusedRow?: boolean
   rowKey?: keyof T
   emptyText?: string
+  /** 页面按当前查询状态提供空态说明与操作；不影响表头、加载或行数据。 */
+  emptyState?: ReactNode
   /** 兼容旧用法：等价于 selectionMode="multiple" */
   selectable?: boolean
   /** 多选模式：显示 checkbox 列，受控 selectedIds/onSelectionChange */
@@ -43,7 +45,7 @@ interface DataTableProps<T extends object> {
 
 export default function DataTable<T extends object>({
   columns, data, loading = false, virtualized = false, preserveFocus = false, retainFocusedRow = false,
-  rowKey = 'id' as keyof T, emptyText = '暂无数据',
+  rowKey = 'id' as keyof T, emptyText = '暂无数据', emptyState,
   selectable = false, selectionMode, selectedIds, onSelectChange, onSelectionChange, selectableCheck,
   onRowDoubleClick,
   columnStorageKey,
@@ -53,14 +55,6 @@ export default function DataTable<T extends object>({
   const isSelectEnabled = !!(selectable || selectionMode)
   const { orderedColumns, usesPercent, getColumnWidth, getPercentColumnWidth, percentMinWidth, colgroupRef, tableRef, tableWidth, hasCustomWidths, setDraggingKey, draggingKey, moveColumn, startResize, fitColumn, resizeCleanupRef, measureWidths, savePixelWidths } = useTableColumns({ columns, fluid, columnStorageKey, isSelectEnabled, fitData: virtualized ? data : undefined })
 
-  // 宽表横向滚动时，操作列固定在右侧：列宽总和经常超过视口，原来的「操作」列会
-  // 被挤到屏幕外，现场只能看到一个被切掉的「详」字（2026-09-17 验收 ISSUE-013）。
-  // 用 sticky 让它始终可见，列宽与排序规则不变。
-  const stickyActionKey = (() => {
-    const last = orderedColumns[orderedColumns.length - 1]
-    if (!last) return null
-    return isAction(String(last.key), String(last.title)) ? String(last.key) : null
-  })()
   const enabledIds = useMemo(() => data.filter(row => !selectableCheck || selectableCheck(row))
     .map(row => Number((row as Record<string, unknown>)[String(rowKey)])), [data, rowKey, selectableCheck])
   const allSelected = enabledIds.length > 0 && enabledIds.every(id => selectedIds?.has(id))
@@ -101,6 +95,7 @@ export default function DataTable<T extends object>({
     return (
       <tr
         key={String(row[rowKey])}
+        data-selected={isSelected || undefined}
         onDoubleClick={onRowDoubleClick ? () => onRowDoubleClick(row) : undefined}
         className={`group min-h-12 border-b border-border/70 last:border-0 transition-colors ${
           isSelected ? 'bg-primary/[0.07]' : 'hover:bg-muted/30'
@@ -126,12 +121,9 @@ export default function DataTable<T extends object>({
           return (
           <td
             key={String(col.key)}
+            data-column-key={String(col.key)}
             onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
-            className={`overflow-hidden px-4 py-2.5 text-foreground align-middle ${
-              stickyActionKey === String(col.key)
-                ? 'sticky right-0 z-10 border-l border-border bg-card group-hover:bg-muted'
-                : ''
-            }`}
+            className="overflow-hidden px-4 py-2.5 text-foreground align-middle"
           >
             {isAction(String(col.key), col.title)
               // 极窄操作列在格内滚动，保留所有按钮的可达性，避免越界覆盖相邻列。
@@ -153,7 +145,7 @@ export default function DataTable<T extends object>({
   const renderVirtual = virtualized && !loading && data.length >= VIRTUAL_TABLE_THRESHOLD
   const getRowKey = useCallback((row: T) => String(row[rowKey]), [rowKey])
   return (
-    <div className="min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden">
+    <div className="desktop-table min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden">
       <div className="overflow-x-auto" data-table-scroll>
         <table aria-rowcount={renderVirtual ? data.length + 1 : undefined} ref={tableRef} aria-busy={loading} className="table-fixed text-sm" style={usesPercent ? { width: '100%', minWidth: percentMinWidth } : { width: tableWidth, minWidth: hasCustomWidths ? 0 : '100%' }}>
           <colgroup ref={colgroupRef}>
@@ -177,9 +169,10 @@ export default function DataTable<T extends object>({
                 </th>
               )}
               {orderedColumns.map((col) => (
-                <th
+                <TableColumnHeader
                   key={String(col.key)}
-                  scope="col"
+                  column={col}
+                  layout={{ startResize, fitColumn, measureWidths, savePixelWidths }}
                   aria-sort={sortKey === String(col.key) ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined}
                   draggable
                   onDragStart={event => { if (resizeCleanupRef.current) event.preventDefault(); else setDraggingKey(String(col.key)) }}
@@ -191,11 +184,8 @@ export default function DataTable<T extends object>({
                     moveColumn(String(col.key))
                   }}
                   onDragEnd={() => setDraggingKey(null)}
-                  className={`relative cursor-move select-none px-4 py-2.5 text-left text-table-head ${
-                    stickyActionKey === String(col.key) ? 'data-table-header-surface sticky right-0 z-20 border-l border-border' : ''
-                  }`}
+                  className="cursor-move select-none"
                 >
-                  <div className="group flex items-center gap-2">
                     {col.sortable && onSortChange ? (
                       <button
                         type="button"
@@ -208,17 +198,8 @@ export default function DataTable<T extends object>({
                       >
                         {col.title} {sortKey === String(col.key) ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
                       </button>
-                    ) : (
-                      <span
-                        className={`min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere] ${
-                          col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''
-                        }`}
-                        title={col.title}
-                      >{col.title}</span>
-                    )}
-                    <TableColumnResizeHandle column={col} layout={{ startResize, fitColumn, measureWidths, savePixelWidths }} />
-                  </div>
-                </th>
+                    ) : undefined}
+                </TableColumnHeader>
               ))}
             </tr>
           </thead>
@@ -237,11 +218,11 @@ export default function DataTable<T extends object>({
               ))
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={colCount} className="px-4 py-16 text-center">
-                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                <td colSpan={colCount} className={emptyState ? 'px-4 text-center' : 'px-4 py-16 text-center'}>
+                  {emptyState ?? <div className="fc-table-empty flex flex-col items-center gap-2 text-muted-foreground">
                     <Inbox className="h-8 w-8 opacity-40" />
                     <span className="text-sm">{emptyText}</span>
-                  </div>
+                  </div>}
                 </td>
               </tr>
             ) : (

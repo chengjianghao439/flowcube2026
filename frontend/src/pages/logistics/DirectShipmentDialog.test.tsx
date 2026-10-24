@@ -21,6 +21,14 @@ test('件数只读且不录重量；保存只提交寄收件和产品，不能�
     expect(dialog.textContent).toContain('本批 2 件')
     expect(dialog.textContent).toContain('重量由快递员称重确认')
     expect(Array.from(dialog.querySelectorAll('label')).some(n => /重量|件数/.test(n.textContent || ''))).toBe(false)
+    await act(async () => root.render(<QueryClientProvider client={client}><DirectShipmentDialog waybill={waybill} submitDisabled onClose={() => {}} onSaved={() => {}} /></QueryClientProvider>))
+    expect(dialog.querySelector('.fc-dialog-caption')?.textContent).toContain('原运单最新状态待核对，草稿已保留，暂不能提交。')
+    expect(dialog.textContent?.match(/原运单最新状态待核对/g)).toHaveLength(1)
+    const blockedSave = Array.from(dialog.querySelectorAll('button')).find(b => b.textContent === '保存并提交下单')!
+    expect(blockedSave.disabled).toBe(true)
+    await act(async () => blockedSave.click())
+    expect(mocks.save).not.toHaveBeenCalled()
+    await act(async () => root.render(<QueryClientProvider client={client}><DirectShipmentDialog waybill={waybill} onClose={() => {}} onSaved={() => {}} /></QueryClientProvider>))
     const save = Array.from(dialog.querySelectorAll('button')).find(b => b.textContent === '保存并提交下单')!
     await act(async () => { save.click(); await new Promise(resolve => setTimeout(resolve, 20)) })
     expect(mocks.save).toHaveBeenCalledOnce()

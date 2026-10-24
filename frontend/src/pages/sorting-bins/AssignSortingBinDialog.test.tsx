@@ -11,7 +11,7 @@ vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => open ? <div>{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children, description }: { children: React.ReactNode; description?: React.ReactNode }) => <div>{children}<div className="fc-dialog-caption">{description}</div></div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
 }))
 

@@ -148,7 +148,7 @@ export default function RoleWorkbenchPage() {
     <div className="space-y-6">
       <PageHeader
         title="待办中心"
-        description="按岗位分组展示待办事项，优先处理最紧急的事项；财务与系统级提醒统一在页面底部汇总。"
+        description="按岗位查看待办与需要关注的事项。"
         actions={<Button onClick={() => { void refetch(); void notificationsQ.refetch() }}>立即刷新</Button>}
       />
 

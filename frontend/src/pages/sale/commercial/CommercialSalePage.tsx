@@ -201,6 +201,7 @@ export default function CommercialSalePage({
     <div className="flex flex-col gap-2.5">
       <ActionBar
         title={order.orderNo}
+        description="查看销售明细、回款与履约进度。"
         subtitle={<SoftStatusLabel label={workflow.label} tone={workflow.tone} />}
         rightActions={
           <>

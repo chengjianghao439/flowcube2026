@@ -135,8 +135,9 @@ export default function InboundTaskEditPage() {
     <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={recovery.busy || !can(PERMISSIONS.INBOUND_ORDER_VIEW)} onClick={async () => confirmed(await recovery.queryOriginal())}>查询原保存结果</Button>
       {recovery.canRetry && <Button variant="outline" size="sm" disabled={recovery.busy || !can(PERMISSIONS.INBOUND_ORDER_UPDATE)} onClick={async () => confirmed(await recovery.retry())}>按原请求重试</Button>}</div>
   </div> : null
-  return <div className="flex flex-col gap-4">
-    <ActionBar title={baseline ? `编辑 ${baseline.context.task.taskNo}` : '编辑收货订单'} rightActions={<>
+  return <div className="desktop-inbound-form flex flex-col gap-4">
+    <ActionBar title={baseline ? `编辑 ${baseline.context.task.taskNo}` : '编辑收货订单'}
+        description="核对收货草稿的来源与商品明细。" rightActions={<>
       <Button variant="outline" onClick={() => confirmDirtyLeave({ dirtyKeys: [path], willNavigate: true, proceed: closeTab })}>取消编辑</Button>
       <Button className="gap-1.5" disabled={blocked || !draft} onClick={() => { void save() }}>{recovery.busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}{recovery.busy ? '保存中…' : '保存修改'}</Button>
     </>} />
@@ -162,7 +163,7 @@ export default function InboundTaskEditPage() {
             <td><InboundProductIdentity item={item} /></td><td><div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"><Input quantity inputMode="decimal" className="h-9 min-w-12 max-w-24 flex-1 text-right tabular-nums" value={qtyInput ?? String(qty)} onBlur={() => blurQty(item.purchaseItemId)} data-purchase-item-id={item.purchaseItemId} aria-label={`${item.purchaseOrderNo} ${item.productName}本次到货数量`} disabled={blocked} onChange={event => lineQty(item.purchaseItemId, event.target.value)} /><span className="min-w-0 text-muted-body [overflow-wrap:anywhere]">{item.unit || '单位未提供'}</span></div></td>
             <td className="font-mono text-xs">{item.purchaseOrderNo}</td><td className="text-muted-foreground">{item.warehouseName}</td><td className="text-right tabular-nums">{unitPrice(item.unitPrice)}</td>
             <td className="text-center"><Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive-ink" disabled={blocked} aria-label={`删除 ${item.purchaseOrderNo} ${item.productName}`} onClick={() => { const selected = { ...draft.selected }; delete selected[item.purchaseItemId]; patch({ selected }) }}>✕</Button></td>
-          </tr>} /></div><div className="border-t border-border px-3 py-2 text-sm text-muted-body">商品明细：{rows.length} 行</div>
+          </tr>} /></div><div className="desktop-order-total border-t border-border px-3 py-2 text-sm text-muted-body">商品明细：{rows.length} 行</div>
         </>}
       </SectionCard>
       <PurchaseItemPickerDialog open={pickerOpen && !blocked} supplierId={baseline.context.supplierId} editTaskId={id!} readOwner={owner} canInteract={() => !blocked} initialSelection={draft.selected} onClose={() => setPickerOpen(false)} onConfirm={picked} />

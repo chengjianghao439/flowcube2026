@@ -1,7 +1,6 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
-import { AppDialog } from '@/components/shared/AppDialog'
-import { Button } from '@/components/ui/button'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { VOUCHER_STATUS_LABELS, VOUCHER_SOURCE_OPTIONS } from '@/types/accounting'
@@ -35,25 +34,14 @@ export default function VoucherQueryDialog({ open, initial, onClose, onApply }: 
   }
 
   return (
-    <AppDialog
+    <QueryDialog
       open={open}
-      onOpenChange={v => { if (!v) onClose() }}
       dialogId="voucher-query"
       title="查询记账凭证"
-      resizable={false}
-      defaultWidth={520}
-      defaultHeight={520}
-      minWidth={420}
-      minHeight={460}
-      footer={
-        <div className="flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button onClick={() => onApply(draft)}>查询</Button>
-          </div>
-        </div>
-      }
+      width={520}
+      onClose={onClose}
+      onReset={() => setDraft(EMPTY)}
+      onApply={() => onApply(draft)}
     >
       <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
@@ -102,6 +90,6 @@ export default function VoucherQueryDialog({ open, initial, onClose, onApply }: 
           />
         </label>
       </QueryFormLayout>
-    </AppDialog>
+    </QueryDialog>
   )
 }

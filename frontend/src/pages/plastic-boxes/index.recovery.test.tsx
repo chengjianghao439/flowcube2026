@@ -27,7 +27,7 @@ const record = (boxId = 4): RepackRecoveryRecord => ({ accountId: owner, boxId, 
 function seed(records = [record()]) { localStorage.setItem(recoveryStorageKey(owner), JSON.stringify({ version: 1, records })); return records }
 async function mount() { root = createRoot(host); await act(async () => root!.render(<QueryClientProvider client={qc}><PlasticBoxesPage /></QueryClientProvider>)) }
 async function click(label: string, scope: ParentNode = document) { const b = [...scope.querySelectorAll('button')].find(b => b.textContent === label); expect(b, label).toBeTruthy(); await act(async () => b!.click()) }
-async function openB() { await click('详情', host.querySelector('[data-box="5"]')!); await click('还原整件') }
+async function openB() { await click('详情', host.querySelector('[data-box="5"]')!); await click('还原整件'); const dialog = [...document.querySelectorAll('[role="dialog"]')].at(-1)!; expect(dialog.querySelector('.fc-dialog-caption')?.textContent).toContain('将按填写数量生成独立整件码'); expect(dialog.textContent?.match(/将按填写数量生成独立整件码/g)).toHaveLength(1) }
 async function setQty(value: string) { const input = document.querySelectorAll<HTMLInputElement>('[role="dialog"] input[type="number"]')[0]; await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) }) }
 beforeEach(() => {
   owner++; localStorage.clear(); vi.clearAllMocks(); api.defaults.baseURL = '/api'

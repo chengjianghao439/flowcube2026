@@ -358,9 +358,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   }
 
   return (
-    <div ref={entryRef} data-order-entry onKeyDown={handleEntryKeyDown} className="flex min-w-0 flex-col gap-3">
+    <div ref={entryRef} data-order-entry onKeyDown={handleEntryKeyDown} className="desktop-purchase-form flex min-w-0 flex-col gap-3">
       <ActionBar
         title={isEdit ? '编辑采购单' : '新建采购单'}
+        description="填写供应商、仓库与采购明细。"
         subtitle={isEdit || isDirty ? <>{isEdit && <EditModeBadge />}<UnsavedBadge show={isDirty} /></> : undefined}
         rightActions={
           <>
@@ -451,7 +452,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
                 : <tbody>{items.map(renderItem)}</tbody>}
             </PurchaseEntryTable>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-sm">
+          <div className="desktop-order-total flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-sm">
             <div className="min-w-0 space-y-1"><p className="text-muted-body">商品明细：{items.length} 行{summary.invalidLineCount > 0 && <span className="ml-2 text-warning-ink">{summary.invalidLineCount} 行待核对，金额仅含有效明细</span>}</p><PurchaseQuantitySummary groups={summary.quantityGroups} /></div>
             <p className="tabular-nums"><span className="mr-3 text-muted-foreground">采购金额</span><strong>{money(summary.amount)}</strong></p>
           </div>
@@ -553,7 +554,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
   const pauseReason = status === 403 ? '没有权限查看采购单' : status === 404 ? '采购单不存在或已删除' : !canEdit ? '当前没有采购编辑权限' : '采购单已不是草稿，无法继续编辑'
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="desktop-purchase-detail flex flex-col gap-3">
       <div hidden={!editPaused} role={editPaused ? 'alert' : undefined} className="flex h-40 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
         <p>{pauseReason}</p><p>未保存编辑内容已保留，恢复后再继续。</p>
         <div className="flex gap-2"><Button variant="outline" onClick={() => closeTab()}>返回采购列表</Button><Button variant="outline" onClick={() => { void refetch() }}>重试</Button></div>
@@ -566,6 +567,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
       {editing ? <FormView editOrder={order} closeTab={closeTab} tabPath={tabPath} paused={editPaused} onSaved={() => setEditing(false)} /> : <>
       <ActionBar
         title={order.orderNo}
+        description="核对采购明细、金额与收货进度。"
         subtitle={<StatusBadge type="purchase" status={order.status} />}
         rightActions={
           <>
@@ -623,14 +625,14 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         }
       />
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border pb-3 text-sm">
+      <div className="desktop-order-overview flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border pb-3 text-sm">
         <p className="tabular-nums"><span className="mr-3 text-muted-foreground">采购金额</span><strong>{money(order.totalAmount)}</strong></p>
         <span className="text-muted-foreground">{order.items?.length ?? 0} 行商品</span>
         <PurchaseQuantitySummary groups={groupPurchaseQuantities(order.items ?? [], 'saved')} />
       </div>
       <OrderDetailSections type="purchase" id={order.id} compactTabs>
       <SectionCard title="基础信息" compact>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
+        <dl className="desktop-order-facts grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
           {[
             ['供应商',     order.supplierName],
             ['仓库',       order.warehouseName],
@@ -715,7 +717,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         ] satisfies TableColumn<PurchaseOrderItem>[]}
           data={order.items ?? []} rowKey="id" emptyText="暂无商品明细" fluid virtualized columnStorageKey="purchase-detail-items" />
         </div>
-        <div aria-label="采购商品明细汇总" className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-border px-4 py-3 text-sm">
+        <div aria-label="采购商品明细汇总" className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-border px-4 py-3 text-sm">
           <span className="mr-auto tabular-nums"><span className="text-muted-foreground">明细</span> {order.items?.length ?? 0} 行</span>
           <PurchaseQuantitySummary groups={groupPurchaseQuantities(order.items ?? [], 'saved')} />
           <strong className="tabular-nums"><span className="mr-2 font-normal">采购金额合计</span>{money(order.totalAmount)}</strong>
@@ -743,7 +745,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
       {/* 审批驳回弹窗（审计 4.7） */}
       <Dialog open={rejectOpen} onOpenChange={(v) => !v && setRejectOpen(false)}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>驳回采购单 {order.orderNo}</DialogTitle></DialogHeader>
+          <DialogHeader description={"填写驳回原因，供采购人员调整。"}><DialogTitle>驳回采购单 {order.orderNo}</DialogTitle></DialogHeader>
           <div className="space-y-2">
             <Label>驳回原因 *</Label>
             <Input

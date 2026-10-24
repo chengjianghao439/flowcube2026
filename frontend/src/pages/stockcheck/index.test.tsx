@@ -55,7 +55,7 @@ test.each([5000, 5001])('截断时显示已读/总匹配%s，不把总数当已�
   fixture.query.data = { list: rows(5000), pagination: { total }, truncated: total > 5000 }
   render()
   const summary = host.querySelector('[role="status"]')?.textContent
-  if (total > 5000) expect(summary).toMatch(/5,000.*5,001.*缩小查询范围/)
+  if (total > 5000) { expect(summary).toMatch(/5,000.*5,001.*缩小查询范围/); expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围') }
   else expect(summary).toBe('共 5,000 单')
   expect(host.querySelectorAll('tbody tr:not([aria-hidden])').length).toBeLessThan(50)
 })

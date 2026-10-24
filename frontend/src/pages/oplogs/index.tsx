@@ -52,9 +52,9 @@ function RawValue({ value }: { value: unknown }) {
 
 function DetailRow({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="grid gap-1 rounded-lg border border-border px-3 py-2 sm:grid-cols-[160px_minmax(0,1fr)]">
-      <div className="text-xs font-medium text-muted-foreground">{label}</div>
-      <RawValue value={value} />
+    <div className="fc-detail-row">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="min-w-0"><RawValue value={value} /></dd>
     </div>
   )
 }
@@ -184,7 +184,8 @@ export default function OpLogsPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="操作日志" description="记录所有写操作，追踪变更历史" actions={
+      <PageHeader title="操作日志"
+        description={!isError && !isLoading && data?.truncated ? <span role="status">已加载 {data.list.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条，请缩小查询范围。</span> : '按操作人、时间与单据追踪变更。'}  actions={
         <>
           <Button variant="outline" onClick={() => downloadExport('/export/oplogs', exportParams).catch(e => toast.error((e as Error).message))}>导出</Button>
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -207,9 +208,7 @@ export default function OpLogsPage() {
       {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : <>
         <DataTable virtualized preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list || []} loading={isLoading} />
 
-        {!isLoading && data && (data.truncated ? (
-          <p role="status" className="px-1 py-3 text-xs text-warning-ink">已加载 {data.list.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条，请缩小查询范围。</p>
-        ) : <ListSummary total={total} unit="条" />)}
+        {!isLoading && data && !data.truncated && <ListSummary total={total} unit="条" />}
       </>}
       <ConfirmDialog
         open={clearConfirm}
@@ -221,12 +220,12 @@ export default function OpLogsPage() {
         onCancel={() => setClearConfirm(false)}
       />
       <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetailId(null) }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="fc-audit-detail max-w-4xl max-h-[90vh]">
+          <DialogHeader description={"查看本次操作的完整记录与上下文。"} className="fc-audit-detail-header">
             <DialogTitle>操作日志详情</DialogTitle>
           </DialogHeader>
           {detail && (
-            <div className="space-y-4">
+            <div className="fc-audit-detail-body min-h-0 space-y-4 overflow-y-auto">
               <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <SoftStatusLabel label={formatHttpMethod(detail.method)} tone="info" />
@@ -243,7 +242,7 @@ export default function OpLogsPage() {
                 </p>
               </div>
 
-              <div className="grid gap-2">
+              <dl className="fc-detail-list">
                 <DetailRow label="请求方式" value={detail.method} />
                 <DetailRow label="访问地址" value={detail.path} />
                 <DetailRow label="状态码" value={detail.statusCode ?? '待确认'} />
@@ -254,7 +253,7 @@ export default function OpLogsPage() {
                 <DetailRow label="时间" value={formatDisplayDateTime(detail.createdAt)} />
                 <DetailRow label="日志 ID" value={detail.id} />
                 <DetailRow label="请求内容" value={detail.requestBody} />
-              </div>
+              </dl>
             </div>
           )}
         </DialogContent>

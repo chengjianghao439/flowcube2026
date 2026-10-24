@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useDisposalHandlingSource } from '@/hooks/useDisposalHandlingSource'
 import { useDisposalHandlingOperation } from '@/hooks/useDisposalHandlingOperation'
 import { HandlingOperationPanel } from '../HandlingOperationPanel'
@@ -5,7 +6,7 @@ import { handlingQty, mayHandle } from '@/lib/disposalHandlingRecovery'
 import { createDisposalApi } from '@/api/disposal'
 import { money, qty } from '@/lib/format'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useRef, useState } from 'react'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
@@ -130,10 +131,9 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
 
   return (
     <Dialog open={open && (!handling || (handling.source.current && handling.source.active))} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="grid-cols-1 max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>{mode === 'create' ? '新建报废单' : '滞销建议'}</DialogTitle></DialogHeader>
-        {!disposalOwnerCurrent(owner) ? <p role="alert">账号、权限或服务器已变化。原圈选保留，不转入当前上下文；请关闭本页后重新查看最新建议。</p> : <div className="space-y-4 py-2">
-          <p className="text-sm text-muted-foreground">有效库存条码余量是当前实物在库。参考量沿原口径扣除账面预占，可能为零或负数；它不是新的出库预算。参考价依平均成本→成本参考价→销售参考价兜底，全部在库与圈选数量分别估值，不是成交价。</p>
+      <DialogContent className="fc-form-dialog grid-cols-1 max-w-6xl max-h-[90vh]">
+        <DialogHeader description={!disposalOwnerCurrent(owner) ? <span role="alert">账号、权限或服务器已变化。原圈选保留，不转入当前上下文；请关闭本页后重新查看最新建议。</span> : '有效库存条码余量是当前实物在库。参考量沿原口径扣除账面预占，可能为零或负数；它不是新的出库预算。参考价依平均成本→成本参考价→销售参考价兜底，全部在库与圈选数量分别估值，不是成交价。'}><DialogTitle>{mode === 'create' ? '新建报废单' : '滞销建议'}</DialogTitle></DialogHeader>
+        {!disposalOwnerCurrent(owner) ? null : <div className="fc-form-dialog-body space-y-4 py-2">
           {!handling && <><div className="flex gap-2 flex-wrap">
             {can(PERMISSIONS.SALE_ORDER_CREATE) && <Button variant="outline" onClick={() => openNormal('/sale/new')}>正常销售</Button>}
             {can(PERMISSIONS.PRODUCT_VIEW) && can(PERMISSIONS.PRODUCT_UPDATE) && <Button variant="outline" onClick={() => openNormal('/price-change')}>全局改价</Button>}
@@ -165,41 +165,41 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
 
           {/* 建议列表 */}
           <div className="border rounded-lg max-h-56 overflow-auto">
-            <div className="grid min-w-[1480px] grid-cols-[40px_160px_160px_144px_224px_112px_100px_140px_180px_100px] gap-2 px-3 py-2 text-xs text-muted-foreground font-medium border-b sticky top-0 bg-background">
-              <div className=""></div>
-              <ProductIdentityGridHeaders />
-              <div className="">ACTIVE在库／参考量</div>
-              <div className="">全部在库参考估值</div>
-              <div className="">最后出库</div>
-              <div className="">操作</div>
-            </div>
+            <ReportTable className="w-full min-w-[1480px] text-sm"><thead className="sticky top-0 z-10"><tr>
+              <th className="w-14 text-center">选择</th>
+              <ProductIdentityHeaders />
+              <th className="w-40">ACTIVE在库／参考量</th>
+              <th className="w-40">全部在库参考估值</th>
+              <th className="w-44">最后出库</th>
+              <th className="w-24">操作</th>
+            </tr></thead><tbody>
             {(suggestions?.list || []).map(s => {
               const selected = selectedIds.has(Number(s.productId))
               return (
-                <div key={`${s.productId}`} className={`grid min-w-[1480px] grid-cols-[40px_160px_160px_144px_224px_112px_100px_140px_180px_100px] gap-2 items-center px-3 py-3 border-b last:border-0 text-sm ${selected ? 'bg-primary/5' : ''}`}>
-                  <div className="">
+                <tr key={`${s.productId}`} className={`border-b last:border-0 text-sm ${selected ? 'bg-primary/5' : ''}`}>
+                  <td className="text-center">
                     <input type="checkbox" checked={selected} disabled={s.totalQty <= 0 && !selected} onChange={() => toggleSuggestion(s)} className="accent-primary" />
-                  </div>
-                  <ProductIdentityGridCells product={s} />
-                  <div className="tabular-nums">{qty(s.onHandQty)}{s.unit}／{qty(s.totalQty)}{s.unit}<p className="text-xs text-muted-foreground">预占 {qty(s.reservedQty)}；{basis[s.valuationBasis]} {money(s.unitValue)}</p>{s.totalQty <= 0 && <p className="text-xs text-destructive-ink">参考量为零或异常，请核对</p>}</div>
-                  <div className="tabular-nums">{money(s.totalValue)}</div>
-                  <div className="text-xs text-muted-foreground">
+                  </td>
+                  <ProductIdentityCells product={s} />
+                  <td className="tabular-nums">{qty(s.onHandQty)}{s.unit}／{qty(s.totalQty)}{s.unit}<p className="text-xs text-muted-foreground">预占 {qty(s.reservedQty)}；{basis[s.valuationBasis]} {money(s.unitValue)}</p>{s.totalQty <= 0 && <p className="text-xs text-destructive-ink">参考量为零或异常，请核对</p>}</td>
+                  <td className="tabular-nums">{money(s.totalValue)}</td>
+                  <td className="text-xs text-muted-foreground">
                     {s.lastOutboundAt ? formatDisplayDateTime(s.lastOutboundAt) : '从未出库'}
-                  </div>
-                  <div className="">
+                  </td>
+                  <td>
                     <Button type="button" size="sm" variant={selected ? 'outline' : 'secondary'} className="h-7 text-xs" disabled={!selected && s.totalQty <= 0} onClick={() => toggleSuggestion(s)}>
                       {selected ? '移除' : '加入'}
                     </Button>
-                  </div>
-                </div>
+                  </td>
+                </tr>
               )
             })}
             {!suggestions?.list?.length && (
-              <p className="text-center py-6 text-sm text-muted-foreground">
+              <tr><td colSpan={10} className="text-center py-6 text-sm text-muted-foreground">
                 {whId ? '没有符合筛选的滞销商品' : '请先选择仓库'}
-              </p>
+              </td></tr>
             )}
-          </div>
+          </tbody></ReportTable></div>
 
           </>}
           {handling && <><p>来源商品与原仓固定，可关联基本量 {handling.source.data?.source.budget.availableQuantity ?? '—'}；不会继承旧批准。</p><Button disabled={!current() || !handling.source.data || rows.length > 0} onClick={() => {
@@ -213,17 +213,17 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
             <div className="space-y-2">
               <Label>处置明细（{rows.length} 项）</Label>
               <div className="border rounded-lg overflow-x-auto">
-                <div className="grid min-w-[1500px] grid-cols-[160px_160px_144px_224px_112px_140px_160px_240px_40px] gap-2 px-3 py-2 text-xs text-muted-foreground font-medium border-b">
-                  <ProductIdentityGridHeaders />
-                  <div className="">处置数量</div>
-                  <div className="">处置方式</div>
-                  <div className="">备注</div>
-                  <div className=""></div>
-                </div>
+                <ReportTable className="w-full min-w-[1500px] text-sm"><thead><tr>
+                  <ProductIdentityHeaders />
+                  <th className="w-36">处置数量</th>
+                  <th className="w-40">处置方式</th>
+                  <th className="w-60">备注</th>
+                  <th className="w-24">操作</th>
+                </tr></thead><tbody>
                 {rows.map(r => (
-                  <div key={r.suggestion.productId} className="grid min-w-[1500px] grid-cols-[160px_160px_144px_224px_112px_140px_160px_240px_40px] gap-2 items-center px-3 py-3 border-b last:border-0 text-sm">
-                    <ProductIdentityGridCells product={r.suggestion} />
-                    <div className="">
+                  <tr key={r.suggestion.productId} className="border-b last:border-0 text-sm">
+                    <ProductIdentityCells product={r.suggestion} />
+                    <td>
                       <div className="flex items-center gap-1">
                         <Input quantity
                           type="number" min="0" step={qtyStep(allowDecimalOf(r.suggestion.productId))} className="h-8 text-sm"
@@ -233,20 +233,20 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                         />
                         <span className="text-xs text-muted-foreground">{r.suggestion.unit}</span>
                       </div>
-                    </div>
-                    <div className="">
+                    </td>
+                    <td>
                       <span>报废（新独立单）</span>
-                    </div>
-                    <div className="">
+                    </td>
+                    <td>
                       <Input className="h-8 text-sm" placeholder="备注" value={r.remark || ''}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRow(r.suggestion.productId, { remark: e.target.value })} />
-                    </div>
-                    <div className="">
+                    </td>
+                    <td>
                       <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive-ink" onClick={() => removeRow(r.suggestion.productId)}>移除</Button>
-                    </div>
-                  </div>
+                    </td>
+                  </tr>
                 ))}
-              </div>
+              </tbody></ReportTable></div>
               <p className="text-sm text-muted-foreground">
                 选中数量参考估值：<span className="text-doc-code-strong tabular-nums">{money(totalValue)}</span>
                 <span className="text-xs ml-2">（历史单保留当时的参考价；实际报废以执行时核对的库存为准，不采用旧建议量上限）</span>

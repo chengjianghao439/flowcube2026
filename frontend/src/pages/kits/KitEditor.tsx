@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -41,7 +42,7 @@ export default function KitEditor({ id, source, onClose }: { id: number | 'new';
   }, [loaded, query.data, query.isFetchedAfterMount, query.isFetching, query.isError, readOwner])
   if (id === 'new') return <KitEditorContent readOwner={readOwner} onClose={onClose} />
   if (!loaded) {
-    return <AppDialog open dialogId="kit-editor" title="成套配件" onOpenChange={v => { if (!v) onClose() }}>
+    return <AppDialog descriptionInHeader description={"核对成套配件的最新资料。"} open dialogId="kit-editor" title="成套配件" onOpenChange={v => { if (!v) onClose() }}>
       <div className="p-5">{(query.isError || sourceError) ? <QueryErrorState error={sourceError || query.error} onRetry={() => void query.refetch()} title="资料读取失败" /> : <p role="status">正在加载最新资料…</p>}</div>
     </AppDialog>
   }
@@ -151,11 +152,10 @@ function KitEditorContent({ initial, readOwner, onClose }: { initial?: KitDefini
   const changed = compositionChanged(draft, baseline)
   const originalVersion = baseline?.version
   return <>
-    <AppDialog open dialogId="kit-editor" title={<span className="flex flex-wrap items-center gap-2">{baseline ? `${writable ? '维护' : '查看'}成套配件 · ${baseline.code}` : '新增成套配件'}{baseline && writable && <EditModeBadge />}<UnsavedBadge show={dirty} /></span>}
+    <AppDialog descriptionInHeader description={!writable ? baseline?.deletedAt ? '资料已删除，保留版本供核对。' : '当前账号可查看资料；维护需要对应的商品新增或修改权限。' : '核对套内商品、每套量与分摊设置。'} open dialogId="kit-editor" title={<span className="flex flex-wrap items-center gap-2">{baseline ? `${writable ? '维护' : '查看'}成套配件 · ${baseline.code}` : '新增成套配件'}{baseline && writable && <EditModeBadge />}<UnsavedBadge show={dirty} /></span>}
       defaultWidth={1100} defaultHeight={740} minWidth={650} minHeight={500} onOpenChange={v => { if (!v) close() }}
       footer={<div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void copyDraft()}>复制草稿内容</Button>{write.conflict && !reloaded && <Button variant="outline" disabled={!backup.copied || locked} onClick={() => void reload()}>重载最新资料</Button>}</div><div className="flex gap-2"><Button variant="outline" disabled={locked} onClick={close}>关闭</Button>{writable && (write.pendingRecord ? <Button disabled={write.busy} onClick={() => void write.retry().then(accept)}>按原请求重试</Button> : <Button disabled={locked || (baseline != null && !dirty)} onClick={() => void save()}>{write.busy ? '正在保存…' : baseline ? '保存修改' : '创建配件'}</Button>)}</div></div>}>
       <div className="h-full space-y-5 overflow-y-auto p-5">
-        {!writable && <p className="text-sm text-muted-foreground">{baseline?.deletedAt ? '资料已删除，保留版本供核对。' : '当前账号可查看资料；维护需要对应的商品新增或修改权限。'}</p>}
         <div aria-live="polite">{success && <p className="rounded-md border bg-primary/5 p-3 text-sm">{success}</p>}{(localError || backup.error || (!reloaded && write.error) || readSourceError) && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive-ink">{localError || backup.error || write.error || readSourceError}{write.conflict && !reloaded && ' 本次输入已保留。先复制草稿内容，再显式重载核对。'}</p>}</div>
         {backup.text && <div className="space-y-2"><textarea aria-label="完整草稿内容" readOnly value={backup.text} className="h-36 w-full rounded-md border bg-background p-2 font-mono text-xs" /><Button variant="outline" onClick={() => backup.acknowledge(backup.text)}>已备份草稿</Button></div>}
         {originalVersion && <dl className="flex flex-wrap gap-x-6 gap-y-2 border-b pb-3 text-xs text-muted-foreground"><div>当前版本 {originalVersion.versionNo}</div><div>资料修订 {baseline!.revision}</div><div>版本创建时间：{formatDisplayDateTime(originalVersion.createdAt)}</div><div>参考采样：{originalVersion.referenceSnapshotAt ? formatDisplayDateTime(originalVersion.referenceSnapshotAt) : '采样时间未单独保存'}</div></dl>}
@@ -195,7 +195,7 @@ function KitEditorContent({ initial, readOwner, onClose }: { initial?: KitDefini
           </fieldset>
           <p className="max-w-4xl text-xs leading-5 text-muted-foreground">{draft.mode === 'product_a' ? '默认按组成保存时的组件 A 价 × 每套基本量分摊。以后商品改价不追改原参考；只改套报价、名称或启停也沿用原参考。' : '为全部组件填写非负比例，例如 80 与 20 或 4 与 1；最多4位小数，个别可为零，合计须大于零。不会自动把原 A 价参考转换成手工比例。'}</p>
           {changed && baseline && <p className="text-xs text-warning-ink">组成、每套量或分摊比例已修改：保存时提交全部组成并生成新版本；默认模式将重新取商品当时 A 价。</p>}
-          <div className="overflow-x-auto rounded-md border"><table className="w-full min-w-[820px] text-sm"><thead className="bg-muted text-left text-xs text-muted-foreground"><tr><th className="p-3">组件商品</th><th className="p-3">基本单位</th><th className="w-32 p-3">每套基本量</th><th className="p-3">原版本 A 价</th><th className="p-3">原分摊参考 / 来源</th>{draft.mode === 'explicit' && <th className="w-36 p-3">分摊比例</th>}{writable && <th className="w-20 p-3">操作</th>}</tr></thead>
+          <div className="overflow-x-auto rounded-md border"><ReportTable className="w-full min-w-[820px] text-sm"><thead className="bg-muted text-left text-xs text-muted-foreground"><tr><th className="p-3">组件商品</th><th className="p-3">基本单位</th><th className="w-32 p-3">每套基本量</th><th className="p-3">原版本 A 价</th><th className="p-3">原分摊参考 / 来源</th>{draft.mode === 'explicit' && <th className="w-36 p-3">分摊比例</th>}{writable && <th className="w-20 p-3">操作</th>}</tr></thead>
             <tbody className="divide-y">{draft.components.map((c, index) => {
               const original = originalVersion?.components.find(old => old.productId === c.productId)
               return <tr key={c.productId} className="align-top"><td className="p-3"><div>{c.name}</div><div className="text-xs text-muted-foreground">{c.code}{!c.active && ' · 商品已停用或删除'}</div></td><td className="p-3">{c.unit}{!c.allowDecimal && <span className="block text-xs text-warning-ink">只能整数</span>}</td>
@@ -204,7 +204,7 @@ function KitEditorContent({ initial, readOwner, onClose }: { initial?: KitDefini
                 {draft.mode === 'explicit' && <td className="p-2"><Input aria-label={`${c.name}分摊比例`} inputMode="decimal" placeholder="主动填写" disabled={!writable || locked} value={c.weight} onChange={e => change({ ...draft, components: draft.components.map((row, i) => i === index ? { ...row, weight: e.target.value } : row) })} /></td>}
                 {writable && <td className="p-2"><Button size="sm" variant="ghost" disabled={locked} aria-label={`移除${c.name}`} onClick={() => change({ ...draft, components: draft.components.filter((_, i) => i !== index) })}>移除</Button></td>}
               </tr>
-            })}{!draft.components.length && <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">添加真实商品，填写每套使用的基本量。</td></tr>}</tbody></table></div>
+            })}{!draft.components.length && <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">添加真实商品，填写每套使用的基本量。</td></tr>}</tbody></ReportTable></div>
         </section>
       </div>
     </AppDialog>

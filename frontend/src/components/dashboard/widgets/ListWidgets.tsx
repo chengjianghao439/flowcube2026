@@ -17,7 +17,7 @@ import {
   usePendingApprovalsBrief,
 } from '@/hooks/useDashboard'
 
-// 固定卡高下，滚动交给 WidgetShell 的 scrollBody；列表本身只管排布
+// 有界卡片内的滚动交给 WidgetShell 的 scrollBody；列表本身只管排布
 const scroll = 'space-y-1'
 
 // —— 低库存预警（dashboard.view）——

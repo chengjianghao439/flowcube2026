@@ -1,6 +1,6 @@
 import { useCallback, useRef, type ReactElement, type HTMLAttributes, type RefAttributes } from 'react'
 import { useTableColumns } from '@/components/shared/useTableColumns'
-import { TableColumnResizeHandle } from '@/components/shared/TableColumnResizeHandle'
+import { TableColumnHeader } from '@/components/shared/TableColumnHeader'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
 import type { TableColumn } from '@/types'
 
@@ -49,7 +49,7 @@ export function InboundEntryTable<T>({ data, getRowKey, renderRow, picker = fals
       requestAnimationFrame(focus)
     }}>
     <colgroup ref={layout.colgroupRef}>{columns.map(col => <col key={String(col.key)} style={{ width: layout.usesPercent ? layout.getPercentColumnWidth(col) : layout.getColumnWidth(col) }} />)}</colgroup>
-    <thead data-resizable className="data-table-header sticky top-0 z-10"><tr>{columns.map(col => <th key={String(col.key)} scope="col" className="relative"><div className={`flex min-w-0 items-center pr-3 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}><span>{col.title}</span><TableColumnResizeHandle column={col} layout={layout} /></div></th>)}</tr></thead>
+    <thead data-resizable className="data-table-header sticky top-0 z-10"><tr>{columns.map(col => <TableColumnHeader key={String(col.key)} column={col} layout={layout} />)}</tr></thead>
     {data.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={data} columns={columns.length} getRowKey={getRowKey} renderRow={renderRow} preserveFocus onScrollToIndexReady={registerScroll} /> : <tbody>{data.map((row, index) => <Row key={getRowKey(row)} row={renderRow(row, index)} />)}</tbody>}
   </table>
 }

@@ -1,5 +1,9 @@
+import { ReportTable } from '@/components/shared/ReportTable'
+import { ReportMeter } from '@/components/shared/ReportMeter'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { CHART_TONES } from '@/components/dashboard/chartTheme'
 import { amount } from '@/lib/format'
-import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { ContentTabs } from '@/components/shared/ContentTabs'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { confirmAction } from '@/lib/confirm'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
@@ -137,10 +141,8 @@ export default function AbcClassPage() {
         const tone = r.coverageRate >= 80 ? 'success' : (r.coverageRate >= 50 ? 'warning' : 'danger')
         return (
           <div className="flex items-center gap-2">
-            <div className="h-2 w-28 overflow-hidden rounded-full bg-muted">
-              <div className={`h-full rounded-full bg-${tone}`} style={{ width: `${Math.min(100, r.coverageRate)}%` }} />
-            </div>
-            <span className={`tabular-nums text-sm ${tone === 'success' ? 'text-emerald-600' : tone === 'warning' ? 'text-amber-600' : 'text-red-600'}`}>{r.coverageRate}%</span>
+            <ReportMeter value={r.coverageRate} max={100} label={`${r.warehouseName} ${r.abcClass} 类按期盘点率`} valueText={`${r.coverageRate}%`} color={tone === 'success' ? CHART_TONES.success : tone === 'warning' ? CHART_TONES.warning : CHART_TONES.destructive} />
+            <span className={`tabular-nums text-sm ${tone === 'success' ? 'text-success-ink' : tone === 'warning' ? 'text-warning-ink' : 'text-destructive-ink'}`}>{r.coverageRate}%</span>
           </div>
         )
       },
@@ -167,7 +169,7 @@ export default function AbcClassPage() {
       if (hasUnsavedRules) confirmAction({ title: '切换仓库', description: '当前规则有未保存的修改，切换仓库将丢弃这些修改。', confirmText: '丢弃并切换', onConfirm: changeWarehouse })
       else changeWarehouse()
     }}>
-      <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
+      <SelectTrigger aria-label="当前仓库" className="h-9 w-52"><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="0">{tab === 'rules' ? '全局默认（所有仓库）' : '请选择仓库'}</SelectItem>
         {warehouses?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
@@ -179,21 +181,20 @@ export default function AbcClassPage() {
     <div className="space-y-4">
       <PageHeader
         title="分档与盘点规则"
-        description="按出库消耗金额分档（A 卖得多盘得频繁 / B 中等 / C 卖得少盘得少）；分批盘点规则决定各档位多久盘一次、单次盘多少。"
+        description={tab === 'rules' ? rulesEditing && canEditRules
+          ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）' : '编辑全局默认规则（适用于未单独设置的所有仓库）')
+          : (warehouseId > 0 ? '查看本仓覆盖规则。' : canEditRules ? '查看全局默认规则；点「编辑规则」后可修改。' : '全局默认只读；仅不限仓管理账号可修改。')
+          : '按出库消耗金额分档（A 卖得多盘得频繁 / B 中等 / C 卖得少盘得少）；分批盘点规则决定各档位多久盘一次、单次盘多少。'}
         actions={<Button variant="outline" onClick={() => downloadExport('/export/abc').catch(e => toast.error((e as Error).message))}>导出</Button>}
       />
 
-      <div className="flex gap-2">
-        <Button variant={tab === 'abc' ? 'default' : 'outline'} size="sm" onClick={() => setTab('abc')}>商品分档结果</Button>
-        <Button variant={tab === 'rules' ? 'default' : 'outline'} size="sm" onClick={() => setTab('rules')}>分批盘点规则</Button>
-        <Button variant={tab === 'coverage' ? 'default' : 'outline'} size="sm" onClick={() => setTab('coverage')}>按期盘点率</Button>
-      </div>
 
-      <KeepAliveSection active={tab === 'abc'} className="space-y-4">
+      <ContentTabs label="商品分档与盘点规则" value={tab} onValueChange={setTab} tabs={[
+        { value: 'abc', label: '商品分档结果', content: <div className="space-y-4">
           <FilterCard>
             {warehouseSelect}
             <Select value={metricType} onValueChange={setMetricType}>
-              <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="分档统计口径" className="h-9 w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="sold_value">按出库消耗金额</SelectItem>
                 <SelectItem value="stock_value">按库存占用金额</SelectItem>
@@ -201,7 +202,7 @@ export default function AbcClassPage() {
             </Select>
             {metricType === 'sold_value' && (
               <div className="flex items-center gap-1">
-                <Input type="number" value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value) || 90)} className="h-9 w-20 text-right tabular-nums" />
+                <Input aria-label="统计天数" type="number" value={windowDays} onChange={(e) => setWindowDays(Number(e.target.value) || 90)} className="h-9 w-20 text-right tabular-nums" />
                 <span className="text-sm text-muted-foreground">统计天数</span>
               </div>
             )}
@@ -210,23 +211,18 @@ export default function AbcClassPage() {
             </Button>
           </FilterCard>
           {warehouseId <= 0
-            ? <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">请先选择一个仓库查看其商品分档（分档按仓划分）</div>
+            ? <EmptyState variant="empty-folder" title="先选择仓库" description="商品分档按仓划分，选择仓库后查看该仓结果。" className="rounded-xl border border-border bg-card" />
             : <DataTable columns={abcColumns} data={abcQ.data ?? []} loading={abcQ.isLoading} />}
-      </KeepAliveSection>
-      <KeepAliveSection active={tab === 'rules'} className="space-y-4">
+        </div> },
+        { value: 'rules', label: '分批盘点规则', content: <div className="space-y-4">
           <FilterCard>
             {warehouseSelect}
-            <span className="text-sm text-muted-foreground">
-              {rulesEditing && canEditRules
-                ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）' : '编辑全局默认规则（适用于未单独设置的所有仓库）')
-                : (warehouseId > 0 ? '查看本仓覆盖规则。' : canEditRules ? '查看全局默认规则；点「编辑规则」后可修改。' : '全局默认只读；仅不限仓管理账号可修改。')}
-            </span>
             {warehouseId === 0 && globalPolicy.isError && <Button size="sm" variant="outline" onClick={() => void globalPolicy.refetch()}>重试权限读取</Button>}
             {rulesEditing && canEditRules && <EditModeBadge />}
             <UnsavedBadge show={hasUnsavedRules} />
           </FilterCard>
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
+            <ReportTable className="w-full text-sm">
               <thead className="bg-muted/40 text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">档位</th>
@@ -242,12 +238,12 @@ export default function AbcClassPage() {
                     <td className="px-4 py-3"><SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} /></td>
                     <td className="px-4 py-2 text-right">
                       {rulesEditing && canEditRules
-                        ? <Input type="number" value={r.intervalDays} onChange={(e) => patchDraft(r.abcClass, { intervalDays: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
+                        ? <Input aria-label={`${r.abcClass} 类盘点周期（天）`} type="number" value={r.intervalDays} onChange={(e) => patchDraft(r.abcClass, { intervalDays: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
                         : <span className="tabular-nums">{r.intervalDays}</span>}
                     </td>
                     <td className="px-4 py-2 text-right">
                       {rulesEditing && canEditRules
-                        ? <Input type="number" value={r.batchLimit} onChange={(e) => patchDraft(r.abcClass, { batchLimit: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
+                        ? <Input aria-label={`${r.abcClass} 类单次上限（SKU）`} type="number" value={r.batchLimit} onChange={(e) => patchDraft(r.abcClass, { batchLimit: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />
                         : <span className="tabular-nums">{r.batchLimit}</span>}
                     </td>
                     <td className="px-4 py-3 text-center">
@@ -261,7 +257,7 @@ export default function AbcClassPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ReportTable>
           </div>
           <div className="flex justify-end">
             {canEditRules && (rulesEditing ? (
@@ -275,14 +271,15 @@ export default function AbcClassPage() {
               <Button variant="outline" disabled={!draft.length} onClick={() => setRulesEditing(true)}>编辑规则</Button>
             ))}
           </div>
-      </KeepAliveSection>
-      <KeepAliveSection active={tab === 'coverage'} className="space-y-4">
+        </div> },
+        { value: 'coverage', label: '按期盘点率', content: <div className="space-y-4">
           <FilterCard>
             {warehouseSelect}
             <span className="text-sm text-muted-foreground">按「距上次盘点的天数超过该档位的周期」判定到期；按期盘点率 = 已按期盘 / 应盘。</span>
           </FilterCard>
           <DataTable columns={coverageColumns} data={coverageRows} loading={coverageQ.isLoading} rowKey="rowKey" emptyText="暂无按期盘点数据（先运行一次分档重算）" />
-      </KeepAliveSection>
+        </div> },
+      ]} />
     </div>
   )
 }

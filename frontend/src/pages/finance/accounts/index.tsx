@@ -50,8 +50,8 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   return (
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-lg" aria-describedby={undefined}>
-        <DialogHeader><DialogTitle>查询资金账户</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-lg">
+        <DialogHeader description={"设置资金账户的筛选条件。"}><DialogTitle>查询资金账户</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-keyword`}>关键字</Label>
@@ -219,7 +219,7 @@ export default function FinanceAccountsPage() {
     <div className="space-y-4">
       <PageHeader
         title="账户管理"
-        description="管理银行、现金等收付款账户；余额由流水实时汇总，不可直接修改。"
+        description="余额由流水实时汇总，不可直接修改。"
         actions={(
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => downloadExport('/export/finance-accounts').catch(e => toast.error((e as Error).message))}>导出</Button>
@@ -228,6 +228,7 @@ export default function FinanceAccountsPage() {
           </div>
         )}
       />
+
 
       {summary && (
         <div className="rounded-lg border border-border bg-card px-4 py-3">
@@ -246,16 +247,14 @@ export default function FinanceAccountsPage() {
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
         <DialogContent className="max-w-2xl">
           {/* 编辑态与默认（新建）态一眼可分 */}
-          <DialogHeader>
+          <DialogHeader description={editing ? <>
+                正在编辑：<span className="font-medium text-foreground">{editing.code ? `${editing.code} · ` : ''}{editing.name}</span>
+              </> : ("填写账户资料与启用状态。")}>
             <DialogTitle className="flex flex-wrap items-center gap-2">
               {editing ? '编辑账户' : '新建账户'}
               {editing && <EditModeBadge />}
             </DialogTitle>
-            {editing && (
-              <p className="text-helper mt-1">
-                正在编辑：<span className="font-medium text-foreground">{editing.code ? `${editing.code} · ` : ''}{editing.name}</span>
-              </p>
-            )}
+
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -313,7 +312,7 @@ export default function FinanceAccountsPage() {
       {/* 账户流水 */}
       <Dialog open={!!txAccount} onOpenChange={v => !v && setTxAccount(null)}>
         <DialogContent className="max-w-4xl">
-          <DialogHeader><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
+          <DialogHeader description={"核对该账户的逐笔收支与余额。"}><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
           {txAccount && (
             <div className="text-sm text-muted-foreground">
               当前余额 <span className="font-semibold text-foreground">{money(txAccount.currentBalance)}</span>
@@ -361,10 +360,10 @@ export default function FinanceAccountsPage() {
       {/* 余额调整：不直接改余额，补一笔差额流水留痕 */}
       <Dialog open={!!adjustTarget} onOpenChange={v => !v && setAdjustTarget(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>余额调整 — {adjustTarget?.name}</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <DialogHeader description={<>{<>
             账实不符时用它对平。系统会按差额补一笔「余额调整」流水，不会直接改写余额，调整过程可追溯。
-          </p>
+          </>}</>}><DialogTitle>余额调整 — {adjustTarget?.name}</DialogTitle></DialogHeader>
+
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label htmlFor={`${fieldId}-current`}>当前余额</Label>

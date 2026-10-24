@@ -1,3 +1,4 @@
+import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { readHandlingSourceId, handlingConfig, mayHandle, handlingQty } from '@/lib/disposalHandlingRecovery'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
@@ -9,7 +10,7 @@ import { captureRefundOwner, refundOwnerCurrent, refundConfig, refundActivityEpo
 import { SupplierRefundSourceButton } from '@/pages/supplier-refunds/SupplierRefundSourceButton'
 import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 /**
  * PurchaseReturnFormPage — 采购退货单新建 / 详情页面（独立路由）
@@ -30,6 +31,7 @@ import { readReturnSourceHandoff, type ReturnSourceHandoff } from '@/pages/retur
 import { Loader2, Save, X } from 'lucide-react'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -350,10 +352,11 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="desktop-document-form flex flex-col gap-3">
       <ActionBar
         title="新建采购退货单"
-        subtitle={isDirty ? <span className="text-xs font-normal text-muted-foreground">未保存</span> : undefined}
+        description={`${handling ? `处理来源：${handling.source.data?.source.productName ?? '核对中'}；可关联基本量 ${handling.source.data?.source.budget.availableQuantity ?? '—'}。请填写准确采购单并明确选择原采购行。` : ''}${boundSource ? `已锚定原单 ${boundSource.orderNo}。商品、单位和原成交价只读；可按行填写本次退货数量，填 0 或移除表示本次不退，数量不得超过剩余可退量。` : '本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择供应商、仓库与商品填写。'}`}
+        subtitle={<UnsavedBadge show={isDirty} />}
         rightActions={
           <Button onClick={handleSubmit} disabled={submitting || locked || loadingSource} className="gap-1.5">
             {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中…</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
@@ -361,7 +364,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
         }
       />
 
-      {handling && <><p>处理来源：{handling.source.data?.source.productName ?? '核对中'}；可关联基本量 {handling.source.data?.source.budget.availableQuantity ?? '—'}。请填写准确采购单并明确选择原采购行。</p>{handling.source.error && <p role="alert">{handling.source.error}</p>}<HandlingOperationPanel write={handling.write} />
+      {handling && <>{handling.source.error && <p role="alert">{handling.source.error}</p>}<HandlingOperationPanel write={handling.write} />
       {boundSource && handling.source.data && <section aria-label="选择原采购行"><p>匹配来源的原采购行（同商品多行须明确选择）</p>{boundSource.items.filter(i => i.productId === handling.source.data!.source.productId && i.unit === handling.source.data!.source.unit && i.remainingQty > 0).map((i,index) => <Button key={i.sourceItemId} variant="outline" disabled={locked || submitting} onClick={() => {
         if (!handlingCurrent() || remark || items.length) { toast.warning('已有输入，未覆盖；请保留并核对'); return }
         setItems([{ _key: 1, sourceItemId: i.sourceItemId, productId: i.productId, productCode: i.productCode, productName: i.productName, articleNumber: i.articleNumber, spec: i.spec, color: i.color, unit: i.unit, quantity: 0, unitPrice: i.unitPrice, entryUnit: i.unit, units: [], originalQty: i.quantity, returnedQty: i.returnedQty, remainingQty: i.remainingQty }]); setCounter(2)
@@ -371,7 +374,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
       {(sourceError || !ownerCurrent) && <p role="alert" className="text-sm text-destructive-ink">{sourceError || '登录或服务器已变化，草稿保留'}</p>}
       <fieldset disabled={locked || submitting} className="contents">
       <SectionCard title="退货信息" compact>
-        <div className="flex flex-wrap items-start gap-4">
+        <div className="desktop-form-fields flex flex-wrap items-start gap-4">
           <div className="w-[272px] shrink-0 space-y-1.5">
             <Label>供应商 *</Label>
             {handling ? <p className="py-2">{supplier?.name || '由准确原采购单确定'}</p> : <PickerField
@@ -419,18 +422,12 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
               )}
             </div>
           </div>
-          <div className="flex-1 space-y-1.5">
+          <div className="desktop-field-wide flex-1 space-y-1.5">
             <Label>备注</Label>
             <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} placeholder="选填" />
           </div>
         </div>
 
-        {!boundSource && <p className="mt-3 text-xs text-muted-foreground">本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择供应商、仓库与商品填写。</p>}
-        {boundSource && (
-          <div className="mt-3 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            已锚定原单 {boundSource.orderNo}。商品、单位和原成交价只读；可按行填写本次退货数量，填 0 或移除表示本次不退，数量不得超过剩余可退量。
-          </div>
-        )}
       </SectionCard>
 
       <SectionCard
@@ -441,28 +438,18 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
         ) : undefined}
       >
         {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+          <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
             <p className="text-sm text-muted-foreground">还没有退货明细，点击上方"添加商品"或先绑定原采购单</p>
           </div>
         ) : (
           <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1320px] text-sm">
-              <thead>
-                <tr className="border-b text-table-head">
-                  <ProductIdentityHeaders />
-                  <th className="w-16 pb-2 text-center">单位</th>
-                  <th className="w-20 pb-2 text-right">数量</th>
-                  <th className="w-24 pb-2 text-right">单价 (¥)</th>
-                  <th className="w-28 pb-2 text-right">金额</th>
-                  <th className="w-10 pb-2" />
-                </tr>
-              </thead>
+            <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 80, align: 'right' }, { key: 'unitPrice', title: '单价 (¥)', width: 96, align: 'right' }, { key: 'amount', title: '金额', width: 112, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="purchase-return-entry-items" minWidth={900}>
               <tbody>
                 {items.map((item, index) => (
                   <Fragment key={item._key}>
                     <tr className={cn('border-border/40', (item.originalQty == null && item.returnedQty == null) && 'border-b')}>
-                      <ProductIdentityCells product={item} nameContent={<button
+                      <ProductIdentityCells compact product={item} nameContent={<button
                           type="button"
                           disabled={!!boundSource}
                           onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
@@ -516,7 +503,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
                     </tr>
                     {(item.originalQty != null || item.returnedQty != null) && (
                       <tr className="border-b border-border/40">
-                        <td colSpan={10} className="pb-2.5 pt-0 text-xs text-muted-foreground">
+                        <td colSpan={6} className="pb-2.5 pt-0 text-xs text-muted-foreground">
                           原单数量 {Number(item.originalQty || 0).toFixed(2)}，已退 {Number(item.returnedQty || 0).toFixed(2)}，剩余可退 {Number(item.remainingQty || 0).toFixed(2)}
                         </td>
                       </tr>
@@ -524,9 +511,9 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
                   </Fragment>
                 ))}
               </tbody>
-            </table>
+            </ResizableTable>
           </div>
-          <div className="flex items-center justify-between border-t border-border pt-4">
+          <div className="desktop-entry-summary flex items-center justify-between border-t border-border pt-4">
             <p className="text-muted-body">商品明细：{items.length} 行</p>
             <div className="text-right">
               <p className="text-helper">合计金额</p>
@@ -672,9 +659,10 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="desktop-document-detail flex flex-col gap-3">
       <ActionBar
         title={ret.returnNo}
+        description="查看采购退货明细与执行进度。"
         subtitle={<StatusBadge type="returns" status={ret.status} />}
         rightActions={
           <>
@@ -702,7 +690,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       <section className="space-y-2"><p>供应商退款与实物退货分别办理。原账款已付形成负余额时，从本采购退货草稿核对准确原付款分配，先登记真实回款，再继续实物退货。</p>{ret.status===1 && ret.purchaseOrderId && <SupplierRefundSourceButton purchaseReturnId={ret.id} disabled={detailQuery.isFetching||detailQuery.isError||detailQuery.isPaused}/>}</section>
       <OrderDetailSections type="purchase-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
       <SectionCard title="基础信息" compact>
-        <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
+        <dl className="desktop-document-facts grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
             ['供应商', ret.supplierName],
             ['仓库', ret.warehouseName],
@@ -716,7 +704,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
             </div>
           ))}
           {ret.remark && (
-            <div className="col-span-3">
+            <div className="desktop-field-wide col-span-3">
               <dt className="mb-0.5 text-helper">备注</dt>
               <dd>{ret.remark}</dd>
             </div>
@@ -727,7 +715,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       <SectionCard title="退货明细" compact>
         <DataTable
           columns={[
-            ...productIdentityColumns(),
+            ...productIdentityColumns({ compact: true }),
             { key: 'unit', title: '单位', width: 70, render: (_, item) => <span className="text-muted-foreground">{(item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : item.unit}</span> },
             { key: 'quantity', title: '数量', width: 120, align: 'right', render: (v, item) => (item.entryUnit && item.entryUnit !== item.unit && item.entryQty != null)
               ? <span className="tabular-nums">{item.entryQty} {item.entryUnit}<span className="ml-1 text-xs text-muted-foreground">（{Number(v)} {item.unit}）</span></span>
@@ -741,7 +729,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
           rowKey="id"
           emptyText="暂无退货明细"
         />
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+        <div className="desktop-entry-summary mt-4 flex items-center justify-between border-t border-border pt-4">
           <p className="text-muted-body">共 {ret.items?.length ?? 0} 行退货明细</p>
           <div className="text-right">
             <p className="text-helper">合计金额</p>

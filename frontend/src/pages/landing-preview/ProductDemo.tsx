@@ -2,9 +2,7 @@ import { useState, type KeyboardEvent } from "react";
 import {
   ArrowUpRight,
   Check,
-  ChevronRight,
   ClipboardList,
-  Package,
   ReceiptText,
   RotateCcw,
   ShoppingCart,
@@ -65,54 +63,46 @@ export default function ProductDemo() {
         aria-labelledby={`preview-scene-${active}`}
         className="lp-product-content"
       >
-        <div className="lp-product-heading">
-          <div>
-            <span className="lp-breadcrumb">
-              业务管理 <ChevronRight size={12} /> {scene.name}
-            </span>
-            <h2>{scene.title}</h2>
-          </div>
-          <span className="lp-product-symbol">
-            <Package size={25} strokeWidth={1.4} />
-          </span>
-        </div>
-        <p className="lp-product-description">{scene.description}</p>
-        <div className="lp-table-scroll">
-          <table>
-            <caption className="lp-sr">{scene.name}示例数据</caption>
-            <thead>
-              <tr>
-                {scene.columns.map((column) => (
-                  <th key={column}>{column}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {scene.rows.map((row, rowIndex) => (
-                <tr key={rowIndex}>
-                  {row.map((value, index) => (
-                    <td key={index}>
-                      {index === row.length - 1 ? (
-                        <span className="lp-status">{value}</span>
-                      ) : (
-                        value
-                      )}
-                    </td>
+        <div className="lp-scene-body" key={scene.name}>
+          <div className="lp-product-heading"><h2>{scene.title}</h2></div>
+          <p className="lp-product-description">{scene.description}</p>
+          <div className="lp-table-scroll">
+            <table>
+              <caption className="lp-sr">{scene.name}示例数据</caption>
+              <thead>
+                <tr>
+                  {scene.columns.map((column) => (
+                    <th key={column}>{column}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="lp-product-note">
-          <Check size={15} />
-          <span>{scene.label}</span>
-        </div>
-        <div className="lp-product-footer">
-          <span>{scene.note}</span>
-          <a href={scene.route} aria-label={`进入系统查看${scene.name}`}>
-            <ArrowUpRight size={17} />
-          </a>
+              </thead>
+              <tbody>
+                {scene.rows.map((row, rowIndex) => (
+                  <tr key={rowIndex}>
+                    {row.map((value, index) => (
+                      <td key={index}>
+                        {index === row.length - 1 ? (
+                          <span className="lp-status">{value}</span>
+                        ) : (
+                          value
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="lp-product-note">
+            <Check size={15} />
+            <span>{scene.label}</span>
+          </div>
+          <div className="lp-product-footer">
+            <span>{scene.note}</span>
+            <a href={scene.route} aria-label={`进入系统查看${scene.name}`}>
+              进入系统 <ArrowUpRight size={15} />
+            </a>
+          </div>
         </div>
       </div>
       <div className="lp-product-bottom">

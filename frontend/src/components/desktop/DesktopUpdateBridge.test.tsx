@@ -35,6 +35,8 @@ async function click(text: string) {
 test('global subscription shows release notes and sends version plus URL for immediate update', async () => {
   await act(async () => notify(update))
   expect(document.body.textContent).toContain('发现新版本')
+  expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('新版本 2.0.0 已发布，当前版本为 1.0.0。')
+  expect(document.body.textContent?.match(/当前版本为/g)).toHaveLength(1)
   expect(document.body.textContent).toContain('修复扫码上架')
   await click('立即更新')
   expect(start).toHaveBeenCalledWith({ version: '2.0.0', downloadUrl: update.downloadUrl })

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -67,6 +67,7 @@ export function PaymentQueryBar({ query, onChange, labels, clearValue = EMPTY_PA
 }
 
 interface Props {
+  title?: string
   open: boolean
   initial: PaymentQueryValues
   clearValue?: PaymentQueryValues
@@ -91,11 +92,10 @@ interface Props {
 /**
  * 账款类列表的查询弹窗——列表页上唯一的查询入口，页面不再放第二套筛选控件。
  *
- * 用高度自适应的 Dialog 而非可拖拽的 AppDialog：条件是固定的几行，
- * 固定高度会在底部留一大片空白。
+ * 查询外壳与业务单据共用QueryDialog，财务字段与清空/应用口径由此组件保留。
  */
 export function PaymentQueryDialog({
-  open, initial, onClose, onApply, labels, partyType, statusOptions, clearValue = EMPTY_PAYMENT_QUERY,
+  open, initial, onClose, onApply, labels, partyType, statusOptions, clearValue = EMPTY_PAYMENT_QUERY, title = '查询',
   showDueDate = false, showConfirmStatus = false, singleDate = false,
 }: Props) {
   const [v, setV] = useState<PaymentQueryValues>(initial)
@@ -109,15 +109,14 @@ export function PaymentQueryDialog({
 
   return (
     <>
-    <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>查询</DialogTitle></DialogHeader>
-
-        <div className="space-y-3">
+    <QueryDialog open={open} title={title} dialogId={`payment-query-${partyType}`} width={680}
+      onClose={onClose} onReset={() => setV(clearValue)} resetLabel="清空"
+      onApply={() => { onApply(v); onClose() }}>
+        <div className="fc-payment-query space-y-4 px-5 py-5">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label>{labels.docLabel}</Label>
-              <Input value={v.docNo} className="h-9" placeholder={`输入${labels.docLabel}`}
+              <Input aria-label={labels.docLabel} value={v.docNo} className="h-9" placeholder={`输入${labels.docLabel}`}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('docNo', e.target.value)} />
             </div>
             <div className="space-y-1">
@@ -144,7 +143,7 @@ export function PaymentQueryDialog({
             <div className="space-y-1">
               <Label>状态</Label>
               <Select value={v.status || '__all__'} onValueChange={x => set('status', x === '__all__' ? '' : x)}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                <SelectTrigger aria-label="状态" className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__all__">全部</SelectItem>
                   {statusOptions.map(([value, label]) => (
@@ -158,7 +157,7 @@ export function PaymentQueryDialog({
               <div className="space-y-1">
                 <Label>结算确认</Label>
                 <Select value={v.confirmStatus || '__all__'} onValueChange={x => set('confirmStatus', x === '__all__' ? '' : x)}>
-                  <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+                  <SelectTrigger aria-label="结算确认" className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">全部</SelectItem>
                     <SelectItem value="0">待确认</SelectItem>
@@ -190,13 +189,13 @@ export function PaymentQueryDialog({
             </div>
             {singleDate ? (
               /* 单日模式：选中的日期同时写进 start/end，后端仍按区间查，等价于「就这一天」 */
-              <DatePicker value={v.startDate} className="h-9 w-full"
+              <DatePicker aria-label={labels.dateLabel} value={v.startDate} className="h-9 w-full"
                 onChange={x => setV(prev => ({ ...prev, startDate: x, endDate: x }))} />
             ) : (
               <div className="flex items-center gap-2">
-                <DatePicker value={v.startDate} onChange={x => set('startDate', x)} max={v.endDate || undefined} className="h-9 flex-1" />
+                <DatePicker aria-label={`${labels.dateLabel}（起）`} value={v.startDate} onChange={x => set('startDate', x)} max={v.endDate || undefined} className="h-9 flex-1" />
                 <span className="text-muted-foreground">至</span>
-                <DatePicker value={v.endDate} onChange={x => set('endDate', x)} min={v.startDate || undefined} className="h-9 flex-1" />
+                <DatePicker aria-label={`${labels.dateLabel}（止）`} value={v.endDate} onChange={x => set('endDate', x)} min={v.startDate || undefined} className="h-9 flex-1" />
               </div>
             )}
           </div>
@@ -205,9 +204,9 @@ export function PaymentQueryDialog({
             <div className="space-y-1">
               <Label>到期日</Label>
               <div className="flex items-center gap-2">
-                <DatePicker value={v.dueStart} onChange={x => set('dueStart', x)} max={v.dueEnd || undefined} className="h-9 flex-1" />
+                <DatePicker aria-label="到期日（起）" value={v.dueStart} onChange={x => set('dueStart', x)} max={v.dueEnd || undefined} className="h-9 flex-1" />
                 <span className="text-muted-foreground">至</span>
-                <DatePicker value={v.dueEnd} onChange={x => set('dueEnd', x)} min={v.dueStart || undefined} className="h-9 flex-1" />
+                <DatePicker aria-label="到期日（止）" value={v.dueEnd} onChange={x => set('dueEnd', x)} min={v.dueStart || undefined} className="h-9 flex-1" />
               </div>
             </div>
           )}
@@ -215,22 +214,16 @@ export function PaymentQueryDialog({
           <div className="space-y-1">
             <Label>{labels.amountLabel}</Label>
             <div className="flex items-center gap-2">
-              <Input type="number" min="0" step="0.01" placeholder="最小金额" className="h-9 flex-1"
+              <Input type="number" min="0" step="0.01" aria-label={`${labels.amountLabel}（最小值）`} placeholder="最小金额" className="h-9 flex-1"
                 value={v.minAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('minAmount', e.target.value)} />
               <span className="text-muted-foreground">至</span>
-              <Input type="number" min="0" step="0.01" placeholder="最大金额" className="h-9 flex-1"
+              <Input type="number" min="0" step="0.01" aria-label={`${labels.amountLabel}（最大值）`} placeholder="最大金额" className="h-9 flex-1"
                 value={v.maxAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('maxAmount', e.target.value)} />
             </div>
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setV(clearValue)}>清空</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </QueryDialog>
 
     {/* 往来方选择器：选中后把名称写进 partyName（账款按 party_name 快照筛，不需要 id） */}
     {canFindParty && partyFinderOpen && (partyType === 1 ? (

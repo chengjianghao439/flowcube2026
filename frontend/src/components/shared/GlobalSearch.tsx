@@ -1,58 +1,53 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Package, Factory, User, ShoppingCart, Truck, ClipboardList, ArrowLeftRight, Undo2, Inbox, Receipt, Archive, Banknote, ShieldCheck, ListChecks, FileText } from 'lucide-react'
+import { Command } from 'cmdk'
+import { Package, Factory, User, ShoppingCart, Truck, ClipboardList, ArrowLeftRight, Undo2, Inbox, Receipt, Archive, Banknote, ShieldCheck, ListChecks, FileText, Search, ArrowRight, Loader2, X } from 'lucide-react'
 import { searchGlobalApi, type GlobalSearchItem } from '@/api/search'
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { EmptyState } from './EmptyState'
+import { IconButton } from './IconButton'
 
 type SearchResult = GlobalSearchItem
-
-const TYPE_ICON: Record<string, React.ComponentType<{className?: string}>> = {
-  product: Package,
-  supplier: Factory,
-  customer: User,
-  purchase: ShoppingCart,
-  sale: Truck,
-  requisition: ClipboardList,
-  transfer: ArrowLeftRight,
-  purchaseReturn: Undo2,
-  saleReturn: Undo2,
-  inbound: Inbox,
-  expense: Receipt,
-  disposal: Archive,
-  refund: Banknote,
-  creditOverride: ShieldCheck,
-  stockcheck: ListChecks,
-  invoice: FileText,
+const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+  product: Package, supplier: Factory, customer: User, purchase: ShoppingCart, sale: Truck,
+  requisition: ClipboardList, transfer: ArrowLeftRight, purchaseReturn: Undo2, saleReturn: Undo2,
+  inbound: Inbox, expense: Receipt, disposal: Archive, refund: Banknote,
+  creditOverride: ShieldCheck, stockcheck: ListChecks, invoice: FileText,
 }
-// 分组展示顺序（与后端 ENTITIES 一致）
-const TYPE_ORDER = ['product','supplier','customer','purchase','sale','requisition','transfer','purchaseReturn','saleReturn','inbound','expense','disposal','refund','creditOverride','stockcheck','invoice']
+const TYPE_ORDER = ['product', 'supplier', 'customer', 'purchase', 'sale', 'requisition', 'transfer', 'purchaseReturn', 'saleReturn', 'inbound', 'expense', 'disposal', 'refund', 'creditOverride', 'stockcheck', 'invoice']
+const resultValue = (result: SearchResult) => JSON.stringify([result.type, result.id, result.path])
 
 export default function GlobalSearch() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
+  const [selected, setSelected] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const requestId = useRef(0)
   const abort = useRef<AbortController | null>(null)
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const navigate = useNavigate()
+  const rootRef = useRef<HTMLDivElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout>>()
-
-  // 平台化快捷键提示：macOS 显示 ⌘K，Windows/Linux 显示 Ctrl+K
+  const navigate = useNavigate()
   const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)
   const shortcutHint = isMac ? '⌘K' : 'Ctrl+K'
 
-  // 快捷键 Cmd+K / Ctrl+K
+  const resetSearch = useCallback(() => {
+    requestId.current += 1
+    clearTimeout(timer.current)
+    abort.current?.abort()
+    setQuery(''); setResults([]); setSelected(''); setLoading(false); setError(''); setFocused(false)
+  }, [])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); inputRef.current?.focus() }
-      if (e.key === 'Escape') {
-        requestId.current += 1
-        clearTimeout(timer.current)
-        abort.current?.abort()
-        setQuery(''); setResults([]); setLoading(false); setError(''); setFocused(false)
-        inputRef.current?.blur()
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault(); inputRef.current?.focus(); setFocused(true)
+      }
+      // 其他弹窗/表单的 Escape 不清空搜索，也不抢走其焦点。
+      if (e.key === 'Escape' && rootRef.current?.contains(document.activeElement)) {
+        resetSearch(); inputRef.current?.blur()
       }
     }
     window.addEventListener('keydown', handler)
@@ -62,10 +57,10 @@ export default function GlobalSearch() {
       requestId.current += 1
       abort.current?.abort()
     }
-  }, [])
+  }, [resetSearch])
 
   const search = (q: string) => {
-    setQuery(q)
+    setQuery(q); setSelected('')
     const currentRequest = ++requestId.current
     clearTimeout(timer.current)
     setResults([])
@@ -87,91 +82,62 @@ export default function GlobalSearch() {
       }
     }, 300)
   }
-
   const go = (result: SearchResult) => {
     navigate(result.path)
-    search(''); setFocused(false)
+    resetSearch()
   }
+  const showDropdown = focused && query.trim().length > 0
+  const groups = TYPE_ORDER.map(type => ({ type, items: results.filter(result => result.type === type) })).filter(group => group.items.length)
 
-  // 回车跳转第一个结果；阻止点击时被 blur 抢先收起（mousedown 时记录，避免 150ms 竞争）
-  const suppressBlur = useRef(false)
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && results.length > 0) {
-      e.preventDefault()
-      go(results[0])
-    }
-  }
-  const onMouseDownResult = () => { suppressBlur.current = true }
-
-  const showDropdown = focused && (query.trim().length > 0)
-
-  return (
-    <div className="relative">
-      <div className="flex items-center gap-2 border rounded-lg px-3 py-1.5 bg-background w-56 focus-within:ring-2 focus-within:ring-primary/30 transition-colors">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground shrink-0">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-        <input
-          ref={inputRef}
-          aria-label="全局搜索单据与资料"
-          title="搜索单据与资料；商品支持编码、名称、条码、供应商型号、型号、颜色"
-          // 不声明的话，浏览器会把登录表单的用户名自动填充灌进这个框（进系统就看到
-          // 搜索框里是当前账号名、还挂着一条"未找到 xxx"的提示）——2026-09-16 修复
-          autoComplete="off"
-          value={query}
-          onChange={e => search(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={() => { if (!suppressBlur.current) setTimeout(() => setFocused(false), 150); suppressBlur.current = false }}
-          onKeyDown={onKeyDown}
-          placeholder={`搜索… ${shortcutHint}`}
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground min-w-0"
-        />
-        {loading && <span className="text-xs text-muted-foreground shrink-0">...</span>}
-      </div>
-
-      {showDropdown && (
-        <div data-search-results className="absolute top-full right-0 mt-2 w-[560px] max-w-[calc(100vw-2rem)] bg-popover text-popover-foreground rounded-lg shadow-lg border border-border z-50 max-h-[70vh] overflow-y-auto">
-          {loading && <div role="status" className="py-8 text-center text-sm text-muted-foreground">正在搜索全部历史记录…</div>}
-          {error && <div role="alert" className="px-4 py-8 text-center text-sm text-destructive-ink">{error}</div>}
-          {results.length === 0 && !loading && !error && (
-            <EmptyState variant="no-result" compact title={`未找到「${query}」相关内容`} description="" />
-          )}
-          {results.length > 0 && (
-            <div>
-              {/* 按类型分组显示 */}
-              {TYPE_ORDER.map(type => {
-                const group = results.filter(r => r.type === type)
-                if (!group.length) return null
-                const Icon = TYPE_ICON[type] || FileText
-                return (
-                  <div key={type}>
-                    <div className="sticky top-0 border-b bg-muted px-4 py-2 text-xs font-medium text-muted-foreground flex items-center gap-2">
-                      <Icon className="size-3.5" /> {group[0].typeLabel}
-                    </div>
-                    {group.map(r => (
-                      <button key={r.id} onClick={() => go(r)} onMouseDown={onMouseDownResult}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-accent transition-colors text-left">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium break-words leading-5">{r.title}</p>
-                          {r.type === 'product' && query.trim() && r.searchMatch && <p className="text-xs text-muted-foreground break-words leading-5">命中：{r.searchMatch}</p>}
-                          {r.subtitle && r.subtitle !== r.title && <p className="text-xs text-muted-foreground break-words leading-5">{r.subtitle}</p>}
-                          {!!r.details?.length && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                            {r.details.map(detail => <span key={detail.label} className="break-words min-w-0 max-w-full leading-5">{detail.label}：{detail.value}</span>)}
-                          </div>}
-                        </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground shrink-0">
-                          <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                      </button>
-                    ))}
-
-                  </div>
-                )
-              })}
-            </div>
-          )}
+  return <Command ref={rootRef} shouldFilter={false} vimBindings={false} loop value={selected} onValueChange={setSelected}
+    label="全局搜索单据与资料" className="fc-global-search relative"
+    onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setFocused(false) }}>
+    <Popover open={showDropdown} onOpenChange={setFocused}>
+      <PopoverAnchor asChild>
+        <div className="fc-global-search-input flex w-56 items-center gap-2 rounded-lg border bg-background px-3 py-1.5 transition-colors focus-within:ring-2 focus-within:ring-primary/30">
+          <Search aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
+          <Command.Input asChild ref={inputRef} value={query} onValueChange={search}>
+            <input aria-label="全局搜索单据与资料" aria-expanded={showDropdown}
+              title="搜索单据与资料；商品支持编码、名称、条码、供应商型号、型号、颜色"
+              autoComplete="off" onFocus={() => setFocused(true)} placeholder={`搜索… ${shortcutHint}`}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" />
+          </Command.Input>
+          {loading ? <Loader2 aria-label="正在搜索" className="size-3.5 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none" />
+            : query && <IconButton label="清空全局搜索" icon={X} className="size-5 shrink-0" onClick={() => { search(''); inputRef.current?.focus() }} />}
         </div>
-      )}
-    </div>
-  )
+      </PopoverAnchor>
+      <PopoverContent align="end" sideOffset={8} role="presentation" aria-labelledby={undefined} data-search-results
+        className="fc-global-search-results w-[560px] max-w-[calc(100vw-2rem)] overflow-hidden"
+        onOpenAutoFocus={event => event.preventDefault()}
+        onCloseAutoFocus={event => event.preventDefault()}
+        onInteractOutside={event => { if (rootRef.current?.contains(event.target as Node)) event.preventDefault() }}
+        onEscapeKeyDown={event => { event.preventDefault(); event.stopPropagation(); resetSearch(); inputRef.current?.blur() }}>
+        <Command.List className="fc-global-search-list max-h-[min(420px,calc(var(--radix-popover-content-available-height)-40px))] overflow-y-auto overscroll-contain" label="搜索结果" aria-busy={loading}>
+          {loading && <div role="status" className="px-5 py-8 text-center text-sm text-muted-foreground">正在搜索全部历史记录…</div>}
+          {error && <div role="alert" className="px-5 py-8 text-center text-sm text-destructive-ink">{error}</div>}
+          {!loading && !error && !results.length && <EmptyState variant="no-result" compact title={`未找到「${query}」相关内容`} description="" />}
+          {groups.map(({ type, items }) => {
+            const Icon = TYPE_ICON[type] || FileText
+            return <Command.Group key={type} heading={<><Icon aria-hidden="true" className="size-3.5" />{items[0].typeLabel}</>}>
+              {items.map(result => <Command.Item key={resultValue(result)} value={resultValue(result)} onSelect={() => go(result)}
+                onMouseDown={event => event.preventDefault()} className="fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none">
+                <div className="min-w-0 flex-1">
+                  <p className="break-words text-sm font-medium leading-5">{result.title}</p>
+                  {result.type === 'product' && query.trim() && result.searchMatch && <p className="break-words text-xs leading-5 text-muted-foreground">命中：{result.searchMatch}</p>}
+                  {result.subtitle && result.subtitle !== result.title && <p className="break-words text-xs leading-5 text-muted-foreground">{result.subtitle}</p>}
+                  {!!result.details?.length && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                    {result.details.map(detail => <span key={detail.label} className="min-w-0 max-w-full break-words leading-5">{detail.label}：{detail.value}</span>)}
+                  </div>}
+                </div>
+                <ArrowRight aria-hidden="true" className="mt-1 size-3.5 shrink-0 text-muted-foreground" />
+              </Command.Item>)}
+            </Command.Group>
+          })}
+        </Command.List>
+        {!!groups.length && <div className="fc-global-search-footer flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground">
+          <span>{results.length} 项结果</span><span aria-hidden="true">↑↓ 选择 · Enter 打开</span>
+        </div>}
+      </PopoverContent>
+    </Popover>
+  </Command>
 }

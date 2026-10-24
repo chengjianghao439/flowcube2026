@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { Button } from '@/components/ui/button'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -55,6 +55,7 @@ export function FinderModal<T extends Record<string, unknown>>({
   entityName = '客户', loadedCount, totalCount, recordLabel,
   unavailableMessage, permissionErrorTitle,
 }: FinderModalProps<T>) {
+  const searchInput = useRef<HTMLInputElement>(null)
   // 唯一判据：数据未加载/未出错，且选中行仍在当前列表（由调用方派生保证）。
   // 页脚、行双击、Space 键三个确认入口共用它，避免各写一套守卫。
   const canConfirm = selected != null && !isLoading && !isError && (!incomplete || allowIncompleteSelection) && !unavailableMessage
@@ -63,9 +64,17 @@ export function FinderModal<T extends Record<string, unknown>>({
   const forbidden = (errorStatus?.status ?? errorStatus?.response?.status) === 403
 
   return (
-    <AppDialog
+    <AppDialog descriptionInHeader description={unavailableMessage || (incomplete && !isLoading && !isError) ? <>
+        {unavailableMessage && <span role="status">{unavailableMessage} </span>}
+        {incomplete && !isLoading && !isError && <span role="alert">{loadedCount != null && totalCount != null ? `已读取 ${loadedCount.toLocaleString()} / ${totalCount.toLocaleString()} ${recordLabel ?? `条${entityName}记录`}。` : '结果超过查询上限，'}{allowIncompleteSelection ? '请缩小搜索范围以查看其余结果。' : '请缩小搜索范围后选择。'}</span>}
+      </> : `按名称或编码查找${entityName}；单击选择，双击直接填入。`}
       open={open}
-      captureFocusOnOpen={compact}
+      captureFocusOnOpen
+      onOpenAutoFocus={event => {
+        if (!searchInput.current) return
+        event.preventDefault()
+        searchInput.current.focus({ preventScroll: true })
+      }}
       onOpenChange={v => !v && onClose()}
       dialogId={dialogId}
       defaultWidth={960}
@@ -82,13 +91,13 @@ export function FinderModal<T extends Record<string, unknown>>({
             value={keyword}
             onChange={onKeywordChange}
             placeholder={searchPlaceholder}
-            autoFocus
+            inputRef={searchInput}
           />
         </div>
 
         {/* ── Table body (scrollable) ──────────────────────────────── */}
         <div data-table-scroll className="min-h-0 flex-1 overflow-auto">
-          {unavailableMessage ? <p role="status" className="px-4 py-4 text-sm text-warning-ink">{unavailableMessage}</p> : isError ? (
+          {unavailableMessage ? null : isError ? (
             <QueryErrorState error={error} onRetry={() => onRetry?.()} title={forbidden && permissionErrorTitle ? permissionErrorTitle : '加载失败'} compact />
           ) : compact ? (
             <FinderDataTable columns={columns} data={data} selected={selected}
@@ -108,7 +117,6 @@ export function FinderModal<T extends Record<string, unknown>>({
           )}
         </div>
 
-        {incomplete && !isLoading && !isError && <p role="alert" className="shrink-0 border-t px-4 py-2 text-sm text-warning-ink">{loadedCount != null && totalCount != null ? `已读取 ${loadedCount.toLocaleString()} / ${totalCount.toLocaleString()} ${recordLabel ?? `条${entityName}记录`}。` : '结果超过查询上限，'}{allowIncompleteSelection ? '请缩小搜索范围以查看其余结果。' : '请缩小搜索范围后选择。'}</p>}
 
         {/* ── Footer ──────────────────────────────────────────────── */}
         <div className={compact ? "shrink-0 border-t px-4 py-3" : "shrink-0 border-t bg-muted/20 px-6 py-4"}>
@@ -120,7 +128,7 @@ export function FinderModal<T extends Record<string, unknown>>({
                   <span className="break-words leading-5" title={selectedLabel(selected)}>{selectedLabel(selected)}</span>
                 </span>
               ) : (
-                compact ? (!isLoading && !isError && !incomplete && !unavailableMessage ? `共 ${data.length} 个${entityName}` : '') : '单击选择，双击直接填入'
+                compact ? (!isLoading && !isError && !incomplete && !unavailableMessage ? `共 ${data.length} 个${entityName}` : '') : ''
               )}
             </div>
             <div className="flex shrink-0 gap-2">

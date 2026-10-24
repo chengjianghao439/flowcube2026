@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Power, BookOpen, Lock } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Power, BookOpen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -129,7 +129,7 @@ function AccountFormDialog({ open, mode, parentAcct, editAcct, onClose }: FormDi
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
+        <DialogHeader description={lockCore ? "系统预置科目：编码、名称、分类与方向不可修改，仅可调整排序与备注。" : ("填写科目编码、名称、分类与记账方向。")}>
           <DialogTitle>
             {mode === 'create'
               ? `新增科目${parentAcct ? ` · 上级：${parentAcct.code} ${parentAcct.name}` : `（一级 L${targetLevel}）`}`
@@ -137,12 +137,7 @@ function AccountFormDialog({ open, mode, parentAcct, editAcct, onClose }: FormDi
           </DialogTitle>
         </DialogHeader>
 
-        {lockCore && (
-          <div className="flex items-center gap-1.5 rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            <Lock className="h-3.5 w-3.5" />
-            系统预置科目：编码、名称、分类与方向不可修改，仅可调整排序与备注。
-          </div>
-        )}
+
 
         <form onSubmit={handleSubmit} className="space-y-4 py-1">
           <div className="grid grid-cols-2 gap-4">
@@ -262,21 +257,20 @@ function AccountNode({ acct, canManage, onAddChild, onEdit, onDelete, onToggle, 
     <div className="space-y-2">
       <div
         className={cn(
-          'group flex items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-primary/5',
+          'fc-account-tree-row group flex items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-primary/5',
           acct.isActive === 0 && 'opacity-50',
           expanded && 'border-primary/30 bg-primary/5',
         )}
       >
-        <button
+        {hasChildren ? <button
           type="button"
           className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-muted-foreground"
-          onClick={() => hasChildren && onExpand(acct)}
-          tabIndex={-1}
+          onClick={() => onExpand(acct)}
+          aria-expanded={expanded}
+          aria-label={`${expanded ? '收起' : '展开'} ${acct.code} ${acct.name}`}
         >
-          {hasChildren
-            ? expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />
-            : <span className="h-3.5 w-3.5" />}
-        </button>
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
+        </button> : <span className="h-5 w-5 shrink-0" aria-hidden />}
 
         <span className="w-20 shrink-0 font-mono text-sm text-doc-code-muted">{acct.code}</span>
         <span className="flex-1 min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium">{acct.name}</span>
@@ -289,7 +283,7 @@ function AccountNode({ acct, canManage, onAddChild, onEdit, onDelete, onToggle, 
         <SoftStatusLabel label={acct.isActive ? '启用' : '停用'} tone={activeTone(acct.isActive)} className="shrink-0" />
 
         {canManage && (
-          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="fc-account-row-actions flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             {acct.level < MAX_LEVEL && (
               <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
                 title="新增下级科目" onClick={() => onAddChild(acct)}>
@@ -318,7 +312,7 @@ function AccountNode({ acct, canManage, onAddChild, onEdit, onDelete, onToggle, 
       </div>
 
       {hasChildren && expanded && (
-        <div className="space-y-2 rounded-lg border border-border/60 bg-muted/15 p-3">
+        <div className="fc-account-children space-y-1">
           {acct.children!.map(child => (
             <AccountNode
               key={child.id}
@@ -388,7 +382,7 @@ export default function AccountsPage() {
     <div>
       <PageHeader
         title="会计科目表"
-        description={`企业会计准则口径的会计科目 · 共 ${totalCount} 个科目`}
+        description="查看会计科目层级与记账属性。"
         actions={canManage && (
           <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -399,6 +393,7 @@ export default function AccountsPage() {
 
       {/* 图例 */}
       <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <span>企业会计准则口径 · 共 {totalCount} 个科目</span>
         {CATEGORY_OPTIONS.map(c => (
           <span key={c} className="flex items-center gap-1">
             <SoftStatusLabel label={ACCOUNT_CATEGORY_LABELS[c]} tone="info" />

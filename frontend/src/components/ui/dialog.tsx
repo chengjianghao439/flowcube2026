@@ -24,7 +24,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/55 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fc-dialog-overlay fixed inset-0 z-50 bg-black/55 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className
     )}
     {...props}
@@ -48,7 +48,7 @@ const DialogContent = React.forwardRef<
         // 于是改以弹窗为定位原点，再被 overflow-y-auto 按弹窗边界裁切（表头被削、浮层错位）。
         // 不用 transform 后，fixed 浮层重新以视口为包含块，祖先的 overflow 也裁不到它。
         // 因此进场动画只保留 fade + zoom，去掉依赖 translate 的 slide-*。
-        "fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
+        "fc-dialog fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
         className
       )}
       {...props}
@@ -67,15 +67,20 @@ DialogContent.displayName = DialogPrimitive.Content.displayName
 
 const DialogHeader = ({
   className,
+  description,
+  children,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
+}: React.HTMLAttributes<HTMLDivElement> & { description?: React.ReactNode }) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 pr-6 text-left",
+      "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left",
       className
     )}
     {...props}
-  />
+  >
+    {children}
+    {description != null && <DialogDescription asChild><div className="fc-dialog-caption text-xs leading-5">{description}</div></DialogDescription>}
+  </div>
 )
 DialogHeader.displayName = "DialogHeader"
 
@@ -85,7 +90,7 @@ const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-wrap items-center justify-end gap-2",
+      "fc-dialog-footer flex flex-wrap items-center justify-end gap-2",
       className
     )}
     {...props}

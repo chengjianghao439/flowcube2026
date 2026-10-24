@@ -1,7 +1,7 @@
 {
-  "version": "0.13.7",
-  "versionCode": 158,
+  "version": "0.13.8",
+  "versionCode": 159,
   "filename": "app-release.apk",
-  "releaseNote": "低权限账号登录后进入自己有权限的页面；月结账款须通过对账单核销，不能按单直接付款。",
-  "publishedAt": "2026-10-23T06:35:45.982Z"
+  "releaseNote": "PDA 界面与业务流程保持不变，随系统同步至 0.13.8。",
+  "publishedAt": "2026-10-24T15:20:20.912Z"
 }

@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
 import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice'
 import { getCreditOverrideApi } from '@/api/credit-overrides'
@@ -15,7 +16,7 @@ import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getSaleListApi } from '@/api/sale'
@@ -63,16 +64,20 @@ function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onC
 
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl flex-col overflow-y-auto">
-        <DialogHeader><DialogTitle>{source ? '重新申请超额放行' : '发起超额放行申请'}</DialogTitle><DialogDescription>{source ? '旧申请与审批记录保留。新申请按当前销售单重新核对，创建后仍须提交审批。' : '选择销售单并说明超额原因，创建后在列表中提交审批。'}</DialogDescription></DialogHeader>
-        <div className="min-w-0 space-y-4 py-2">
+      <DialogContent className="fc-form-dialog flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl flex-col">
+        <DialogHeader description={pickedSale ? <>
+          选中 <span className="font-medium">{pickedSale.orderNo}</span>（{pickedSale.customerName}，{money(pickedSale.totalAmount)}）。
+          提交后系统会校验该客户授信是否超限，并保存当时的额度、已用额度与超出金额。
+          {source ? ' 旧申请与审批记录保留。新申请按当前销售单重新核对，创建后仍须提交审批。' : ' 创建后在列表中提交审批。'}
+        </> : source ? '旧申请与审批记录保留。新申请按当前销售单重新核对，创建后仍须提交审批。' : '选择销售单并说明超额原因，创建后在列表中提交审批。'}><DialogTitle>{source ? '重新申请超额放行' : '发起超额放行申请'}</DialogTitle></DialogHeader>
+        <div className="fc-form-dialog-body min-w-0 space-y-4">
           <form onSubmit={search} className="flex items-center gap-2">
             <Input aria-label="搜索销售单号或客户" placeholder="销售单号 / 客户名" value={kw} onChange={e => setKw(e.target.value)} className="flex-1" />
             <Button type="submit" size="sm" variant="outline">搜索</Button>
           </form>
           {sales.length > 0 && (
             <div className="max-h-48 overflow-auto rounded-md border">
-              <table className="w-full min-w-[460px] text-sm">
+              <ReportTable className="w-full min-w-[460px] text-sm">
                 <thead className="sticky top-0 bg-muted/60">
                   <tr className="text-left text-muted-foreground">
                     <th className="px-3 py-1.5 font-medium"><span className="sr-only">选择</span></th>
@@ -93,17 +98,11 @@ function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onC
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </ReportTable>
             </div>
           )}
           {sales.length === 0 && kw && (
             <EmptyState variant="no-result" title="未找到可申请的销售单" description="请输入完整销售单号再次查询" compact />
-          )}
-          {pickedSale && (
-            <div className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm">
-              选中 <span className="font-medium">{pickedSale.orderNo}</span>（{pickedSale.customerName}，{money(pickedSale.totalAmount)}）。
-              提交后系统会校验该客户授信是否超限，并保存当时的额度、已用额度与超出金额。
-            </div>
           )}
           <div className="space-y-2">
             <Label htmlFor="credit-reason">超额原因 <span className="text-destructive-ink">*</span></Label>
@@ -240,7 +239,7 @@ export default function CreditOverridesPage() {
     <div className="space-y-4">
       <PageHeader
         title="超额放行申请"
-        description="管理销售订单的授信超额申请，核对申请额度、原因与审批状态。"
+        description="金额为申请时的授信额度"
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/credit-overrides').catch(e => toast.error((e as Error).message))}>导出</Button>
@@ -266,7 +265,6 @@ export default function CreditOverridesPage() {
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
         <p>共 <span className="font-medium tabular-nums text-foreground">{total.toLocaleString()}</span> 条申请 · {status ? CREDIT_OVERRIDE_STATUS_LABEL[status] ?? status : '全部状态'}</p>
-        <span className="text-xs">金额为申请时的授信额度</span>
       </div>
       {isError && !data ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="加载失败" compact />
@@ -276,8 +274,12 @@ export default function CreditOverridesPage() {
       {total > 0 && <ListSummary total={total} />}
 
       <Dialog open={!!approveTarget} onOpenChange={open => {if (!open && !approving) setApproveTarget(null)}}>
-        <DialogContent><DialogHeader><DialogTitle>{approveTarget?.isSelfApproval ? '自行审批' : '批准当前节点'}</DialogTitle><DialogDescription>核对当前申请后审批；自行审批必须填写原因。</DialogDescription></DialogHeader>
-          <textarea aria-label="审批原因" value={approveReason} onChange={e=>setApproveReason(e.target.value)} maxLength={500} className="min-h-24 rounded-md border p-2" />
+        <DialogContent className="fc-form-dialog max-w-lg"><DialogHeader description={<>{<>核对当前申请后审批；自行审批必须填写原因。</>}</>}><DialogTitle>{approveTarget?.isSelfApproval ? '自行审批' : '批准当前节点'}</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-2">
+            <Label htmlFor="credit-approve-reason">审批原因</Label>
+            <textarea id="credit-approve-reason" aria-label="审批原因" value={approveReason} onChange={e=>setApproveReason(e.target.value)} maxLength={500} className="min-h-24 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+            <p className="text-right text-xs text-muted-foreground">{approveReason.length} / 500</p>
+          </div>
           <DialogFooter><Button variant="outline" disabled={approving} onClick={()=>setApproveTarget(null)}>取消</Button><Button disabled={approving || (approveTarget?.isSelfApproval && !approveReason.trim())} onClick={()=>{
             if (!approveTarget?.currentTaskId) return
             approve({id:approveTarget.id,expectedTaskId:approveTarget.currentTaskId,reason:approveReason},{onSuccess:()=>{setApproveTarget(null);toast.success('当前节点已批准')},onError:(e:Error)=>toast.error(e.message)})
@@ -289,13 +291,15 @@ export default function CreditOverridesPage() {
         ['销售单', handoff.data.saleOrderNo], ['客户', handoff.data.customerName], ['本单净额', money(handoff.data.thisAmount)], ['授信额度', money(handoff.data.creditLimit)], ['超额金额', money(handoff.data.overAmount)], ['状态', handoff.data.statusName], ['申请效力', handoff.data.requestInvalidReason || handoff.data.approvalInvalidReason || (handoff.data.approvalValidity==='valid'?'当前有效':null)], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason], ['驳回原因', handoff.data.rejectReason],
       ]} />}
       <Dialog open={!!rejectTarget} onOpenChange={open => { if (!open && !rejecting) setRejectTarget(null) }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>驳回超额放行申请</DialogTitle><DialogDescription>说明驳回原因，便于申请人调整销售安排。</DialogDescription></DialogHeader>
+        <DialogContent className="fc-form-dialog max-w-lg">
+          <DialogHeader description={<>{<>说明驳回原因，便于申请人调整销售安排。</>}</>}><DialogTitle>驳回超额放行申请</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-4">
           <RecordIdentity title={rejectTarget?.overrideNo} detail={rejectTarget?.customerName} />
           <div className="space-y-2">
             <Label htmlFor="credit-reject-reason">驳回原因</Label>
             <textarea id="credit-reject-reason" autoFocus rows={4} maxLength={300} value={rejectReason} onChange={e => setRejectReason(e.target.value)} disabled={rejecting} className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder="填写具体原因，最多 300 字" />
             <p className="text-right text-xs text-muted-foreground">{rejectReason.length} / 300</p>
+          </div>
           </div>
           <DialogFooter><Button variant="outline" disabled={rejecting} onClick={() => setRejectTarget(null)}>取消</Button><Button variant="destructive" disabled={rejecting || !rejectReason.trim()} onClick={() => {
             if (!rejectTarget) return

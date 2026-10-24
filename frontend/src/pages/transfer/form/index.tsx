@@ -1,7 +1,8 @@
+import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 /**
  * TransferFormPage — 调拨单新建 / 编辑 / 查看页面（独立路由）
@@ -234,10 +235,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="desktop-document-form flex flex-col gap-3">
       {incomingDraft && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3 text-sm"><p>收到采购调拨建议：{incomingDraft.fromWarehouseName} → {incomingDraft.toWarehouseName}。{isDirty ? '当前有未保存内容，带入将替换当前表单。' : '核对后带入表单。'}</p><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setAppliedProcurementKey(incomingKey)}>保留当前表单</Button><Button size="sm" onClick={applyProcurementDraft}>带入采购建议</Button></div></div>}
       <ActionBar
         title={isEdit ? '编辑调拨单' : '新建调拨单'}
+        description="核对调出仓、调入仓与商品明细。"
         subtitle={isEdit || isDirty ? <>{isEdit && <EditModeBadge />}<UnsavedBadge show={isDirty} /></> : undefined}
         rightActions={
           <>
@@ -258,7 +260,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       />
 
       <SectionCard title="调拨信息" compact>
-        <div className="flex items-start gap-4">
+        <div className="desktop-form-fields desktop-transfer-fields flex items-start gap-4">
           <div className="w-56 shrink-0 space-y-1.5">
             <Label htmlFor="transfer-from">调出仓库 *</Label>
             <WarehouseSelect
@@ -284,7 +286,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             {!toError && sameWarehouse && <p className="text-xs text-destructive-ink">与调出仓库不能相同</p>}
           </div>
 
-          <div className="flex-1 space-y-1.5">
+          <div className="desktop-field-wide flex-1 space-y-1.5">
             <Label htmlFor="transfer-remark">备注</Label>
             <Input
               id="transfer-remark"
@@ -307,26 +309,18 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         }
       >
         {items.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+          <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
             <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
             <p className="text-sm text-muted-foreground">还没有调拨明细，点击上方&ldquo;添加商品&rdquo;开始录入</p>
           </div>
         ) : (
           <>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1320px] text-sm">
-              <thead>
-                <tr className="border-b text-table-head">
-                  <ProductIdentityHeaders />
-                  <th className="w-16 pb-2 text-center">单位</th>
-                  <th className="w-24 pb-2 text-right">调拨数量</th>
-                  <th className="w-10 pb-2" />
-                </tr>
-              </thead>
+            <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '调拨数量', width: 96, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="transfer-entry-items" minWidth={760}>
               <tbody>
                 {items.map(item => (
                   <tr key={item._key} className="border-b border-border/40">
-                    <ProductIdentityCells product={item} nameContent={<button
+                    <ProductIdentityCells compact product={item} nameContent={<button
                         type="button"
                         onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
                         className={cn(
@@ -368,10 +362,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ResizableTable>
           </div>
 
-          <div className="flex items-center justify-between border-t border-border pt-4">
+          <div className="desktop-entry-summary flex items-center justify-between border-t border-border pt-4">
             <p className="text-muted-body">商品种数：{items.length} 种　合计数量：{totalQuantity}</p>
           </div>
           </>
@@ -436,9 +430,10 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
   const showProgress = order.status >= 3 // 在途/已完成：展示 PDA 扫码进度
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="desktop-document-detail flex flex-col gap-3">
       <ActionBar
         title={order.orderNo}
+        description="查看调拨明细与两端执行进度。"
         subtitle={<StatusBadge type="transfer" status={order.status} />}
         rightActions={
           <>
@@ -467,7 +462,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
 
       <OrderDetailSections type="transfer" id={order.id}>
       <SectionCard title="基础信息" compact>
-        <dl className="grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
+        <dl className="desktop-document-facts grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
           {[
             ['调出仓库',   order.fromWarehouseName],
             ['调入仓库', order.toWarehouseName],
@@ -480,7 +475,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
             </div>
           ))}
           {order.remark && (
-            <div className="col-span-3">
+            <div className="desktop-field-wide col-span-3">
               <dt className="mb-0.5 text-helper">备注</dt>
               <dd>{order.remark}</dd>
             </div>
@@ -491,7 +486,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
       <SectionCard title="调拨明细" compact>
         <DataTable
           columns={[
-            ...productIdentityColumns(),
+            ...productIdentityColumns({ compact: true }),
             { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
             { key: 'quantity', title: '计划', width: 90 },
             ...(showProgress ? [

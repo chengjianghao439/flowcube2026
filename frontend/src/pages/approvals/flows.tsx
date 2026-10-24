@@ -1,4 +1,5 @@
 import { useState, useId } from 'react'
+import { Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -193,23 +194,23 @@ export default function ApprovalFlowsPage() {
         actions={<Button onClick={openCreate}>新增审批流</Button>}
       />
 
+
       <DataTable columns={columns} data={flows} loading={false} rowKey="id" />
 
       <Dialog open={formOpen} onOpenChange={v => { if (!v) draft.requestClose() }}>
-        <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="sm:max-w-4xl">
-          <DialogHeader>
+        <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog sm:max-w-4xl">
+          <DialogHeader description={editing ? <>
+                正在编辑：<span className="font-medium text-foreground">{editing.name}</span>
+              </> : ("设置业务类型、金额区间与审批节点。")}>
             {/* 编辑态与默认（新增）态一眼可分 */}
             <DialogTitle className="flex flex-wrap items-center gap-2">
               {editing ? '编辑审批流' : '新增审批流'}
               {editing && <EditModeBadge />}
               <UnsavedBadge show={dirty} />
             </DialogTitle>
-            {editing && (
-              <p className="text-helper mt-1">
-                正在编辑：<span className="font-medium text-foreground">{editing.name}</span>
-              </p>
-            )}
+
           </DialogHeader>
+          <div className="fc-form-dialog-body">
           <fieldset disabled={draft.locked} className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-x-5 gap-y-4">
               <div className="space-y-2">
@@ -243,12 +244,12 @@ export default function ApprovalFlowsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <Label>审批节点（按顺序逐级审批）</Label>
-                <Button size="sm" variant="outline" onClick={addStep}>+ 添加节点</Button>
+                <Button size="sm" variant="outline" onClick={addStep}><Plus className="mr-1.5 h-3.5 w-3.5" aria-hidden />添加节点</Button>
               </div>
               {form.steps.map((s, i) => (
-                <div key={i} className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+                <div key={i} className="fc-approval-step space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">第 {s.stepOrder} 级</span>
+                    <h3 className="text-sm font-semibold">第 {s.stepOrder} 级</h3>
                     {form.steps.length > 1 && (
                       <Button size="sm" variant="ghost" className="text-destructive-ink hover:text-destructive-ink" onClick={() => removeStep(i)}>移除</Button>
                     )}
@@ -311,6 +312,7 @@ export default function ApprovalFlowsPage() {
               <span className="text-sm">启用该流程</span>
             </label>
           </fieldset>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={draft.requestClose} disabled={draft.locked}>取消</Button>
             <Button onClick={handleSave} disabled={draft.locked}>{editing ? '保存修改' : '保存'}</Button>

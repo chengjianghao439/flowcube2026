@@ -42,10 +42,10 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
       {/* 覆盖 SheetContent 的默认宽度 */}
       <SheetContent
         side="right"
-        className="flex w-[640px] max-w-[640px] flex-col gap-0 p-0 sm:max-w-[640px]"
+        className="desktop-container-drawer flex w-[640px] max-w-[640px] flex-col gap-0 p-0 sm:max-w-[640px]"
       >
         {/* ── 顶部信息区 ───────────────────────────────────────────────── */}
-        <SheetHeader className="border-b px-6 py-5 pr-12">
+        <SheetHeader className="desktop-container-header border-b px-6 py-5 pr-12">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
               <Box className="h-4 w-4 text-primary" />
@@ -61,7 +61,7 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
 
           {/* 库存摘要 */}
           {item && (
-            <div className="mt-3 grid grid-cols-3 divide-x divide-border rounded-lg border bg-muted/30">
+            <div className="desktop-container-summary mt-3 grid grid-cols-3 divide-x divide-border rounded-lg border bg-muted/30">
               <StockMini label="在库" value={formatQty(item.onHand)}   unit={item.unit} color="text-primary" />
               <StockMini label="预占" value={formatQty(item.reserved)} unit={item.unit} color="text-warning-ink" />
               <StockMini label="可用" value={formatQty(item.available)} unit={item.unit}

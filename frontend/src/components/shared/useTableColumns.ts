@@ -4,7 +4,7 @@ import type { TableColumn } from '@/types'
 export function isAction(key: string, title: string): boolean { return key === 'actions' || title === '操作' }
 
 /** 列布局持久化及鼠标/键盘交互；不负责行数据呈现。 */
-export function useTableColumns<T extends object>({columns, fluid, columnStorageKey, isSelectEnabled, fitData = []}: {columns: TableColumn<T>[]; fluid: boolean; columnStorageKey?: string; isSelectEnabled: boolean; fitData?: T[]}) {
+export function useTableColumns<T extends object>({columns, fluid, columnStorageKey, isSelectEnabled, fitData = [], allowReorder = true}: {columns: TableColumn<T>[]; fluid: boolean; columnStorageKey?: string; isSelectEnabled: boolean; fitData?: T[]; allowReorder?: boolean}) {
   const [columnOrder, setColumnOrder] = useState<string[]>([])
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({})
   const [widthUnit, setWidthUnit] = useState<'px' | 'percent'>(fluid ? 'percent' : 'px')
@@ -72,14 +72,14 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
   }, [currentKeys, resolvedStorageKey, fluid])
 
   const orderedColumns = useMemo(() => {
-    if (!columnOrder.length) return columns
+    if (!allowReorder || !columnOrder.length) return columns
     const byKey = new Map(columns.map(col => [String(col.key), col]))
     const merged = [
       ...columnOrder.map(key => byKey.get(key)).filter((col): col is TableColumn<T> => !!col),
       ...columns.filter(col => !columnOrder.includes(String(col.key))),
     ]
     return merged
-  }, [columnOrder, columns])
+  }, [columnOrder, columns, allowReorder])
 
   useEffect(() => () => resizeCleanupRef.current?.(), [currentKeys, resolvedStorageKey, fluid])
 
@@ -148,7 +148,7 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
   }
 
   const savePixelWidths = (widths: Record<string, number>) => {
-    persistLayout(columnOrder.length ? columnOrder : currentKeys, widths, 'px')
+    persistLayout(allowReorder && columnOrder.length ? columnOrder : currentKeys, widths, 'px')
   }
 
   const startResize = (event: ReactMouseEvent, col: TableColumn<T>) => {
@@ -230,8 +230,12 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
     let width = 80
     // 双击时才测量已加载内容；临时使用自然宽度，支持换行文字和表单控件。
     for (const row of Array.from(tableRef.current?.rows ?? [])) {
-      const cell = row.cells[index]
-      if (!cell || cell.colSpan > 1) continue
+      // 分组表头的 DOM 下标不是叶列下标；合计行的 colspan 也会占据多个逻辑列。
+      let offset = 0
+      const cell = row.parentElement?.tagName === 'THEAD'
+        ? Array.from(row.cells).find(cell => cell.dataset.columnKey === String(col.key))
+        : Array.from(row.cells).find(cell => { const start = offset; offset += cell.colSpan; return start === index && cell.colSpan === 1 })
+      if (!cell) continue
       const content = cell.firstElementChild as HTMLElement | null
       if (!content) continue
       const previous = content.style.cssText

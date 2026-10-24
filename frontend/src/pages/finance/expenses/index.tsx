@@ -62,7 +62,7 @@ function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
   return (
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
       <DialogContent className="max-w-3xl">
-        <DialogHeader><DialogTitle>查询费用报销单</DialogTitle></DialogHeader>
+        <DialogHeader description={"设置费用报销单的筛选条件。"}><DialogTitle>查询费用报销单</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
@@ -349,6 +349,7 @@ export default function ExpenseClaimsPage() {
         )}
       />
 
+
       {summary && <SummaryStrip items={[{ label: '报销总额', value: money(summary.totalAmount) }, { label: '待审批', value: money(summary.pendingAmount), tone: 'text-warning-ink' }, { label: '已付款', value: money(summary.paidAmount), tone: 'text-success-ink' }]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => { setQuery(EMPTY_EXP_QUERY); }} />
@@ -363,16 +364,14 @@ export default function ExpenseClaimsPage() {
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
         <DialogContent className="max-w-5xl">
           {/* 编辑态与默认（新建）态一眼可分 */}
-          <DialogHeader>
+          <DialogHeader description={editingId ? <>
+                正在编辑：<span className="font-medium text-foreground">{editingNo || `#${editingId}`}{title ? ` · ${title}` : ''}</span>
+              </> : ("填写报销事项、费用类别与明细。")}>
             <DialogTitle className="flex flex-wrap items-center gap-2">
               {editingId ? '编辑报销单' : '新建报销单'}
               {editingId && <EditModeBadge />}
             </DialogTitle>
-            {editingId && (
-              <p className="text-helper mt-1">
-                正在编辑：<span className="font-medium text-foreground">{editingNo || `#${editingId}`}{title ? ` · ${title}` : ''}</span>
-              </p>
-            )}
+
           </DialogHeader>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
@@ -439,7 +438,7 @@ export default function ExpenseClaimsPage() {
       {/* 明细 */}
       <Dialog open={shownDetailId != null} onOpenChange={v => !v && closeDetail()}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader><DialogTitle>报销单 — <span className="text-doc-code-strong">{detail?.claimNo}</span></DialogTitle></DialogHeader>
+          <DialogHeader description={detail?.rejectReason ? <span className="text-destructive-ink">驳回原因：{detail.rejectReason}</span> : '核对报销明细、审批与付款进度。'}><DialogTitle>报销单 — <span className="text-doc-code-strong">{detail?.claimNo}</span></DialogTitle></DialogHeader>
           <OrderDetailSections type="expense" id={shownDetailId || 0}>
 
           {detail && (
@@ -450,11 +449,6 @@ export default function ExpenseClaimsPage() {
               {detail.approvedByName && <span>· 审批 {detail.approvedByName}</span>}
               {detail.paidAccountName && <span>· 付款账户 {detail.paidAccountName}</span>}
             </div>
-          )}
-          {detail?.rejectReason && (
-            <p className="rounded-md border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive-ink">
-              驳回原因：{detail.rejectReason}
-            </p>
           )}
           <div className="max-h-80 overflow-y-auto rounded-md border">
             <ReportTable className="w-full text-sm">
@@ -486,11 +480,11 @@ export default function ExpenseClaimsPage() {
       {/* 付款 */}
       <Dialog open={!!payTarget && canPay} onOpenChange={v => !v && setPayTarget(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>报销付款 — {payTarget?.claimNo}</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <DialogHeader description={<>{<>
             将从所选账户支出 <span className="font-semibold text-foreground">{payTarget ? money(payTarget.totalAmount) : ''}</span>，
             并写入该账户流水。付款后单据不可再改。
-          </p>
+          </>}</>}><DialogTitle>报销付款 — {payTarget?.claimNo}</DialogTitle></DialogHeader>
+
           <div className="space-y-1">
             <Label>付款账户 *</Label>
             <Select value={payAccount} onValueChange={setPayAccount}>
@@ -550,7 +544,7 @@ export default function ExpenseClaimsPage() {
       {/* 驳回 */}
       <Dialog open={!!rejectTarget && canApprove} onOpenChange={v => !v && setRejectTarget(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>驳回报销单 — {rejectTarget?.claimNo}</DialogTitle></DialogHeader>
+          <DialogHeader description={"填写驳回原因，供报销人核对。"}><DialogTitle>驳回报销单 — {rejectTarget?.claimNo}</DialogTitle></DialogHeader>
           <div className="space-y-1">
             <Label>驳回原因 *</Label>
             <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRejectReason(e.target.value)}

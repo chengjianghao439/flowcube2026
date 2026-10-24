@@ -139,7 +139,7 @@ test.each([5000, 5001])('%i匹配最多读取5000，真实collector标记与页�
   expect(requests.every(r => Number(r.url.searchParams.get('pageSize')) === 200)).toBe(true)
   expect(data()?.truncated).toBe(count === 5001)
   const text = host.textContent!.replace(/[,\s]/g, '')
-  if (count === 5001) { expect(text).toContain('已加载5000'); expect(text).toContain('匹配5001'); expect(text).toContain('缩小查询范围') }
+  if (count === 5001) { expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围'); expect(host.querySelectorAll('.desktop-page-description')).toHaveLength(1); expect(text).toContain('已加载5000'); expect(text).toContain('匹配5001'); expect(text).toContain('缩小查询范围') }
   else { expect(text).toContain('共5000'); expect(text).not.toContain('缩小查询范围') }
 })
 

@@ -177,6 +177,7 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
       )}
 
       <PaymentQueryDialog
+        title={`查询${partyLabel}对账单`}
         open={queryOpen}
         initial={query}
         onClose={() => setQueryOpen(false)}

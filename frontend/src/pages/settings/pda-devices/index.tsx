@@ -28,12 +28,11 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import DataTable from '@/components/shared/DataTable'
-import { FilterCard } from '@/components/shared/FilterCard'
 import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import ListSummary from '@/components/shared/ListSummary'
 import PageHeader from '@/components/shared/PageHeader'
@@ -139,31 +138,30 @@ export default function PdaDevicesPage() {
     <div className="space-y-4">
       <PageHeader
         title="PDA 设备"
-        description="登记 PDA 设备并生成设备码与密钥，扫码绑定后即可现场作业；停用或重置密钥会让该设备立即退出登录"
+        description="绑定仓库后，这台 PDA 只能作业本仓的单据；未绑定的设备可在任何仓作业。 停用设备或重置密钥会让这台设备立即退出登录——设备丢失时请立即「停用」。"
         actions={<Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
       />
-      <FilterCard>
-        <Input
-          className="w-64"
-          placeholder="搜索设备名称或设备码"
-          value={keyword}
-          onChange={e => { setKeyword(e.target.value); }}
+      <section className="fc-list-workbench min-w-0 rounded-xl border border-border bg-card" aria-label="PDA设备列表">
+        <div className="fc-list-toolbar">
+          <Input
+            className="h-9 w-64"
+            aria-label="搜索设备名称或设备码"
+            placeholder="搜索设备名称或设备码"
+            value={keyword}
+            onChange={e => { setKeyword(e.target.value); }}
+          />
+        </div>
+
+
+        <DataTable
+          columns={columns}
+          data={data?.list ?? []}
+          loading={isLoading}
+          rowKey="id"
+          fluid
+          columnStorageKey="pda-devices:v1"
         />
-      </FilterCard>
-
-      <div className="rounded-xl border border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        绑定仓库后，这台 PDA 只能作业本仓的单据；未绑定的设备可在任何仓作业。
-        停用设备或重置密钥会让这台设备立即退出登录——设备丢失时请立即「停用」。
-      </div>
-
-      <DataTable
-        columns={columns}
-        data={data?.list ?? []}
-        loading={isLoading}
-        rowKey="id"
-        fluid
-        columnStorageKey="pda-devices:v1"
-      />
+      </section>
 
       {(data?.pagination?.total ?? 0) > 20 && (
         <ListSummary total={data?.pagination?.total ?? 0} unit="台" />
@@ -172,11 +170,11 @@ export default function PdaDevicesPage() {
       {/* 登记新设备 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>登记新 PDA 设备</DialogTitle>
-            <DialogDescription>
+          <DialogHeader description={<>{<>
               登记后会生成设备码与密钥，密钥只显示一次，请立刻拿 PDA 扫码绑定。
-            </DialogDescription>
+            </>}</>}>
+            <DialogTitle>登记新 PDA 设备</DialogTitle>
+
           </DialogHeader>
           <div className="space-y-3">
             <div>
@@ -219,11 +217,11 @@ export default function PdaDevicesPage() {
       {/* 密钥与绑定二维码：仅此一次 */}
       <Dialog open={!!secretView} onOpenChange={open => { if (!open) setSecretView(null) }}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>用 PDA 扫这个码完成绑定</DialogTitle>
-            <DialogDescription>
+          <DialogHeader description={<>{<>
               密钥仅显示一次，关闭后不可再查看；如遗失，需重置密钥后重新绑定。
-            </DialogDescription>
+            </>}</>}>
+            <DialogTitle>用 PDA 扫这个码完成绑定</DialogTitle>
+
           </DialogHeader>
           {secretView && (
             <div className="space-y-3">
@@ -260,17 +258,15 @@ export default function PdaDevicesPage() {
       {/* 编辑 */}
       <Dialog open={!!editing} onOpenChange={open => { if (!open) setEditing(null) }}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+          <DialogHeader description={<>{editing && (<>
+                正在编辑：<span className="font-medium text-foreground">{editing.deviceName || editing.deviceCode}</span>
+              </>)} {<>{<>改绑仓库会让这台设备退出登录，需要重新登录。</>}</>}</>}>
             <DialogTitle className="flex flex-wrap items-center gap-2">
               编辑设备
               <EditModeBadge />
             </DialogTitle>
-            {editing && (
-              <p className="text-helper mt-1">
-                正在编辑：<span className="font-medium text-foreground">{editing.deviceName || editing.deviceCode}</span>
-              </p>
-            )}
-            <DialogDescription>改绑仓库会让这台设备退出登录，需要重新登录。</DialogDescription>
+
+
           </DialogHeader>
           {editing && (
             <div className="space-y-3">

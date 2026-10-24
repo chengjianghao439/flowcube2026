@@ -108,7 +108,7 @@ test.each([5000, 5001])('%i匹配严格5000上限与25批，截断反馈明确�
   expect(data()?.list).toHaveLength(5000); expect(requests).toHaveLength(25)
   expect(data()?.truncated).toBe(count === 5001)
   const text = host.textContent!.replace(/[,\s]/g, '')
-  if (count === 5001) { expect(text).toContain('已加载5000'); expect(text).toContain('匹配5001'); expect(text).toContain('缩小查询范围') }
+  if (count === 5001) { expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围'); expect(host.querySelectorAll('.desktop-page-description')).toHaveLength(1); expect(text).toContain('已加载5000'); expect(text).toContain('匹配5001'); expect(text).toContain('缩小查询范围') }
   else { expect(text).toContain('共5000'); expect(text).not.toContain('缩小查询范围') }
   expect(host.querySelector('[data-virtual-body]')).toBeTruthy(); expect(actualRows().length).toBeLessThan(50)
 })

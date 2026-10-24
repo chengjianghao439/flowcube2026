@@ -5,7 +5,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from '@/components/ui/dialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import ListSummary from '@/components/shared/ListSummary'
@@ -51,15 +50,12 @@ export default function RiskDetails({
       }}
     >
       <DialogContent className="max-w-3xl">
-        <DialogHeader>
+        <DialogHeader description={kind === 'stock'
+            ? '按商品和仓库合计实物库存，筛选数量 ≤ 10；不是可承诺库存判断。'
+            : '仅列出当前占用额度超过授信限额的客户；展示全部符合条件的结果。'}>
           <DialogTitle>
             {kind === 'stock' ? '低库存明细' : '授信超限客户'}
           </DialogTitle>
-          <DialogDescription>
-            {kind === 'stock'
-              ? '按商品和仓库合计实物库存，筛选数量 ≤ 10；不是可承诺库存判断。'
-              : '仅列出当前占用额度超过授信限额的客户；展示全部符合条件的结果。'}
-          </DialogDescription>
         </DialogHeader>
         <div className="max-h-[65vh] overflow-y-auto">
           {query.error ? (

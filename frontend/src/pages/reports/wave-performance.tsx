@@ -19,6 +19,7 @@ import type { WaveStats } from '@/api/reports'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { StatTile } from '@/components/dashboard/StatTile'
+import { ReportMeter } from '@/components/shared/ReportMeter'
 
 /** 与 pages/picking-waves 的批次状态取色保持一致 */
 const STATUS_TONE: Record<number, StatusTone> = {
@@ -31,13 +32,10 @@ function fmtDuration(min: number | null): string {
   return `${Math.floor(min / 60)}h ${min % 60}m`
 }
 
-function EfficiencyBar({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
+function EfficiencyBar({ value, max, label }: { value: number; max: number; label: string }) {
   return (
     <div className="flex items-center gap-2">
-      <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-        <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
-      </div>
+      <ReportMeter value={value} max={max} label={label} valueText={`${value.toFixed(1)} 件/分`} />
       <span className="text-xs tabular-nums text-foreground w-20 text-right shrink-0">
         {value.toFixed(1)} 件/分
       </span>
@@ -122,8 +120,8 @@ export default function WavePerformancePage() {
     },
     {
       key: 'efficiency', title: '拣货效率', width: 160,
-      render: (v) => v != null
-        ? <EfficiencyBar value={v as number} max={maxEfficiency} />
+      render: (v, row) => v != null
+        ? <EfficiencyBar value={v as number} max={maxEfficiency} label={`${row.waveNo} 拣货效率`} />
         : <span className="text-xs text-muted-foreground">—</span>,
     },
   ]
@@ -132,7 +130,7 @@ export default function WavePerformancePage() {
     <div className="space-y-6">
       <PageHeader
         title="批次效率"
-        description="分析各批次的拣货时长、SKU 分布与拣货效率。"
+        description="核对批次时长、商品分布与效率。"
         actions={(
           <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
         )}

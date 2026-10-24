@@ -92,7 +92,9 @@ test('预览失败显示真实错误/重试，不冒充空表与0量，不提供
   await mount()
   await until(() => expect(healthCalls.length).toBeGreaterThan(0))
   expect(pendingHealth.size).toBeGreaterThan(0)
-  expect(document.body.textContent).toContain('加载商品与库存信息')
+  expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('加载商品与库存信息')
+  expect(document.body.textContent?.split('加载商品与库存信息')).toHaveLength(2)
+  expect(document.body.textContent).not.toContain('核对商品身份，按明细选择发货仓库和本次占库数量')
   expect(document.body.textContent).not.toContain('加载失败')
   expect(button('确认占用（0 项）').disabled).toBe(true)
   await act(async () => releaseHealthProbes())
@@ -135,9 +137,15 @@ test('缓存读取失败封住表格，重试成功后保留原数量/仓库选�
 })
 
 test('占库仓库标签关联这一商品行的真实选择控件', async () => {
-  client.defaults.adapter = (async config => { validateRead(config); return success(config) }) satisfies AxiosAdapter
+  client.defaults.adapter = (async config => { validateRead(config); return success(config, { ...preview, credit: { customerId: 1, creditLimit: 100, used: 90, thisOrder: 30, willExceed: true, overAmount: 20 } }) }) satisfies AxiosAdapter
   await mount()
   await until(() => expect(document.querySelector('select')).not.toBeNull())
+  const caption = document.querySelector('.fc-dialog-caption')!
+  expect(caption.textContent).toContain('额度 ¥100.00，已用 ¥90.00，本单 ¥30.00，超出约 ¥20.00')
+  expect(caption.textContent).toContain('超额占库须先取得有效批准；原批准失效时可重新发起')
+  expect(caption.querySelector('a')?.getAttribute('href')).toBe('#/credit-overrides')
+  expect(document.body.textContent?.split('客户授信将超额')).toHaveLength(2)
+  expect(document.body.textContent).not.toContain('核对商品身份，按明细选择发货仓库和本次占库数量')
   const label = [...document.querySelectorAll('label')].find(label => label.textContent?.includes('选择库存所在仓库'))
   expect(label).toBeTruthy(); expect(label!.htmlFor).not.toBe('')
   expect(document.getElementById(label!.htmlFor)).toBe(document.querySelector('select'))
@@ -146,7 +154,9 @@ test('占库仓库标签关联这一商品行的真实选择控件', async () =>
 test('首次正在读取不展示0量/空分配表', async () => {
   client.defaults.adapter = (async config => { validateRead(config); return await new Promise((_resolve, reject) => { releasePendingRead = () => reject(new CanceledError('synthetic fixture cleanup')) }) }) satisfies AxiosAdapter
   await mount()
-  expect(document.body.textContent).toContain('加载商品与库存信息')
+  expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('加载商品与库存信息')
+  expect(document.body.textContent?.split('加载商品与库存信息')).toHaveLength(2)
+  expect(document.body.textContent).not.toContain('核对商品身份，按明细选择发货仓库和本次占库数量')
   expect(document.body.textContent).not.toContain('0 行')
   expect(document.querySelector('[role="dialog"] table')).toBeNull()
 })

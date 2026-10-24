@@ -1,4 +1,5 @@
 import { Search } from 'lucide-react'
+import type { Ref } from 'react'
 import { Input } from '@/components/ui/input'
 
 interface FinderSearchProps {
@@ -6,13 +7,16 @@ interface FinderSearchProps {
   onChange: (v: string) => void
   placeholder?: string
   autoFocus?: boolean
+  inputRef?: Ref<HTMLInputElement>
 }
 
-export function FinderSearch({ value, onChange, placeholder = '搜索…', autoFocus }: FinderSearchProps) {
+export function FinderSearch({ value, onChange, placeholder = '搜索…', autoFocus, inputRef }: FinderSearchProps) {
   return (
     <div className="relative flex-1">
-      <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+      <Search aria-hidden="true" className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
       <Input
+        ref={inputRef}
+        aria-label={placeholder}
         className="h-8 pl-8 text-sm"
         placeholder={placeholder}
         value={value}

@@ -1,8 +1,9 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import type { DisposalOrder } from '@/types/disposal'
 import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
-import { useRef, useState } from 'react'
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { Fragment, useRef, useState } from 'react'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { Button } from '@/components/ui/button'
@@ -87,7 +88,7 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
     <>
     <Dialog open={open} onOpenChange={(next) => { if (!next && !actionLocked) onClose() }}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader description={disposal && !allScrap ? <span role="alert">{status === 3 ? '本单含促销、退供应商或异常明细，不能直接扣库。请返回列表选择“整单签认”，核对全部旧行后由另一名人员签认处理意图，再走正常销售、采购退货或重新报废流程；未签认前保持旧单。' : status === 4 ? '历史直接处置记录仅供追溯，不补单、不重算历史金额、不再次执行。' : '本单含旧处理方式；草稿／待审可先取消后手动走正常销售或采购退货，待审仍可按原规则驳回。不能把旧行改成报废。'}</span> : "核对来源明细、审批与处理进度。"}>
           <DialogTitle className="flex items-center gap-3">
             滞销处理单详情
             {disposal && <SoftStatusLabel label={statusLabel} tone={STATUS_TONE[disposal.status] ?? 'draft'} />}
@@ -96,7 +97,6 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
         <OrderDetailSections type="disposal" id={id || 0}>
 
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
-        {disposal && !allScrap && <p role="alert" className="rounded border p-3">{status === 3 ? '本单含促销、退供应商或异常明细，不能直接扣库。请返回列表选择“整单签认”，核对全部旧行后由另一名人员签认处理意图，再走正常销售、采购退货或重新报废流程；未签认前保持旧单。' : status === 4 ? '历史直接处置记录仅供追溯，不补单、不重算历史金额、不再次执行。' : '本单含旧处理方式；草稿／待审可先取消后手动走正常销售或采购退货，待审仍可按原规则驳回。不能把旧行改成报废。'}</p>}
         <DisposalExecutionPanel write={write} active={readable && !actionsDisabled} />
         {disposal && (
           <div className="space-y-4">
@@ -114,28 +114,29 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
             </div>
 
             <div className="overflow-x-auto">
-              <div className="grid min-w-[1440px] grid-cols-[160px_160px_144px_224px_112px_80px_120px_180px_120px_100px] gap-2 text-xs text-muted-foreground font-medium border-b bg-muted/30 py-3 mb-1">
-                <ProductIdentityGridHeaders />
-                <div className="">单位</div>
-                <div className="">数量</div>
-                <div className="">历史参考价</div>
-                <div className="">小计</div>
-                <div className="">处置方式</div>
-              </div>
+              <ReportTable className="w-full min-w-[1440px] text-sm"><thead><tr>
+                <ProductIdentityHeaders />
+                <th className="w-20">单位</th>
+                <th className="w-32">数量</th>
+                <th className="w-44">历史参考价</th>
+                <th className="w-32">小计</th>
+                <th className="w-28">处置方式</th>
+              </tr></thead><tbody>
               {disposal.items?.map(item => (
-                <div key={item.id} className="grid min-w-[1440px] grid-cols-[160px_160px_144px_224px_112px_80px_120px_180px_120px_100px] gap-2 items-center py-3 border-b last:border-0 text-sm">
-                  <ProductIdentityGridCells product={item} />
-                  <div className="text-muted-foreground">{item.unit}</div>
-                  <div className="tabular-nums">{item.quantity}</div>
-                  <div className="tabular-nums">{money(item.unitValue)}</div>
-                  <div className="tabular-nums">{money(item.value)}</div>
-                  <div className="">
+                <Fragment key={item.id}><tr className="border-b last:border-0 text-sm">
+                  <ProductIdentityCells product={item} />
+                  <td className="text-muted-foreground">{item.unit}</td>
+                  <td className="tabular-nums">{item.quantity}</td>
+                  <td className="tabular-nums">{money(item.unitValue)}</td>
+                  <td className="tabular-nums">{money(item.value)}</td>
+                  <td>
                     <SoftStatusLabel label={DISPOSE_TYPE_LABELS[item.disposeType]} tone={DISPOSE_TYPE_TONES[item.disposeType]} />
-                  </div>
-                  {item.remark && <div className="col-span-full text-xs text-muted-foreground">行备注：{item.remark}</div>}
-                </div>
+                  </td>
+                </tr>
+                {item.remark && <tr><td colSpan={10} className="text-xs text-muted-foreground">行备注：{item.remark}</td></tr>}
+                </Fragment>
               ))}
-            </div>
+            </tbody></ReportTable></div>
           </div>
         )}
         </OrderDetailSections>
@@ -189,7 +190,7 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
 
     <Dialog open={rejectOpen && readable && status === 2 && can(PERMISSIONS.INVENTORY_DISPOSAL_APPROVE)} onOpenChange={setRejectOpen}>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>驳回处置单</DialogTitle></DialogHeader>
+        <DialogHeader description={"填写驳回原因，供申请人核对。"}><DialogTitle>驳回处置单</DialogTitle></DialogHeader>
         <div className="space-y-2 py-2">
           <Label>驳回原因</Label>
           <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateRejectDraft({ reason: e.target.value })} placeholder="必填，将展示给经办人" />

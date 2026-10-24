@@ -37,7 +37,7 @@ export const LimitedTextarea = React.forwardRef<HTMLTextAreaElement, LimitedText
     const len = String(value).length
     const near = len >= Math.floor(maxLength * 0.8)
     return (
-      <div className="relative">
+      <div className="fc-limited-field relative" data-near-limit={near || undefined}>
         <textarea
           ref={node => {
             localRef.current = node
@@ -56,7 +56,7 @@ export const LimitedTextarea = React.forwardRef<HTMLTextAreaElement, LimitedText
         />
         <span
           className={cn(
-            'pointer-events-none absolute right-2.5 text-xs tabular-nums',
+            'fc-character-count pointer-events-none absolute right-2.5 text-xs tabular-nums',
             singleLine ? 'top-1/2 -translate-y-1/2' : 'bottom-1.5',
             near ? 'text-orange-500' : 'text-muted-foreground',
           )}

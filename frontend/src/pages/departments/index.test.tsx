@@ -61,6 +61,13 @@ test('department table displays its saved manager and creation time', async () =
   expect(cells.filter(value => value === '—')).toHaveLength(0)
 })
 
+test('department search has a readable name without exposing modification actions to a read-only user', async () => {
+  await render()
+  expect(host.querySelector('input[aria-label="搜索部门名称"]')).not.toBeNull()
+  expect([...host.querySelectorAll('button')].some(button => button.textContent === '新增部门')).toBe(false)
+  expect(mocks.create).not.toHaveBeenCalled()
+})
+
 test('shows invalid manager, approval references and direct member count', async () => {
   mocks.departments = [{ ...baseDepartment, managerIsActive: false, approvalFlowCount: 2 }]
   await render()

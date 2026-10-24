@@ -91,7 +91,7 @@
 }
 
 
-/* 表头和固定操作列表头共用不透明的同色底，横向滚动时内容不会透出。 */
+/* 共用表格与普通明细表头使用相同的不透明底色。 */
 .data-table-header-surface,
 .data-table-header {
   background-color: color-mix(in srgb, hsl(var(--muted)) 30%, hsl(var(--card)) 70%);
@@ -112,6 +112,11 @@
   @apply px-2;
 }
 .data-table-header:not([data-resizable]) > tr > th:not(:last-child) {
+  border-inline-end: 1px solid hsl(var(--border));
+}
+
+/* 分组标题只画组边界，叶列仍由共用拖动把手提供唯一分隔线。 */
+.data-table-header[data-resizable] > tr > .fc-table-group-header:not(:last-child) {
   border-inline-end: 1px solid hsl(var(--border));
 }
 

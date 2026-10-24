@@ -12,7 +12,7 @@ import { ApiClientError } from '@/api/client'
 
 vi.mock('@/api/suppliers', () => ({ getSuppliersApi: vi.fn() }))
 vi.mock('@/components/shared/AppDialog', () => ({
-  AppDialog: ({ children, footer, dialogId, captureFocusOnOpen }: { children: ReactNode; footer?: ReactNode; dialogId?: string; captureFocusOnOpen?: boolean }) => <div data-dialog-id={dialogId} data-capture-focus={captureFocusOnOpen}>{children}{footer}</div>,
+  AppDialog: ({ children, footer, description, dialogId, captureFocusOnOpen }: { children: ReactNode; description?: ReactNode; footer?: ReactNode; dialogId?: string; captureFocusOnOpen?: boolean }) => <div data-dialog-id={dialogId} data-capture-focus={captureFocusOnOpen}><div className="fc-dialog-caption">{description}</div>{children}{footer}</div>,
 }))
 
 const supplier = (id = 1, isActive = true) => ({ id, name: `供应商${id}`, code: `S${id}`, contact: '联系人', phone: '电话', isActive })
@@ -100,6 +100,8 @@ test('purchase losing view permission pauses existing input without a false empt
   await draw(); await ready(); const old = row()
   await act(async () => useAuthStore.setState({ user: { ...useAuthStore.getState().user!, permissions: [] } }))
   expect(host.textContent).toContain('当前没有供应商查看权限')
+  expect(host.querySelector('.fc-dialog-caption')?.textContent).toContain('当前没有供应商查看权限')
+  expect(host.textContent?.match(/当前没有供应商查看权限/g)).toHaveLength(1)
   expect(host.textContent).not.toContain('共 0'); expect(host.textContent).not.toContain('没有匹配的供应商')
   await act(async () => old.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
   expect(confirm).not.toHaveBeenCalled()

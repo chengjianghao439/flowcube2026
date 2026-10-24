@@ -308,9 +308,9 @@ function RemarkDialog({
   return (
     <Dialog open={open && visible} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="sm:max-w-xl">
-        <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
+        <DialogHeader description={<>{description}</>}><DialogTitle>{title}</DialogTitle></DialogHeader>
         <div className="space-y-3 py-1">
-          <div className="text-sm text-muted-foreground">{description}</div>
+
           <div className="space-y-1.5">
             <Label>{label}{required ? ' *' : '（选填）'}</Label>
             <Input
@@ -490,18 +490,22 @@ export default function BackfillsPage() {
 
   return (
     <div>
-      {!refundOwnerCurrent(refundOwner) && <p role="alert">供应商退款上下文已变化，请重新核对新上下文；原过滤与输入保留。</p>}
-      {[approveTarget,rejectTarget,cancelTarget,executeTarget,regenTarget,detailRow].some(t=>t?.bizType==='supplier_refund'&&!targetCurrent(t)) && <p role="alert">原供应商退款上下文已变化，原输入保留，动作暂停。</p>}
-      {refundWriteError && refundPageCurrent() && <p role="alert">{refundWriteError}</p>}
       <PageHeader
         title="跨期补录审批"
-        description="已结账期间被拦下的付款/核销/退款在这里申请与审批：申请只留单不动账，批准后才真正记账，调整凭证落在补录当期"
+        description={<>
+          {!refundOwnerCurrent(refundOwner) && <span role="alert">供应商退款上下文已变化，请重新核对新上下文；原过滤与输入保留。 </span>}
+          {[approveTarget,rejectTarget,cancelTarget,executeTarget,regenTarget,detailRow].some(t=>t?.bizType==='supplier_refund'&&!targetCurrent(t)) && <span role="alert">原供应商退款上下文已变化，原输入保留，动作暂停。 </span>}
+          {refundWriteError && refundPageCurrent() && <span role="alert">{refundWriteError} </span>}
+          {!isError && !isLoading && data?.truncated && <span role="status">已加载 {list.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条，请缩小查询范围。 </span>}
+          已结账期间被拦下的付款/核销/退款在这里申请与审批：申请只留单不动账，批准后才真正记账，调整凭证落在补录当期
+        </>}
         actions={
           <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
             <RefreshCw className={`mr-1.5 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />刷新
           </Button>
         }
       />
+
 
       {summary && (
         <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -534,14 +538,12 @@ export default function BackfillsPage() {
         )}
       </div>
 
-      {!isError && !isLoading && data && (data.truncated ? (
-        <p role="status" className="px-1 py-3 text-xs text-warning-ink">已加载 {list.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条，请缩小查询范围。</p>
-      ) : <ListSummary total={total} />)}
+      {!isError && !isLoading && data && !data.truncated && <ListSummary total={total} />}
 
       {/* ── 详情：审批人要据此核对原单号、金额、原因，以及原请求快照里钱怎么走 ── */}
       <Dialog open={targetOpen(detailRow)} onOpenChange={v => { if (!v) clearTarget('detail', detailRow, setDetailRow) }}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+          <DialogHeader description={"核对补录来源、审批状态与处理结果。"}>
             <DialogTitle className="flex items-center gap-2">
               补录申请 {targetNo(detailRow)}
               {detailRow && targetCurrent(detailRow) && <SoftStatusLabel label={statusOf(detailRow).label} tone={statusOf(detailRow).tone} />}

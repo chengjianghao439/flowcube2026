@@ -1,3 +1,4 @@
+import PageHeader from '@/components/shared/PageHeader'
 import { useOwnHandlingRecords, useDisposalHandlingOperation } from '@/hooks/useDisposalHandlingOperation'
 import { handlingEpoch, ownHandlingRecords } from '@/lib/disposalHandlingRecovery'
 import { HandlingOperationPanel } from './HandlingOperationPanel'
@@ -26,7 +27,7 @@ export function DisposalRecoveryEntry() {
 }
 function Item({ record }: { record: DisposalExecutionRecord }) {
   const active = useActiveWorkspaceTab(), write = useDisposalExecution(record.id, active)
-  return <section className="rounded border p-4"><h2>处置单 #{record.id} 原报废结果</h2><DisposalExecutionPanel write={write} active={active} /></section>
+  return <section className="rounded border p-4"><h2 className="mb-3 text-section-title">处置单 #{record.id} 原报废结果</h2><DisposalExecutionPanel write={write} active={active} /></section>
 }
 function Records({ records }: { records: DisposalExecutionRecord[] }) {
   const [known, setKnown] = useState(records)
@@ -39,19 +40,21 @@ function Records({ records }: { records: DisposalExecutionRecord[] }) {
 function HandlingItem({ identity, kind }: { identity: string; kind: string }) {
   const active = useActiveWorkspaceTab(), write = useDisposalHandlingOperation(identity, active, () => false)
   const labels: Record<string, string> = { source: '处理意图', sale: '销售草稿', purchase_return: '采购退货', scrap: '报废草稿', release: '核对解除', conversion: '旧单签认' }
-  return <section className="rounded border p-4"><h2>{labels[kind]}原结果</h2><HandlingOperationPanel write={write} />{write.result && <p>已确认原处理结果。请按现有查看权限从业务列表查看单据。</p>}</section>
+  return <section className="rounded border p-4"><h2 className="mb-3 text-section-title">{labels[kind]}原结果</h2><HandlingOperationPanel write={write} />{write.result && <p>已确认原处理结果。请按现有查看权限从业务列表查看单据。</p>}</section>
 }
 function HandlingRecords() {
   const { records, error } = useOwnHandlingRecords()
   const [known, setKnown] = useState(records)
   useEffect(() => { setKnown(previous => { const added = records.filter(r => !previous.some(old => old.operationUuid === r.operationUuid)); return added.length ? [...previous, ...added] : previous }) }, [records])
-  return <section><h2>处理意图与关联结果</h2>{error ? <p role="alert">{error}</p> : known.map(record => <HandlingItem key={record.operationUuid} identity={record.draftIdentity} kind={record.kind} />)}</section>
+  return <section><h2 className="mb-3 text-section-title">处理意图与关联结果</h2>{error ? <p role="alert">{error}</p> : known.map(record => <HandlingItem key={record.operationUuid} identity={record.draftIdentity} kind={record.kind} />)}</section>
 }
 /** Auth-only，本人查询；不挂业务详情、审批、仓库、建议或执行表单。 */
 export default function DisposalRecoveryPage() {
   const { records, error } = useOwnDisposalRecords()
-  return <div className="space-y-4"><h1 className="text-xl font-semibold">报废结果核对</h1><p>这里只核对本人在原服务器发出的报废请求。查看或执行权限撤回后仍可查询；重试须有当前执行权限和仓库范围。</p>
-    {error ? <p role="alert">{error}</p> : <Records key={disposalEpoch()} records={records} />}
-    <HandlingRecords key={handlingEpoch()} />
+  return <div className="space-y-4"><PageHeader title="报废结果核对"
+        description="这里只核对本人在原服务器发出的报废请求。查看或执行权限撤回后仍可查询；重试须有当前执行权限和仓库范围。"  />
+
+    {error ? <p role="alert">{error}</p> : <Records key={`disposal-${disposalEpoch()}`} records={records} />}
+    <HandlingRecords key={`handling-${handlingEpoch()}`} />
   </div>
 }

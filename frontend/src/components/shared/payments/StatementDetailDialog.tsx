@@ -75,7 +75,7 @@ export function StatementDetailDialog({ open, onClose, statementId, type }: Prop
   }
 
   return (
-    <AppDialog
+    <AppDialog descriptionInHeader description={"核对对账范围、账款明细与结算记录。"}
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="payment-statement-detail"

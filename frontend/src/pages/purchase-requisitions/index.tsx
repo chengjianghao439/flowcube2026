@@ -116,7 +116,7 @@ export default function RequisitionsPage() {
     <div className="space-y-4">
       <PageHeader
         title="采购申请"
-        description="登记采购需求，审批后按供应商转为采购单。"
+        description={!isError && !isLoading && data?.truncated ? <span role="status">已读取 {list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 单，请缩小查询范围。</span> : '核对采购需求、审批与转单进度。'}
         actions={
           <>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -151,9 +151,7 @@ export default function RequisitionsPage() {
         emptyText="暂无采购申请单"
         onRowDoubleClick={r => open(`/purchase-requisitions/${r.id}`, `采购申请单 ${r.requisitionNo}`)}
       />}
-      {!isError && !isLoading && data && (data.truncated
-        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 单，请缩小查询范围。</div>
-        : <ListSummary total={data.pagination.total} unit="单" />)}
+      {!isError && !isLoading && data && !data.truncated && <ListSummary total={data.pagination.total} unit="单" />}
 
       <RequisitionQueryDialog
         open={queryOpen}

@@ -112,31 +112,20 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
   return (
     <>
     <Dialog open={open} onOpenChange={v => { if (!v) draft.requestClose() }}>
-      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} onInputCapture={() => { if (draft.canEdit()) setInputDirty(true) }} className="sm:max-w-2xl">
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} onInputCapture={() => { if (draft.canEdit()) setInputDirty(true) }} className="fc-form-dialog sm:max-w-2xl">
         {/* 编辑态与默认（录入）态一眼可分 */}
-        <DialogHeader>
+        <DialogHeader description={<>
+          {conflict && <span role="alert"><span className="font-medium text-destructive-ink">本次修改未保存（该发票已被他人修改）</span> 当前填写内容仍在。请先复制需要保留的内容，再关闭本弹窗、等列表刷新完成后重新打开，核对最新内容后再提交。 </span>}
+          {edit ? <>正在编辑：<span className="font-medium text-foreground">{f.invoiceNo ? `发票号 ${f.invoiceNo}` : `#${edit.id}`}{f.partyName ? ` · ${f.partyName}` : ''}</span></> : !conflict && '填写发票资料、往来单位与金额。'}
+        </>}>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {edit ? '编辑' : '录入'}{typeName}发票
             {edit && <EditModeBadge />}
             <UnsavedBadge show={dirty} />
           </DialogTitle>
-          {edit && (
-            <p className="text-helper mt-1">
-              正在编辑：<span className="font-medium text-foreground">{f.invoiceNo ? `发票号 ${f.invoiceNo}` : `#${edit.id}`}{f.partyName ? ` · ${f.partyName}` : ''}</span>
-            </p>
-          )}
+
         </DialogHeader>
-        {conflict && (
-          // 版本冲突（迁移 263）：**保留弹窗与草稿**，提示"先复制再关闭重开核对"。
-          // 不自动关闭、不自动重试、不把新版本 merge 进旧草稿；toast 仍由全局拦截器统一给出。
-          <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
-            <p className="font-medium text-destructive-ink">本次修改未保存（该发票已被他人修改）</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              当前填写内容仍在。请先复制需要保留的内容，再关闭本弹窗、等列表刷新完成后重新打开，核对最新内容后再提交。
-            </p>
-          </div>
-        )}
-        <div className="grid grid-cols-2 gap-4 py-1">
+        <div className="fc-form-dialog-body grid grid-cols-2 gap-4 py-1">
           <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceCode`}>发票代码</Label><Input id={`${inputId}-invoiceCode`} value={f.invoiceCode} onChange={e => setF(s => ({ ...s, invoiceCode: e.target.value }))} disabled={isPending} className="font-mono" /></div>
           <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceNo`}>发票号码 *</Label><Input id={`${inputId}-invoiceNo`} value={f.invoiceNo} onChange={e => setF(s => ({ ...s, invoiceNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
           <div className="space-y-1.5 col-span-2"><Label htmlFor={`${inputId}-partyName`}>{invoiceType === 1 ? '供应商' : '客户'} *</Label><Input id={`${inputId}-partyName`} value={f.partyName} onChange={e => setF(s => ({ ...s, partyName: e.target.value }))} disabled={isPending} /></div>
@@ -221,6 +210,7 @@ export default function InvoicesPage() {
         description="进项/销项发票池与认证抵扣台账；税额在生成凭证时按发票自动拆分为进项/销项税额"
         actions={canManage && <Button onClick={() => { setEditTarget(null); setDialogOpen(true) }}><Plus className="mr-1.5 h-4 w-4" />录入{invoiceType === 1 ? '进项' : '销项'}发票</Button>}
       />
+
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg border border-border/70 bg-card p-0.5">

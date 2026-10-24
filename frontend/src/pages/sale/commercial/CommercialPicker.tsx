@@ -17,6 +17,7 @@ import type { Product, ProductFinderResult } from '@/types/products'
 import type { Category } from '@/types/categories'
 import type { PaginatedData } from '@/types'
 import { AppDialog } from '@/components/shared/AppDialog'
+import { ResizableTable } from '@/components/shared/ResizableTable'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
 import { Input } from '@/components/ui/input'
@@ -245,7 +246,7 @@ export default function CommercialPicker({ kind, warehouseId, owner, readGuard, 
   const total = result?.pagination.total ?? 0
   const count = kind === 'kit' && selectedCategory != null && !blockedCategory ? items.length : total
 
-  return <AppDialog captureFocusOnOpen open={visible} dialogId={`sale-commercial-picker-${kind}`} title={kind === 'kit' ? '选择成套配件' : '选择普通商品'} defaultWidth={1240} defaultHeight={660} minWidth={900} minHeight={480} onOpenChange={open => { if (!open) close() }} footer={<div className="flex items-center justify-between gap-4">
+  return <AppDialog descriptionInHeader description={kind === 'kit' ? '按编码或名称查找并选择成套配件。' : '按商品资料查找并选择普通商品。'} captureFocusOnOpen open={visible} dialogId={`sale-commercial-picker-${kind}`} title={kind === 'kit' ? '选择成套配件' : '选择普通商品'} defaultWidth={1240} defaultHeight={660} minWidth={900} minHeight={480} onOpenChange={open => { if (!open) close() }} footer={<div className="flex items-center justify-between gap-4">
     <div className="min-w-0 text-sm">{selected && <span className="block whitespace-normal leading-5 [overflow-wrap:anywhere]"><span className="mr-2 text-muted-foreground">已选</span>{selected.code} · {selected.name}</span>}</div>
     <div className="flex shrink-0 gap-2"><Button variant="outline" onClick={close}>取消</Button><Button disabled={!selected || pending || !!error || blockedCategory || disabledItem(selected)} onClick={() => { if (selected) void choose(selected) }}>{selecting ? '读取资料…' : '确认选择'}</Button></div>
   </div>}>
@@ -265,11 +266,15 @@ export default function CommercialPicker({ kind, warehouseId, owner, readGuard, 
           {result?.truncated && <div className="shrink-0 border-b bg-warning/10 px-3 py-2 text-xs text-warning-ink" role="status">{blockedCategory ? '匹配资料未读齐，暂不能按分类选择。' : `结果超过单次显示上限，已显示 ${result.list.length.toLocaleString()} / 共 ${total.toLocaleString()} 条。`}请缩小搜索范围。</div>}
           {selectionError && <p role="alert" className="shrink-0 border-b px-3 py-2 text-sm text-destructive-ink">{selectionError}</p>}
           <div ref={scrollRef} data-table-scroll className="min-h-0 flex-1 overflow-auto" aria-busy={loading}>
-            {error ? <QueryErrorState error={error} onRetry={() => { if (isCurrent()) setRetry(old => old + 1) }} title="商品加载失败" compact /> : <table className="w-full min-w-[940px] table-fixed" aria-rowcount={virtualized ? items.length + 1 : undefined}>
-              <colgroup>{[104, 132, 112, 232, 80, 56, 112, 112].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
-              <thead className="sticky top-0 z-10 border-b data-table-header text-left text-xs font-medium"><tr>{['编码', '供应商型号', '型号', '商品名称', '颜色', '单位'].map(label => <th key={label} className="px-2 py-2.5 font-medium">{label}</th>)}<th className="px-2 py-2.5 text-right font-medium" title={kind === 'kit' ? '单套现货参考；共享组件按整单核对，不保证可拣或交期' : undefined}>{kind === 'kit' ? '独立现货参考' : '可用库存'}</th><th className="px-2 py-2.5 text-right font-medium" title="实际成交价以订单核对结果为准">价格 A 参考</th></tr></thead>
+            {error ? <QueryErrorState error={error} onRetry={() => { if (isCurrent()) setRetry(old => old + 1) }} title="商品加载失败" compact /> : <ResizableTable columns={[
+              { key: 'code', title: '编码', width: 104 }, { key: 'articleNumber', title: '供应商型号', width: 132 },
+              { key: 'spec', title: '型号', width: 112 }, { key: 'name', title: '商品名称', width: 232 },
+              { key: 'color', title: '颜色', width: 80 }, { key: 'unit', title: '单位', width: 56 },
+              { key: 'stock', title: kind === 'kit' ? '独立现货参考' : '可用库存', width: 112, align: 'right', headerTitle: kind === 'kit' ? '单套现货参考；共享组件按整单核对，不保证可拣或交期' : undefined },
+              { key: 'price', title: '价格 A 参考', width: 112, align: 'right', headerTitle: '实际成交价以订单核对结果为准' },
+            ]} columnStorageKey={`sale-commercial-picker-${kind}`} minWidth={940} stickyHeader aria-rowcount={virtualized ? items.length + 1 : undefined}>
               {loading ? <tbody>{Array.from({ length: 6 }, (_, index) => <tr key={index} aria-hidden="true" className="border-b"><td colSpan={8} className="px-3 py-3"><div className="h-4 rounded bg-muted" /></td></tr>)}</tbody> : blockedCategory ? <tbody /> : !items.length ? <tbody><tr><td colSpan={8} className="py-12 text-center text-sm text-muted-foreground">没有匹配的商品</td></tr></tbody> : virtualized ? <VirtualTableBody data={items} columns={8} getRowKey={item => item.id} renderRow={renderRow} onScrollToIndexReady={registerScroll} /> : <tbody>{items.map(renderRow)}</tbody>}
-            </table>}
+            </ResizableTable>}
           </div>
         </div>
       </div>

@@ -370,6 +370,7 @@ export default function InboundTasksPage() {
     <div className="space-y-4">
       <PageHeader
         title="收货订单"
+        description="核对到货、收货与上架进度。"
         actions={
           <>
             <Button

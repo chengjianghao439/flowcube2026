@@ -146,7 +146,7 @@ export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = tru
   }
 
   return (
-    <AppDialog
+    <AppDialog descriptionInHeader description={context && !readable ? <span role="status">资料读取已暂停，当前草稿仍保留。</span> : context && !query.isError && query.isFetching ? <span role="status">正在加载分类…</span> : '展开分类层级并选择所需末级分类。'}
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="category-finder"
@@ -157,7 +157,7 @@ export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = tru
       minHeight={300}
       footer={
         <div className="flex items-center justify-between gap-4">
-          <span className="text-sm text-muted-foreground">{selectedName ? `当前分类：${selectedName}` : '展开分类后点击末级分类填入'}</span>
+          <span className="text-sm text-muted-foreground">{selectedName ? `当前分类：${selectedName}` : ''}</span>
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>取消</Button>
             <Button onClick={handleConfirm} disabled={selectedId == null || !ready || (!!context && !selectedName)}>确认</Button>
@@ -165,7 +165,7 @@ export function CategoryFinder({ open, onClose, onConfirm, value, leafOnly = tru
         </div>
       }
     >
-      {context && !readable ? <p role="status" className="p-5 text-sm text-muted-foreground">资料读取已暂停，当前草稿仍保留。</p> : context && query.isError ? <QueryErrorState error={query.error} title="分类加载失败" onRetry={() => { if (current()) void query.refetch() }} /> : context && query.isFetching ? <p role="status" className="p-5 text-sm text-muted-foreground">正在加载分类…</p> : categoryTree.length === 0 ? (
+      {context && !readable ? null : context && query.isError ? <QueryErrorState error={query.error} title="分类加载失败" onRetry={() => { if (current()) void query.refetch() }} /> : context && query.isFetching ? null : categoryTree.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">暂无分类</p>
       ) : (
         <div className="h-full overflow-y-auto p-4">

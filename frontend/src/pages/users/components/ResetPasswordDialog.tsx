@@ -35,14 +35,14 @@ export default function ResetPasswordDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+        <DialogHeader description={<>
+            正在重置账号 <span className="font-medium text-foreground">{username}</span> 的密码
+          </>}>
           <DialogTitle>重置密码</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          <p className="text-sm text-muted-foreground">
-            正在重置账号 <span className="font-medium text-foreground">{username}</span> 的密码
-          </p>
+
 
           <div className="space-y-2">
             <Label htmlFor="new-password">新密码</Label>

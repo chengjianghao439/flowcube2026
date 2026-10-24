@@ -240,7 +240,8 @@ export default function TransferPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="库存调拨" description="在仓库之间调拨商品，自动同步两端库存" actions={
+      <PageHeader title="库存调拨"
+        description={!isError && !isLoading && data?.truncated ? <span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</span> : '核对调拨明细、在途与收发进度。'}  actions={
         <>
           <Button variant="outline"
             onClick={() => downloadExport('/export/transfer', exportParams).catch(e => toast.error((e as Error).message))}>
@@ -268,9 +269,7 @@ export default function TransferPage() {
       {isError ? <QueryErrorState error={error} title="调拨列表读取失败" onRetry={() => void refetch()} />
         : <DataTable virtualized preserveFocus retainFocusedRow={confirmState.open || forceCloseState.open} columns={columns} data={data?.list || []} loading={isLoading} onRowDoubleClick={goToDetail} />}
 
-      {!isError && !isLoading && data && (data.truncated
-        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</div>
-        : <ListSummary total={total} unit="单" />)}
+      {!isError && !isLoading && data && !data.truncated && <ListSummary total={total} unit="单" />}
 
       <ConfirmDialog
         open={confirmState.open && canActOnTransfer(confirmState.id, [1, 2])}
@@ -282,7 +281,9 @@ export default function TransferPage() {
         onCancel={closeConfirm}
       />
 
-      <AppDialog
+      <AppDialog descriptionInHeader description={<>{<>
+            仅用于运输途中货物丢失、长期无法送达等无法正常扫码入库的情况。确认后，在途库存条码按运输损耗核销：不退回调出仓，也不计入调入仓；调拨单直接标记为已完成，不能撤回。
+          </>}</>}
         open={forceCloseState.open && canActOnTransfer(forceCloseState.id, [3])}
         onOpenChange={(v) => { if (!v && pendingId !== forceCloseState.id) setForceCloseState({ open: false, id: null }) }}
         dialogId="transfer-force-close-dialog"
@@ -312,9 +313,7 @@ export default function TransferPage() {
         }
       >
         <div className="space-y-4 px-1 py-1 text-sm leading-6">
-          <p className="text-muted-foreground">
-            仅用于运输途中货物丢失、长期无法送达等无法正常扫码入库的情况。确认后，在途库存条码按运输损耗核销：不退回调出仓，也不计入调入仓；调拨单直接标记为已完成，不能撤回。
-          </p>
+
           <LimitedTextarea
             maxLength={200}
             placeholder="请填写异常了结原因（必填，会记入操作记录）"

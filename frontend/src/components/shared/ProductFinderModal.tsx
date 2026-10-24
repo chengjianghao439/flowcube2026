@@ -1,8 +1,10 @@
+import { ResizableTable } from './ResizableTable'
+import { productIdentityColumns } from './productIdentityColumns'
 import { money, unitPrice } from '@/lib/format'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { moveFinderFocus } from '@/lib/finderNavigation'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { Check, ChevronDown, ChevronRight, PackageSearch, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, PackageSearch, Search, X } from 'lucide-react'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
@@ -72,6 +74,7 @@ export default function ProductFinderModal(props: ProductFinderModalProps) {
 const noSubscription = () => () => {}
 const zeroEpoch = () => 0
 function ProductFinderContent({ open, compact = false, context: suppliedContext, dialogId, readOwner: suppliedOwner, readGuard, warehouseId, warehouseName, mode = 'lookup', onConfirm, onClose }: ProductFinderModalProps) {
+  const searchInput = useRef<HTMLInputElement>(null)
   const explicitContext = typeof suppliedContext === 'object' ? suppliedContext : undefined
   // 普通编辑的 compact 选择器没有上层 owner，本次打开仍绑定当前归属；默认调用沿用原读取规则。
   const compactOwner = useRef<{ owner: ReturnType<typeof captureKitReadOwner>; epoch: number } | null>(null)
@@ -154,7 +157,7 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
   const hasStock = warehouseId != null && warehouseId > 0
   const purchaseLayout = compact && mode === 'purchase' && !!explicitContext
   const compactWidths = purchaseLayout ? [104, 132, 112, 232, 80, 56, 140] : [104, 132, 116, 208, 84, 74, 114]
-  const columnCount = (compact ? 7 : 8) + (hasStock ? 1 : 0) + (mode === 'sale' ? 1 : 0)
+  const columnCount = 7 + (hasStock ? 1 : 0) + (mode === 'sale' ? 1 : 0)
   const scrollToIndex = useRef<((index: number) => void) | null>(null)
   const registerScroll = useCallback((scroll: ((index: number) => void) | null) => { scrollToIndex.current = scroll }, [])
   const renderRow = (product: ProductFinderResult, index: number) => <tr key={product.id} data-finder-key={product.id} aria-selected={selectedId === product.id} tabIndex={pending ? -1 : 0} onClick={() => { if (current() && !pending) setSelectedId(product.id) }} onDoubleClick={() => confirm(product)} onKeyDown={e => {
@@ -163,21 +166,25 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
     if (e.key === 'Enter') { e.preventDefault(); if (compact || selectedId === product.id) confirm(product); else setSelectedId(product.id) }
     if (compact) moveFinderFocus(e, products, index, row => row.id, scrollToIndex.current)
   }} className={cn('cursor-pointer align-top outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring', compact && 'border-b', pending ? 'opacity-50' : selectedId === product.id ? 'bg-primary/[0.07]' : 'hover:bg-muted/50')}>
-    {!compact && <td className="py-4 pl-3 text-primary">{selectedId === product.id && <Check className="h-4 w-4" />}</td>}
     <ProductIdentityCells product={product} nameContent={<><span>{product.name}</span>{!pending && searchText && product.searchMatch && <span className="block text-xs leading-5 text-muted-foreground">命中：{product.searchMatch}</span>}</>} />
     <td className="px-2 py-3 text-muted-foreground"><span>{product.unit || '—'}</span>{product.allowDecimalQty === false && <span className={cn('rounded bg-warning/10 px-1 text-xs text-warning-ink', compact ? 'mt-0.5 inline-block' : 'ml-1')}>只能整数</span>}</td><td className="break-words px-3 py-3 text-xs leading-5 text-muted-foreground">{mode === 'purchase' ? product.supplierName || '—' : product.categoryName || '未分类'}</td>
     {hasStock && <td className="px-3 py-3 text-right tabular-nums">{product.stock}</td>}{mode === 'sale' && <td className="px-3 py-3 text-right tabular-nums">{product.salePrice == null ? '—' : compact ? unitPrice(product.salePrice) : money(product.salePrice)}</td>}
   </tr>
 
-  return <AppDialog captureFocusOnOpen={compact} open={readable || localPaused} onOpenChange={value => { if (!value) close() }} dialogId={dialogId ?? (compact ? 'sale-product-finder' : 'product-finder-v2')} defaultWidth={compact ? 1240 : 1200} defaultHeight={compact ? 660 : 730} minWidth={compact ? 900 : 960} minHeight={compact ? 480 : 560}
+  return <AppDialog descriptionInHeader description={localPaused ? <span role="status">{explicitContext ? permission(PERMISSIONS.PRODUCT_VIEW) ? '读取已暂停，输入已保留。请关闭后重新选择商品。' : '当前没有商品查看权限，输入已保留。' : '读取来源已变化，输入已保留。请关闭后重新选择商品。'}</span> : incomplete && !pending && !query.isError ? <span role="status">已读取 {products.length.toLocaleString()} / {total.toLocaleString()} 个匹配商品。{allowIncompleteSelection ? '请缩小搜索范围以查看其余匹配商品。' : '请缩小搜索范围后再确认选择。'}</span> : compact ? '按商品资料查找，确认所需商品。' : '按商品资料查找；单击选择，双击或选中后按 Enter 确认。'} captureFocusOnOpen open={readable || localPaused} onOpenChange={value => { if (!value) close() }} dialogId={dialogId ?? (compact ? 'sale-product-finder' : 'product-finder-v2')} defaultWidth={compact ? 1240 : 1200} defaultHeight={compact ? 660 : 730} minWidth={compact ? 900 : 960} minHeight={compact ? 480 : 560}
+    onOpenAutoFocus={event => {
+      if (!searchInput.current || searchInput.current.disabled) return
+      event.preventDefault()
+      searchInput.current.focus({ preventScroll: true })
+    }}
     title={<span className="flex items-center gap-2"><PackageSearch className="h-4 w-4 text-primary" />选择商品</span>}
-    footer={<div className={cn('flex items-center gap-5', compact ? 'justify-end' : 'justify-between')}>{!compact && <p className="text-xs text-muted-foreground">单击选择 · 双击或选中后按 Enter 确认</p>}<div className="flex shrink-0 gap-2"><Button size={compact ? 'sm' : 'default'} variant="outline" onClick={close}>取消</Button><Button size={compact ? 'sm' : 'default'} disabled={!canConfirm} onClick={() => { if (selected) confirm(selected) }}>确认选择</Button></div></div>}>
+    footer={<div className={cn('flex items-center gap-5', compact ? 'justify-end' : 'justify-between')}><div className="flex shrink-0 gap-2"><Button size={compact ? 'sm' : 'default'} variant="outline" onClick={close}>取消</Button><Button size={compact ? 'sm' : 'default'} disabled={!canConfirm} onClick={() => { if (selected) confirm(selected) }}>确认选择</Button></div></div>}>
     <div className="flex h-full flex-col overflow-hidden">
       <div className={cn('flex shrink-0 items-center border-b', compact ? 'gap-3 px-4 py-2.5' : 'gap-4 px-5 py-3')}>
-        <div className="relative max-w-2xl flex-1"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input autoFocus disabled={localPaused} aria-label="搜索商品" value={keyword} onChange={e => { if (current()) { setKeyword(e.target.value); resetSelection() } }} placeholder="搜索名称、编码、条码、供应商型号、型号或颜色" className={cn('pl-9 pr-9', compact ? 'h-9' : 'h-10')} />{keyword && !localPaused && <button aria-label="清空搜索" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => { if (current()) { setKeyword(''); resetSelection() } }}><X className="h-4 w-4" /></button>}</div>
+        <div className="relative max-w-2xl flex-1"><Search aria-hidden="true" className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input ref={searchInput} disabled={localPaused} aria-label="搜索商品" value={keyword} onChange={e => { if (current()) { setKeyword(e.target.value); resetSelection() } }} placeholder="搜索名称、编码、条码、供应商型号、型号或颜色" className={cn('pl-9 pr-9', compact ? 'h-9' : 'h-10')} />{keyword && !localPaused && <button aria-label="清空搜索" className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted" onClick={() => { if (current()) { setKeyword(''); resetSelection() } }}><X className="h-4 w-4" /></button>}</div>
         <span className="text-xs text-muted-foreground">{hasStock ? `库存参考：${warehouseName || '未指定仓库'}` : '启用商品'}</span>
       </div>
-      {localPaused ? <div role="status" className="flex min-h-0 flex-1 items-start px-4 py-4 text-sm text-warning-ink">{explicitContext ? permission(PERMISSIONS.PRODUCT_VIEW) ? '读取已暂停，输入已保留。请关闭后重新选择商品。' : '当前没有商品查看权限，输入已保留。' : '读取来源已变化，输入已保留。请关闭后重新选择商品。'}</div> : <div className="flex min-h-0 flex-1">
+      {localPaused ? null : <div className="flex min-h-0 flex-1">
         <aside aria-label="商品分类" className={cn('shrink-0 overflow-y-auto border-r', compact ? 'w-44 px-2 py-2' : 'w-52 px-3 py-3')}>
           <p className="mb-2 px-2 text-xs font-medium text-muted-foreground">商品分类</p>
           <button aria-pressed={!category} className={cn('mb-1 w-full rounded-md px-3 py-2 text-left text-sm font-medium', !category ? 'bg-primary/10 text-primary' : 'hover:bg-muted')} onClick={() => { if (current()) { setCategory(null); resetSelection() } }}>全部分类</button>
@@ -186,13 +193,17 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className={cn('flex shrink-0 items-center justify-between gap-3 px-4 text-xs text-muted-foreground', compact ? 'py-2' : 'py-2.5')}><span>{category ? `${category.name}（含子分类）` : '全部商品'}</span><span aria-live="polite">{pending ? '正在查询…' : query.isError ? '查询失败' : `共 ${total.toLocaleString()} 个匹配商品`}</span></div>
-          {incomplete && !pending && !query.isError && <p role="status" className="mx-3 mb-2 rounded border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning-ink">已读取 {products.length.toLocaleString()} / {total.toLocaleString()} 个匹配商品。{allowIncompleteSelection ? '请缩小搜索范围以查看其余匹配商品。' : '请缩小搜索范围后再确认选择。'}</p>}
           <div className="min-h-0 flex-1 overflow-auto" data-table-scroll={compact ? '' : undefined} aria-busy={!!pending}>
-            {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} title={explicitContext && forbidden ? '没有商品查看权限' : '商品加载失败'} compact /> : <table className={cn('w-full', purchaseLayout ? 'text-[13px]' : 'text-sm', compact ? cn(purchaseLayout ? hasStock ? 'min-w-[940px]' : 'min-w-[860px]' : 'min-w-[1024px]', 'table-fixed [&_th]:min-w-0 [&_th]:py-2.5 [&_td]:min-w-0 [&_td]:py-2 [&_td]:leading-5 [&_td]:[overflow-wrap:anywhere]') : 'min-w-[1200px]')}>
-              {compact && <colgroup>{compactWidths.map((width, index) => <col key={index} style={{ width }} />)}{hasStock && <col style={{ width: 86 }} />}{mode === 'sale' && <col style={{ width: 106 }} />}</colgroup>}
-              <thead data-selection-column className="sticky top-0 z-10 data-table-header text-left text-xs text-muted-foreground"><tr>{!compact && <th className="w-9 py-3"><span className="sr-only">选择</span></th>}<ProductIdentityHeaders /><th className="w-16 px-2 py-3 font-medium">单位</th><th className="px-3 py-3 font-medium">{mode === 'purchase' ? '供应商' : '分类'}</th>{hasStock && <th className="w-24 px-3 py-3 text-right font-medium">可用库存</th>}{mode === 'sale' && <th className="w-28 px-3 py-3 text-right font-medium">{compact ? '价格 A 参考' : '参考售价'}</th>}</tr></thead>
+            {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} title={explicitContext && forbidden ? '没有商品查看权限' : '商品加载失败'} compact /> : <ResizableTable columns={[
+              ...productIdentityColumns({ code: 'code', name: 'name' }).map((column, index) => ({ ...column, width: compact ? compactWidths[index] : column.width })),
+              { key: 'unit', title: '单位', width: compact ? compactWidths[5] : 80 },
+              { key: 'source', title: mode === 'purchase' ? '供应商' : '分类', width: compact ? compactWidths[6] : 180 },
+              ...(hasStock ? [{ key: 'stock', title: '可用库存', width: 86, align: 'right' as const }] : []),
+              ...(mode === 'sale' ? [{ key: 'salePrice', title: compact ? '价格 A 参考' : '参考售价', width: 106, align: 'right' as const }] : []),
+            ]} columnStorageKey={`product-finder:${compact ? purchaseLayout ? 'compact-purchase' : 'compact' : 'full'}:${mode}:${hasStock ? 'stock' : 'plain'}`}
+              minWidth={compact ? purchaseLayout ? hasStock ? 940 : 860 : 1024 : 1200} stickyHeader className={purchaseLayout ? 'text-[13px]' : 'text-sm'}>
               {compact && !query.isLoading && products.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={products} columns={columnCount} getRowKey={product => product.id} renderRow={renderRow} onScrollToIndexReady={registerScroll} /> : <tbody className="divide-y divide-border">{query.isLoading ? <tr><td colSpan={columnCount} className="py-20 text-center text-muted-foreground">正在加载商品…</td></tr> : !products.length ? <tr><td colSpan={columnCount} className="py-16 text-center"><PackageSearch className="mx-auto mb-3 h-7 w-7 text-muted-foreground/50" /><p className="font-medium">没有匹配的商品</p>{!compact && <p className="mt-1 text-xs text-muted-foreground">试试其他关键词，或切换到全部分类。</p>}</td></tr> : products.map(renderRow)}</tbody>}
-            </table>}
+            </ResizableTable>}
           </div>
         </div>
       </div>}

@@ -26,8 +26,8 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
   return (
     <Dialog open={!!accountId} onOpenChange={o => { if (!o) onClose() }}>
       <DialogContent className="sm:max-w-5xl">
-        <DialogHeader><DialogTitle>明细账 · {code} {name} <span className="text-sm font-normal text-muted-foreground">（{period}）</span></DialogTitle></DialogHeader>
-        {isLoading || !data ? <div className="py-10 text-center text-sm text-muted-foreground">加载中…</div> : (
+        <DialogHeader description={isLoading || !data ? <span role="status">加载中…</span> : '核对科目逐笔发生额与余额。'}><DialogTitle>明细账 · {code} {name} <span className="text-sm font-normal text-muted-foreground">（{period}）</span></DialogTitle></DialogHeader>
+        {isLoading || !data ? null : (
           <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/60">
             <ReportTable className="w-full text-sm">
               <thead className="sticky top-0 bg-muted/60 text-muted-foreground">
@@ -77,7 +77,9 @@ export default function LedgerPage() {
 
   return (
     <div>
-      <PageHeader title="总账与试算平衡" description="查看科目期初、本期发生与期末余额；借贷发生额和期末余额应各自平衡" />
+      <PageHeader title="总账与试算平衡"
+        description="查看科目期初、本期发生与期末余额；借贷发生额和期末余额应各自平衡"  />
+
 
       <FilterCard className="mb-4">
         <span className="text-sm text-muted-foreground">会计期间</span>
@@ -97,16 +99,16 @@ export default function LedgerPage() {
             <tr className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
               <th rowSpan={2} className="px-3 py-2 text-left font-medium">科目</th>
               <th rowSpan={2} className="px-3 py-2 text-left font-medium">类别</th>
-              <th colSpan={2} className="border-l border-border/60 px-3 py-1.5 text-center font-medium">期初余额</th>
-              <th colSpan={2} className="border-l border-border/60 px-3 py-1.5 text-center font-medium">本期发生</th>
-              <th colSpan={2} className="border-l border-border/60 px-3 py-1.5 text-center font-medium">期末余额</th>
+              <th colSpan={2} className="px-3 py-1.5 text-center font-medium">期初余额</th>
+              <th colSpan={2} className="px-3 py-1.5 text-center font-medium">本期发生</th>
+              <th colSpan={2} className="px-3 py-1.5 text-center font-medium">期末余额</th>
             </tr>
             <tr className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
-              <th className="border-l border-border/60 px-3 py-1.5 text-right font-medium">借方</th>
+              <th className="px-3 py-1.5 text-right font-medium">借方</th>
               <th className="px-3 py-1.5 text-right font-medium">贷方</th>
-              <th className="border-l border-border/60 px-3 py-1.5 text-right font-medium">借方</th>
+              <th className="px-3 py-1.5 text-right font-medium">借方</th>
               <th className="px-3 py-1.5 text-right font-medium">贷方</th>
-              <th className="border-l border-border/60 px-3 py-1.5 text-right font-medium">借方</th>
+              <th className="px-3 py-1.5 text-right font-medium">借方</th>
               <th className="px-3 py-1.5 text-right font-medium">贷方</th>
             </tr>
           </thead>

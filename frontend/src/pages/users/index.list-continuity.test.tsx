@@ -61,7 +61,7 @@ test.each([201, 5000, 5001])('有界收集%i个匹配并明确完整性，不要
   for (const url of requests) expect(url.searchParams.get('hideDevelopment')).toBe('1')
   expect(host.textContent).not.toMatch(/上一页|下一页|第 1 \/.*页/)
   const summary = host.querySelector('[role="status"]')?.textContent
-  if (total > 5000) expect(summary).toMatch(/5,000.*5,001.*缩小查询范围/)
+  if (total > 5000) { expect(summary).toMatch(/5,000.*5,001.*缩小查询范围/); expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围') }
   else expect(summary).toBe(`共 ${total.toLocaleString()} 个`)
 }, 20000)
 test('第二批读取失败拒绝部分用户，可沿原条件重试', async () => {

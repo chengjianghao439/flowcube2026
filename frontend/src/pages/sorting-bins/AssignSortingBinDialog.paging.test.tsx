@@ -70,7 +70,7 @@ test.each([5000, 5001])('真实取齐%i候选并披露完整性与有界挂载',
   expect(data()?.list).toHaveLength(5000); expect(data()?.truncated).toBe(total > 5000)
   expect(requests).toHaveLength(25)
   const text = [...document.querySelectorAll('[role="status"]')].map(node => node.textContent).join(' ')
-  if (total > 5000) expect(/5,?000.*5,?001/.test(text) && /仅显示|未全部|未完整|截断/.test(text)).toBe(true)
+  if (total > 5000) { expect(/5,?000.*5,?001/.test(text) && /仅显示|未全部|未完整|截断/.test(text)).toBe(true); expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('候选未全部读取') }
   expect(document.body.textContent).not.toMatch(/上一页|下一页/)
   expect(document.querySelectorAll('tbody tr:not([aria-hidden])').length).toBeLessThan(50)
 }, 15000)

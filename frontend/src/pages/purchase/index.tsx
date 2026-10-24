@@ -325,6 +325,7 @@ export default function PurchasePage() {
     <div className="space-y-4">
       <PageHeader
         title="采购订单"
+        description={!isError && !isLoading && data?.truncated ? <span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</span> : '核对采购明细、收货与付款进度。'}
         actions={
           <>
             <Button variant="outline"
@@ -379,9 +380,7 @@ export default function PurchasePage() {
         columnStorageKey="purchase:status-v3"
       />}
 
-      {!isError && !isLoading && data && (data.truncated
-        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</div>
-        : <ListSummary total={total} unit="单" />)}
+      {!isError && !isLoading && data && !data.truncated && <ListSummary total={total} unit="单" />}
 
       {printDetail && (
         <OrderPrintOverlay
@@ -414,7 +413,7 @@ export default function PurchasePage() {
       {/* 驳回弹窗（审计 4.7）：审批人驳回待审批采购单 */}
       <Dialog open={!!rejectTarget} onOpenChange={(v) => !v && setRejectTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader><DialogTitle>驳回采购单 {rejectTarget?.orderNo}</DialogTitle></DialogHeader>
+          <DialogHeader description={"填写驳回原因，供采购人员调整。"}><DialogTitle>驳回采购单 {rejectTarget?.orderNo}</DialogTitle></DialogHeader>
           <div className="space-y-2">
             <Label>驳回原因 *</Label>
             <Input

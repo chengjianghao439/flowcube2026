@@ -19,7 +19,7 @@ vi.mock('@/hooks/useCategories', () => ({ useCategoryTree: () => ({ data: [] }) 
 vi.mock('@/hooks/useProductQtyPolicies', () => ({ useProductQtyPolicies: () => () => true }))
 vi.mock('@/components/shared/ContainerDrawer', () => ({ default: () => null }))
 vi.mock('@/components/finder', () => ({ ProductFinder: () => null }))
-vi.mock('@/components/ui/dialog', async importOriginal => ({ ...await importOriginal<typeof import('@/components/ui/dialog')>(), Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => open ? <div role="dialog">{children}</div> : null, ...Object.fromEntries(['Content', 'Header', 'Title', 'Footer', 'Description'].map(k => [`Dialog${k}`, ({ children }: { children: React.ReactNode }) => <div>{children}</div>])) }))
+vi.mock('@/components/ui/dialog', async importOriginal => ({ ...await importOriginal<typeof import('@/components/ui/dialog')>(), Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => open ? <div role="dialog">{children}</div> : null, DialogHeader: ({ children, description }: { children: React.ReactNode; description?: React.ReactNode }) => <div>{children}<div className="fc-dialog-caption">{description}</div></div>, ...Object.fromEntries(['Content', 'Title', 'Footer', 'Description'].map(k => [`Dialog${k}`, ({ children }: { children: React.ReactNode }) => <div>{children}</div>])) }))
 const item = { productId: 7, warehouseId: 8, productName: '商品A', warehouseName: '仓库A', unit: '件' }
 function result(productId = 7, warehouseId = 8, orderNo = 'SO-当前') {
   const legacy = { productId, warehouseId, summary: { activeQuantity: 30, cacheOnHand: 32, reserved: 50, available: 0, expected: 25, atp: 5, pickableQuantity: 12, reservationQuantity: 40, expectedBindingQuantity: 33, expectedPoolBindingQuantity: 25, cacheDifference: 2, reservationDifference: 10, bindingPoolDifference: 8, visibleReservationQuantity: 20, hiddenReservationQuantity: 12, orphanReservationQuantity: 6, unknownReservationQuantity: 2, visibleBindingQuantity: 28, hiddenBindingQuantity: 5, orphanBindingQuantity: 0 }, list: [{ saleOrderId: 11, orderNo, customerName: '授权客户', status: 2, createdAt: '2026-10-04 10:00:00', reservationQuantity: 20, expectedBindingQuantity: 28, hiddenBindingQuantity: 0, orphanBindingQuantity: 3, bindings: [{ bindingId: 1, saleOrderItemId: 41, quantity: 25, sourceState: 'expected_supply', purchase: { purchaseOrderId: 201, purchaseItemId: 301, orderNo: 'PO-当前', status: 2, openQuantity: 25, boundQuantity: 25 } }] }], pagination: { page: 1, pageSize: 20, total: 21 } }
@@ -77,7 +77,7 @@ test.each(['账号', '权限', '服务器'])('%s变化隔离旧概要和迟到�
   else act(() => useAuthStore.setState({ sessionGeneration: 2, user: { id: change === '账号' ? 10 : 9, username: 'new', realName: '测试', roleId: change === '权限' ? 5 : 1, roleName: '测试', permissions: change === '权限' ? [] : undefined } }))
   await flush(); await act(async () => { resolve(result(7, 8, 'SO-旧上下文')); await new Promise(done => setTimeout(done, 35)) })
   expect(host.textContent).not.toContain('SO-旧上下文')
-  if (change === '权限') expect(host.textContent).toContain('没有查看库存的权限')
+  if (change === '权限') { expect(host.textContent).toContain('没有查看库存的权限'); expect(host.querySelector('.fc-dialog-caption')?.textContent).toBe('没有查看库存的权限'); expect(host.textContent?.match(/没有查看库存的权限/g)).toHaveLength(1) }
   else expect(host.textContent).toContain('SO-新上下文')
 })
 test('服务器地址变化无需父组件draw，立即移除已显示旧原单并fresh读取', async () => {

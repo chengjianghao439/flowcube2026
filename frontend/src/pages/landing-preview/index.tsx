@@ -1,90 +1,48 @@
-/** 独立工作树中的官网候选版，用户确认前不合并或发布。 */
-import { useEffect, useState } from "react";
-import {
-  ArrowDown,
-  ArrowRight,
-  ArrowUpRight,
-  Check,
-  ChevronDown,
-  Download,
-  Globe2,
-  Mail,
-  Menu,
-  Monitor,
-  Phone,
-  ScanLine,
-  ShieldCheck,
-  Smartphone,
-  X,
-} from "lucide-react";
-import SystemBrand from "@/components/shared/SystemBrand";
-import { capabilityGroups } from "../landing/product-content";
-import { landingUpdates } from "../landing/updates";
-import ProductDemo from "./ProductDemo";
-import BusinessStory from "./BusinessStory";
-import "./preview.css";
+/** 官网融合已确认的新稿布局与旧版交互演示，发布信息继续来自原公开接口。 */
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import SystemBrand from '@/components/shared/SystemBrand'
+import { landingUpdates } from '../landing/updates'
+import ProductDemo from '../landing/ProductDemo'
+import BusinessStory from '../landing/BusinessStory'
+import { capabilityGroups } from '../landing/product-content'
+import { installLandingMotion } from '../landing/motion'
+import '../landing/landing-reference.css'
+import '../landing/landing-fusion.css'
+import '../landing/landing-sections.css'
 
-const navigation = [
-  ["产品体验", "product"],
-  ["业务协同", "business"],
-  ["三端协作", "devices"],
-  ["版本更新", "updates"],
-] as const;
-const deviceInfo = [
-  {
-    label: "Windows 桌面端",
-    icon: Monitor,
-    title: "办公室里，业务有条理。",
-    text: "从订单处理到财务核对，在熟悉的工作台完成日常业务。支持本地标签打印与自动更新。",
-    items: ["采购销售与仓库协同", "本地标签打印", "客户端自动更新"],
-  },
-  {
-    label: "Android PDA",
-    icon: Smartphone,
-    title: "走到货物面前，就能接着做。",
-    text: "把任务带到仓库现场。扫码收货、上架、拣货与出库，按任务指引一步步完成。",
-    items: ["扫码识别商品与库存条码", "按任务执行仓库作业", "设备与仓库绑定"],
-  },
-  {
-    label: "浏览器",
-    icon: Globe2,
-    title: "打开浏览器，进入工作状态。",
-    text: "无需安装客户端，使用已有企业账号登录。业务入口和可见数据依岗位权限开放。",
-    items: ["无需安装即可访问", "沿用企业账号与权限", "查看业务进度与记录"],
-  },
-];
-
-function Brand() {
-  return (
-    <span className="lp-brand">
-      <SystemBrand />
-      <span>
-        极序 <b>Flow</b>
-      </span>
-    </span>
-  );
+type Desktop = { version?: string; url?: string } | null
+function DesktopDownload({ desktop, loading, className, children }: { desktop: Desktop; loading: boolean; className: string; children: ReactNode }) {
+  const url = desktop?.url && /^(https?:\/\/|\/(?!\/))/.test(desktop.url) ? desktop.url : null
+  return url ? <a className={className} href={url}>{children}</a> : <button className={className} disabled>{loading ? '正在获取安装包…' : '暂未获取到安装包'}</button>
 }
-function scrollToSection(id: string) {
-  document
-    .getElementById(id)
-    ?.scrollIntoView({
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-        ? "instant"
-        : "smooth",
-      block: "start",
-    });
+function ReleaseList() {
+  return <div className="release-list">{landingUpdates.slice(0, 3).map(item => <div className="logrow" key={item.version}>
+    <div><div className="v num">v{item.version}</div><span className="tag">{item.category}</span></div>
+    <div><h3>{item.title}</h3><ul>{item.details.slice(0, 3).map(detail => <li key={detail}>{detail}</li>)}</ul></div>
+  </div>)}</div>
 }
-
-export default function LandingPreview() {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [device, setDevice] = useState(0);
+function jump(event: MouseEvent<HTMLAnchorElement>, id: string) {
+  event.preventDefault()
+  const target = document.getElementById(id)
+  if (!target) return
+  const header = target.closest('.official-site')?.querySelector('header')
+  const offset = (header?.getBoundingClientRect().height ?? 66) + 18
+  window.scrollTo({ top: Math.max(0, window.scrollY + target.getBoundingClientRect().top - offset), behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+}
+export default function LandingPage() {
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const previousTitle = document.title
+    document.title = '极序 Flow — 业务有序，经营有数（电脑版）'
+    const stop = root.current ? installLandingMotion(root.current) : undefined
+    return () => { stop?.(); document.title = previousTitle }
+  }, [])
   const [desktop, setDesktop] = useState<{
     version?: string;
     url?: string;
   } | null>(null);
   const [pdaVersion, setPdaVersion] = useState("");
   const [downloadsLoading, setDownloadsLoading] = useState(true);
-  const currentDevice = deviceInfo[device];
   useEffect(() => {
     const controller = new AbortController();
     // 公共版本信息失败时呈现不可用；不注入登录态或读取经营数据。
@@ -124,468 +82,234 @@ export default function LandingPreview() {
       controller.abort();
     };
   }, []);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMenuOpen(false);
-        document.getElementById("lp-menu-toggle")?.focus();
-      }
-    };
-    const resize = () => {
-      if (window.innerWidth > 800) setMenuOpen(false);
-    };
-    window.addEventListener("keydown", close);
-    window.addEventListener("resize", resize);
-    return () => {
-      window.removeEventListener("keydown", close);
-      window.removeEventListener("resize", resize);
-    };
-  }, [menuOpen]);
-  const desktopUrl =
-    desktop?.url && /^(https?:\/\/|\/(?!\/))/.test(desktop.url)
-      ? desktop.url
-      : "";
-  function go(id: string) {
-    setMenuOpen(false);
-    scrollToSection(id);
-  }
-  return (
-    <div className="lp-site">
-      <a
-        className="lp-skip"
-        href="#product"
-        onClick={(event) => {
-          event.preventDefault();
-          go("product");
-          document.getElementById("product")?.focus();
-        }}
-      >
-        跳到产品体验
-      </a>
-      <header className="lp-header">
-        <div className="lp-container lp-header-inner">
-          <button
-            className="lp-brand-button"
-            aria-label="返回顶部"
-            onClick={() => go("home")}
-          >
-            <Brand />
-          </button>
-          <nav className="lp-nav" aria-label="主导航">
-            {navigation.map(([label, id]) => (
-              <button key={id} onClick={() => go(id)}>
-                {label}
-              </button>
-            ))}
-          </nav>
-          <div className="lp-header-actions">
-            <a href="#/login" className="lp-login">
-              进入系统 <ArrowUpRight size={15} />
-            </a>
-            <button
-              className="lp-button lp-small"
-              onClick={() => go("downloads")}
-            >
-              下载客户端
-            </button>
-            <button
-              id="lp-menu-toggle"
-              className="lp-menu-toggle"
-              aria-label={menuOpen ? "关闭导航" : "打开导航"}
-              aria-expanded={menuOpen}
-              aria-controls="lp-mobile-nav"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              {menuOpen ? <X /> : <Menu />}
-            </button>
-          </div>
-        </div>
-        {menuOpen && (
-          <nav
-            id="lp-mobile-nav"
-            className="lp-mobile-nav"
-            aria-label="手机导航"
-          >
-            {navigation.map(([label, id]) => (
-              <button key={id} onClick={() => go(id)}>
-                {label}
-                <ArrowUpRight size={16} />
-              </button>
-            ))}
-            <a href="#/login">
-              进入系统
-              <ArrowUpRight size={16} />
-            </a>
-          </nav>
-        )}
-      </header>
-      <main>
-        <section className="lp-hero" id="home">
-          <div className="lp-container lp-hero-grid">
-            <div className="lp-hero-copy">
-              <span className="lp-intro">
-                <span /> 为有仓库的生意，理顺每一天
-              </span>
-              <h1>
-                业务有序，
-                <br />
-                经营<span>有数。</span>
-              </h1>
-              <p>
-                从采购到交付，从库存到账款。
-                <br />
-                让办公室与仓库，在同一个流程里协作。
-              </p>
-              <div className="lp-hero-actions">
-                <a href="#/login" className="lp-button">
-                  进入极序 Flow
-                  <ArrowUpRight size={18} />
-                </a>
-                <button
-                  className="lp-text-button"
-                  onClick={() => go("business")}
-                >
-                  看看如何协同
-                  <ArrowDown size={16} />
-                </button>
-              </div>
-              <div className="lp-hero-platforms">
-                <span>
-                  <Monitor size={15} />
-                  桌面办公
-                </span>
-                <span>
-                  <Smartphone size={15} />
-                  PDA 作业
-                </span>
-                <span>
-                  <Globe2 size={15} />
-                  浏览器访问
-                </span>
-              </div>
-            </div>
-            <div className="lp-hero-product" id="product" tabIndex={-1}>
-              <div className="lp-product-backdrop" aria-hidden="true">
-                <span>Flow</span>
-              </div>
-              <ProductDemo />
-              <div className="lp-demo-caption">
-                <span>
-                  <span className="lp-live-dot" />{" "}
-                  点击上方场景，看看业务如何衔接
-                </span>
-                <span>产品结构示意 · 非真实经营数据</span>
-              </div>
-            </div>
-          </div>
-          <div className="lp-container lp-hero-bottom">
-            <span>让分散的环节，成为连贯的业务。</span>
-            <div>
-              <span>采购</span>
-              <ArrowRight />
-              <span>销售</span>
-              <ArrowRight />
-              <span>仓储</span>
-              <ArrowRight />
-              <span>财务</span>
-              <ArrowRight />
-              <span>会计</span>
-            </div>
-          </div>
-        </section>
-        <section className="lp-section lp-container" id="business">
-          <BusinessStory />
-          <div className="lp-capabilities">
-            <div>
-              <span className="lp-section-label">业务全景</span>
-              <h2>
-                管好货，
-                <br />
-                也管好生意。
-              </h2>
-              <p>
-                从补货、交付到对账，
-                <br />
-                让每个岗位都能找到自己的工作入口。
-              </p>
-              <a href="#/login" className="lp-text-button">
-                进入业务工作台
-                <ArrowUpRight size={17} />
-              </a>
-            </div>
-            <div className="lp-capability-list">
-              {capabilityGroups.map((item, index) => (
-                <details key={item.title} open={index === 0 ? true : undefined}>
-                  <summary>
-                    <span>{item.title}</span>
-                    <ChevronDown size={19} />
-                  </summary>
-                  <div>
-                    <p>{item.description}</p>
-                    <a href={item.route}>
-                      {item.link}
-                      <ArrowUpRight size={15} />
-                    </a>
-                  </div>
-                </details>
-              ))}
-            </div>
-          </div>
-        </section>
-        <section className="lp-devices" id="devices">
-          <div className="lp-container">
-            <div className="lp-devices-heading">
-              <h2>
-                同一套业务，
-                <br />
-                在合适的设备上继续。
-              </h2>
-              <p>
-                办公室做决策，仓库按任务执行。
-                <br />
-                各司其职，也彼此衔接。
-              </p>
-            </div>
-            <div className="lp-device-layout">
-              <div className="lp-device-info">
-                <div className="lp-device-switch" aria-label="选择客户端">
-                  {deviceInfo.map((item, index) => (
-                    <button
-                      key={item.label}
-                      aria-pressed={index === device}
-                      onClick={() => setDevice(index)}
-                    >
-                      <item.icon size={18} />
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-                <div aria-live="polite" className="lp-device-description">
-                  <h3>{currentDevice.title}</h3>
-                  <p>{currentDevice.text}</p>
-                  <ul>
-                    {currentDevice.items.map((item) => (
-                      <li key={item}>
-                        <Check size={16} />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <button
-                  className="lp-button lp-white"
-                  onClick={() => go("downloads")}
-                >
-                  选择你的客户端
-                  <ArrowRight size={17} />
-                </button>
-              </div>
-              <div
-                className="lp-device-art"
-                data-device={device}
-                aria-label="桌面工作台与 PDA 任务示意"
-              >
-                <div className="lp-monitor">
-                  <div className="lp-monitor-bar">
-                    <Brand />
-                    <span>我的工作台</span>
-                  </div>
-                  <div className="lp-monitor-body">
-                    <aside>
-                      <span className="selected">工作台</span>
-                      <span>业务管理</span>
-                      <span>仓库作业</span>
-                      <span>财务管理</span>
-                    </aside>
-                    <div>
-                      <span className="lp-screen-greeting">
-                        每一项工作，都有清楚的下一步。
-                      </span>
-                      <h4>今天，从待办开始。</h4>
-                      <div className="lp-screen-tasks">
-                        <span>
-                          待处理采购 <b>03</b>
-                        </span>
-                        <span>
-                          待执行任务 <b>08</b>
-                        </span>
-                      </div>
-                      <div className="lp-screen-list">
-                        <p>
-                          <i />
-                          采购收货<span>待处理</span>
-                        </p>
-                        <p>
-                          <i />
-                          销售订单复核<span>待处理</span>
-                        </p>
-                        <p>
-                          <i />
-                          应收账款核对<span>待处理</span>
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="lp-screen-demo">示例数据</span>
-                </div>
-                <div className="lp-phone">
-                  <div className="lp-phone-speaker" />
-                  <div className="lp-phone-header">
-                    <SystemBrand />
-                    <b>仓库作业</b>
-                  </div>
-                  <span className="lp-phone-sub">当前任务 · 拣货</span>
-                  <div className="lp-scan">
-                    <ScanLine size={58} strokeWidth={1} />
-                  </div>
-                  <h4>扫描库存条码</h4>
-                  <p>按任务指引继续作业</p>
-                  <div className="lp-phone-task">
-                    <span>缓冲铰链 · 全盖</span>
-                    <strong>
-                      80 <small>件</small>
-                    </strong>
-                  </div>
-                  <span className="lp-phone-bottom">任务流程示意</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-        <section className="lp-section lp-container lp-updates" id="updates">
-          <div className="lp-section-heading">
-            <div>
-              <span className="lp-section-label">持续完善，贴近日常</span>
-              <h2>每一次更新，都有用。</h2>
-            </div>
-            <button className="lp-text-button" onClick={() => go("downloads")}>
-              获取客户端
-              <ArrowDown size={16} />
-            </button>
-          </div>
-          <div className="lp-update-list">
-            {landingUpdates.slice(0, 3).map((item, index) => (
-              <details key={item.version}>
-                <summary>
-                  <div className="lp-update-version">
-                    <span>v{item.version}</span>
-                    {index === 0 && <small>近期更新</small>}
-                  </div>
-                  <div className="lp-update-title">
-                    <span>{item.category}</span>
-                    <h3>{item.title}</h3>
-                  </div>
-                  <span className="lp-update-open">
-                    <ChevronDown size={20} />
-                  </span>
-                </summary>
-                <div className="lp-update-detail">
-                  <p>{item.description}</p>
-                  <ul>
-                    {item.details.map((detail) => (
-                      <li key={detail}>{detail}</li>
-                    ))}
-                  </ul>
-                </div>
-              </details>
-            ))}
-          </div>
-        </section>
-        <section className="lp-downloads" id="downloads">
-          <div className="lp-container">
-            <div className="lp-download-heading">
-              <Brand />
-              <h2>让有序，成为日常。</h2>
-              <p>选择合适的入口，开始今天的工作。</p>
-            </div>
-            <div className="lp-download-options">
-              <article>
-                <Monitor size={26} strokeWidth={1.5} />
-                <h3>Windows 桌面端</h3>
-                <p>日常办公、本地打印与自动更新。</p>
-                <small>
-                  {desktop?.version
-                    ? `安装包版本 v${desktop.version}`
-                    : "版本信息以发布清单为准"}
-                </small>
-                {desktopUrl ? (
-                  <a className="lp-button" href={desktopUrl}>
-                    <Download size={16} />
-                    下载 Windows 版
-                  </a>
-                ) : (
-                  <button className="lp-button" disabled>
-                    {downloadsLoading ? "正在获取安装包…" : "暂未获取到安装包"}
-                  </button>
-                )}
-              </article>
-              <article>
-                <Smartphone size={26} strokeWidth={1.5} />
-                <h3>Android PDA 端</h3>
-                <p>用于仓库现场的手持扫码作业。</p>
-                <small>
-                  {pdaVersion
-                    ? `安装包版本 v${pdaVersion}`
-                    : "适用于 Android 手持设备"}
-                </small>
-                <a className="lp-button lp-outline" href="/api/pda/download">
-                  <Download size={16} />
-                  下载 PDA 版
-                </a>
-              </article>
-              <article>
-                <Globe2 size={26} strokeWidth={1.5} />
-                <h3>浏览器直接使用</h3>
-                <p>无需安装，登录企业业务工作台。</p>
-                <small>使用已有企业账号登录</small>
-                <a className="lp-button lp-outline" href="#/login">
-                  进入网页版
-                  <ArrowUpRight size={16} />
-                </a>
-              </article>
-            </div>
-            <div className="lp-download-footnote">
-              <ShieldCheck size={16} />
-              业务入口遵循企业账号权限，PDA 作业需绑定设备与仓库。
-            </div>
-          </div>
-        </section>
-      </main>
-      <footer className="lp-footer">
-        <div className="lp-container">
-          <div className="lp-footer-top">
-            <div>
-              <Brand />
-              <p>业务有序，经营有数。</p>
-            </div>
-            <nav aria-label="页脚导航">
-              {navigation.map(([label, id]) => (
-                <button key={id} onClick={() => go(id)}>
-                  {label}
-                </button>
-              ))}
-            </nav>
-            <div className="lp-contact">
-              <span>聊聊你的业务与使用需求</span>
-              <a href="tel:15701178441">
-                <Phone size={16} />
-                157 0117 8441
-                <ArrowUpRight size={15} />
-              </a>
-              <a href="mailto:15701178441@139.com">
-                <Mail size={16} />
-                15701178441@139.com
-              </a>
-            </div>
-          </div>
-          <div className="lp-footer-bottom">
-            <span>© {new Date().getFullYear()} 极序 Flow</span>
-            <span>ERP / WMS 企业管理系统</span>
-            <button onClick={() => go("home")}>返回顶部 ↑</button>
-          </div>
-        </div>
-      </footer>
+  return <div className="official-site" ref={root}>
+
+<header>
+  <div className="side hd">
+    <div className="official-brand"><SystemBrand /><div className="brand">极序 Flow<small>ERP / WMS</small></div></div>
+    <nav>
+      <a href="#product" onClick={event => jump(event, "product")}>产品</a><a href="#flow" onClick={event => jump(event, "flow")}>流程</a><a href="#modules" onClick={event => jump(event, "modules")}>模块</a><a href="#ends" onClick={event => jump(event, "ends")}>三端</a><a href="#log" onClick={event => jump(event, "log")}>更新日志</a><a href="#download" onClick={event => jump(event, "download")}>下载</a>
+    </nav>
+    <a className="btn btn-line" href="#/login">进入系统</a>
+    <a className="btn btn-ink" href="#download" onClick={event => jump(event, "download")}>下载客户端</a>
+  </div>
+</header>
+
+<div className="side hero" id="product">
+  <div className="hero-ghost" aria-hidden="true">序</div>
+    <div className="eyebrow"><span>为有仓库的生意而做</span></div>
+  <h1>业务有序，<br /><em>经营有数。</em></h1>
+  <p className="sub">从订单到出库，从库存到账款。<br />一处看清，协同完成。</p>
+  <div className="cta-row">
+    <a className="btn btn-ink" href="#download" onClick={event => jump(event, "download")}>开始使用</a>
+    <a className="btn btn-line" href="#product-demo" onClick={event => jump(event, "product-demo")}>探索产品 <span aria-hidden="true">↗</span></a>
+  </div>
+  <p className="fine">Windows 桌面端 · PDA 手持端 · 浏览器版，<span>三端同一套数据</span></p>
+  <div className="stage" id="product-demo">
+    <div className="fusion-demo"><ProductDemo /></div>
+  </div>
+</div>
+
+<div className="side site-stats">
+  <div className="stats">
+    <div className="stat"><div className="v">业务相连</div><div className="k">采购、销售、仓储与财务，沿同一条业务线衔接。</div></div>
+    <div className="stat"><div className="v">三端协作</div><div className="k">桌面、PDA 与浏览器，查看和处理同一份数据。</div></div>
+    <div className="stat"><div className="v">库存有据</div><div className="k">库存条码记录货物变化，每一步操作都有迹可查。</div></div>
+  </div>
+</div>
+
+<section className="side site-section" id="warehouse">
+  <div className="split">
+    <div>
+      <div className="eyebrow sec-eyebrow">仓储作业</div>
+      <h2>库存的账，只有一本。</h2>
+      <p className="lede">从入库到出库，用库存条码串起每一步。<br />查得到数量，也查得到来源与操作记录。</p>
+      <ul className="checks">
+        <li>批次拣货<span>— 一批订单合并成一个批次，一趟走完</span></li>
+        <li>占库锁定<span>— 订单一确认就锁库存，不会卖超</span></li>
+        <li>盘点差异<span>— 当场定位到库存条码和批次</span></li>
+      </ul>
+        <div className="spec"><span>多仓多库位</span><span>批次管理</span><span>按仓库范围授权</span></div>
     </div>
-  );
+    <div className="mini">
+      <div className="mh"><b>拣货清单 · 示例</b><span>华东一仓</span></div>
+      <div className="mrow"><span>缓冲铰链 · 全盖</span><span className="pill">A-03 库存条码</span></div>
+      <div className="mrow"><span>隐藏式导轨 · 450mm</span><span className="pill">B-11 库存条码</span></div>
+      <div className="mrow"><span>上翻支撑 · 标准型</span><span className="pill">A-07 库存条码</span></div>
+      <div className="mrow"><span>本批次 · 3 个品类</span><span className="num">一趟走完</span></div>
+    </div>
+  </div>
+</section>
+
+<section className="side site-section" id="finance">
+  <div className="alt">
+    <div className="split">
+      <div className="mini">
+        <div className="mh"><b>凭证分录 · 示例</b><span>销售出库单 XK-0931</span></div>
+        <div className="mrow"><span>借 · 主营业务成本</span><span className="num">¥48,210.00</span></div>
+        <div className="mrow"><span>贷 · 库存商品</span><span className="num">¥48,210.00</span></div>
+        <div className="mrow"><span>借 · 应收账款</span><span className="num">¥62,480.00</span></div>
+        <div className="mrow"><span>贷 · 主营业务收入</span><span className="num">¥62,480.00</span></div>
+        <div className="mrow"><span>状态</span><span className="pill">借贷平衡 · 已生成</span></div>
+      </div>
+      <div>
+        <div className="eyebrow sec-eyebrow">财务与会计</div>
+        <h2><span>业务走完，</span><span>账自动跟上。</span></h2>
+        <p className="lede">业务单据衔接应收应付和会计凭证。<br />少一次重复录入，月末仍可按来源核对。</p>
+        <ul className="checks">
+          <li>应收应付<span>— 跟着订单走，该收该付一目了然</span></li>
+          <li>收付款核销<span>— 按分金额核对，差一分也标出来</span></li>
+          <li>成本来源<span>— 每个数字都能查到来源单据</span></li>
+        </ul>
+          <div className="spec"><span>凭证模板可配置</span><span>核销精确到分</span><span>成本来源可追溯</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section className="side site-section" id="flow">
+  <h2>不多一步，不漏一单。</h2>
+  <ol className="flow">
+    <li className="step"><div className="n">01</div><div className="t">销售下单</div><div className="d">确认订单，核对价格与交期</div></li>
+    <li className="step"><div className="n">02</div><div className="t">系统占库</div><div className="d">按商品占库，保留供货依据</div></li>
+    <li className="step"><div className="n">03</div><div className="t">批次拣货</div><div className="d">同区订单合成批次，按任务扫码</div></li>
+    <li className="step"><div className="n">04</div><div className="t">复核出库</div><div className="d">扫码复核，核对数量后出库</div></li>
+    <li className="step"><div className="n">05</div><div className="t">物流跟踪</div><div className="d">运单关联订单，跟踪运输进度</div></li>
+    <li className="step"><div className="n">06</div><div className="t">对账收款</div><div className="d">应收有来源，收款按单核销</div></li>
+    <li className="step"><div className="n">07</div><div className="t">凭证入账</div><div className="d">收入与成本，按业务生成凭证</div></li>
+  </ol>
+  <div className="fusion-story"><BusinessStory /></div>
+</section>
+
+
+<section className="side site-section" id="compare">
+  <h2><span>老办法不是不行，</span><span>是对不上。</span></h2>
+  <div className="cmp">
+    <div className="cmp-hd"><span>每天的事</span><span>老办法</span><span className="b">用极序 Flow</span></div>
+    <div className="cmpr"><span className="t">库存记账</span><span className="o">记在好几张表里，月底对不上</span><span className="n">只认库存条码，一本账</span></div>
+    <div className="cmpr"><span className="t">拣货发货</span><span className="o">一张订单跑一趟仓库</span><span className="n">批次合并，一趟走完</span></div>
+    <div className="cmpr"><span className="t">月底对账</span><span className="o">全员停下来对单据</span><span className="n">按单核对，实际结算精确到分</span></div>
+    <div className="cmpr"><span className="t">临时查数</span><span className="o">翻聊天记录和 Excel</span><span className="n">打开系统，一处看清</span></div>
+    <div className="cmpr"><span className="t">财务制证</span><span className="o">对着单据手工录分录</span><span className="n">凭证引擎自动生成</span></div>
+  </div>
+</section>
+
+<section className="side site-section" id="modules">
+  <h2>生意要用的，都在里面。</h2>
+  <div className="mods">
+    {capabilityGroups.map(item => <article className="mod" key={item.title}>
+      <h3>{item.title}</h3><p>{item.description}</p>
+      <a className="fusion-module-link" href={item.route}>{item.link}<span aria-hidden="true"> ›</span></a>
+    </article>)}
+  </div>
+</section>
+
+<section className="side site-section" id="ends">
+  <h2><span>办公室、仓库、路上，</span><span>同一个系统。</span></h2>
+  <div className="device-showcase" aria-label="桌面与手持端协作示意">
+    <div className="device-desktop" aria-hidden="true">
+      <div className="device-bar"><span><SystemBrand /> 极序 Flow</span><span>工作台 · 示例</span></div>
+      <div className="device-workspace">
+        <div className="device-sidebar"><span className="selected">销售管理</span><span>库存管理</span><span>仓库任务</span><span>财务会计</span></div>
+        <div className="device-orders">
+          <div className="device-heading"><b>销售订单</b><span>办公室 · 桌面端</span></div>
+          <div className="device-order"><b>缓冲铰链 · 全盖</b><span>80 件</span><span>待履约</span></div>
+          <div className="device-order"><b>隐藏式导轨 · 450mm</b><span>40 套</span><span>待复核</span></div>
+          <div className="device-order"><b>上翻支撑 · 标准型</b><span>20 套</span><span>待出库</span></div>
+          <div className="device-sync">同一张订单，衔接下一步作业。</div>
+        </div>
+      </div>
+    </div>
+    <div className="device-handheld" aria-hidden="true">
+      <div className="device-speaker" />
+      <div className="device-screen">
+        <span>仓库 · PDA</span><b>复核任务</b>
+        <div className="device-barcode" />
+        <strong>缓冲铰链 · 全盖</strong><p>任务数量 <b>80 件</b></p>
+        <div className="device-action">扫码复核</div>
+      </div>
+    </div>
+  </div>
+  <div className="ends" id="download">
+    <div className="end">
+      <b>桌面端 · Windows</b>
+      <p>装在办公室电脑上用。单据、报表、打印都稳，适合坐班处理业务。</p>
+      <small>Windows 10 及以上 · 版本以发布信息为准</small>
+      <DesktopDownload desktop={desktop} loading={downloadsLoading} className="">下载安装包</DesktopDownload>
+    </div>
+    <div className="end">
+      <b>PDA 手持端</b>
+      <p>装到仓库手持设备上。收货、上架、拣货、盘点，扫码即走。</p>
+      <small>适用于 Android 手持设备 · 作业前需绑定设备与仓库{pdaVersion && ` · v${pdaVersion}`}</small>
+      <a href="/api/pda/download">下载 PDA 版</a>
+    </div>
+    <div className="end">
+      <b>浏览器网页版</b>
+      <p>免安装，打开浏览器登录就能用。管理者在哪，仓库就在哪。</p>
+      <small>使用已有企业账号登录</small>
+      <a href="#/login">打开网页版</a>
+    </div>
+  </div>
+
+</section>
+
+
+
+<section className="side site-section" id="start">
+  <h2>三步，今天就能用上。</h2>
+  <div className="starts">
+    <div className="stp2"><div className="n">01</div><b>下载安装</b><p>桌面端适用于Windows 10 及以上，下载完装好就能打开。</p></div>
+    <div className="stp2"><div className="n">02</div><b>登录账号</b><p>用企业账号登录桌面端；网页版同一个账号，打开浏览器直接用。</p></div>
+    <div className="stp2"><div className="n">03</div><b>绑定 PDA</b><p>手持设备安装 PDA 版，绑定所在仓库，再开始扫码作业。</p></div>
+  </div>
+</section>
+
+<section className="side site-section" id="log">
+  <div className="eyebrow sec-eyebrow">版本更新</div>
+  <h2>一直在变好。</h2>
+  <ReleaseList />  <p style={{"fontSize": "12.5px", "color": "var(--faint)", "marginTop": "22px"}}>以上均为安装验收版本，仅供合成数据安装验收；每个版本发布前都走完整回归与安装包校验。</p>
+</section>
+
+<section className="side site-section" id="faq">
+  <h2>先问清楚，再开始。</h2>
+  <div className="fq">
+    <details><summary>对电脑和系统有什么要求？</summary><p>桌面端运行在 Windows 10 及以上，安装包以下载区发布信息为准。网页版用主流浏览器的近期版本即可打开，不需要安装。</p></details>
+    <details><summary>PDA 在仓库里怎么用？</summary><p>给 Android 手持设备装上 PDA 版，首次使用时把设备与所在仓库绑定，之后收货、上架、拣货、盘点都扫码完成，数据实时回传。设备丢失或人员变动时，管理员可以吊销它的访问权限。</p></details>
+    <details><summary>桌面、PDA、网页版的数据是同一份吗？</summary><p>是同一套系统、同一份数据。在办公室改的单，仓库 PDA 上立刻能看到；仓库扫码入的库，办公室的库存和账上同步更新。</p></details>
+    <details><summary>版本怎么更新？</summary><p>桌面端、PDA 与服务按版本配套发布，更新内容写在上方的更新日志里。升级前系统会做备份核对，历史数据保留。</p></details>
+    <details><summary>现在是什么阶段，收费怎么算？</summary><p>当前版本与更新内容以本页发布信息为准，适合先用测试数据走通流程、验收设备和打印。收费按企业规模与使用方式确认，电话里聊清楚再定，具体方案沟通确认。</p></details>
+  </div>
+</section>
+<div className="side fin site-closing">
+  <h2>业务有序，经营有数。</h2>
+  <p>下载桌面端，装好就能开始今天的业务。</p>
+  <div className="cta-row">
+    <DesktopDownload desktop={desktop} loading={downloadsLoading} className="btn btn-ink">下载 Windows 版</DesktopDownload>
+    <a className="btn btn-line" href="tel:15701178441">电话聊聊 · 157 0117 8441</a>
+  </div>
+</div>
+
+<footer className="site-footer">
+  <div className="side">
+    <div className="ft">
+      <div className="c">
+        <b>极序 Flow</b>
+        <p>为有仓库的生意，理顺每一天。<br />ERP / WMS 企业管理系统</p>
+      </div>
+      <div className="c"><h4>产品</h4><div className="lk">
+        <a href="#download" onClick={event => jump(event, "download")}>桌面端 · Windows</a><a href="#download" onClick={event => jump(event, "download")}>PDA 手持端</a><a href="#/login">浏览器网页版</a><a href="#log" onClick={event => jump(event, "log")}>更新日志</a><a href="#faq" onClick={event => jump(event, "faq")}>常见问题</a>
+      </div></div>
+      <div className="c"><h4>模块</h4><div className="lk">
+        <a href="#modules" onClick={event => jump(event, "modules")}>采购</a><a href="#modules" onClick={event => jump(event, "modules")}>销售</a><a href="#modules" onClick={event => jump(event, "modules")}>仓储</a><a href="#modules" onClick={event => jump(event, "modules")}>物流</a><a href="#modules" onClick={event => jump(event, "modules")}>财务</a><a href="#modules" onClick={event => jump(event, "modules")}>会计</a>
+      </div></div>
+      <div className="c">
+        <h4>聊聊你的业务</h4>
+        <p style={{"marginTop": "0"}}>电话<br /><a className="ft-tel" href="tel:15701178441">157 0117 8441</a><br />邮箱 · 15701178441@139.com</p>
+      </div>
+    </div>
+    <div className="ft-legal"><span>© 2026 极序 Flow</span><span>ERP / WMS 企业管理系统</span><span>{desktop?.version ? `当前桌面版本 v${desktop.version}` : "版本信息以发布清单为准"}</span></div>
+  </div>
+</footer>
+
+</div>
 }

@@ -80,14 +80,17 @@ export default function AssignSortingBinDialog({ open, onClose, warehouseId, tas
 
   return <Dialog open={open} onOpenChange={next => { if (!next) onClose() }}>
     <DialogContent className="max-w-2xl">
-      <DialogHeader><DialogTitle>补分配分拣格</DialogTitle></DialogHeader>
-      <p className="text-sm text-muted-foreground">仅列出拣货中或待分拣、尚未占格且无取消或改单挂起的任务。系统从任务所属仓库选择空闲格。</p>
-      {query.isFetching && <p role="status" className="text-sm">正在加载待分配任务…</p>}
+      <DialogHeader description={<>
+        {query.isFetching && <span role="status">正在加载待分配任务… </span>}
+        {pending && !query.isFetching && rows.length === 0 && <span role="status">{taskId ? '已刷新：该任务已不符合补分配条件或不在可访问范围内，请返回订单刷新进度。' : '当前筛选范围内没有待分配任务。'} </span>}
+        {pending && !query.isFetching && !taskId && pending.truncated && <span role="status">{`仅显示前 ${rows.length.toLocaleString()} 条，共 ${total.toLocaleString()} 条，候选未全部读取；请缩小仓库范围或处理后重新打开。`} </span>}
+        仅列出拣货中或待分拣、尚未占格且无取消或改单挂起的任务。系统从任务所属仓库选择空闲格。
+      </>}><DialogTitle>补分配分拣格</DialogTitle></DialogHeader>
+
       {query.isError && <div role="alert" className="text-sm">读取失败：{query.error.message}<Button variant="outline" size="sm" onClick={() => void query.refetch()}>重试</Button></div>}
-      {pending && !query.isFetching && rows.length === 0 && <p role="status" className="text-sm text-muted-foreground">{taskId ? '已刷新：该任务已不符合补分配条件或不在可访问范围内，请返回订单刷新进度。' : '当前筛选范围内没有待分配任务。'}</p>}
       {taskId && <Button variant="outline" size="sm" disabled={query.isFetching || mutation.isPending} onClick={() => void query.refetch()}>刷新任务</Button>}
       {pending && rows.length > 0 && <div data-workspace-scroll className="max-h-96 overflow-y-auto rounded-md border"><DataTable columns={columns} data={rows} virtualized preserveFocus /></div>}
-      {pending && !query.isFetching && !taskId && <p role="status" className="text-xs text-muted-foreground">{pending.truncated ? `仅显示前 ${rows.length.toLocaleString()} 条，共 ${total.toLocaleString()} 条，候选未全部读取；请缩小仓库范围或处理后重新打开。` : `共 ${total.toLocaleString()} 条待分配任务`}</p>}
+      {pending && !query.isFetching && !taskId && !pending.truncated && <p role="status" className="text-xs text-muted-foreground">共 {total.toLocaleString()} 条待分配任务</p>}
     </DialogContent>
   </Dialog>
 }

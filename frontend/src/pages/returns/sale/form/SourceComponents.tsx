@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { Button } from '@/components/ui/button'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { CashMoneyProof, ReturnSourceLabels, ReturnSourceOrderItem } from '@/api/returns'
@@ -38,7 +39,7 @@ export function SourceComponents({
       <p className="px-3 py-2 text-xs text-muted-foreground">
         请选择本次实际退回的原出库配件。同商品、同仓库的不同来源需分单，不合并平均价。来源全量参考不代表本次退款，本次金额以保存后系统估算为准，合格入仓后确定。
       </p>
-      <table className="w-full min-w-[1000px] text-sm">
+      <ReportTable className="w-full min-w-[1000px] text-sm">
         <thead>
           <tr className="border-y bg-muted/30 text-xs">
             <th className="p-2 text-left">原成交行 / 实发批次 / 配件</th>
@@ -92,7 +93,7 @@ export function SourceComponents({
             </tr>
           ))}
         </tbody>
-      </table>
+      </ReportTable>
     </div>
   )
 }

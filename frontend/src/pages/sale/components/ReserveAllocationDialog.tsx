@@ -1,12 +1,13 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import OrdinarySaleRecoveryNotice from './OrdinarySaleRecoveryNotice'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { money } from '@/lib/format'
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { Loader2, AlertTriangle, Boxes, PackageSearch, Warehouse } from 'lucide-react'
+import { AlertTriangle, Boxes, PackageSearch, Warehouse } from 'lucide-react'
 import { clampAllocationQty, isAllocationQtyValid } from './saleAllocation'
 import { cn } from '@/lib/utils'
 import { summarizeSaleQuantities } from '@/lib/salePresentation'
@@ -141,12 +142,20 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
       <DialogContent aria-busy={reserve.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="flex max-h-[88vh] w-[min(96vw,1180px)] max-w-none flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-border px-5 py-4 pr-12">
+        <DialogHeader description={<>
+          {!readUnavailable && credit?.willExceed && <span className="text-warning-ink">
+            客户授信将超额：额度 {money(credit.creditLimit)}，已用 {money(credit.used)}，本单 {money(credit.thisOrder)}，超出约 {money(credit.overAmount)}。
+            超额占库须先取得有效批准；原批准失效时可重新发起{' '}
+            <a href="#/credit-overrides" className="font-medium text-primary underline underline-offset-2">超额放行申请</a>。
+          </span>}
+          {isLoading && <span role="status">加载商品与库存信息…</span>}
+          {!isLoading && !(!readUnavailable && credit?.willExceed) && '核对商品身份，按明细选择发货仓库和本次占库数量'}
+        </>} className="border-b border-border px-5 py-4 pr-12">
           <DialogTitle className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Boxes className="h-5 w-5" /></span>
             <span>
               <span className="block text-base">占用库存</span>
-              <DialogDescription asChild><span className="mt-0.5 block text-xs font-normal text-muted-foreground">核对商品身份，按明细选择发货仓库和本次占库数量</span></DialogDescription>
+
             </span>
           </DialogTitle>
         </DialogHeader>
@@ -167,28 +176,11 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          {!readUnavailable && credit?.willExceed && (
-            <p className="mb-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2.5 text-sm text-foreground">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" />
-              <span>
-                客户授信将超额：额度 {money(credit.creditLimit)}，已用 {money(credit.used)}，本单 {money(credit.thisOrder)}，超出约 {money(credit.overAmount)}。
-                超额占库须先取得有效批准；原批准失效时可重新发起{' '}
-                <a href="#/credit-overrides" className="font-medium text-primary underline underline-offset-2">超额放行申请</a>。
-              </span>
-            </p>
-          )}
-
-          {isLoading && (
-            <div className="flex h-56 items-center justify-center text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />加载商品与库存信息…
-            </div>
-          )}
-
           {isError && <QueryErrorState error={error} onRetry={() => { void refetch() }} description="没能加载占库预览，请重试后核对商品和仓库" />}
 
           {!readUnavailable && (
             <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full min-w-[1560px] text-sm">
+              <ReportTable className="w-full min-w-[1560px] text-sm">
                 <thead data-selection-column className="sticky top-0 z-[1] data-table-header text-xs text-muted-foreground">
                   <tr>
                     <th className="w-12 px-4 py-3">
@@ -262,7 +254,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                     <tr><td colSpan={11} className="px-4 py-16 text-center text-muted-foreground"><PackageSearch className="mx-auto mb-2 h-8 w-8 opacity-35" />没有可占用库存的商品明细</td></tr>
                   )}
                 </tbody>
-              </table>
+              </ReportTable>
             </div>
           )}
         </div>

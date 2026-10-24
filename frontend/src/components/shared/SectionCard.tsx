@@ -60,11 +60,11 @@ export function SectionCard({
   const hasHeader = title || actions
 
   return (
-    <div className={cn('rounded-lg border border-border bg-card', className)}>
+    <div className={cn('desktop-section-card rounded-lg border border-border bg-card', className)}>
       {/* 标题行 */}
       {hasHeader && (
         <div className={cn(
-          'flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border',
+          'desktop-section-heading flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border',
           compact ? 'px-4 py-2.5' : 'px-5 py-3',
         )}>
           {title && (
@@ -77,7 +77,7 @@ export function SectionCard({
       )}
 
       {/* Body */}
-      <div className={cn('min-w-0', !noPadding && (compact ? 'p-4' : 'p-5'), contentClassName)}>
+      <div className={cn('desktop-section-body min-w-0', !noPadding && (compact ? 'p-4' : 'p-5'), contentClassName)}>
         {children}
       </div>
     </div>

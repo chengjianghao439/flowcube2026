@@ -83,7 +83,8 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
   })
 
   return (
-    <AppDialog
+    <AppDialog descriptionInHeader
+      description={!applied ? <>填写{partyLabel}与期间后点「查待对账账款」</> : isFetching ? <span role="status">加载中…</span> : !list.length ? "该期间内没有未对账的月结账款" : "选择往来方、账期与本次对账的账款。"}
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="payment-statement-create"
@@ -102,8 +103,8 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
       }
     >
       <div className="flex h-full flex-col gap-4 p-5">
-        <div className="grid grid-cols-[minmax(240px,2fr)_1fr_1fr_auto] items-end gap-4">
-          <div className="space-y-1 col-span-2">
+        <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-[minmax(0,2fr)_repeat(2,minmax(160px,1fr))]">
+          <div className="space-y-1">
             <Label>{partyLabel} *</Label>
             <Input value={partyName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartyName(e.target.value)} placeholder={`输入${partyLabel}名称`} />
           </div>
@@ -131,11 +132,6 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {!applied && <p className="px-3 py-6 text-center text-sm text-muted-foreground">填写{partyLabel}与期间后点「查待对账账款」</p>}
-            {applied && isFetching && <p className="px-3 py-6 text-center text-sm text-muted-foreground">加载中…</p>}
-            {applied && !isFetching && !list.length && (
-              <p className="px-3 py-6 text-center text-sm text-muted-foreground">该期间内没有未对账的月结账款</p>
-            )}
             {list.map(it => (
               <label key={it.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/30">
                 <input

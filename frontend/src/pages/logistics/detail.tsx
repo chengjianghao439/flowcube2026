@@ -25,7 +25,7 @@ import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -132,7 +132,8 @@ export default function LogisticsDetailPage() {
     <div className="space-y-4">
       <PageHeader
         title={wb ? `运单 ${wb.waybillNo}` : '运单详情'}
-        description={wb ? <SoftStatusLabel label={wb.statusLabel} tone={wb.statusTone} /> : undefined}
+        description={readReady ? nextStep : <span role="status">{!validId ? '运单标识无效，无法读取。' : query.isPaused ? '网络已暂停，恢复后重新读取原运单。' : isError ? '最新状态待核对，旧记录暂不提供操作；已打开的草稿保留。' : query.isFetching ? '正在重新读取原运单，旧记录暂不提供操作。' : '原运单尚未核实，暂不提供操作。'}</span>}
+        status={wb ? <SoftStatusLabel label={wb.statusLabel} tone={wb.statusTone} /> : undefined}
         actions={
           <div className="flex items-center gap-2">
             {canManage && canEditShipment && <Button variant="outline" onClick={() => setShipmentTarget(wb!)}>补充寄件资料</Button>}
@@ -148,9 +149,7 @@ export default function LogisticsDetailPage() {
       />
 
       {isError && validId && isActiveTab && <QueryErrorState error={error} onRetry={() => { if (validId && isActiveTab) void refetch() }} title="运单加载失败" compact />}
-      {!readReady && <p className="text-sm text-muted-foreground" role="status">{!validId ? '运单标识无效，无法读取。' : query.isPaused ? '网络已暂停，恢复后重新读取原运单。' : isError ? '最新状态待核对，旧记录暂不提供操作；已打开的草稿保留。' : query.isFetching ? '正在重新读取原运单，旧记录暂不提供操作。' : '原运单尚未核实，暂不提供操作。'}</p>}
-      {readReady && <div className="rounded-md border border-border bg-muted/30 p-3 text-sm space-y-2">
-        <p>{nextStep}</p>
+      {readReady && <div className="rounded-md border border-border bg-muted/30 p-3 text-sm space-y-2 empty:hidden">
         {canOperate && can(PERMISSIONS.PRINT_JOB_VIEW) && <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query', '?category=logistics')}>查看物流标签记录</Button>}
         {canOperate && can(PERMISSIONS.PRINT_JOB_VIEW) && <p className="text-xs text-muted-foreground">进入物流类别查询，需按记录核对；此入口不定位本运单的原打印任务。</p>}
       </div>}
@@ -194,9 +193,9 @@ export default function LogisticsDetailPage() {
       {shipmentTarget && <DirectShipmentDialog waybill={shipmentTarget} submitDisabled={!canManage || !canEditShipment || shipmentTarget.id !== waybillId} onClose={() => setShipmentTarget(null)} onSaved={invalidate} />}
       <Dialog open={!!trackTarget} onOpenChange={v => { if (!v) { setTrackTarget(null); setTrackingInput('') } }}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>录入快递单号</DialogTitle><DialogDescription>保留原运单草稿，核实最新状态后保存。</DialogDescription></DialogHeader>
+          <DialogHeader description={<>{<>保留原运单草稿，核实最新状态后保存。</>} {<>运单 {trackTarget?.waybillNo}｜{trackTarget?.carrierName ?? '未指定承运商'}</>}</>}><DialogTitle>录入快递单号</DialogTitle></DialogHeader>
           <div className="space-y-4 py-3">
-            <p className="text-sm text-muted-foreground">运单 {trackTarget?.waybillNo}｜{trackTarget?.carrierName ?? '未指定承运商'}</p>
+
             {(!canRecord || trackTarget?.id !== waybillId) && <p className="text-sm text-muted-foreground" role="status">原运单最新状态待核对，已输入的单号保留，暂不能保存。</p>}
             <div>
               <Label htmlFor="logistics-detail-tracking-number">快递单号</Label>

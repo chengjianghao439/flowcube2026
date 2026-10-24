@@ -59,7 +59,7 @@ const PRINT_TONE: Record<string, StatusTone> = {
 /** 沿用销售摘要区的间距与图标，保留上架、结算和条码打印各自状态。 */
 function StatusCard({ label, value, tone, detail, help, icon: Icon }: { label: string; value: string; tone: StatusTone; detail?: React.ReactNode; help?: React.ReactNode; icon: LucideIcon }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 px-4 py-2.5">
+    <div className="desktop-inbound-status flex min-w-0 items-center gap-2.5 px-4 py-2.5">
       <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary"><Icon className="h-3.5 w-3.5" /></span>
       <div className="min-w-0 space-y-1 [overflow-wrap:anywhere]">
         <div className="flex items-center gap-1"><p className="text-helper">{label}</p>{help}</div>
@@ -152,10 +152,11 @@ export default function InboundTaskDetailPage() {
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="desktop-inbound-detail flex flex-col gap-2.5">
       {error && <QueryErrorState compact error={error} title="刷新失败，当前显示上次读取的数据" onRetry={() => { void refetchTask() }} />}
       <ActionBar
         title={task.taskNo}
+        description="查看收货进度、商品与库存条码。"
         subtitle={<SoftStatusLabel label={receiptStatus?.label ?? task.statusName} tone={statusTone} />}
         rightActions={
           <>
@@ -222,7 +223,7 @@ export default function InboundTaskDetailPage() {
         }
       />
 
-      <section aria-label="收货摘要" className="overflow-hidden rounded-xl border border-border bg-card">
+      <section aria-label="收货摘要" className="desktop-inbound-summary overflow-hidden rounded-xl border border-border bg-card">
       <div className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <StatusCard
           icon={PackageCheck}
@@ -253,7 +254,7 @@ export default function InboundTaskDetailPage() {
       {inboundExceptionReason(task.exceptionFlags) && <p className="text-sm text-warning-ink">{inboundExceptionReason(task.exceptionFlags)}；请核对对应状态。</p>}
       <OrderDetailSections type="inbound" id={task.id} compactTabs>
       <SectionCard title="基础信息" compact contentClassName="p-3">
-        <div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2 xl:grid-cols-3 [&>div]:min-w-0 [&>div]:[overflow-wrap:anywhere]">
+        <div className="desktop-inbound-facts grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2 xl:grid-cols-3 [&>div]:min-w-0 [&>div]:[overflow-wrap:anywhere]">
           <div><span className="text-muted-foreground">供应商：</span>{task.supplierName ?? '—'}</div>
           <div><span className="text-muted-foreground">仓库：</span>{task.warehouseName ?? '—'}</div>
           <div><span className="text-muted-foreground">采购单：</span>{task.purchaseOrderId && can(PERMISSIONS.PURCHASE_ORDER_VIEW) ? <button className="text-primary underline underline-offset-2" onClick={() => { const path = `/purchase/${task.purchaseOrderId}`; useWorkspaceStore.getState().addTab({ key: path, path, title: task.purchaseOrderNo ?? '采购详情' }); navigate(path) }}>{task.purchaseOrderNo}</button> : <span>{task.purchaseOrderNo ?? '混合采购'}</span>}</div>
@@ -304,7 +305,7 @@ export default function InboundTaskDetailPage() {
         />
 
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-border px-4 py-3 text-sm">
+        <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t border-border px-4 py-3 text-sm">
           <span className="mr-auto tabular-nums"><span className="text-muted-foreground">明细</span> {items.length} 行</span>
           <div className="flex min-w-0 flex-wrap items-center gap-x-6 gap-y-2 text-muted-foreground">
             {(['orderedQty', 'receivedQty', 'putawayQty'] as const).map((field, index) => <span key={field} className="min-w-0">{(quantityGroups.length <= 3 || areInboundQuantitiesZero(quantityGroups, field)) && <span className="mr-2">{['应到', '已收', '已上架'][index]}</span>}<InboundQuantitySummary collapseZero groups={quantityGroups} field={field} label={['应到', '已收', '已上架'][index]} /></span>)}

@@ -1,3 +1,4 @@
+import { ResizableTable } from '@/components/shared/ResizableTable'
 import { qty as formatQty } from '@/lib/format'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
@@ -45,6 +46,18 @@ import type { Category } from '@/types/categories'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { importStockApi } from '@/api/inventory'
 
+const inventoryColumns: (TableColumn<object> & { headerTitle?: string })[] = [
+  ...productIdentityColumns().map((column, index) => ({ ...column, width: [160, 160, 144, 224, 112][index] })),
+  { key: 'unit', title: '单位', width: 80 },
+  { key: 'categoryPath', title: '分类路径', width: 180 },
+  { key: 'warehouseName', title: '仓库', width: 112 },
+  { key: 'onHand', title: '在库数量', width: 112, align: 'right' },
+  { key: 'reserved', title: '已预占', width: 96, align: 'right' },
+  { key: 'available', title: '可用库存', headerTitle: '可用库存 = 在库 − 已预占', width: 96, align: 'right' },
+  { key: 'updatedAt', title: '最近更新', width: 144 },
+  { key: 'actions', title: '操作', width: 96 },
+]
+
 const inventoryRowKey = (row: InventoryOverviewItem) => row.id
 
 type Tab = 'overview' | 'logs'
@@ -62,11 +75,11 @@ function StatCard({ icon, label, value, sub, accent = 'text-foreground' }: {
   icon: React.ReactNode; label: string; value: React.ReactNode; sub?: string; accent?: string
 }) {
   return (
-    <div className="card-base flex items-start gap-4 p-5">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/60">{icon}</div>
+    <div className="desktop-stock-stat card-base flex items-start gap-4 p-5">
+      <div className="desktop-stock-stat-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/60">{icon}</div>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <div className={`mt-1 text-2xl font-bold ${accent}`}>{value}</div>
+        <div className={`desktop-stock-stat-value mt-1 text-2xl font-bold ${accent}`}>{value}</div>
         {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
       </div>
     </div>
@@ -296,7 +309,7 @@ export default function InventoryPage() {
   }
 
   const renderInventoryRow = (row: InventoryOverviewItem) => (
-    <tr key={row.id} className={`border-b border-border/40 transition-colors hover:bg-muted/20 ${drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''}`}>
+    <tr key={row.id} data-selected={drawerItem?.id === row.id && drawerOpen || undefined} className={`border-b border-border/40 transition-colors hover:bg-muted/20 ${drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''}`}>
       <ProductIdentityCells product={row} /><td className="px-4 py-3">{row.unit || '—'}</td>
       <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
       <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
@@ -312,8 +325,9 @@ export default function InventoryPage() {
   )
 
   return (
-    <div className="space-y-4">
-      <PageHeader title="库存管理" description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存" actions={
+    <div className="desktop-inventory-page space-y-4">
+      <PageHeader title="库存管理"
+        description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存"  actions={
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={() => tab === 'logs' ? setLogsQueryOpen(true) : setOverviewQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={() => downloadExport(
@@ -330,10 +344,11 @@ export default function InventoryPage() {
         </div>
       } />
 
+
       {/* 标签切换 */}
-      <div className="mb-4 flex gap-1 border-b border-border">
+      <div className="desktop-detail-tabs mb-4 flex gap-1 border-b border-border">
         {(['overview', 'logs'] as Tab[]).map(t => (
-          <button key={t} onClick={() => updateParams({ tab: t })}
+          <button key={t} aria-pressed={tab === t} onClick={() => updateParams({ tab: t })}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
             {t === 'overview' ? '库存总览' : '出入库记录'}
           </button>
@@ -357,7 +372,7 @@ export default function InventoryPage() {
       <KeepAliveSection active={tab === 'overview'} className="space-y-4">
           {overviewError && <QueryErrorState error={overviewError} title="库存数量读取失败" compact onRetry={() => { if (active && tab === 'overview') void retryOverview() }} />}
           {/* 统计卡片 */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="desktop-stock-summary grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard icon={<Package className="h-5 w-5 text-muted-foreground" />} label="商品 SKU 数"
               value={overviewLoading ? '—' : (stats?.totalSkus ?? 0).toLocaleString()} sub="当前筛选条件下" />
             <StatCard icon={<Warehouse className="h-5 w-5 text-blue-500" />} label="在库数量"
@@ -369,28 +384,9 @@ export default function InventoryPage() {
           </div>
 
           {/* 库存表格 */}
-          <div className="card-base overflow-hidden">
+          <div className="desktop-table desktop-inventory-table card-base overflow-hidden">
             <div className="overflow-x-auto">
-              <table aria-rowcount={list.length + 1} className="w-full table-fixed text-sm" style={{ minWidth: 1816 }}>
-                <colgroup>{[160, 160, 144, 224, 112, 80, 180, 112, 112, 96, 96, 144, 96].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    {[
-                      ...['编码', '供应商型号', '型号', '名称', '颜色'].map(label => ({ label, cls: label === '名称' ? 'min-w-[220px] text-left' : 'min-w-[140px] text-left' })),
-                      { label: '单位', cls: 'min-w-[80px] text-left' },
-                      { label: '分类路径', cls: 'text-left' },
-                      { label: '仓库', cls: 'w-28 text-left' },
-                      { label: '在库数量', cls: 'w-28 text-right' },
-                      { label: '已预占', cls: 'w-24 text-right' },
-                      { label: '可用库存', cls: 'w-24 text-right', title: '可用库存 = 在库 − 已预占' },
-                      { label: '最近更新', cls: 'w-36 text-left' },
-                      { label: '操作', cls: 'w-24 text-left' },
-                    ].map(col => (
-                      <th key={col.label} title={'title' in col ? col.title : undefined}
-                        className={`px-4 py-2.5 text-xs font-semibold text-muted-foreground ${col.cls}`}>{col.label}</th>
-                    ))}
-                  </tr>
-                </thead>
+              <ResizableTable columns={inventoryColumns} columnStorageKey="inventory-overview" minWidth={1816} aria-rowcount={list.length + 1}>
                 {!overviewLoading && list.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={list} columns={13} getRowKey={inventoryRowKey} renderRow={renderInventoryRow} /> : <tbody>
                   {overviewLoading ? (
                     <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
@@ -400,7 +396,7 @@ export default function InventoryPage() {
                     list.map(renderInventoryRow)
                   )}
                 </tbody>}
-              </table>
+              </ResizableTable>
             </div>
           </div>
 
@@ -434,7 +430,7 @@ export default function InventoryPage() {
       {/* 出库弹窗 */}
       <Dialog open={opOpen} onOpenChange={v => !v && setOpOpen(false)}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>出库</DialogTitle></DialogHeader>
+          <DialogHeader description={"核对商品、仓库与本次出库数量。"}><DialogTitle>出库</DialogTitle></DialogHeader>
           <form onSubmit={handleOp} className="space-y-4 py-2">
             <div className="space-y-2"><Label>商品 *</Label><PickerField value={form.productName} placeholder="点击选择商品…" onOpen={() => setProductFinderOpen(true)} disabled={opFrozen} /></div>
             <div className="space-y-2">
@@ -462,9 +458,9 @@ export default function InventoryPage() {
       {/* 库存导入弹窗：下载模板 → 填数上传 → 后端逐行建容器 */}
       <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportResult(null) }}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader><DialogTitle>批量导入库存</DialogTitle></DialogHeader>
+          <DialogHeader description={<>{<>请先下载模板，按照格式填写后上传。模板用于初始化各仓库的商品期初库存。</>}</>}><DialogTitle>批量导入库存</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">请先下载模板，按照格式填写后上传。模板用于初始化各仓库的商品期初库存。</p>
+
             <ImportSteps template={
               <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => downloadExport('/import/stock/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>

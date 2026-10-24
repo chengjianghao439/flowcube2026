@@ -74,9 +74,10 @@ export default function ProcurementPlanListPage() {
     <div className="space-y-4">
       <PageHeader
         title="采购计划"
-        description="按未发销售、历史预测与现有供给生成采购计划，核对包装、交期和覆盖后转为采购单草稿。"
+        description={!isError && !isLoading && data?.truncated ? <span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 单，请缩小查询范围。</span> : '按未发销售、历史预测与现有供给生成采购计划，核对包装、交期和覆盖后转为采购单草稿。'}
         actions={<div className="flex flex-wrap gap-2"><Button variant="outline" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '刷新中…' : '立即刷新'}</Button>{canManage && <Button onClick={() => setGenOpen(true)}>+ 生成计划</Button>}</div>}
       />
+
       <FilterCard>
         <Input placeholder="搜索计划编号/名称…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e) => { if (e.key === 'Enter') setKeyword(search) }} />
         <Button size="sm" variant="outline" onClick={() => setKeyword(search)}>搜索</Button>
@@ -84,13 +85,11 @@ export default function ProcurementPlanListPage() {
       </FilterCard>
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="采购计划加载失败" compact />
         : <DataTable virtualized preserveFocus columns={columns} data={data?.list ?? []} loading={isLoading} />}
-      {!isError && !isLoading && data && (data.truncated
-        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {data.pagination.total.toLocaleString()} 单，请缩小查询范围。</div>
-        : <ListSummary total={data.pagination.total} unit="单" />)}
+      {!isError && !isLoading && data && !data.truncated && <ListSummary total={data.pagination.total} unit="单" />}
 
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>生成采购计划</DialogTitle></DialogHeader>
+          <DialogHeader description="只统计在库现货与在途采购；未发销售（含未占库订单）会优先消耗预测需求；已有计划、申请和采购草稿会先行抵扣，避免重复采购。"><DialogTitle>生成采购计划</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
@@ -129,7 +128,6 @@ export default function ProcurementPlanListPage() {
               <Label>计划名称（可选）</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="默认按生成时间" className="h-10" />
             </div>
-            <p className="text-xs text-muted-foreground">只统计在库现货与在途采购；未发销售（含未占库订单）会优先消耗预测需求；已有计划、申请和采购草稿会先行抵扣，避免重复采购。</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenOpen(false)} disabled={generate.isPending}>取消</Button>

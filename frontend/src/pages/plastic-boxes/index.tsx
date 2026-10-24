@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useRef, useState, type ReactNode } from 'react'
 import { Input } from '@/components/ui/input'
@@ -143,7 +144,8 @@ export default function PlasticBoxesPage() {
       {recovery.records.map(record => <RecoveryNoticeView key={record.requestKey} record={record} recovery={recovery} canRepack={canRepack} onOpen={() => { void openOriginal(record) }} />)}
       <BaseCrudPage<PlasticBox>
         title="塑料盒管理"
-        description="管理塑料盒（B 条码），每个塑料盒固定存放一个商品，用于零散出货"
+      description="核对塑料盒条码、商品与占用状态。"
+        notice="管理塑料盒（B 条码），每个塑料盒固定存放一个商品，用于零散出货"
         canCreate={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
       canEdit={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
       canDelete={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
@@ -153,7 +155,7 @@ export default function PlasticBoxesPage() {
         recordUnit="个"
         deleteApi={(id) => deletePlasticBoxApi(id, { skipGlobalError: true })}
         deleteMessage="确认删除该塑料盒？"
-        createLabel="+ 新建塑料盒"
+        createLabel="新建塑料盒"
         headerActions={
           <Button variant="outline" onClick={() => downloadExport('/export/plastic-boxes').catch(e => toast.error((e as Error).message))}>导出</Button>
         }
@@ -164,6 +166,7 @@ export default function PlasticBoxesPage() {
         renderToolbar={
           <FilterCard>
             <Input
+              aria-label="搜索塑料盒条码或商品"
               placeholder="搜索条码 / 商品…"
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -273,93 +276,95 @@ function DetailDialog({
 
   return (
     <Dialog open={!!box} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-5xl" aria-describedby={undefined}>
-        <DialogHeader>
+      <DialogContent className="fc-order-activity max-w-5xl">
+        <DialogHeader description={"核对塑料盒当前余量、来源与流水。"}>
           <DialogTitle>塑料盒详情 · {box?.barcode}</DialogTitle>
         </DialogHeader>
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm text-muted-foreground">
-            {box?.productName ? `绑定商品：${box.productName} (${box.productCode})` : '未绑定商品'}
-            {box?.warehouseName ? ` · ${box.warehouseName}` : ''}
-            {` · 当前数量 ${box?.remainingQty ?? 0}`}
+        <div className="fc-order-activity-body min-h-0 min-w-0 space-y-4 overflow-y-auto pt-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-muted-foreground">
+              {box?.productName ? `绑定商品：${box.productName} (${box.productCode})` : '未绑定商品'}
+              {box?.warehouseName ? ` · ${box.warehouseName}` : ''}
+              {` · 当前数量 ${box?.remainingQty ?? 0}`}
+            </div>
+            {/* 可执行入口按权限显示：只有「库存容器拆分」权限才给还原按钮（后端守卫仍然保留） */}
+            {canRepack && (
+              <Button variant="outline" size="sm" onClick={() => setRepackOpen(true)} disabled={!(box?.remainingQty ?? 0)}>
+                还原整件
+              </Button>
+            )}
           </div>
-          {/* 可执行入口按权限显示：只有「库存容器拆分」权限才给还原按钮（后端守卫仍然保留） */}
-          {canRepack && (
-            <Button variant="outline" size="sm" onClick={() => setRepackOpen(true)} disabled={!(box?.remainingQty ?? 0)}>
-              还原整件
-            </Button>
-          )}
-        </div>
 
-        {/* 来源贡献（批 A）：累计贡献，非当前批次余量 */}
-        <div className="rounded-md border p-3">
-          <div className="mb-2 text-xs font-medium text-muted-foreground">
-            来源贡献（累计口径，非当前余量{sourcesQuery.data?.mixedBatch ? '；本盒为混合来源' : ''}）
+          {/* 来源贡献（批 A）：累计贡献，非当前批次余量 */}
+          <div className="fc-container-source-section border-y border-border py-3">
+            <div className="mb-2 text-xs font-medium text-muted-foreground">
+              来源贡献（累计口径，非当前余量{sourcesQuery.data?.mixedBatch ? '；本盒为混合来源' : ''}）
+            </div>
+            {sourcesQuery.isError ? (
+              <QueryErrorState error={sourcesQuery.error} onRetry={() => { void sourcesQuery.refetch() }} title="来源贡献加载失败" compact />
+            ) : sourcesQuery.isLoading ? (
+              <div className="text-xs text-muted-foreground">加载中…</div>
+            ) : !sourcesQuery.data?.sources?.length ? (
+              <div className="text-xs text-muted-foreground">暂无来源记录</div>
+            ) : (
+              <ReportTable className="w-full text-xs">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-1 pr-3 font-medium">来源条码</th>
+                    <th className="py-1 pr-3 font-medium">来源批次</th>
+                    <th className="py-1 font-medium text-right">累计贡献</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourcesQuery.data.sources.map((s) => (
+                    <tr key={s.sourceContainerId} className="border-b last:border-0">
+                      <td className="py-1 pr-3 font-mono">{s.sourceBarcode ?? `#${s.sourceContainerId}`}</td>
+                      <td className="py-1 pr-3 text-muted-foreground">{s.sourceBatchNo ?? '—'}</td>
+                      <td className="py-1 text-right tabular-nums">{s.contributedQty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ReportTable>
+            )}
           </div>
-          {sourcesQuery.isError ? (
-            <QueryErrorState error={sourcesQuery.error} onRetry={() => { void sourcesQuery.refetch() }} title="来源贡献加载失败" compact />
-          ) : sourcesQuery.isLoading ? (
-            <div className="text-xs text-muted-foreground">加载中…</div>
-          ) : !sourcesQuery.data?.sources?.length ? (
-            <div className="text-xs text-muted-foreground">暂无来源记录</div>
-          ) : (
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="py-1 pr-3 font-medium">来源条码</th>
-                  <th className="py-1 pr-3 font-medium">来源批次</th>
-                  <th className="py-1 font-medium text-right">累计贡献</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sourcesQuery.data.sources.map((s) => (
-                  <tr key={s.sourceContainerId} className="border-b last:border-0">
-                    <td className="py-1 pr-3 font-mono">{s.sourceBarcode ?? `#${s.sourceContainerId}`}</td>
-                    <td className="py-1 pr-3 text-muted-foreground">{s.sourceBatchNo ?? '—'}</td>
-                    <td className="py-1 text-right tabular-nums">{s.contributedQty}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
 
-        {recovery.records.map(original => <RecoveryNoticeView key={original.requestKey} record={original} recovery={recovery} canRepack={canRepack} />)}
+          {recovery.records.map(original => <RecoveryNoticeView key={original.requestKey} record={original} recovery={recovery} canRepack={canRepack} />)}
 
-        <div className="text-xs font-medium text-muted-foreground">塑料盒流水</div>
-        <div className="max-h-[420px] overflow-y-auto">
-          {isError ? (
-            <QueryErrorState error={error} onRetry={() => { void refetch() }} title="塑料盒流水加载失败" compact />
-          ) : isLoading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">加载中…</div>
-          ) : !data?.length ? (
-            <EmptyState variant="no-data" title="暂无流水" compact />
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">时间</th>
-                  <th className="py-2 pr-3 font-medium">类型</th>
-                  <th className="py-2 pr-3 font-medium text-right">数量</th>
-                  <th className="py-2 pr-3 font-medium">备注</th>
-                  <th className="py-2 font-medium">操作人</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.map((m, i) => (
-                  <tr key={i} className="border-b last:border-0">
-                    <td className="py-2 pr-3 whitespace-nowrap">{formatDisplayDateTime(m.createdAt)}</td>
-                    <td className="py-2 pr-3">
-                      <SoftStatusLabel label={m.moveTypeName ?? TYPE_NAMES[m.type] ?? `类型${m.type}`} tone={TYPE_TONE[m.type] ?? 'info'} />
-                    </td>
-                    <td className="py-2 pr-3 text-right tabular-nums">{m.qty}</td>
-                    <td className="py-2 pr-3 text-muted-foreground">{m.remark ?? '—'}</td>
-                    <td className="py-2">{m.operatorName ?? '—'}</td>
+          <h3 className="text-sm font-semibold">塑料盒流水</h3>
+          <div className="min-w-0 overflow-x-auto">
+            {isError ? (
+              <QueryErrorState error={error} onRetry={() => { void refetch() }} title="塑料盒流水加载失败" compact />
+            ) : isLoading ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">加载中…</div>
+            ) : !data?.length ? (
+              <EmptyState variant="no-data" title="暂无流水" compact />
+            ) : (
+              <ReportTable className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="py-2 pr-3 font-medium">时间</th>
+                    <th className="py-2 pr-3 font-medium">类型</th>
+                    <th className="py-2 pr-3 font-medium text-right">数量</th>
+                    <th className="py-2 pr-3 font-medium">备注</th>
+                    <th className="py-2 font-medium">操作人</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {data.map((m, i) => (
+                    <tr key={i} className="border-b last:border-0">
+                      <td className="py-2 pr-3 whitespace-nowrap">{formatDisplayDateTime(m.createdAt)}</td>
+                      <td className="py-2 pr-3">
+                        <SoftStatusLabel label={m.moveTypeName ?? TYPE_NAMES[m.type] ?? `类型${m.type}`} tone={TYPE_TONE[m.type] ?? 'info'} />
+                      </td>
+                      <td className="py-2 pr-3 text-right tabular-nums">{m.qty}</td>
+                      <td className="py-2 pr-3 text-muted-foreground">{m.remark ?? '—'}</td>
+                      <td className="py-2">{m.operatorName ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ReportTable>
+            )}
+          </div>
         </div>
       </DialogContent>
       {box && (
@@ -416,12 +421,11 @@ function RepackDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-md" aria-describedby={undefined}>
-        <DialogHeader><DialogTitle>还原整件 · {box.barcode}</DialogTitle></DialogHeader>
+      <DialogContent className="max-w-md">
+        <DialogHeader description={<>盒内余量 {remaining}，将按填写数量生成独立整件码，余量留在盒内。</>}><DialogTitle>还原整件 · {box.barcode}</DialogTitle></DialogHeader>
         <div className="space-y-3">
           {recoveryNotice}
 
-          <p className="text-xs text-muted-foreground">盒内余量 {remaining}，将按填写数量生成独立整件码，余量留在盒内。</p>
           <div className="flex gap-2">
             <button type="button" disabled={locked}
               className={`flex-1 rounded-md border px-3 py-1.5 text-xs ${mode === 'quick' ? 'border-primary bg-primary/10 font-semibold' : 'border-border'} disabled:opacity-50`}

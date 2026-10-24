@@ -63,7 +63,13 @@ afterEach(async()=>{
 
 test.each(['销售单内容已变更','已超过有效截止时间','缺少原始内容证明'])('显示失效原因%s；部分占库原单直接重申，历史不取消，新单仍由用户提交',async message=>{
   why=message;await mount();expect(host.textContent).toContain(`原批准已失效：${message}。`)
+  expect(host.querySelector('.desktop-page-description')?.textContent).toBe('金额为申请时的授信额度')
+  expect(host.textContent?.match(/金额为申请时的授信额度/g)).toHaveLength(1)
   await click('重新申请')
+  const dialog = document.querySelector('[role="dialog"]')!
+  expect(dialog.querySelector('.fc-dialog-caption')?.textContent).toContain('提交后系统会校验该客户授信是否超限')
+  expect(dialog.querySelector('.fc-dialog-caption')?.textContent).toContain('旧申请与审批记录保留')
+  expect(dialog.textContent?.match(/提交后系统会校验该客户授信是否超限/g)).toHaveLength(1)
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('SO-PARTIAL')
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('当前客户')
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('33.00')

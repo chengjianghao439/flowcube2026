@@ -1,3 +1,4 @@
+import PageHeader from '@/components/shared/PageHeader'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -45,8 +46,9 @@ function RecoveryRecords({ records }: { records: QueryRecord[] }) {
 export default function RepeatSaleRecoveryPage() {
   const { records, error } = useOwnRepeatSaleQueries()
   return <div className="space-y-4">
-    <h1 className="text-xl font-semibold">开单结果核对</h1>
-    <p className="text-sm text-muted-foreground">这里只核对当前账号在原服务器发出的创建请求。重开页面没有原完整表单，不能再次提交；查询失败或未找到结果时请继续核对，勿另发保存。</p>
+    <PageHeader title="开单结果核对"
+        description="这里只核对当前账号在原服务器发出的创建请求。重开页面没有原完整表单，不能再次提交；查询失败或未找到结果时请继续核对，勿另发保存。"  />
+
     {error ? <p role="alert">{error}</p> : <RecoveryRecords key={reorderEpoch()} records={records} />}
   </div>
 }

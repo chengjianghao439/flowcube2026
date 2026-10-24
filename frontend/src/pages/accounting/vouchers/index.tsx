@@ -155,11 +155,11 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="sm:max-w-xl">
-        <DialogHeader><DialogTitle>生成本期凭证</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-1">
-          <p className="text-xs text-muted-foreground">
+        <DialogHeader description={<>{<>
             从采购结算/销售收入成本/收付款/费用报销/退货/盘点/运费结算/手工应付等业务事实全量重算生成凭证。可反复执行，重复生成不会产生多余凭证。
-          </p>
+          </>}</>}><DialogTitle>生成本期凭证</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-1">
+
           <div className="space-y-1.5">
             <Label>会计期间（YYYYMM）</Label>
             <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))}
@@ -187,16 +187,14 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
   return (
     <Dialog open={!!id} onOpenChange={o => { if (!o) onClose() }}>
       <DialogContent className="sm:max-w-6xl">
-        <DialogHeader>
+        <DialogHeader description={!isError && (isLoading || !v) ? <span role="status">加载中…</span> : '核对凭证分录、来源与状态。'}>
           <DialogTitle className="flex items-center gap-2">
             凭证 {!isError && v?.voucherNo}
             {v && !isError && <SoftStatusLabel label={VOUCHER_STATUS_LABELS[v.status]} tone={statusTone(v.status)} />}
             {!isError && v?.isReversal === 1 && <SoftStatusLabel label="红字" tone="danger" />}
           </DialogTitle>
         </DialogHeader>
-        {isError ? <QueryErrorState compact error={error} onRetry={() => void refetch()} /> : isLoading || !v ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">加载中…</div>
-        ) : (
+        {isError ? <QueryErrorState compact error={error} onRetry={() => void refetch()} /> : isLoading || !v ? null : (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
               <div><span className="text-muted-foreground">日期：</span>{fmtDate(v.voucherDate)}</div>
@@ -273,7 +271,7 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
       <DialogContent className="sm:max-w-6xl">
-        <DialogHeader><DialogTitle>手工凭证录入</DialogTitle></DialogHeader>
+        <DialogHeader description={"填写记账日期、摘要与借贷分录。"}><DialogTitle>手工凭证录入</DialogTitle></DialogHeader>
         <div className="space-y-3 py-1">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
@@ -439,6 +437,7 @@ export default function VouchersPage() {
           </div>
         }
       />
+
 
       <ReconciliationCard />
 

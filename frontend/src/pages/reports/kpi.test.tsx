@@ -39,6 +39,8 @@ async function refresh() {
 it('分仓占比按全部仓库销售净额计算，负毛利不显示成功色', async () => {
   vi.mocked(getKpiApi).mockResolvedValue(report)
   await render()
+  expect(host.querySelector('.desktop-page-description')?.textContent).toContain('受限仓库账号仅统计可归属且有权查看的销售单回款')
+  expect(host.textContent?.match(/分仓以订单头仓库归属/g)).toHaveLength(1)
   expect(host.textContent).toContain('60.0%')
   expect(host.textContent).toContain('40.0%')
   expect(host.textContent).not.toContain('100.0%')

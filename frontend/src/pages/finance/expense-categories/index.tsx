@@ -32,7 +32,8 @@ export default function ExpenseCategoriesPage() {
   return (
     <BaseCrudPage<ExpenseCategory>
       title="费用类别"
-      description="报销单填写时可选的费用类别。已被报销单使用的类别不能删除，只能停用。"
+      description="维护报销时可选的费用类别。"
+      notice="报销单填写时可选的费用类别。已被报销单使用的类别不能删除，只能停用。"
       canCreate={can(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE)}
       canEdit={can(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE)}
       canDelete={can(PERMISSIONS.FINANCE_EXPENSE_CATEGORY_MANAGE)}

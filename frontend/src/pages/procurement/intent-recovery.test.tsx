@@ -28,3 +28,18 @@ const btn=(s:string)=>[...document.querySelectorAll<HTMLButtonElement>('button')
 async function render(path:string,component:React.ReactNode){await act(async()=>root.render(<MemoryRouter initialEntries={[path]}><TabPathContext.Provider value={path}><QueryClientProvider client={qc}><Routes><Route path={path.includes('plans')?'/procurement/plans/:id':'/purchase-requisitions/new'} element={component}/></Routes></QueryClientProvider></TabPathContext.Provider></MemoryRouter>))}
 test('PROC06生产新建未知冻结保存/正文',async()=>{m.create.mockRejectedValue(new ApiClientError({message:'本轮未知',status:0}));await render('/purchase-requisitions/new',<PR/>);await act(async()=>{btn('选择合成仓').click();btn('添加商品').click()});await act(async()=>btn('选择合成商品').click());await act(async()=>btn('保存').click());await vi.waitFor(()=>expect(m.create).toHaveBeenCalledOnce());await vi.waitFor(()=>expect(btn('保存').disabled).toBe(true));expect(document.querySelector<HTMLInputElement>('input[type="number"]')!.disabled).toBe(true)})
 test('PROC07生产计划原A未知冻结selection',async()=>{m.convert.mockRejectedValue(new ApiClientError({message:'本轮未知',status:0}));await render('/procurement/plans/7',<Plan/>);await vi.waitFor(()=>expect(host.querySelectorAll('input[type="checkbox"]').length).toBe(3));const a=host.querySelector<HTMLInputElement>('input[aria-label="选择 合成商品1 合成仓"]')!;await act(async()=>a.click());await act(async()=>btn('转采购（1 行）').click());await vi.waitFor(()=>expect(m.convert).toHaveBeenCalledOnce());await vi.waitFor(()=>expect(a.disabled).toBe(true));await vi.waitFor(()=>expect(btn('转采购（1 行）').disabled).toBe(true))})
+
+test('只读采购计划没有空白选择列，草稿仍保留真实多选', async () => {
+  plan.status = 3
+  try {
+    await render('/procurement/plans/7', <Plan />)
+    await vi.waitFor(() => expect(host.textContent).toContain('SYNTHETIC-PLAN'))
+    const caption = host.querySelector('.desktop-page-description')!
+    expect(caption.textContent).toContain('预测窗口 30 天')
+    expect(caption.textContent).toContain('转换时仍会重新核对')
+    expect(host.textContent?.match(/需求与覆盖读取于/g)).toHaveLength(1)
+    expect(host.querySelector('thead th')?.textContent).toBe('编码')
+    expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(0)
+    expect(host.querySelector('tbody td')?.textContent).toBe('SYNTHETIC1')
+  } finally { plan.status = 1 }
+})

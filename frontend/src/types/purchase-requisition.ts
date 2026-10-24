@@ -6,6 +6,8 @@ export interface RequisitionItem {
   productCode?: string
   productName?: string
   unit?: string
+  articleNumber?: string | null
+  color?: string | null
   spec?: string | null
   quantity: number
   estimatedPrice?: number | null

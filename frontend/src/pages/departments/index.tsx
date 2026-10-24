@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { toast } from '@/lib/toast'
 import { useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment } from '@/hooks/useDepartments'
@@ -299,12 +299,14 @@ export default function DepartmentsPage() {
     <div className="space-y-4">
       <PageHeader
         title="部门管理"
-        description="维护组织部门与负责人；审批流可按部门负责人匹配审批人"
+        description="审批流可按部门负责人匹配审批人"
         actions={canCreate ? <Button onClick={() => openCreate()}>新增部门</Button> : null}
       />
 
+
       <FilterCard>
         <Input
+          aria-label="搜索部门名称"
           placeholder="搜索部门名称"
           value={search}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
@@ -346,21 +348,19 @@ export default function DepartmentsPage() {
       )}
 
       <Dialog open={formOpen} onOpenChange={(v) => !v && !savePending && setFormOpen(false)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader>
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
+          <DialogHeader description={editing ? <>
+                正在编辑：<span className="font-medium text-foreground">{editing.name}</span>
+              </> : (<>{<>设置部门名称、上级部门、负责人及排序</>}</>)}>
             {/* 编辑态与默认（新增）态一眼可分 */}
             <DialogTitle className="flex flex-wrap items-center gap-2">
               {editing ? '编辑部门' : '新增部门'}
               {editing && <EditModeBadge />}
             </DialogTitle>
-            {editing && (
-              <p className="text-helper mt-1">
-                正在编辑：<span className="font-medium text-foreground">{editing.name}</span>
-              </p>
-            )}
+
           </DialogHeader>
-          <DialogDescription className="sr-only">设置部门名称、上级部门、负责人及排序</DialogDescription>
-          <div className="grid grid-cols-1 gap-x-5 gap-y-4 py-2 sm:grid-cols-2">
+
+          <div className="fc-form-dialog-body grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="department-name">部门名称</Label>
               <Input id="department-name" value={form.name} aria-invalid={!!errors.name} aria-describedby={errors.name ? 'department-name-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, name: e.target.value }); setErrors(prev => ({ ...prev, name: undefined })) }} placeholder="如：采购部" />

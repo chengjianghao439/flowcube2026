@@ -25,6 +25,8 @@ function parseTyped(text: string): Date | undefined {
 
 interface DatePickerProps {
   id?: string
+  /** 查询中的外层 label 可能包含日历 portal；显式名称避免混入整个月份。 */
+  'aria-label'?: string
   /** 受控值，格式 yyyy-MM-dd；空字符串表示未选择 */
   value: string
   onChange: (value: string) => void
@@ -38,7 +40,7 @@ interface DatePickerProps {
 }
 
 /** 统一日期选择控件：可直接输入 yyyy-MM-dd，也可点击日历图标弹出选择——跨度大时打字比翻页快 */
-export function DatePicker({ id, value, onChange, min, max, placeholder = 'yyyy-mm-dd', className, disabled }: DatePickerProps) {
+export function DatePicker({ id, 'aria-label': ariaLabel, value, onChange, min, max, placeholder = 'yyyy-mm-dd', className, disabled }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const skipFocusOpen = React.useRef(false)
@@ -65,10 +67,11 @@ export function DatePicker({ id, value, onChange, min, max, placeholder = 'yyyy-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <div className="relative flex items-center">
+        <div className="fc-date-picker relative flex items-center">
           <input
             ref={inputRef}
             id={id}
+            aria-label={ariaLabel}
             type="text"
             value={text}
             placeholder={placeholder}
@@ -96,7 +99,7 @@ export function DatePicker({ id, value, onChange, min, max, placeholder = 'yyyy-
           </button>
         </div>
       </PopoverAnchor>
-      <PopoverContent className="w-auto p-0" align="start"
+      <PopoverContent className="fc-date-menu w-auto p-0" align="start"
         onOpenAutoFocus={event => { event.preventDefault(); interactedOutside.current = false }}
         onFocusOutside={event => { if (event.target === inputRef.current) event.preventDefault() }}
         onInteractOutside={() => { interactedOutside.current = true }}
@@ -122,7 +125,7 @@ export function DatePicker({ id, value, onChange, min, max, placeholder = 'yyyy-
               disabled={(d) => (minDate ? d < minDate : false) || (maxDate ? d > maxDate : false)}
             />
           </div>
-          <div className="flex shrink-0 items-center justify-between border-t px-3 py-2">
+          <div className="fc-date-footer flex shrink-0 items-center justify-between border-t px-3 py-2">
             <button
               type="button"
               className="text-sm text-primary hover:underline"

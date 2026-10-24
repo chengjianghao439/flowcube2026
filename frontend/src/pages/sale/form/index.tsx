@@ -85,6 +85,10 @@ import { useSaleEditEntry } from './useSaleEditEntry'
 // ─── 主页面 ───────────────────────────────────────────────────────────────────
 
 export default function SaleFormPage() {
+  return <div className="desktop-page-sample sale-form-sample"><SaleFormContent /></div>
+}
+
+function SaleFormContent() {
   const tabPath  = useContext(TabPathContext)
   const navigate = useNavigate()
   const pathname = tabPath.split(/[?#]/)[0]
@@ -229,6 +233,7 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
     <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title="新建销售单"
+        description={handling ? `处理来源：${handling.source.data?.source.productName ?? '核对中'}；仅原商品、原仓、基本单位，客户由员工选择。可关联 ${handling.source.data?.source.budget.availableQuantity ?? '—'}` : '填写客户、商品与发货信息。'}
         subtitle={<UnsavedBadge show={isDirty} />}
         rightActions={
           <>
@@ -242,7 +247,7 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
         }
       />
 
-      {handling && <><p>处理来源：{handling.source.data?.source.productName ?? '核对中'}；仅原商品、原仓、基本单位，客户由员工选择。可关联 {handling.source.data?.source.budget.availableQuantity ?? '—'}</p>{handling.source.error && <p role="alert">{handling.source.error}</p>}<Button disabled={frozen || imported || !handling.source.data} onClick={() => { if (handling.source.data && initializeHandling(handling.source.data.source, handling.source.data.product)) setImported(true); else toast.warning('已有输入，来源未覆盖草稿；请保留并核对') }}>载入来源商品</Button><HandlingOperationPanel write={handling.write} /></>}
+      {handling && <>{handling.source.error && <p role="alert">{handling.source.error}</p>}<Button disabled={frozen || imported || !handling.source.data} onClick={() => { if (handling.source.data && initializeHandling(handling.source.data.source, handling.source.data.product)) setImported(true); else toast.warning('已有输入，来源未覆盖草稿；请保留并核对') }}>载入来源商品</Button><HandlingOperationPanel write={handling.write} /></>}
       {reorder && <><ReorderSourcePanel data={reorder.source.data} error={reorder.source.error} loading={reorder.source.loading} imported={imported} disabled={frozen} onImport={importSource} onReload={reorder.source.reload} /><RepeatCreateRecoveryPanel write={reorder.write} active={reorder.source.active} onConfirmed={confirmed} /></>}
       <fieldset disabled={frozen} className="contents">
 
@@ -409,6 +414,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       {handoff === 'invalid' && <p role="alert" className="text-sm text-destructive-ink">交接参数无效，请从原事项重新打开；当前只显示本单信息。</p>}
       <ActionBar
         title={order.orderNo}
+        description="查看销售明细、回款与履约进度。"
         subtitle={
           <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} />
         }
@@ -546,7 +552,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                   emptyText="暂无商品明细"
                 />
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+              <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
                 <span className="mr-auto tabular-nums"><span className="text-muted-foreground">明细</span> {order.items?.length ?? 0} 行</span>
                 <span className="tabular-nums"><span className="mr-2 text-muted-foreground">折扣金额</span>{Number(order.discountAmount ?? 0) > 0 ? money(-Number(order.discountAmount)) : money(0)}</span>
                 <strong className="tabular-nums"><span className="mr-2 font-normal">订单金额</span>{money(Math.max(0, Number(order.totalAmount) - Number(order.discountAmount ?? 0)))}</strong>

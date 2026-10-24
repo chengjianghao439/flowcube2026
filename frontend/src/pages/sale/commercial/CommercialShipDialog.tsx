@@ -1,7 +1,8 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { commercialWarehouseName } from './warehouseName'
 import { commercialUnit } from './commercialDraft'
 import type { SaleOrder } from '@/types/sale'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { PackageCheck } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -36,10 +37,10 @@ export default function CommercialShipDialog({
         if (!open && !locked) onClose()
       }}>
       <DialogContent aria-busy={locked} onEscapeKeyDown={event => { if (locked) event.preventDefault() }} className="flex max-h-[86vh] w-[min(94vw,900px)] max-w-none flex-col overflow-hidden">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary" />发起出库</DialogTitle></DialogHeader>
-        <DialogDescription className="sr-only">选择本次出库明细与数量</DialogDescription>
+        <DialogHeader description={<>{<>选择本次出库明细与数量</>}</>}><DialogTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary" />发起出库</DialogTitle></DialogHeader>
+
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
-          <table className="w-full min-w-[1560px] text-sm">
+          <ReportTable className="w-full min-w-[1560px] text-sm">
             <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground"><tr>
               <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" disabled={locked} checked={available.length > 0 && chosen.length === available.length} onChange={event => onChange({ ...quantities, ...Object.fromEntries(available.map(group => [group.id, event.target.checked ? quantities[group.id] && Number(quantities[group.id]) > 0 ? quantities[group.id] : String(group.dispatch!.availableQty) : '0'])) })} /></th>
               <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
@@ -78,7 +79,7 @@ export default function CommercialShipDialog({
             })}
             {!available.length && <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">没有可选发货余量，请核对原批次和实物归还进度。</td></tr>}
             </tbody>
-          </table>
+          </ReportTable>
         </div>
         <DialogFooter className="sm:items-center sm:justify-between"><span className="mr-auto text-sm text-muted-foreground">已选择 {chosen.length} 项</span><Button variant="outline" disabled={locked} onClick={onClose}>取消</Button><Button disabled={locked || !valid} onClick={() => onConfirm(chosen.map(g => ({ groupId: g.id, qty: Number(quantities[g.id]) })))}>确认发起出库</Button></DialogFooter>
       </DialogContent>

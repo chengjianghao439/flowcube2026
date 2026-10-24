@@ -89,7 +89,7 @@ export default function ApprovalPendingPage() {
     <div className="space-y-4">
       <PageHeader
         title="待我审批"
-        description="你可处理的审批节点与业务单级审核，点击单据号进入原单"
+        description={!isError && data && !isFetching && data.truncated ? <span role="status">仅显示前 {list.length.toLocaleString()} 条，共 {total.toLocaleString()} 条，待办未全部读取；请先处理现有待办后刷新。</span> : '核对待办申请并进入原单处理。'}
       />
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="审批待办读取失败" compact /> : <>
       <DataTable
@@ -101,9 +101,7 @@ export default function ApprovalPendingPage() {
         preserveFocus
         emptyText={list.length === 0 && !isLoading ? '没有待你审批的单据' : undefined}
       />
-      {data && !isFetching && (data.truncated
-        ? <p role="status" className="text-sm text-muted-foreground">仅显示前 {list.length.toLocaleString()} 条，共 {total.toLocaleString()} 条，待办未全部读取；请先处理现有待办后刷新。</p>
-        : <ListSummary total={total} />)}
+      {data && !isFetching && !data.truncated && <ListSummary total={total} />}
       </>}
     </div>
   )

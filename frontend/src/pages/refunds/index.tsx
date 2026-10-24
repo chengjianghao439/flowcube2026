@@ -33,7 +33,6 @@ const STATUS_TONE: Record<number, StatusTone> = {
   4: 'danger',   // 已取消
 }
 
-
 export default function RefundsPage() {
   const STATUS_NAME: Record<number, string> = { 1: '草稿', 2: '已确认', 3: '已完成', 4: '已取消' }
   const [keyword, setKeyword] = useState('')
@@ -110,6 +109,7 @@ export default function RefundsPage() {
         }
       />
 
+
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (
@@ -185,12 +185,11 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose() } }}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader><DialogTitle>新建退款单</DialogTitle></DialogHeader>
+        <DialogHeader description="系统按单号反查该销售单已收金额，退款不能超过已收金额"><DialogTitle>新建退款单</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-sale`}>销售单号 *</Label>
             <Input id={`${fieldId}-sale`} value={saleOrderNo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSaleOrderNo(e.target.value)} placeholder="输入销售单号" className="font-mono" />
-            <p className="text-xs text-muted-foreground">系统按单号反查该销售单已收金额，退款不能超过已收金额</p>
           </div>
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-amount`}>退款金额 *</Label>

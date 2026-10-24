@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, FolderTree } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -54,18 +54,20 @@ function CategoryAccordionLevel({
   leafOnly: boolean
 }) {
   return (
-    <div className="space-y-2">
+    <div className="fc-category-level space-y-2">
       {nodes.map(cat => {
         const hasChildren = !!cat.children?.length
         const selectable = !leafOnly || !hasChildren
         const selected = selectedId === cat.id
         const expanded = expandedIds.has(cat.id)
         return (
-          <div key={cat.id} className="space-y-2">
+          <div key={cat.id} className="fc-category-branch space-y-2">
             <button
               type="button"
+              aria-expanded={hasChildren ? expanded : undefined}
+              aria-pressed={!hasChildren ? selected : undefined}
               className={cn(
-                'flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
+                'fc-category-row flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors',
                 selected
                   ? 'border-primary/40 bg-primary/10 text-primary'
                   : 'border-border/70 bg-muted/20 text-foreground hover:border-primary/30 hover:bg-primary/5',
@@ -87,11 +89,12 @@ function CategoryAccordionLevel({
                   : <ChevronRight className="h-4 w-4 shrink-0" />
                 : <span className="h-4 w-4 shrink-0" />}
               <span className={cn('min-w-0 whitespace-normal [overflow-wrap:anywhere]', selected && 'font-medium')}>{cat.name}</span>
+              {selected && <Check className="ml-auto h-4 w-4 shrink-0" aria-hidden />}
               {cat.status === 0 && <span className="ml-auto shrink-0 text-xs text-muted-foreground">停用</span>}
             </button>
 
             {hasChildren && expanded && (
-              <div className="rounded-lg border border-border/60 bg-background/80 p-2">
+              <div className="fc-category-children rounded-lg border border-border/60 bg-background/80 p-2">
                 <CategoryAccordionLevel
                   nodes={cat.children!}
                   selectedId={selectedId}
@@ -153,13 +156,15 @@ export default function CategoryTreeSelect({
 
       <DropdownMenuContent
         align="start"
-        className={cn('w-[var(--radix-dropdown-menu-trigger-width)] min-w-64 p-2', contentClassName)}
+        collisionPadding={8}
+        className={cn('fc-category-menu w-[var(--radix-dropdown-menu-trigger-width)] min-w-64 p-2', contentClassName)}
       >
         {allowClear && (
           <button
             type="button"
+            aria-pressed={value == null}
             className={cn(
-              'mb-1 flex w-full items-center rounded-md border border-border/70 bg-muted/20 px-3 py-1.5 text-left text-sm transition-colors hover:border-primary/30 hover:bg-primary/5',
+              'fc-category-row mb-1 flex w-full items-center rounded-md border border-border/70 bg-muted/20 px-3 py-1.5 text-left text-sm transition-colors hover:border-primary/30 hover:bg-primary/5',
               value == null && 'border-primary/40 bg-primary/10 text-primary',
             )}
             onClick={() => {
@@ -170,20 +175,21 @@ export default function CategoryTreeSelect({
             disabled={disabled}
           >
             {emptyLabel}
+            {value == null && <Check className="ml-auto h-4 w-4 shrink-0" aria-hidden />}
           </button>
         )}
 
         {breadcrumb.length > 0 && (
-          <div className="mb-2 rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+          <div className="fc-category-caption mb-2 rounded-md border border-border/60 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
             当前路径：{breadcrumb.map(item => item.name).join(' / ')}
           </div>
         )}
 
-        <div className="mb-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        <div className="fc-category-caption mb-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
           默认显示一级分类，点击当前分类展开或收起下一级
         </div>
 
-        <div className="max-h-80 overflow-y-auto">
+        <div className="fc-category-options max-h-80 overflow-y-auto">
           {categoryTree.length === 0 ? (
             <p className="px-3 py-4 text-center text-xs text-muted-foreground">暂无分类</p>
           ) : (

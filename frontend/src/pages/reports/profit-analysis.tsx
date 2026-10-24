@@ -143,7 +143,7 @@ export default function ProfitAnalysisPage() {
     <div className="space-y-5">
       <PageHeader
         title="利润 / 库存分析"
-        description="查看已完成销售单的估算毛利与当前库存；销售明细可打开原单，库存明细可进入库存总览。"
+        description="日期仅筛选已完成销售单的开单时间。销售净额扣除整单折扣，商品净额按明细金额比例分摊；毛利为净额减成本估算。库存与滞销为当前授权仓库数据，不随日期变化。"
         actions={(
           <div className="flex flex-wrap gap-2">
             <Button variant="outline"
@@ -159,6 +159,7 @@ export default function ProfitAnalysisPage() {
           </div>
         )}
       />
+
 
       <div className="grid gap-3 sm:grid-cols-2 min-[960px]:grid-cols-4">
         <SummaryCard label="销售毛利" value={money(summary?.grossProfit)} hint={`销售净额 ${money(summary?.saleAmount)}`} negative={(summary?.grossProfit ?? 0) < 0} />
@@ -187,7 +188,6 @@ export default function ProfitAnalysisPage() {
         }}
       />
 
-      <p className="text-xs leading-5 text-muted-foreground">日期仅筛选已完成销售单的开单时间。销售净额扣除整单折扣，商品净额按明细金额比例分摊；毛利为净额减成本估算。库存与滞销为当前授权仓库数据，不随日期变化。</p>
       <ReportQueryFeedback title="利润 / 库存分析" hasData={!!data} isError={isError} isFetching={isFetching} error={error} onRetry={() => void refetch()} />
 
       <div className="flex flex-wrap gap-1 border-b border-border">

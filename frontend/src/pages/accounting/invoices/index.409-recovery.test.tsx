@@ -99,6 +99,11 @@ it('★ 409 ⇒ 保留弹窗与草稿，并给出"先复制再关闭重开"的�
   expect(inputByValue('我填了一半的草稿'), '草稿应保留').toBeTruthy()
   await vi.waitFor(() => expect(document.body.textContent).toMatch(/未保存|复制/))
 
+  expect(dialog()?.querySelector('.fc-dialog-caption')?.textContent).toContain('该发票已被他人修改')
+  expect(dialog()?.querySelector('.fc-dialog-caption')?.textContent).toContain('当前填写内容仍在')
+  expect(dialog()?.querySelectorAll('.fc-dialog-caption')).toHaveLength(1)
+  expect(dialog()?.textContent?.match(/请先复制需要保留的内容/g)).toHaveLength(1)
+
   // 手动关闭 → 重开：**不得**携带旧冲突提示
   await act(async () => { btnByText('取消')!.click() }); await discardIfDirty()
   await vi.waitFor(() => expect(dialog()).toBeNull())

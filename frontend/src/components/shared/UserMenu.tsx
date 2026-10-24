@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { LogOut, KeyRound, UserCircle2, Building2, Warehouse, ShieldCheck, ChevronDown, Loader2 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -136,7 +136,7 @@ export default function UserMenu() {
       {/* 我的信息弹窗 */}
       <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>我的信息</DialogTitle></DialogHeader>
+          <DialogHeader description={"核对当前账号的个人与岗位资料。"}><DialogTitle>我的信息</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             {myInfoError && <p role="alert" className="text-sm text-destructive-ink">个人资料加载失败。<button type="button" className="underline" onClick={() => void refetchMyInfo()}>重试</button></p>}
             <div className="rounded-lg border border-border">
@@ -178,11 +178,11 @@ export default function UserMenu() {
       {/* 浏览器端退出确认（桌面端走原生 messageBox） */}
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>退出登录</DialogTitle>
-            <DialogDescription>
+          <DialogHeader description={<>{<>
               确定退出登录吗？未保存的数据可能会丢失。
-            </DialogDescription>
+            </>}</>}>
+            <DialogTitle>退出登录</DialogTitle>
+
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button type="button" variant="outline" onClick={() => setLogoutOpen(false)}>
@@ -204,7 +204,7 @@ export default function UserMenu() {
 
       <Dialog open={pwdOpen} onOpenChange={setPwdOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>修改密码</DialogTitle></DialogHeader>
+          <DialogHeader description={"填写当前密码与新密码。"}><DialogTitle>修改密码</DialogTitle></DialogHeader>
           <form onSubmit={handlePwdSubmit} className="space-y-4 py-2">
             <div className="space-y-1"><Label htmlFor="profile-old-password">当前密码 *</Label><Input id="profile-old-password" type="password" value={oldPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPwd(e.target.value)} required autoComplete="current-password" /></div>
             <div className="space-y-1"><Label htmlFor="profile-new-password">新密码 *（至少 6 位）</Label><Input id="profile-new-password" type="password" value={newPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPwd(e.target.value)} required minLength={6} autoComplete="new-password" /></div>

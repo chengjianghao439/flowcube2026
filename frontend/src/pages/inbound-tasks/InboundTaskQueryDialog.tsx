@@ -1,8 +1,7 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useRef, useState } from 'react'
-import { AppDialog } from '@/components/shared/AppDialog'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProductFinder, SupplierFinder } from '@/components/finder'
@@ -67,25 +66,14 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC
 
   return (
     <>
-      <AppDialog
+      <QueryDialog
         open={open}
-        onOpenChange={v => { if (!v) onClose() }}
         dialogId="inbound-task-query"
         title="查询收货订单"
-        resizable={false}
-        defaultWidth={680}
-        defaultHeight={600}
-        minWidth={420}
-        minHeight={420}
-        footer={
-          <div className="flex justify-between gap-2">
-            <Button variant="ghost" onClick={() => setDraft(resetDraft())}>重置</Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>取消</Button>
-              <Button onClick={() => onApply(draft)}>查询</Button>
-            </div>
-          </div>
-        }
+        width={680}
+        onClose={onClose}
+        onReset={() => setDraft(resetDraft())}
+        onApply={() => onApply(draft)}
       >
         <QueryFormLayout>
           <label className="flex flex-col gap-1">
@@ -152,14 +140,14 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC
             />
           </label>
 
-          <label className="flex flex-col gap-1">
+          <label className="fc-query-date-start flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
-            <DatePicker value={draft.startDate} max={draft.endDate || undefined}
+            <DatePicker aria-label="创建日期（起）" value={draft.startDate} max={draft.endDate || undefined}
               onChange={v => set('startDate', v)} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
-            <DatePicker value={draft.endDate} min={draft.startDate || undefined}
+            <DatePicker aria-label="创建日期（止）" value={draft.endDate} min={draft.startDate || undefined}
               onChange={v => set('endDate', v)} className="h-9" />
           </label>
 
@@ -174,7 +162,7 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC
             />
           </label>
         </QueryFormLayout>
-      </AppDialog>
+      </QueryDialog>
 
       <SupplierFinder
         open={supplierOpen}

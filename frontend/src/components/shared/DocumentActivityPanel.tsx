@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import type { KitReadOwner } from '@/api/kits'
 import { assertKitReadOwner } from '@/hooks/useKits'
 import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
@@ -16,9 +17,9 @@ import { SectionCard } from './SectionCard'
 function LogSectionTable({ section }: { section: ActivitySection }) {
   return <div className="overflow-x-auto px-3 pb-3">
     {section.description && <p className="mb-2 text-xs text-muted-foreground">{section.description}</p>}
-    <table className="w-full text-xs"><thead><tr className="border-b text-left text-muted-foreground">{section.columns.map(c=><th key={c.key} className="whitespace-nowrap px-2 py-2 font-medium">{c.label}</th>)}</tr></thead>
+    <ReportTable className="w-full text-xs"><thead><tr className="border-b text-left text-muted-foreground">{section.columns.map(c=><th key={c.key} className="whitespace-nowrap px-2 py-2 font-medium">{c.label}</th>)}</tr></thead>
       <tbody className="divide-y">{section.rows.map((row,index)=><tr key={`${row.id ?? 'row'}-${index}`}>{section.columns.map(c=><td key={c.key} className="min-w-24 whitespace-pre-wrap break-words px-2 py-2 align-top tabular-nums">{row[c.key]==null ? '未记录' : c.format==='date' ? formatDisplayDateTime(String(row[c.key])) : String(row[c.key])}</td>)}</tr>)}</tbody>
-    </table>
+    </ReportTable>
   </div>
 }
 
@@ -51,7 +52,7 @@ export function DocumentActivityPanel({ type, id, view, extra, readOwner }: { ty
     {view === 'progress' && ['purchase', 'inbound', 'transfer'].includes(type) && <OrderFulfillmentPanel type={type as FulfillmentType} id={id} />}
     {extra}
     {view === 'log' ? <SectionCard title="操作记录" compact>
-      {data.events.length ? <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-sm"><thead><tr className="border-b text-left text-muted-foreground"><th className="px-3 py-2 font-medium">事项 / 说明</th><th className="w-44 px-3 py-2 font-medium">时间</th><th className="w-32 px-3 py-2 font-medium">操作人</th></tr></thead><tbody className="divide-y">{data.events.map(event => <tr key={event.id}><td className="px-3 py-3"><p className="font-medium">{event.title}</p>{event.description && <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-muted-foreground">{event.description}</p>}<OrderChangeDetails payload={event.payload} /><p className="mt-1 text-xs text-muted-foreground">{event.source}</p></td><td className="px-3 py-3 align-top text-muted-foreground">{formatDisplayDateTime(event.createdAt)}</td><td className="px-3 py-3 align-top text-muted-foreground">{event.createdByName || '未记录'}</td></tr>)}</tbody></table></div> : <EmptyState variant="no-data" compact title="暂无操作记录" />}
+      {data.events.length ? <div className="overflow-x-auto"><ReportTable className="w-full min-w-[640px] text-sm"><thead><tr className="border-b text-left text-muted-foreground"><th className="px-3 py-2 font-medium">事项 / 说明</th><th className="w-44 px-3 py-2 font-medium">时间</th><th className="w-32 px-3 py-2 font-medium">操作人</th></tr></thead><tbody className="divide-y">{data.events.map(event => <tr key={event.id}><td className="px-3 py-3"><p className="font-medium">{event.title}</p>{event.description && <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-muted-foreground">{event.description}</p>}<OrderChangeDetails payload={event.payload} /><p className="mt-1 text-xs text-muted-foreground">{event.source}</p></td><td className="px-3 py-3 align-top text-muted-foreground">{formatDisplayDateTime(event.createdAt)}</td><td className="px-3 py-3 align-top text-muted-foreground">{event.createdByName || '未记录'}</td></tr>)}</tbody></ReportTable></div> : <EmptyState variant="no-data" compact title="暂无操作记录" />}
       {sections.filter(s=>s.rows.length).map((s,index)=><details key={`${s.title}-${index}`} data-activity-log-section className="mt-3 rounded-md border">
         <summary className="cursor-pointer px-3 py-2 text-xs font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">{s.title}（{s.rows.length}）</summary>
         <LogSectionTable section={s} />
@@ -59,7 +60,7 @@ export function DocumentActivityPanel({ type, id, view, extra, readOwner }: { ty
       <p className="mt-3 text-xs text-muted-foreground">{data.historyNote}</p>
     </SectionCard> : sections.length ? sections.map((s, index) => <SectionCard key={`${s.title}-${index}`} title={s.title} compact>
       {s.description && <p className="mb-3 text-xs text-muted-foreground">{s.description}</p>}
-      {s.rows.length ? <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left text-muted-foreground">{s.columns.map(c => <th key={c.key} className="whitespace-nowrap px-3 py-2 font-medium">{c.label}</th>)}</tr></thead><tbody className="divide-y">{s.rows.map((row, index) => <tr key={`${row.id ?? 'row'}-${index}`}>{s.columns.map(c => <td key={c.key} className="min-w-24 px-3 py-3 align-top tabular-nums">{row[c.key] == null ? '—' : c.format === 'date' ? formatDisplayDateTime(String(row[c.key])) : String(row[c.key])}</td>)}</tr>)}</tbody></table></div> : <EmptyState variant="no-data" compact title={`暂无${s.title.includes('打印') ? '打印任务' : '作业明细'}`} />}
+      {s.rows.length ? <div className="overflow-x-auto"><ReportTable className="w-full text-sm"><thead><tr className="border-b text-left text-muted-foreground">{s.columns.map(c => <th key={c.key} className="whitespace-nowrap px-3 py-2 font-medium">{c.label}</th>)}</tr></thead><tbody className="divide-y">{s.rows.map((row, index) => <tr key={`${row.id ?? 'row'}-${index}`}>{s.columns.map(c => <td key={c.key} className="min-w-24 px-3 py-3 align-top tabular-nums">{row[c.key] == null ? '—' : c.format === 'date' ? formatDisplayDateTime(String(row[c.key])) : String(row[c.key])}</td>)}</tr>)}</tbody></ReportTable></div> : <EmptyState variant="no-data" compact title={`暂无${s.title.includes('打印') ? '打印任务' : '作业明细'}`} />}
     </SectionCard>) : !extra && <p className="py-10 text-center text-sm text-muted-foreground">{view === 'print' ? '尚未生成打印任务' : view === 'containers' ? '尚未生成库存条码' : '尚无已记录的作业进度'}</p>}
   </div>
 }

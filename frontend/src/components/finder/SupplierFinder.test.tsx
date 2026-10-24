@@ -12,7 +12,7 @@ import { getSuppliersApi } from '@/api/suppliers'
 
 vi.mock('@/api/suppliers', () => ({ getSuppliersApi: vi.fn() }))
 vi.mock('@/components/shared/AppDialog', () => ({
-  AppDialog: ({ children, footer }: { children: ReactNode; footer?: ReactNode }) => <div>{children}{footer}</div>,
+  AppDialog: ({ children, footer, description }: { children: ReactNode; footer?: ReactNode; description?: ReactNode }) => <div><div className="fc-dialog-caption">{description}</div>{children}{footer}</div>,
 }))
 
 type Row = Record<string, unknown>

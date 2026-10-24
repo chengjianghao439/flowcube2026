@@ -1,3 +1,4 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useProcurementIntentRecovery, type PlanConverted } from '@/hooks/useProcurementIntentRecovery'
 import ProcurementIntentRecoveryNotice from '@/components/shared/ProcurementIntentRecoveryNotice'
@@ -71,6 +72,7 @@ export default function ProcurementPlanDetailPage() {
   const allowDecimalOf = useProductQtyPolicies(items.map(item => item.productId))
   const pendingIds = useMemo(() => items.filter(i => i.status === 1).map(i => i.id), [items])
   const editable = canManage && plan && (plan.status === 1 || plan.status === 2)
+  const showSelection = Boolean(editable && canConvert && pendingIds.length > 0)
 
   const toggle = (id: number) => {if(conversion.blocked)return;setSelected(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })}
   const toggleAll = () => {if(conversion.blocked)return;setSelected(prev => prev.size === pendingIds.length ? new Set() : new Set(pendingIds))}
@@ -83,10 +85,10 @@ export default function ProcurementPlanDetailPage() {
     <div className="space-y-4">
       <PageHeader
         title={`采购计划 ${plan.code}`}
-        description={`预测窗口 ${plan.forecastWindow} 天 · 覆盖周期 ${plan.horizonDays} 天 · 默认提前期 ${plan.defaultLeadTime} 天 · 共 ${plan.itemCount} 行`}
+        description={`预测窗口 ${plan.forecastWindow ?? ''} 天 · 覆盖周期 ${plan.horizonDays ?? ''} 天 · 默认提前期 ${plan.defaultLeadTime ?? ''} 天 · 共 ${plan.itemCount ?? ''} 行。需求与覆盖读取于 ${dataUpdatedAt ? formatDisplayDateTime(new Date(dataUpdatedAt).toISOString()) : '—'}；转换时仍会重新核对。`}
+        status={<SoftStatusLabel label={plan.statusName} tone={PLAN_TONE[plan.status] ?? 'draft'} />}
         actions={<div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '刷新中…' : '刷新需求'}</Button>
-          <SoftStatusLabel label={plan.statusName} tone={PLAN_TONE[plan.status] ?? 'draft'} />
           <Button variant="outline" size="sm" onClick={() => navigate(getWorkspaceListPath('/procurement'))}>返回列表</Button>
           {editable && (
             <Button variant="outline" size="sm" onClick={() => confirmAction({ title: '作废该采购计划？', description: '已转出的采购单不受影响，仅把计划头置为作废。', variant: 'destructive', onConfirm: () => cancelPlan.mutate() })} disabled={cancelPlan.isPending || conversion.blocked}>作废</Button>
@@ -96,15 +98,14 @@ export default function ProcurementPlanDetailPage() {
 
       <ProcurementIntentRecoveryNotice recovery={conversion} onConfirmed={answer=>{if(!answer.queryOnly)setSelected(new Set());void invalidate();void qc.invalidateQueries({queryKey:['procurement-plans']});toast.success('原计划转采购已确认')}} />
       {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title="刷新失败，当前显示上次读取的数据" compact />}
-      <p className="text-xs text-muted-foreground">需求与覆盖读取于 {dataUpdatedAt ? formatDisplayDateTime(new Date(dataUpdatedAt).toISOString()) : '—'}；转换时仍会重新核对。</p>
       <OrderDetailSections type="plan" id={plan.id}>
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full min-w-[1900px] text-sm">
+        <ReportTable className="w-full min-w-[1900px] text-sm">
           <thead className="bg-muted/40 text-muted-foreground [&_th]:whitespace-nowrap">
             <tr>
-              <th className="px-3 py-2 text-center font-medium">
-                {editable && canConvert && pendingIds.length > 0 && <input type="checkbox" aria-label="选择全部待处理计划明细" disabled={conversion.blocked} checked={selected.size === pendingIds.length && pendingIds.length > 0} onChange={toggleAll} className="h-4 w-4 accent-primary" />}
-              </th>
+              {showSelection && <th className="w-12 px-3 py-2 text-center font-medium">
+                <input type="checkbox" aria-label="选择全部待处理计划明细" disabled={conversion.blocked} checked={selected.size === pendingIds.length && pendingIds.length > 0} onChange={toggleAll} className="h-4 w-4 accent-primary" />
+              </th>}
               <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
               <th className="px-3 py-2 text-left font-medium">仓库</th>
               <th className="px-3 py-2 text-right font-medium">日均</th>
@@ -128,9 +129,9 @@ export default function ProcurementPlanDetailPage() {
               const pending = it.status === 1
               return (
                 <tr key={it.id} className={`border-t border-border ${it.status === 3 ? 'opacity-50' : ''}`}>
-                  <td className="px-3 py-2 text-center">
-                    {editable && canConvert && pending && <input type="checkbox" aria-label={`选择 ${it.productName} ${it.warehouseName}`} disabled={conversion.blocked} checked={selected.has(it.id)} onChange={() => toggle(it.id)} className="h-4 w-4 accent-primary" />}
-                  </td>
+                  {showSelection && <td className="px-3 py-2 text-center">
+                    {pending && <input type="checkbox" aria-label={`选择 ${it.productName} ${it.warehouseName}`} disabled={conversion.blocked} checked={selected.has(it.id)} onChange={() => toggle(it.id)} className="h-4 w-4 accent-primary" />}
+                  </td>}
                   <ProductIdentityCells product={it} /><td className="px-3 py-3">{it.unit || '—'}</td>
                   <td className="px-3 py-2">{it.warehouseName}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{num(it.adu)}</td>
@@ -181,7 +182,7 @@ export default function ProcurementPlanDetailPage() {
               )
             })}
           </tbody>
-        </table>
+        </ReportTable>
       </div>
 
       {editable && canConvert && (

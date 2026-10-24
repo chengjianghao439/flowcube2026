@@ -118,7 +118,9 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+        <DialogHeader description={mode === 'edit' && editCat ? <>
+              正在编辑：<span className="font-medium text-foreground">{editCat.code ? `${editCat.code} · ` : ''}{editCat.name}</span>
+            </> : ("填写分类名称、上级与排序。")}>
           {/* 编辑态与默认（新增）态一眼可分 */}
           <DialogTitle className="flex flex-wrap items-center gap-2">
             {mode === 'create'
@@ -126,11 +128,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
               : `编辑${LEVEL_LABEL[editCat?.level ?? 1] ?? ''}分类`}
             {mode === 'edit' && <EditModeBadge />}
           </DialogTitle>
-          {mode === 'edit' && editCat && (
-            <p className="text-helper mt-1">
-              正在编辑：<span className="font-medium text-foreground">{editCat.code ? `${editCat.code} · ` : ''}{editCat.name}</span>
-            </p>
-          )}
+
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-1">
@@ -396,7 +394,7 @@ export default function CategoriesPage() {
     <div>
       <PageHeader
         title="商品分类"
-        description={`支持 4 级分类，共 ${totalCount} 个`}
+        description="维护商品分类层级与归属。"
         actions={
           can(PERMISSIONS.CATEGORY_CREATE) && <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -407,6 +405,7 @@ export default function CategoriesPage() {
 
       {/* 图例说明 */}
       <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+        <span>支持 4 级分类，共 {totalCount} 个</span>
         {[1, 2, 3, 4].map(l => (
           <span key={l} className="flex items-center gap-1">
             <SoftStatusLabel label={`L${l}`} tone="info" />

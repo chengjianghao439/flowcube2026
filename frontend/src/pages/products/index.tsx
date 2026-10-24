@@ -206,8 +206,9 @@ export default function ProductsPage() {
   ], [categoryPathMap, navigateFromTable, handlePrintProductLabel, printingIds, hasKeyword, canUpdate, canDelete, canPrint])
 
   return (
-    <div className="space-y-4">
-      <PageHeader title="商品管理" description="管理商品档案与分类" actions={
+    <div className="desktop-record-page space-y-4">
+      <PageHeader title="商品管理"
+        description="维护商品资料、分类与数量规则。"  actions={
         <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={()=>downloadExport('/export/stock').catch(e=>toast.error((e as Error).message))}>导出库存</Button>
@@ -237,9 +238,9 @@ export default function ProductsPage() {
       {/* 批量导入弹窗 */}
       <Dialog open={importOpen} onOpenChange={v=>{ setImportOpen(v); if(!v) setImportResult(null) }}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader><DialogTitle>批量导入商品</DialogTitle></DialogHeader>
+          <DialogHeader description={<>{<>请先下载模板，按照格式填写后上传。编码已存在的商品将自动跳过。</>}</>}><DialogTitle>批量导入商品</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">请先下载模板，按照格式填写后上传。编码已存在的商品将自动跳过。</p>
+
             <ImportSteps template={
               <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={()=>downloadExport('/import/products/template').catch(e=>toast.error((e as Error).message))}>下载导入模板</Button>

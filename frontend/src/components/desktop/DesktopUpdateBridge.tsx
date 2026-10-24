@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/lib/toast'
 
 /** 根部订阅，与登录、当前工作区或仪表盘是否打开无关。晚到快照由 preload 补送。 */
@@ -41,9 +41,8 @@ export function DesktopUpdateBridge() {
   return (
     <Dialog open={update != null} onOpenChange={open => { if (!open && !busy) setUpdate(null) }}>
       <DialogContent className="sm:max-w-2xl">
-        <DialogHeader>
+        <DialogHeader description={<>新版本 {update?.version} 已发布，当前版本为 {update?.current}。</>}>
           <DialogTitle>发现新版本</DialogTitle>
-          <DialogDescription>新版本 {update?.version} 已发布，当前版本为 {update?.current}。</DialogDescription>
         </DialogHeader>
         <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/20 p-4 text-sm leading-6">
           {update?.notes.trim() || '暂无更新说明'}

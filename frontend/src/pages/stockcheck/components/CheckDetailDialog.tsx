@@ -1,5 +1,6 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { ProductIdentityGridCells, ProductIdentityGridHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
@@ -226,7 +227,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     <>
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose() }}>
       <DialogContent className="grid-cols-1 max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader description={"核对盘点商品、账面量、实盘量与差异。"}>
           <DialogTitle className="flex items-center gap-3">
             盘点单详情
             {check && <SoftStatusLabel label={check.statusName} tone={check.status===1?'active':check.status===2?'success':'danger'} />}
@@ -244,14 +245,14 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
               {check.remark && <div className="col-span-3"><span className="text-muted-foreground">备注：</span>{check.remark}</div>}
             </div>
             <div className="overflow-x-auto">
-              <div className="grid min-w-[1440px] grid-cols-[160px_160px_144px_224px_112px_80px_120px_180px_120px_100px] gap-2 text-xs text-muted-foreground font-medium border-b bg-muted/30 py-3 mb-1">
-                <ProductIdentityGridHeaders />
-                <div className="">单位</div>
-                <div className="">账面数量</div>
-                <div className="">实盘数量</div>
-                <div className="">差异</div>
-                <div className=""></div>
-              </div>
+              <ReportTable className="w-full min-w-[1440px] text-sm"><thead><tr>
+                <ProductIdentityHeaders />
+                <th className="w-20">单位</th>
+                <th className="w-32">账面数量</th>
+                <th className="w-44">实盘数量</th>
+                <th className="w-32">差异</th>
+                {check.status === 1 && <th className="w-28">操作</th>}
+              </tr></thead><tbody>
               {check.items?.map((item: CheckItem)=>{
                 const actualRaw = actuals[item.id]
                 const actual = actualRaw!==''&&actualRaw!==undefined ? parseFloat(actualRaw) : null
@@ -260,11 +261,11 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                   ? (item.diffQty ?? null)
                   : (actual!=null && !hasError ? actual - item.bookQty : null)
                 return (
-                  <div key={item.id} className="grid min-w-[1440px] grid-cols-[160px_160px_144px_224px_112px_80px_120px_180px_120px_100px] gap-2 items-center py-3 border-b last:border-0">
-                    <ProductIdentityGridCells product={item} />
-                    <div className="text-sm text-muted-foreground">{item.unit}</div>
-                    <div className="text-sm">{item.bookQty}</div>
-                    <div className="">
+                  <tr key={item.id} className="border-b last:border-0">
+                    <ProductIdentityCells product={item} />
+                    <td className="text-sm text-muted-foreground">{item.unit}</td>
+                    <td className="text-sm">{item.bookQty}</td>
+                    <td>
                       {item.scanDriven ? (
                         <div className="space-y-0.5">
                           <span className="text-sm block">
@@ -288,11 +289,11 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                       ) : (
                         <span className="text-sm block">{item.actualQty??'-'}</span>
                       )}
-                    </div>
-                    <div className={`text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
+                    </td>
+                    <td className={`text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
                       {diff!=null ? (diff>0?'+':'')+diff.toFixed(2) : '-'}
-                    </div>
-                    <div className="">
+                    </td>
+                    {check.status === 1 && <td>
                       {check.status===1 && (
                         <Button
                           variant="ghost"
@@ -303,11 +304,11 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                           disabled={refreshItem.isPending}
                         >刷新账面</Button>
                       )}
-                    </div>
-                  </div>
+                    </td>}
+                  </tr>
                 )
               })}
-            </div>
+            </tbody></ReportTable></div>
           </div>
           </OrderDetailSections>
         )}

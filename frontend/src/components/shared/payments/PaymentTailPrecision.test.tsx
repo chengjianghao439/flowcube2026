@@ -115,6 +115,9 @@ it.each(['0.001', '0.0067', '12.3456', '1.23456'])('native form and direct submi
 })
 it.each([.0067, .8999, 12.3456])('legacy single balance %s stays exact and cannot be rounded up for payment', async balance => {
   await mount(<RegisterPaymentDialog open onClose={() => {}} type={2} record={record(1, balance) as never} />)
+  expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('历史余额含不足一分的尾差，请先核对')
+  expect(document.body.textContent?.split('历史余额含不足一分的尾差，请先核对')).toHaveLength(2)
+  expect(document.body.textContent).not.toContain('核对原账款、资金账户、实际日期与金额。')
   await chooseAccount(); await input(document.querySelector('input[type="number"]')!, '.01')
   expect(document.body.textContent).toContain(`¥${balance}`); expect(document.body.textContent).toContain('请先核对'); expect(button('确认登记').disabled).toBe(true)
   await act(async () => { document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })) }); expect(fixture.payCalls).toHaveLength(0)
@@ -147,7 +150,11 @@ it.each(['.001', '.0067', '1.23456'])('new receipt never sends fractional-cent %
   expect(button('仅登记不核销').disabled).toBe(true); await click('仅登记不核销'); expect(fixture.createCalls).toHaveLength(0)
 })
 it.each([.8999, .0067])('legacy receipt balance %s is read-only and requires reconciliation; no automatic rounding', async balance => {
-  await continueWith(balance); expect(document.body.textContent).toContain(String(balance)); expect(document.body.textContent).toContain('请先核对'); expect(button('全额').disabled).toBe(true); expect(button('自动分配').disabled).toBe(true); expect(button('仅登记不核销').disabled).toBe(true)
+  await continueWith(balance)
+  expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain(`原余额 ¥${balance}，含不足一分的尾差，请先核对`)
+  expect(document.body.textContent?.split('含不足一分的尾差，请先核对')).toHaveLength(3) // 窗口提示和原候选行各一次，局部账款依据保留。
+  expect(document.body.textContent).not.toContain('核对收付款信息并选择本次核销账款。')
+  expect(document.body.textContent).toContain(String(balance)); expect(document.body.textContent).toContain('请先核对'); expect(button('全额').disabled).toBe(true); expect(button('自动分配').disabled).toBe(true); expect(button('仅登记不核销').disabled).toBe(true)
   await click('全额'); await click('自动分配'); expect(allocations()[0].value).toBe(''); expect(fixture.settleCalls).toHaveLength(0)
 })
 it('legacy candidate is skipped, while a verified cent candidate may be allocated without rounding the old balance', async () => {

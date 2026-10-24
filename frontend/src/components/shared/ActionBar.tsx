@@ -2,7 +2,7 @@
  * ActionBar — 全系统统一页面顶部操作栏
  *
  * 结构：
- *   [ 主标题  副标题(可选) ]  |  [ rightActions ]
+ *   [ 主标题  标题旁状态(可选) ]  |  [ rightActions ]
  *
  * 视觉规范：
  * - 最小高度 56px，长标题或操作按钮自动换行
@@ -23,6 +23,7 @@
  * ```tsx
  * <ActionBar
  *   title="新建销售单"
+ *   description="填写客户、商品与发货信息。"
  *   rightActions={
  *     <>
  *       <Button variant="outline" onClick={onCancel}>取消</Button>
@@ -33,6 +34,7 @@
  *
  * <ActionBar
  *   title={order.orderNo}
+ *   description="查看销售明细与履约进度。"
  *   subtitle={<StatusBadge type="sale" status={order.status} />}
  *   rightActions={...}
  * />
@@ -45,7 +47,10 @@ export interface ActionBarProps {
   /** 页面主标题，支持字符串或自定义 JSX（text-xl font-semibold 由组件提供） */
   title: React.ReactNode
 
-  /** 副标题区域，通常用于放置状态 Badge */
+  /** 与普通页头相同的唯一小字说明，提示优先于用途。 */
+  description: React.ReactNode
+
+  /** 标题旁状态区域（沿用 subtitle 参数兼容已有表单），不放功能介绍 */
   subtitle?: React.ReactNode
 
   /** 右侧操作按钮区域，按主→次→危险从右到左排列 */
@@ -61,6 +66,7 @@ export interface ActionBarProps {
 
 export function ActionBar({
   title,
+  description,
   subtitle,
   rightActions,
   sticky = true,
@@ -68,23 +74,26 @@ export function ActionBar({
   return (
     <div
       className={cn(
-        'flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2 border-b bg-background px-6',
+        'desktop-action-bar flex min-h-14 flex-wrap items-start justify-between gap-x-4 gap-y-2 py-2 border-b bg-background px-6',
         sticky && 'sticky top-0 z-10 -mx-6 -mt-6',
       )}
     >
-      {/* 左侧：主标题 + 副标题 */}
-      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <h1 className="break-words text-xl font-semibold leading-6 text-foreground">
-          {title}
-        </h1>
-        {subtitle && (
-          <div className="flex items-center">{subtitle}</div>
-        )}
+      {/* 左侧：标题与状态同行，说明位于下一行 */}
+      <div className="desktop-page-heading-main min-w-0 flex-1">
+        <div className="desktop-page-identity flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="break-words text-xl font-semibold leading-6 text-foreground">
+            {title}
+          </h1>
+          {subtitle && (
+            <div className="flex items-center">{subtitle}</div>
+          )}
+        </div>
+        <p className="desktop-page-description mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
       </div>
 
       {/* 右侧：操作按钮 —— 统一压到 sm 尺寸，详情/表单页顶栏比列表页工具栏更紧凑 */}
       {rightActions && (
-        <div className="flex flex-wrap items-center gap-2 [&>button]:h-9 [&>button]:px-3">{rightActions}</div>
+        <div className="desktop-action-buttons flex flex-wrap items-center gap-2 [&>button]:h-9 [&>button]:px-3">{rightActions}</div>
       )}
     </div>
   )

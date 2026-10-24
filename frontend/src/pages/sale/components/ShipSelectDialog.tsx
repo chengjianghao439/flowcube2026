@@ -1,7 +1,8 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import OrdinarySaleRecoveryNotice, { type OrdinarySaleRecovery } from './OrdinarySaleRecoveryNotice'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { PackageCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,14 +64,14 @@ export default function ShipSelectDialog({ open, onClose, order, loading, recove
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
       <DialogContent aria-busy={loading} onEscapeKeyDown={e => { if (submitting.current || loading) e.preventDefault() }} className="flex max-h-[86vh] w-[min(94vw,900px)] max-w-none flex-col overflow-hidden">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary" />发起出库</DialogTitle></DialogHeader>
-        <DialogDescription>
+        <DialogHeader description={<>{<>
           选择本次发货商品并填写数量。未发部分保留，可稍后继续发货。
           {order.isMultiWarehouse && ' 本单将按仓库分别创建出库任务。'}
-        </DialogDescription>
+        </>}</>}><DialogTitle className="flex items-center gap-2"><PackageCheck className="h-5 w-5 text-primary" />发起出库</DialogTitle></DialogHeader>
+
         <OrdinarySaleRecoveryNotice recovery={recovery} onConfirmed={onClose} />
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
-          <table className="w-full min-w-[1560px] text-sm">
+          <ReportTable className="w-full min-w-[1560px] text-sm">
             <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr>
                 <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" disabled={frozen} checked={allSelected} onChange={e => { if (!submitting.current && !frozen) setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }]))) }} /></th>
@@ -100,7 +101,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, recove
               })}
               {!undispatched.length && <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">没有可发货明细，请先占库</td></tr>}
             </tbody>
-          </table>
+          </ReportTable>
         </div>
         <DialogFooter className="sm:items-center sm:justify-between">
           <span className={cn('mr-auto text-sm text-muted-foreground', invalid.length > 0 && 'text-destructive-ink')}>

@@ -6,6 +6,7 @@ import { RecordIdentity } from '@/components/shared/RecordIdentity'
 import { useState, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Input } from '@/components/ui/input'
+import { FormField } from '@/components/shared/FormField'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SettlementTypeField } from '@/components/shared/SettlementTypeField'
 import { activeTone, type StatusTone } from '@/lib/statusTone'
@@ -99,7 +100,7 @@ export default function SuppliersPage() {
   return (
     <BaseCrudPage<Supplier>
       title="供应商管理"
-      description="管理采购供应商档案"
+      description="维护供应商资料与结算信息。"
       canCreate={can(PERMISSIONS.SUPPLIER_CREATE)}
       canEdit={can(PERMISSIONS.SUPPLIER_UPDATE)}
       canDelete={can(PERMISSIONS.SUPPLIER_DELETE)}
@@ -164,20 +165,17 @@ export default function SuppliersPage() {
         return (
           <div className="space-y-5">
             <h3 className="text-sm font-medium">供应商与联系方式</h3>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
               {isEdit && (
-                <div className="space-y-1">
-                  <Label htmlFor="supplier-code">供应商编码</Label>
-                  <Input id="supplier-code" value={editing.code} disabled className="bg-muted/50 font-mono text-sm" />
-                </div>
+                <FormField id="supplier-code" label="供应商编码">{field => <Input {...field} value={editing.code} disabled className="bg-muted/50 font-mono text-sm" />}</FormField>
               )}
-              <div className="space-y-1"><Label htmlFor="supplier-name">名称 *</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.name} lengthMode="unicode" id="supplier-name" value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} placeholder="供应商名称"/></div>
-              <div className="space-y-1"><Label htmlFor="supplier-contact">联系人</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.contact} lengthMode="unicode" id="supplier-contact" value={form.contact} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('contact',e.target.value)}/></div>
-              <div className="space-y-1"><Label htmlFor="supplier-phone">电话</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.phone} lengthMode="unicode" id="supplier-phone" value={form.phone} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('phone',e.target.value)} placeholder="手机、座机或国际电话" inputMode="tel"/></div>
-              <div className="space-y-1"><Label htmlFor="supplier-email">邮箱</Label><Input id="supplier-email" value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} placeholder="选填"/></div>
+              <FormField id="supplier-name" label="名称 *">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.name} lengthMode="unicode" {...field} value={form.name} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('name',e.target.value)} placeholder="供应商名称"/>}</FormField>
+              <FormField id="supplier-contact" label="联系人">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.contact} lengthMode="unicode" {...field} value={form.contact} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('contact',e.target.value)}/>}</FormField>
+              <FormField id="supplier-phone" label="电话">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.phone} lengthMode="unicode" {...field} value={form.phone} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('phone',e.target.value)} placeholder="手机、座机或国际电话" inputMode="tel"/>}</FormField>
+              <FormField id="supplier-email" label="邮箱">{field => <Input {...field} value={form.email} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('email',e.target.value)} placeholder="选填"/>}</FormField>
             </div>
-            <div className="space-y-1"><Label htmlFor="supplier-address">地址</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.address} lengthMode="unicode" id="supplier-address" value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)}/></div>
-            <div className="space-y-1"><Label htmlFor="supplier-remark">备注</Label><LimitedInput maxLength={PARTY_PROFILE_LIMITS.remark} lengthMode="unicode" id="supplier-remark" value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)}/></div>
+            <FormField id="supplier-address" label="地址">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.address} lengthMode="unicode" {...field} value={form.address} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('address',e.target.value)}/>}</FormField>
+            <FormField id="supplier-remark" label="备注">{field => <LimitedInput maxLength={PARTY_PROFILE_LIMITS.remark} lengthMode="unicode" {...field} value={form.remark} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('remark',e.target.value)}/>}</FormField>
             <h3 className="border-t pt-4 text-sm font-medium">结算与供货</h3>
             <SettlementTypeField
               disabled={locked}
@@ -186,12 +184,9 @@ export default function SuppliersPage() {
               paymentTermsDays={form.paymentTermsDays}
               onChange={next => setForm(f => ({ ...f, ...next }))}
             />
-            <div className="space-y-1">
-              <Label htmlFor="supplier-leadTimeDays">采购提前期（天）</Label>
-              <Input id="supplier-leadTimeDays" type="number" min="0" max="365" value={String(form.leadTimeDays)}
+            <FormField id="supplier-leadTimeDays" label="采购提前期（天）">{field => <Input {...field} type="number" min="0" max="365" value={String(form.leadTimeDays)}
                 onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setForm(f=>({...f, leadTimeDays: Number(e.target.value) || 0}))}
-                placeholder="下单到到货天数，用于采购计划预测" />
-            </div>
+                placeholder="下单到到货天数，用于采购计划预测" />}</FormField>
             {isEdit && <div className="flex items-center gap-2"><input type="checkbox" id="sp-active" checked={form.isActive} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>set('isActive',e.target.checked)} className="accent-primary"/><Label htmlFor="sp-active" className="cursor-pointer">启用</Label></div>}
           </div>
         )

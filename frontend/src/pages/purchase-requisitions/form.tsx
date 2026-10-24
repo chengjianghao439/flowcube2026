@@ -1,10 +1,12 @@
+import { ResizableTable } from '@/components/shared/ResizableTable'
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useProcurementIntentRecovery, type RequisitionCreated } from '@/hooks/useProcurementIntentRecovery'
 import ProcurementIntentRecoveryNotice from '@/components/shared/ProcurementIntentRecoveryNotice'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { DatePicker } from '@/components/shared/DatePicker'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { SectionCard } from '@/components/shared/SectionCard'
 /**
  * 采购申请单 — 新建 / 编辑 / 详情页（独立路由）
@@ -57,8 +59,8 @@ interface ConvertRow {
   quantity: string; supplierId: number | null; supplierName: string; unitPrice: string
 }
 
-function Section({ title, children, actions }: { title: string; children: React.ReactNode; actions?: React.ReactNode }) {
-  return <SectionCard title={title} actions={actions} compact>{children}</SectionCard>
+function Section({ title, children, actions, className }: { title: string; children: React.ReactNode; actions?: React.ReactNode; className?: string }) {
+  return <SectionCard title={title} actions={actions} className={className} compact>{children}</SectionCard>
 }
 
 /** 多级审批流进度时间线（引擎实例快照展示；无实例时后端不返回 approval，前端不渲染） */
@@ -157,7 +159,7 @@ export default function RequisitionFormPage() {
         warehouseName: detail.warehouseName,
         expectedDate: detail.expectedDate ?? '',
         items: (detail.items ?? []).map(i => ({
-          productId: i.productId, productCode: i.productCode ?? '', productName: i.productName ?? '', unit: i.unit ?? '',
+          productId: i.productId, productCode: i.productCode ?? '', productName: i.productName ?? '', unit: i.unit ?? '', articleNumber: i.articleNumber ?? null, spec: i.spec ?? null, color: i.color ?? null,
           quantity: String(i.quantity), estimatedPrice: i.estimatedPrice != null ? String(i.estimatedPrice) : '',
           suggestedSupplierId: i.suggestedSupplierId ?? null, suggestedSupplierName: i.suggestedSupplierName ?? '',
           convertedQty: i.convertedQty ?? 0,
@@ -342,9 +344,10 @@ export default function RequisitionFormPage() {
   const canConvert = can(PERMISSIONS.PURCHASE_REQUISITION_CONVERT)
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="desktop-document-form desktop-requisition-form flex flex-col gap-4">
       <ActionBar
         title={isNew ? '新建采购申请单' : `采购申请单 ${detail?.requisitionNo ?? ''}`}
+        description="核对申请仓库、到货日期与商品。"
         subtitle={detail ? <SoftStatusLabel label={detail.statusName} tone={detail.statusTone} /> : undefined}
         rightActions={
           <div className="flex flex-wrap gap-2">
@@ -371,7 +374,7 @@ export default function RequisitionFormPage() {
 
       <OrderDetailSections type="requisition" id={editId || 0} progress={detail?.approval ? <ApprovalProgress approval={detail.approval} /> : undefined}>
       <Section title="基本信息">
-        <div className="grid grid-cols-4 gap-x-5 gap-y-4">
+        <div className="desktop-form-fields desktop-requisition-fields grid grid-cols-4 gap-x-5 gap-y-4">
           <div className="space-y-1.5">
             <Label>事由</Label>
             <Input value={title} onChange={e => {if(mayChange())setTitle(e.target.value)}} disabled={!editable || inputFrozen} maxLength={100} placeholder="选填，如「前置仓补货」" />
@@ -395,25 +398,15 @@ export default function RequisitionFormPage() {
         </div>
       </Section>
 
-      <Section title="采购申请明细" actions={editable && <Button size="sm" variant="outline" onClick={() => setProductFinderOpen(true)} disabled={inputFrozen}><Plus className="mr-1 h-4 w-4" />添加商品</Button>}>
+      <Section title="采购申请明细" className="desktop-requisition-items" actions={editable && <Button size="sm" variant="outline" onClick={() => setProductFinderOpen(true)} disabled={inputFrozen}><Plus className="mr-1 h-4 w-4" />添加商品</Button>}>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1500px] text-sm">
-            <thead>
-              <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
-                <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
-                <th className="px-3 py-2 text-right w-28">采购申请数量</th>
-                <th className="px-3 py-2 text-right w-28">预估单价</th>
-                <th className="px-3 py-2 text-left w-48">建议供应商</th>
-                {!editable && <th className="px-3 py-2 text-right w-24">已转采购</th>}
-                {editable && <th className="px-3 py-2 w-12"></th>}
-              </tr>
-            </thead>
+          <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 80 }, { key: 'quantity', title: '采购申请数量', width: 112, align: 'right' }, { key: 'price', title: '预估单价', width: 112, align: 'right' }, { key: 'supplier', title: '建议供应商', width: 192 }, ...(editable ? [{ key: 'actions', title: '操作', width: 80 }] : [{ key: 'converted', title: '已转采购', width: 96, align: 'right' as const }])]} columnStorageKey="requisition-entry-items" minWidth={1000}>
             <tbody>
               {items.length === 0 ? (
-                <tr><td colSpan={10} className="py-10 text-center text-muted-foreground">暂无明细{editable ? '，点右上角「添加商品」' : ''}</td></tr>
+                <tr><td colSpan={6} className="desktop-requisition-empty text-center text-muted-foreground">暂无明细{editable ? '，点右上角「添加商品」' : ''}</td></tr>
               ) : items.map((it, idx) => (
                 <tr key={idx} className="border-b border-border/40">
-                  <ProductIdentityCells product={it} /><td className="px-3 py-3">{it.unit || '—'}</td>
+                  <ProductIdentityCells compact product={it} /><td className="px-3 py-3">{it.unit || '—'}</td>
                   <td className="px-3 py-2 text-right">
                     {editable ? <Input quantity type="number" step={qtyStep(allowDecimalOf(it.productId))} min="0" value={it.quantity} onChange={e => setItem(idx, { quantity: e.target.value })} disabled={inputFrozen} className="h-8 text-right tabular-nums" />
                       : <span className="tabular-nums">{it.quantity}</span>}
@@ -431,7 +424,7 @@ export default function RequisitionFormPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResizableTable>
         </div>
       </Section>
 
@@ -443,7 +436,7 @@ export default function RequisitionFormPage() {
       {/* 驳回原因 */}
       <Dialog open={rejectOpen} onOpenChange={v => !v && setRejectOpen(false)}>
         <DialogContent className="sm:max-w-lg">
-          <DialogHeader><DialogTitle>驳回采购申请单</DialogTitle></DialogHeader>
+          <DialogHeader description={"填写驳回原因，供申请人调整。"}><DialogTitle>驳回采购申请单</DialogTitle></DialogHeader>
           <div className="space-y-2 py-2">
             <Label>驳回原因 *</Label>
             <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={e => setRejectReason(e.target.value)} maxLength={300} placeholder="请填写驳回原因" />
@@ -458,23 +451,14 @@ export default function RequisitionFormPage() {
       {/* 转采购单 */}
       <Dialog open={convertOpen} onOpenChange={v => !v && setConvertOpen(false)}>
         <DialogContent className="sm:max-w-4xl">
-          <DialogHeader><DialogTitle>转采购单</DialogTitle></DialogHeader>
-          <p className="text-xs text-muted-foreground">按供应商自动拆分成多张采购单草稿。每行填转采购数量、供应商与单价；数量填 0 表示本次不转。</p>
+          <DialogHeader description={<>{<>按供应商自动拆分成多张采购单草稿。每行填转采购数量、供应商与单价；数量填 0 表示本次不转。</>}</>}><DialogTitle>转采购单</DialogTitle></DialogHeader>
+
           <div className="max-h-[50vh] overflow-y-auto py-2">
-            <table className="w-full min-w-[1500px] text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
-                  <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
-                  <th className="px-2 py-2 text-right w-24">可转余量</th>
-                  <th className="px-2 py-2 text-right w-24">转采购</th>
-                  <th className="px-2 py-2 text-left w-40">供应商</th>
-                  <th className="px-2 py-2 text-right w-24">单价</th>
-                </tr>
-              </thead>
+            <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 80 }, { key: 'remaining', title: '可转余量', width: 96, align: 'right' }, { key: 'quantity', title: '转采购', width: 96, align: 'right' }, { key: 'supplier', title: '供应商', width: 160 }, { key: 'unitPrice', title: '单价', width: 96, align: 'right' }]} columnStorageKey="requisition-convert-items" minWidth={1000}>
               <tbody>
                 {convertRows.map((r, idx) => (
                   <tr key={r.requisitionItemId} className="border-b border-border/40">
-                    <ProductIdentityCells product={detail?.items?.find(item => item.id === r.requisitionItemId) ?? r} /><td className="px-3 py-3">{detail?.items?.find(item => item.id === r.requisitionItemId)?.unit || '—'}</td>
+                    <ProductIdentityCells compact product={detail?.items?.find(item => item.id === r.requisitionItemId) ?? r} /><td className="px-3 py-3">{detail?.items?.find(item => item.id === r.requisitionItemId)?.unit || '—'}</td>
                     <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{r.remaining}</td>
                     <td className="px-2 py-2"><Input quantity type="number" step={qtyStep(allowDecimalOf(r.productId))} min="0" max={r.remaining} value={r.quantity} onChange={e => setConvertRows(rows => rows.map((x, i) => i === idx ? { ...x, quantity: e.target.value } : x))} className="h-8 text-right tabular-nums" /></td>
                     <td className="px-2 py-2"><PickerField value={r.supplierName} placeholder="选择供应商" onOpen={() => setSupplierTarget({ scope: 'convert', index: idx })} /></td>
@@ -482,7 +466,7 @@ export default function RequisitionFormPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </ResizableTable>
           </div>
           <UncertainSubmitNotice
             visible={convertGuard.uncertain}

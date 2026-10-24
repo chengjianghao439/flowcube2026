@@ -49,8 +49,8 @@ function SourceDetails({ row, type, onClose }: { row: PartyLedgerRow; type: 1 | 
       : { receipt: null, entries: await getEntriesApi(row.recordId!) },
   })
   const canNavigate = !query.isFetching && !query.isPaused && !query.isError && !!query.data?.receipt && query.data.receipt.id === row.receiptId && query.data.receipt.type === type
-  return <Dialog open onOpenChange={v => !v && onClose()}><DialogContent className="max-w-4xl" aria-describedby={undefined}>
-    <DialogHeader><DialogTitle>收付款明细 · {row.documentNo}</DialogTitle></DialogHeader>
+  return <Dialog open onOpenChange={v => !v && onClose()}><DialogContent className="max-w-4xl">
+    <DialogHeader description={"核对本次收付款的登记与核销记录。"}><DialogTitle>收付款明细 · {row.documentNo}</DialogTitle></DialogHeader>
     {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} compact /> : query.isPending ? <p>正在加载明细…</p> : <div className="max-h-[65vh] space-y-4 overflow-auto">
       {query.data?.receipt && <>
         <p>{query.data.receipt.partyName} · 汇款 {money(query.data.receipt.amount)} · 已核销 {money(query.data.receipt.settledAmount)} · 未核销 {money(query.data.receipt.balance)}</p>
@@ -106,10 +106,12 @@ export default function PartyLedgerPage() {
     </div> },
   ]
   return <div className="space-y-4">
-    <PageHeader title={`${type === 2 ? '客户' : '供应商'}往来明细${data ? ` · ${data.party.name}` : ''}`} description="覆盖全部结算方式，按记账时间查看往来余额的每次变化。核销不重复计入收付款。" actions={<>
+    <PageHeader title={`${type === 2 ? '客户' : '供应商'}往来明细${data ? ` · ${data.party.name}` : ''}`}
+        description="覆盖全部结算方式，按记账时间查看往来余额的每次变化。核销不重复计入收付款。"  actions={<>
       <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>刷新</Button>
       <Button variant="outline" disabled={!data || query.isFetching || query.isError} onClick={() => data && exportLedger(data)}>导出 CSV</Button>
     </>} />
+
     <FilterCard>
       <Label htmlFor={`${dateControlId}-start`}>记账日期</Label>
       <DatePicker id={`${dateControlId}-start`} value={draft.startDate} onChange={startDate => setDraft(v => ({ ...v, startDate }))} max={draft.endDate || undefined} />

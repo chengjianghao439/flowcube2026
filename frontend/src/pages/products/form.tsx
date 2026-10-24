@@ -297,6 +297,7 @@ export default function ProductFormPage() {
       )}
       <ActionBar
         title={isNew ? '新增商品' : '编辑商品'}
+        description="维护商品规格、单位与价格。"
         subtitle={isEdit || isDirty ? (
           <>
             {isEdit && <EditModeBadge />}

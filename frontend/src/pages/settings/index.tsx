@@ -15,6 +15,7 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { todayYmd } from '@/lib/dateTime'
+import { groupSettings } from './settingsSections'
 
 const LOGO_MAX_BYTES = 2 * 1024 * 1024
 const LOGO_ACCEPT = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml']
@@ -26,6 +27,7 @@ export default function SettingsPage() {
   const qc = useQueryClient()
 
   const { data } = useQuery({ queryKey: ['settings'], queryFn: () => getSettingsApi() })
+  const sections = useMemo(() => groupSettings(data?.list ?? []), [data?.list])
   // 保存成功后回到默认（只读）态：页面状态本身的变化就是「已保存」的反馈
   const save = useMutation({
     mutationFn: updateSettingsApi,
@@ -112,16 +114,11 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="max-w-6xl space-y-4">
+    <div className="desktop-page-sample settings-page-sample space-y-5">
       <PageHeader
         title="系统设置"
-        description={editing ? (
-          <span className="inline-flex flex-wrap items-center gap-2">
-            <EditModeBadge />
-            <UnsavedBadge show={isDirty} />
-            <span>正在编辑全局配置，保存后立即生效并回到查看状态。</span>
-          </span>
-        ) : canUpdate ? '当前为查看状态；需要修改请点右上角「编辑」。' : '配置全局参数与角色权限。'}
+        description={!canUpdate ? <>当前账号无修改权限{isDirty && '。有未保存的更改，关闭标签前请先保存。'}</> : isDirty ? '有未保存的更改，关闭标签前请先保存。' : editing ? '正在编辑全局配置，保存后立即生效并回到查看状态。' : '维护企业资料与业务参数。'}
+        status={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /></> : undefined}
         actions={canUpdate ? (
           editing ? (
             <>
@@ -134,17 +131,13 @@ export default function SettingsPage() {
         ) : null}
       />
 
-      {isDirty && (
-        <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/5 px-4 py-2.5 text-sm text-warning-ink">
-          <span className="h-2 w-2 rounded-full bg-warning" />
-          有未保存的更改，关闭标签前请先保存。
-        </div>
-      )}
 
-      {/* 品牌标识 */}
-      <section className="rounded-lg border border-border bg-card">
-        <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted/30">
+
+      <div className="sample-settings-grid" data-editing={editing}>
+      <section className="sample-settings-card" aria-label="品牌标识">
+        <header><h2>品牌标识</h2><span className="sample-settings-count">公司 Logo</span></header>
+        <div className="sample-settings-brand flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="sample-logo-preview shrink-0">
             {logo?.url && !logoImgFailed ? (
               <img
                 src={logo.url}
@@ -158,8 +151,7 @@ export default function SettingsPage() {
           </div>
           <div className="min-w-0 flex-1 space-y-2.5">
             <div>
-              <h2 className="text-base font-semibold">品牌标识</h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
+              <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
                 公司 Logo 显示于 ERP 顶栏与打印单据模板（销售单/采购单/出库单/仓库任务单）。支持 {LOGO_FRIENDLY}，≤2MB，上传后立即生效。
               </p>
             </div>
@@ -176,24 +168,18 @@ export default function SettingsPage() {
                   {upload.isPending ? (<><Loader2 className="size-4 animate-spin" />上传中…</>) : (<><Upload className="size-4" />{logo?.url ? '更换 Logo' : '上传 Logo'}</>)}
                 </Button>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {canUpdate ? '点右上角「编辑」后可上传/更换 Logo。' : '当前账号无修改权限'}
-              </p>
-            )}
+            ) : canUpdate ? (
+              <p className="text-sm text-muted-foreground">点右上角「编辑」后可上传/更换 Logo。</p>
+            ) : null}
           </div>
         </div>
       </section>
 
-      {/* 基础参数 */}
-      <section className="rounded-lg border border-border bg-card">
-        <div className="border-b border-border/60 px-6 py-4">
-          <h2 className="text-base font-semibold">基础参数</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">影响业务流程的全局配置，保存后立即生效。</p>
-        </div>
-        <div className="divide-y divide-border px-5">
-          {data?.list.filter(s => s.type !== 'image' && s.type !== 'timestamp').map(s => (
-            <div key={s.key_name} className="grid gap-3 py-4 sm:grid-cols-[minmax(280px,0.8fr)_1fr] sm:gap-8">
+      {sections.map(section => <section key={section.id} className="sample-settings-card" aria-label={section.title}>
+        <header><h2>{section.title}</h2><span className="sample-settings-count">{section.items.length} 项</span></header>
+        <div className="sample-settings-fields divide-y divide-border">
+          {section.items.map(s => (
+            <div key={s.key_name} className="sample-setting-row">
               <div>
                 {editing ? (
                   <Label htmlFor={`setting-${s.key_name}`} className="font-medium">{s.label}</Label>
@@ -228,12 +214,8 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
-        {!canUpdate && (
-          <div className="px-6 pb-6">
-            <p className="text-sm text-muted-foreground">当前账号无修改权限</p>
-          </div>
-        )}
-      </section>
+      </section>)}
+      </div>
     </div>
   )
 }

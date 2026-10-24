@@ -49,14 +49,14 @@ export function FilterCard({
 
   if (!collapsible) {
     return (
-      <div className={cn('flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3', className)}>
+      <div className={cn('desktop-filter-card desktop-filter-inline flex min-w-0 flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3', className)}>
         {children}
       </div>
     )
   }
 
   return (
-    <div className={cn('rounded-lg border border-border bg-card', className)}>
+    <div className={cn('desktop-filter-card rounded-lg border border-border bg-card', className)}>
       {/* 折叠触发器 */}
       <button
         type="button"

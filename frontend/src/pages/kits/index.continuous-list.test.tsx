@@ -69,7 +69,7 @@ test.each([201, 5000, 5001])('配件有界收集%i个匹配并明确完整性，
   for (const url of requests) expect(url.searchParams.get('keyword')).toBe('APPLIED')
   expect(host.textContent).not.toMatch(/上一页|下一页|第 3 页/)
   const summary = host.querySelector('[role="status"]')?.textContent
-  if (total > 5000) expect(summary).toMatch(/5,000.*5,001.*缩小查询范围/)
+  if (total > 5000) { expect(summary).toMatch(/5,000.*5,001.*缩小查询范围/); expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围'); expect(host.querySelector('.desktop-page-description')?.textContent).toContain('库存按真实组件管理') }
   else expect(summary).toBe(`共 ${total.toLocaleString()} 条`)
 }, 20000)
 test('配件续批失败拒绝部分结果，原条件可重试', async () => {

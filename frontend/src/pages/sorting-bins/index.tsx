@@ -2,7 +2,8 @@
  * 分拣格管理页
  * 路由：/sorting-bins
  */
-import { useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useState, type ReactNode } from 'react'
+import PageHeader from '@/components/shared/PageHeader'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
@@ -58,9 +59,9 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>批量创建分拣格</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
+      <DialogContent className="fc-form-dialog max-w-2xl">
+        <DialogHeader description={"选择仓库并填写分拣格编号范围。"}><DialogTitle>批量创建分拣格</DialogTitle></DialogHeader>
+        <div className="fc-form-dialog-body space-y-4">
           <div>
             <Label htmlFor="sorting-batch-warehouse">仓库</Label>
             <Select value={warehouseId} onValueChange={setWarehouseId}>
@@ -98,25 +99,27 @@ export default function SortingBinsPage() {
   const [normalOpen, setNormalOpen] = useState(false)
   const canAssign = can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN)
   const canView = can(PERMISSIONS.SORTING_BIN_VIEW)
+  const handoffNotice = context === 'invalid' || (context && !canAssign) ? <>
+    {context === 'invalid' && <span role="alert">交接信息无效，请返回订单重新进入分拣格分配。 </span>}
+    {context && !canAssign && <span role="alert">没有分配仓库任务的权限，请联系主管处理。</span>}
+  </> : undefined
   useEffect(() => {
     const latest = readSortingBinHandoff(path)
     setHandoffOpen(active && latest !== null && latest !== 'invalid')
   }, [path, active])
   return <>
-    {canView ? <SortingBinsManagementPage /> : <div className="space-y-3">
-      <h2 className="text-lg font-semibold">分拣格管理</h2>
+    {canView ? <SortingBinsManagementPage notice={handoffNotice} /> : <div className="space-y-3">
+      <PageHeader title="分拣格管理" description={handoffNotice ?? '查看任务交接并补分配分拣格。'} />
       {canAssign && <Button variant="outline" onClick={() => setNormalOpen(true)}>补分配分拣格</Button>}
       {canAssign && <AssignSortingBinDialog open={normalOpen} onClose={() => setNormalOpen(false)} />}
     </div>}
-    {context === 'invalid' && <p role="alert">交接信息无效，请返回订单重新进入分拣格分配。</p>}
-    {context && !canAssign && <p role="alert">没有分配仓库任务的权限，请联系主管处理。</p>}
     {context && context !== 'invalid' && canAssign && <AssignSortingBinDialog
       open={handoffOpen} onClose={() => setHandoffOpen(false)} taskId={context.taskId} warehouseId={context.warehouseId}
     />}
   </>
 }
 
-function SortingBinsManagementPage() {
+function SortingBinsManagementPage({ notice }: { notice?: ReactNode }) {
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [warehouseFilter, setWarehouseFilter] = useState<number | null>(null)
@@ -198,7 +201,7 @@ function SortingBinsManagementPage() {
     <>
       <BaseCrudPage<SortingBin>
         title="分拣格管理"
-        description="管理仓库 Put Wall 分拣格，查看占用状态"
+      description="核对分拣格位置、占用与关联任务。" notice={notice}
         canCreate={can(PERMISSIONS.SORTING_BIN_MANAGE)}
       canEdit={can(PERMISSIONS.SORTING_BIN_MANAGE)}
       canDelete={can(PERMISSIONS.SORTING_BIN_MANAGE)}
@@ -211,7 +214,7 @@ function SortingBinsManagementPage() {
         }).then(r => r ?? [])}
         deleteApi={(id) => deleteSortingBinApi(id)}
         deleteMessage="确认删除该分拣格？"
-        createLabel="+ 新建分拣格"
+        createLabel="新建分拣格"
         saveSuccessMessage={(editing) => editing ? '已更新' : '分拣格已创建'}
         formWidthClass="max-w-2xl"
         onOpen={handleOpen}

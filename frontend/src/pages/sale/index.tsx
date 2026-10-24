@@ -253,10 +253,11 @@ export default function SalePage() {
 
   // ── 渲染 ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
+    <div className="desktop-page-sample sale-list-sample space-y-4">
       {/* 页头 */}
       <PageHeader
         title="销售订单"
+        description={!error && data?.truncated ? <span role="status">已显示 {data.list.length.toLocaleString()} / 共 {total.toLocaleString()} 单，请缩小查询范围。</span> : '核对销售明细、订单状态与回款。'}
         actions={
           <>
             <Button variant="outline"
@@ -270,9 +271,9 @@ export default function SalePage() {
       />
 
       {cancel.recovery?.storageBlocked && <SaleCancelRecoveryNotice recovery={cancel.recovery} onConfirmed={()=>{setCancelOrder(null);setCancelReason('')}} />}
-      <OrderStatusFilter label="销售状态分类" value={statusFilter}
+      <div className="sample-status-strip"><OrderStatusFilter label="销售状态分类" value={statusFilter}
         options={QUICK_STATUSES}
-        onChange={status => updateParams({status: status || null, page: 1})} />
+        onChange={status => updateParams({status: status || null, page: 1})} /></div>
 
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
@@ -288,6 +289,7 @@ export default function SalePage() {
         </div>
       )}
 
+      <section className="sample-table-panel" aria-label="销售订单列表">
       {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} /> : <DataTable virtualized
         columns={columns}
         data={data?.list ?? []}
@@ -297,9 +299,8 @@ export default function SalePage() {
         columnStorageKey="sale:classic-v5"
       />}
 
-      {!error && data && (data.truncated
-        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已显示 {data.list.length.toLocaleString()} / 共 {total.toLocaleString()} 单，请缩小查询范围。</div>
-        : <ListSummary total={total} unit="单" />)}
+      {!error && data && !data.truncated && <ListSummary total={total} unit="单" />}
+      </section>
 
       {/* 二次确认弹窗 */}
       <ConfirmDialog

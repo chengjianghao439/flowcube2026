@@ -75,7 +75,7 @@ test.each([5000, 5001])('真实有界读取%i并明确完整/截断数量', asyn
   expect(data()?.list).toHaveLength(5000); expect(data()?.truncated).toBe(total > 5000)
   expect(requests).toHaveLength(50)
   const status = [...host.querySelectorAll('[role="status"]')].map(node => node.textContent).join(' ')
-  if (total > 5000) expect(/5,?000.*5,?001/.test(status) && /仅显示|未全部|未完整|截断/.test(status)).toBe(true)
+  if (total > 5000) { expect(/5,?000.*5,?001/.test(status) && /仅显示|未全部|未完整|截断/.test(status)).toBe(true); expect(host.querySelector('.desktop-page-description')?.textContent).toContain('待办未全部读取') }
   else expect(status).toContain('5,000')
   expect(host.textContent).not.toMatch(/上一页|下一页/)
 }, 15000)

@@ -4,6 +4,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { getByRole } from '@testing-library/dom'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { DEFAULT_LABEL_ELEMENTS } from '@/constants/printFieldDefs'
 import PrintTemplateEditor from './editor'
@@ -50,6 +52,11 @@ test('打开模板自动使用真实字段，保存不包含预览值', async ()
 test('无真实记录保持原空白布局', async () => {
   mocks.sample.mockResolvedValue(null); mocks.detail.mockResolvedValue({ ...tpl, layout: { elements: [] } })
   await render(); expect(host.textContent).toContain('暂无可用业务数据'); expect(host.textContent).toContain('从左侧拖拽字段到这里'); expect(host.textContent).not.toContain('真实测试商品')
+  const caption = host.querySelector('.desktop-page-description')!
+  expect(host.querySelectorAll('.desktop-page-description')).toHaveLength(1)
+  expect(caption.textContent).toContain('Delete 删除')
+  expect(host.textContent?.match(/Delete 删除/g)).toHaveLength(1)
+  expect(caption.textContent).toContain('毫米')
 })
 test('初始空白但有真实记录时提供可编辑默认字段布局', async () => {
   mocks.detail.mockResolvedValue({ ...tpl, layout: { elements: [] } })
@@ -148,4 +155,58 @@ test('legacy thermal58 without explicit width hydrates the same dimensions as th
   mocks.detail.mockResolvedValue({ ...tpl, paperSize: 'thermal58', layout: { elements: [] } })
   await render()
   expect(host.querySelector<HTMLInputElement>('input[title="宽度 mm"]')!.value).toBe('58')
+})
+
+test.each([
+  { type: 8, kind: 'barcode', key: 'barcodeHRI', label: '显示可读数字', initial: true },
+  { type: 8, kind: 'text', key: 'showLabel', label: '显示标签：前缀', initial: false },
+  { type: 1, kind: 'text', key: 'border', label: '显示边框', initial: false },
+  { type: 1, kind: 'table', key: 'showIndex', label: '显示序号列', initial: true },
+  { type: 1, kind: 'table', key: 'tableRowWrap', label: '表格自动换行', initial: true },
+])('$label 标签和开关关联，默认值、撤销重做和保存含义保持', async ({ type, kind, key, label, initial }) => {
+  const element = { ...DEFAULT_LABEL_ELEMENTS[8][1], id: 'control', type: kind, label: '控件样本', fieldKey: 'product_code', tableColumns: ['name', 'qty'], border: false }
+  mocks.detail.mockResolvedValue({ ...tpl, type, layout: { elements: [element] } })
+  await render()
+  act(() => getByRole(host, 'button', { name: /^元素：控件样本/ }).focus())
+  const control = getByRole(host, 'switch', { name: label })
+  expect(control.getAttribute('aria-checked')).toBe(String(initial))
+  const associatedLabel = host.querySelector<HTMLLabelElement>(`label[for="${control.id}"]`)
+  expect(associatedLabel).not.toBeNull()
+  const user = userEvent.setup()
+  await act(async () => { await user.click(associatedLabel!) })
+  expect(control.getAttribute('aria-checked')).toBe(String(!initial))
+  act(() => control.focus())
+  await act(async () => { await user.keyboard(' ') })
+  expect(control.getAttribute('aria-checked')).toBe(String(initial))
+  await act(async () => { await user.keyboard(' ') })
+  expect(control.getAttribute('aria-checked')).toBe(String(!initial))
+  await click('撤销')
+  expect(control.getAttribute('aria-checked')).toBe(String(initial))
+  await click('重做')
+  expect(control.getAttribute('aria-checked')).toBe(String(!initial))
+  await click('保存')
+  expect(mocks.save.mock.calls.at(-1)![0].layout.elements[0][key]).toBe(!initial)
+})
+
+test('对齐分段组支持方向键且不能清空已有对齐，多选附加字段保留原有未知字段', async () => {
+  const element = { ...DEFAULT_LABEL_ELEMENTS[8][1], id: 'control', type: 'table', label: '控件样本', fieldKey: 'itemsTable', textAlign: 'left', tableColumns: ['name', 'qty'], nameAttrs: ['color', 'legacy'] }
+  mocks.detail.mockResolvedValue({ ...tpl, type: 1, layout: { elements: [element] } })
+  await render()
+  act(() => getByRole(host, 'button', { name: /^元素：控件样本/ }).focus())
+  const align = getByRole(host, 'radiogroup', { name: '对齐方式' })
+  const left = getByRole(align, 'radio', { name: '左对齐' })
+  const center = getByRole(align, 'radio', { name: '居中对齐' })
+  const user = userEvent.setup()
+  act(() => left.focus())
+  await act(async () => { await user.keyboard('{ArrowRight}{Enter}{Enter}{Delete}') })
+  expect(document.activeElement).toBe(center)
+  expect(center.getAttribute('aria-checked')).toBe('true')
+  const attrs = getByRole(host, 'toolbar', { name: '名称后附加信息' })
+  await act(async () => { await user.click(getByRole(attrs, 'button', { name: '单位' })) })
+  await click('保存')
+  expect(mocks.save.mock.calls.at(-1)![0].layout.elements[0]).toMatchObject({ x: element.x, y: element.y, textAlign: 'center', nameAttrs: ['color', 'legacy', 'unit'] })
+  act(() => getByRole(host, 'button', { name: /^元素：控件样本/ }).focus())
+  await act(async () => { await user.keyboard('{ArrowRight}') })
+  await click('保存')
+  expect(mocks.save.mock.calls.at(-1)![0].layout.elements[0]).toMatchObject({ x: element.x + 1, y: element.y })
 })

@@ -199,6 +199,7 @@ export default function ReplenishmentPage() {
         }
       />
 
+
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (
@@ -241,14 +242,14 @@ export default function ReplenishmentPage() {
 
       <Dialog open={confirmOpen} onOpenChange={v => !v && setConfirmOpen(false)}>
         <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
+          <DialogHeader description={<>{<>
+              将勾选的 <span className="font-semibold text-foreground">{selectedRows.length}</span> 项补货建议生成一张采购申请单（仓库「
+              {selectedRows[0]?.warehouseName ?? '—'}」），保存为草稿，核对后提交审批。创建时重新校验需求和覆盖；建议数量已满足包装与起订规则。
+            </>}</>}>
             <DialogTitle>生成采购申请单</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
-            <p className="text-sm text-muted-foreground">
-              将勾选的 <span className="font-semibold text-foreground">{selectedRows.length}</span> 项补货建议生成一张采购申请单（仓库「
-              {selectedRows[0]?.warehouseName ?? '—'}」），保存为草稿，核对后提交审批。创建时重新校验需求和覆盖；建议数量已满足包装与起订规则。
-            </p>
+
             <div className="max-h-56 overflow-auto rounded-md border">
               <ReportTable className="w-full min-w-[1500px] text-sm">
                 <thead className="sticky top-0 bg-muted/60">

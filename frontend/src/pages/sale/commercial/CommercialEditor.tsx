@@ -456,9 +456,10 @@ export default function CommercialEditor({
   interaction.current.warehouseId = String(entryWarehouseId)
   const permission = order ? PERMISSIONS.SALE_ORDER_UPDATE : PERMISSIONS.SALE_ORDER_CREATE
   return (
-    <div ref={entryRef} data-order-entry onKeyDown={navigateEntry} className="flex flex-col gap-2.5">
+    <div ref={entryRef} data-order-entry onKeyDown={navigateEntry} className="sample-order-editor flex flex-col gap-4">
       <ActionBar
         title={order ? `${order.orderNo} · ${adjust ? '修改订单' : '编辑'}` : '新建销售单'}
+        description="核对客户、商品与发货安排。"
         subtitle={<UnsavedBadge show={snapshot !== original.current} />}
         rightActions={
           <>

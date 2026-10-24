@@ -97,7 +97,9 @@ export default function ReportsPage() {
   const [tab, setTab] = useState<Tab>('income')
   return (
     <div>
-      <PageHeader title="会计报表" description="利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）" />
+      <PageHeader title="会计报表"
+        description="利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）"  />
+
 
       <FilterCard className="mb-4">
         <div className="flex rounded-lg border border-border/70 bg-card p-0.5">

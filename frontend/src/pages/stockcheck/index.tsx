@@ -76,7 +76,9 @@ export default function StockCheckPage() {
 
   return (
     <div className="space-y-4">
-      <PageHeader title="库存盘点" description="创建盘点单并填写实盘数量，提交后自动调整库存" actions={can(PERMISSIONS.STOCKCHECK_CREATE) ? <Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button> : undefined} />
+      <PageHeader title="库存盘点"
+        description={!error && !isLoading && data?.truncated ? <><span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</span> 创建盘点单并填写实盘数量，提交后自动调整库存</> : '创建盘点单并填写实盘数量，提交后自动调整库存'}  actions={can(PERMISSIONS.STOCKCHECK_CREATE) ? <Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button> : undefined} />
+
       <FilterCard>
         <Input placeholder="搜索单号/仓库…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); }}>搜索</Button>
@@ -84,13 +86,11 @@ export default function StockCheckPage() {
       </FilterCard>
       {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} />
         : <DataTable virtualized preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list||[]} loading={isLoading} />}
-      {!error && !isLoading && data && (data.truncated
-        ? <div role="status" className="px-1 py-3 text-xs text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</div>
-        : <ListSummary total={total} unit="单" />)}
+      {!error && !isLoading && data && !data.truncated && <ListSummary total={total} unit="单" />}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>新建盘点单</DialogTitle></DialogHeader>
+          <DialogHeader description={<>{checkType==='2'?'分批盘点：只拉该档位到期未盘的商品（不停机）':'全盘：拉该仓库所有有库存的商品'}作为盘点明细</>}><DialogTitle>新建盘点单</DialogTitle></DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4 py-2">
             <div className="space-y-1">
               <Label>选择仓库 *</Label>
@@ -105,7 +105,6 @@ export default function StockCheckPage() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">{checkType==='2'?'分批盘点：只拉该档位到期未盘的商品（不停机）':'全盘：拉该仓库所有有库存的商品'}作为盘点明细</p>
             </div>
             <div className="space-y-1">
               <Label>盘点方式</Label>

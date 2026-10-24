@@ -1,8 +1,9 @@
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { money } from '@/lib/format'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ReportTable } from '@/components/shared/ReportTable'
+import { ReportPanel } from '@/components/shared/ReportPanel'
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -20,11 +21,9 @@ import { downloadExport } from '@/lib/exportDownload'
 import type { TableColumn } from '@/types'
 import { beijingPeriod } from '@/lib/dateTime'
 
-
 function LedgerTable({ title, rows, total, accent }: { title: string; rows: Array<{ code: string; name: string; amount: number }>; total: number; accent?: boolean }) {
   return (
-    <div className="rounded-lg border border-border">
-      <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">{title} <span className="ml-1 text-muted-foreground font-normal">{money(total)}</span></div>
+    <ReportPanel title={title} action={<span className="text-sm tabular-nums text-muted-foreground">{money(total)}</span>} className="fc-ledger-panel">
       <ReportTable className="w-full text-sm">
         <tbody>
           {rows.map(r => (
@@ -37,7 +36,7 @@ function LedgerTable({ title, rows, total, accent }: { title: string; rows: Arra
           {!rows.length && <tr><td colSpan={3} className="px-4 py-4 text-center text-muted-foreground">无数据</td></tr>}
         </tbody>
       </ReportTable>
-    </div>
+    </ReportPanel>
   )
 }
 
@@ -118,6 +117,7 @@ export default function ConsolidationPage() {
         }
       />
 
+
       {/* 账套列表 */}
       <DataTable columns={companyColumns} data={companyList} rowKey="id" loading={!companies} emptyText="暂无账套" />
 
@@ -156,12 +156,12 @@ export default function ConsolidationPage() {
 
       <Dialog open={createOpen} onOpenChange={open => { if (!createInFlight.current) setCreateOpen(open) }}>
         <DialogContent className="sm:max-w-xl">
-          <DialogHeader><DialogTitle>新建账套</DialogTitle><DialogDescription>填写账套编码和名称，创建期间请等待操作完成。</DialogDescription></DialogHeader>
+          <DialogHeader description={<>{<>填写账套编码和名称，创建期间请等待操作完成。</>} {<>新账套会自动复制主账套的预置会计科目；后续可在会计科目页维护其独立科目。</>}</>}><DialogTitle>新建账套</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             <label className="space-y-2 text-sm">账套编码<Input disabled={createMutation.isPending} placeholder="如 SUB5" value={newCode} onChange={e => setNewCode(e.target.value)} /></label>
             <label className="space-y-2 text-sm">账套名称<Input disabled={createMutation.isPending} placeholder="账套名称" value={newName} onChange={e => setNewName(e.target.value)} /></label>
           </div>
-          <p className="text-xs leading-6 text-muted-foreground">新账套会自动复制主账套的预置会计科目；后续可在会计科目页维护其独立科目。</p>
+
           <DialogFooter><Button variant="outline" disabled={createMutation.isPending} onClick={() => { if (!createInFlight.current) setCreateOpen(false) }}>取消</Button><Button disabled={createMutation.isPending} onClick={createCompany}>{createMutation.isPending ? '创建中…' : '创建'}</Button></DialogFooter>
         </DialogContent>
       </Dialog>

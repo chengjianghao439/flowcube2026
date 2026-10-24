@@ -167,7 +167,8 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
 
   return (
     <>
-    <AppDialog
+    <AppDialog descriptionInHeader
+      description={legacyBalance ? <span className="text-warning-ink">历史余额含不足一分的尾差，请先核对</span> : "核对原账款、资金账户、实际日期与金额。"}
       open={open}
       onOpenChange={v => { if (!v) { onClose(); closePrompt() } }}
       dialogId="payment-register"
@@ -205,7 +206,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
         {record && (
           <div className="mb-4 space-y-1 text-sm text-muted-foreground">
             <p>关联单号：<span className="text-doc-code-strong">{record.orderNo}</span> &nbsp;·&nbsp; {partyLabel}：{record.partyName}</p>
-            <p>余额：<span className="font-medium text-destructive-ink">{legacyBalance && record.balance != null && Number.isFinite(Number(record.balance)) ? `¥${String(record.balance)}` : money(record.balance)}</span>{legacyBalance && <span className="ml-2 text-warning-ink">历史余额含不足一分的尾差，请先核对</span>}</p>
+            <p>余额：<span className="font-medium text-destructive-ink">{legacyBalance && record.balance != null && Number.isFinite(Number(record.balance)) ? `¥${String(record.balance)}` : money(record.balance)}</span></p>
           </div>
         )}
         <div className="grid grid-cols-2 gap-4">

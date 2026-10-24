@@ -148,6 +148,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />}
 
       <PaymentQueryDialog
+        title={`查询${actionLabel}单`}
         open={queryOpen}
         initial={query}
         onClose={() => setQueryOpen(false)}

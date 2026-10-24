@@ -48,6 +48,15 @@ test('规则后台数据刷新不得覆盖尚未保存的编辑', async () => {
   expect(input().value).toBe('17'); expect(mocks.guard.mock.lastCall?.[1]).toBe(true)
 })
 
+test('每档规则的周期与上限有各自的可读名称，标签准确对应原数值', () => {
+  const interval = host.querySelector<HTMLInputElement>('input[aria-label="A 类盘点周期（天）"]')
+  const limit = host.querySelector<HTMLInputElement>('input[aria-label="A 类单次上限（SKU）"]')
+  expect(interval).not.toBeNull()
+  expect(limit).not.toBeNull()
+  expect(interval?.value).toBe('10')
+  expect(limit?.value).toBe('50')
+})
+
 test('保存期间继续编辑，成功回执不能清掉后续草稿或关闭保护', async () => {
   let finish!: (result: object) => void
   mocks.save.mockImplementation(() => new Promise(resolve => { finish = resolve }))

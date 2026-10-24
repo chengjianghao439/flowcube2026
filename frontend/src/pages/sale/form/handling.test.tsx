@@ -71,6 +71,9 @@ async function input(el: HTMLInputElement, value: string) { await act(async () =
 test('真实普通新建仅初始化来源SKU/基本单位/原仓；客户主动选当前报价，POST原API准确source', async () => {
   requests.length = 0; actualAdapter()
   await page('/sale/new?handlingSourceId=11', async host => {
+    expect(host.querySelector('.desktop-page-description')?.textContent).toContain('处理来源：')
+    expect(host.querySelector('.desktop-page-description')?.textContent).toContain('仅原商品、原仓、基本单位')
+    expect(host.textContent?.match(/处理来源：/g)).toHaveLength(1)
     await click('载入来源商品')
     expect(host.textContent).toContain('原仓'); expect([...host.querySelectorAll('button')].some(b => b.textContent?.trim() === '添加商品')).toBe(false)
     expect(host.querySelector<HTMLInputElement>('input[aria-label="当前商品数量"]')!.value).toBe('0')

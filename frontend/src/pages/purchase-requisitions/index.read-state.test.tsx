@@ -146,6 +146,8 @@ for (const spec of specs) {
     expect(requests).toHaveLength(25); expect(data.list).toHaveLength(5000); expect(data.truncated).toBe(true)
     const status = [...host.querySelectorAll('[role="status"]')].map(node => node.textContent).join(' ')
     expect(/5,?000.*5,?001/.test(status) && /缩小|未全部|未取齐|截断/.test(status)).toBe(true)
+    expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围')
+    expect(host.querySelectorAll('.desktop-page-description')).toHaveLength(1)
   }, 20000)
   test(`${spec.id}-R06 a successful complete empty response keeps its existing empty view`, async () => {
     respond = url => batch(url, 0); await mount(spec); await wait(() => expect(cache(spec)?.state.status).toBe('success'))

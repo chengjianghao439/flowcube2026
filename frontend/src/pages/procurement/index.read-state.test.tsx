@@ -146,6 +146,8 @@ for (const spec of specs) {
     expect(requests).toHaveLength(25); expect(data.list).toHaveLength(5000); expect(data.truncated).toBe(true)
     const status = [...host.querySelectorAll('[role="status"]')].map(node => node.textContent).join(' ')
     expect(/5,?000.*5,?001/.test(status) && /缩小|未全部|未取齐|截断/.test(status)).toBe(true)
+    expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围')
+    expect(host.querySelectorAll('.desktop-page-description')).toHaveLength(1)
   }, 20000)
   test(`${spec.id}-R06 a successful complete empty response keeps its existing empty view`, async () => {
     respond = url => batch(url, 0); await mount(spec); await wait(() => expect(cache(spec)?.state.status).toBe('success'))
@@ -171,6 +173,7 @@ for (const spec of specs) {
     respond = () => new Promise(resolve => { release = resolve }); await mount(spec)
     await wait(() => expect(release).toBeTypeOf('function'))
     await click(spec.id === 'PLAN' ? '+ 生成计划' : '查询')
+    expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('已有计划、申请和采购草稿会先行抵扣')
     const selector = spec.id === 'PLAN' ? 'input[placeholder="默认按生成时间"]' : 'input[placeholder="请输入关键字…"]'
     const input = document.querySelector<HTMLInputElement>(`[role="dialog"] ${selector}`)!
     await act(async () => input.focus())

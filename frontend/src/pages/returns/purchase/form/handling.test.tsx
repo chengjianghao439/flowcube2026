@@ -53,6 +53,8 @@ test('真实PR加载完整原PO但重复SKU不自动选；员工第2行精确sou
   posts.length=0;actualAdapter()
   await page('/returns/purchase/new?handlingSourceId=11',async host=>{
     await input(host.querySelector<HTMLInputElement>('input[placeholder="输入原单号"]')!,'PO31');await click('载入')
+    expect(host.querySelector('.desktop-page-description')?.textContent).toContain('已锚定原单 PO31')
+    expect(host.textContent?.match(/已锚定原单/g)).toHaveLength(1)
     expect(host.querySelector('input[placeholder="数量"]')).toBeNull()
     expect(host.textContent).toContain('同商品多行须明确选择')
     await click('选择原采购第 2 行')

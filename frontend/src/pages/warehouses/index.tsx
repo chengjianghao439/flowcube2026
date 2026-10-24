@@ -69,7 +69,7 @@ export default function WarehousesPage() {
   return (
     <BaseCrudPage<Warehouse>
       title="仓库管理"
-      description="管理仓库档案信息"
+      description="维护仓库资料与启用状态。"
       canEdit={can(PERMISSIONS.WAREHOUSE_UPDATE)}
       canDelete={can(PERMISSIONS.WAREHOUSE_DELETE)}
       columns={columns}
@@ -100,7 +100,7 @@ export default function WarehousesPage() {
         const isEdit = !!editing
         return (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className={`grid gap-4 ${isEdit ? 'grid-cols-2' : 'grid-cols-1'}`}>
               {isEdit && (
                 <div className="space-y-2">
                   <Label htmlFor="warehouse-code">仓库编码</Label>

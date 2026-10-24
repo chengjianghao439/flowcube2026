@@ -141,7 +141,7 @@ export default function LogisticsPage() {
     <div className="space-y-4">
       <PageHeader
         title="物流运单"
-        description="按包裹查看运单、取号状态与物流轨迹，处理待录入和取号失败的运单。"
+        description="核对包裹运单、取号与物流状态。"
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/waybills').catch(e => toast.error((e as Error).message))}>导出</Button>
@@ -182,9 +182,9 @@ export default function LogisticsPage() {
 
       <Dialog open={!!trackTarget} onOpenChange={v => { if (!v) { setTrackTarget(null); setTrackingInput('') } }}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>录入快递单号</DialogTitle></DialogHeader>
+          <DialogHeader description={<>{<>运单 {trackTarget?.waybillNo}｜{trackTarget?.carrierName ?? '未指定承运商'}</>}</>}><DialogTitle>录入快递单号</DialogTitle></DialogHeader>
           <div className="space-y-4 py-3">
-            <p className="text-sm text-muted-foreground">运单 {trackTarget?.waybillNo}｜{trackTarget?.carrierName ?? '未指定承运商'}</p>
+
             <div>
               <Label htmlFor="logistics-tracking-number">快递单号</Label>
               <Input id="logistics-tracking-number" className="mt-2 font-mono" placeholder="输入承运商快递单号" value={trackingInput} onChange={e => setTrackingInput(e.target.value)} autoFocus />

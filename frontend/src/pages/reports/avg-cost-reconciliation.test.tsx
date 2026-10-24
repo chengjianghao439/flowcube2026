@@ -49,6 +49,9 @@ test.each([['avg_cost','当前移动均价'],['cost_price','当前进价估值']
 
 test('仅实际截断时简短显示200/201行范围，金额合计保持接口两位',()=>{
   Object.assign(state.data,{truncated:true,matchedRows:201,totalRows:200,list:[row(3.4567,1)]});draw()
+  expect(host.querySelector('.desktop-page-description')?.textContent).toContain('检测到 1 项账面差异')
+  expect(host.querySelector('.desktop-page-description')?.textContent).toContain('200 / 201')
+  expect(host.textContent?.match(/价值差合计为已显示范围/g)).toHaveLength(1)
   expect(host.textContent).toContain('200 / 201');expect(host.textContent).toContain('价值差合计为已显示范围')
   Object.assign(state.data,{truncated:false,matchedRows:200});draw()
   expect(host.textContent).not.toContain('价值差合计为已显示范围')

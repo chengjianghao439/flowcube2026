@@ -1,8 +1,10 @@
+import { ChartContainer } from '@/components/shared/ChartContainer'
+import { ChartTooltipContent, ChartLegendContent } from '@/components/shared/ChartPresentation'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Wallet, BarChart3, ShoppingCart, HandCoins, ReceiptText } from 'lucide-react'
 import {
-  ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
 } from 'recharts'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -14,7 +16,7 @@ import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { todayYmd } from '@/lib/dateTime'
 import DataTable from '@/components/shared/DataTable'
 import { getKpiApi, type KpiMetric, type KpiByWarehouseRow } from '@/api/reports'
-import { chartTooltip, axisTick, money, wan } from '@/components/dashboard/chartTheme'
+import { chartGrid, CHART_TONES, axisTick, money, wan } from '@/components/dashboard/chartTheme'
 import type { TableColumn } from '@/types'
 
 /**
@@ -103,9 +105,10 @@ export default function KpiPage() {
     <div className="space-y-4">
       <PageHeader
         title="经营 KPI"
-        description={`核心经营指标与 ${data?.prevPeriod ? '上期(' + data.prevPeriod + ')' : '上期'} 环比`}
+        description={<>销售按已出库订单的业务日期统计，净额扣除整单折扣；回款按到账日期统计。受限仓库账号仅统计可归属且有权查看的销售单回款。分仓以订单头仓库归属，环比遇负值上期按其绝对值计算。{costBasisNote}</>}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <span className="desktop-page-meta">与 {data?.prevPeriod ? '上期(' + data.prevPeriod + ')' : '上期'} 环比</span>
             <Select value={period} onValueChange={setPeriod}>
               <SelectTrigger aria-label="统计月份" className="h-9 w-36">
                 <SelectValue placeholder="选择月份" />
@@ -119,7 +122,6 @@ export default function KpiPage() {
         }
       />
 
-      <p className="text-xs leading-5 text-muted-foreground">销售按已出库订单的业务日期统计，净额扣除整单折扣；回款按到账日期统计。受限仓库账号仅统计可归属且有权查看的销售单回款。分仓以订单头仓库归属，环比遇负值上期按其绝对值计算。{costBasisNote}</p>
       <ReportQueryFeedback title="经营 KPI" hasData={!!data} isError={isError} isFetching={isFetching} error={error} onRetry={() => void refetch()} />
       {(!isError || !!data) && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -145,18 +147,18 @@ export default function KpiPage() {
             emptyDescription="当前期间范围内没有销售或回款记录"
           >
             <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
+              <ChartContainer width="100%" height="100%">
                 <ComposedChart data={chartRows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={axisTick} />
-                  <YAxis tick={axisTick} width={48} tickFormatter={wan} />
-                  <Tooltip formatter={(v) => money(Number(v ?? 0))} contentStyle={chartTooltip} cursor={{ stroke: 'hsl(var(--border))' }} />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
-                  <Bar dataKey="回款" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} maxBarSize={24} />
-                  <Line type="monotone" dataKey="销售净额" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="毛利" stroke="hsl(var(--warning))" strokeWidth={2} dot={{ r: 3 }} />
+                  <CartesianGrid {...chartGrid} />
+                  <XAxis axisLine={false} tickLine={false} tickMargin={10} dataKey="month" padding={{ left: 12, right: 24 }} tick={axisTick} />
+                  <YAxis axisLine={false} tickLine={false} tick={axisTick} width={48} tickFormatter={wan} />
+                  <Tooltip formatter={(v) => money(Number(v ?? 0))} content={<ChartTooltipContent />} cursor={{ stroke: 'hsl(var(--border))' }} />
+                  <Legend content={<ChartLegendContent />} />
+                  <Bar dataKey="回款" fill={CHART_TONES.success} radius={[5, 5, 0, 0]} maxBarSize={24} />
+                  <Line type="monotone" dataKey="销售净额" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 2.5, strokeWidth: 0, fill: 'hsl(var(--primary))' }} activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--card))' }} />
+                  <Line type="monotone" dataKey="毛利" stroke={CHART_TONES.warning} strokeWidth={2} dot={{ r: 2.5, strokeWidth: 0, fill: CHART_TONES.warning }} activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--card))' }} />
                 </ComposedChart>
-              </ResponsiveContainer>
+              </ChartContainer>
             </div>
           </ReportPanel>
 

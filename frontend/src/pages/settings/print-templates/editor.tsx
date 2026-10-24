@@ -36,6 +36,8 @@ import { getPrintTemplateDetailApi, createPrintTemplateApi, updatePrintTemplateA
 import { confirmAction } from '@/lib/confirm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -574,6 +576,7 @@ interface PropertiesPanelProps {
 
 function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, onToggle, onEndTextEdit, onDelete, onDeleteMulti, onAlign, onDistribute }: PropertiesPanelProps) {
   const [customColKey, setCustomColKey] = useState('')
+  const controlId = useId()
   if (!el) {
     return (
       <div className="flex w-60 shrink-0 flex-col border-l bg-muted/20">
@@ -730,14 +733,9 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
               </Select>
             </div>
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">显示可读数字</label>
-              <button
-                className={`relative h-5 w-9 rounded-full transition-colors ${el.barcodeHRI !== false ? 'bg-primary' : 'bg-input'}`}
-                role="switch" aria-checked={el.barcodeHRI !== false} aria-label="显示可读数字"
-                onClick={() => onChange(el.id, { barcodeHRI: el.barcodeHRI === false })}
-              >
-                <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.barcodeHRI !== false ? 'translate-x-4' : 'translate-x-0.5'}`} />
-              </button>
+              <label htmlFor={`${controlId}-hri`} className="cursor-pointer text-xs font-medium text-muted-foreground">显示可读数字</label>
+              <Switch id={`${controlId}-hri`} aria-label="显示可读数字" checked={el.barcodeHRI !== false}
+                onCheckedChange={checked => onChange(el.id, { barcodeHRI: checked })} />
             </div>
           </div>
         )}
@@ -792,14 +790,9 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
         {/* 标签 text：显示「标签：」前缀开关（默认关，与真机一致） */}
         {isLabel && el.type === 'text' && (
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-muted-foreground">显示「标签：」前缀</label>
-            <button
-              className={`relative h-5 w-9 rounded-full transition-colors ${el.showLabel ? 'bg-primary' : 'bg-input'}`}
-              role="switch" aria-checked={el.showLabel} aria-label="显示标签：前缀"
-              onClick={() => onChange(el.id, { showLabel: !el.showLabel })}
-            >
-              <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.showLabel ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </button>
+            <label htmlFor={`${controlId}-prefix`} className="cursor-pointer text-xs font-medium text-muted-foreground">显示「标签：」前缀</label>
+            <Switch id={`${controlId}-prefix`} aria-label="显示标签：前缀" checked={!!el.showLabel}
+              onCheckedChange={checked => onChange(el.id, { showLabel: checked })} />
           </div>
         )}
 
@@ -807,37 +800,32 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
         {el.type !== 'divider' && el.type !== 'barcode' && el.type !== 'image' && (
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">对齐方式</label>
-            <div className="flex gap-1">
+            <ToggleGroup type="single" value={el.textAlign} aria-label="对齐方式" className="flex w-full"
+              onValueChange={value => {
+                if (value === 'left' || value === 'center' || value === 'right') onChange(el.id, { textAlign: value })
+              }}>
               {(['left', 'center', 'right'] as const).map(a => (
-                <Button
+                <ToggleGroupItem
                   key={a}
-                  size="sm"
-                  variant={el.textAlign === a ? 'default' : 'outline'}
+                  value={a}
                   className="flex-1 p-0"
-                  aria-label={`对齐方式 ${a}`}
-                  aria-pressed={el.textAlign === a}
-                  onClick={() => onChange(el.id, { textAlign: a })}
+                  aria-label={a === 'left' ? '左对齐' : a === 'center' ? '居中对齐' : '右对齐'}
                 >
                   {a === 'left' && <AlignLeft className="size-3.5" />}
                   {a === 'center' && <AlignCenter className="size-3.5" />}
                   {a === 'right' && <AlignRight className="size-3.5" />}
-                </Button>
+                </ToggleGroupItem>
               ))}
-            </div>
+            </ToggleGroup>
           </div>
         )}
 
         {/* 边框（仅单据画布） */}
         {!isLabel && el.type === 'text' && (
           <div className="flex items-center justify-between">
-            <label className="text-xs font-medium text-muted-foreground">显示边框</label>
-            <button
-              className={`relative h-5 w-9 rounded-full transition-colors ${el.border ? 'bg-primary' : 'bg-input'}`}
-              role="switch" aria-checked={el.border} aria-label="显示边框"
-              onClick={() => onChange(el.id, { border: !el.border })}
-            >
-              <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.border ? 'translate-x-4' : 'translate-x-0.5'}`} />
-            </button>
+            <label htmlFor={`${controlId}-border`} className="cursor-pointer text-xs font-medium text-muted-foreground">显示边框</label>
+            <Switch id={`${controlId}-border`} aria-label="显示边框" checked={!!el.border}
+              onCheckedChange={checked => onChange(el.id, { border: checked })} />
           </div>
         )}
 
@@ -846,47 +834,31 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
           <div className="space-y-3">
             {/* 序号列显隐（评审增强：可显示/隐藏） */}
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-muted-foreground">显示序号列</label>
-              <button
-                className={`relative h-5 w-9 rounded-full transition-colors ${el.showIndex !== false ? 'bg-primary' : 'bg-input'}`}
-                role="switch" aria-checked={el.showIndex !== false} aria-label="显示序号列"
-                onClick={() => onToggle(el.id, 'showIndex')}
-              >
-                <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.showIndex !== false ? 'translate-x-4' : 'translate-x-0.5'}`} />
-              </button>
+              <label htmlFor={`${controlId}-index`} className="cursor-pointer text-xs font-medium text-muted-foreground">显示序号列</label>
+              <Switch id={`${controlId}-index`} aria-label="显示序号列" checked={el.showIndex !== false}
+                onCheckedChange={() => onToggle(el.id, 'showIndex')} />
             </div>
 
             {/* 名称列后拼接（颜色/型号/单位/货号）：勾选的字段不再独立成列，自动排在名称后面 */}
             {(el.tableColumns ?? ['name', 'qty', 'price', 'amount']).includes('name') && (
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">名称后附加信息</label>
-                <div className="flex flex-wrap gap-1.5">
+                <ToggleGroup type="multiple" value={el.nameAttrs ?? []} aria-label="名称后附加信息"
+                  className="flex flex-wrap justify-start bg-transparent p-0"
+                  onValueChange={nameAttrs => onChange(el.id, { nameAttrs })}>
                   {(['color', 'spec', 'unit', 'articleNo'] as const).map(key => {
                     const def = TABLE_COLUMN_OPTIONS.find(c => c.key === key) ?? { key, label: key }
-                    const checked = (el.nameAttrs ?? []).includes(key)
                     return (
-                      <button
+                      <ToggleGroupItem
                         key={key}
-                        type="button"
-                        role="checkbox"
-                        aria-checked={checked}
-                        onClick={() => {
-                          const next = checked
-                            ? (el.nameAttrs ?? []).filter(k => k !== key)
-                            : [...(el.nameAttrs ?? []), key]
-                          onChange(el.id, { nameAttrs: next })
-                        }}
-                        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                          checked
-                            ? 'border-primary bg-primary/10 text-primary'
-                            : 'border-border text-muted-foreground hover:border-primary/50'
-                        }`}
+                        value={key}
+                        className="border border-border px-2 data-[state=on]:border-primary/25 data-[state=on]:bg-primary/5 data-[state=on]:shadow-none"
                       >
                         {def.label}
-                      </button>
+                      </ToggleGroupItem>
                     )
                   })}
-                </div>
+                </ToggleGroup>
                 <p className="text-xs text-muted-foreground">勾选后拼接在商品名称后（如「商品A [黑色] [500g] [件]」），不再作为独立列。</p>
               </div>
             )}
@@ -1043,14 +1015,9 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
                 <span className="shrink-0 text-xs text-muted-foreground">mm</span>
               </div>
               <div className="flex items-center justify-between">
-                <label className="text-xs font-medium text-muted-foreground">自动换行</label>
-                <button
-                  className={`relative h-5 w-9 rounded-full transition-colors ${el.tableRowWrap !== false ? 'bg-primary' : 'bg-input'}`}
-                  role="switch" aria-checked={el.tableRowWrap !== false} aria-label="表格自动换行"
-                  onClick={() => onToggle(el.id, 'tableRowWrap')}
-                >
-                  <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${el.tableRowWrap !== false ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                </button>
+                <label htmlFor={`${controlId}-wrap`} className="cursor-pointer text-xs font-medium text-muted-foreground">自动换行</label>
+                <Switch id={`${controlId}-wrap`} aria-label="表格自动换行" checked={el.tableRowWrap !== false}
+                  onCheckedChange={() => onToggle(el.id, 'tableRowWrap')} />
               </div>
             </div>
           </div>
@@ -1850,7 +1817,10 @@ export default function PrintTemplateEditor() {
       ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
     }
     function onKey(e: KeyboardEvent) {
+      // Radix 选择组/浮层已消费的按键不再作为画布快捷键执行。
+      if (e.defaultPrevented) return
       const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
+      const inControl = e.target instanceof Element && !!e.target.closest('button, select, [role="switch"], [role="radio"], [role="combobox"], [contenteditable="true"]')
       const mod = e.ctrlKey || e.metaKey
       if (mod && !inField && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault()
@@ -1861,7 +1831,7 @@ export default function PrintTemplateEditor() {
       if (mod && !inField && (e.key === 'd' || e.key === 'D') && selectedIds.length) {
         e.preventDefault(); duplicateGroup(selectedIds); return
       }
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && !inField) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length && !inField && !inControl) {
         // 多选时整组删除（一次 snapshot）
         const ids = [...selectedIds]
         snapshot()
@@ -1869,7 +1839,7 @@ export default function PrintTemplateEditor() {
         setSelectedIds([])
       }
       if (e.key === 'Escape') setSelectedIds([])
-      if (selectedIds.length && !inField && ARROWS[e.key]) {
+      if (selectedIds.length && !inField && !inControl && ARROWS[e.key]) {
         e.preventDefault()
         snapshot()
         const step = e.shiftKey ? 5 : 1
@@ -1886,8 +1856,9 @@ export default function PrintTemplateEditor() {
   // isNew 不需要 hydrated（新建页没有远程数据）；编辑页等 remote 加载完成
   if (!isNew && (isLoading || hydrated === null)) {
     return (
-      <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden px-4 pb-4 pt-2">
-        <PageHeader title="编辑打印模板" description="加载中…" />
+      <div className="desktop-print-editor flex h-full min-h-0 flex-col gap-5 overflow-hidden">
+        <PageHeader title="编辑打印模板"
+        description="核对模板字段、纸张与打印版式。"  />
         <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" />
           正在加载模板…
@@ -1898,10 +1869,10 @@ export default function PrintTemplateEditor() {
 
   // ── Render ───────────────────────────────────────────────────
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden px-4 pb-4 pt-2">
+    <div className="desktop-print-editor flex h-full min-h-0 flex-col gap-5 overflow-hidden">
       <PageHeader
         title={isNew ? '新建打印模板' : `编辑打印模板 #${id}`}
-        description="从左侧拖入字段，在画布上点选/拖动/缩放调整版式（毫米坐标）；画布下方显示真实纸张尺寸，保存后打印以预览为准。"
+        description={`${preview ? '画布下方显示真实纸张尺寸，保存后打印以预览为准。' : '从左侧拖入字段，点选后拖动、缩放或在右侧修改属性；工具栏可放大画布，Delete 删除。画布下方显示真实纸张尺寸（毫米），保存后打印以预览为准。'}${isZplLabelType(type) ? '打印时按毫米坐标生成 ZPL。' : ''}`}
         actions={
           // 评审次要项：保存后（尤其新建跳转）给返回列表出口
           <Button type="button" size="sm" variant="outline" onClick={() => navigate(getWorkspaceListPath('/settings/print-templates'))}>
@@ -1910,6 +1881,7 @@ export default function PrintTemplateEditor() {
           </Button>
         }
       />
+
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
         <div className="flex shrink-0 flex-wrap items-center gap-3 border-b px-4 py-3">
@@ -2185,14 +2157,7 @@ export default function PrintTemplateEditor() {
                   : <span>暂无可用业务数据，保留当前模板</span>)}
               {preview && <span>· 预览模式</span>}
             </div>
-            {!preview && (
-              <p className="mx-auto text-xs text-muted-foreground text-center max-w-xl">
-                {isZplLabelType(type)
-                  ? '从左侧拖拽字段到画布 · 打印时按毫米坐标生成 ZPL · 工具栏可放大画布 · '
-                  : '从左侧拖拽字段到画布 · 点击选中元素后可拖动位置或在右侧修改属性 · 工具栏可放大画布 · '}
-                <kbd className="rounded border px-1">Delete</kbd> 删除
-              </p>
-            )}
+
 
             <div
               ref={canvasRef}

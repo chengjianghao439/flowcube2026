@@ -24,7 +24,6 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
-
 export default function TaxFilingPage() {
   const { companyId } = useCompanyStore()
   const [period, setPeriod] = useState(() => beijingPeriod())
@@ -36,6 +35,7 @@ export default function TaxFilingPage() {
         description="从会计科目发生额实时投影增值税/所得税申报表要素（税会差异，即税法与会计口径的差异，用调整项手工维护），供报税参考。"
         actions={<Button variant="outline" onClick={() => downloadExport('/export/tax-adjustments').catch(e => toast.error((e as Error).message))}>导出</Button>}
       />
+
 
       <FilterCard className="mb-4">
         <div className="text-sm font-medium">申报期间</div>
@@ -118,9 +118,9 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
       {tab === 'vat' ? (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            <div className="rounded-lg border border-border">
-              <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">增值税申报要素</div>
-              <div className="space-y-1.5 px-4 py-3 text-sm">
+            <div className="fc-tax-panel rounded-lg border border-border bg-card">
+              <h2 className="fc-report-section-title border-b border-border px-4 py-3 text-sm font-semibold">增值税申报要素</h2>
+              <div className="fc-accounting-facts space-y-1.5 px-4 py-3 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">销项税额（222102 贷方）</span><span className="tabular-nums">{money(vat?.salesTaxAmount ?? 0)}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">进项税额（222101 借方）</span><span className="tabular-nums">{money(vat?.inputTaxAmount ?? 0)}</span></div>
                 <div className="flex justify-between border-t border-border pt-2"><span>应纳税额（销项−进项+调整）</span><span className="tabular-nums font-semibold text-primary">{money(vat?.taxDue ?? 0)}</span></div>
@@ -128,11 +128,11 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
             </div>
           </div>
           <div className="space-y-2">
-            <div className="rounded-lg border border-border">
-              <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">税会差异调整（增值税）</div>
-              {canManage && <div className="flex gap-2 p-3">
-                <Input placeholder="调整项，如：视同销售" value={adjItem} onChange={e => { draftRevision.current += 1; setAdjItem(e.target.value) }} className="h-9" />
-                <Input placeholder="金额" type="number" value={adjAmount} onChange={e => { draftRevision.current += 1; setAdjAmount(e.target.value) }} className="h-9 w-28 text-right" />
+            <div className="fc-tax-panel rounded-lg border border-border bg-card">
+              <h2 className="fc-report-section-title border-b border-border px-4 py-3 text-sm font-semibold">税会差异调整（增值税）</h2>
+              {canManage && <div className="fc-tax-adjustment-form flex flex-wrap items-start gap-2 p-3">
+                <Input aria-label="增值税调整项" placeholder="调整项，如：视同销售" value={adjItem} onChange={e => { draftRevision.current += 1; setAdjItem(e.target.value) }} className="h-9" />
+                <Input aria-label="增值税调整金额" placeholder="金额" type="number" value={adjAmount} onChange={e => { draftRevision.current += 1; setAdjAmount(e.target.value) }} className="h-9 w-28 text-right" />
                 <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={submitAdjustment}>添加</Button>
               </div>}
             </div>
@@ -142,9 +142,9 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            <div className="rounded-lg border border-border">
-              <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">所得税申报要素</div>
-              <div className="space-y-1.5 px-4 py-3 text-sm">
+            <div className="fc-tax-panel rounded-lg border border-border bg-card">
+              <h2 className="fc-report-section-title border-b border-border px-4 py-3 text-sm font-semibold">所得税申报要素</h2>
+              <div className="fc-accounting-facts space-y-1.5 px-4 py-3 text-sm">
                 <div className="flex justify-between"><span className="text-muted-foreground">营业收入</span><span className="tabular-nums">{money(income?.revenue ?? 0)}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">成本费用</span><span className="tabular-nums">{money(income?.expense ?? 0)}</span></div>
                 <div className="flex justify-between border-t border-border pt-2"><span>利润总额</span><span className={`tabular-nums font-semibold ${(income?.profitTotal ?? 0) < 0 ? 'text-destructive-ink' : ''}`}>{money(income?.profitTotal ?? 0)}</span></div>
@@ -154,11 +154,11 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
             </div>
           </div>
           <div className="space-y-2">
-            <div className="rounded-lg border border-border">
-              <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">税会差异调整（所得税）</div>
-              {canManage && <div className="flex gap-2 p-3">
-                <Input placeholder="调整项，如：业务招待费调增" value={adjItem} onChange={e => { draftRevision.current += 1; setAdjItem(e.target.value) }} className="h-9" />
-                <Input placeholder="金额" type="number" value={adjAmount} onChange={e => { draftRevision.current += 1; setAdjAmount(e.target.value) }} className="h-9 w-28 text-right" />
+            <div className="fc-tax-panel rounded-lg border border-border bg-card">
+              <h2 className="fc-report-section-title border-b border-border px-4 py-3 text-sm font-semibold">税会差异调整（所得税）</h2>
+              {canManage && <div className="fc-tax-adjustment-form flex flex-wrap items-start gap-2 p-3">
+                <Input aria-label="所得税调整项" placeholder="调整项，如：业务招待费调增" value={adjItem} onChange={e => { draftRevision.current += 1; setAdjItem(e.target.value) }} className="h-9" />
+                <Input aria-label="所得税调整金额" placeholder="金额" type="number" value={adjAmount} onChange={e => { draftRevision.current += 1; setAdjAmount(e.target.value) }} className="h-9 w-28 text-right" />
                 <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={submitAdjustment}>添加</Button>
               </div>}
             </div>

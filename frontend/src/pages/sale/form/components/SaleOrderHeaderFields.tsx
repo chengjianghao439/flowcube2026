@@ -6,7 +6,7 @@ import type { CarrierOption } from '@/types/carriers'
 import { useId, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Input }  from '@/components/ui/input'
-import { MapPin, MessageSquareText, Truck, UserRound } from 'lucide-react'
+import { MapPin, MessageSquareText, UserRound } from 'lucide-react'
 import { Label }  from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
@@ -140,11 +140,11 @@ export function SaleOrderHeaderFields({
           {phoneError && <p role="alert" className="text-xs text-destructive-ink">{phoneError}</p>}
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-5">
-          <Label htmlFor={`${fieldId}-address`} className="inline-flex items-center gap-1.5"><Truck className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>
+          <Label htmlFor={`${fieldId}-address`} className="inline-flex items-center gap-1.5"><MapPin aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>
           <LimitedTextarea autoGrow id={`${fieldId}-address`} maxLength={200} value={receiverAddress} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => apply(() => setReceiverAddress(e.target.value))} placeholder="请输入详细收货地址" rows={1} disabled={headerReadOnly} className="h-9 min-h-0 py-1.5" singleLine />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-3">
-          <Label htmlFor={`${fieldId}-remark`} className="inline-flex items-center gap-1.5"><MessageSquareText className="h-3.5 w-3.5 text-muted-foreground" />备注</Label>
+          <Label htmlFor={`${fieldId}-remark`} className="inline-flex items-center gap-1.5"><MessageSquareText aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />备注</Label>
           <Input id={`${fieldId}-remark`} maxLength={50} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setRemark(e.target.value))} placeholder="选填" disabled={headerReadOnly} className="h-9" />
         </div>
       </div>

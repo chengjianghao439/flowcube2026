@@ -88,14 +88,14 @@ export default function TableActionsMenu({
   if (items.length === 0 && !menuInitialized) {
     return (
       <button ref={node => { actionRoot.current = node }} type="button" disabled={primaryDisabled} onClick={onPrimaryClick}
-        className={cn('inline-flex items-center rounded-md border border-border', primaryClass)}>
+        className={cn('fc-table-actions inline-flex items-center rounded-md border border-border', primaryClass)}>
         {primaryLabel}
       </button>
     )
   }
 
   return (
-    <div ref={node => { actionRoot.current = node }} className="inline-flex items-center rounded-md border border-border overflow-hidden">
+    <div ref={node => { actionRoot.current = node }} className="fc-table-actions inline-flex items-center rounded-md border border-border overflow-hidden">
       <button
         type="button"
         disabled={primaryDisabled}

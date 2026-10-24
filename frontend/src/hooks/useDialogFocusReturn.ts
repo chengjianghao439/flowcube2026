@@ -21,8 +21,7 @@ export function useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus, captur
   activeRef.current = active
   const restoreFocusRef = useRef<HTMLElement | null>(null)
   const previousOpen = useRef(false)
-  // Sale pickers opt in: React input autoFocus runs before Radix's open event.
-  // Capture during the parent's opening render, before its portal children mount.
+  // Finders opt in: capture before portal children mount or run their focus handlers.
   if (captureOpen !== undefined) {
     if (captureOpen && !previousOpen.current) {
       const target = document.activeElement

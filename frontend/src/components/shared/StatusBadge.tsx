@@ -91,7 +91,7 @@ export function StatusBadge({ type, status, className, ariaLabel }: StatusBadgeP
   return (
     <Badge
       variant="outline"
-      className={cn('text-xs font-medium', cfg.className, className)}
+      className={cn('fc-status-label text-xs font-medium', cfg.className, className)}
       aria-label={ariaLabel}
     >
       {cfg.label}
@@ -118,7 +118,7 @@ export function SoftStatusLabel({ label, tone, className, title, onClick }: Soft
       title={title}
       onClick={onClick}
       className={cn(
-        'text-xs font-medium',
+        'fc-status-label text-xs font-medium',
         STATUS_TONE_CLASS[tone],
         onClick && 'cursor-pointer hover:opacity-80',
         className,

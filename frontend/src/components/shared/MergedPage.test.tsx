@@ -17,7 +17,7 @@ function TestView() {
   const active = useActiveWorkspaceTab()
   const [value, setValue] = useState('未筛选')
   return <div data-view={ownPath} data-active={String(active)}>
-    <PageHeader title="原页标题" actions={<button onClick={() => setValue('已筛选')}>查询</button>} />
+    <PageHeader title="原页标题" description="核对当前视图的记录。" actions={<button onClick={() => setValue('已筛选')}>查询</button>} />
     <p>{value}</p>
   </div>
 }

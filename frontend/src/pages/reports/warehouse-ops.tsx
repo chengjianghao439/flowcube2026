@@ -17,33 +17,18 @@ import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { WT_STATUS } from '@/generated/status'
 import type { OpsOperator, FlowBottleneck } from '@/api/reports'
-
-// ── 每小时趋势图 ────────────────────────────────────────────────────────────
-function HourlyChart({ data }: { data: { hour: string; count: number }[] }) {
-  const max = Math.max(...data.map(d => d.count), 1)
-  return (
-    <div className="flex items-end gap-0.5 h-20">
-      {data.map(d => (
-        <div key={d.hour} className="flex-1 flex flex-col items-center gap-1 group relative">
-          <div
-            title={`${d.hour}：${d.count} 次`}
-            className="w-full rounded-t bg-primary/60 hover:bg-primary transition-colors"
-            style={{ height: `${Math.max(3, (d.count / max) * 72)}px` }}
-          />
-        </div>
-      ))}
-    </div>
-  )
-}
+import { CompactColumnChart } from '@/components/shared/CompactColumnChart'
+import { ReportMeter } from '@/components/shared/ReportMeter'
+import { CHART_TONES } from '@/components/dashboard/chartTheme'
 
 // ── 流程瓶颈条 ─────────────────────────────────────────────────────────────
 const FLOW_COLOR: Record<number, string> = {
-  [WT_STATUS.PENDING]: 'bg-gray-300',
-  [WT_STATUS.PICKING]: 'bg-blue-400',
-  [WT_STATUS.SORTING]: 'bg-yellow-400',
-  [WT_STATUS.CHECKING]: 'bg-orange-400',
-  [WT_STATUS.PACKING]: 'bg-purple-400',
-  [WT_STATUS.SHIPPING]: 'bg-cyan-400',
+  [WT_STATUS.PENDING]: '#9699a1',
+  [WT_STATUS.PICKING]: CHART_TONES.primary,
+  [WT_STATUS.SORTING]: CHART_TONES.warning,
+  [WT_STATUS.CHECKING]: '#a87955',
+  [WT_STATUS.PACKING]: '#7775a8',
+  [WT_STATUS.SHIPPING]: CHART_TONES.info,
 }
 
 function FlowBar({ items }: { items: FlowBottleneck[] }) {
@@ -53,12 +38,7 @@ function FlowBar({ items }: { items: FlowBottleneck[] }) {
       {items.map(item => (
         <div key={item.status} className="flex items-center gap-3">
           <p className="w-16 shrink-0 text-helper">{item.label}</p>
-          <div className="flex-1 h-3 rounded-full bg-muted overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${FLOW_COLOR[item.status]}`}
-              style={{ width: `${Math.max(2, (item.count / max) * 100)}%` }}
-            />
-          </div>
+          <ReportMeter value={item.count} max={max} label={item.label} valueText={`${item.count} 个任务`} color={FLOW_COLOR[item.status]} />
           <p className="w-8 text-left text-sm font-bold text-foreground">{item.count}</p>
         </div>
       ))}
@@ -93,9 +73,10 @@ export default function WarehouseOpsPage() {
       {/* 标题栏 */}
       <PageHeader
         title="仓库运营看板"
-        description={`实时数据 · 每分钟自动刷新 · 更新于 ${updatedTime}`}
+        description="查看仓库任务、扫码量与作业趋势。"
         actions={(
           <div className="flex flex-wrap gap-2">
+            <span className="desktop-page-meta">实时数据 · 每分钟自动刷新 · 更新于 {updatedTime}</span>
             <Button size="sm" variant="outline" onClick={() => openPath('/reports/wave-performance', '批次效率')}>
               查看批次效率
             </Button>
@@ -124,16 +105,16 @@ export default function WarehouseOpsPage() {
       {!isLoading && data && !isError && (<>
 
         {/* 今日核心指标 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="fc-ops-metrics grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           <StatTile icon={Truck} label="今日出库单数" value={s?.shippedToday ?? 0} hint="已完成出库" tone="success" />
           <StatTile icon={Layers} label="拣货中任务" value={s?.pickingNow ?? 0} hint="进行中" />
           <StatTile icon={PackageOpen} label="今日入库单数" value={s?.inboundToday ?? 0} hint="已全部上架完成" />
           <StatTile icon={BarChart3} label="今日扫码" value={s?.scanCount ?? 0} hint={`拣货 ${s?.pickQty ?? 0} 件`} />
-          <StatTile icon={AlertTriangle} label="扫码错误" value={s?.errorCount ?? 0} hint={`错误率 ${s?.errorRate}`} accent={(s?.errorCount ?? 0) > 0} />
-          <StatTile icon={Undo2} label="撤销次数" value={s?.undoCount ?? 0} hint="今日" accent={(s?.undoCount ?? 0) > 5} />
+          <StatTile icon={AlertTriangle} label="扫码错误" value={s?.errorCount ?? 0} hint={`错误率 ${s?.errorRate}`} tone={(s?.errorCount ?? 0) > 0 ? 'danger' : 'primary'} accent={(s?.errorCount ?? 0) > 0} />
+          <StatTile icon={Undo2} label="撤销次数" value={s?.undoCount ?? 0} hint="今日" tone={(s?.undoCount ?? 0) > 5 ? 'warning' : 'primary'} accent={(s?.undoCount ?? 0) > 5} />
         </div>
 
-        <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_1fr] gap-4">
+        <div className="grid grid-cols-1 items-start xl:grid-cols-[1.2fr_1fr] gap-4">
           <ReportPanel
             title="流程瓶颈分析"
             description="各步骤任务堆积量"
@@ -153,14 +134,7 @@ export default function WarehouseOpsPage() {
             emptyTitle="暂无作业趋势"
             emptyDescription="暂无扫码趋势"
           >
-            <>
-              <HourlyChart data={data.hourlyTrend} />
-              <div className="flex justify-between mt-1">
-                <span className="text-xs text-muted-foreground">06:00</span>
-                <span className="text-xs text-muted-foreground">14:00</span>
-                <span className="text-xs text-muted-foreground">22:00</span>
-              </div>
-            </>
+            <CompactColumnChart rows={data.hourlyTrend.map(row => ({ label: row.hour, value: row.count }))} label="扫码次数" />
           </ReportPanel>
 
           <ReportPanel

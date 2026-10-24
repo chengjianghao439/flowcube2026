@@ -22,10 +22,10 @@ export default function ReservationDetailsDialog({ open, onClose, item }: { open
   const valid = !!item && [item.productId, item.warehouseId].every(id => Number.isSafeInteger(id) && id > 0)
   return <Dialog open={open && active} onOpenChange={next => { if (!next) onClose() }}>
     <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-      <DialogHeader><DialogTitle>库存预占明细</DialogTitle></DialogHeader>
+      <DialogHeader description={!can(P.INVENTORY_VIEW) ? '没有查看库存的权限' : !valid ? '库存商品或仓库信息无效' : '核对预占来源、订单与仓库分布。'}><DialogTitle>库存预占明细</DialogTitle></DialogHeader>
       {open && active && (can(P.INVENTORY_VIEW) ? valid && item
         ? <ReservationSnapshotRead renderSummary={summary => <QuantitySummary summary={summary} />} key={`${owner}:${item.productId}:${item.warehouseId}`} item={item} owner={owner} server={server} generation={generation} />
-        : <p>库存商品或仓库信息无效</p> : <p>没有查看库存的权限</p>)}
+        : null : null)}
       <DialogFooter><Button variant="outline" onClick={onClose}>关闭</Button></DialogFooter>
     </DialogContent>
   </Dialog>

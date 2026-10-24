@@ -106,25 +106,25 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center text-center',
+        'fc-empty-state flex flex-col items-center justify-center text-center',
         compact ? 'gap-2 py-8' : 'gap-3 py-16',
         className,
       )}
     >
       {resolvedIcon && (
-        <div className="text-muted-foreground/40">
+        <div className="fc-empty-state-icon text-muted-foreground/40">
           {resolvedIcon}
         </div>
       )}
 
       {resolvedTitle && (
-        <p className={cn('font-medium text-foreground', compact ? 'text-sm' : 'text-base')}>
+        <p className={cn('fc-empty-state-title font-medium text-foreground', compact ? 'text-sm' : 'text-base')}>
           {resolvedTitle}
         </p>
       )}
 
       {resolvedDescription && (
-        <p className={cn('text-muted-foreground', compact ? 'text-xs' : 'text-sm')}>
+        <p className={cn('fc-empty-state-description text-muted-foreground', compact ? 'text-xs' : 'text-sm')}>
           {resolvedDescription}
         </p>
       )}

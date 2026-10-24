@@ -28,7 +28,6 @@ vi.mock('@/hooks/useStockCheck', () => ({
 }))
 vi.mock('@/hooks/useProductQtyPolicies', () => ({ useProductQtyPolicies: () => () => false }))
 vi.mock('@/components/shared/OrderDetailSections', () => ({ OrderDetailSections: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }))
-vi.mock('@/components/shared/ProductIdentityCells', () => ({ ProductIdentityGridCells: () => <div>测试品</div>, ProductIdentityGridHeaders: () => <div>商品</div> }))
 vi.mock('@/components/ui/dialog', () => ({ Dialog: ({ children }: { children: React.ReactNode }) => <div>{children}</div>, DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>, DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>, DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>, DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }))
 vi.mock('@/components/shared/ConfirmDialog', () => ({ ConfirmDialog: ({ open, title, onConfirm }: { open: boolean; title: string; onConfirm: () => void }) => open ? <button onClick={onConfirm}>{title}</button> : null }))
 vi.mock('@/lib/toast', () => ({ toast: { error: f.toastError, success: vi.fn(), warning: vi.fn() } }))

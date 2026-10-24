@@ -170,6 +170,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
         )}
       />
 
+
       <nav aria-label={`${copy.title}登记方式`} className="flex gap-1 border-b border-border">
         {([
           { key: 'records' as const, label: can(PERMISSIONS.PAYMENT_EXECUTE) ? '按单登记' : '账款明细' },
@@ -203,6 +204,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
       </section>
 
       <PaymentQueryDialog
+        title={`查询${copy.title}`}
         open={queryOpen}
         initial={query}
         clearValue={ALL_DATES_QUERY}

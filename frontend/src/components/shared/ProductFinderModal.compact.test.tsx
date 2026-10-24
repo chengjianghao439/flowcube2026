@@ -232,7 +232,8 @@ test('purchase compact uses a neutral context, its own dialog settings and suppl
   expect(cache.getQueryCache().getAll().some(query => query.queryKey.includes('sale-entry'))).toBe(false)
   expect((document.querySelector('[role="dialog"]') as HTMLElement).style.width).toBe('1080px')
   expect(document.body.textContent).toContain('受控供应商'); expect(document.body.textContent).not.toContain('价格 A')
-  expect(document.querySelector('table')?.classList.contains('min-w-[940px]')).toBe(true)
+  expect(Number.parseFloat(document.querySelector('table')!.style.minWidth)).toBeGreaterThanOrEqual(940)
+  expect(document.querySelectorAll('thead button[aria-label$="列宽"]')).toHaveLength(8)
   expect(document.body.textContent).not.toContain('选择商品后，在这里')
   expect(requests.every(request => request.baseURL === '/original/api' && request.automaticReplay === false)).toBe(true)
   await act(async () => row().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
@@ -278,6 +279,8 @@ test('purchase source ABA preserves search but blocks every old node until a fre
   await drawPurchase(); await ready(); await type('保留词'); await ready(); const old = row(), before = requests.length
   await act(async () => { setApiClientBaseURL('/other/api'); setApiClientBaseURL('/original/api') })
   expect(document.body.textContent).toContain('读取已暂停')
+  expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('读取已暂停')
+  expect(document.body.textContent?.match(/读取已暂停/g)).toHaveLength(1)
   expect(document.querySelector<HTMLInputElement>('[aria-label="搜索商品"]')!.value).toBe('保留词')
   expect(requests).toHaveLength(before)
   await act(async () => old.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))

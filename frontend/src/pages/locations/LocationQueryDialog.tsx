@@ -1,8 +1,7 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AppDialog } from '@/components/shared/AppDialog'
-import { Button } from '@/components/ui/button'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { getWarehousesActiveApi } from '@/api/warehouses'
@@ -42,25 +41,14 @@ export default function LocationQueryDialog({ open, initial, onClose, onApply }:
   }
 
   return (
-    <AppDialog
+    <QueryDialog
       open={open}
-      onOpenChange={v => { if (!v) onClose() }}
       dialogId="location-query"
       title="查询库位"
-      resizable={false}
-      defaultWidth={520}
-      defaultHeight={480}
-      minWidth={420}
-      minHeight={400}
-      footer={
-        <div className="flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button onClick={() => onApply(draft)}>查询</Button>
-          </div>
-        </div>
-      }
+      width={520}
+      onClose={onClose}
+      onReset={() => setDraft(EMPTY)}
+      onApply={() => onApply(draft)}
     >
       <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
@@ -110,6 +98,6 @@ export default function LocationQueryDialog({ open, initial, onClose, onApply }:
           />
         </label>
       </QueryFormLayout>
-    </AppDialog>
+    </QueryDialog>
   )
 }

@@ -33,13 +33,13 @@ test('提交中取消和关闭不能丢弃原表单或打开另一个草稿', as
   const saved = new Promise<void>(r => { resolve = r })
   await act(async () => root.render(
     <QueryClientProvider client={queryClient}>
-      <BaseCrudPage title="供应商管理" columns={[]} queryKey={['pending-draft']} listQuery={async () => []}
+      <BaseCrudPage description="核对资料并维护记录。" title="供应商管理" columns={[]} queryKey={['pending-draft']} listQuery={async () => []}
         deleteApi={async () => null} deleteMessage="删除供应商" renderForm={() => <input aria-label="供应商名称" defaultValue="保留原输入" />}
         submitForm={() => saved} />
     </QueryClientProvider>,
   ))
   const button = (name: string) => [...document.querySelectorAll('button')].find(b => b.textContent === name)!
-  await act(async () => button('+ 新建').click())
+  await act(async () => button('新建').click())
   await act(async () => button('创建').click())
   await act(async () => { await new Promise(r => setTimeout(r, 25)) })
   expect(button('取消').disabled).toBe(true)
@@ -53,7 +53,7 @@ test('提交中取消和关闭不能丢弃原表单或打开另一个草稿', as
 test('读取失败时不把记录总数显示为零', async () => {
   await act(async () => root.render(
     <QueryClientProvider client={queryClient}>
-      <BaseCrudPage title="供应商管理" columns={[]} queryKey={['failed-count']} listQuery={async () => { throw Error('网络不可用') }}
+      <BaseCrudPage description="核对资料并维护记录。" title="供应商管理" columns={[]} queryKey={['failed-count']} listQuery={async () => { throw Error('网络不可用') }}
         deleteApi={async () => null} deleteMessage="删除供应商" renderForm={() => null} submitForm={async () => null} />
     </QueryClientProvider>,
   ))
@@ -68,7 +68,7 @@ test.each([
 ])('保存失败只提示一次明确原因：$message', async ({ message, error }) => {
   await act(async () => root.render(
     <QueryClientProvider client={queryClient}>
-      <BaseCrudPage
+      <BaseCrudPage description="核对资料并维护记录。"
         title="供应商管理"
         columns={[]}
         queryKey={['supplier-feedback-test']}
@@ -87,4 +87,21 @@ test.each([
     [...document.querySelectorAll('button')].find(button => button.textContent === '创建')!.click()
   })
   expect(toast.error).toHaveBeenCalledExactlyOnceWith(message)
+})
+
+
+test('页头只有一处小字，有业务提示时替代用途说明，无提示时使用用途说明', async () => {
+  const render = (notice?: string) => <QueryClientProvider client={queryClient}>
+    <BaseCrudPage title="货架管理" description="维护货架资料与位置。" notice={notice}
+      columns={[]} queryKey={['single-caption']} listQuery={async () => []}
+      deleteApi={async () => null} deleteMessage="删除货架" renderForm={() => null} submitForm={async () => null} />
+  </QueryClientProvider>
+  await act(async () => root.render(render('货架唯一条码（H）与标签打印')))
+  expect(host.querySelectorAll('.desktop-page-description')).toHaveLength(1)
+  expect(host.querySelector('.desktop-page-description')?.textContent).toBe('货架唯一条码（H）与标签打印')
+  expect(host.textContent).not.toContain('维护货架资料与位置。')
+  expect(host.querySelector('.desktop-page-business-notice')).toBeNull()
+  await act(async () => root.render(render()))
+  expect(host.querySelector('.desktop-page-description')?.textContent).toBe('维护货架资料与位置。')
+  expect(host.textContent).not.toContain('货架唯一条码')
 })

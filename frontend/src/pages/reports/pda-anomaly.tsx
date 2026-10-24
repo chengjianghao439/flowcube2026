@@ -14,33 +14,16 @@ import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
+import { CompactColumnChart } from '@/components/shared/CompactColumnChart'
+import { ReportMeter } from '@/components/shared/ReportMeter'
+import { CHART_TONES } from '@/components/dashboard/chartTheme'
 
-function BarRow({ label, value, max, color = 'bg-red-400' }: { label: string; value: number; max: number; color?: string }) {
-  const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0
+function BarRow({ label, value, max, color = CHART_TONES.destructive }: { label: string; value: number; max: number; color?: string }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="fc-report-bar-row flex items-center gap-3">
       <p className="w-44 shrink-0 break-words text-sm leading-5 text-foreground">{label}</p>
-      <div className="flex-1 h-2.5 rounded-full bg-muted overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
+      <ReportMeter value={value} max={max} label={label} valueText={`${value} 次`} color={color} />
       <p className="w-14 text-right tabular-nums text-sm font-semibold text-foreground">{value}</p>
-    </div>
-  )
-}
-
-function MiniChart({ data }: { data: { date: string; errorCount: number }[] }) {
-  const max = Math.max(...data.map(d => d.errorCount), 1)
-  return (
-    <div className="flex items-end gap-1 h-16">
-      {data.map(d => (
-        <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
-          <div
-            className="w-full rounded-t bg-red-400 hover:bg-red-500 transition-all"
-            style={{ height: `${Math.max(4, (d.errorCount / max) * 56)}px` }}
-          />
-          <span className="text-[9px] text-muted-foreground rotate-45 origin-left hidden group-hover:block absolute -bottom-4 left-0">{d.date.slice(5)}</span>
-        </div>
-      ))}
     </div>
   )
 }
@@ -81,7 +64,7 @@ export default function PdaAnomalyPage() {
     <div className="space-y-6">
       <PageHeader
         title="PDA 异常分析"
-        description="分析扫码错误、撤销操作与异常趋势。"
+        description="核对扫码错误、撤销与异常趋势。"
         actions={(
           <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
         )}
@@ -126,12 +109,12 @@ export default function PdaAnomalyPage() {
         {/* 汇总 */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatTile icon={ScanLine} label="总扫码次数" value={s?.totalScans ?? 0} />
-          <StatTile icon={AlertTriangle} label="错误次数" value={s?.totalErrors ?? 0} accent={(s?.totalErrors ?? 0) > 0} />
-          <StatTile icon={Undo2} label="撤销次数" value={s?.totalUndos ?? 0} accent={(s?.totalUndos ?? 0) > 0} />
-          <StatTile icon={Percent} label="错误率" value={s?.errorRate ?? '0%'} accent={parseFloat(s?.errorRate ?? '0') > 5} hint="错误次数 / 总扫码" />
+          <StatTile icon={AlertTriangle} label="错误次数" value={s?.totalErrors ?? 0} tone={(s?.totalErrors ?? 0) > 0 ? 'danger' : 'primary'} accent={(s?.totalErrors ?? 0) > 0} />
+          <StatTile icon={Undo2} label="撤销次数" value={s?.totalUndos ?? 0} tone={(s?.totalUndos ?? 0) > 0 ? 'warning' : 'primary'} accent={(s?.totalUndos ?? 0) > 0} />
+          <StatTile icon={Percent} label="错误率" value={s?.errorRate ?? '0%'} tone={parseFloat(s?.errorRate ?? '0') > 5 ? 'danger' : 'primary'} accent={parseFloat(s?.errorRate ?? '0') > 5} hint="错误次数 / 总扫码" />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 items-start md:grid-cols-2 gap-4">
           <ReportPanel
             title="每日错误趋势"
             description="最近时间范围内的错误变化"
@@ -140,13 +123,7 @@ export default function PdaAnomalyPage() {
             emptyTitle="暂无每日趋势"
             emptyDescription="当前筛选条件下没有错误趋势数据"
           >
-            <>
-              <MiniChart data={data.dailyTrend} />
-              <div className="flex justify-between mt-1">
-                <span className="text-helper">{data.dailyTrend[0]?.date}</span>
-                <span className="text-helper">{data.dailyTrend[data.dailyTrend.length-1]?.date}</span>
-              </div>
-            </>
+            <CompactColumnChart rows={data.dailyTrend.map(row => ({ label: row.date, value: row.errorCount }))} label="错误次数" color={CHART_TONES.destructive} />
           </ReportPanel>
 
           <ReportPanel
@@ -174,7 +151,7 @@ export default function PdaAnomalyPage() {
           >
             <div className="space-y-2">
               {data.undoByOperator.map(r => (
-                <BarRow key={r.operatorId} label={r.operatorName} value={r.undoCount} max={maxUndo} color="bg-orange-400" />
+                <BarRow key={r.operatorId} label={r.operatorName} value={r.undoCount} max={maxUndo} color={CHART_TONES.warning} />
               ))}
             </div>
           </ReportPanel>
@@ -189,7 +166,7 @@ export default function PdaAnomalyPage() {
           >
             <div className="space-y-2">
               {data.byReason.map(r => (
-                <BarRow key={r.reason} label={r.reason} value={r.count} max={maxRsn} color="bg-yellow-400" />
+                <BarRow key={r.reason} label={r.reason} value={r.count} max={maxRsn} color={CHART_TONES.warning} />
               ))}
             </div>
           </ReportPanel>
@@ -204,7 +181,7 @@ export default function PdaAnomalyPage() {
           >
             <div className="space-y-2">
               {data.byBarcode.map(r => (
-                <BarRow key={r.barcode} label={r.barcode} value={r.count} max={maxBc} color="bg-purple-400" />
+                <BarRow key={r.barcode} label={r.barcode} value={r.count} max={maxBc} color={CHART_TONES.info} />
               ))}
             </div>
           </ReportPanel>

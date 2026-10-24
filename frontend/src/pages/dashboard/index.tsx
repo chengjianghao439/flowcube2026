@@ -3,6 +3,9 @@ import {
   Pencil, Save, X, RotateCcw, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/shared/IconButton'
+import PageHeader from '@/components/shared/PageHeader'
+import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { usePermission } from '@/hooks/usePermission'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -27,10 +30,18 @@ const SPAN: Record<number, string> = {
   4: 'sm:col-span-2 lg:col-span-4',
 }
 
+// 列表按内容决定高度并设置滚动上限；图表保持有界尺寸。
+function widgetHeight(id: string, editing = false) {
+  const definition = WIDGET_MAP[id]
+  if (definition.category === 'list') return undefined
+  const height = definition.size === 'lg' ? 380 : definition.category === 'kpi' ? 160 : 260
+  return height + (editing ? 36 : 0)
+}
+
 function ReadOnlyWidget({ widget, className }: { widget: DashboardWidgetLayout; className: string }) {
   const Body = WIDGET_MAP[widget.id].Component
   return (
-    <div data-widget-id={widget.id} className={cn('dashboard-item min-w-0', className)}>
+    <div data-widget-id={widget.id} data-widget-sizing={WIDGET_MAP[widget.id].category === 'list' ? 'content' : undefined} style={{ height: widgetHeight(widget.id) }} className={cn('dashboard-item min-w-0', className)}>
       <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-muted-foreground">加载中…</div>}>
         <Body />
       </Suspense>
@@ -127,12 +138,9 @@ export default function DashboardPage() {
   // ── 渲染 ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-page-title">仪表盘</h1>
-          <p className="text-muted-body mt-1">{editing ? '拖拽调整卡片顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : '按你保存的顺序查看指标、待办与个人工具。'}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <PageHeader title="仪表盘"
+        description={editing ? '拖拽调整卡片顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : "查看待办、经营指标与个人工具。"} status={editing ? <EditModeBadge /> : undefined}
+        actions={<div className="flex flex-wrap items-center gap-2">
           {!editing ? (
             <>
               <Button variant="outline" size="sm" onClick={showAll}><LayoutGrid className="h-3.5 w-3.5" /> 展示全部卡片</Button>
@@ -155,8 +163,9 @@ export default function DashboardPage() {
               </Button>
             </>
           )}
-        </div>
-      </div>
+        </div>}
+      />
+
 
       {/* 组件库（编辑态内联展开，非模态） */}
       {editing && libOpen && (
@@ -230,8 +239,9 @@ export default function DashboardPage() {
               <div
                 key={w.id}
                 data-widget-id={w.id}
-                style={{ height: def.size === 'lg' ? 380 : def.category === 'kpi' ? 160 : 260 }}
-                className={cn(SPAN[w.w] ?? SPAN[2], 'relative', dragging === w.id && 'opacity-40')}
+                data-widget-sizing={def.category === 'list' ? 'content' : undefined}
+                style={{ height: widgetHeight(w.id, true) }}
+                className={cn(SPAN[w.w] ?? SPAN[2], 'desktop-widget-editor relative flex min-w-0 flex-col', dragging === w.id && 'opacity-40')}
                 draggable={editing}
                 onDragStart={editing ? () => { dragId.current = w.id; setDragging(w.id) } : undefined}
                 onDragEnter={editing ? () => reorder(w.id) : undefined}
@@ -241,23 +251,17 @@ export default function DashboardPage() {
                 {editing && (
                   <>
                     <div className="pointer-events-none absolute inset-0 z-10 rounded-lg border-2 border-dashed border-primary/40" />
-                    <div className="absolute right-2 top-2 z-20 flex items-center gap-0.5 rounded-lg border border-border bg-card/95 p-0.5 shadow-sm backdrop-blur">
-                      <button type="button" title="减小宽度" onClick={() => resize(w.id, -1)} disabled={w.w <= 1}
-                        className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-30">
-                        <Minus className="h-3.5 w-3.5" />
-                      </button>
-                      <span className="w-4 text-center text-xs tabular-nums text-muted-foreground">{w.w}</span>
-                      <button type="button" title="增大宽度" onClick={() => resize(w.id, 1)} disabled={w.w >= 4}
-                        className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-muted disabled:opacity-30">
-                        <Plus className="h-3.5 w-3.5" />
-                      </button>
-                      <span title="拖拽排序" className="flex h-6 w-6 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted active:cursor-grabbing">
-                        <GripVertical className="h-3.5 w-3.5" />
+                    <div className="desktop-widget-controls relative z-20 flex shrink-0 items-center gap-0.5 px-2 py-1">
+                      <span title="拖拽排序" className="mr-auto flex h-7 w-7 cursor-grab items-center justify-center rounded text-muted-foreground active:cursor-grabbing">
+                        <GripVertical aria-hidden="true" className="h-3.5 w-3.5" />
                       </span>
-                      <button type="button" title="隐藏" onClick={() => hide(w.id)}
-                        className="flex h-6 w-6 items-center justify-center rounded text-destructive-ink hover:bg-destructive/10">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                      <IconButton label={`减小${def.title}宽度`} icon={Minus} onClick={() => resize(w.id, -1)} disabled={w.w <= 1}
+                        className="h-7 w-7 rounded-md text-muted-foreground disabled:opacity-30" />
+                      <span className="w-4 text-center text-xs tabular-nums text-muted-foreground">{w.w}</span>
+                      <IconButton label={`增大${def.title}宽度`} icon={Plus} onClick={() => resize(w.id, 1)} disabled={w.w >= 4}
+                        className="h-7 w-7 rounded-md text-muted-foreground disabled:opacity-30" />
+                      <IconButton label={`隐藏${def.title}`} icon={X} onClick={() => hide(w.id)}
+                        className="h-7 w-7 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive-ink" />
                     </div>
                   </>
                 )}
@@ -271,10 +275,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {visible.map(widget => <ReadOnlyWidget key={widget.id} widget={widget} className={cn(
-            WIDGET_MAP[widget.id].size === 'lg' ? 'h-[380px]' : WIDGET_MAP[widget.id].category === 'kpi' ? 'h-[160px]' : 'h-[260px]',
-            SPAN[widget.w] ?? SPAN[2],
-          )} />)}
+          {visible.map(widget => <ReadOnlyWidget key={widget.id} widget={widget} className={SPAN[widget.w] ?? SPAN[2]} />)}
         </div>
       )}
 

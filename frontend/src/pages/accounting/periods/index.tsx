@@ -6,7 +6,7 @@ import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
  */
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Lock, Unlock, RefreshCcw, CalendarCheck } from 'lucide-react'
+import { Lock, Unlock, RefreshCcw } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
@@ -116,25 +116,21 @@ export default function AccountingPeriodsPage() {
     <div className="space-y-4">
       <PageHeader
         title="会计期间与结转"
-        description="期间结账后该期间凭证锁定；结账前需先生成损益结转凭证（12 月含年度利润结转）。本系统是正式账，请按月结账。"
+        description="期间结账后该期间凭证锁定；结账前需先生成损益结转凭证（12 月含年度利润结转）。本系统是正式账，请按月结账。 结账顺序：生成本期业务凭证 → 生成损益结转凭证（状态为「已最新」）→ 结账。期间已结账后再有凭证变动必须先反结账。"
         actions={<Button variant="outline" onClick={() => downloadExport('/export/accounting-periods').catch(e => toast.error((e as Error).message))}>导出</Button>}
       />
 
-      <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
-        <CalendarCheck className="h-4 w-4" />
-        结账顺序：生成本期业务凭证 → 生成损益结转凭证（状态为「已最新」）→ 结账。期间已结账后再有凭证变动必须先反结账。
-      </div>
 
       <DataTable columns={columns} data={data ?? []} loading={isLoading} rowKey="period" />
 
       {/* 生成结转确认 */}
       <Dialog open={!!generating} onOpenChange={v => !v && setGenerating(null)}>
         <DialogContent className="sm:max-w-xl">
-          <DialogHeader><DialogTitle>生成结转凭证</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <DialogHeader description={<>{<>
             确认 {generating && fmtPeriod(generating.period)} 的损益结转凭证
             {generating?.closingStatus === 'current' ? '重新生成（结转后又有新发生额时会更新金额）' : '？'} 结转后损益科目清零、差额计入「本年利润」。
-          </p>
+          </>}</>}><DialogTitle>生成结转凭证</DialogTitle></DialogHeader>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenerating(null)} disabled={genMut.isPending}>取消</Button>
             <Button onClick={() => generating && genMut.mutate(generating.period)} disabled={genMut.isPending}>{genMut.isPending ? '生成中…' : '生成'}</Button>
@@ -145,10 +141,10 @@ export default function AccountingPeriodsPage() {
       {/* 结账确认 */}
       <Dialog open={!!closing} onOpenChange={v => !v && setClosing(null)}>
         <DialogContent className="sm:max-w-xl">
-          <DialogHeader><DialogTitle>结账</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <DialogHeader description={<>{<>
             确认结账 {closing && fmtPeriod(closing.period)}？结账后该期间凭证锁定，账面视为已确认；如需调整须反结账。
-          </p>
+          </>}</>}><DialogTitle>结账</DialogTitle></DialogHeader>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setClosing(null)} disabled={closeMut.isPending}>取消</Button>
             <Button onClick={() => closing && closeMut.mutate(closing.period)} disabled={closeMut.isPending}>{closeMut.isPending ? '结账中…' : '确认结账'}</Button>

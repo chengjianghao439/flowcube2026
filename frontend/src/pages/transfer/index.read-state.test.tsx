@@ -201,7 +201,7 @@ test.each([5000, 5001])('real collector reads 5000 of %i matches and discloses c
   const data = transferQuery()?.state.data as { list: unknown[]; truncated: boolean }
   expect(data.list).toHaveLength(5000); expect(data.truncated).toBe(total > 5000)
   const summary = host.querySelector('[role="status"]')?.textContent || ''
-  if (total > 5000) { expect(summary).toMatch(/5,000.*5,001.*缩小查询范围/); expect(summary).not.toBe('共 5,001 单') }
+  if (total > 5000) { expect(summary).toMatch(/5,000.*5,001.*缩小查询范围/); expect(summary).not.toBe('共 5,001 单'); expect(host.querySelector('.desktop-page-description')?.textContent).toContain('请缩小查询范围') }
   else expect(summary).toBe('共 5,000 单')
   expect(host.textContent).not.toMatch(/上一页|下一页/)
 }, 20000)

@@ -1,7 +1,6 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
-import { AppDialog } from '@/components/shared/AppDialog'
-import { Button } from '@/components/ui/button'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Input } from '@/components/ui/input'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 
@@ -34,25 +33,14 @@ export default function RackQueryDialog({ open, initial, onClose, onApply }: Pro
   }
 
   return (
-    <AppDialog
+    <QueryDialog
       open={open}
-      onOpenChange={v => { if (!v) onClose() }}
       dialogId="rack-query"
       title="查询货架"
-      resizable={false}
-      defaultWidth={520}
-      defaultHeight={420}
-      minWidth={420}
-      minHeight={360}
-      footer={
-        <div className="flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button onClick={() => onApply(draft)}>查询</Button>
-          </div>
-        </div>
-      }
+      width={520}
+      onClose={onClose}
+      onReset={() => setDraft(EMPTY)}
+      onApply={() => onApply(draft)}
     >
       <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
@@ -89,6 +77,6 @@ export default function RackQueryDialog({ open, initial, onClose, onApply }: Pro
           />
         </label>
       </QueryFormLayout>
-    </AppDialog>
+    </QueryDialog>
   )
 }

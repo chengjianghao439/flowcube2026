@@ -119,6 +119,9 @@ test.each([
   [{ status: 3, printDataRef: 'official_platform' }, '请通过快递官方打印面单'], [{ status: 5 }, '本地记录已作废'],
 ] as const)('状态说明 %j 引导 %s', async (changes, text) => {
   vi.mocked(getWaybillDetailApi).mockResolvedValue(waybill(changes as Partial<LogisticsWaybill>)); await render('/logistics/7'); expect(host.textContent).toContain(text)
+  expect(host.querySelector('.desktop-page-description')?.textContent).toContain(text)
+  expect(host.querySelectorAll('.desktop-page-description')).toHaveLength(1)
+  expect(host.textContent).not.toContain('核对包裹、快递单号与物流轨迹。')
   if ('submittedToPlatform' in changes || changes.status === 6) {
     expect(button('作废')).toBeUndefined()
     if (changes.status === 1) expect(button('查询原单')).toBeUndefined()

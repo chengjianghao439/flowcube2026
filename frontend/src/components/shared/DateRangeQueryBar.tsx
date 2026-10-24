@@ -52,6 +52,7 @@ export function DateRangeQueryBar({
         </div>
       ) : null}
       <DatePicker
+        aria-label={`${label}（起）`}
         value={startDate}
         onChange={onStartDateChange}
         max={endDate || undefined}
@@ -59,6 +60,7 @@ export function DateRangeQueryBar({
       />
       <span className="text-sm text-muted-foreground">至</span>
       <DatePicker
+        aria-label={`${label}（止）`}
         value={endDate}
         onChange={onEndDateChange}
         min={startDate || undefined}

@@ -17,6 +17,7 @@ const snapshot = (createdAt = Date.now()) => ({ version: 1, id: 11, userId: 9, b
 it('撤VIEW/EXECUTE后重挂auth-only可核本人，只有status GET，没有detail/stock/approval/新执行', async () => {
   expect(isRegisteredErpRoute('/disposals/recovery')).toBe(true); expect(resolveRoutePermission('/disposals/recovery')).toBeUndefined(); expect(resolveRoutePermission('/disposals')).toBeTruthy()
   localStorage.setItem(DISPOSAL_EXECUTION_STORAGE, JSON.stringify([snapshot()]))
+  const consoleErrors = vi.spyOn(console, 'error').mockImplementation(() => {})
   const host = document.createElement('div'), root = createRoot(host), cache = new QueryClient()
   try {
     await act(async () => root.render(<MemoryRouter initialEntries={['/disposals/recovery']}><QueryClientProvider client={cache}><KeepAliveOutlet /></QueryClientProvider></MemoryRouter>))
@@ -29,6 +30,7 @@ it('撤VIEW/EXECUTE后重挂auth-only可核本人，只有status GET，没有det
       expect(query?.disabled).toBe(false)
       return query!
     }, { timeout: 3000, interval: 20 })
+    expect(consoleErrors.mock.calls.some(args => args.some(arg => typeof arg === 'string' && arg.includes('same key')))).toBe(false)
     expect(calls).toHaveLength(0)
     await act(async () => button.click())
     await vi.waitFor(async () => {
@@ -38,7 +40,7 @@ it('撤VIEW/EXECUTE后重挂auth-only可核本人，只有status GET，没有det
     expect(calls).toEqual(['/system/request-status/original'])
     expect(host.querySelector('input')).toBeNull()
     expect([...host.querySelectorAll('button')].find(b => b.textContent === '按原请求重试')?.disabled).toBe(true)
-  } finally { await act(async () => root.unmount()); cache.clear() }
+  } finally { await act(async () => root.unmount()); cache.clear(); consoleErrors.mockRestore() }
 })
 it.each([Date.now() - 8 * 86400000, Date.now() + 86400000])('TTL过期/异常时间只查询；缺旧body或重复记录不得另建键', async createdAt => {
   localStorage.setItem(DISPOSAL_EXECUTION_STORAGE, JSON.stringify([snapshot(createdAt)])); const { default: Page } = await import('./DisposalRecoveryPage'); const host = document.createElement('div'), root = createRoot(host), cache = new QueryClient()

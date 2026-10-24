@@ -3,6 +3,7 @@
  * 路由：/settings/print-templates
  */
 import { useState } from 'react'
+import { Plus } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
@@ -13,6 +14,7 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import DataTable from '@/components/shared/DataTable'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
@@ -84,8 +86,8 @@ export default function PrintTemplatesPage() {
     <div className="space-y-5">
       <PageHeader
         title="打印模板"
-        description="管理销售单、采购单等打印模板"
-        actions={canManage && <Button onClick={goToNew}>+ 新建模板</Button>}
+        description="维护单据模板与默认打印版式。"
+        actions={canManage && <Button onClick={goToNew}><Plus className="mr-1.5 h-4 w-4" aria-hidden />新建模板</Button>}
       />
 
       {isError ? (
@@ -95,6 +97,7 @@ export default function PrintTemplatesPage() {
         data={data ?? []}
         loading={isLoading}
         rowKey="id"
+        emptyState={<EmptyState variant="no-data" title="暂无打印模板" description={canManage ? '使用右上角「新建模板」添加单据打印模板。' : '当前没有可查看的打印模板，请联系管理员配置。'} />}
       />}
 
       <ConfirmDialog

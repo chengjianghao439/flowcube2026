@@ -136,8 +136,8 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
   return (
     <>
     <Dialog open={open && sectionActive} onOpenChange={(next) => { if (!next && !actionLocked) { onClose(); closePrompt() } }}>
-      <DialogContent className="max-w-4xl" aria-describedby={undefined}>
-        <DialogHeader>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader description={"核对退款来源、金额与处理记录。"}>
           <DialogTitle className="flex flex-wrap items-center gap-3">
             退款单详情
             {refund && !isError && <SoftStatusLabel label={refund.statusName} tone={STATUS_TONE[refund.status] ?? 'draft'} />}

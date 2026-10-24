@@ -16,20 +16,20 @@ export const LimitedInput = React.forwardRef<HTMLInputElement, LimitedInputProps
     const len = lengthMode === 'unicode' ? Array.from(String(value).trim()).length : String(value).length
     const near = len >= Math.floor(maxLength * 0.8)
     return (
-      <div className="relative">
+      <div className="fc-limited-field relative" data-near-limit={near || undefined}>
         <input
           ref={ref}
           maxLength={lengthMode === 'unicode' ? undefined : maxLength}
           value={value}
           className={cn(
-            'flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-14 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
+            'fc-input flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-14 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
             className,
           )}
           {...props}
         />
         <span
           className={cn(
-            'pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs tabular-nums',
+            'fc-character-count pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs tabular-nums',
             near ? 'text-orange-500' : 'text-muted-foreground',
           )}
         >

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { TableColumn } from '@/types'
 import { useTableColumns } from '@/components/shared/useTableColumns'
-import { TableColumnResizeHandle } from '@/components/shared/TableColumnResizeHandle'
+import { TableColumnHeader } from '@/components/shared/TableColumnHeader'
 
 type EntryColumn = 'product' | 'quantity' | 'unit' | 'unitPrice' | 'amount' | 'remark' | 'actions'
 const columns: TableColumn<Record<EntryColumn, unknown>>[] = [
@@ -24,12 +24,7 @@ export function SaleEntryTable({ children, rowCount, stickyHeader = false }: { c
       {columns.map(col => <col key={String(col.key)} style={{ width: layout.usesPercent ? layout.getPercentColumnWidth(col) : layout.getColumnWidth(col) }} />)}
     </colgroup>
     <thead data-resizable className={`data-table-header ${stickyHeader ? 'sticky top-0 z-10' : ''}`}>
-      <tr>{columns.map(col => <th key={String(col.key)} scope="col" className="relative">
-        <div className={`flex min-w-0 items-center pr-3 ${col.align === 'right' ? 'justify-end' : col.align === 'center' ? 'justify-center' : ''}`}>
-          <span>{col.title}</span>
-          <TableColumnResizeHandle column={col} layout={layout} />
-        </div>
-      </th>)}</tr>
+      <tr>{columns.map(col => <TableColumnHeader key={String(col.key)} column={col} layout={layout} />)}</tr>
     </thead>
     {children}
   </table>

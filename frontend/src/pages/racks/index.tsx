@@ -147,7 +147,8 @@ export default function RacksPage() {
     <>
       <BaseCrudPage<Rack>
         title="货架管理"
-        description="货架唯一条码（H）与标签打印"
+      description="维护货架位置、条码与标签。"
+        notice={localPrintEnv === 'ok' ? '货架唯一条码（H）与标签打印' : localPrintEnv === 'browser' ? '浏览器可提交打印任务。如需使用本机标签打印机，请打开极序 Flow 桌面客户端。' : '本机打印暂不可用。请退出后重新打开极序 Flow；若仍无法打印，请联系管理员。'}
         canCreate={can(PERMISSIONS.RACK_CREATE)}
       canEdit={can(PERMISSIONS.RACK_UPDATE)}
       canDelete={can(PERMISSIONS.RACK_DELETE)}
@@ -165,7 +166,7 @@ export default function RacksPage() {
         recordUnit="个"
         deleteApi={(id) => deleteRackApi(id, { skipGlobalError: true })}
         deleteMessage="货架被库位或库存引用后不能删除。"
-        createLabel="+ 新建货架"
+        createLabel="新建货架"
         saveSuccessMessage={(editing) => editing ? '货架已保存' : '货架已创建'}
         formWidthClass="sm:max-w-2xl"
         onOpen={handleOpen}
@@ -178,27 +179,6 @@ export default function RacksPage() {
         }
         renderToolbar={
           <>
-            {localPrintEnv !== 'ok' && (
-              <div
-                className={`rounded-lg border px-4 py-3 text-sm leading-relaxed ${
-                  localPrintEnv === 'electron_no_bridge'
-                    ? 'border-destructive/50 bg-destructive/5 text-destructive-ink'
-                    : 'border-amber-500/50 bg-amber-500/5 text-amber-950 dark:text-amber-100'
-                }`}
-              >
-                {localPrintEnv === 'browser' ? (
-                  <>
-                    <strong>浏览器可提交打印任务。</strong>
-                    如需使用本机标签打印机，请打开极序 Flow 桌面客户端。
-                  </>
-                ) : (
-                  <>
-                    <strong>本机打印暂不可用。</strong>
-                    请退出后重新打开极序 Flow；若仍无法打印，请联系管理员。
-                  </>
-                )}
-              </div>
-            )}
             {chips.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 {chips.map(c => (

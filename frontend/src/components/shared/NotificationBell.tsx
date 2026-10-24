@@ -1,4 +1,5 @@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { IconButton } from '@/components/shared/IconButton'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -66,18 +67,16 @@ export default function NotificationBell() {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-      <button
-        aria-label={`通知中心${total > 0 ? `，${total} 条待处理` : ''}`}
-        className="relative p-2 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
-        title="通知中心"
-      >
-        <Bell className="size-[18px]" />
-        {total > 0 && (
+      <IconButton
+        icon={Bell}
+        label={`通知中心${total > 0 ? `，${total} 条待处理` : ''}`}
+        className="relative h-9 w-9 rounded-lg text-muted-foreground hover:text-foreground"
+        badge={total > 0 ? (
           <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 bg-destructive text-destructive-foreground text-[10px] rounded-full flex items-center justify-center px-1 font-bold">
             {total > 99 ? '99+' : total}
           </span>
-        )}
-      </button>
+        ) : undefined}
+      />
 
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg p-0" aria-label="通知中心">

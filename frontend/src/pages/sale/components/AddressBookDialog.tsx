@@ -170,7 +170,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
   if (readOwner) { try { assertKitReadOwner(readOwner) } catch { ownerCurrent = false } }
 
   return (
-    <AppDialog
+    <AppDialog descriptionInHeader description={"选择当前客户的常用收货地址。"}
       open={open && guardAllowed}
       onOpenChange={value => { if (mayInteract()) onOpenChange(value) }}
       dialogId="customer-address-book"

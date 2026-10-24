@@ -1,9 +1,13 @@
+import { ChartContainer } from '@/components/shared/ChartContainer'
+import { chartGrid, chartBarCursor, CHART_TONES, axisTick, CHART_COLORS as PIE_COLORS } from '@/components/dashboard/chartTheme'
+import { ChartTooltipContent, ChartLegendContent, ChartValueLegend } from '@/components/shared/ChartPresentation'
+import { ResizableTable } from '@/components/shared/ResizableTable'
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { useState } from 'react'
 import { money } from '@/lib/format'
 import { useNavigate } from 'react-router-dom'
 import {
-  ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart,
 } from 'recharts'
 import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowUpDown } from 'lucide-react'
@@ -28,23 +32,9 @@ import { limitTopSeries } from '@/lib/topSeries'
 const wan = (n: number) => Math.abs(n) >= 10000 ? `${(n / 10000).toFixed(n >= 1e6 ? 0 : 1)}万` : String(Math.round(n))
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
 
-// 主题感知的 Tooltip 样式：深色模式下也用卡片底色，避免 recharts 默认白底在暗色主题里刺眼
-const chartTooltip = {
-  borderRadius: 8,
-  border: '1px solid hsl(var(--border))',
-  background: 'hsl(var(--card))',
-  color: 'hsl(var(--foreground))',
-  fontSize: 12,
-} as const
-const axisTick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } as const
-
 // 账户余额饼图配色：语义色打头，其余用几个协调的固定色轮转。
 // 切片数由 limitTopSeries 限到 TOP_SERIES_LIMIT + 1，与本数组长度一致；「其他」项用中性灰，
 // 否则它会轮回到第 1 个账户的语义色，读者会误以为是同一个账户（2026-09-19 修复漏改）。
-const PIE_COLORS = [
-  'hsl(var(--primary))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--info))',
-  '#8b5cf6', '#0ea5e9', '#f97316', 'hsl(var(--destructive))',
-]
 const OTHER_ACCOUNT_COLOR = 'hsl(var(--muted-foreground))'
 // 「其他 N 个账户」聚合项的哨兵 ID：真实账户 ID 均为正数（自增主键）
 const OTHER_ACCOUNT_ID = -1
@@ -65,8 +55,8 @@ function ShareBar({ label, amount, share, tone = 'primary' }: {
         <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-foreground">{label}</span>
         <span className="shrink-0 pl-2 tabular-nums text-muted-foreground">{money(amount)} · {pct(share)}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded bg-muted">
-        <div className={`h-full rounded ${barClass}`} style={{ width: `${Math.min(100, share * 100)}%` }} />
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className={`h-full rounded-full ${barClass}`} style={{ width: `${Math.min(100, share * 100)}%` }} />
       </div>
     </div>
   )
@@ -102,15 +92,7 @@ function PartyList({ title, parties, emptyText }: {
         <p className="py-6 text-center text-sm text-muted-foreground">{emptyText}</p>
       ) : (
         <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-xs text-muted-foreground">
-              <tr>
-                <th className="py-1.5 text-left font-medium">往来方</th>
-                <th className="py-1.5 text-right font-medium">敞口</th>
-                <th className="py-1.5 text-right font-medium">逾期</th>
-                <th className="py-1.5 text-right font-medium">账龄</th>
-              </tr>
-            </thead>
+          <ResizableTable columns={[{ key: 'party', title: '往来方', width: 190 }, { key: 'amount', title: '敞口', width: 128, align: 'right' }, { key: 'overdue', title: '逾期', width: 128, align: 'right' }, { key: 'aging', title: '账龄', width: 112, align: 'right' }]} columnStorageKey={`finance-aging-${title}`} minWidth={558}>
             <tbody>
               {parties.map(p => (
                 <tr key={p.partyName} className="border-t border-border">
@@ -129,7 +111,7 @@ function PartyList({ title, parties, emptyText }: {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </ResizableTable>
         </div>
       )}
     </div>
@@ -188,10 +170,10 @@ export default function FinanceDashboardPage() {
   })
 
   return (
-    <div className="space-y-5">
+    <div className="fc-finance-dashboard space-y-5">
       <PageHeader
         title="资金看板"
-        description="账户余额、区间现金流、应收应付账龄一屏总览。数据实时取自账户流水与账款。"
+        description="查看账户余额、现金流与账龄。"
         actions={(
           <div className="flex gap-2">
             <Button variant="outline"
@@ -276,17 +258,17 @@ export default function FinanceDashboardPage() {
                 {agingChart.every(d => d.应收 === 0 && d.应付 === 0) ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">当前没有未结清账款</p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={240}>
+                  <ChartContainer width="100%" height={240}>
                     <BarChart data={agingChart} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis dataKey="label" tick={axisTick} />
-                      <YAxis tick={axisTick} tickFormatter={wan} width={48} />
-                      <Tooltip formatter={(v) => money(Number(v ?? 0))} contentStyle={chartTooltip} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                      <Legend wrapperStyle={{ fontSize: 12 }} />
-                      <Bar dataKey="应收" fill="hsl(var(--info))" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="应付" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
+                      <CartesianGrid {...chartGrid} />
+                      <XAxis axisLine={false} tickLine={false} tickMargin={10} dataKey="label" tick={axisTick} />
+                      <YAxis axisLine={false} tickLine={false} tick={axisTick} tickFormatter={wan} width={48} />
+                      <Tooltip formatter={(v) => money(Number(v ?? 0))} content={<ChartTooltipContent />} cursor={chartBarCursor} />
+                      <Legend content={<ChartLegendContent />} />
+                      <Bar maxBarSize={28} dataKey="应收" fill={CHART_TONES.info} radius={[5, 5, 0, 0]} />
+                      <Bar maxBarSize={28} dataKey="应付" fill={CHART_TONES.warning} radius={[5, 5, 0, 0]} />
                     </BarChart>
-                  </ResponsiveContainer>
+                  </ChartContainer>
                 )}
               </div>
 
@@ -298,24 +280,24 @@ export default function FinanceDashboardPage() {
           )}
 
           {/* 月度收支 + 账户余额分布 */}
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="fc-finance-charts grid gap-4 lg:grid-cols-2">
             <div className="card-base p-4">
               <h3 className="text-card-title">月度收支</h3>
               {monthlyData.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">该区间内没有资金流水</p>
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
+                <ChartContainer width="100%" height={260}>
                   <ComposedChart data={monthlyData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tick={axisTick} />
-                    <YAxis tick={axisTick} tickFormatter={wan} width={48} />
-                    <Tooltip formatter={(v) => money(Number(v ?? 0))} contentStyle={chartTooltip} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="收入" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                    <Bar dataKey="支出" fill="hsl(var(--destructive))" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                    <Line type="monotone" dataKey="净额" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                    <CartesianGrid {...chartGrid} />
+                    <XAxis axisLine={false} tickLine={false} tickMargin={10} dataKey="month" padding={{ left: 12, right: 24 }} tick={axisTick} />
+                    <YAxis axisLine={false} tickLine={false} tick={axisTick} tickFormatter={wan} width={48} />
+                    <Tooltip formatter={(v) => money(Number(v ?? 0))} content={<ChartTooltipContent />} cursor={chartBarCursor} />
+                    <Legend content={<ChartLegendContent />} />
+                    <Bar dataKey="收入" fill={CHART_TONES.success} radius={[5, 5, 0, 0]} maxBarSize={28} />
+                    <Bar dataKey="支出" fill={CHART_TONES.destructive} radius={[5, 5, 0, 0]} maxBarSize={28} />
+                    <Line type="monotone" dataKey="净额" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 2.5, strokeWidth: 0, fill: 'hsl(var(--primary))' }} activeDot={{ r: 4, strokeWidth: 2, stroke: 'hsl(var(--card))' }} />
                   </ComposedChart>
-                </ResponsiveContainer>
+                </ChartContainer>
               )}
             </div>
 
@@ -327,11 +309,12 @@ export default function FinanceDashboardPage() {
               {accounts.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">还没有启用的资金账户</p>
               ) : (
-                <ResponsiveContainer width="100%" height={260}>
+                <div>
+                <ChartContainer width="100%" height={220}>
                   <PieChart>
                     <Pie
                       data={accounts} dataKey="balance" nameKey="name"
-                      cx="50%" cy="50%" innerRadius={55} outerRadius={95} paddingAngle={2}
+                      cx="50%" cy="50%" innerRadius={64} outerRadius={92} paddingAngle={3} cornerRadius={4}
                     >
                       {accounts.map((a, i) => (
                         <Cell
@@ -340,10 +323,14 @@ export default function FinanceDashboardPage() {
                         />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(v, _n, p) => [`${money(Number(v ?? 0))} · ${pct((p?.payload?.share as number) ?? 0)}`, p?.payload?.name as string]} contentStyle={chartTooltip} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Tooltip formatter={(v, _n, p) => [`${money(Number(v ?? 0))} · ${pct((p?.payload?.share as number) ?? 0)}`, p?.payload?.name as string]} content={<ChartTooltipContent />} />
                   </PieChart>
-                </ResponsiveContainer>
+                </ChartContainer>
+                <ChartValueLegend entries={accounts.map((account, index) => ({
+                  key: account.id, label: account.name, value: money(account.balance),
+                  color: account.id === OTHER_ACCOUNT_ID ? OTHER_ACCOUNT_COLOR : PIE_COLORS[index % PIE_COLORS.length],
+                }))} />
+                </div>
               )}
             </div>
           </div>
@@ -365,15 +352,7 @@ export default function FinanceDashboardPage() {
             <div className="card-base p-4">
               <h3 className="text-card-title">资金流水按业务类型</h3>
               <div className="mt-3 overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-xs text-muted-foreground">
-                    <tr>
-                      <th className="py-1.5 text-left font-medium">业务类型</th>
-                      <th className="py-1.5 text-right font-medium">笔数</th>
-                      <th className="py-1.5 text-right font-medium">收入</th>
-                      <th className="py-1.5 text-right font-medium">支出</th>
-                    </tr>
-                  </thead>
+                <ResizableTable columns={[{ key: 'type', title: '业务类型', width: 180 }, { key: 'count', title: '笔数', width: 80, align: 'right' }, { key: 'in', title: '收入', width: 128, align: 'right' }, { key: 'out', title: '支出', width: 128, align: 'right' }]} columnStorageKey="finance-dashboard-business-types" minWidth={516}>
                   <tbody>
                     {data.byBizType.map(b => (
                       <tr key={b.bizType} className="border-t border-border">
@@ -387,7 +366,7 @@ export default function FinanceDashboardPage() {
                       <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">该区间内没有资金流水</td></tr>
                     )}
                   </tbody>
-                </table>
+                </ResizableTable>
               </div>
             </div>
           </div>

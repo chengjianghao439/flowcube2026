@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ShippingProductField } from '@/components/shared/ShippingProductField'
 import { updateWaybillShipmentApi } from '@/api/logistics'
@@ -36,7 +36,7 @@ export function DirectShipmentDialog({ waybill, onClose, onSaved, submitDisabled
     onError: (e: Error) => toast.error(e.message || '保存失败'),
   })
   return <Dialog open onOpenChange={v => { if (!v && !mutation.isPending) onClose() }}><DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-    <DialogHeader><DialogTitle>补充寄件资料</DialogTitle><DialogDescription>本批 {waybill.shipment?.packages.length || 0} 件，按实际打包箱数自动填写。重量由快递员称重确认。</DialogDescription></DialogHeader>
+    <DialogHeader description={<>{submitDisabled && <span role="status">原运单最新状态待核对，草稿已保留，暂不能提交。 </span>}本批 {waybill.shipment?.packages.length || 0} 件，按实际打包箱数自动填写。重量由快递员称重确认。</>}><DialogTitle>补充寄件资料</DialogTitle></DialogHeader>
     <div className="space-y-5 py-2">
       <ContactFields title="寄件人" value={sender} onChange={setSender} />
       <ContactFields title="收件人" value={receiver} onChange={setReceiver} />
@@ -47,7 +47,6 @@ export function DirectShipmentDialog({ waybill, onClose, onSaved, submitDisabled
         {waybill.platformCode === 'deppon' && <div><Label>送货方式</Label><Select value={deliveryType} onValueChange={setDeliveryType}><SelectTrigger aria-label="送货方式"><SelectValue placeholder="选择送货方式" /></SelectTrigger><SelectContent><SelectItem value="1">自提</SelectItem><SelectItem value="3">送货不上楼</SelectItem><SelectItem value="4">送货上楼</SelectItem></SelectContent></Select></div>}
       </div>
     </div>
-    {submitDisabled && <p role="status" className="text-sm text-muted-foreground">原运单最新状态待核对，草稿已保留，暂不能提交。</p>}
     <DialogFooter><Button variant="outline" disabled={mutation.isPending} onClick={onClose}>取消</Button><Button disabled={submitDisabled || mutation.isPending || !productCode || !cargoName || !['1', '2'].includes(freightType)} onClick={() => mutation.mutate()}>保存并提交下单</Button></DialogFooter>
   </DialogContent></Dialog>
 }

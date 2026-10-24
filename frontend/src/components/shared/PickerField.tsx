@@ -9,7 +9,7 @@
  * 默认最小高度 40px，长文本完整换行并自动增高；调用方可调整最小高度。
  * 即使查询表单沿用 h-9，也不能把长选择结果压回固定高度。
  */
-import { X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -27,7 +27,7 @@ export function PickerField({ id, label, value, placeholder, onOpen, onClear, on
   className?: string
 }) {
   const field = (
-    <div className="flex items-center gap-1">
+    <div className="fc-picker-field flex min-w-0 items-center gap-1">
       <button
         id={id}
         type="button"
@@ -35,7 +35,7 @@ export function PickerField({ id, label, value, placeholder, onOpen, onClear, on
         onDoubleClick={onDoubleClick}
         disabled={disabled}
         className={cn(
-          'min-h-10 !h-auto w-full min-w-0 whitespace-normal [overflow-wrap:anywhere] rounded-md border border-input bg-background px-3 py-2',
+          'fc-picker-trigger min-h-10 !h-auto w-full min-w-0 whitespace-normal [overflow-wrap:anywhere] rounded-md border border-input bg-background px-3 py-2',
           'text-left text-sm transition-colors',
           'hover:border-primary hover:bg-muted/30',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
@@ -43,9 +43,10 @@ export function PickerField({ id, label, value, placeholder, onOpen, onClear, on
           className,
         )}
       >
-        {value
+        <span className="fc-picker-value">{value
           ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-foreground">{value}</span>
-          : <span className="text-muted-foreground">{placeholder}</span>}
+          : <span className="text-muted-foreground">{placeholder}</span>}</span>
+        <Search aria-hidden="true" className="fc-picker-icon hidden h-3.5 w-3.5 shrink-0" />
       </button>
       {value && onClear ? (
         <Button type="button" variant="ghost" size="icon" className="shrink-0" onClick={onClear} disabled={disabled} aria-label={`清除${label ?? '选择'}`}>

@@ -1,7 +1,6 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
-import { AppDialog } from '@/components/shared/AppDialog'
-import { Button } from '@/components/ui/button'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Input } from '@/components/ui/input'
 import CategoryTreeSelect from '@/components/shared/CategoryTreeSelect'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
@@ -32,25 +31,14 @@ export default function InventoryOverviewQueryDialog({ open, initial, onClose, o
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
   return (
-    <AppDialog
+    <QueryDialog
       open={open}
-      onOpenChange={v => { if (!v) onClose() }}
       dialogId="inventory-overview-query"
       title="查询库存总览"
-      resizable={false}
-      defaultWidth={520}
-      defaultHeight={420}
-      minWidth={420}
-      minHeight={380}
-      footer={
-        <div className="flex justify-between gap-2">
-          <Button variant="ghost" onClick={() => setDraft(EMPTY)}>重置</Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>取消</Button>
-            <Button onClick={() => onApply(draft)}>查询</Button>
-          </div>
-        </div>
-      }
+      width={520}
+      onClose={onClose}
+      onReset={() => setDraft(EMPTY)}
+      onApply={() => onApply(draft)}
     >
       <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
@@ -87,6 +75,6 @@ export default function InventoryOverviewQueryDialog({ open, initial, onClose, o
           />
         </label>
       </QueryFormLayout>
-    </AppDialog>
+    </QueryDialog>
   )
 }

@@ -52,3 +52,29 @@ test('批次详情失败时显示可重试错误，不呈现待选择批次或�
   vi.mocked(getWaveByIdApi).mockResolvedValue({ id: 7, waveNo: 'PW-详情恢复', status: 4, items: [] } as never)
   await click('重试'); expect(document.querySelector('[role="dialog"]')!.textContent).toContain('PW-详情恢复')
 })
+
+test.each([
+  { status: 5, description: '该批次已取消，不再进行出库打印。', action: '如需恢复，请重新创建批次' },
+  { status: 4, description: '该批次已完成，仍可回看打印和任务执行情况。', action: '可回看打印与执行记录' },
+  { status: 2, printSummary: { failedCount: 1 }, description: '出库箱贴存在失败或超时任务，建议先补打，再继续拣货 / 分拣 / 出库。', action: '优先处理出库打印异常' },
+])('批次状态 $status 的原指引和下一步只在标题说明显示一次', async ({ status, printSummary, description, action }) => {
+  vi.mocked(getWaveByIdApi).mockResolvedValue({ id: 7, waveNo: 'PW-状态核对', status, printSummary, items: [] } as never)
+  await render('/?waveId=7')
+  const dialog = document.querySelector('[role="dialog"]')!
+  const caption = document.getElementById(dialog.getAttribute('aria-describedby')!)!
+  expect(caption.textContent).toContain(description)
+  expect(caption.textContent).toContain(action)
+  expect(dialog.textContent!.split(description)).toHaveLength(2)
+  expect(dialog.textContent!.split(action)).toHaveLength(2)
+  expect(dialog.textContent).toContain('当前进度：')
+})
+
+test('批次详情正在读取时，用原读取提示替换用途说明', async () => {
+  vi.mocked(getWaveByIdApi).mockReturnValue(new Promise(() => {}))
+  await render('/?waveId=7')
+  const dialog = document.querySelector('[role="dialog"]')!
+  const caption = document.getElementById(dialog.getAttribute('aria-describedby')!)!
+  expect(caption.textContent).toBe('正在加载批次详情…')
+  expect(dialog.textContent!.split('正在加载批次详情…')).toHaveLength(2)
+  expect(dialog.textContent).not.toContain('开始拣货')
+})

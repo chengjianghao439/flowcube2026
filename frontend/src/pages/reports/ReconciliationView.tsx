@@ -141,7 +141,6 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
 
 
 
-
   const columns: TableColumn<ReconciliationRecord>[] = [
     { key: 'orderNo', title: '关联单号', width: 170, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'partyName', title: copy.party, width: 160 },
@@ -221,6 +220,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
         )}
       />
 
+
       <div className="flex gap-1 border-b border-border">
         {([
           { key: 'statements' as const, label: '汇总对账' },
@@ -245,6 +245,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
       <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
 
       <PaymentQueryDialog
+        title={`查询${copy.title}`}
         open={queryOpen}
         initial={query}
         onClose={() => setQueryOpen(false)}

@@ -1,7 +1,9 @@
+import { ResizableTable } from '@/components/shared/ResizableTable'
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 /**
  * 批次拣货管理页
  * 路由：/picking-waves
@@ -230,10 +232,10 @@ export default function PickingWavesPage() {
   const detailCopy = getWaveClosureCopy(detail ?? null)
 
   return (
-    <div className="space-y-5">
+    <div className="desktop-wave-page space-y-5">
       <PageHeader
         title="批次拣货"
-        description="管理批次拣货、分拣推进，以及出库箱贴打印异常的处理。"
+        description="核对批次拣货、分拣与打印进度。"
         actions={
           <>
             <Button variant="outline" onClick={() => downloadExport('/export/picking-waves').catch(e => toast.error((e as Error).message))}>导出</Button>
@@ -262,42 +264,29 @@ export default function PickingWavesPage() {
       </>}
 
       <Dialog open={!!selectedWaveId} onOpenChange={v => !v && closeDetail()}>
-        <DialogContent className="max-w-6xl">
-          <DialogHeader>
+        <DialogContent className="desktop-wave-dialog max-w-6xl">
+          <DialogHeader description={detailError ? '核对批次任务、执行进度与异常。'
+            : detailLoading ? <span role="status">正在加载批次详情…</span>
+            : detail ? <>{detailCopy.description} 下一步动作：{detailCopy.nextAction}。</>
+            : '核对批次任务、执行进度与异常。'}>
             <DialogTitle>
               批次详情 — <span className="text-doc-code-strong">{detail?.waveNo ?? `#${selectedWaveId}`}</span>
             </DialogTitle>
           </DialogHeader>
 
           <div className="max-h-[75vh] space-y-5 overflow-y-auto py-2">
-            {detailError ? <QueryErrorState error={detailFailure} onRetry={() => { void retryDetail() }} title="批次详情加载失败" /> : detailLoading ? <p className="py-8 text-center text-muted-foreground">正在加载批次详情…</p> : detail ? <OrderDetailSections type="wave" id={selectedWaveId || 0} initialView={focus === 'print-closure' ? 'print' : focus ? 'progress' : 'info'} printProgress={<div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>打开出库补打</Button></div>}>
-            <section className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-foreground">当前进度：{detailCopy.stageLabel}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{detailCopy.description}</p>
-                </div>
-                <div className="rounded-lg border border-border bg-white px-4 py-3 text-left">
-                  <p className="text-helper">下一步动作</p>
-                  <p className="mt-1 font-semibold text-foreground">{detailCopy.nextAction}</p>
-                </div>
-              </div>
+            {detailError ? <QueryErrorState error={detailFailure} onRetry={() => { void retryDetail() }} title="批次详情加载失败" /> : detailLoading ? null : detail ? <OrderDetailSections type="wave" id={selectedWaveId || 0} initialView={focus === 'print-closure' ? 'print' : focus ? 'progress' : 'info'} printProgress={<div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>打开出库补打</Button></div>}>
+            <section className="desktop-wave-progress rounded-lg border border-primary/20 bg-primary/5 px-4 py-4">
+              <p className="text-sm font-semibold text-foreground">当前进度：{detailCopy.stageLabel}</p>
             </section>
 
             {detail?.items?.length ? (
-              <section className="space-y-3 rounded-lg border border-border bg-card p-4">
+              <section className="desktop-wave-items space-y-3 rounded-lg border border-border bg-card p-4">
                 <div>
                   <h3 className="text-card-title">批次商品汇总</h3>
                   <p className="text-muted-body">按商品查看应拣与已拣，快速定位缺口。</p>
                 </div>
-                <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm">
-                  <thead>
-                    <tr className="border-b border-border text-left text-muted-foreground">
-                      <ProductIdentityHeaders />
-                      <th className="px-3 py-2 text-right">应拣</th>
-                      <th className="px-3 py-2 text-right">已拣</th>
-                    </tr>
-                  </thead>
+                <div className="overflow-x-auto"><ResizableTable columns={[...productIdentityColumns(), { key: 'totalQty', title: '应拣', width: 80, align: 'right' }, { key: 'pickedQty', title: '已拣', width: 80, align: 'right' }]} columnStorageKey="picking-wave-items" minWidth={960}>
                   <tbody className="divide-y divide-border">
                     {detail.items.map(item => (
                       <tr key={item.id}>
@@ -307,7 +296,7 @@ export default function PickingWavesPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table></div>
+                </ResizableTable></div>
               </section>
             ) : null}
             </OrderDetailSections> : null}

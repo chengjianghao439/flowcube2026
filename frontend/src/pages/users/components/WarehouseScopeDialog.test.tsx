@@ -32,4 +32,8 @@ test('cannot save an empty warehouse scope before the current scope loads', asyn
   await act(async () => root.render(<WarehouseScopeDialog open onClose={() => {}} userId={42} userName="测试" />))
   const button = [...document.querySelectorAll('button')].find(item => item.textContent === '保存')!
   expect(button.disabled).toBe(true)
+  expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('加载中…')
+  expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('不勾选任何仓库 = 不限仓')
+  expect(document.body.textContent?.match(/加载中…/g)).toHaveLength(1)
+  expect(save).not.toHaveBeenCalled()
 })

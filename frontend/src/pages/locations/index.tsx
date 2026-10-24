@@ -139,7 +139,7 @@ export default function LocationsPage() {
     <>
       <BaseCrudPage<Location>
         title="库位管理"
-        description="管理仓库内的存储库位"
+      description="维护仓库内的存储库位。"
         canCreate={can(PERMISSIONS.LOCATION_CREATE)}
       canEdit={can(PERMISSIONS.LOCATION_UPDATE)}
       canDelete={can(PERMISSIONS.LOCATION_DELETE)}
@@ -156,7 +156,7 @@ export default function LocationsPage() {
         recordUnit="个"
         deleteApi={(id) => deleteLocationApi(id, { skipGlobalError: true })}
         deleteMessage="库位被库存引用后不能删除；如需停用，请编辑并取消启用。"
-        createLabel="+ 新建库位"
+        createLabel="新建库位"
         saveSuccessMessage={(editing) => editing ? '库位已保存' : '库位已创建'}
         formWidthClass="max-w-2xl"
         onOpen={handleOpen}

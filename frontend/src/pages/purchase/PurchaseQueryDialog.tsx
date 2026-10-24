@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AppDialog } from '@/components/shared/AppDialog'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SupplierFinder, ProductFinder } from '@/components/finder'
@@ -62,26 +61,14 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
 
   return (
     <>
-      <AppDialog
+      <QueryDialog
         open={open}
-        captureFocusOnOpen
-        onOpenChange={v => { if (!v) onClose() }}
         dialogId="purchase-query"
         title="查询采购单"
-        resizable={false}
-        defaultWidth={680}
-        defaultHeight={600}
-        minWidth={420}
-        minHeight={420}
-        footer={
-          <div className="flex justify-between gap-2">
-            <Button variant="ghost" onClick={() => setDraft(resetDraft())}>重置</Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>取消</Button>
-              <Button onClick={() => onApply(draft)}>查询</Button>
-            </div>
-          </div>
-        }
+        width={680}
+        onClose={onClose}
+        onReset={() => setDraft(resetDraft())}
+        onApply={() => onApply(draft)}
       >
         <div className="grid content-start grid-cols-1 gap-x-5 gap-y-3 overflow-y-auto px-5 py-4 sm:grid-cols-2 [&>*]:min-w-0">
           <p className="col-span-full text-sm font-semibold">订单条件</p>
@@ -147,14 +134,14 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
           </label>
 
           <p className="col-span-full border-t border-border pt-3 text-sm font-semibold">创建与备注</p>
-          <label className="flex flex-col gap-1">
+          <label className="fc-query-date-start flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
-            <DatePicker value={draft.startDate} max={draft.endDate || undefined}
+            <DatePicker aria-label="创建日期（起）" value={draft.startDate} max={draft.endDate || undefined}
               onChange={v => set('startDate', v)} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
-            <DatePicker value={draft.endDate} min={draft.startDate || undefined}
+            <DatePicker aria-label="创建日期（止）" value={draft.endDate} min={draft.startDate || undefined}
               onChange={v => set('endDate', v)} className="h-9" />
           </label>
 
@@ -169,7 +156,7 @@ export default function PurchaseQueryDialog({ open, initial, resetValues, onClos
             />
           </label>
         </div>
-      </AppDialog>
+      </QueryDialog>
 
       <SupplierFinder
         compact context="purchase" dialogId="purchase-query-supplier-finder"

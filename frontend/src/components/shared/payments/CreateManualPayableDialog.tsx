@@ -197,7 +197,10 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
   }
 
   return (
-    <AppDialog
+    <AppDialog descriptionInHeader description={<>{<>
+          没有采购单/运费单可挂的应付（零星费用、押金、线下结算的采购）在这里录入。
+          创建后不会自动记账：需在「凭证」页点「生成本期凭证」入账。
+        </>}</>}
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="manual-payable-create"
@@ -223,10 +226,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
       }
     >
       <form id={FORM_ID} onSubmit={submit} className="h-full overflow-y-auto p-5">
-        <p className="mb-4 text-sm text-muted-foreground">
-          没有采购单/运费单可挂的应付（零星费用、押金、线下结算的采购）在这里录入。
-          创建后不会自动记账：需在「凭证」页点「生成本期凭证」入账。
-        </p>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <Label>单号 *</Label>

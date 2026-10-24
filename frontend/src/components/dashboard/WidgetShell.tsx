@@ -27,10 +27,10 @@ export function WidgetShell({
   onRetry?: () => void
 }) {
   return (
-    // h-full + overflow-hidden：卡片高度由网格行高决定，内容不撑破（超出的靠 scrollBody 滚动）
-    <div className={cn('card-base dashboard-widget flex h-full flex-col overflow-hidden p-4', className)}>
+    // 外层控制有界尺寸；ERP列表可按内容收缩，超出上限仍由scrollBody滚动。
+    <div data-tone={tone} className={cn('card-base dashboard-widget flex h-full flex-col overflow-hidden p-4', className)}>
       <div className="dashboard-widget-header mb-3 flex shrink-0 flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-border pb-3">
-        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE_ICON[tone])}>
+        <span className={cn('dashboard-widget-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE_ICON[tone])}>
           <Icon className="h-4 w-4" aria-hidden />
         </span>
         <h3 className="min-w-0 flex-1 text-sm font-semibold leading-5 text-foreground">{title}</h3>

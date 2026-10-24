@@ -26,7 +26,7 @@ export function StatTile({
   loading?: boolean
 }) {
   return (
-    <div className={cn('card-base dashboard-stat flex h-full flex-col overflow-hidden px-5 py-4', accent && TONE_CARD[tone])}>
+    <div data-tone={tone} data-accent={accent || undefined} className={cn('card-base dashboard-stat flex h-full flex-col overflow-hidden px-5 py-4', accent && TONE_CARD[tone])}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
@@ -34,7 +34,7 @@ export function StatTile({
             <p className={cn('mt-2 break-words text-[26px] font-semibold leading-8 tracking-tight tabular-nums', accent ? TONE_TEXT[tone] : 'text-foreground')} title={String(value)}>{value}</p>
           )}
         </div>
-        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE_ICON[tone])}>
+        <span className={cn('dashboard-stat-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE_ICON[tone])}>
           <Icon className="h-[18px] w-[18px]" aria-hidden />
         </span>
       </div>

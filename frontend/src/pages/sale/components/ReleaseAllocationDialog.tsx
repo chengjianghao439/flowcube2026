@@ -1,7 +1,8 @@
+import { ReportTable } from '@/components/shared/ReportTable'
 import OrdinarySaleRecoveryNotice from './OrdinarySaleRecoveryNotice'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { useEffect, useRef, useState } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -82,14 +83,14 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
       <DialogContent aria-busy={release.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl flex-col gap-4 p-4 sm:p-6">
-        <DialogHeader><DialogTitle>取消占库</DialogTitle></DialogHeader>
-        <DialogDescription>
+        <DialogHeader description={<>{<>
           选择需要释放的商品并填写数量。未勾选的明细继续保留占库。
-        </DialogDescription>
+        </>}</>}><DialogTitle>取消占库</DialogTitle></DialogHeader>
+
 
         <OrdinarySaleRecoveryNotice recovery={release.recovery} onConfirmed={onClose} />
         <div className="min-h-0 overflow-auto rounded-lg border border-border">
-          <table className="w-full min-w-[1560px] text-sm">
+          <ReportTable className="w-full min-w-[1560px] text-sm">
             <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr>
                 <th className="w-10 px-3 py-2">
@@ -145,7 +146,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                 <tr><td colSpan={10} className="px-2 py-6 text-center text-muted-foreground">没有已占库存的明细</td></tr>
               )}
             </tbody>
-          </table>
+          </ReportTable>
         </div>
 
         {invalid.length > 0 && <p role="alert" className="text-sm text-destructive-ink">释放数量须大于 0、不超过已占数量，最多保留 2 位小数。</p>}

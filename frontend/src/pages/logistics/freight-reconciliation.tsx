@@ -96,6 +96,7 @@ export default function FreightReconciliationPage() {
         description="录入承运商回传的运费账单，按「承运商 + 账期」汇总生成对承运商的应付（仅寄付计入，月结，需财务确认后付款）。"
       />
 
+
       <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
         <div>
           <Label className="text-xs text-muted-foreground">承运商</Label>
@@ -138,7 +139,7 @@ export default function FreightReconciliationPage() {
 
       <Dialog open={billDialog} onOpenChange={v => !v && setBillDialog(false)}>
         <DialogContent className="max-w-xl">
-          <DialogHeader><DialogTitle>录入运费账单</DialogTitle></DialogHeader>
+          <DialogHeader description={"核对承运商账期、运单与账单金额。"}><DialogTitle>录入运费账单</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div>
               <Label>承运商</Label>

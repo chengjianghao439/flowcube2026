@@ -102,6 +102,8 @@ export function ConfirmDialog({
       }}
       dialogId="confirm-dialog"
       resizable={false}
+      sizeToContent
+      description={description}
       defaultWidth={520}
       defaultHeight={250}
       minWidth={360}
@@ -109,7 +111,7 @@ export function ConfirmDialog({
       title={
         <span className="flex items-center gap-2">
           {variant === 'destructive' && (
-            <AlertTriangle className="h-4 w-4 text-destructive-ink" />
+            <AlertTriangle className="h-4 w-4 shrink-0 text-destructive-ink" aria-hidden />
           )}
           {title}
         </span>
@@ -124,10 +126,6 @@ export function ConfirmDialog({
           </Button>
         </div>
       }
-    >
-      <div className="overflow-auto px-5 py-4 text-sm leading-6 break-words text-muted-foreground">
-        {description}
-      </div>
-    </AppDialog>
+    />
   )
 }

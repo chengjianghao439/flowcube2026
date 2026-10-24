@@ -85,7 +85,7 @@ export default function CarriersPage() {
   return (
     <BaseCrudPage<Carrier>
       title="承运商管理"
-      description="管理物流、快递等承运商信息"
+      description="维护承运商资料与联系方式。"
       canCreate={can(PERMISSIONS.CARRIER_CREATE)}
       canEdit={can(PERMISSIONS.CARRIER_UPDATE)}
       canDelete={can(PERMISSIONS.CARRIER_DELETE)}

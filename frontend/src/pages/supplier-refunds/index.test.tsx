@@ -67,6 +67,9 @@ test('已创建原回执仍呈现提交的两位现金金额和原分配，不�
  }finally{await m.close()}
 })
 test.each([1, 2, 3, 4])('状态%d准确detail动作，state3不撤销，确认只RF1与真实confirmAllowed', async (value) => { status = value; const m = await mount('/supplier-refunds?detailId=61'); try {
+    expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('退款与实物退货独立');
+    expect(document.body.textContent?.match(/退款与实物退货独立/g)).toHaveLength(1);
+    expect(document.body.textContent).not.toContain('核对供应商退款与实际回款记录。');
     expect(document.body.textContent).toContain('RF61');
     expect(buttons('确认退款单').some(b => !b.disabled)).toBe(value === 1);
     expect(buttons('登记实际已收到').some(b => !b.disabled)).toBe(value === 2);

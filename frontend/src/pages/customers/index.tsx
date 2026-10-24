@@ -116,8 +116,9 @@ export default function CustomersPage() {
   ]
 
   return (
-    <div className="space-y-4">
-      <PageHeader title="客户管理" description="维护客户档案、结算与授信，配置销售默认价格等级。" actions={
+    <div className="desktop-record-page space-y-4">
+      <PageHeader title="客户管理"
+        description="维护客户资料、结算与授信。"  actions={
         <>
           <Button variant="outline" onClick={() => downloadExport('/export/customers').catch(e => toast.error((e as Error).message))}>导出</Button>
           {can(PERMISSIONS.CUSTOMER_CREATE) && <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>}
@@ -176,10 +177,10 @@ export default function CustomersPage() {
       {/* 绑定价格等级弹窗 */}
       <Dialog open={bindOpen && canBindPrice} onOpenChange={setBindOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>绑定价格等级</DialogTitle></DialogHeader>
+          <DialogHeader description={<>{<>选择客户默认价格等级，下销售单时会自动带入对应的 A / B / C / D 价格。</>}</>}><DialogTitle>绑定价格等级</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <RecordIdentity title={bindCustomer?.name} code={bindCustomer?.code} />
-            <p className="text-sm text-muted-foreground">选择客户默认价格等级，下销售单时会自动带入对应的 A / B / C / D 价格。</p>
+
             <Select value={selectedPriceLevel} onValueChange={v => setSelectedPriceLevel(v as 'A' | 'B' | 'C' | 'D')}>
               <SelectTrigger aria-label="客户默认价格等级" className="h-10 w-full">
                 <SelectValue placeholder="选择价格等级" />
