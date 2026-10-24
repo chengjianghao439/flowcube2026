@@ -29,12 +29,12 @@ const typeParamSchema = z.object({
 const bindBodySchema = z.object({
   printerId: z.coerce.number().int().positive('printerId 必填'),
   warehouseId: z.union([z.coerce.number().int().min(0), z.literal(''), z.null(), z.undefined()])
-    .transform((value) => (value == null || value === '' ? 0 : Number(value))),
+    .transform((value) => (value == null || value === '' ? 0 : Number(value))).default(0),
 }).passthrough()
 
 const unbindQuerySchema = z.object({
   warehouseId: z.union([z.coerce.number().int().min(0), z.literal(''), z.null(), z.undefined()])
-    .transform((value) => (value == null || value === '' ? 0 : Number(value))),
+    .transform((value) => (value == null || value === '' ? 0 : Number(value))).default(0),
 }).passthrough()
 
 router.use(authMiddleware)

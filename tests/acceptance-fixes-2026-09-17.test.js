@@ -123,6 +123,21 @@ test('超额申请沿用原到期时间格式，分钟、秒和小数秒均兼�
   }
 })
 
+test('打印机绑定省略仓库仍按原规则解析为公司级零，不提前返回校验错误', () => {
+  const router = offlineRouter('printer-bindings/printer-bindings.routes.js')
+  for (const method of ['put', 'delete']) {
+    const route = router.stack.find(layer => layer.route?.path === '/:type' && layer.route.methods[method]).route
+    for (const value of [undefined, '', null, 0, '0', '3']) {
+      const warehouse = value === undefined ? {} : { warehouseId: value }
+      const req = method === 'put' ? { body: { printerId: '7', ...warehouse } } : { query: warehouse }
+      let error
+      route.stack[2].handle(req, fakeRes(), err => { error = err })
+      assert.equal(error, undefined)
+      assert.equal((req.body ?? req.query).warehouseId, Number(value) || 0)
+    }
+  }
+})
+
 test('畸形 JSON 请求体返回 400 而不是 500', () => {
   const errorHandler = require('../backend/src/middleware/errorHandler')
   const req = { originalUrl: '/api/auth/login', method: 'POST', body: {}, params: {}, requestId: 'test-req' }
