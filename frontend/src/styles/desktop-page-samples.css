@@ -3,42 +3,25 @@
 .desktop-shell-sample,
 :is(.desktop-page-sample, .desktop-workspace),
 body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper]) {
-  --background:240 11% 96.5%;
-  --foreground:240 3% 12%;
-  --card:0 0% 100%;
-  --card-foreground:240 3% 12%;
-  --popover:0 0% 100%;
-  --popover-foreground:240 3% 12%;
-  --primary:223 100% 31%;
-  --primary-foreground:0 0% 100%;
-  --border:240 6% 89%;
-  --input:240 5% 83%;
-  --ring:220 100% 40%;
-  --muted:240 6% 95%;
-  --muted-foreground:240 2% 43%;
-  --accent:220 60% 96%;
-  --accent-foreground:223 100% 31%;
-  --desktop-radius:14px;
-  --desktop-shadow:0 1px 3px rgb(29 29 31 / 2%);
+  --desktop-radius:var(--radius);
+  --desktop-radius-lg:var(--radius-dialog);
+  --desktop-shadow:var(--shadow-card);
+  --desktop-shadow-lg:var(--shadow-popover);
   font-family:"Inter","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
   font-variant-numeric:tabular-nums;
 }
 
 /* Keep the full navigation and workspace tabs, with a quieter visual hierarchy. */
-.desktop-shell-sample > header { background:#fff; }
+.desktop-shell-sample > header { background:hsl(var(--card) / .86); backdrop-filter:blur(16px) saturate(1.4); -webkit-backdrop-filter:blur(16px) saturate(1.4); border-bottom:1px solid hsl(var(--border)); }
 .desktop-shell-sample .desktop-topbar { min-height:54px; padding:6px 20px; gap:12px; }
 .desktop-shell-sample .desktop-nav nav { gap:2px; }
-.desktop-shell-sample .desktop-nav nav :is(a,button) { padding:7px 9px; font-size:13px; font-weight:500; border-radius:7px; }
-.desktop-shell-sample .desktop-nav nav [role="menu"] ul { border-radius:12px; padding:6px; box-shadow:0 16px 40px rgb(29 29 31 / 12%); }
-.desktop-shell-sample .desktop-nav nav [role="menu"] a { border-radius:6px; padding:8px 10px; }
+.desktop-shell-sample .desktop-nav nav :is(a,button) { padding:7px 10px; font-size:13px; font-weight:500; border-radius:8px; }
+.desktop-shell-sample .desktop-nav nav [role="menu"] a { border-radius:8px; padding:8px 10px; }
 .desktop-shell-sample .desktop-tools { gap:10px; padding-left:14px; }
-.desktop-shell-sample .desktop-search .fc-global-search-input { width:176px; border-radius:8px; background:#f5f5f7; }
+.desktop-shell-sample .desktop-search .fc-global-search-input { width:176px; border-radius:var(--radius-button); background:hsl(var(--background)); }
 .desktop-shell-sample .desktop-search input { font-size:12px; }
-.desktop-shell-sample .desktop-tabs { background:#f0f0f2; padding:6px 20px 0; }
-.desktop-shell-sample .desktop-tabs [role="presentation"] { border:1px solid transparent; border-bottom:0; border-radius:9px 9px 0 0; }
-.desktop-shell-sample .desktop-tabs [role="presentation"]:has(> [role="tab"][aria-selected="true"]) { background:#fff; border-color:hsl(var(--border)); }
-.desktop-shell-sample .desktop-tabs [role="presentation"] > span.absolute { display:none; }
-.desktop-shell-sample .desktop-tabs [role="tab"] { border:0; border-radius:8px 8px 0 0; background:transparent; font-size:12.5px; font-weight:400; }
+.desktop-shell-sample .desktop-tabs { background:hsl(var(--background)); padding:6px 20px 0; }
+.desktop-shell-sample .desktop-tabs [role="tab"] { border:0; border-radius:0; background:transparent; font-size:12.5px; font-weight:400; }
 .desktop-shell-sample .desktop-tabs [role="tab"][aria-selected="true"] { color:hsl(var(--foreground)); font-weight:600; }
 
 :is(.desktop-page-sample,.desktop-workspace) { width:100%; min-width:0; max-width:none; margin-inline:auto; color:hsl(var(--foreground)); font-size:13.5px; }
@@ -56,37 +39,39 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-ra
 .desktop-workspace .desktop-page-header .fc-button { height:36px; font-size:13px; }
 .desktop-workspace .desktop-section-heading h3 { font-size:14px; line-height:1.5; font-weight:600; }
 .desktop-workspace :is(.desktop-section-card,.bg-card.border).rounded-lg { border-radius:var(--desktop-radius); }
-.desktop-workspace :is(input.bg-background,textarea.bg-background,button.bg-background) { background-color:#fff; }
+.desktop-workspace :is(input.bg-background,textarea.bg-background,button.bg-background) { background-color:hsl(var(--card)); }
 
 /* Shape defaults live below utilities so validation, disabled and domain states win. */
 @layer components {
   :is(.desktop-page-sample,.desktop-workspace) :is(.desktop-section-card,.bg-card.border),
   .desktop-workspace .sample-table-panel,
   .desktop-workspace .sample-settings-card {
-    border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:#fff; box-shadow:var(--desktop-shadow);
+    border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:hsl(var(--card)); box-shadow:var(--desktop-shadow);
   }
   :is(.desktop-page-sample,.desktop-workspace) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),textarea,[role="combobox"]),
   body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),textarea,[role="combobox"]) {
-    background-color:#fafafa; border-radius:8px; font-size:13px;
+    background-color:hsl(var(--card)); border:1px solid hsl(var(--input)); border-radius:10px; font-size:13px;
   }
   :is(.desktop-page-sample,.desktop-workspace) :is(input,textarea,[role="combobox"]):focus-visible,
-  body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) :is(input,textarea,[role="combobox"]):focus-visible { background-color:#fff; }
+  body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) :is(input,textarea,[role="combobox"]):focus-visible { background-color:hsl(var(--card)); }
   body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) { background-color:hsl(var(--background)); color:hsl(var(--foreground)); }
 }
 :is(.desktop-page-sample,.desktop-workspace) .fc-button,
 body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper]) .fc-button {
-  border-radius:8px; font-weight:500; box-shadow:none; transition-property:background-color,border-color,color,box-shadow;
+  border-radius:10px; font-weight:500; box-shadow:none; transition-property:background-color,border-color,color,box-shadow;
 }
+:is(.desktop-page-sample,.desktop-workspace) .fc-button.bg-primary,
+body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) .fc-button.bg-primary { background:hsl(var(--primary-action)); }
 :is(.desktop-page-sample,.desktop-workspace) .fc-button.bg-primary:hover,
-body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) .fc-button.bg-primary:hover { background:#0043ce; }
+body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) .fc-button.bg-primary:hover { background:hsl(var(--primary-hover)); }
 :is(.desktop-page-sample,.desktop-workspace) :is(input,textarea,button):disabled { cursor:not-allowed; }
 
 /* Column widths and virtualization remain owned by DataTable; all columns scroll together. */
 .desktop-workspace .desktop-table { border-radius:var(--desktop-radius); box-shadow:var(--desktop-shadow); }
 .desktop-workspace .desktop-table table { font-size:13px; }
-.desktop-workspace :is(.data-table-header,.data-table-header-surface) { background:#fafafa; }
+.desktop-workspace :is(.data-table-header,.data-table-header-surface) { background:hsl(var(--card)); }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) :is(.fc-table-header-cell,.data-table-header > tr > th,.data-table-header-surface > th,.fc-report-table > thead > tr > th) {
-  padding:10px 16px; background:#fafafa; color:hsl(var(--muted-foreground));
+  padding:10px 16px; background:hsl(var(--card)); color:hsl(var(--muted-foreground));
   border-bottom:1px solid hsl(var(--border)); font-size:12px; line-height:18px; font-weight:500; vertical-align:middle;
 }
 .desktop-workspace .desktop-table td:not([colspan]) { padding-block:10px; }
@@ -98,7 +83,7 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) .fc-button.bg-pri
   background-color:var(--desktop-row-surface);
 }
 .desktop-workspace .desktop-table tbody > tr:hover {
-  --desktop-row-surface:color-mix(in srgb,hsl(var(--muted)) 30%,hsl(var(--card)));
+  --desktop-row-surface:color-mix(in srgb,hsl(var(--primary)) 4%,hsl(var(--card)));
 }
 .desktop-workspace .desktop-table tbody > tr[data-selected="true"] {
   --desktop-row-surface:color-mix(in srgb,hsl(var(--primary)) 7%,hsl(var(--card)));
@@ -107,7 +92,7 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) .fc-button.bg-pri
 .desktop-workspace .sample-table-panel { min-width:0; }
 
 /* 全局搜索沿成熟的命令菜单交互，选中行和分组使用现有中性色。 */
-body:has(.desktop-shell-sample) .fc-global-search-results { border-radius:12px; box-shadow:0 16px 40px rgb(29 29 31 / 12%); }
+body:has(.desktop-shell-sample) .fc-global-search-results { border-radius:16px; box-shadow:var(--desktop-shadow-lg); }
 body:has(.desktop-shell-sample) .fc-global-search-list { padding:6px; }
 body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading] { display:flex; align-items:center; gap:7px; padding:10px 10px 6px; color:hsl(var(--muted-foreground)); font-size:11.5px; font-weight:500; }
 body:has(.desktop-shell-sample) .fc-global-search-result { transition:background-color 120ms ease,color 120ms ease; }
@@ -118,10 +103,8 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 @media (prefers-reduced-motion:reduce) { body:has(.desktop-shell-sample) .fc-global-search-result { transition:none; } }
 .desktop-workspace .sample-table-panel > .desktop-table { border:0; border-radius:var(--desktop-radius) var(--desktop-radius) 0 0; box-shadow:none; }
 .desktop-workspace .sample-table-panel > [role="status"] { padding:14px 16px; font-size:12px; }
-:is(.sample-status-strip > [role="group"],.desktop-workspace .desktop-status-filter) { border:0; gap:6px; }
-:is(.sample-status-strip,.desktop-workspace .desktop-status-filter) button { min-height:34px; padding:6px 12px; border:1px solid transparent; border-radius:8px; font-size:12.5px; font-weight:400; }
-:is(.sample-status-strip,.desktop-workspace .desktop-status-filter) button[data-state="on"] { border-color:hsl(var(--border)); background:#fff; color:hsl(var(--primary)); font-weight:500; box-shadow:var(--desktop-shadow); }
-.sale-list-sample > .flex .rounded-full { background:#edf5ff; color:#002d9c; }
+:is(.sample-status-strip > [role="radiogroup"],.desktop-workspace .desktop-status-filter) { border:0; gap:6px; }
+.sale-list-sample > .flex > span.rounded-full { background:hsl(var(--blue-10)); color:hsl(var(--primary-action)); }
 
 .sale-form-sample .sample-order-editor > .sticky:first-child { margin:0; padding:0 0 16px; border-bottom:0; background:hsl(var(--background)); }
 .sale-form-sample .sample-order-editor > fieldset { display:flex; flex-direction:column; gap:18px; }
@@ -136,19 +119,13 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 }
 .desktop-workspace .desktop-action-buttons { gap:8px; }
 .desktop-workspace .desktop-action-buttons .fc-button { height:36px; font-size:13px; }
-:is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog) .desktop-detail-tabs {
-  gap:20px; padding:0; border:0; border-bottom:1px solid hsl(var(--border));
-  border-radius:0; background:transparent;
-}
 :is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog) .desktop-detail-tabs > button {
-  flex:0 0 auto; min-width:0; padding:10px 2px 12px; border-radius:0;
-  border-bottom:2px solid transparent; background:transparent; box-shadow:none;
-  color:hsl(var(--muted-foreground)); font-size:13px; font-weight:400;
+  font-size:13px; font-weight:500;
 }
+:is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog) .desktop-detail-tabs > button.rounded-md { border-radius:var(--radius-button); }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog) .desktop-detail-tabs > button:is([aria-selected="true"],[aria-pressed="true"]) {
-  color:hsl(var(--primary)); border-bottom-color:hsl(var(--primary)); font-weight:500;
+  color:hsl(var(--primary)); font-weight:600;
 }
-:is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog) .desktop-detail-tabs > button:hover { color:hsl(var(--foreground)); }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog) .desktop-detail-tabs > button > svg { width:15px; height:15px; }
 .desktop-workspace .desktop-purchase-form { gap:18px; }
 .desktop-workspace .desktop-purchase-form > .desktop-section-card { overflow:hidden; }
@@ -159,10 +136,10 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 .desktop-workspace .desktop-order-facts { gap:14px 28px; font-size:13px; }
 .desktop-workspace .desktop-order-facts > div:not(.col-span-full) > dt { min-width:64px; }
 .desktop-workspace .desktop-order-facts dd { font-weight:500; line-height:1.6; }
-.desktop-workspace .desktop-order-total { padding:14px 16px; background:#fafafa; font-size:13px; }
+.desktop-workspace .desktop-order-total { padding:14px 16px; border-radius:0 0 var(--desktop-radius) var(--desktop-radius); background:hsl(var(--surface-subtle)); font-size:13px; }
 .desktop-workspace .desktop-order-total strong { font-size:16px; font-weight:600; }
 .desktop-workspace .desktop-order-total strong > span { font-size:13px; color:hsl(var(--muted-foreground)); }
-.desktop-workspace .desktop-summary-strip { border-radius:var(--desktop-radius); background:#fff; }
+.desktop-workspace .desktop-summary-strip { border-radius:var(--desktop-radius); background:hsl(var(--card)); }
 .desktop-workspace .desktop-summary-strip > div { padding:14px 18px; }
 .desktop-workspace .desktop-summary-strip dd { font-size:19px; letter-spacing:-.02em; }
 .desktop-workspace .desktop-filter-card { border-radius:var(--desktop-radius); }
@@ -175,7 +152,7 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 
 /* Inventory, receiving and warehouse execution keep their existing data and controls. */
 .desktop-workspace .desktop-stock-summary {
-  gap:0; overflow:hidden; border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:#fff;
+  gap:0; overflow:hidden; border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:hsl(var(--card));
 }
 .desktop-workspace .desktop-stock-stat {
   padding:18px 20px; gap:10px; border:0; border-radius:0; background:transparent; box-shadow:none;
@@ -184,7 +161,7 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 .desktop-workspace .desktop-stock-stat-icon { width:24px; height:24px; background:transparent; }
 .desktop-workspace .desktop-stock-stat-icon > svg { width:17px; height:17px; }
 .desktop-workspace .desktop-stock-stat-value { margin-top:6px; font-size:20px; font-weight:600; line-height:1.4; letter-spacing:-.02em; }
-.desktop-workspace .desktop-inventory-table thead > tr { background:#fafafa; }
+.desktop-workspace .desktop-inventory-table thead > tr { background:hsl(var(--surface-subtle)); }
 .desktop-workspace :is(.desktop-inbound-form,.desktop-inbound-detail) { gap:18px; }
 .desktop-workspace .desktop-inbound-form > .desktop-section-card { overflow:hidden; }
 .desktop-workspace .desktop-inbound-summary { border-radius:var(--desktop-radius); }
@@ -193,8 +170,8 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 .desktop-workspace .desktop-inbound-facts { gap:12px 28px; font-size:13px; line-height:1.7; }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog,body:has(.desktop-shell-sample) .fc-app-dialog) [data-inbound-entry-table] { font-size:13px; }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog,body:has(.desktop-shell-sample) .fc-app-dialog) [data-inbound-entry-table] td { padding-block:10px; }
-body:has(.desktop-shell-sample) .fc-sheet { --background:0 0% 100%; color:hsl(var(--foreground)); box-shadow:-16px 0 64px rgb(29 29 31 / 12%); }
-body:has(.desktop-shell-sample) .fc-sheet-overlay { background:rgb(29 29 31 / 28%); }
+body:has(.desktop-shell-sample) .fc-sheet { --background:0 0% 100%; color:hsl(var(--foreground)); box-shadow:-16px 0 64px rgb(var(--shadow-ink) / 12%); }
+body:has(.desktop-shell-sample) .fc-sheet-overlay { background:rgb(var(--shadow-ink) / 28%); }
 body:has(.desktop-shell-sample) .desktop-container-drawer { width:min(640px,100vw); }
 body:has(.desktop-shell-sample) .desktop-container-header { padding:22px 24px; padding-right:48px; text-align:left; }
 
@@ -202,7 +179,7 @@ body:has(.desktop-shell-sample) .desktop-container-header > div:first-child { al
 body:has(.desktop-shell-sample) .desktop-container-header > div:first-child > div:last-child { flex:1; }
 body:has(.desktop-shell-sample) .desktop-container-header dl { grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px 16px; }
 body:has(.desktop-shell-sample) .desktop-container-header dd { font-size:13px; line-height:1.5; }
-body:has(.desktop-shell-sample) .desktop-container-summary { border-radius:10px; background:#fafafa; }
+body:has(.desktop-shell-sample) .desktop-container-summary { border-radius:10px; background:hsl(var(--surface-subtle)); }
 body:has(.desktop-shell-sample) .desktop-container-summary .text-lg { font-size:18px; font-weight:600; }
 body:has(.desktop-shell-sample) .fc-sheet[data-state] { animation-duration:200ms; transition-duration:200ms; }
 body:has(.desktop-shell-sample) .desktop-wave-dialog { display:flex; flex-direction:column; max-height:calc(100dvh - 48px); overflow:hidden; }
@@ -211,14 +188,14 @@ body:has(.desktop-shell-sample) .desktop-wave-dialog > :not(.overflow-y-auto) { 
 @media (min-width:1200px) {
   .desktop-workspace .desktop-inbound-create-fields { grid-template-columns:repeat(4,minmax(0,1fr)); }
 }
-body:has(.desktop-shell-sample) .desktop-wave-dialog .desktop-wave-progress { border-color:hsl(var(--border)); border-radius:12px; background:#fafafa; }
+body:has(.desktop-shell-sample) .desktop-wave-dialog .desktop-wave-progress { border-color:hsl(var(--border)); border-radius:12px; background:hsl(var(--surface-subtle)); }
 body:has(.desktop-shell-sample) .desktop-wave-progress > div > div:last-child { padding:0; border:0; border-radius:0; background:transparent; }
 body:has(.desktop-shell-sample) .desktop-wave-items { border-radius:12px; }
 body:has(.desktop-shell-sample) .desktop-wave-items h3 { font-size:14px; font-weight:600; }
 body:has(.desktop-shell-sample) .desktop-wave-items table { min-width:960px; font-size:13px; }
 body:has(.desktop-shell-sample) .desktop-wave-items td { padding-block:10px; }
 
-.sample-settings-grid { overflow:hidden; border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:#fff; box-shadow:var(--desktop-shadow); }
+.sample-settings-grid { overflow:hidden; border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:hsl(var(--card)); box-shadow:var(--desktop-shadow); }
 .desktop-workspace .sample-settings-card { display:grid; grid-template-columns:192px minmax(0,1fr); min-width:0; padding:0 24px; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .sample-settings-card + .sample-settings-card { border-top:1px solid hsl(var(--border)); }
 .sample-settings-card > header { display:flex; flex-direction:column; align-items:flex-start; gap:4px; padding:24px 24px 24px 0; }
@@ -230,12 +207,12 @@ body:has(.desktop-shell-sample) .desktop-wave-items td { padding-block:10px; }
 .sample-setting-row p.text-sm,.sample-setting-row label { font-size:13px; }
 .sample-settings-grid[data-editing="true"] .sample-setting-row { align-items:baseline; }
 .sample-settings-brand { min-width:0; padding-block:24px; }
-.sample-settings-brand .sample-logo-preview { display:flex; height:76px; width:76px; flex-shrink:0; align-items:center; justify-content:center; overflow:hidden; border:1px dashed #d2d2d7; border-radius:12px; background:#fafafa; }
+.sample-settings-brand .sample-logo-preview { display:flex; height:76px; width:76px; flex-shrink:0; align-items:center; justify-content:center; overflow:hidden; border:1px dashed hsl(var(--border)); border-radius:12px; background:hsl(var(--surface-subtle)); }
 
 /* Management pages use the shell's page margin and one continuous master/detail surface. */
 .desktop-management-page { min-width:0; }
-.desktop-split-workbench { display:grid; grid-template-columns:256px minmax(0,1fr); align-items:stretch; overflow:hidden; border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:#fff; box-shadow:var(--desktop-shadow); }
-.desktop-split-sidebar { min-width:0; border-right:1px solid hsl(var(--border)); background:#fafafa; }
+.desktop-split-workbench { display:grid; grid-template-columns:256px minmax(0,1fr); align-items:stretch; overflow:hidden; border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:hsl(var(--card)); box-shadow:var(--desktop-shadow); }
+.desktop-split-sidebar { min-width:0; border-right:1px solid hsl(var(--border)); background:hsl(var(--surface-subtle)); }
 .desktop-split-search { display:flex; flex-direction:column; gap:10px; padding:16px; border-bottom:1px solid hsl(var(--border)); }
 .desktop-split-list { max-height:65vh; overflow:auto; overscroll-behavior:contain; }
 .desktop-split-list > button { font-size:13px; }
@@ -249,14 +226,14 @@ body:has(.desktop-shell-sample) .desktop-wave-items td { padding-block:10px; }
 .desktop-management-form > div:last-child { padding-top:16px; border-top:1px solid hsl(var(--border)); }
 
 /* Radix portals sit beside AppLayout. Conditional ownership keeps these styles out of PDA. */
-body:has(.desktop-shell-sample) .fc-dialog-overlay { background:rgb(29 29 31 / 28%); }
+body:has(.desktop-shell-sample) .fc-dialog-overlay { background:rgb(var(--shadow-ink) / 28%); }
 body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) {
   --background:0 0% 100%;
   border-radius:16px;
-  font-size:13.5px; box-shadow:0 24px 64px rgb(29 29 31 / 16%);
+  font-size:13.5px; box-shadow:0 24px 64px rgb(var(--shadow-ink) / 16%);
 }
 body:has(.desktop-shell-sample) .fc-app-dialog-header { border-color:hsl(var(--border)); }
-body:has(.desktop-shell-sample) .fc-app-dialog-header > h2 { font-size:16px; font-weight:600; letter-spacing:-.015em; overflow-wrap:anywhere; }
+body:has(.desktop-shell-sample) .fc-app-dialog-header h2 { font-size:16px; font-weight:600; letter-spacing:-.015em; overflow-wrap:anywhere; }
 body:has(.desktop-shell-sample) .fc-app-dialog-header > button { margin-top:-2px; }
 body:has(.desktop-shell-sample) .fc-app-dialog[data-content-sized] .fc-query-form { height:auto; overflow:visible; padding:20px; }
 body:has(.desktop-shell-sample) .fc-query-dialog-content > .grid { padding:20px; column-gap:20px; row-gap:16px; }
@@ -275,9 +252,9 @@ body:has(.desktop-shell-sample) .fc-category-menu .fc-category-row:focus-visible
 body:has(.desktop-shell-sample) .fc-category-menu .fc-category-row[aria-pressed="true"] { background:hsl(var(--primary) / .08); color:hsl(var(--primary)); }
 body:has(.desktop-shell-sample) .fc-category-menu .fc-category-children { margin-left:17px; border:0; border-left:1px solid hsl(var(--border)); border-radius:0; background:transparent; padding:0 0 0 8px; }
 body:has(.desktop-shell-sample) .fc-category-menu .fc-category-caption { margin-bottom:4px; border:0; border-radius:0; background:transparent; padding:7px 10px; font-size:12px; line-height:18px; }
-body:has(.desktop-shell-sample) .fc-app-dialog-footer { background:#fafafa; border-color:hsl(var(--border)); border-radius:0 0 15px 15px; }
+body:has(.desktop-shell-sample) .fc-app-dialog-footer { background:hsl(var(--surface-subtle)); border-color:hsl(var(--border)); border-radius:0 0 15px 15px; }
 body:has(.desktop-shell-sample) .fc-app-dialog-footer .fc-button { height:36px; font-size:13px; }
-body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] > :is([role="menu"],[role="listbox"],[role="dialog"]) { border-radius:10px; box-shadow:0 16px 40px rgb(29 29 31 / 12%); }
+body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] > :is([role="menu"],[role="listbox"],[role="dialog"]) { border-radius:10px; box-shadow:0 16px 40px rgb(var(--shadow-ink) / 12%); }
 
 /* Familiar desktop tools: quiet at rest, explicit on focus and while choosing. */
 @layer components {
@@ -293,6 +270,7 @@ body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] > :is([role=
 }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) .fc-picker-trigger { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) .fc-picker-value { min-width:0; }
+:is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) :is(.fc-input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),textarea,.fc-picker-trigger,.fc-select-trigger,.fc-date-picker > input) { border-radius:var(--radius-button); }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) .fc-picker-icon { display:block; color:hsl(var(--muted-foreground)); }
 /* Honor the existing compact density without clipping multi-line selections. */
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) :is(.fc-picker-trigger,.fc-select-trigger).h-9 {
@@ -322,7 +300,7 @@ body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] > :is([role=
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) .fc-date-picker > button:hover:not(:disabled) { background:hsl(var(--muted)); }
 body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu) {
   border-radius:12px; border-color:hsl(var(--border)); background:hsl(var(--popover));
-  box-shadow:0 12px 36px rgb(29 29 31 / 12%),0 2px 6px rgb(29 29 31 / 4%);
+  box-shadow:0 12px 36px rgb(var(--shadow-ink) / 12%),0 2px 6px rgb(var(--shadow-ink) / 4%);
   transform-origin:var(--radix-popper-transform-origin);
 }
 body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)[data-state="open"] { animation:desktop-tool-open 140ms cubic-bezier(.22,.61,.36,1); }
@@ -338,7 +316,7 @@ body:has(.desktop-shell-sample) .fc-date-menu :is(.fc-calendar-cell,.fc-calendar
 body:has(.desktop-shell-sample) .fc-date-menu .fc-calendar-weekday { width:32px; }
 body:has(.desktop-shell-sample) .fc-date-menu .fc-calendar-day { border-radius:50%; font-size:13px; }
 body:has(.desktop-shell-sample) .fc-date-menu .fc-calendar-cell:has([aria-selected="true"]) { background:transparent; }
-body:has(.desktop-shell-sample) .fc-date-footer { padding:8px 10px; background:#fafafa; border-radius:0 0 11px 11px; }
+body:has(.desktop-shell-sample) .fc-date-footer { padding:8px 10px; background:hsl(var(--surface-subtle)); border-radius:0 0 11px 11px; }
 body:has(.desktop-shell-sample) .fc-date-footer > button { min-height:30px; padding:4px 10px; border-radius:7px; font-size:12.5px; text-decoration:none; }
 body:has(.desktop-shell-sample) .fc-date-footer > button:hover { background:hsl(var(--accent)); }
 body:has(.desktop-shell-sample) .fc-date-footer > button:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:1px; }
@@ -358,11 +336,11 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-ra
 .desktop-workspace .fc-icon-button { min-width:28px; min-height:28px; }
 body:has(.desktop-shell-sample) .fc-icon-tooltip {
   max-width:min(240px,calc(100vw - 24px)); border-radius:8px; font-size:12px;
-  box-shadow:0 4px 16px rgb(29 29 31 / 10%); pointer-events:none;
+  box-shadow:0 4px 16px rgb(var(--shadow-ink) / 10%); pointer-events:none;
 }
 body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { animation:desktop-tool-open 140ms ease-out; }
 .desktop-workspace .fc-status-label { border-radius:5px; padding:1px 7px; font-size:11.5px; line-height:18px; font-weight:500; }
-.desktop-workspace .fc-table-actions { border-radius:7px; border-color:hsl(var(--border)); }
+.desktop-workspace .fc-table-actions { border-radius:var(--radius-button); border-color:hsl(var(--border)); }
 .desktop-workspace .fc-table-actions > button { min-height:30px; }
 .desktop-workspace .desktop-table td:is([data-column-key="createdAt"],[data-column-key="updatedAt"],[data-column-key="operatorName"],[data-column-key="remark"]) { color:hsl(var(--muted-foreground)); }
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) :is(.fc-empty-state-icon > svg,.fc-table-empty > svg) { width:28px; height:28px; }
@@ -453,10 +431,10 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { an
 .desktop-workspace .fc-list-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 20px; padding:14px 16px 8px; }
 .desktop-workspace .fc-list-toolbar-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-left:auto; }
 .desktop-workspace .fc-list-toolbar .fc-button { height:36px; font-size:12px; }
-.desktop-workspace .fc-segmented-control { display:flex; flex-wrap:wrap; align-items:center; gap:3px; padding:3px; border-radius:10px; background:#f0f0f2; }
+.desktop-workspace .fc-segmented-control { display:flex; flex-wrap:wrap; align-items:center; gap:3px; padding:3px; border-radius:10px; background:hsl(var(--muted)); }
 .desktop-workspace .fc-segmented-control .fc-print-category { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:32px; padding:6px 12px; border:1px solid transparent; border-radius:7px; background:transparent; color:hsl(var(--muted-foreground)); font-size:12px; line-height:18px; font-weight:500; transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out; }
-.desktop-workspace .fc-segmented-control .fc-print-category:hover { background:rgb(255 255 255 / .6); color:hsl(var(--foreground)); }
-.desktop-workspace .fc-segmented-control .fc-print-category[aria-pressed="true"] { border-color:hsl(var(--border)); background:#fff; color:hsl(var(--primary)); box-shadow:0 1px 2px rgb(0 0 0 / .04); }
+.desktop-workspace .fc-segmented-control .fc-print-category:hover { background:hsl(var(--card) / .6); color:hsl(var(--foreground)); }
+.desktop-workspace .fc-segmented-control .fc-print-category[aria-pressed="true"] { border-color:hsl(var(--border)); background:hsl(var(--card)); color:hsl(var(--primary)); box-shadow:0 1px 2px rgb(var(--shadow-ink) / .04); }
 .desktop-workspace .fc-list-query-context { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:5px 20px; padding:0 16px 12px; color:hsl(var(--muted-foreground)); font-size:12px; line-height:20px; }
 .desktop-workspace .fc-list-query-context p { min-width:0; overflow-wrap:anywhere; }
 .desktop-workspace .fc-list-filter-chips { padding:0 16px 12px; }
@@ -512,7 +490,7 @@ body:has(.desktop-shell-sample)   .fc-audit-detail .fc-detail-row { grid-templat
   border-radius:10px;
   background:hsl(var(--card));
   color:hsl(var(--foreground));
-  box-shadow:0 4px 18px rgb(0 0 0 / .07),0 1px 3px rgb(0 0 0 / .03);
+  box-shadow:0 4px 18px rgb(var(--shadow-ink) / .07),0 1px 3px rgb(var(--shadow-ink) / .03);
   font-size:12px;
   line-height:1.5;
   white-space:normal;
@@ -564,3 +542,81 @@ body:has(.desktop-shell-sample) .fc-order-activity .fc-order-facts > [data-long]
 body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) .fc-dialog-caption { margin:4px 0 0; color:hsl(var(--muted-foreground)); font-size:12px; font-weight:400; line-height:20px; white-space:pre-wrap; overflow-wrap:anywhere; }
 body:has(.desktop-shell-sample) .fc-dialog-header > .fc-dialog-caption { margin-top:4px; }
 body:has(.desktop-shell-sample) .fc-app-dialog-description { font-size:12px; line-height:20px; }
+
+/* ── 附件基线：弹窗与浮层用规范的大圆角与深柔影；选区与焦点与官网一致 ── */
+body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) { border-radius:var(--desktop-radius-lg); box-shadow:var(--desktop-shadow-lg); }
+body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] :is([role="menu"],[role="listbox"]) { border-radius:14px; box-shadow:var(--desktop-shadow-lg); }
+:is(.desktop-page-sample,.desktop-workspace) ::selection { background:hsl(var(--selection)); }
+:is(.desktop-page-sample,.desktop-workspace) .fc-button:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
+
+/* ── v2 列表页精修（针对"列表页平铺发闷、弹窗反而好"的反馈）──
+   思路：弹窗好看在卡片构图与层级；列表页缺的是层级与降噪。 */
+/* 行操作主按钮降噪：雾面底深蓝字，不再一列实心深蓝抢眼；悬停才实心 */
+.desktop-workspace .desktop-table .fc-button.bg-primary { background:hsl(var(--blue-10)); color:hsl(var(--primary-action)); }
+.desktop-workspace .desktop-table .fc-button.bg-primary:hover { background:hsl(var(--primary-action)); color:hsl(var(--card)); }
+/* 表头给一层极淡的灰，与白行拉开结构；表头字加深一档 */
+:is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) :is(.fc-table-header-cell,.data-table-header > tr > th,.data-table-header-surface > th,.fc-report-table > thead > tr > th) { background:hsl(var(--surface-subtle)); font-weight:600; }
+.desktop-workspace :is(.data-table-header,.data-table-header-surface) { background:hsl(var(--surface-subtle)); }
+/* 斑马纹：偶数行极淡底，扫视更稳 */
+.desktop-workspace .desktop-table tbody > tr:nth-child(even):not([data-selected="true"]) { --desktop-row-surface:color-mix(in srgb,hsl(var(--muted)) 45%,hsl(var(--card))); }
+.desktop-workspace .desktop-table tbody > tr:nth-child(even):not([data-selected="true"]):hover { --desktop-row-surface:color-mix(in srgb,hsl(var(--primary)) 4%,hsl(var(--card))); }
+/* 行高略放，呼吸感向弹窗看齐 */
+.desktop-workspace .desktop-table td:not([colspan]) { padding-block:11px; }
+/* 汇总行做成面板的底带，而不是裸文字 */
+.desktop-workspace .sample-table-panel > [role="status"] { background:hsl(var(--surface-subtle)); border-top:1px solid hsl(var(--border)); border-radius:0 0 var(--desktop-radius) var(--desktop-radius); padding:12px 16px; }
+/* 页头标题升一号，层级立起来 */
+:is(.desktop-page-sample,.desktop-workspace) h1 { font-size:24px; }
+
+/* ── v3 深读修正：回到组件自身的布局语言，只改样式值 ──
+   依据：OrderStatusFilter 是下划线页签（border-b-2 + data-state）、WorkspaceTabs 是
+   下划线指示条、TableActionsMenu 是 .fc-table-actions 分体按钮（主按钮 + 仅箭头触发器）。
+   v1/v2 把它们改成胶囊/卡片是与组件设计打架，本节回正。 */
+/* 状态筛选：下划线式，只调色与字重，不改形状 */
+:is(.sample-status-strip,.desktop-workspace .desktop-status-filter) button {
+  background:transparent; border:0; border-bottom:2px solid transparent; border-radius:0; box-shadow:none;
+  min-height:40px; padding:6px 12px; font-size:14px; font-weight:400; color:hsl(var(--muted-foreground));
+}
+:is(.sample-status-strip,.desktop-workspace .desktop-status-filter) button:hover { color:hsl(var(--foreground)); }
+:is(.sample-status-strip,.desktop-workspace .desktop-status-filter) button[data-state="on"] {
+  background:transparent; border-color:transparent; border-bottom-color:hsl(var(--primary));
+  color:hsl(var(--foreground)); font-weight:600; box-shadow:none;
+}
+/* 打开页页签：恢复组件的下划线指示条，取消卡片化 */
+.desktop-shell-sample .desktop-tabs { background:hsl(var(--background)); }
+.desktop-shell-sample .desktop-tabs [role="presentation"] { border:0; border-bottom:0; border-radius:0; background:transparent; }
+.desktop-shell-sample .desktop-tabs [role="presentation"]:has(> [role="tab"][aria-selected="true"]) { background:transparent; border-color:transparent; }
+.desktop-shell-sample .desktop-tabs [role="presentation"] > span.absolute { display:block; }
+/* 行操作分体按钮 .fc-table-actions：边框组圆角 + 主按钮降噪（雾面→悬停实心深蓝） */
+.desktop-workspace .desktop-table .fc-table-actions { border-radius:var(--radius-button); }
+.desktop-workspace .desktop-table .fc-table-actions > button:is(.bg-primary,.bg-transparent) { background:hsl(var(--blue-10)); color:hsl(var(--primary-action)); }
+.desktop-workspace .desktop-table .fc-table-actions > button:is(.bg-primary,.bg-transparent):hover { background:hsl(var(--primary-action)); color:hsl(var(--card)); }
+.desktop-workspace .desktop-table button.fc-table-actions:is(.bg-primary,.bg-transparent) { background:hsl(var(--blue-10)); color:hsl(var(--primary-action)); }
+.desktop-workspace .desktop-table button.fc-table-actions:is(.bg-primary,.bg-transparent):hover { background:hsl(var(--primary-action)); color:hsl(var(--card)); }
+/* TopNav.tsx: nav > div.relative > div[role="menu"] > ul; current source includes the role. */
+.desktop-shell-sample .desktop-nav nav [role="menu"] > ul { border-radius:14px; box-shadow:var(--desktop-shadow-lg); padding:6px; }
+
+/* Compatibility aliases: keep existing TSX utility names and their semantic roles.
+ * These selectors are collected from real non-PDA class literals; blue utilities
+ * resolve directly to brand tokens in tailwind-v3-colors.js. */
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-orange-500\/15) { background-color:hsl(var(--warning) / 0.15); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.hover\:text-orange-500:hover,.hover\:text-orange-800:hover,.text-amber-500,.text-amber-600,.text-amber-700,.text-amber-900,.text-orange-400,.text-orange-500,.text-orange-600,.text-orange-800) { color:hsl(var(--warning-ink)); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.hover\:text-red-800:hover,.text-red-400,.text-red-500,.text-red-600,.text-red-700,.text-red-800,.text-rose-600,.text-rose-700) { color:hsl(var(--destructive-ink)); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-orange-400) { background-color:hsl(var(--warning)); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.border-green-200) { border-color:hsl(var(--success) / 0.28); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-green-50) { background-color:hsl(var(--success) / 0.06); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.hover\:text-green-600:hover,.hover\:text-green-800:hover,.text-emerald-500,.text-emerald-600,.text-green-600,.text-green-800) { color:hsl(var(--success-ink)); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.text-green-600\/70) { color:hsl(var(--success-ink) / 0.7); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-green-600\/70) { background-color:hsl(var(--success) / 0.7); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.border-red-100,.border-red-200,.border-rose-200) { border-color:hsl(var(--destructive) / 0.28); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-red-50,.bg-rose-50,.hover\:bg-red-50:hover) { background-color:hsl(var(--destructive) / 0.06); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.text-red-600\/70) { color:hsl(var(--destructive-ink) / 0.7); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-red-600\/70) { background-color:hsl(var(--destructive) / 0.7); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.border-amber-200,.border-orange-200) { border-color:hsl(var(--warning) / 0.28); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-amber-50,.bg-orange-50) { background-color:hsl(var(--warning) / 0.06); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.text-orange-600\/70) { color:hsl(var(--warning-ink) / 0.7); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-orange-600\/70) { background-color:hsl(var(--warning) / 0.7); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-orange-500\/10,.bg-yellow-500\/10) { background-color:hsl(var(--warning) / 0.1); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-green-500\/10) { background-color:hsl(var(--success) / 0.1); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-red-500\/5) { background-color:hsl(var(--destructive) / 0.05); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.border-amber-300) { border-color:hsl(var(--warning) / 0.4); }
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-amber-50\/40) { background-color:hsl(var(--warning) / 0.024); }
