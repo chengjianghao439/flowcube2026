@@ -620,3 +620,74 @@ body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] :is([role="m
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-red-500\/5) { background-color:hsl(var(--destructive) / 0.05); }
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.border-amber-300) { border-color:hsl(var(--warning) / 0.4); }
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-amber-50\/40) { background-color:hsl(var(--warning) / 0.024); }
+
+/* ── 其他页面精修：在已复核基线后追加，不改组件结构与已有规则 ── */
+.desktop-shell-sample,
+body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] {
+  --desktop-radius-popover:14px;
+  --desktop-radius-option:8px;
+  --desktop-layer-header:20;
+}
+
+/* Header 的 backdrop-filter 建立层叠上下文，内联 Popover 仍属于它。
+   flex 子项只调层级，避免搜索结果被后面的工作面遮住；Dialog/Sheet 保留 50。 */
+.desktop-shell-sample > header { z-index:var(--desktop-layer-header); }
+
+/* GlobalSearch: PopoverContent 同元素 role=presentation；cmdk 输出选项状态。
+   内层 listbox 是滚动列表，不再继承通用浮层规则的第二层阴影。 */
+body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role="presentation"] {
+  border-radius:var(--desktop-radius-popover);
+  box-shadow:var(--desktop-shadow-lg);
+}
+body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role="listbox"] {
+  border-radius:0;
+  box-shadow:none;
+}
+body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role="option"] {
+  border-radius:var(--desktop-radius-option);
+}
+body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected="true"]:not([data-disabled="true"]):not([aria-disabled="true"]) {
+  background:hsl(var(--blue-10));
+  color:hsl(var(--foreground));
+}
+body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading] {
+  padding:8px 12px 4px;
+  font-size:11px;
+  font-weight:600;
+  letter-spacing:.04em;
+}
+body:has(.desktop-shell-sample) .fc-global-search-footer {
+  background:hsl(var(--surface-subtle));
+}
+
+/* 浮层共享 14px；选项、输入、分段、对话框继续各用原有形态。 */
+body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu) {
+  border-radius:var(--desktop-radius-popover);
+}
+.desktop-shell-sample .desktop-nav nav [role="menu"] > ul {
+  border-radius:var(--desktop-radius-popover);
+}
+
+/* 同级工作面用面板令牌；内嵌表格底角扣除父面板的 1px 边框。 */
+.desktop-workspace :is(.fc-list-workbench,.fc-tax-panel) {
+  border-radius:var(--desktop-radius);
+}
+.desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child {
+  border-radius:0 0 calc(var(--desktop-radius) - 1px) calc(var(--desktop-radius) - 1px);
+}
+
+/* ReportTable 已有 tfoot utility；库存数量已有 tabular-nums 及外壳继承。
+   主表最终为 surface-subtle 浅灰表头，库存沿同一令牌，不追加重复覆盖。 */
+
+/* 仓库流程的三处旧色由 FlowBar 内联传入；仅按已核对的语义属性替换。
+   !important 用于覆盖该内联 color，不匹配颜色字符串或猜测 DOM 顺序。 */
+.desktop-workspace .fc-report-panel .fc-report-meter[aria-label="待拣货"] { color:hsl(var(--muted-foreground)) !important; }
+.desktop-workspace .fc-report-panel .fc-report-meter[aria-label="待复核"] { color:hsl(var(--blue-60)) !important; }
+.desktop-workspace .fc-report-panel .fc-report-meter[aria-label="待打包"] { color:hsl(var(--blue-80)) !important; }
+
+/* 审批等列表的普通文字入口已有 disabled 属性，但仍会继承主色及 hover 下划线。
+   只调整禁用的文字变体，普通、危险和幽灵 fc-button 沿组件自己的状态。 */
+.desktop-workspace .desktop-table button.text-primary:not(.fc-button):disabled {
+  color:hsl(var(--muted-foreground));
+  text-decoration-line:none;
+}

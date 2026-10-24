@@ -1,0 +1,26 @@
+本轮相对 93109deb5c922266d49634fa8fdcc817083830b4 的逐文件清单
+总计 23 个文件：2 个已跟踪文件修改、21 个新增文件。
+
+A	docs/desktop-other-pages-review-2026-10-25.md
+A	docs/desktop-other-pages-review-2026-10-25/browser-states.json
+A	docs/desktop-other-pages-review-2026-10-25/changed-files.txt
+A	docs/desktop-other-pages-review-2026-10-25/checks.json
+A	docs/desktop-other-pages-review-2026-10-25/selector-audit.json
+A	docs/desktop-other-pages-review-2026-10-25/selector-dom-hits.json
+A	docs/desktop-other-pages-review-2026-10-25/states/approval.png
+A	docs/desktop-other-pages-review-2026-10-25/states/barcode.png
+A	docs/desktop-other-pages-review-2026-10-25/states/finance.png
+A	docs/desktop-other-pages-review-2026-10-25/states/inbound-create.png
+A	docs/desktop-other-pages-review-2026-10-25/states/inbound-detail.png
+A	docs/desktop-other-pages-review-2026-10-25/states/inventory.png
+A	docs/desktop-other-pages-review-2026-10-25/states/ledger.png
+A	docs/desktop-other-pages-review-2026-10-25/states/purchase-form.png
+A	docs/desktop-other-pages-review-2026-10-25/states/purchase.png
+A	docs/desktop-other-pages-review-2026-10-25/states/search.png
+A	docs/desktop-other-pages-review-2026-10-25/states/tax.png
+A	docs/desktop-other-pages-review-2026-10-25/states/transfer.png
+A	docs/desktop-other-pages-review-2026-10-25/states/vouchers.png
+A	docs/desktop-other-pages-review-2026-10-25/states/warehouse-ops.png
+M	docs/frontend-pda-conventions.md
+A	docs/superpowers/plans/2026-10-25-other-pages-refinement.md
+M	frontend/src/styles/desktop-page-samples.css

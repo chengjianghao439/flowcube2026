@@ -8,6 +8,8 @@
 
 ---
 
+- **其他电脑端页面精修（2026-10-25，本地实现）**：只在已复核电脑端 CSS 后追加令牌规则，保留 TSX、utility、结构与交互。搜索按真实 cmdk `data-selected` / `data-disabled` 及分组属性匹配；其内层 listbox 只作为滚动列表，不另叠浮层阴影。当前 Popover 内联挂载，顶栏毛玻璃的层叠上下文须保证搜索高于工作面、低于对话框。浮层 14px、工作面沿面板令牌，内嵌表格底角随父面板扣边框；不重复 ReportTable 合计和库存 tabular-nums utility。库存继续与主表共用浅灰表头。普通文字入口的禁用态不能继续显示可用主色及 hover 下划线，fc-button 各变体保留自身状态。仓库运营三处 TSX 内联旧色在本轮零 TSX 改动范围下以现有流程 aria-label 映射令牌，未来改状态文案须同步选择器。逐页状态、合成响应及明确未覆盖项见 [本轮复核记录](desktop-other-pages-review-2026-10-25.md)；不据此认定全岗位、虚拟列表大数据、PDA 或出纸通过。
+
 - **浅色品牌样式校正（2026-10-25，本地实现）**：`index.css :root` 统一 IBM Carbon 蓝、中性与状态令牌，登录页和 ERP 浮层共用；桌面样式不再另抄一套颜色。保留 TSX、类名和交互，既有蓝色 utility 通过样式配置接品牌令牌，真实浅色语义 utility 通过桌面作用域兼容映射；`dark:` 变体不能去掉前缀当裸类，`.dark` 原令牌块保持不变。搜索框保留圆角矩形；SaleOrderDetailTabs / ContentTabs 保留源码分段形态，库存保留自身下划线，不用通用 CSS 抹平不同组件的形态。WorkspaceTabs 保留自身 2px 指示条，OrderStatusFilter 按 Radix 实际 `radiogroup` / `data-state` 呈现；行操作只调整普通主按钮，危险变体保留红色。Inter、Noto Sans SC 和既有 JetBrains Mono 随包按 Unicode 子集加载，OFL 许可证随产物分发；字体 URL 必须在构建后解析到实际文件或内联资源，不能以 dev 加载正常或 build exit 0 代替。共享根令牌与字体适用于共用入口，ERP 专属兼容映射不进入 PDA 组件；本轮未做 PDA 真机、Windows 安装或实际打印验收。逐页选择器、合成数据范围与验证结果见 [本轮检查记录](desktop-ibm-style-review-2026-10-25.md)。
 
 - **电脑端统一呈现（2026-10-23，本地实现）**：用户确认销售列表、销售新建/详情与系统设置样板后，`AppLayout` 统一启用 `desktop-shell-sample` 和 `desktop-workspace` 作用域，共用表格、表单面板、页头、状态筛选与控件沿用确认后的浅色蓝色皮肤。`desktop-page-sample` 保留原样板页面标记；其他 ERP 页面通过共用外壳继承视觉，不逐页重写业务。官网使用独立 `official-site` 样式与确认原稿结构；PDA 和对外查询页不进入 ERP 皮肤。销售查询、默认日期、筛选、真实汇总、虚拟表格、列宽和内部滚动、单据状态、金额/数量、权限、改单只读、保存请求与未知结果恢复沿用原逻辑；不能按静态参考稿补写死的状态、配置或仓库。输入框视觉样式须让校验等语义 utility 保持优先。系统设置按接口原始键分为企业信息、单据编号、业务参数，未知键保留在业务参数，字段标签、备注、类型、原值与保存键不变；图片/时间戳继续排除在普通配置批量保存之外，Logo 沿用独立接口。样板计划见 `docs/superpowers/plans/2026-10-23-desktop-page-samples.md`；合成数据浏览器预览仅证明前端显示与交互，不等于真实业务写入或生产验收。

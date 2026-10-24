@@ -1,0 +1,812 @@
+{
+  "baseline": "93109deb5c922266d49634fa8fdcc817083830b4",
+  "cssPath": "frontend/src/styles/desktop-page-samples.css",
+  "baselineByteIdentical": true,
+  "addedLines": 71,
+  "rules": [
+    {
+      "selector": ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]",
+      "line": 625,
+      "declarations": [
+        {
+          "property": "--desktop-radius-popover",
+          "value": "14px",
+          "important": false
+        },
+        {
+          "property": "--desktop-radius-option",
+          "value": "8px",
+          "important": false
+        },
+        {
+          "property": "--desktop-layer-header",
+          "value": "20",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample"
+      ]
+    },
+    {
+      "selector": ".desktop-shell-sample > header",
+      "line": 634,
+      "declarations": [
+        {
+          "property": "z-index",
+          "value": "var(--desktop-layer-header)",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample"
+      ]
+    },
+    {
+      "selector": "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]",
+      "line": 638,
+      "declarations": [
+        {
+          "property": "border-radius",
+          "value": "var(--desktop-radius-popover)",
+          "important": false
+        },
+        {
+          "property": "box-shadow",
+          "value": "var(--desktop-shadow-lg)",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample",
+        "fc-global-search-results",
+        "fc-popover"
+      ]
+    },
+    {
+      "selector": "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]",
+      "line": 642,
+      "declarations": [
+        {
+          "property": "border-radius",
+          "value": "0",
+          "important": false
+        },
+        {
+          "property": "box-shadow",
+          "value": "none",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample",
+        "fc-global-search-results",
+        "fc-global-search-list"
+      ]
+    },
+    {
+      "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]",
+      "line": 646,
+      "declarations": [
+        {
+          "property": "border-radius",
+          "value": "var(--desktop-radius-option)",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample",
+        "fc-global-search-result"
+      ]
+    },
+    {
+      "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])",
+      "line": 649,
+      "declarations": [
+        {
+          "property": "background",
+          "value": "hsl(var(--blue-10))",
+          "important": false
+        },
+        {
+          "property": "color",
+          "value": "hsl(var(--foreground))",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample",
+        "fc-global-search-result"
+      ]
+    },
+    {
+      "selector": "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]",
+      "line": 653,
+      "declarations": [
+        {
+          "property": "padding",
+          "value": "8px 12px 4px",
+          "important": false
+        },
+        {
+          "property": "font-size",
+          "value": "11px",
+          "important": false
+        },
+        {
+          "property": "font-weight",
+          "value": "600",
+          "important": false
+        },
+        {
+          "property": "letter-spacing",
+          "value": ".04em",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample",
+        "fc-global-search-list"
+      ]
+    },
+    {
+      "selector": "body:has(.desktop-shell-sample) .fc-global-search-footer",
+      "line": 659,
+      "declarations": [
+        {
+          "property": "background",
+          "value": "hsl(var(--surface-subtle))",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample",
+        "fc-global-search-footer"
+      ]
+    },
+    {
+      "selector": "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)",
+      "line": 664,
+      "declarations": [
+        {
+          "property": "border-radius",
+          "value": "var(--desktop-radius-popover)",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample",
+        "fc-popover",
+        "fc-select-menu",
+        "fc-dropdown-menu"
+      ]
+    },
+    {
+      "selector": ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul",
+      "line": 667,
+      "declarations": [
+        {
+          "property": "border-radius",
+          "value": "var(--desktop-radius-popover)",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-shell-sample",
+        "desktop-nav"
+      ]
+    },
+    {
+      "selector": ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)",
+      "line": 672,
+      "declarations": [
+        {
+          "property": "border-radius",
+          "value": "var(--desktop-radius)",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-workspace",
+        "fc-list-workbench",
+        "fc-tax-panel"
+      ]
+    },
+    {
+      "selector": ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child",
+      "line": 675,
+      "declarations": [
+        {
+          "property": "border-radius",
+          "value": "0 0 calc(var(--desktop-radius) - 1px) calc(var(--desktop-radius) - 1px)",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-workspace",
+        "fc-list-workbench",
+        "desktop-table"
+      ]
+    },
+    {
+      "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]",
+      "line": 684,
+      "declarations": [
+        {
+          "property": "color",
+          "value": "hsl(var(--muted-foreground))",
+          "important": true
+        }
+      ],
+      "classes": [
+        "desktop-workspace",
+        "fc-report-panel",
+        "fc-report-meter"
+      ]
+    },
+    {
+      "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]",
+      "line": 685,
+      "declarations": [
+        {
+          "property": "color",
+          "value": "hsl(var(--blue-60))",
+          "important": true
+        }
+      ],
+      "classes": [
+        "desktop-workspace",
+        "fc-report-panel",
+        "fc-report-meter"
+      ]
+    },
+    {
+      "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]",
+      "line": 686,
+      "declarations": [
+        {
+          "property": "color",
+          "value": "hsl(var(--blue-80))",
+          "important": true
+        }
+      ],
+      "classes": [
+        "desktop-workspace",
+        "fc-report-panel",
+        "fc-report-meter"
+      ]
+    },
+    {
+      "selector": ".desktop-workspace .desktop-table button.text-primary:not(.fc-button):disabled",
+      "line": 690,
+      "declarations": [
+        {
+          "property": "color",
+          "value": "hsl(var(--muted-foreground))",
+          "important": false
+        },
+        {
+          "property": "text-decoration-line",
+          "value": "none",
+          "important": false
+        }
+      ],
+      "classes": [
+        "desktop-workspace",
+        "desktop-table",
+        "fc-button"
+      ]
+    }
+  ],
+  "summary": {
+    "rules": 16,
+    "classes": 16,
+    "sourceFiles": 343,
+    "unresolvedClasses": 0
+  },
+  "anchors": {
+    "desktop-shell-sample": [
+      {
+        "path": "frontend/src/layouts/AppLayout.tsx",
+        "line": 21,
+        "element": "div",
+        "attributes": [
+          "className=\"desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background\""
+        ],
+        "openingElement": "<div className=\"desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background\">"
+      }
+    ],
+    "fc-global-search-results": [
+      {
+        "path": "frontend/src/components/shared/GlobalSearch.tsx",
+        "line": 109,
+        "element": "PopoverContent",
+        "attributes": [
+          "align=\"end\"",
+          "sideOffset={8}",
+          "role=\"presentation\"",
+          "aria-labelledby={undefined}",
+          "data-search-results",
+          "className=\"fc-global-search-results w-[560px] max-w-[calc(100vw-2rem)] overflow-hidden\"",
+          "onOpenAutoFocus={event => event.preventDefault()}",
+          "onCloseAutoFocus={event => event.preventDefault()}",
+          "onInteractOutside={event => { if (rootRef.current?.contains(event.target as Node)) event.preventDefault() }}",
+          "onEscapeKeyDown={event => { event.preventDefault(); event.stopPropagation(); resetSearch(); inputRef.current?.blur() }}"
+        ],
+        "openingElement": "<PopoverContent align=\"end\" sideOffset={8} role=\"presentation\" aria-labelledby={undefined} data-search-results\n        className=\"fc-global-search-results w-[560px] max-w-[calc(100vw-2rem)] overflow-hidden\"\n        onOpenAutoFocus={event => event.preventDefault()}\n        onCloseAutoFocus={event => event.preventDefault()}\n        onInteractOutside={event => { if (rootRef.current?.contains(event.target as Node)) event.preventDefault() }}\n        onEscapeKeyDown={event => { event.preventDefault(); event.stopPropagation(); resetSearch(); inputRef.current?.blur() }}>"
+      }
+    ],
+    "fc-popover": [
+      {
+        "path": "frontend/src/components/ui/popover.tsx",
+        "line": 38,
+        "element": "PopoverPrimitive.Content",
+        "attributes": [
+          "ref={ref}",
+          "align={align}",
+          "sideOffset={sideOffset}",
+          "collisionBoundary={collisionBoundary}",
+          "collisionPadding={collisionPadding}",
+          "sticky={sticky}",
+          "className={cn(\n      \"fc-popover z-50 w-auto rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2\",\n      className\n    )}",
+          "{...props}"
+        ],
+        "openingElement": "<PopoverPrimitive.Content\n    ref={ref}\n    align={align}\n    sideOffset={sideOffset}\n    collisionBoundary={collisionBoundary}\n    collisionPadding={collisionPadding}\n    sticky={sticky}\n    className={cn(\n      \"fc-popover z-50 w-auto rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2\",\n      className\n    )}\n    {...props}\n  />"
+      }
+    ],
+    "fc-global-search-list": [
+      {
+        "path": "frontend/src/components/shared/GlobalSearch.tsx",
+        "line": 115,
+        "element": "Command.List",
+        "attributes": [
+          "className=\"fc-global-search-list max-h-[min(420px,calc(var(--radix-popover-content-available-height)-40px))] overflow-y-auto overscroll-contain\"",
+          "label=\"搜索结果\"",
+          "aria-busy={loading}"
+        ],
+        "openingElement": "<Command.List className=\"fc-global-search-list max-h-[min(420px,calc(var(--radix-popover-content-available-height)-40px))] overflow-y-auto overscroll-contain\" label=\"搜索结果\" aria-busy={loading}>"
+      }
+    ],
+    "fc-global-search-result": [
+      {
+        "path": "frontend/src/components/shared/GlobalSearch.tsx",
+        "line": 122,
+        "element": "Command.Item",
+        "attributes": [
+          "key={resultValue(result)}",
+          "value={resultValue(result)}",
+          "onSelect={() => go(result)}",
+          "onMouseDown={event => event.preventDefault()}",
+          "className=\"fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none\""
+        ],
+        "openingElement": "<Command.Item key={resultValue(result)} value={resultValue(result)} onSelect={() => go(result)}\n                onMouseDown={event => event.preventDefault()} className=\"fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none\">"
+      }
+    ],
+    "fc-global-search-footer": [
+      {
+        "path": "frontend/src/components/shared/GlobalSearch.tsx",
+        "line": 137,
+        "element": "div",
+        "attributes": [
+          "className=\"fc-global-search-footer flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground\""
+        ],
+        "openingElement": "<div className=\"fc-global-search-footer flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground\">"
+      }
+    ],
+    "fc-select-menu": [
+      {
+        "path": "frontend/src/components/ui/select.tsx",
+        "line": 76,
+        "element": "SelectPrimitive.Content",
+        "attributes": [
+          "ref={ref}",
+          "className={cn(\n        \"fc-select-menu relative z-50 max-h-96 max-w-[calc(100vw-2rem)] min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2\",\n        position === \"popper\" &&\n          \"data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1\",\n        className\n      )}",
+          "position={position}",
+          "{...props}"
+        ],
+        "openingElement": "<SelectPrimitive.Content\n      ref={ref}\n      className={cn(\n        \"fc-select-menu relative z-50 max-h-96 max-w-[calc(100vw-2rem)] min-w-[8rem] overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2\",\n        position === \"popper\" &&\n          \"data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1\",\n        className\n      )}\n      position={position}\n      {...props}\n    >"
+      }
+    ],
+    "fc-dropdown-menu": [
+      {
+        "path": "frontend/src/components/ui/dropdown-menu.tsx",
+        "line": 40,
+        "element": "DropdownMenuPrimitive.SubContent",
+        "attributes": [
+          "ref={ref}",
+          "className={cn(\n      'fc-dropdown-menu z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',\n      className,\n    )}",
+          "{...props}"
+        ],
+        "openingElement": "<DropdownMenuPrimitive.SubContent\n    ref={ref}\n    className={cn(\n      'fc-dropdown-menu z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',\n      className,\n    )}\n    {...props}\n  />"
+      },
+      {
+        "path": "frontend/src/components/ui/dropdown-menu.tsx",
+        "line": 56,
+        "element": "DropdownMenuPrimitive.Content",
+        "attributes": [
+          "ref={ref}",
+          "sideOffset={sideOffset}",
+          "className={cn(\n        'fc-dropdown-menu z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',\n        className,\n      )}",
+          "{...props}"
+        ],
+        "openingElement": "<DropdownMenuPrimitive.Content\n      ref={ref}\n      sideOffset={sideOffset}\n      className={cn(\n        'fc-dropdown-menu z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',\n        className,\n      )}\n      {...props}\n    />"
+      }
+    ],
+    "desktop-nav": [
+      {
+        "path": "frontend/src/layouts/AppLayout.tsx",
+        "line": 37,
+        "element": "div",
+        "attributes": [
+          "className=\"desktop-nav order-last w-full min-w-0 lg:order-none lg:w-auto lg:flex-1\""
+        ],
+        "openingElement": "<div className=\"desktop-nav order-last w-full min-w-0 lg:order-none lg:w-auto lg:flex-1\">"
+      }
+    ],
+    "desktop-workspace": [
+      {
+        "path": "frontend/src/layouts/AppLayout.tsx",
+        "line": 53,
+        "element": "main",
+        "attributes": [
+          "className=\"desktop-workspace min-h-0 min-w-0 flex-1 overflow-hidden\""
+        ],
+        "openingElement": "<main className=\"desktop-workspace min-h-0 min-w-0 flex-1 overflow-hidden\">"
+      }
+    ],
+    "fc-list-workbench": [
+      {
+        "path": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+        "line": 380,
+        "element": "section",
+        "attributes": [
+          "className=\"fc-list-workbench min-w-0 rounded-xl border border-border bg-card\"",
+          "aria-label=\"条码打印记录\""
+        ],
+        "openingElement": "<section className=\"fc-list-workbench min-w-0 rounded-xl border border-border bg-card\" aria-label=\"条码打印记录\">"
+      },
+      {
+        "path": "frontend/src/pages/settings/pda-devices/index.tsx",
+        "line": 144,
+        "element": "section",
+        "attributes": [
+          "className=\"fc-list-workbench min-w-0 rounded-xl border border-border bg-card\"",
+          "aria-label=\"PDA设备列表\""
+        ],
+        "openingElement": "<section className=\"fc-list-workbench min-w-0 rounded-xl border border-border bg-card\" aria-label=\"PDA设备列表\">"
+      }
+    ],
+    "fc-tax-panel": [
+      {
+        "path": "frontend/src/pages/accounting/tax/index.tsx",
+        "line": 121,
+        "element": "div",
+        "attributes": [
+          "className=\"fc-tax-panel rounded-lg border border-border bg-card\""
+        ],
+        "openingElement": "<div className=\"fc-tax-panel rounded-lg border border-border bg-card\">"
+      },
+      {
+        "path": "frontend/src/pages/accounting/tax/index.tsx",
+        "line": 131,
+        "element": "div",
+        "attributes": [
+          "className=\"fc-tax-panel rounded-lg border border-border bg-card\""
+        ],
+        "openingElement": "<div className=\"fc-tax-panel rounded-lg border border-border bg-card\">"
+      },
+      {
+        "path": "frontend/src/pages/accounting/tax/index.tsx",
+        "line": 145,
+        "element": "div",
+        "attributes": [
+          "className=\"fc-tax-panel rounded-lg border border-border bg-card\""
+        ],
+        "openingElement": "<div className=\"fc-tax-panel rounded-lg border border-border bg-card\">"
+      },
+      {
+        "path": "frontend/src/pages/accounting/tax/index.tsx",
+        "line": 157,
+        "element": "div",
+        "attributes": [
+          "className=\"fc-tax-panel rounded-lg border border-border bg-card\""
+        ],
+        "openingElement": "<div className=\"fc-tax-panel rounded-lg border border-border bg-card\">"
+      }
+    ],
+    "desktop-table": [
+      {
+        "path": "frontend/src/components/shared/DataTable.tsx",
+        "line": 148,
+        "element": "div",
+        "attributes": [
+          "className=\"desktop-table min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden\""
+        ],
+        "openingElement": "<div className=\"desktop-table min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden\">"
+      },
+      {
+        "path": "frontend/src/pages/inventory/index.tsx",
+        "line": 387,
+        "element": "div",
+        "attributes": [
+          "className=\"desktop-table desktop-inventory-table card-base overflow-hidden\""
+        ],
+        "openingElement": "<div className=\"desktop-table desktop-inventory-table card-base overflow-hidden\">"
+      }
+    ],
+    "fc-report-panel": [
+      {
+        "path": "frontend/src/components/shared/ReportPanel.tsx",
+        "line": 33,
+        "element": "section",
+        "attributes": [
+          "className={cn('fc-report-panel rounded-lg border border-border bg-card p-4', className)}"
+        ],
+        "openingElement": "<section className={cn('fc-report-panel rounded-lg border border-border bg-card p-4', className)}>"
+      }
+    ],
+    "fc-report-meter": [
+      {
+        "path": "frontend/src/components/shared/ReportMeter.tsx",
+        "line": 11,
+        "element": "meter",
+        "attributes": [
+          "className=\"fc-report-meter min-w-0 flex-1\"",
+          "min={0}",
+          "max={max}",
+          "value={value}",
+          "aria-label={label}",
+          "aria-valuetext={valueText}",
+          "style={{ color }}"
+        ],
+        "openingElement": "<meter className=\"fc-report-meter min-w-0 flex-1\" min={0} max={max} value={value} aria-label={label} aria-valuetext={valueText} style={{ color }}>"
+      }
+    ],
+    "fc-button": [
+      {
+        "path": "frontend/src/components/ui/button.tsx",
+        "line": 18,
+        "element": "Comp",
+        "attributes": [
+          "className={cn(\"fc-button\", buttonVariants({ variant, size, className }))}",
+          "ref={ref}",
+          "{...props}"
+        ],
+        "openingElement": "<Comp\n        className={cn(\"fc-button\", buttonVariants({ variant, size, className }))}\n        ref={ref}\n        {...props}\n      />"
+      }
+    ]
+  },
+  "libraries": {
+    "cmdk": "1.1.1",
+    "@radix-ui/react-popover": "1.1.18",
+    "@radix-ui/react-popper": "1.2.8",
+    "@radix-ui/react-select": "2.2.6",
+    "@radix-ui/react-dropdown-menu": "2.1.24"
+  },
+  "attributeEvidence": {
+    "cmdk-group-heading": "cmdk generated DIV with aria-hidden=true; observed in browser-states.json: search-selected panels",
+    "cmdk-list": "cmdk generated role=listbox with aria-busy; observed in browser-states.json: search-selected / search-loading panels",
+    "cmdk-item": "cmdk generated role=option, aria-selected/data-selected and aria-disabled/data-disabled; observed in browser-states.json: search-selected states",
+    "data-search-results": "GlobalSearch PopoverContent passes data-search-results and role=presentation on same element",
+    "data-radix-popper-content-wrapper": "Radix generated wrapper; fixed position and z-index=50 observed in browser",
+    "aria-label meter": "ReportMeter forwards label to aria-label; reports.metrics.js derives label from WT_STATUS_NAME; all 6 states rendered in browser-states.json: warehouse-ops-normal"
+  },
+  "domHits": {
+    ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]": [
+      {
+        "capture": "search-selected",
+        "count": 2
+      },
+      {
+        "capture": "purchase-menu",
+        "count": 2
+      },
+      {
+        "capture": "topnav-menu",
+        "count": 1
+      },
+      {
+        "capture": "tax",
+        "count": 1
+      },
+      {
+        "capture": "device-workbench",
+        "count": 1
+      },
+      {
+        "capture": "warehouse-ops",
+        "count": 1
+      },
+      {
+        "capture": "approval-disabled",
+        "count": 1
+      }
+    ],
+    ".desktop-shell-sample > header": [
+      {
+        "capture": "search-selected",
+        "count": 1
+      },
+      {
+        "capture": "purchase-menu",
+        "count": 1
+      },
+      {
+        "capture": "topnav-menu",
+        "count": 1
+      },
+      {
+        "capture": "tax",
+        "count": 1
+      },
+      {
+        "capture": "device-workbench",
+        "count": 1
+      },
+      {
+        "capture": "warehouse-ops",
+        "count": 1
+      },
+      {
+        "capture": "approval-disabled",
+        "count": 1
+      }
+    ],
+    "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]": [
+      {
+        "capture": "search-selected",
+        "count": 1
+      }
+    ],
+    "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]": [
+      {
+        "capture": "search-selected",
+        "count": 1
+      }
+    ],
+    "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]": [
+      {
+        "capture": "search-selected",
+        "count": 3
+      }
+    ],
+    "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])": [
+      {
+        "capture": "search-selected",
+        "count": 1
+      }
+    ],
+    "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]": [
+      {
+        "capture": "search-selected",
+        "count": 2
+      }
+    ],
+    "body:has(.desktop-shell-sample) .fc-global-search-footer": [
+      {
+        "capture": "search-selected",
+        "count": 1
+      }
+    ],
+    "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)": [
+      {
+        "capture": "search-selected",
+        "count": 1
+      },
+      {
+        "capture": "purchase-menu",
+        "count": 1
+      }
+    ],
+    ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul": [
+      {
+        "capture": "topnav-menu",
+        "count": 1
+      }
+    ],
+    ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)": [
+      {
+        "capture": "tax",
+        "count": 2
+      },
+      {
+        "capture": "device-workbench",
+        "count": 1
+      }
+    ],
+    ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child": [
+      {
+        "capture": "device-workbench",
+        "count": 1
+      }
+    ],
+    ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]": [
+      {
+        "capture": "warehouse-ops",
+        "count": 1
+      }
+    ],
+    ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]": [
+      {
+        "capture": "warehouse-ops",
+        "count": 1
+      }
+    ],
+    ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]": [
+      {
+        "capture": "warehouse-ops",
+        "count": 1
+      }
+    ],
+    ".desktop-workspace .desktop-table button.text-primary:not(.fc-button):disabled": [
+      {
+        "capture": "approval-disabled",
+        "count": 1
+      }
+    ]
+  },
+  "structuralEvidence": [
+    {
+      "path": "frontend/src/components/layout/TopNav.tsx",
+      "startLine": 125,
+      "endLine": 149,
+      "source": "            ? 'bg-primary/10 text-primary'\n            : 'text-muted-foreground hover:bg-muted hover:text-foreground'\n        )}\n      >\n        {label}\n        <ChevronDown className={cn('h-3.5 w-3.5 opacity-70 transition-transform', open && 'rotate-180')} />\n      </button>\n      {open && (\n        <div\n          className=\"absolute left-0 top-full z-50 min-w-[12rem] pt-1\"\n          role=\"menu\"\n          onMouseEnter={openMenu}\n          onMouseLeave={scheduleClose}\n        >\n          <ul className=\"rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md\">\n            {sections.map((section, index) => (\n              <Fragment key={section.label ?? `__plain-${index}`}>\n                {index > 0 && (\n                  <li role=\"separator\" className=\"my-1 border-t border-border\" />\n                )}\n                {showSectionLabels && section.label && (\n                  <li\n                    role=\"presentation\"\n                    className=\"px-3 pb-1 pt-1.5 text-xs font-medium text-muted-foreground\"\n                  >"
+    },
+    {
+      "path": "frontend/src/components/shared/GlobalSearch.tsx",
+      "startLine": 108,
+      "endLine": 143,
+      "source": "      </PopoverAnchor>\n      <PopoverContent align=\"end\" sideOffset={8} role=\"presentation\" aria-labelledby={undefined} data-search-results\n        className=\"fc-global-search-results w-[560px] max-w-[calc(100vw-2rem)] overflow-hidden\"\n        onOpenAutoFocus={event => event.preventDefault()}\n        onCloseAutoFocus={event => event.preventDefault()}\n        onInteractOutside={event => { if (rootRef.current?.contains(event.target as Node)) event.preventDefault() }}\n        onEscapeKeyDown={event => { event.preventDefault(); event.stopPropagation(); resetSearch(); inputRef.current?.blur() }}>\n        <Command.List className=\"fc-global-search-list max-h-[min(420px,calc(var(--radix-popover-content-available-height)-40px))] overflow-y-auto overscroll-contain\" label=\"搜索结果\" aria-busy={loading}>\n          {loading && <div role=\"status\" className=\"px-5 py-8 text-center text-sm text-muted-foreground\">正在搜索全部历史记录…</div>}\n          {error && <div role=\"alert\" className=\"px-5 py-8 text-center text-sm text-destructive-ink\">{error}</div>}\n          {!loading && !error && !results.length && <EmptyState variant=\"no-result\" compact title={`未找到「${query}」相关内容`} description=\"\" />}\n          {groups.map(({ type, items }) => {\n            const Icon = TYPE_ICON[type] || FileText\n            return <Command.Group key={type} heading={<><Icon aria-hidden=\"true\" className=\"size-3.5\" />{items[0].typeLabel}</>}>\n              {items.map(result => <Command.Item key={resultValue(result)} value={resultValue(result)} onSelect={() => go(result)}\n                onMouseDown={event => event.preventDefault()} className=\"fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none\">\n                <div className=\"min-w-0 flex-1\">\n                  <p className=\"break-words text-sm font-medium leading-5\">{result.title}</p>\n                  {result.type === 'product' && query.trim() && result.searchMatch && <p className=\"break-words text-xs leading-5 text-muted-foreground\">命中：{result.searchMatch}</p>}\n                  {result.subtitle && result.subtitle !== result.title && <p className=\"break-words text-xs leading-5 text-muted-foreground\">{result.subtitle}</p>}\n                  {!!result.details?.length && <div className=\"mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground\">\n                    {result.details.map(detail => <span key={detail.label} className=\"min-w-0 max-w-full break-words leading-5\">{detail.label}：{detail.value}</span>)}\n                  </div>}\n                </div>\n                <ArrowRight aria-hidden=\"true\" className=\"mt-1 size-3.5 shrink-0 text-muted-foreground\" />\n              </Command.Item>)}\n            </Command.Group>\n          })}\n        </Command.List>\n        {!!groups.length && <div className=\"fc-global-search-footer flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground\">\n          <span>{results.length} 项结果</span><span aria-hidden=\"true\">↑↓ 选择 · Enter 打开</span>\n        </div>}\n      </PopoverContent>\n    </Popover>\n  </Command>\n}"
+    },
+    {
+      "path": "frontend/src/components/shared/ReportTable.tsx",
+      "startLine": 20,
+      "endLine": 23,
+      "source": "  return Children.toArray(children).map(child => isValidElement<NodeProps>(child) ? text(child.props.children) : String(child)).join('')\n}\nconst base = 'fc-report-table w-full text-sm tabular-nums [&_th]:font-medium [&_th]:text-muted-foreground [&_td]:leading-6 [&_td]:align-middle [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr:hover]:bg-muted/20 [&_tfoot]:bg-muted/30 [&_tfoot]:font-semibold'\n"
+    },
+    {
+      "path": "frontend/src/components/shared/ReportMeter.tsx",
+      "startLine": 1,
+      "endLine": 13,
+      "source": "import { CHART_TONES } from '@/components/dashboard/chartTheme'\n\n/** 有界比例使用原生meter，精确值仍由调用方显示；不为零值补造最小色条。 */\nexport function ReportMeter({ value, max, label, valueText, color = CHART_TONES.primary }: {\n  value: number\n  max: number\n  label: string\n  valueText: string\n  color?: string\n}) {\n  return <meter className=\"fc-report-meter min-w-0 flex-1\" min={0} max={max} value={value} aria-label={label} aria-valuetext={valueText} style={{ color }}>{valueText}</meter>\n}"
+    },
+    {
+      "path": "frontend/src/pages/approvals/pending.tsx",
+      "startLine": 34,
+      "endLine": 47,
+      "source": "    {\n      key: 'no',\n      title: '单据号',\n      width: 180,\n      render: (_, row) => (\n        <button\n          className=\"text-primary hover:underline\"\n          disabled={isFetching || isError || !approvalSource(row.bizType, row.bizId, can).path}\n          title={approvalSource(row.bizType, row.bizId, can).reason || undefined}\n          onClick={() => openSource(row)}\n        >\n          {row.no || `#${row.bizId}`}\n        </button>\n      ),"
+    },
+    {
+      "path": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "startLine": 24,
+      "endLine": 43,
+      "source": "// ── 流程瓶颈条 ─────────────────────────────────────────────────────────────\nconst FLOW_COLOR: Record<number, string> = {\n  [WT_STATUS.PENDING]: '#9699a1',\n  [WT_STATUS.PICKING]: CHART_TONES.primary,\n  [WT_STATUS.SORTING]: CHART_TONES.warning,\n  [WT_STATUS.CHECKING]: '#a87955',\n  [WT_STATUS.PACKING]: '#7775a8',\n  [WT_STATUS.SHIPPING]: CHART_TONES.info,\n}\n\nfunction FlowBar({ items }: { items: FlowBottleneck[] }) {\n  const max = Math.max(...items.map(i => i.count), 1)\n  return (\n    <div className=\"space-y-2\">\n      {items.map(item => (\n        <div key={item.status} className=\"flex items-center gap-3\">\n          <p className=\"w-16 shrink-0 text-helper\">{item.label}</p>\n          <ReportMeter value={item.count} max={max} label={item.label} valueText={`${item.count} 个任务`} color={FLOW_COLOR[item.status]} />\n          <p className=\"w-8 text-left text-sm font-bold text-foreground\">{item.count}</p>\n        </div>"
+    },
+    {
+      "path": "backend/src/modules/reports/reports.metrics.js",
+      "startLine": 128,
+      "endLine": 132,
+      "source": "  const flowBottleneck = WT_STATUS_ACTIVE.map(s => ({\n    status: s,\n    label: WT_STATUS_NAME[s],\n    count: Number(flowRows.find(r => r.status === s)?.cnt ?? 0),\n  }))"
+    }
+  ],
+  "libraryAttributeSnippets": {
+    "cmdk-group-heading": [
+      "react-compose-refs\";var N='[cmdk-group=\"\"]',Y='[cmdk-group-items=\"\"]',be='[cmdk-group-heading=\"\"]',le='[cmdk-item=\"\"]',ce=`${le}:not([aria-disabled=\"true\"])`,Z=\"cmdk-item-select\",T=\"data-value\",Re=(r,o,n)=>ae(r,o,n),ue",
+      "\",role:\"presentation\",hidden:x?void 0:!0},n&&t.createElement(\"div\",{ref:b,\"cmdk-group-heading\":\"\",\"aria-hidden\":!0,id:m},n),B(r,S=>t.createElement(\"div\",{\"cmdk-group-items\":\"\",role:\"group\",\"aria-labelledby\":n?m:void 0}"
+    ],
+    "cmdk-list": [
+      "tionFrame(x),C.unobserve(m)}}},[]),t.createElement(D.div,{ref:G(d,o),...c,\"cmdk-list\":\"\",role:\"listbox\",tabIndex:-1,\"aria-activedescendant\":p,\"aria-label\":u,id:b.listId},B(r,m=>t.createElement(\"div\",{ref:G(f,b",
+      "bel\":u,id:b.listId},B(r,m=>t.createElement(\"div\",{ref:G(f,b.listInnerRef),\"cmdk-list-sizer\":\"\"},m)))}),xe=t.forwardRef((r,o)=>{let{open:n,onOpenChange:u,overlayClassName:c,contentClassName:d,container:f,...p}="
+    ],
+    "cmdk-item": [
+      "heading=\"\"]',le='[cmdk-item=\"\"]',ce=`${le}:not([aria-disabled=\"true\"])`,Z=\"cmdk-item-select\",T=\"data-value\",Re=(r,o,n)=>ae(r,o,n),ue=t.createContext(void 0),K=()=>t.useContext(ue),de=t.createContext(void 0),ee",
+      "t:O,keywords:$,...q}=r;return t.createElement(D.div,{ref:G(u,o),...q,id:n,\"cmdk-item\":\"\",role:\"option\",\"aria-disabled\":!!A,\"aria-selected\":!!R,\"data-disabled\":!!A,\"data-selected\":!!R,onPointerMove:A||d.getDisa"
+    ],
+    "data-selected": [
+      "role:\"option\",\"aria-disabled\":!!A,\"aria-selected\":!!R,\"data-disabled\":!!A,\"data-selected\":!!R,onPointerMove:A||d.getDisablePointerSelection()?void 0:S,onClick:A?void 0:C},r.children)}),Ee=t.forwardRef((r,o)=>{let{"
+    ],
+    "data-disabled": [
+      "id:n,\"cmdk-item\":\"\",role:\"option\",\"aria-disabled\":!!A,\"aria-selected\":!!R,\"data-disabled\":!!A,\"data-selected\":!!R,onPointerMove:A||d.getDisablePointerSelection()?void 0:S,onClick:A?void 0:C},r.children)}),Ee=t.for"
+    ]
+  }
+}

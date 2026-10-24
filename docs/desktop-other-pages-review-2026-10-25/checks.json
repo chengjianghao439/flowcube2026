@@ -1,0 +1,70 @@
+{
+  "timestamp": "2026-10-24T23:08:46.614496+00:00",
+  "baseline": "93109deb5c922266d49634fa8fdcc817083830b4",
+  "cssBasePrefixByteIdentical": true,
+  "productFilesChanged": [
+    "frontend/src/styles/desktop-page-samples.css"
+  ],
+  "tsxChanged": 0,
+  "addedCssLines": 71,
+  "cssHexLiterals": 0,
+  "newRules": 16,
+  "anchoredClasses": 16,
+  "unresolvedClasses": 0,
+  "rulesWithVisibleDomHit": 16,
+  "nonGetRequests": 0,
+  "browserCaptures": 65,
+  "routeCount": 14,
+  "stateSheets": 14,
+  "validation": {
+    "frontendLint": {
+      "exit": 0
+    },
+    "frontendTypesTsconfigApp": {
+      "exit": 0
+    },
+    "frontendElectronTargetBuild": {
+      "exit": 0,
+      "seconds": 4.47
+    },
+    "chartSeriesLimit": {
+      "exit": 0,
+      "passed": 5,
+      "failed": 0
+    },
+    "frontendConventions": {
+      "exit": 0,
+      "passed": 5,
+      "failed": 0
+    },
+    "agentsMdGuard": {
+      "exit": 0,
+      "failed": 0
+    }
+  },
+  "knownSourceLiterals": {
+    "warehouseFlowInlineColors": {
+      "path": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "lines": [
+        26,
+        29,
+        30
+      ],
+      "count": 3,
+      "renderedTokenOverrides": "CSS aria-label selectors; TSX remains unchanged"
+    },
+    "printTemplateCanvas": {
+      "path": "frontend/src/pages/settings/print-templates/editor.tsx",
+      "count": 4,
+      "reason": "document canvas colors excluded from application skin"
+    }
+  },
+  "notRun": [
+    "full frontend unit suite",
+    "database/business smoke",
+    "remote CI results",
+    "Windows install/update",
+    "PDA device",
+    "physical printing"
+  ]
+}
