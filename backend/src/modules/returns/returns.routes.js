@@ -5,8 +5,8 @@ const { PERMISSIONS } = require('../../constants/permissions')
 const { validateBody } = require('../../utils/route')
 const { disposalSourceSchema }=require('../disposal/disposal.handling.contracts')
 const router=Router(); router.use(authMiddleware)
-const vParams=s=>(req,res,next)=>{const r=s.safeParse(req.params);if(!r.success)return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null});req.params=r.data;next()}
-const vQuery=s=>(req,res,next)=>{const r=s.safeParse(req.query);if(!r.success)return res.status(400).json({success:false,message:r.error.errors.map(e=>e.message).join('；'),data:null});req.query=r.data;next()}
+const vParams=s=>(req,res,next)=>{const r=s.safeParse(req.params);if(!r.success)return res.status(400).json({success:false,message:r.error.issues.map(e=>e.message).join('；'),data:null});req.params=r.data;next()}
+const vQuery=s=>(req,res,next)=>{const r=s.safeParse(req.query);if(!r.success)return res.status(400).json({success:false,message:r.error.issues.map(e=>e.message).join('；'),data:null});req.query=r.data;next()}
 const idParam=z.object({id:z.coerce.number().int().positive('id 必须为正整数')})
 const sourceOrderQuery=z.object({orderNo:z.string().trim().min(1,'原单号不能为空')})
 const itemSchema=z.object({sourceItemId:z.number().int().positive().optional(),productId:z.number().int().positive(),productCode:z.string(),productName:z.string(),articleNumber:z.string().optional().nullable(),spec:z.string().optional().nullable(),color:z.string().optional().nullable(),unit:z.string(),entryUnit:z.string().optional(),quantity:z.number().positive(),unitPrice:z.number().nonnegative()})

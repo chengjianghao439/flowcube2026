@@ -11,7 +11,7 @@ const router = Router()
 const itemSchema = z.object({
   productId: z.number().int().positive('请选择商品'),
   quantity: z.number().positive('处置数量必须大于 0'),
-  disposeType: z.literal(3, { errorMap: () => ({ message: '新独立处理单仅支持报废' }) }),
+  disposeType: z.literal(3, { error: '新独立处理单仅支持报废' }),
   remark: z.string().max(300).optional().nullable(),
 })
 

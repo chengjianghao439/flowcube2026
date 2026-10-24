@@ -250,7 +250,7 @@ Compose 透传 `JWT_ACCESS_EXPIRES_IN`（默认 2h）、`JWT_REFRESH_EXPIRES_IN`
 
 依赖安全门禁对三端运行完整 `npm audit --json`（包含 Electron 所在 devDependencies），高危/严重直接和传递依赖均阻断；审计接口失败、非法 JSON、异常退出同样阻断。详见 `docs/prelaunch-runtime-hr-ops-fixes-2026-09-05.md`。
 
-桌面运行时现固定 Electron 44.2.0 / builder 26.15.3；Windows 安装目标仍为 x64。Electron 44 要求 macOS >= 13（旧 macOS 11/12 不再支持）；本机只完成 macOS 目录包与运行时边界验证，Windows 安装/更新和实机打印仍需 Windows 验收。
+桌面运行时现固定 Electron 44.9.3 / builder 26.15.3；Windows 安装目标仍为 x64。Electron 44 要求 macOS >= 13（旧 macOS 11/12 不再支持）；本机只完成 macOS 目录包与运行时边界验证，Windows 安装/更新和实机打印仍需 Windows 验收。
 
 
 ## 第二轮修复的运行时验收

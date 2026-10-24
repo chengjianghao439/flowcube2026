@@ -23,7 +23,7 @@ const VALID_TYPES = [
 ]
 
 const typeParamSchema = z.object({
-  type: z.enum(VALID_TYPES, { errorMap: () => ({ message: '无效的打印类型' }) }),
+  type: z.enum(VALID_TYPES, { error: '无效的打印类型' }),
 })
 
 const bindBodySchema = z.object({

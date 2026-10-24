@@ -19,7 +19,7 @@ const updateSchema = z.object({
 })
 
 const statusSchema = z.object({
-  status: z.enum(['active', 'disabled', 'retired'], { errorMap: () => ({ message: '设备状态无效' }) }),
+  status: z.enum(['active', 'disabled', 'retired'], { error: '设备状态无效' }),
 })
 
 router.use(authMiddleware)

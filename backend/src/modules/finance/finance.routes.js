@@ -10,7 +10,7 @@ router.use(authMiddleware)
 
 const vParams = s => (req,res,next) => {
   const r = s.safeParse(req.params)
-  if (!r.success) return res.status(400).json({ success:false, message:r.error.errors.map(e=>e.message).join('；'), data:null })
+  if (!r.success) return res.status(400).json({ success:false, message:r.error.issues.map(e=>e.message).join('；'), data:null })
   req.params = r.data; next()
 }
 const idParam = z.object({ id: z.coerce.number().int().positive('id 必须为正整数') })

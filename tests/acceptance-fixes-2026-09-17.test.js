@@ -29,6 +29,100 @@ function fakeRes() {
   }
 }
 
+test('Zod 校验失败保持 400 与原中文说明，不因错误对象接口变化崩溃', () => {
+  const { z } = require('../backend/node_modules/zod')
+  const errorHandler = require('../backend/src/middleware/errorHandler')
+  const parsed = z.object({ quantity: z.number().positive('数量必须大于零') }).safeParse({ quantity: 0 })
+  const req = { originalUrl: '/api/test', method: 'POST', requestId: 'zod-validation-fixture' }
+  const res = fakeRes()
+  assert.equal(parsed.success, false)
+  errorHandler(parsed.error, req, res, () => {})
+  assert.equal(res.statusCode, 400)
+  assert.equal(res.body.code, 'VALIDATION_ERROR')
+  assert.equal(res.body.message, '数量必须大于零')
+})
+
+test('超过既有数组上限时，在逐元素校验前拒绝，不累积海量错误', () => {
+  const { z } = require('../backend/node_modules/zod')
+  let parsedElements = 0
+  const schema = z.array(z.string().superRefine(() => { parsedElements++ })).max(200, '明细不能超过 200 行')
+  const result = schema.safeParse(Array(201).fill('fixture'))
+  assert.equal(result.success, false)
+  assert.equal(result.error.issues.length, 1)
+  assert.equal(result.error.issues[0].message, '明细不能超过 200 行')
+  assert.equal(parsedElements, 0)
+  assert.deepEqual(schema.parse(['fixture']), ['fixture'])
+})
+
+// 只替换认证与控制器边界，执行真实路由中的 schema / 参数校验，不加载数据库。
+function offlineRouter(relative) {
+  const vm = require('node:vm')
+  const { createRequire } = require('node:module')
+  const filename = path.join(ROOT, 'backend/src/modules', relative)
+  const localRequire = createRequire(filename)
+  const next = (_req, _res, done) => done?.()
+  const handlers = new Proxy({}, { get: () => next })
+  const module_ = { exports: {} }
+  const require_ = id => {
+    if (id.endsWith('.controller') || id.endsWith('.service')) return handlers
+    if (id === '../../middleware/auth') return { authMiddleware: next, requirePermission: () => next, requireAnyPermission: () => next }
+    if (id === '../../middleware/apiIngress') return { loginLimiter: next }
+    if (id === './system.split-device') return { splitReceiptDevice: next }
+    return localRequire(id)
+  }
+  vm.runInNewContext(read(path.relative(ROOT, filename)), { require: require_, module: module_, exports: module_.exports }, { filename })
+  return module_.exports
+}
+
+test('登录和操作回执查询保留原校验响应及中文必填提示', () => {
+  const login = offlineRouter('auth/auth.routes.js').stack.find(layer => layer.route?.path === '/login').route
+  const loginRes = fakeRes()
+  login.stack[1].handle({ body: { username: '', password: 'fixture' } }, loginRes, () => assert.fail('无效登录不得进入控制器'))
+  assert.equal(loginRes.statusCode, 400)
+  assert.equal(loginRes.body.message, '账号不能为空')
+  const query = offlineRouter('system/system.routes.js').stack.find(layer => layer.route?.path === '/request-status/:key').route
+  for (const action of [undefined, '   ']) {
+    const res = fakeRes()
+    query.stack[0].handle({ query: action === undefined ? {} : { action } }, res, () => assert.fail('缺少 action 必须拒绝'))
+    assert.equal(res.statusCode, 400)
+    assert.equal(res.body.message, '缺少 action 参数')
+  }
+  const req = { query: { action: ' transfer.scanOut.7 ', warehouseId: '3' } }
+  let passed = false
+  query.stack[0].handle(req, fakeRes(), () => { passed = true })
+  assert.equal(passed, true)
+  assert.equal(req.query.action, 'transfer.scanOut.7')
+  assert.equal(req.query.warehouseId, 3)
+})
+
+test('打印机和设备状态的非法枚举保留中文原因', () => {
+  for (const [file, method, path_, req, message] of [
+    ['printer-bindings/printer-bindings.routes.js', 'put', '/:type', { params: { type: 'invalid-fixture' } }, '无效的打印类型'],
+    ['pda-devices/pda-devices.routes.js', 'put', '/:id/status', { body: { status: 'invalid-fixture' } }, '设备状态无效'],
+  ]) {
+    const route = offlineRouter(file).stack.find(layer => layer.route?.path === path_ && layer.route.methods[method]).route
+    let error
+    route.stack[1].handle(req, fakeRes(), err => { error = err })
+    assert.equal(error?.issues?.[0]?.message, message)
+  }
+})
+
+test('超额申请沿用原到期时间格式，分钟、秒和小数秒均兼容', () => {
+  const route = offlineRouter('credit-overrides/credit-overrides.routes.js').stack.find(layer => layer.route?.path === '/' && layer.route.methods.post).route
+  for (const expiresAt of ['2026-10-24T10:00Z', '2026-10-24T10:00:00Z', '2026-10-24T10:00:00.123Z', undefined]) {
+    const req = { body: { saleOrderId: 7, reason: 'fixture', ...(expiresAt === undefined ? {} : { expiresAt }) } }
+    let error
+    route.stack[1].handle(req, fakeRes(), err => { error = err })
+    assert.equal(error, undefined)
+    assert.equal(req.body.expiresAt, expiresAt)
+  }
+  for (const expiresAt of ['2026-02-30T10:00Z', '2026-10-24T24:00Z', '2026-10-24T10:00', '2026-10-24T10:00+08:00']) {
+    let error
+    route.stack[1].handle({ body: { saleOrderId: 7, reason: 'fixture', expiresAt } }, fakeRes(), err => { error = err })
+    assert.equal(error?.name, 'ZodError')
+  }
+})
+
 test('畸形 JSON 请求体返回 400 而不是 500', () => {
   const errorHandler = require('../backend/src/middleware/errorHandler')
   const req = { originalUrl: '/api/auth/login', method: 'POST', body: {}, params: {}, requestId: 'test-req' }

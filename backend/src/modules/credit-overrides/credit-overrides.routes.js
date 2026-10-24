@@ -10,7 +10,8 @@ const router = Router()
 const createSchema = z.object({
   saleOrderId: z.number().int().positive('请选择销售单'),
   reason: z.string().trim().min(1, '请填写超额原因').max(500),
-  expiresAt: z.string().datetime().optional(),
+  // 保留原校验允许的 UTC 分钟、秒与小数秒格式；Zod 4 默认要求秒。
+  expiresAt: z.union([z.string().datetime(), z.string().datetime({ precision: -1 })]).optional(),
 })
 const approvalSchema = z.object({ expectedTaskId: z.number().int().positive().optional(), reason: z.string().trim().max(500).optional() })
 const rejectSchema = approvalSchema.extend({ reason: z.string().trim().min(1, '请填写驳回原因').max(300) })

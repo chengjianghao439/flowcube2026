@@ -11,7 +11,7 @@ function vQuery(schema) {
     if (!r.success) {
       return res.status(400).json({
         success: false,
-        message: r.error.errors.map(e => e.message).join('；'),
+        message: r.error.issues.map(e => e.message).join('；'),
         data: null,
       })
     }
@@ -21,9 +21,8 @@ function vQuery(schema) {
 }
 
 const requestStatusQuery = z.object({
-  // required_error 不能省：字段整个缺失时触发的是 required 而非 min，
-  // 只写 min 的话用户拿到的是 zod 默认的英文 "Required"
-  action: z.string({ required_error: '缺少 action 参数' }).trim().min(1, '缺少 action 参数'),
+  // 缺失字段继续沿原中文提示，其他类型错误沿校验器默认提示。
+  action: z.string({ error: issue => issue.input === undefined ? '缺少 action 参数' : undefined }).trim().min(1, '缺少 action 参数'),
   // 新建尚无资源ID：保留原仓与正文指纹供领域闸门核对；其他回执仍可省略。
   warehouseId: z.coerce.number().int().positive().optional(),
   requestFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),

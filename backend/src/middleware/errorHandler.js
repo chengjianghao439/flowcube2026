@@ -63,7 +63,7 @@ function errorHandler(err, req, res, next) {
 
   // ── Zod 校验错误 ─────────────────────────────────────────────────────────
   if (err.name === 'ZodError') {
-    const message = err.errors.map((e) => e.message).join('；')
+    const message = (err.issues ?? err.errors).map((e) => e.message).join('；')
     logger.warn(`[ZodError] ${message}`, { path, userId, requestId, code: 'VALIDATION_ERROR' }, 'VALID')
     return errorResponse(res, message, 400, null, 'VALIDATION_ERROR')
   }

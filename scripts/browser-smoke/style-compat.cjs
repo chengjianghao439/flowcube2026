@@ -171,11 +171,11 @@ async function main() {
     process.chdir(frontend)
     const config = (await import(pathToFileURL(path.join(frontend, 'postcss.config.js')))).default
     const plugins = Object.entries(config.plugins).map(([name, options]) => requireFrontend(name)(options))
-    // Preserve the original v3 candidate set. These two recorded text utilities
-    // were retired from product pages by F12; keep testing their compilation.
+    // Preserve the original v3 candidate set. Recorded semantic text utilities
+    // retired from product pages must still compile in this immutable fixture.
     // Adding all main candidates would alter historically un-emitted palette
     // utilities, so only the existing edge section adds further candidates.
-    const fixtureClasses = ['text-success text-warning', ...[...readFileSync(fixture, 'utf8').split('<section')[1].matchAll(/className="([^"]*)"/g)].map(match => match[1])].join(' ')
+    const fixtureClasses = ['text-success text-warning text-page-title', ...[...readFileSync(fixture, 'utf8').split('<section')[1].matchAll(/className="([^"]*)"/g)].map(match => match[1])].join(' ')
     const source = readFileSync(path.join(frontend, 'src/index.css'), 'utf8') + `\n@source inline("${fixtureClasses}");`
     const css = await postcss(plugins).process(source, { from: path.join(frontend, 'src/index.css') })
     const result = await build({ entryPoints: [fixture], bundle: true, write: false, format: 'iife', jsx: 'automatic', tsconfig: path.join(frontend, 'tsconfig.app.json'), nodePaths: [path.join(frontend, 'node_modules')], define: { 'process.env.NODE_ENV': '"test"', 'import.meta.env': '{}', 'import.meta.hot': 'undefined' } })

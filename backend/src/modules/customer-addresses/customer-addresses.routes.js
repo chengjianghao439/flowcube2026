@@ -9,7 +9,7 @@ const router = Router()
 
 const vQuery = schema => (req, res, next) => {
   const r = schema.safeParse(req.query)
-  if (!r.success) return res.status(400).json({ success: false, message: r.error.errors.map(e => e.message).join('；'), data: null })
+  if (!r.success) return res.status(400).json({ success: false, message: r.error.issues.map(e => e.message).join('；'), data: null })
   req.query = r.data
   next()
 }

@@ -18,7 +18,7 @@ const loginSchema = z.object({
 router.post('/login', loginLimiter, (req, res, next) => {
   const result = loginSchema.safeParse(req.body)
   if (!result.success) {
-    const message = result.error.errors.map((e) => e.message).join('；')
+    const message = result.error.issues.map((e) => e.message).join('；')
     return res.status(400).json({ success: false, message, data: null })
   }
   req.body = result.data
