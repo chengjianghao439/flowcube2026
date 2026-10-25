@@ -32,6 +32,7 @@ import {
 } from '@/utils/printerName'
 import { formatPrinterSource } from '@/utils/displayFormatters'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import type { TableColumn } from '@/types'
@@ -155,7 +156,7 @@ export default function PrintersPage() {
   const canUseSystemPrinters =
     isDesktop && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
 
-  const { data: printers = [], isLoading, refetch: refetchPrinters } = usePrinters()
+  const { data: printers = [], isLoading, isSuccess, refetch: refetchPrinters } = usePrinters()
   useEffect(() => {
     if (!canUseSystemPrinters || !canManagePrinters) return
     let active = true
@@ -532,6 +533,7 @@ export default function PrintersPage() {
       </Dialog>
 
       <DataTable columns={cols} data={printers} loading={isLoading} rowKey="id" emptyText="暂无打印机" />
+      {isSuccess && <ListSummary total={printers.length} unit="台" />}
 
       {bindTarget && canManagePrinters && (
         <BindDialog

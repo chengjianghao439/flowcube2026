@@ -1,0 +1,250 @@
+{
+  "barcode": {
+    "before": [
+      {
+        "attrs": {
+          "aria-pressed": "true",
+          "class": "fc-print-category",
+          "title": "库存条码标签的打印记录与补打；历史缺失时可查找有效收货来源恢复标签",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgb(255, 255, 255)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgb(210, 210, 215)",
+          "color": "rgb(0, 67, 206)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 97
+        },
+        "text": "入库条码"
+      },
+      {
+        "attrs": {
+          "aria-pressed": "false",
+          "class": "fc-print-category",
+          "title": "出库箱贴 / L 条码的打印记录与补打",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgba(0, 0, 0, 0)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgba(0, 0, 0, 0)",
+          "color": "rgb(110, 110, 115)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 97
+        },
+        "text": "出库条码"
+      },
+      {
+        "attrs": {
+          "aria-pressed": "false",
+          "class": "fc-print-category",
+          "title": "物流标签与面单的打印记录与补打",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgba(0, 0, 0, 0)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgba(0, 0, 0, 0)",
+          "color": "rgb(110, 110, 115)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 97
+        },
+        "text": "物流条码"
+      }
+    ],
+    "after": [
+      {
+        "attrs": {
+          "aria-pressed": "true",
+          "class": "fc-segmented-option",
+          "title": "库存条码标签的打印记录与补打；历史缺失时可查找有效收货来源恢复标签",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgb(255, 255, 255)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgb(210, 210, 215)",
+          "color": "rgb(0, 67, 206)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 97
+        },
+        "text": "入库条码"
+      },
+      {
+        "attrs": {
+          "aria-pressed": "false",
+          "class": "fc-segmented-option",
+          "title": "出库箱贴 / L 条码的打印记录与补打",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgba(0, 0, 0, 0)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgba(0, 0, 0, 0)",
+          "color": "rgb(110, 110, 115)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 97
+        },
+        "text": "出库条码"
+      },
+      {
+        "attrs": {
+          "aria-pressed": "false",
+          "class": "fc-segmented-option",
+          "title": "物流标签与面单的打印记录与补打",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgba(0, 0, 0, 0)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgba(0, 0, 0, 0)",
+          "color": "rgb(110, 110, 115)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 97
+        },
+        "text": "物流条码"
+      }
+    ]
+  },
+  "invoices": {
+    "before": [
+      {
+        "attrs": {
+          "aria-pressed": "true",
+          "class": "fc-print-category",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgb(255, 255, 255)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgb(210, 210, 215)",
+          "color": "rgb(0, 67, 206)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 74
+        },
+        "text": "进项发票"
+      },
+      {
+        "attrs": {
+          "aria-pressed": "false",
+          "class": "fc-print-category",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgba(0, 0, 0, 0)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgba(0, 0, 0, 0)",
+          "color": "rgb(110, 110, 115)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 74
+        },
+        "text": "销项发票"
+      }
+    ],
+    "after": [
+      {
+        "attrs": {
+          "aria-pressed": "true",
+          "class": "fc-segmented-option",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgb(255, 255, 255)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgb(210, 210, 215)",
+          "color": "rgb(0, 67, 206)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 74
+        },
+        "text": "进项发票"
+      },
+      {
+        "attrs": {
+          "aria-pressed": "false",
+          "class": "fc-segmented-option",
+          "type": "button"
+        },
+        "style": {
+          "background": "rgba(0, 0, 0, 0)",
+          "borderRadius": "7px",
+          "borderTop": "1px solid rgba(0, 0, 0, 0)",
+          "color": "rgb(110, 110, 115)",
+          "display": "flex",
+          "fontSize": "12px",
+          "fontWeight": "500",
+          "gap": "7px",
+          "height": "32px",
+          "justifyContent": "center",
+          "minHeight": "32px",
+          "padding": "6px 12px",
+          "width": 74
+        },
+        "text": "销项发票"
+      }
+    ]
+  }
+}

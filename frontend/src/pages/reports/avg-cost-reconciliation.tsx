@@ -3,6 +3,7 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
 import { money } from '@/lib/format'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -102,6 +103,7 @@ export default function AvgCostReconciliationPage() {
           emptyText="无可对账数据"
         />
       )}
+      {data && !isLoading && !isError && <ListSummary total={data.list.length} unit="条" />}
     </div>
   )
 }

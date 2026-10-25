@@ -1,0 +1,104 @@
+{
+  "待拣货": {
+    "before": {
+      "attrs": {
+        "aria-label": "待拣货",
+        "aria-valuetext": "4 个任务",
+        "class": "fc-report-meter min-w-0 flex-1",
+        "max": "4",
+        "min": "0",
+        "style": "color: rgb(150, 153, 161);",
+        "value": "4"
+      },
+      "color": "rgb(110, 110, 115)",
+      "leftColor": "rgb(110, 110, 115)",
+      "leftText": "待拣货",
+      "rightColor": "rgb(29, 29, 31)",
+      "rightText": "4"
+    },
+    "after": {
+      "attrs": {
+        "aria-label": "待拣货",
+        "aria-valuetext": "4 个任务",
+        "class": "fc-report-meter min-w-0 flex-1",
+        "max": "4",
+        "min": "0",
+        "style": "color: hsl(var(--muted-foreground));",
+        "value": "4"
+      },
+      "color": "rgb(110, 110, 115)",
+      "leftColor": "rgb(110, 110, 115)",
+      "leftText": "待拣货",
+      "rightColor": "rgb(29, 29, 31)",
+      "rightText": "4"
+    }
+  },
+  "待复核": {
+    "before": {
+      "attrs": {
+        "aria-label": "待复核",
+        "aria-valuetext": "2 个任务",
+        "class": "fc-report-meter min-w-0 flex-1",
+        "max": "4",
+        "min": "0",
+        "style": "color: rgb(168, 121, 85);",
+        "value": "2"
+      },
+      "color": "rgb(15, 98, 254)",
+      "leftColor": "rgb(110, 110, 115)",
+      "leftText": "待复核",
+      "rightColor": "rgb(29, 29, 31)",
+      "rightText": "2"
+    },
+    "after": {
+      "attrs": {
+        "aria-label": "待复核",
+        "aria-valuetext": "2 个任务",
+        "class": "fc-report-meter min-w-0 flex-1",
+        "max": "4",
+        "min": "0",
+        "style": "color: hsl(var(--blue-60));",
+        "value": "2"
+      },
+      "color": "rgb(15, 98, 254)",
+      "leftColor": "rgb(110, 110, 115)",
+      "leftText": "待复核",
+      "rightColor": "rgb(29, 29, 31)",
+      "rightText": "2"
+    }
+  },
+  "待打包": {
+    "before": {
+      "attrs": {
+        "aria-label": "待打包",
+        "aria-valuetext": "1 个任务",
+        "class": "fc-report-meter min-w-0 flex-1",
+        "max": "4",
+        "min": "0",
+        "style": "color: rgb(119, 117, 168);",
+        "value": "1"
+      },
+      "color": "rgb(0, 45, 156)",
+      "leftColor": "rgb(110, 110, 115)",
+      "leftText": "待打包",
+      "rightColor": "rgb(29, 29, 31)",
+      "rightText": "1"
+    },
+    "after": {
+      "attrs": {
+        "aria-label": "待打包",
+        "aria-valuetext": "1 个任务",
+        "class": "fc-report-meter min-w-0 flex-1",
+        "max": "4",
+        "min": "0",
+        "style": "color: hsl(var(--blue-80));",
+        "value": "1"
+      },
+      "color": "rgb(0, 45, 156)",
+      "leftColor": "rgb(110, 110, 115)",
+      "leftText": "待打包",
+      "rightColor": "rgb(29, 29, 31)",
+      "rightText": "1"
+    }
+  }
+}

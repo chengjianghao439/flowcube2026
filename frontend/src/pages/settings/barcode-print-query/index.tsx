@@ -387,7 +387,7 @@ export default function BarcodePrintQueryPage() {
                 aria-pressed={category === item.value}
                 title={item.hint}
                 onClick={() => { setCategory(item.value); setRecovery(false) }}
-                className="fc-print-category"
+                className="fc-segmented-option"
               >
                 {item.value === 'inbound' ? <PackageOpen className="h-4 w-4 shrink-0" aria-hidden /> : item.value === 'outbound' ? <PackageCheck className="h-4 w-4 shrink-0" aria-hidden /> : <Truck className="h-4 w-4 shrink-0" aria-hidden />}
                 <span>{item.label}</span>

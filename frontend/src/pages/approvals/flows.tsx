@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,7 +55,7 @@ const emptyStep = (stepOrder: number) => ({ stepOrder, approverType: APPROVER_TY
 const emptyFlow = (): FlowDraft => ({ bizType: 'purchase_requisition', name: '', minAmount: '', maxAmount: '', isActive: true, remark: '', steps: [emptyStep(1)] })
 
 export default function ApprovalFlowsPage() {
-  const { data: flows = [] } = useApprovalFlows()
+  const { data: flows = [], isSuccess } = useApprovalFlows()
   const { mutate: createFlow, isPending: creating } = useCreateApprovalFlow()
   const { mutate: updateFlow, isPending: updating } = useUpdateApprovalFlow()
   const { mutate: deleteFlow } = useDeleteApprovalFlow()
@@ -196,6 +197,7 @@ export default function ApprovalFlowsPage() {
 
 
       <DataTable columns={columns} data={flows} loading={false} rowKey="id" />
+      {isSuccess && <ListSummary total={flows.length} unit="个" />}
 
       <Dialog open={formOpen} onOpenChange={v => { if (!v) draft.requestClose() }}>
         <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog sm:max-w-4xl">

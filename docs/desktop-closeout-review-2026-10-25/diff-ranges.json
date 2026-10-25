@@ -1,0 +1,197 @@
+{
+  "frontend/src/components/shared/payments/ReceiptDetailDialog.tsx": [
+    {
+      "start": 72,
+      "end": 72,
+      "lines": 1
+    }
+  ],
+  "frontend/src/components/shared/payments/SettlementConfirmDialog.tsx": [
+    {
+      "start": 76,
+      "end": 76,
+      "lines": 1
+    }
+  ],
+  "frontend/src/components/shared/payments/StatementDetailDialog.tsx": [
+    {
+      "start": 116,
+      "end": 116,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/accounting/invoices/index.tsx": [
+    {
+      "start": 235,
+      "end": 235,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/accounting/ledger/index.tsx": [
+    {
+      "start": 33,
+      "end": 33,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/accounting/periods/index.tsx": [
+    {
+      "start": 12,
+      "end": 12,
+      "lines": 1
+    },
+    {
+      "start": 126,
+      "end": 126,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/accounting/vouchers/index.tsx": [
+    {
+      "start": 207,
+      "end": 207,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/approvals/flows.tsx": [
+    {
+      "start": 6,
+      "end": 6,
+      "lines": 1
+    },
+    {
+      "start": 58,
+      "end": 58,
+      "lines": 1
+    },
+    {
+      "start": 200,
+      "end": 200,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/credit-overrides/index.tsx": [
+    {
+      "start": 81,
+      "end": 81,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/finance/accounts/index.tsx": [
+    {
+      "start": 327,
+      "end": 327,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/finance/expenses/index.tsx": [
+    {
+      "start": 455,
+      "end": 455,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/kits/KitEditor.tsx": [
+    {
+      "start": 198,
+      "end": 198,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/procurement/detail.tsx": [
+    {
+      "start": 104,
+      "end": 104,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/reports/avg-cost-reconciliation.tsx": [
+    {
+      "start": 6,
+      "end": 6,
+      "lines": 1
+    },
+    {
+      "start": 106,
+      "end": 106,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/reports/replenishment.tsx": [
+    {
+      "start": 255,
+      "end": 255,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/reports/warehouse-ops.tsx": [
+    {
+      "start": 26,
+      "end": 26,
+      "lines": 1
+    },
+    {
+      "start": 29,
+      "end": 30,
+      "lines": 2
+    }
+  ],
+  "frontend/src/pages/settings/barcode-print-query/index.tsx": [
+    {
+      "start": 390,
+      "end": 390,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/settings/printers/index.tsx": [
+    {
+      "start": 35,
+      "end": 35,
+      "lines": 1
+    },
+    {
+      "start": 159,
+      "end": 159,
+      "lines": 1
+    },
+    {
+      "start": 536,
+      "end": 536,
+      "lines": 1
+    }
+  ],
+  "frontend/src/pages/stockcheck/abc.tsx": [
+    {
+      "start": 226,
+      "end": 226,
+      "lines": 1
+    }
+  ],
+  "frontend/src/styles/desktop-page-samples.css": [
+    {
+      "start": 435,
+      "end": 437,
+      "lines": 3
+    },
+    {
+      "start": 456,
+      "end": 458,
+      "lines": 3
+    },
+    {
+      "start": 481,
+      "end": 481,
+      "lines": 1
+    },
+    {
+      "start": 540,
+      "end": 540,
+      "lines": 1
+    },
+    {
+      "start": 684,
+      "end": 685,
+      "lines": 2
+    }
+  ]
+}

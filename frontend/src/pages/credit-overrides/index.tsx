@@ -78,7 +78,7 @@ function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onC
           {sales.length > 0 && (
             <div className="max-h-48 overflow-auto rounded-md border">
               <ReportTable className="w-full min-w-[460px] text-sm">
-                <thead className="sticky top-0 bg-muted/60">
+                <thead className="sticky top-0">
                   <tr className="text-left text-muted-foreground">
                     <th className="px-3 py-1.5 font-medium"><span className="sr-only">选择</span></th>
                     <th className="px-3 py-1.5 font-medium">单号</th>

@@ -101,7 +101,7 @@ export default function ProcurementPlanDetailPage() {
       <OrderDetailSections type="plan" id={plan.id}>
       <div className="overflow-x-auto rounded-lg border border-border">
         <ReportTable className="w-full min-w-[1900px] text-sm">
-          <thead className="bg-muted/40 text-muted-foreground [&_th]:whitespace-nowrap">
+          <thead className="text-muted-foreground [&_th]:whitespace-nowrap">
             <tr>
               {showSelection && <th className="w-12 px-3 py-2 text-center font-medium">
                 <input type="checkbox" aria-label="选择全部待处理计划明细" disabled={conversion.blocked} checked={selected.size === pendingIds.length && pendingIds.length > 0} onChange={toggleAll} className="h-4 w-4 accent-primary" />

@@ -432,9 +432,9 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { an
 .desktop-workspace .fc-list-toolbar-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-left:auto; }
 .desktop-workspace .fc-list-toolbar .fc-button { height:36px; font-size:12px; }
 .desktop-workspace .fc-segmented-control { display:flex; flex-wrap:wrap; align-items:center; gap:3px; padding:3px; border-radius:10px; background:hsl(var(--muted)); }
-.desktop-workspace .fc-segmented-control .fc-print-category { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:32px; padding:6px 12px; border:1px solid transparent; border-radius:7px; background:transparent; color:hsl(var(--muted-foreground)); font-size:12px; line-height:18px; font-weight:500; transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out; }
-.desktop-workspace .fc-segmented-control .fc-print-category:hover { background:hsl(var(--card) / .6); color:hsl(var(--foreground)); }
-.desktop-workspace .fc-segmented-control .fc-print-category[aria-pressed="true"] { border-color:hsl(var(--border)); background:hsl(var(--card)); color:hsl(var(--primary)); box-shadow:0 1px 2px rgb(var(--shadow-ink) / .04); }
+.desktop-workspace .fc-segmented-control .fc-segmented-option { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:32px; padding:6px 12px; border:1px solid transparent; border-radius:7px; background:transparent; color:hsl(var(--muted-foreground)); font-size:12px; line-height:18px; font-weight:500; transition:background-color 160ms ease-out,color 160ms ease-out,border-color 160ms ease-out; }
+.desktop-workspace .fc-segmented-control .fc-segmented-option:hover { background:hsl(var(--card) / .6); color:hsl(var(--foreground)); }
+.desktop-workspace .fc-segmented-control .fc-segmented-option[aria-pressed="true"] { border-color:hsl(var(--border)); background:hsl(var(--card)); color:hsl(var(--primary)); box-shadow:0 1px 2px rgb(var(--shadow-ink) / .04); }
 .desktop-workspace .fc-list-query-context { display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:5px 20px; padding:0 16px 12px; color:hsl(var(--muted-foreground)); font-size:12px; line-height:20px; }
 .desktop-workspace .fc-list-query-context p { min-width:0; overflow-wrap:anywhere; }
 .desktop-workspace .fc-list-filter-chips { padding:0 16px 12px; }
@@ -453,7 +453,9 @@ body:has(.desktop-shell-sample) .fc-form-dialog { display:flex; flex-direction:c
 body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-header { flex-shrink:0; padding:18px 48px 16px 24px; border-bottom:1px solid hsl(var(--border)); }
 body:has(.desktop-shell-sample) .fc-form-dialog-body { flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; padding:18px 24px; }
 body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-footer,
-body:has(.desktop-shell-sample) .fc-form-dialog > form > .fc-dialog-footer { flex-shrink:0; padding:14px 24px; border-top:1px solid hsl(var(--border)); }
+body:has(.desktop-shell-sample) .fc-form-dialog > form > .fc-dialog-footer { flex-shrink:0; padding:12px 20px; border-top:1px solid hsl(var(--border)); background:hsl(var(--surface-subtle)); }
+body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-footer .fc-button,
+body:has(.desktop-shell-sample) .fc-form-dialog > form > .fc-dialog-footer .fc-button { height:36px; font-size:13px; }
 body:has(.desktop-shell-sample) .fc-master-form-status { flex-shrink:0; margin:0; border-top:1px solid hsl(var(--border)); }
 @media (max-width:640px) {
   body:has(.desktop-shell-sample) .fc-master-form .grid-cols-2 { grid-template-columns:minmax(0,1fr); }
@@ -476,7 +478,7 @@ body:has(.desktop-shell-sample) .fc-audit-detail .fc-detail-row dd { margin:0; }
 .desktop-workspace .fc-account-tree-row { border-width:0 0 1px; border-color:hsl(var(--border) / .6); border-radius:7px; box-shadow:none; }
 .desktop-workspace .fc-account-children { margin-left:20px; padding-left:12px; border-left:1px solid hsl(var(--border) / .65); }
 .desktop-workspace .fc-account-tree-row > button:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
-.desktop-workspace .fc-print-category:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
+.desktop-workspace .fc-segmented-option:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
 body:has(.desktop-shell-sample) .fc-approval-step { border-block-start:1px solid hsl(var(--border)); padding:16px 0 4px; }
 @media (max-width:640px) {
 body:has(.desktop-shell-sample)   .fc-audit-detail .fc-detail-row { grid-template-columns:minmax(0,1fr); gap:5px; }
@@ -535,7 +537,7 @@ body:has(.desktop-shell-sample) .fc-order-activity .fc-order-facts > [data-long]
   body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-dialog-overlay,.fc-sheet,.fc-sheet-overlay,[data-radix-popper-content-wrapper]) { animation:none !important; transition:none !important; }
   body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu,.fc-select-trigger,.fc-select-trigger > svg,.fc-picker-trigger,.fc-date-picker > input,.fc-input,textarea) { animation:none !important; transition:none !important; }
   body:has(.desktop-shell-sample) :is(.fc-icon-tooltip,.fc-character-count),
-  .desktop-workspace :is(.fc-account-row-actions,.fc-print-category) { animation:none !important; transition:none !important; }
+  .desktop-workspace :is(.fc-account-row-actions,.fc-segmented-option) { animation:none !important; transition:none !important; }
 }
 
 /* 电脑端弹窗：提示或用途只占标题下同一位置，PDA 保持原样。 */
@@ -679,8 +681,8 @@ body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-men
 /* ReportTable 已有 tfoot utility；库存数量已有 tabular-nums 及外壳继承。
    主表最终为 surface-subtle 浅灰表头，库存沿同一令牌，不追加重复覆盖。 */
 
-/* 仓库流程的三处旧色由 FlowBar 内联传入；仅按已核对的语义属性替换。
-   !important 用于覆盖该内联 color，不匹配颜色字符串或猜测 DOM 顺序。 */
+/* 仓库流程的内联色源已与令牌对齐；保留已复核的语义映射，样式值不变。
+   这三条兼容规则只匹配原语义属性，不按颜色字符串或 DOM 顺序猜测。 */
 .desktop-workspace .fc-report-panel .fc-report-meter[aria-label="待拣货"] { color:hsl(var(--muted-foreground)) !important; }
 .desktop-workspace .fc-report-panel .fc-report-meter[aria-label="待复核"] { color:hsl(var(--blue-60)) !important; }
 .desktop-workspace .fc-report-panel .fc-report-meter[aria-label="待打包"] { color:hsl(var(--blue-80)) !important; }

@@ -252,7 +252,7 @@ export default function ReplenishmentPage() {
 
             <div className="max-h-56 overflow-auto rounded-md border">
               <ReportTable className="w-full min-w-[1500px] text-sm">
-                <thead className="sticky top-0 bg-muted/60">
+                <thead className="sticky top-0">
                   <tr className="text-left text-muted-foreground">
                     <ProductIdentityHeaders />
                     <th className="px-4 py-3 text-right font-medium">建议采购量</th>

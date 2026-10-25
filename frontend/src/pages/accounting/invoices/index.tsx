@@ -232,7 +232,7 @@ export default function InvoicesPage() {
       <div className="fc-segmented-control w-fit" role="group" aria-label="发票类型">
           {[{ v: 1, l: '进项发票' }, { v: 2, l: '销项发票' }].map(t => (
             <button key={t.v} type="button" aria-pressed={invoiceType === t.v}
-              onClick={() => { if (invoiceType !== t.v) { setInvoiceType(t.v); setStatus('') } }} className="fc-print-category">{t.l}</button>
+              onClick={() => { if (invoiceType !== t.v) { setInvoiceType(t.v); setStatus('') } }} className="fc-segmented-option">{t.l}</button>
           ))}
       </div>
 

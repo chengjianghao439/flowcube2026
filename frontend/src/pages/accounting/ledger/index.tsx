@@ -30,7 +30,7 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
         {isLoading || !data ? null : (
           <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/60">
             <ReportTable className="w-full text-sm">
-              <thead className="sticky top-0 bg-muted/60 text-muted-foreground">
+              <thead className="sticky top-0 text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">日期</th>
                   <th className="px-3 py-2 text-left font-medium">凭证号</th>

@@ -8,7 +8,7 @@
 
 ---
 
-- **其他电脑端页面精修（2026-10-25，本地实现）**：只在已复核电脑端 CSS 后追加令牌规则，保留 TSX、utility、结构与交互。搜索按真实 cmdk `data-selected` / `data-disabled` 及分组属性匹配；其内层 listbox 只作为滚动列表，不另叠浮层阴影。当前 Popover 内联挂载，顶栏毛玻璃的层叠上下文须保证搜索高于工作面、低于对话框。浮层 14px、工作面沿面板令牌，内嵌表格底角随父面板扣边框；不重复 ReportTable 合计和库存 tabular-nums utility。库存继续与主表共用浅灰表头。普通文字入口的禁用态不能继续显示可用主色及 hover 下划线，fc-button 各变体保留自身状态。仓库运营三处 TSX 内联旧色在本轮零 TSX 改动范围下以现有流程 aria-label 映射令牌，未来改状态文案须同步选择器。逐页状态、合成响应及明确未覆盖项见 [本轮复核记录](desktop-other-pages-review-2026-10-25.md)；不据此认定全岗位、虚拟列表大数据、PDA 或出纸通过。
+- **其他电脑端页面精修（2026-10-25，本地实现）**：只在已复核电脑端 CSS 后追加令牌规则，保留 TSX、utility、结构与交互。搜索按真实 cmdk `data-selected` / `data-disabled` 及分组属性匹配；其内层 listbox 只作为滚动列表，不另叠浮层阴影。当前 Popover 内联挂载，顶栏毛玻璃的层叠上下文须保证搜索高于工作面、低于对话框。浮层 14px、工作面沿面板令牌，内嵌表格底角随父面板扣边框；不重复 ReportTable 合计和库存 tabular-nums utility。库存继续与主表共用浅灰表头。普通文字入口的禁用态不能继续显示可用主色及 hover 下划线，fc-button 各变体保留自身状态。仓库运营最初以流程 aria-label 将三处内联旧色映射到令牌；收尾轮已将 TSX 色源直接对齐同一令牌，保留原兼容映射，未来改文案须核对选择器。逐页状态、合成响应及明确未覆盖项见 [本轮复核记录](desktop-other-pages-review-2026-10-25.md)；不据此认定全岗位、虚拟列表大数据、PDA 或出纸通过。
 
 - **浅色品牌样式校正（2026-10-25，本地实现）**：`index.css :root` 统一 IBM Carbon 蓝、中性与状态令牌，登录页和 ERP 浮层共用；桌面样式不再另抄一套颜色。保留 TSX、类名和交互，既有蓝色 utility 通过样式配置接品牌令牌，真实浅色语义 utility 通过桌面作用域兼容映射；`dark:` 变体不能去掉前缀当裸类，`.dark` 原令牌块保持不变。搜索框保留圆角矩形；SaleOrderDetailTabs / ContentTabs 保留源码分段形态，库存保留自身下划线，不用通用 CSS 抹平不同组件的形态。WorkspaceTabs 保留自身 2px 指示条，OrderStatusFilter 按 Radix 实际 `radiogroup` / `data-state` 呈现；行操作只调整普通主按钮，危险变体保留红色。Inter、Noto Sans SC 和既有 JetBrains Mono 随包按 Unicode 子集加载，OFL 许可证随产物分发；字体 URL 必须在构建后解析到实际文件或内联资源，不能以 dev 加载正常或 build exit 0 代替。共享根令牌与字体适用于共用入口，ERP 专属兼容映射不进入 PDA 组件；本轮未做 PDA 真机、Windows 安装或实际打印验收。逐页选择器、合成数据范围与验证结果见 [本轮检查记录](desktop-ibm-style-review-2026-10-25.md)。
 
@@ -1260,3 +1260,9 @@ ReportTable 只对可完整验证占位矩阵及单列叶子的表头建立列�
 发票类型沿共享段控；状态页签、查询草稿与 chips 复用同一已应用状态源。查询只有原接口支持的关键词和状态，没有日期；打开回填、取消不应用、重置仅清草稿。类型切换清除类型相关状态，原 page 参数与客户端自动取齐机制不变。行推进动作沿原状态/权限与回调，编辑仍仅 status=1；已抵扣/已红冲保持原单一删除入口，不因行操作归组获得编辑资格。表单必填星号与金额带只换为已有令牌，原日期、计算、草稿/409 与提交合同保持。
 
 显式紧凑表在桌面工作区/ERP 弹窗的 table 上同时使用 fc-report-table 与 fc-table-compact，统一 th/td 为 6px/12px、12.5px；颜色、状态、列宽与合计沿共享组件，只覆盖密度，不用固定行高。本轮仅迁移塑料盒详情来源贡献与流水两表，其余弹窗不自动进入变体。逐文件差异、四表表头改前/后测量、合成响应浏览器状态与未覆盖范围见 [本轮报告](desktop-page-conformance-2026-10-25.md)。
+
+### 电脑端收尾：页脚、计数与命名（2026-10-25）
+
+fc-form-dialog 的直接页脚及 form 内页脚统一 surface-subtle 背景、12px/20px 内边距和原上边框，其按钮 36px/13px，与 app-dialog 同规格。只匹配这两种结构，头部/正文、app-dialog、ConfirmDialog 和其他特殊页脚不借此改造。BaseCrudPage 的 fc-master-form 同样接收该规则。既有 ReportTable 的 12 处 thead 冲淡背景类只作死类删除，th 仍由不透明标准规则着色，sticky、列宽及其他类保持。
+
+段控按钮统一命名 fc-segmented-option，两页与 CSS 同步更名，状态/focus/reduced-motion 声明不变。审批流/会计期间的计数单位为个，打印机为台，平均成本对账为条；计数取当前原列表长度，汇总仅在相应成功/加载条件满足时出现，不借用匹配数、差异项数或别处统计。查询、列表和错误行为保持。仓库三种 meter 色源直接使用 muted-foreground/blue-60/blue-80，控制条形 currentColor，左右文本沿原各自字色。逐处行号、完整级联/计算对照、状态图与未覆盖项见 [收尾报告](desktop-closeout-review-2026-10-25.md)。

@@ -324,7 +324,7 @@ export default function FinanceAccountsPage() {
           )}
           <div className="max-h-96 overflow-y-auto rounded-md border">
             <ReportTable className="w-full text-sm">
-              <thead className="sticky top-0 bg-muted/50 text-xs text-muted-foreground">
+              <thead className="sticky top-0 text-xs text-muted-foreground">
                 <tr>
                   <th className="px-2 py-1.5 text-left">日期</th>
                   <th className="px-2 py-1.5 text-left">类型</th>

@@ -73,7 +73,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
         </div>}
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
           <ReportTable className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
+            <thead className="text-xs text-muted-foreground">
               <tr><th className="px-2 py-1.5 text-left">收货单</th><th className="px-2 py-1.5 text-left">商品</th><th className="px-2 py-1.5 text-right">上架量</th><th className="px-2 py-1.5 text-right">采购单价</th><th className="px-2 py-1.5 text-right">金额</th></tr>
             </thead>
             <tbody>

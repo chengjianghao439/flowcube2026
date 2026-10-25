@@ -204,7 +204,7 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
             </div>
             <div className="overflow-x-auto rounded-lg border border-border/60">
               <ReportTable className="w-full text-sm">
-                <thead className="bg-muted/40 text-muted-foreground">
+                <thead className="text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">摘要</th>
                     <th className="px-3 py-2 text-left font-medium">科目</th>
