@@ -38,7 +38,7 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {
       return <div>{action.path && <a href={`#${action.path}`} className="text-primary underline">{action.label}</a>}{action.note && <p className="mt-1 text-xs text-muted-foreground">{action.note}</p>}</div>
     } },
   ]
-  return <SectionCard title="订单履约待办" compact actions={<Button variant="outline" size="sm" onClick={() => query.refetch()} disabled={query.isFetching}>刷新事项</Button>}>
+  return <section aria-label="订单履约待办"><SectionCard title="订单履约待办" compact actions={<Button variant="outline" size="sm" onClick={() => query.refetch()} disabled={query.isFetching}>刷新事项</Button>}>
     <div className="mb-3 flex flex-wrap gap-2">{[['open', '全部未处理'], ['mine', '待我处理'], ['unassigned', '待认领'], ['overdue', '需关注（超时）'], ['resolved', '已处理']].map(([value, label]) => <Button key={value} size="sm" variant={filter === value ? 'default' : 'outline'} onClick={() => update({ filter: value })}>{label}</Button>)}</div>
     <form className="mb-3 flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); update({ keyword: draft.trim() }) }}>
       <select aria-label="单据类型" className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={documentType} onChange={event => update({ documentType: event.target.value })}>
@@ -49,7 +49,8 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {
       {(keyword || draft || documentType || filter !== 'open') && <Button type="button" size="sm" variant="ghost" onClick={() => update({ keyword: '', draft: '', documentType: '', filter: 'open' })}>重置筛选</Button>}
     </form>
     <DataTable virtualized columns={columns} data={query.data?.list || []} rowKey="id" loading={query.isPending} />
+  </SectionCard>
     <ListSummary total={query.data?.pagination.total || 0} unit="项" />
     <p className="mt-1 text-xs text-muted-foreground">状态和单据类型会为当前账号记住。事项按原单查看权限及仓库范围显示；自动阻塞解除后保留处理结果和操作记录。</p>
-  </SectionCard>
+  </section>
 }

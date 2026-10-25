@@ -1,0 +1,436 @@
+vite v6.4.4 building for production...
+
+(!) outDir /tmp/flowcube-desktop-walkthrough-20261025/dist is not inside project root and will not be emptied.
+Use --emptyOutDir to override.
+
+transforming...
+✓ 5568 modules transformed.
+rendering chunks...
+[plugin vite:reporter]
+(!) /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/lib/queryClient.ts is dynamically imported by /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/main.tsx but also statically imported by /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/lib/authSession.ts, /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/store/companyStore.ts, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter]
+(!) /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/pages/supplier-refunds/RefundRecoveryPage.tsx is dynamically imported by /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/router/routeRegistry.ts but also statically imported by /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/TopNav.tsx, /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/pages/supplier-refunds/index.tsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter]
+(!) /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/pages/disposal/DisposalRecoveryPage.tsx is dynamically imported by /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/router/routeRegistry.ts but also statically imported by /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/TopNav.tsx, dynamic import will not move module into another chunk.
+
+[plugin vite:reporter]
+(!) /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/pages/sale/RepeatSaleRecoveryPage.tsx is dynamically imported by /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/router/routeRegistry.ts but also statically imported by /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/TopNav.tsx, dynamic import will not move module into another chunk.
+
+computing gzip size...
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/index.html                                                                                                     2.02 kB │ gzip:   0.94 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/jetbrains-mono-tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx_cwhsk-BehTv68k.woff2      5.89 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/jetbrains-mono-tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxPcwhsk-D3oMJlXt.woff2      6.84 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.88-BXYxwf2t.woff2     7.23 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.87-DioZSHnU.woff2     7.96 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALRIIKIyQ4-DuJTpTg_.woff2                                             8.13 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.91-DTr9RQcS.woff2     8.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/jetbrains-mono-tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxTcwhsk-Buze_B52.woff2      8.87 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALRIYKIyQ4-Bi3ATJ76.woff2                                             8.98 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.90-BnOlPreP.woff2     9.22 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.99-BI6XPoxp.woff2     9.70 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALRKoKIyQ4-BGmsQlw-.woff2                                             9.90 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inter-UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2pL7SUc-CBcvBZtf.woff2                                           10.25 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.89-ClMFrFaL.woff2    10.79 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inter-UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2ZL7SUc-DlzME5K_.woff2                                           11.23 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.21-D0x9-yBt.woff2    11.28 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.6-ChnZIQfQ.woff2     11.39 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/jetbrains-mono-tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx7cwhsk-DIC32ArD.woff2     11.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/flow-icon-CK-wnIZw.png                                                                                 17.43 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inter-UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa0ZL7SUc-DqGufNeO.woff2                                           18.75 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inter-UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1pL7SUc-CkhJZR-_.woff2                                           19.00 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.5-CfWugllB.woff2     20.04 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALRLoKI-DDW8mKAR.woff2                                               24.88 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inter-UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa2JL7SUc-BOeWTOD4.woff2                                           25.96 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.85-CjI3qdxG.woff2    26.77 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/jetbrains-mono-tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg-6fWv1k7M.woff2       31.43 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.80-Bje1Fxy1.woff2    32.45 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.84-zMBmUocm.woff2    32.52 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.86-BHY8TVEH.woff2    33.43 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.41-Hthm7FFi.woff2    36.28 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.77-B3MVY9Ax.woff2    36.66 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.73-B1ZoOTgM.woff2    39.10 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.79-BIoZy8fr.woff2    41.06 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.60-B7QOYsXJ.woff2    41.30 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.68-DGbCD9xu.woff2    41.38 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.65-DMPCXBvK.woff2    41.39 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.64-DVB11t7j.woff2    41.41 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.51-BlFLOjcP.woff2    41.48 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.36-CkITyjoT.woff2    41.69 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.70-RgTO941D.woff2    42.08 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.53-CwyWNT6x.woff2    43.28 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.83-99rD8YO-.woff2    43.36 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.75-Cp2wp4si.woff2    43.82 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.61-C8JjQS7w.woff2    45.10 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.42-eaS2gKds.woff2    45.43 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.50-DAOGW-Dr.woff2    45.72 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.118-xhBB7f6V.woff2   45.99 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.82-CUggNZi4.woff2    46.01 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.40-BQ5xpS5j.woff2    46.43 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.43-o-T53XXV.woff2    46.49 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.34-Bspba0wC.woff2    46.75 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.72-C4oWy3ul.woff2    46.92 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.31-Wfi_lutW.woff2    47.08 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.27-COFdrquJ.woff2    47.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.33-CUVQXNAJ.woff2    47.33 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.59-BS4Kwzxx.woff2    47.50 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.81-B2NN7Qi3.woff2    47.50 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.71-D9sG-CWv.woff2    47.77 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.55-DBK2wUOR.woff2    47.95 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.76-B494D7xS.woff2    48.24 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inter-UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7-Dx4kXJAl.woff2                                              48.26 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.78-5jX7iNMC.woff2    48.92 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.63-BJr8P-OB.woff2    49.05 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.28-DMgdNu1o.woff2    50.02 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.35-K8fX_YPG.woff2    50.46 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.48-BNMfTR6k.woff2    50.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.26-C0sF2Z2f.woff2    50.74 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.39-BMZNLWQU.woff2    51.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.52-OZjrybnw.woff2    51.77 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.54-DM0nRe18.woff2    51.82 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.117-siZzFqgK.woff2   52.23 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.32-BRJQ4PY5.woff2    52.37 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.67-Dzk7WhCR.woff2    52.46 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.66-BobaG10V.woff2    52.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.49-DX-0y7wg.woff2    52.77 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.116-B4HVAfHo.woff2   52.80 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.56-C-VKK1LS.woff2    53.33 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.37-WCZ2zfEe.woff2    53.36 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.29-Cmq8em30.woff2    53.85 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.44-BJH5J4Ez.woff2    54.10 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.30-CZWqZ3yU.woff2    54.42 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.38-DeM7CUce.woff2    54.42 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.57-Cdbfh5kq.woff2    55.35 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.69-Ctrv1EqA.woff2    55.52 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.47-CyY7gKNX.woff2    55.97 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.74-F7dH_rZJ.woff2    56.26 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.115-BWy07H14.woff2   56.26 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.23-Du1oYWkE.woff2    56.70 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.112-BcFuP3w6.woff2   57.46 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.58-CflMKARZ.woff2    57.47 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.46-BR_5Mu6e.woff2    57.52 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.114-CO_5Xo-i.woff2   57.74 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.101-CPkZHnw0.woff2   58.03 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.25-BFHiqilg.woff2    58.22 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.113-Dk932kmj.woff2   58.43 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.62-bS4wq1Gg.woff2    58.96 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.109-Dsp-De_0.woff2   60.21 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.102-gzIulUH6.woff2   60.52 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.107-D7fvVprN.woff2   60.83 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.110-DE_6NUrb.woff2   61.19 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.104-B3QMglgE.woff2   61.40 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.105-xXh_OMfk.woff2   61.61 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.111-C4S-TlTn.woff2   62.40 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.106-B9n3jMjP.woff2   62.44 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.24-CmWjJ0gt.woff2    62.55 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.103-CJfSBxFo.woff2   63.73 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.108-J0_LhxVo.woff2   64.34 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.100-DluiXYzi.woff2   64.38 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.22-BBUVTShg.woff2    65.22 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.45-BKuxSCOJ.woff2    67.44 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/noto-sans-sc-k3kXo84MPvpLmixcA63oeALhLOCT-xWNm8Hqd37g1OkDRZe7lR4sg1IzSy-MNbE9VH8V.119-Ck_g2FGz.woff2   76.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inter-UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa25L7SUc-DO1Apj_S.woff2                                           85.07 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-1BhnowPq.css                                                                                      1.68 kB │ gzip:   0.65 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-W86Y_PGp.css                                                                                      5.36 kB │ gzip:   1.39 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-xeXZRb5n.css                                                                                     50.81 kB │ gzip:   9.07 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-Buy1kijv.css                                                                                     57.97 kB │ gzip:   9.03 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BBVwlFr-.css                                                                                    235.89 kB │ gzip:  66.16 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inbound-tasks-DrUIdmTo.js                                                                               0.10 kB │ gzip:   0.11 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/visibleRoles-B0lgYlD5.js                                                                                0.11 kB │ gzip:   0.11 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useCompanyQueryKey-Ce6JGr-4.js                                                                          0.13 kB │ gzip:   0.14 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/topSeries-DAmmkrWC.js                                                                                   0.19 kB │ gzip:   0.17 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useVisibleQuery-CATkc3l4.js                                                                             0.20 kB │ gzip:   0.18 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/pdaCriticalState-C5tLQ0O9.js                                                                            0.21 kB │ gzip:   0.17 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/editMode-DkeVIwWm.js                                                                                    0.23 kB │ gzip:   0.19 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ListSummary-Bo20KCiS.js                                                                                 0.23 kB │ gzip:   0.22 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/price-lists-CJT_Rz8q.js                                                                                 0.24 kB │ gzip:   0.18 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaOverviewText-L3uZ51KW.js                                                                             0.25 kB │ gzip:   0.21 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/dateRange-C7tSp2kr.js                                                                                   0.28 kB │ gzip:   0.22 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ReportMeter-CWnX62yN.js                                                                                 0.32 kB │ gzip:   0.25 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/urlSearchParams-CBg1aJhU.js                                                                             0.33 kB │ gzip:   0.24 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/usePollingReport-Cy64cGVQ.js                                                                            0.33 kB │ gzip:   0.25 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/suppliers-DeAtf-ij.js                                                                                   0.36 kB │ gzip:   0.22 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/usePartyLedger-Dmiyza96.js                                                                              0.37 kB │ gzip:   0.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/QueryFormLayout-DfvBRO4j.js                                                                             0.37 kB │ gzip:   0.29 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useWorkspaceTabTitle-DBGtugic.js                                                                        0.38 kB │ gzip:   0.28 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/exportDownload-CTnicpxI.js                                                                              0.39 kB │ gzip:   0.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/sorting-bins-DNwQmk8j.js                                                                                0.40 kB │ gzip:   0.23 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/procurement-BIi87b82.js                                                                                 0.40 kB │ gzip:   0.23 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/returnSourcePresentation-BXoZbW0b.js                                                                    0.42 kB │ gzip:   0.36 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useSuppliers-DVyDY6bK.js                                                                                0.42 kB │ gzip:   0.29 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/warehouses-ER3VDBo7.js                                                                                  0.42 kB │ gzip:   0.21 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useUserOptions-6fVscuOA.js                                                                              0.45 kB │ gzip:   0.36 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/FormField-CARVxVr5.js                                                                                   0.46 kB │ gzip:   0.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useDirtyGuard-3KIVcSyl.js                                                                               0.46 kB │ gzip:   0.29 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/RecordIdentity-BHcPNfqV.js                                                                              0.48 kB │ gzip:   0.27 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaProductIdentity-CvT7FpsJ.js                                                                          0.49 kB │ gzip:   0.31 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/handoff-Dp5I1Y6j.js                                                                                     0.49 kB │ gzip:   0.33 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/sourceHandoff-CyNSkqvv.js                                                                               0.49 kB │ gzip:   0.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ApprovalHandoffNotice-Cz27Oh2U.js                                                                       0.50 kB │ gzip:   0.35 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useCarriers-BFfK-4CL.js                                                                                 0.51 kB │ gzip:   0.36 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaNextStep-BbJwXnVH.js                                                                                 0.51 kB │ gzip:   0.35 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useWarehouses-DWIjwSub.js                                                                               0.53 kB │ gzip:   0.38 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useApprovalReadScope-Cuih_wJH.js                                                                        0.54 kB │ gzip:   0.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/SummaryStrip-BmtKa04g.js                                                                                0.54 kB │ gzip:   0.35 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/carriers-CllASjjx.js                                                                                    0.56 kB │ gzip:   0.29 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/EditModeBadge-uchMisFW.js                                                                               0.56 kB │ gzip:   0.37 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useWorkspaceSearchParams-CNbQtqmA.js                                                                    0.61 kB │ gzip:   0.38 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaCard-CKe1kjtH.js                                                                                     0.62 kB │ gzip:   0.41 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/logistics-D1NJQ1Pw.js                                                                                   0.63 kB │ gzip:   0.29 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/productIdentityColumns-CiXlM-xo.js                                                                      0.64 kB │ gzip:   0.44 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/products-2L9uQgtt.js                                                                                    0.65 kB │ gzip:   0.34 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ProductIdentitySummary-G86f0Uhs.js                                                                      0.65 kB │ gzip:   0.42 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/locations-CkVHdAXl.js                                                                                   0.66 kB │ gzip:   0.34 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/approvals-BvqRplHz.js                                                                                   0.69 kB │ gzip:   0.45 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/QueryChips-D2YWIQ09.js                                                                                  0.69 kB │ gzip:   0.46 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/purchase-requisitions-B3lfAags.js                                                                       0.70 kB │ gzip:   0.30 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/transfer-CGIMH7dC.js                                                                                    0.71 kB │ gzip:   0.34 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useLedger-B-Q_VRa0.js                                                                                   0.71 kB │ gzip:   0.34 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/KeepAliveSection-D9aZuQ8Y.js                                                                            0.73 kB │ gzip:   0.46 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/OperatorSelectField-79wzeWpL.js                                                                         0.73 kB │ gzip:   0.47 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/finderNavigation-M9vVMoup.js                                                                            0.74 kB │ gzip:   0.47 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/chartTheme-Bh9e2vqQ.js                                                                                  0.75 kB │ gzip:   0.38 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/SectionCard-Dun71fX0.js                                                                                 0.75 kB │ gzip:   0.41 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaDoneView-CJR-g_SJ.js                                                                                 0.76 kB │ gzip:   0.41 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/OrderStatusFilter-B5zg_ME3.js                                                                           0.77 kB │ gzip:   0.47 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useAccounts-CyNKVAIU.js                                                                                 0.77 kB │ gzip:   0.37 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useDepartments-Cwar0Pa-.js                                                                              0.80 kB │ gzip:   0.37 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ReportQueryFeedback-CdBDt0TC.js                                                                         0.81 kB │ gzip:   0.59 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/usePdaPlasticReadGuard-hD3IsJi8.js                                                                      0.83 kB │ gzip:   0.49 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/FinanceOrderLink-p2VqGN-6.js                                                                            0.88 kB │ gzip:   0.60 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BC0GJMJT.js                                                                                       0.90 kB │ gzip:   0.58 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/UncertainSubmitNotice-i0ivKvK4.js                                                                       0.90 kB │ gzip:   0.67 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/sale-commercial-DIz7z7rM.js                                                                             0.94 kB │ gzip:   0.51 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/toggle-group-DXCYpOiP.js                                                                                0.95 kB │ gzip:   0.49 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/web-CUSOOi3C.js                                                                                         0.95 kB │ gzip:   0.45 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ReportPanel-RcZ9LA_g.js                                                                                 0.95 kB │ gzip:   0.56 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ActionBar-B-StBOMu.js                                                                                   0.97 kB │ gzip:   0.48 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useAuth-CEVFn7YR.js                                                                                     0.97 kB │ gzip:   0.52 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/packages-DnMnLwJn.js                                                                                    1.00 kB │ gzip:   0.40 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ResizableTable-piTh_Y0R.js                                                                              1.00 kB │ gzip:   0.54 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaTaskState-D6RZx_qA.js                                                                                1.00 kB │ gzip:   0.51 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useUsers-Dz4LFbLk.js                                                                                    1.02 kB │ gzip:   0.48 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/WarehouseSelect-CFKzGuDD.js                                                                             1.02 kB │ gzip:   0.65 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/LimitedInput-DsEoETjO.js                                                                                1.03 kB │ gzip:   0.61 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/barcode-CqY8vT1C.js                                                                                     1.05 kB │ gzip:   0.41 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/FilterCard-BYZclleF.js                                                                                  1.06 kB │ gzip:   0.57 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useCategories-BmgNnMbo.js                                                                               1.08 kB │ gzip:   0.51 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useProductQtyPolicies-l6hnSZHE.js                                                                       1.12 kB │ gzip:   0.69 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ShippingProductField-p0hGthE7.js                                                                        1.13 kB │ gzip:   0.70 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/stockcheck-fPFM_weU.js                                                                                  1.14 kB │ gzip:   0.47 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useSupplierRefundRead-Cahsfa_I.js                                                                       1.22 kB │ gzip:   0.75 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/CompactColumnChart-oJMlBDP_.js                                                                          1.22 kB │ gzip:   0.67 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ProductIdentityCells-BcpCXkcE.js                                                                        1.23 kB │ gzip:   0.64 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useGlobalPolicyWriteCapability-C776g5tz.js                                                              1.24 kB │ gzip:   0.74 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useProducts-ysHFTMII.js                                                                                 1.27 kB │ gzip:   0.63 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/payments-D1qpzwiK.js                                                                                    1.31 kB │ gzip:   0.52 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useApprovals-wQ0Ox68_.js                                                                                1.31 kB │ gzip:   0.75 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/DateRangeQueryBar-C1eiNun7.js                                                                           1.34 kB │ gzip:   0.68 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-yEWHA3bo.js                                                                                       1.36 kB │ gzip:   0.87 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inboundListNavigation-nvgrAIFt.js                                                                       1.36 kB │ gzip:   0.83 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/receivableStatus-D47tNEMR.js                                                                            1.38 kB │ gzip:   0.66 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/split-recovery-DWRJvLoh.js                                                                              1.40 kB │ gzip:   0.87 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-C7KNOx_H.js                                                                                       1.44 kB │ gzip:   0.76 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/accounting-CAsq1YMz.js                                                                                  1.45 kB │ gzip:   0.73 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PickerField-B9-Lvxg-.js                                                                                 1.47 kB │ gzip:   0.73 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/dateTime-6VCSPSBK.js                                                                                    1.48 kB │ gzip:   0.69 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/finance-CbbtObRn.js                                                                                     1.49 kB │ gzip:   0.55 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useCustomers-BCsxdvUq.js                                                                                1.50 kB │ gzip:   0.69 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/reports-ykYk4G5e.js                                                                                     1.50 kB │ gzip:   0.79 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ContentTabs-CFfHwXQ4.js                                                                                 1.51 kB │ gzip:   0.77 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaSplitRecoveryPanel-DwPKn-XU.js                                                                       1.52 kB │ gzip:   0.88 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/OrderActivityDialog-B4SqtwtO.js                                                                         1.52 kB │ gzip:   0.89 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/LimitedTextarea-CKzn-1zM.js                                                                             1.55 kB │ gzip:   0.91 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/QueryDialog-zNzXTDM5.js                                                                                 1.56 kB │ gzip:   0.90 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/usePurchase-HscG55nd.js                                                                                 1.62 kB │ gzip:   0.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/returns-CMCaSYse.js                                                                                     1.73 kB │ gzip:   0.53 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/BackfillRequestDialog-BPureZ8h.js                                                                       1.78 kB │ gzip:   1.06 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inventory-iIcjuKg4.js                                                                                   1.83 kB │ gzip:   0.75 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useDisposalHandlingSource-CYj7cykg.js                                                                   1.86 kB │ gzip:   1.16 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useApprovalDetailHandoff-CA8wkubo.js                                                                    1.86 kB │ gzip:   1.15 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/sale-return-FZuems_Z.js                                                                                 1.87 kB │ gzip:   1.06 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/reconciliation-receivable-C6N38jmb.js                                                                   1.87 kB │ gzip:   0.90 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/reconciliation-payable-p8uQM4ip.js                                                                      1.87 kB │ gzip:   0.90 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useDialogDraftGuard-tupbl3yl.js                                                                         1.89 kB │ gzip:   0.98 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/receivable-B81scube.js                                                                                  1.91 kB │ gzip:   0.92 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/payable-DDmfAngK.js                                                                                     1.91 kB │ gzip:   0.92 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/workspaceHistoryGuard-x0PhhDQi.js                                                                       1.93 kB │ gzip:   0.97 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/partyProfile-CCaKLrK1.js                                                                                1.98 kB │ gzip:   1.16 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/QueryErrorState-gMZdkqaz.js                                                                             2.00 kB │ gzip:   1.02 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useInboundTasks-DoRIb_Wg.js                                                                             2.01 kB │ gzip:   0.97 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaHandoffSummary-Cl3lURUj.js                                                                           2.01 kB │ gzip:   1.00 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/usePdaFeedback-287vKfhM.js                                                                              2.11 kB │ gzip:   1.03 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ChartPresentation-DSyCWs7r.js                                                                           2.20 kB │ gzip:   0.92 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useIdempotentSubmit-9s9ZPIxi.js                                                                         2.22 kB │ gzip:   1.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/HandlingScrapPage-DxgHajgH.js                                                                           2.34 kB │ gzip:   1.31 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/StatTile-B-W_5u3M.js                                                                                    2.41 kB │ gzip:   1.08 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/warehouse-tasks-COuMJQwB.js                                                                             2.45 kB │ gzip:   0.71 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/GlobalErrorBoundary-Cmpp4K2J.js                                                                         2.48 kB │ gzip:   1.25 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/saleEntryOwner-Bt6JcN2r.js                                                                              2.50 kB │ gzip:   1.16 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/CategoryPathDisplay-DdP8ddKq.js                                                                         2.55 kB │ gzip:   1.03 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/CustomerFinder-cW8JDlxS.js                                                                              2.68 kB │ gzip:   1.42 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/fulfillment-BsHOkjl0.js                                                                                 2.83 kB │ gzip:   1.41 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/accounting-DWntbj8P.js                                                                                  2.89 kB │ gzip:   0.98 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/OrderDetailSections-Dqfoxerq.js                                                                         3.01 kB │ gzip:   1.49 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/pending-D1GVcsi0.js                                                                                     3.09 kB │ gzip:   1.57 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BCAZVUjH.js                                                                                       3.21 kB │ gzip:   1.69 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/select-DJNcP-4D.js                                                                                      3.26 kB │ gzip:   1.22 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaCriticalActionNotice-DddKNNp1.js                                                                     3.29 kB │ gzip:   1.58 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/transfer-DPrge50l.js                                                                                    3.33 kB │ gzip:   1.45 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CsRvSuwF.js                                                                                       3.47 kB │ gzip:   1.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ReportTable-CuChydDl.js                                                                                 3.56 kB │ gzip:   1.74 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/plastic-box-C8sFMR99.js                                                                                 3.57 kB │ gzip:   1.72 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/CategoryFinder-B0z_1Cqw.js                                                                              3.59 kB │ gzip:   1.74 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/SupplierFinder-CivUdbp0.js                                                                              3.60 kB │ gzip:   1.77 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inventory-query-Dxn0aJc0.js                                                                             3.61 kB │ gzip:   1.72 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/print-templates-XhXp9Iw3.js                                                                             3.67 kB │ gzip:   1.33 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/orderEntry-BmU5XnMj.js                                                                                  3.71 kB │ gzip:   2.02 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/TableActionsMenu-BNd-VyzH.js                                                                            3.77 kB │ gzip:   1.46 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/dropdown-menu-B-gfMUAQ.js                                                                               3.78 kB │ gzip:   1.06 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/statements-D0pD0Ntr.js                                                                                  3.80 kB │ gzip:   1.83 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/RiskDetails-4AqJm0UJ.js                                                                                 3.84 kB │ gzip:   1.85 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/orderPrintData-CUfEDg2P.js                                                                              3.88 kB │ gzip:   1.25 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inbound-CqCs4_1p.js                                                                                     3.94 kB │ gzip:   1.84 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/web-I3XxfXnY.js                                                                                         4.00 kB │ gzip:   1.39 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/commercialDraft-TQpOE1cm.js                                                                             4.13 kB │ gzip:   1.63 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/CategoryTreeSelect-CBEJ10wj.js                                                                          4.33 kB │ gzip:   1.80 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/login-BE-70O_w.js                                                                                       4.65 kB │ gzip:   1.81 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/TableTextPreview-jOkI2Kg_.js                                                                            4.73 kB │ gzip:   2.17 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/usePdaSplitRecovery-BmblKaEj.js                                                                         4.73 kB │ gzip:   2.29 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-B3i7hIFd.js                                                                                       4.87 kB │ gzip:   1.90 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DH3sotdC.js                                                                                       4.92 kB │ gzip:   1.86 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/avg-cost-reconciliation-CKNL0Cgc.js                                                                     5.13 kB │ gzip:   2.50 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/DataTable-Brorp0ZS.js                                                                                   5.25 kB │ gzip:   2.33 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/CloseReceivingDialog-CzniW80N.js                                                                        5.31 kB │ gzip:   2.42 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/trace-CAoJKNK3.js                                                                                       5.56 kB │ gzip:   1.97 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/wave-performance-C5LaL9Gi.js                                                                            5.74 kB │ gzip:   2.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/pdaSplitRecovery-DVEsAxUG.js                                                                            5.82 kB │ gzip:   2.39 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-B2hWC0Vd.js                                                                                       5.83 kB │ gzip:   2.41 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/BaseCrudPage-DuPGWJIz.js                                                                                5.89 kB │ gzip:   2.81 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/pda-anomaly-BDWhkYU8.js                                                                                 5.97 kB │ gzip:   2.44 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useKits-BM5d2Vez.js                                                                                     6.19 kB │ gzip:   2.58 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/sale-return-putaway-BvYUpw-R.js                                                                         6.22 kB │ gzip:   2.44 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/transfer-out-VueU8H5x.js                                                                                6.30 kB │ gzip:   2.57 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-D8IUyoS2.js                                                                                       6.47 kB │ gzip:   2.91 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DwVDdRpy.js                                                                                       6.65 kB │ gzip:   2.94 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/warehouse-ops-BqHyeRL0.js                                                                               6.81 kB │ gzip:   2.77 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DjvuUO9a.js                                                                                       6.92 kB │ gzip:   2.85 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/kpi-CORbZBtw.js                                                                                         7.07 kB │ gzip:   3.30 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PdaScanner-B9r4Pi6Y.js                                                                                  7.10 kB │ gzip:   2.89 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/freight-reconciliation-DnC6nFi-.js                                                                      7.29 kB │ gzip:   2.71 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/SaleOrderPreview-BBuuMdWH.js                                                                            7.37 kB │ gzip:   2.78 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/FinderModal-BeJ1L7lW.js                                                                                 7.50 kB │ gzip:   3.19 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/TableColumnHeader-BKtcD3Gn.js                                                                           7.53 kB │ gzip:   3.34 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/role-workbench-D7d2CZxJ.js                                                                              7.63 kB │ gzip:   2.95 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/fill-CibjhJnU.js                                                                                        7.66 kB │ gzip:   3.14 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/transfer-in-D-Er5oWK.js                                                                                 7.68 kB │ gzip:   3.12 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/MergedPage-BqAhaXua.js                                                                                  8.02 kB │ gzip:   3.15 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BzwSxBCV.js                                                                                       8.16 kB │ gzip:   3.21 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CY3eJRKv.js                                                                                       8.20 kB │ gzip:   2.32 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/picking-DSCikNJP.js                                                                                     8.45 kB │ gzip:   3.25 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/inventory-aging-CC_iv1nV.js                                                                             8.50 kB │ gzip:   3.31 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/party-ledger-BKi_7opK.js                                                                                8.55 kB │ gzip:   3.92 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useKitOperation-CwXMNmvi.js                                                                             8.82 kB │ gzip:   3.38 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DQ0s_1dG.js                                                                                       8.95 kB │ gzip:   3.81 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-Br2N_Vcm.js                                                                                       9.29 kB │ gzip:   3.46 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BUnQ4cqg.js                                                                                       9.51 kB │ gzip:   3.64 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PurchaseItemPickerDialog-BORBiQ2K.js                                                                    9.68 kB │ gzip:   4.05 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-Dx_Iywvn.js                                                                                       9.80 kB │ gzip:   3.45 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-M-XLXpBs.js                                                                                       9.82 kB │ gzip:   3.51 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/bind-BW9ZYK7e.js                                                                                        9.83 kB │ gzip:   4.30 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DTf6Wxsc.js                                                                                       9.89 kB │ gzip:   3.07 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/FulfillmentTodos-Bm9xm_-b.js                                                                            9.92 kB │ gzip:   4.14 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/stockcheck-B0481DJj.js                                                                                 10.08 kB │ gzip:   3.93 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-vv1HmW9G.js                                                                                      10.10 kB │ gzip:   3.61 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CMxTKDl5.js                                                                                      10.21 kB │ gzip:   3.86 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/sale-return-receive-jw6Ami56.js                                                                        10.27 kB │ gzip:   3.68 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/useCriticalPdaAction-Bp3eHawY.js                                                                       10.36 kB │ gzip:   4.08 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/profit-analysis-YYiYH_PY.js                                                                            10.55 kB │ gzip:   3.72 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/CreateRefundPage-CctpJUwS.js                                                                           10.73 kB │ gzip:   4.35 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-WAgioC3E.js                                                                                      10.76 kB │ gzip:   3.67 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CR9NcXmB.js                                                                                      10.83 kB │ gzip:   4.09 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-B-sdroPv.js                                                                                      10.86 kB │ gzip:   4.10 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BNNa4w35.js                                                                                      10.87 kB │ gzip:   4.01 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/check-mjDGdzt_.js                                                                                      10.90 kB │ gzip:   4.21 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ship-DkAMETTD.js                                                                                       11.23 kB │ gzip:   4.28 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-Cblte85U.js                                                                                      11.25 kB │ gzip:   3.76 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/replenishment-ClGMNiAr.js                                                                              11.36 kB │ gzip:   4.48 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/abc-3cKqNZPX.js                                                                                        11.43 kB │ gzip:   4.40 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/detail-aA0NkYYB.js                                                                                     11.48 kB │ gzip:   4.27 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ProcurementIntentRecoveryNotice-CMJ6TXga.js                                                            11.48 kB │ gzip:   4.79 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/flows-CD0Ak0v4.js                                                                                      11.73 kB │ gzip:   4.16 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/edit-CGLfSgfS.js                                                                                       11.99 kB │ gzip:   4.85 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/putaway-DW3piAha.js                                                                                    12.02 kB │ gzip:   4.49 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ProcurementSupplyDetails-BcAA24B1.js                                                                   12.09 kB │ gzip:   4.49 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BfhSn8If.js                                                                                      12.22 kB │ gzip:   4.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ChartWidgets-BkmAoj6Y.js                                                                               12.33 kB │ gzip:   3.88 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/sort-CH5AUSf6.js                                                                                       12.41 kB │ gzip:   4.43 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/salePresentation-DI-byFbt.js                                                                           12.48 kB │ gzip:   5.35 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-B5tUalzQ.js                                                                                      12.56 kB │ gzip:   5.02 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CSRcOPP-.js                                                                                      12.83 kB │ gzip:   4.91 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/adjustment-BTggzHRj.js                                                                                 12.99 kB │ gzip:   4.24 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/CreateDisposalDialog-T4eMAURX.js                                                                       13.12 kB │ gzip:   5.21 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/split-BM9tTk-n.js                                                                                      13.31 kB │ gzip:   4.90 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-bvn7gkX6.js                                                                                      13.45 kB │ gzip:   4.61 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DK-7B0iq.js                                                                                      13.53 kB │ gzip:   5.51 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CJGRyfrB.js                                                                                      13.59 kB │ gzip:   5.23 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DfCf_WZc.js                                                                                      13.82 kB │ gzip:   5.24 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/task-DhEOi0Iu.js                                                                                       14.07 kB │ gzip:   5.52 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CluQlc05.js                                                                                      14.64 kB │ gzip:   4.87 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ProductFinderModal-CIP48WoU.js                                                                         14.67 kB │ gzip:   5.86 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/cancel-return-B6qDsDut.js                                                                              14.69 kB │ gzip:   4.83 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BmTdcgJ8.js                                                                                      14.77 kB │ gzip:   5.64 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BRm59PD5.js                                                                                      14.84 kB │ gzip:   5.51 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CU1a-X7m.js                                                                                      14.90 kB │ gzip:   5.60 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/detail-D7SR7tXE.js                                                                                     15.05 kB │ gzip:   5.62 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BluxWOSQ.js                                                                                      15.73 kB │ gzip:   5.38 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CD3m-_ve.js                                                                                      15.98 kB │ gzip:   6.28 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CITYedvJ.js                                                                                      16.37 kB │ gzip:   6.16 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-Kh1pLHva.js                                                                                      16.38 kB │ gzip:   5.93 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DhBoIy9J.js                                                                                      16.59 kB │ gzip:   6.08 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/form-vwq8FcDw.js                                                                                       17.44 kB │ gzip:   6.14 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/SaleOrderPrintTemplate-Ctj4ldhI.js                                                                     17.46 kB │ gzip:   5.90 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-C7rMoy8Y.js                                                                                      17.70 kB │ gzip:   6.64 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BZAnqTTK.js                                                                                      18.11 kB │ gzip:   6.59 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-C84iv4um.js                                                                                      18.16 kB │ gzip:   6.78 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/detail-CKUxz8dZ.js                                                                                     18.34 kB │ gzip:   6.63 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-aIXYbRP9.js                                                                                      18.71 kB │ gzip:   6.31 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/form-B5z6QBVs.js                                                                                       18.87 kB │ gzip:   6.81 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/create-Wzs1lpBb.js                                                                                     18.96 kB │ gzip:   7.50 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/OrderPrintOverlay-cSg3gCC2.js                                                                          19.15 kB │ gzip:   7.11 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BFwy0KI1.js                                                                                      19.24 kB │ gzip:   6.77 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-YRR1SadB.js                                                                                      19.41 kB │ gzip:   6.76 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/receive-CHMMEA3o.js                                                                                    19.69 kB │ gzip:   6.48 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ReconciliationView-Caspbtrm.js                                                                         20.60 kB │ gzip:   6.76 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-tnMnERXx.js                                                                                      21.54 kB │ gzip:   7.06 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/PaymentsView-Dxz7qGZW.js                                                                               22.19 kB │ gzip:   8.12 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/pack-pdaibtGb.js                                                                                       27.25 kB │ gzip:   8.56 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/DocumentActivityPanel-DSuNXTl9.js                                                                      27.85 kB │ gzip:   9.21 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BtEt6RiZ.js                                                                                      27.95 kB │ gzip:   9.88 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CYhKXn2q.js                                                                                      27.96 kB │ gzip:   9.29 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-RtkM6gOp.js                                                                                      28.02 kB │ gzip:  10.11 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CJR-8iaB.js                                                                                      28.11 kB │ gzip:  10.23 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/button-BbVhHLPx.js                                                                                     29.52 kB │ gzip:   9.50 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/ReceiptPanel-B3r72Ilp.js                                                                               30.19 kB │ gzip:  10.01 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DXOqEayu.js                                                                                      31.41 kB │ gzip:  11.12 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-C38K2FpL.js                                                                                      32.44 kB │ gzip:  11.42 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-Cp7VQh5B.js                                                                                      32.68 kB │ gzip:  10.84 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-e70V-6An.js                                                                                      37.94 kB │ gzip:  13.21 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/vendor-router-CNU2OIbl.js                                                                              39.91 kB │ gzip:  14.46 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BYZIeJov.js                                                                                      41.36 kB │ gzip:  11.02 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CLi2XhdV.js                                                                                      57.74 kB │ gzip:  18.95 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-BWICq7ky.js                                                                                      63.45 kB │ gzip:  21.64 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/editor-CriaR-5m.js                                                                                     71.08 kB │ gzip:  20.49 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CfJECwHF.js                                                                                      78.22 kB │ gzip:  22.09 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/vendor-query-CpnrpHYR.js                                                                               78.42 kB │ gzip:  23.12 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/vendor-barcode-CQ1pCttT.js                                                                             84.83 kB │ gzip:  20.49 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/DatePicker-BUYYAImW.js                                                                                 86.43 kB │ gzip:  23.27 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-DQcnOXZW.js                                                                                     103.75 kB │ gzip:  30.36 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/vendor-core-Q-5fFGCP.js                                                                               119.60 kB │ gzip:  32.50 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-8FAsDDc_.js                                                                                     164.33 kB │ gzip:  48.10 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/vendor-react-BrtsTF-Q.js                                                                              178.07 kB │ gzip:  58.35 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/index-CskPLMdN.js                                                                                     206.00 kB │ gzip:  64.84 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/vendor-ui-CepfSOcG.js                                                                                 279.97 kB │ gzip:  73.13 kB
+../../../../../../../tmp/flowcube-desktop-walkthrough-20261025/dist/assets/vendor-charts-J3Kj0IQk.js                                                                             442.08 kB │ gzip: 125.28 kB
+✓ built in 5.43s

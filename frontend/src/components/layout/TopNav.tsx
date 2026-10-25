@@ -129,10 +129,12 @@ function NavItemMenu(props: {
         {label}
         <ChevronDown className={cn('h-3.5 w-3.5 opacity-70 transition-transform', open && 'rotate-180')} />
       </button>
-      {open && (
         <div
-          className="absolute left-0 top-full z-50 min-w-[12rem] pt-1"
+          className="fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1"
           role="menu"
+          hidden={!open}
+          aria-hidden={!open || undefined}
+          {...(!open ? { inert: '' } : {})}
           onMouseEnter={openMenu}
           onMouseLeave={scheduleClose}
         >
@@ -179,7 +181,6 @@ function NavItemMenu(props: {
             ))}
           </ul>
         </div>
-      )}
     </div>
   )
 }

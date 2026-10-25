@@ -1,0 +1,789 @@
+{
+  "labels": [
+    {
+      "file": "frontend/src/components/shared/UserMenu.tsx",
+      "line": 209,
+      "children": "当前密码 *"
+    },
+    {
+      "file": "frontend/src/components/shared/UserMenu.tsx",
+      "line": 210,
+      "children": "新密码 *（至少 6 位）"
+    },
+    {
+      "file": "frontend/src/components/shared/UserMenu.tsx",
+      "line": 211,
+      "children": "确认新密码 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/BackfillRequestDialog.tsx",
+      "line": 52,
+      "children": "申请原因 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+      "line": 232,
+      "children": "单号 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+      "line": 236,
+      "children": "供应商 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+      "line": 240,
+      "children": "金额 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+      "line": 244,
+      "children": "结算方式 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+      "line": 266,
+      "children": "借方科目 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/CreateStatementDialog.tsx",
+      "line": 108,
+      "children": "{partyLabel}*"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/RegisterPaymentDialog.tsx",
+      "line": 213,
+      "children": "资金账户 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/RegisterPaymentDialog.tsx",
+      "line": 223,
+      "children": "金额 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/RegisterPaymentDialog.tsx",
+      "line": 224,
+      "children": "日期 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+      "line": 328,
+      "children": "{partyLabel}*"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+      "line": 340,
+      "children": "{isContinue ? '可核销余额' : '汇款金额 *'}"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+      "line": 348,
+      "children": "日期 *"
+    },
+    {
+      "file": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+      "line": 365,
+      "children": "{isPayableType(type) ? '付款账户' : '收款账户'}*"
+    },
+    {
+      "file": "frontend/src/pages/accounting/accounts/index.tsx",
+      "line": 145,
+      "children": "科目编码 *"
+    },
+    {
+      "file": "frontend/src/pages/accounting/accounts/index.tsx",
+      "line": 156,
+      "children": "科目名称 *"
+    },
+    {
+      "file": "frontend/src/pages/accounting/accounts/index.tsx",
+      "line": 165,
+      "children": "科目类别 *"
+    },
+    {
+      "file": "frontend/src/pages/accounting/accounts/index.tsx",
+      "line": 180,
+      "children": "余额方向 *"
+    },
+    {
+      "file": "frontend/src/pages/accounting/backfills/index.tsx",
+      "line": 315,
+      "children": "{label}{required ? ' *' : '（选填）'}"
+    },
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "line": 132,
+      "children": "发票号码 <span className=\"text-destructive-ink\">*</span>"
+    },
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "line": 133,
+      "children": "{invoiceType === 1 ? '供应商' : '客户'}<span className=\"text-destructive-ink\">*</span>"
+    },
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "line": 135,
+      "children": "价税合计 <span className=\"text-destructive-ink\">*</span>"
+    },
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "line": 148,
+      "children": "开票日期 <span className=\"text-destructive-ink\">*</span>"
+    },
+    {
+      "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "line": 278,
+      "children": "记账日期 *"
+    },
+    {
+      "file": "frontend/src/pages/categories/index.tsx",
+      "line": 137,
+      "children": "分类名称 *"
+    },
+    {
+      "file": "frontend/src/pages/credit-overrides/index.tsx",
+      "line": 108,
+      "children": "超额原因 <span className=\"text-destructive-ink\">*</span>"
+    },
+    {
+      "file": "frontend/src/pages/customers/components/CustomerFormDialog.tsx",
+      "line": 110,
+      "children": "label=\"客户名称 *\""
+    },
+    {
+      "file": "frontend/src/pages/disposal/components/CreateDisposalDialog.tsx",
+      "line": 146,
+      "children": "选择仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/finance/accounts/index.tsx",
+      "line": 261,
+      "children": "账户名称 *"
+    },
+    {
+      "file": "frontend/src/pages/finance/accounts/index.tsx",
+      "line": 265,
+      "children": "类型 *"
+    },
+    {
+      "file": "frontend/src/pages/finance/accounts/index.tsx",
+      "line": 373,
+      "children": "调整后余额 *"
+    },
+    {
+      "file": "frontend/src/pages/finance/expense-categories/index.tsx",
+      "line": 52,
+      "children": "类别名称 *"
+    },
+    {
+      "file": "frontend/src/pages/finance/expenses/index.tsx",
+      "line": 489,
+      "children": "付款账户 *"
+    },
+    {
+      "file": "frontend/src/pages/finance/expenses/index.tsx",
+      "line": 549,
+      "children": "驳回原因 *"
+    },
+    {
+      "file": "frontend/src/pages/fixed-assets/index.tsx",
+      "line": 48,
+      "children": "资产名称 *"
+    },
+    {
+      "file": "frontend/src/pages/fixed-assets/index.tsx",
+      "line": 63,
+      "children": "购置日期 *"
+    },
+    {
+      "file": "frontend/src/pages/fixed-assets/index.tsx",
+      "line": 67,
+      "children": "原值（元）*"
+    },
+    {
+      "file": "frontend/src/pages/fixed-assets/index.tsx",
+      "line": 77,
+      "children": "使用年限（月）*"
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 435,
+      "children": "商品 *"
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 437,
+      "children": "仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 446,
+      "children": "数量 *"
+    },
+    {
+      "file": "frontend/src/pages/kits/KitEditor.tsx",
+      "line": 166,
+      "children": "配件名称 *"
+    },
+    {
+      "file": "frontend/src/pages/kits/KitEditor.tsx",
+      "line": 167,
+      "children": "分类 *"
+    },
+    {
+      "file": "frontend/src/pages/kits/KitEditor.tsx",
+      "line": 168,
+      "children": "供应商 *"
+    },
+    {
+      "file": "frontend/src/pages/kits/KitEditor.tsx",
+      "line": 169,
+      "children": "单位 *"
+    },
+    {
+      "file": "frontend/src/pages/kits/KitEditor.tsx",
+      "line": 170,
+      "children": "型号 *"
+    },
+    {
+      "file": "frontend/src/pages/kits/KitEditor.tsx",
+      "line": 171,
+      "children": "颜色 *"
+    },
+    {
+      "file": "frontend/src/pages/kits/KitEditor.tsx",
+      "line": 173,
+      "children": "进价 *"
+    },
+    {
+      "file": "frontend/src/pages/permissions/index.tsx",
+      "line": 63,
+      "children": "角色编码 *"
+    },
+    {
+      "file": "frontend/src/pages/permissions/index.tsx",
+      "line": 67,
+      "children": "角色名称 *"
+    },
+    {
+      "file": "frontend/src/pages/permissions/index.tsx",
+      "line": 111,
+      "children": "角色编码 *"
+    },
+    {
+      "file": "frontend/src/pages/permissions/index.tsx",
+      "line": 115,
+      "children": "角色名称 *"
+    },
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "line": 209,
+      "children": "绑定商品 *"
+    },
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "line": 213,
+      "children": "所属仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 325,
+      "children": "名称 *"
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 329,
+      "children": "分类 *"
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 345,
+      "children": "供应商 *"
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 359,
+      "children": "单位 *"
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 363,
+      "children": "型号 *"
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 367,
+      "children": "颜色 *"
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 375,
+      "children": "进价 *"
+    },
+    {
+      "file": "frontend/src/pages/purchase/form/index.tsx",
+      "line": 392,
+      "children": "供应商 *"
+    },
+    {
+      "file": "frontend/src/pages/purchase/form/index.tsx",
+      "line": 408,
+      "children": "入库仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/purchase/form/index.tsx",
+      "line": 750,
+      "children": "驳回原因 *"
+    },
+    {
+      "file": "frontend/src/pages/purchase/index.tsx",
+      "line": 418,
+      "children": "驳回原因 *"
+    },
+    {
+      "file": "frontend/src/pages/purchase-requisitions/form.tsx",
+      "line": 383,
+      "children": "期望入库仓 *"
+    },
+    {
+      "file": "frontend/src/pages/purchase-requisitions/form.tsx",
+      "line": 441,
+      "children": "驳回原因 *"
+    },
+    {
+      "file": "frontend/src/pages/racks/index.tsx",
+      "line": 219,
+      "children": "所属仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/racks/index.tsx",
+      "line": 297,
+      "children": "货架编码 *"
+    },
+    {
+      "file": "frontend/src/pages/refunds/index.tsx",
+      "line": 191,
+      "children": "销售单号 *"
+    },
+    {
+      "file": "frontend/src/pages/refunds/index.tsx",
+      "line": 195,
+      "children": "退款金额 *"
+    },
+    {
+      "file": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "line": 379,
+      "children": "供应商 *"
+    },
+    {
+      "file": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "line": 390,
+      "children": "退货仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 374,
+      "children": "客户 *"
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 385,
+      "children": "退货仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/sale/form/components/SaleOrderHeaderFields.tsx",
+      "line": 76,
+      "children": "客户 *"
+    },
+    {
+      "file": "frontend/src/pages/sale/form/components/SaleOrderHeaderFields.tsx",
+      "line": 81,
+      "children": "出库仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/index.tsx",
+      "line": 96,
+      "children": "选择仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/supplier-refunds/CreateRefundPage.tsx",
+      "line": 88,
+      "children": "真实银行回款日 *"
+    },
+    {
+      "file": "frontend/src/pages/supplier-refunds/CreateRefundPage.tsx",
+      "line": 89,
+      "children": "收入账户 *"
+    },
+    {
+      "file": "frontend/src/pages/suppliers/index.tsx",
+      "line": 172,
+      "children": "label=\"名称 *\""
+    },
+    {
+      "file": "frontend/src/pages/transfer/form/index.tsx",
+      "line": 265,
+      "children": "调出仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/transfer/form/index.tsx",
+      "line": 277,
+      "children": "调入仓库 *"
+    },
+    {
+      "file": "frontend/src/pages/users/components/UserFormDialog.tsx",
+      "line": 165,
+      "children": "账号 <span className=\"text-destructive-ink\">*</span>"
+    },
+    {
+      "file": "frontend/src/pages/users/components/UserFormDialog.tsx",
+      "line": 182,
+      "children": "初始密码 <span className=\"text-destructive-ink\">*</span>"
+    },
+    {
+      "file": "frontend/src/pages/users/components/UserFormDialog.tsx",
+      "line": 201,
+      "children": "姓名 <span className=\"text-destructive-ink\">*</span>"
+    },
+    {
+      "file": "frontend/src/pages/warehouses/index.tsx",
+      "line": 111,
+      "children": "仓库名称 *"
+    },
+    {
+      "file": "frontend/src/pages/warehouses/index.tsx",
+      "line": 118,
+      "children": "仓库类型 *"
+    }
+  ],
+  "summaries": [
+    {
+      "file": "frontend/src/components/dashboard/widgets/RiskDetails.tsx",
+      "line": 143,
+      "ancestors": [
+        "<div className=\"max-h-[65vh] overflow-y-auto\">",
+        "<DialogContent className=\"max-w-3xl\">",
+        "<Dialog open onOpenChange={(value) => { if (!value) onClose() }} >"
+      ]
+    },
+    {
+      "file": "frontend/src/components/shared/BaseCrudPage.tsx",
+      "line": 208,
+      "ancestors": [
+        "<div className=\"desktop-record-page space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/components/shared/FulfillmentTodos.tsx",
+      "line": 52,
+      "ancestors": [
+        "<SectionCard title=\"订单履约待办\" compact actions={<Button variant=\"outline\" size=\"sm\" onClick={() => query.refetch()} disabled={query.isFetching}>刷新事项</Button>}>"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/accounting/backfills/index.tsx",
+      "line": 539,
+      "ancestors": [
+        "<div>"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "line": 259,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/accounting/periods/index.tsx",
+      "line": 126,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "line": 461,
+      "ancestors": [
+        "<div>"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/approvals/flows.tsx",
+      "line": 200,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/approvals/pending.tsx",
+      "line": 104,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/credit-overrides/index.tsx",
+      "line": 274,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/customers/index.tsx",
+      "line": 163,
+      "ancestors": [
+        "<footer className=\"px-1 py-3\">",
+        "<section aria-label=\"客户列表\">",
+        "<div className=\"desktop-record-page space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/disposal/HandlingSourcesPanel.tsx",
+      "line": 68,
+      "ancestors": [
+        "<section className=\"space-y-3 border rounded p-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/disposal/index.tsx",
+      "line": 148,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/finance/expenses/index.tsx",
+      "line": 359,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/finance/transactions/index.tsx",
+      "line": 244,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/fixed-assets/index.tsx",
+      "line": 219,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/inbound-tasks/index.tsx",
+      "line": 427,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 405,
+      "ancestors": [
+        "<KeepAliveSection active={tab === 'overview'} className=\"space-y-4\">",
+        "<div className=\"desktop-inventory-page space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 418,
+      "ancestors": [
+        "<KeepAliveSection active={tab === 'logs'} className=\"space-y-4\">",
+        "<div className=\"desktop-inventory-page space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/kits/index.tsx",
+      "line": 67,
+      "ancestors": [
+        "<div>"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "line": 135,
+      "ancestors": [
+        "<SectionCard title=\"运费账单\" noPadding>",
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "line": 140,
+      "ancestors": [
+        "<SectionCard title=\"月结汇总单（应付）\" noPadding>",
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/logistics/index.tsx",
+      "line": 179,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "line": 211,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/payments/PaymentsView.tsx",
+      "line": 203,
+      "ancestors": [
+        "<section aria-label=\"现结账款\" className=\"space-y-4\">",
+        "<KeepAliveSection active={tab === 'records'} className=\"space-y-4\">",
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/payments/SupplierMonthlyPayables.tsx",
+      "line": 51,
+      "ancestors": [
+        "<section aria-label=\"月结欠款\" className=\"space-y-3 border-b border-border pb-5\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/picking-waves/index.tsx",
+      "line": 263,
+      "ancestors": [
+        "<div className=\"desktop-wave-page space-y-5\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/portal/statements.tsx",
+      "line": 76,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/price-change/index.tsx",
+      "line": 225,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/procurement/index.tsx",
+      "line": 88,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/products/index.tsx",
+      "line": 236,
+      "ancestors": [
+        "<div className=\"desktop-record-page space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/purchase/index.tsx",
+      "line": 383,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/purchase-requisitions/index.tsx",
+      "line": 154,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/refunds/index.tsx",
+      "line": 130,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/reports/avg-cost-reconciliation.tsx",
+      "line": 106,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/reports/wave-performance.tsx",
+      "line": 213,
+      "ancestors": [
+        "<div className=\"space-y-6\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/returns/index.tsx",
+      "line": 332,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/sale/index.tsx",
+      "line": 302,
+      "ancestors": [
+        "<section className=\"sample-table-panel\" aria-label=\"销售订单列表\">",
+        "<div className=\"desktop-page-sample sale-list-sample space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+      "line": 588,
+      "ancestors": [
+        "<div className=\"fc-list-footer\">",
+        "<section className=\"fc-list-workbench min-w-0 rounded-xl border border-border bg-card\" aria-label=\"条码打印记录\">",
+        "<div className=\"fc-print-query-page space-y-4\" style={{ overflowAnchor: 'none' }}>"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/settings/pda-devices/index.tsx",
+      "line": 167,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/settings/printers/index.tsx",
+      "line": 536,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/index.tsx",
+      "line": 89,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/supplier-refunds/index.tsx",
+      "line": 68,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/transfer/index.tsx",
+      "line": 272,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 189,
+      "ancestors": [
+        "<div className=\"space-y-4\">"
+      ]
+    }
+  ]
+}

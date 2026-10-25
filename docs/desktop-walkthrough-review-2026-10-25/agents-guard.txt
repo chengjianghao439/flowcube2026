@@ -1,0 +1,6 @@
+
+> test:agents-md-guard
+> node tests/agents-md-injection-guard.test.js
+
+agents-md-injection-guard: 目录链 1 层、docs 引用 30 个、npm 脚本引用 32 个、AGENTS.md 31451 字节（硬限 32768）、失败 0
+  [OK] AGENTS.md 注入守卫通过

@@ -1,0 +1,440 @@
+
+ RUN  v4.1.11 /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend
+
+Error: Uncaught [Error: 合成单页渲染错误]
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) Error: 合成单页渲染错误
+    at /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/WorkspaceSafety.test.tsx:85:44
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at wrapper (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:722:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2622:52
+    at run (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1150:20)
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+Error: Uncaught [Error: 合成单页渲染错误]
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) Error: 合成单页渲染错误
+    at /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/WorkspaceSafety.test.tsx:85:44
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at wrapper (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:722:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2622:52
+    at run (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1150:20)
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+Error: Uncaught [Error: 合成单页渲染错误]
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) Error: 合成单页渲染错误
+    at /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/WorkspaceSafety.test.tsx:85:44
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at wrapper (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:722:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2622:52
+    at run (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1150:20)
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+Error: Uncaught [Error: 合成单页渲染错误]
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) Error: 合成单页渲染错误
+    at /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/WorkspaceSafety.test.tsx:85:44
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at wrapper (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:722:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2622:52
+    at run (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1150:20)
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+Error: Uncaught null
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) null
+Error: Uncaught null
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) null
+Error: Uncaught undefined
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) undefined
+Error: Uncaught undefined
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) undefined
+Error: Uncaught '合成字符串异常'
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) 合成字符串异常
+Error: Uncaught '合成字符串异常'
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) 合成字符串异常
+Error: Uncaught 17
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) 17
+Error: Uncaught 17
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) 17
+Error: Uncaught false
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) false
+Error: Uncaught false
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) false
+Error: Uncaught { message: '合成对象异常' }
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) { message: '合成对象异常' }
+Error: Uncaught { message: '合成对象异常' }
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) { message: '合成对象异常' }
+Error: Uncaught null
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) null
+Error: Uncaught null
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) null
+Error: Uncaught undefined
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) undefined
+Error: Uncaught undefined
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) undefined
+Error: Uncaught '合成字符串异常'
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) 合成字符串异常
+Error: Uncaught '合成字符串异常'
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) 合成字符串异常
+Error: Uncaught 17
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) 17
+Error: Uncaught 17
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) 17
+Error: Uncaught false
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) false
+Error: Uncaught false
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) false
+Error: Uncaught { message: '合成对象异常' }
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) { message: '合成对象异常' }
+Error: Uncaught { message: '合成对象异常' }
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) { message: '合成对象异常' }
+Error: Uncaught [Error: 合成单页渲染错误]
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) Error: 合成单页渲染错误
+    at /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/WorkspaceSafety.test.tsx:85:44
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at wrapper (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:722:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2622:52
+    at run (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1150:20)
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+Error: Uncaught [Error: 合成单页渲染错误]
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) Error: 合成单页渲染错误
+    at /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/WorkspaceSafety.test.tsx:85:44
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at wrapper (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:722:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2622:52
+    at run (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1150:20)
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+Error: Uncaught [Error: 合成单页渲染错误]
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) Error: 合成单页渲染错误
+    at /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/WorkspaceSafety.test.tsx:85:44
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at wrapper (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:722:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2622:52
+    at run (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1150:20)
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+Error: Uncaught [Error: 合成单页渲染错误]
+    at reportException (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/helpers/runtime-script-errors.js:66:24)
+    at innerInvokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:353:9)
+    at invokeEventListeners (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:286:3)
+    at HTMLUnknownElementImpl._dispatch (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:233:9)
+    at HTMLUnknownElementImpl.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:104:17)
+    at HTMLUnknownElement.dispatchEvent (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/jsdom/lib/jsdom/living/generated/EventTarget.js:241:34)
+    at Object.invokeGuardedCallbackDev (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4213:16)
+    at invokeGuardedCallback (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:4277:31)
+    at beginWork$1 (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:27490:7)
+    at performUnitOfWork (/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/react-dom/cjs/react-dom.development.js:26599:12) Error: 合成单页渲染错误
+    at /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/components/layout/WorkspaceSafety.test.tsx:85:44
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at wrapper (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:722:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2622:52
+    at run (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1150:20)
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+
+ Test Files  418 passed (418)
+      Tests  3783 passed (3783)
+   Start at  20:10:34
+   Duration  165.19s (transform 6.30s, setup 0ms, import 59.06s, tests 180.23s, environment 54.03s)

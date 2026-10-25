@@ -289,7 +289,7 @@ export default function SalePage() {
         </div>
       )}
 
-      <section className="sample-table-panel" aria-label="销售订单列表">
+      <section className="min-w-0" aria-label="销售订单列表">
       {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} /> : <DataTable virtualized
         columns={columns}
         data={data?.list ?? []}

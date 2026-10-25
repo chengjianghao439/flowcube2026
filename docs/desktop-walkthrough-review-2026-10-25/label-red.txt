@@ -1,0 +1,52 @@
+
+ RUN  v4.1.11 /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend
+
+ ❯ src/components/ui/label.test.tsx (3 tests | 2 failed) 36ms
+   × 必填标记独立着色，保留字段名称、label关联和原生校验 31ms
+   × 动态条件、Fragment和星号后的密码提示沿原文字呈现 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/ui/label.test.tsx > 必填标记独立着色，保留字段名称、label关联和原生校验
+AssertionError: expected undefined to be '*' // Object.is equality
+
+- Expected:
+"*"
+
++ Received:
+undefined
+
+ ❯ src/components/ui/label.test.tsx:22:76
+     20|   const host = mount(<FormField id="required-name" label="名称 *">{field…
+     21|   const input = getByRole(host, 'textbox', { name: '名称 *' }) as HTMLIn…
+     22|   expect(host.querySelector('label > .text-destructive-ink')?.textCont…
+       |                                                                            ^
+     23|   expect(host.querySelector('label')?.htmlFor).toBe(input.id)
+     24|   expect(input.required).toBe(true)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/components/ui/label.test.tsx > 动态条件、Fragment和星号后的密码提示沿原文字呈现
+AssertionError: expected  to have a length of 2 but got +0
+
+- Expected
++ Received
+
+- 2
++ 0
+
+ ❯ src/components/ui/label.test.tsx:32:58
+     30|   const host = mount(<><Label><>{'供应商'}{required ? ' *' : '（选填）'}</></…
+     31|   expect([...host.querySelectorAll('label')].map(label => label.textCo…
+     32|   expect(host.querySelectorAll('.text-destructive-ink')).toHaveLength(…
+       |                                                          ^
+     33| })
+     34|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 1 passed (3)
+   Start at  19:52:04
+   Duration  552ms (transform 38ms, setup 0ms, import 139ms, tests 36ms, environment 279ms)

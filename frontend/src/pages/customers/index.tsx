@@ -129,7 +129,6 @@ export default function CustomersPage() {
         <Input aria-label="搜索客户编码或名称" placeholder="搜索客户编码或名称" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-80" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); } }} />
         <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); }}>重置</Button>}
-      {!isError && !isFetching && data && <span className="ml-auto text-xs text-muted-foreground">共 {total.toLocaleString()} 位客户</span>}
       </FilterCard>
 
       {importOpen && (
@@ -160,7 +159,7 @@ export default function CustomersPage() {
       <section aria-label="客户列表">
         {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list||[]} loading={isFetching} />}
         {!isError && !isFetching && data && <footer className="px-1 py-3">
-          <ListSummary total={total} unit="条" />
+          <ListSummary total={total} unit="位" />
         </footer>}
       </section>
       <CustomerFormDialog open={dialogOpen && (editing ? canUpdate : can(PERMISSIONS.CUSTOMER_CREATE))} onClose={()=>setDialogOpen(false)} customer={editing} />

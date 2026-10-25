@@ -60,11 +60,12 @@ export function HandlingSourcesPanel() {
         {link.target && <Button variant="link" onClick={() => { if (sourceCurrent(source) && mayHandle(link.target!.type === 'sale_order' ? P.SALE_ORDER_VIEW : link.target!.type === 'purchase_return' ? P.RETURN_ORDER_VIEW : P.INVENTORY_DISPOSAL_VIEW)) openHandlingTab(link.target!.path, navigate) }}>{link.target.orderNo}</Button>}
         <Button variant="outline" disabled={link.state !== 'ACTIVE' || !link.returnClosed || !mayHandle(source.originKind === 'legacy' ? P.INVENTORY_DISPOSAL_APPROVE : P.INVENTORY_DISPOSAL_CREATE)} onClick={() => { if (sourceCurrent(source) && link.state === 'ACTIVE') { const key = JSON.stringify([source.id, link.linkId, owner]); setDialogs(old => ({ ...old, [key]: { source, link, owner } })); setSelected(key) } }}>核对解除</Button></div>)}
     </article> }]
-  return <section className="space-y-3 border rounded p-4"><h2 className="font-semibold">处理来源</h2><p className="text-sm text-muted-foreground">意图量、关联量、实际执行量和已解除量来自服务器；意图不承诺库存。金额与执行仍走原业务。</p>
+  return <section className="space-y-3"><div className="space-y-3 border rounded p-4"><h2 className="font-semibold">处理来源</h2><p className="text-sm text-muted-foreground">意图量、关联量、实际执行量和已解除量来自服务器；意图不承诺库存。金额与执行仍走原业务。</p>
     {data.isError && <QueryErrorState error={data.error} title="来源读取失败" onRetry={() => { if (current() && !data.isFetching) void data.refetch() }} />}
     {current() && data.isFetching && <p role="status" className="text-sm text-muted-foreground">正在加载处理来源…</p>}
     {readable && rows.length > 0 && <DataTable columns={columns} data={rows} virtualized preserveFocus retainFocusedRow={selected !== null} />}
     {readable && total === 0 && <p>暂无处理来源</p>}
+    </div>
     {readable && (data.data.truncated ? <p role="status" className="text-sm text-muted-foreground">已读取 {rows.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条；来源未全部读取，请处理现有来源后重新读取。</p> : <ListSummary total={total} />)}
     {Object.entries(dialogs).map(([key, draft]) => <ReleaseDialog key={key} source={draft.source} link={draft.link} open={selected === key && handlingOwnerCurrent(draft.owner)} available={rows.some(source => source.id === draft.source.id && source.revision === draft.source.revision && source.links.some(link => link.linkId === draft.link.linkId && link.state === 'ACTIVE' && link.returnClosed))} onClose={() => setSelected(null)} />)}
   </section>

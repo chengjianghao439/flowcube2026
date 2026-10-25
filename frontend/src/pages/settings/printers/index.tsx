@@ -471,7 +471,7 @@ export default function PrintersPage() {
             {!listLoading && !listError && systemList.length > 0 && (
               <>
                 <div>
-                  <label className="text-label mb-1 block">本机打印机 *</label>
+                  <label className="text-label mb-1 block">本机打印机 <span className="text-destructive-ink">*</span></label>
                   <Select value={selectedName} onValueChange={setSelectedName}>
                     <SelectTrigger className="input w-full">
                       <SelectValue placeholder="请选择" />
@@ -488,7 +488,7 @@ export default function PrintersPage() {
                   </Select>
                 </div>
                 <div>
-                  <label className="text-label mb-1 block">设备类型 *</label>
+                  <label className="text-label mb-1 block">设备类型 <span className="text-destructive-ink">*</span></label>
                   <Select value={String(addType)} onValueChange={v => setAddType(+v as 1 | 2 | 3)}>
                     <SelectTrigger className="input w-full">
                       <SelectValue />

@@ -5,7 +5,16 @@ import { STATUS_TONE_CLASS } from './statusTone'
 const css = readFileSync(new URL('../index.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
 function tokens(selector: string) {
   const block = css.slice(css.indexOf(selector)).split('}')[0]
-  return Object.fromEntries([...block.matchAll(/--([\w-]+):\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/g)].map(m => [m[1], hsl(Number(m[2]), Number(m[3]) / 100, Number(m[4]) / 100)]))
+  const palette: Record<string, number[]> = Object.fromEntries([...block.matchAll(/--([\w-]+):\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/g)].map(m => [m[1], hsl(Number(m[2]), Number(m[3]) / 100, Number(m[4]) / 100)]))
+  // 品牌与语义色可引用另一颜色令牌；仍对最终色值执行原来的 4.5:1 断言。
+  const aliases = [...block.matchAll(/--([\w-]+):\s*var\(--([\w-]+)\)\s*;/g)]
+  while (aliases.length) {
+    const index = aliases.findIndex(match => palette[match[2]])
+    if (index < 0) throw new Error(`${selector} 存在未知或循环颜色别名：${aliases.map(match => match[1]).join(', ')}`)
+    const [match] = aliases.splice(index, 1)
+    palette[match[1]] = palette[match[2]]
+  }
+  return palette
 }
 function hsl(h: number, s: number, l: number) {
   const a = s * Math.min(l, 1 - l)

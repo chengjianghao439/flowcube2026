@@ -130,15 +130,19 @@ export default function FreightReconciliationPage() {
         {!canGenerate && <span className="text-xs text-muted-foreground">选择承运商并填写账期后，可生成应付</span>}
       </div>
 
+      <section aria-label="运费账单">
       <SectionCard title="运费账单" noPadding>
         <DataTable columns={billColumns} data={bills?.list ?? []} loading={billsLoading} rowKey="id" emptyText="暂无运费账单（点「录入账单」添加，或对接平台回传）" />
-        {bills && !billsLoading && <ListSummary total={bills.pagination.total} unit="张" />}
       </SectionCard>
+      {bills && !billsLoading && <ListSummary total={bills.pagination.total} unit="张" />}
+      </section>
 
+      <section aria-label="月结汇总单（应付）">
       <SectionCard title="月结汇总单（应付）" noPadding>
         <DataTable columns={settlementColumns} data={settlements?.list ?? []} loading={settlementsLoading} rowKey="id" emptyText="暂无汇总单（选承运商 + 账期后「生成应付」）" />
-        {settlements && !settlementsLoading && <ListSummary total={settlements.pagination.total} unit="单" />}
       </SectionCard>
+      {settlements && !settlementsLoading && <ListSummary total={settlements.pagination.total} unit="单" />}
+      </section>
 
       <Dialog open={billDialog} onOpenChange={v => !v && setBillDialog(false)}>
         <DialogContent className="max-w-xl">

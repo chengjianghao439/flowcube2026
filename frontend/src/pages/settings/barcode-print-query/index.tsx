@@ -584,11 +584,11 @@ export default function BarcodePrintQueryPage() {
             action={awaitingRecoveryQuery ? <Button variant="outline" onClick={() => setQueryOpen(true)}>输入恢复查询条件</Button> : undefined}
           />}
         />
-        <div className="fc-list-footer">
+      </section>
+      <div className="fc-list-footer">
           {canOperate ? <ListSummary total={total} unit="条" /> : <span>{awaitingRecoveryQuery ? '等待输入查询条件' : '记录数量待核对'}</span>}
           <span>状态每 {AUTO_REFRESH_MS / 1000} 秒自动刷新</span>
-        </div>
-      </section>
+      </div>
 
       <BarcodePrintQueryDialog
         open={queryOpen}

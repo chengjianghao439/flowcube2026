@@ -44,7 +44,6 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-ra
 /* Shape defaults live below utilities so validation, disabled and domain states win. */
 @layer components {
   :is(.desktop-page-sample,.desktop-workspace) :is(.desktop-section-card,.bg-card.border),
-  .desktop-workspace .sample-table-panel,
   .desktop-workspace .sample-settings-card {
     border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:hsl(var(--card)); box-shadow:var(--desktop-shadow);
   }
@@ -89,7 +88,6 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) .fc-button.bg-pri
   --desktop-row-surface:color-mix(in srgb,hsl(var(--primary)) 7%,hsl(var(--card)));
 }
 .desktop-workspace .desktop-table .fc-button { height:30px; min-height:30px; font-size:12px; }
-.desktop-workspace .sample-table-panel { min-width:0; }
 
 /* 全局搜索沿成熟的命令菜单交互，选中行和分组使用现有中性色。 */
 body:has(.desktop-shell-sample) .fc-global-search-results { border-radius:16px; box-shadow:var(--desktop-shadow-lg); }
@@ -101,8 +99,6 @@ body:has(.desktop-shell-sample) .fc-global-search-result + .fc-global-search-res
 body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button { width:20px; height:20px; min-height:20px; padding:2px; }
 body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { width:13px; height:13px; }
 @media (prefers-reduced-motion:reduce) { body:has(.desktop-shell-sample) .fc-global-search-result { transition:none; } }
-.desktop-workspace .sample-table-panel > .desktop-table { border:0; border-radius:var(--desktop-radius) var(--desktop-radius) 0 0; box-shadow:none; }
-.desktop-workspace .sample-table-panel > [role="status"] { padding:14px 16px; font-size:12px; }
 :is(.sample-status-strip > [role="radiogroup"],.desktop-workspace .desktop-status-filter) { border:0; gap:6px; }
 .sale-list-sample > .flex > span.rounded-full { background:hsl(var(--blue-10)); color:hsl(var(--primary-action)); }
 
@@ -303,8 +299,8 @@ body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-men
   box-shadow:0 12px 36px rgb(var(--shadow-ink) / 12%),0 2px 6px rgb(var(--shadow-ink) / 4%);
   transform-origin:var(--radix-popper-transform-origin);
 }
-body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)[data-state="open"] { animation:desktop-tool-open 140ms cubic-bezier(.22,.61,.36,1); }
-body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)[data-state="closed"] { animation:desktop-tool-close 100ms ease-in; }
+body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)[data-state="open"] { animation:desktop-tool-open var(--desktop-motion-in) var(--desktop-motion-ease); }
+body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)[data-state="closed"] { animation:desktop-tool-close var(--desktop-motion-out) ease-out; pointer-events:none !important; }
 body:has(.desktop-shell-sample) :is(.fc-select-item,.fc-dropdown-menu [role^="menuitem"]) { min-height:32px; border-radius:7px; font-size:13px; line-height:1.5; }
 body:has(.desktop-shell-sample) .fc-select-item { padding-block:7px; }
 body:has(.desktop-shell-sample) .fc-select-item[data-state="checked"] { font-weight:500; }
@@ -320,7 +316,7 @@ body:has(.desktop-shell-sample) .fc-date-footer { padding:8px 10px; background:h
 body:has(.desktop-shell-sample) .fc-date-footer > button { min-height:30px; padding:4px 10px; border-radius:7px; font-size:12.5px; text-decoration:none; }
 body:has(.desktop-shell-sample) .fc-date-footer > button:hover { background:hsl(var(--accent)); }
 body:has(.desktop-shell-sample) .fc-date-footer > button:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:1px; }
-@keyframes desktop-tool-open { from { opacity:.65; scale:.985; } to { opacity:1; scale:1; } }
+@keyframes desktop-tool-open { from { opacity:0; translate:0 -3px; } to { opacity:1; translate:0 0; } }
 @keyframes desktop-tool-close { from { opacity:1; } to { opacity:0; } }
 
 /* One icon family and optical weight, scoped to the desktop and its portals. */
@@ -447,7 +443,7 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { an
 .desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child { border-radius:0 0 13px 13px; }
 .desktop-workspace .desktop-table tbody > tr:has(:is(.fc-table-empty,.fc-empty-state)) { --desktop-row-surface:hsl(var(--card)); }
 .desktop-workspace .fc-list-workbench .fc-empty-state-description { max-width:60ch; line-height:20px; }
-.desktop-workspace .fc-list-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 20px; padding:12px 16px; border-top:1px solid hsl(var(--border)); color:hsl(var(--muted-foreground)); font-size:12px; line-height:18px; }
+.desktop-workspace .fc-list-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 20px; padding:12px 4px; color:hsl(var(--muted-foreground)); font-size:12px; line-height:18px; }
 .desktop-workspace .fc-list-footer > [role="status"] { padding:0; }
 body:has(.desktop-shell-sample) .fc-form-dialog { display:flex; flex-direction:column; gap:0; padding:0; overflow:hidden; }
 body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-header { flex-shrink:0; padding:18px 48px 16px 24px; border-bottom:1px solid hsl(var(--border)); }
@@ -564,8 +560,6 @@ body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] :is([role="m
 .desktop-workspace .desktop-table tbody > tr:nth-child(even):not([data-selected="true"]):hover { --desktop-row-surface:color-mix(in srgb,hsl(var(--primary)) 4%,hsl(var(--card))); }
 /* 行高略放，呼吸感向弹窗看齐 */
 .desktop-workspace .desktop-table td:not([colspan]) { padding-block:11px; }
-/* 汇总行做成面板的底带，而不是裸文字 */
-.desktop-workspace .sample-table-panel > [role="status"] { background:hsl(var(--surface-subtle)); border-top:1px solid hsl(var(--border)); border-radius:0 0 var(--desktop-radius) var(--desktop-radius); padding:12px 16px; }
 /* 页头标题升一号，层级立起来 */
 :is(.desktop-page-sample,.desktop-workspace) h1 { font-size:24px; }
 
@@ -701,4 +695,63 @@ body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-men
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) table.fc-report-table.fc-table-compact > :is(thead,tbody,tfoot) > tr > :is(th,td) {
   padding:6px 12px;
   font-size:12.5px;
+}
+
+/* 浮层沿现有 Radix Presence 退场；结束后不保留 transform，避免改变日历的 fixed 定位原点。 */
+body:has(.desktop-shell-sample) {
+  --desktop-motion-in:200ms;
+  --desktop-motion-out:140ms;
+  --desktop-motion-ease:cubic-bezier(.2,0,0,1);
+}
+body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)[data-state="open"] {
+  animation:desktop-dialog-open var(--desktop-motion-in) var(--desktop-motion-ease);
+}
+body:has(.desktop-shell-sample) .fc-dialog-overlay[data-state="open"] {
+  animation:desktop-overlay-open var(--desktop-motion-in) var(--desktop-motion-ease);
+}
+body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-dialog-overlay)[data-state="closed"] {
+  animation:desktop-tool-close var(--desktop-motion-out) ease-out;
+  pointer-events:none !important;
+}
+@keyframes desktop-dialog-open {
+  from { opacity:0; transform:translateY(3px) scale(.98); }
+  to { opacity:1; transform:none; }
+}
+@keyframes desktop-overlay-open { from { opacity:0; } to { opacity:1; } }
+
+/* 顶栏原有 hover 开关与延迟不变；hidden 的离散过渡让关闭帧留出淡出时间。
+   同时由 hidden/aria-hidden/inert 阻止关闭后的命中和键盘进入。 */
+.desktop-shell-sample .fc-topnav-menu {
+  display:block;
+  opacity:1;
+  translate:0 0;
+  transition:opacity var(--desktop-motion-in) var(--desktop-motion-ease),translate var(--desktop-motion-in) var(--desktop-motion-ease),display var(--desktop-motion-out) allow-discrete;
+}
+.desktop-shell-sample .fc-topnav-menu[hidden] {
+  display:none;
+  opacity:0;
+  pointer-events:none;
+  transition-duration:var(--desktop-motion-out);
+}
+@starting-style {
+  .desktop-shell-sample .fc-topnav-menu:not([hidden]) { opacity:0; translate:0 -3px; }
+}
+
+/* 使用独立 scale 属性，避免与已有 active:scale 叠乘；列宽拖动手柄保持原命中几何。 */
+body:has(.desktop-shell-sample) :is(.desktop-shell-sample,.fc-dialog,.fc-app-dialog,.fc-sheet,.fc-popover,.fc-select-menu,.fc-dropdown-menu) :is(button,[role="button"],.fc-button):not(.cursor-col-resize) {
+  scale:1;
+  transition-property:background-color,border-color,color,box-shadow,opacity,scale;
+  transition-duration:150ms,150ms,150ms,150ms,150ms,120ms;
+  transition-timing-function:ease-out;
+}
+body:has(.desktop-shell-sample) :is(.desktop-shell-sample,.fc-dialog,.fc-app-dialog,.fc-sheet,.fc-popover,.fc-select-menu,.fc-dropdown-menu) :is(button,[role="button"],.fc-button):not(.cursor-col-resize):not(:disabled):not([disabled]):not([aria-disabled="true"]):not([data-disabled]):active {
+  scale:.98;
+}
+@media (prefers-reduced-motion:reduce) {
+  .desktop-shell-sample .fc-topnav-menu,
+  body:has(.desktop-shell-sample) :is(.desktop-shell-sample,.fc-dialog,.fc-app-dialog,.fc-sheet,.fc-popover,.fc-select-menu,.fc-dropdown-menu) :is(button,[role="button"],.fc-button):not(.cursor-col-resize) {
+    animation:none !important;
+    transition:none !important;
+    scale:none !important;
+  }
 }

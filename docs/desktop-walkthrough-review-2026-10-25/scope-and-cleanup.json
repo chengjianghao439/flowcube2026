@@ -1,0 +1,60 @@
+{
+  "baseline": "6cb4b476fe5922c03cb44abd5d70a07ed513fe12",
+  "productFiles": [
+    "frontend/src/components/layout/TopNav.tsx",
+    "frontend/src/components/shared/ConfirmDialog.tsx",
+    "frontend/src/components/shared/FulfillmentTodos.tsx",
+    "frontend/src/components/shared/UserMenu.tsx",
+    "frontend/src/components/ui/label.tsx",
+    "frontend/src/pages/customers/index.tsx",
+    "frontend/src/pages/disposal/HandlingSourcesPanel.tsx",
+    "frontend/src/pages/inbound-tasks/create.tsx",
+    "frontend/src/pages/kits/index.tsx",
+    "frontend/src/pages/logistics/freight-reconciliation.tsx",
+    "frontend/src/pages/sale/index.tsx",
+    "frontend/src/pages/settings/barcode-print-query/index.tsx",
+    "frontend/src/pages/settings/printers/index.tsx",
+    "frontend/src/styles/desktop-page-samples.css"
+  ],
+  "productTsxCount": 13,
+  "stylesheetHexCount": 0,
+  "indexCssUnchanged": true,
+  "indexCssSha256": "837565ec09d833e2cddf881e1339bdf7c82a32c7677a3bc588daf03166d7b961",
+  "nonGetRequests": {},
+  "browserClose": {
+    "success": true,
+    "data": {
+      "closed": true,
+      "lifecycle": {
+        "effectiveLaunch": {
+          "browserLaunched": false,
+          "engine": "chrome",
+          "launchHash": null
+        },
+        "launched": false,
+        "relaunchedBrowser": false,
+        "restartedBackground": false,
+        "restoreStatus": "not_configured",
+        "reused": false,
+        "saveStatus": "not_configured"
+      },
+      "restoreStatus": "not_configured",
+      "saveStatus": "not_configured"
+    },
+    "error": null
+  },
+  "sessionsAfter": {
+    "success": true,
+    "data": {
+      "sessions": []
+    }
+  },
+  "previewPortsStopped": [
+    5205,
+    58363
+  ],
+  "preservedPreview": {
+    "port": 5197,
+    "pid": 54161
+  }
+}

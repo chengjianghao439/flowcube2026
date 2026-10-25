@@ -1266,3 +1266,9 @@ ReportTable 只对可完整验证占位矩阵及单列叶子的表头建立列�
 fc-form-dialog 的直接页脚及 form 内页脚统一 surface-subtle 背景、12px/20px 内边距和原上边框，其按钮 36px/13px，与 app-dialog 同规格。只匹配这两种结构，头部/正文、app-dialog、ConfirmDialog 和其他特殊页脚不借此改造。BaseCrudPage 的 fc-master-form 同样接收该规则。既有 ReportTable 的 12 处 thead 冲淡背景类只作死类删除，th 仍由不透明标准规则着色，sticky、列宽及其他类保持。
 
 段控按钮统一命名 fc-segmented-option，两页与 CSS 同步更名，状态/focus/reduced-motion 声明不变。审批流/会计期间的计数单位为个，打印机为台，平均成本对账为条；计数取当前原列表长度，汇总仅在相应成功/加载条件满足时出现，不借用匹配数、差异项数或别处统计。查询、列表和错误行为保持。仓库三种 meter 色源直接使用 muted-foreground/blue-60/blue-80，控制条形 currentColor，左右文本沿原各自字色。逐处行号、完整级联/计算对照、状态图与未覆盖项见 [收尾报告](desktop-closeout-review-2026-10-25.md)。
+
+### 桌面走查归编与动效（2026-10-25）
+
+ERP 列表以 DataTable 自带卡片后的 ListSummary 为标准，销售、条码打印、运费对账及嵌入履约/处置来源区域统一到卡外计数；计数数据、成功/加载/失败条件与截断口径保持。成套配件沿既有 FilterCard。共享 Label 将字段末尾或后接括号提示的必填星号呈现为 text-destructive-ink 独立 span，原生标签的三个例外同步处理；保留名称、标签关联和校验，不自动解析正文模板示例。
+
+共享 Radix 弹窗与工具浮层进入 200ms、退出 140ms，减动效关闭；进场结束不保留 transform，避免破坏日历 fixed 定位。顶栏主导航和用户菜单通过 hidden/aria-hidden/inert 与 CSS display 离散过渡退场，原开关/回调不变。可用按钮统一独立 scale .98、120ms；禁用与列宽拖动手柄排除。调用方直接卸载的业务弹窗无法仅凭 CSS 完成退出动画，至少成套配件编辑/删除入口仍属未完成范围，不得概称全系统浮层已通过。逐处 TSX 差异、实际时序、按压计算值及验收边界见 [第六轮报告](desktop-walkthrough-review-2026-10-25.md)。
