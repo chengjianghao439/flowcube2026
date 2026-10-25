@@ -17,6 +17,7 @@ import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { WaveStats } from '@/api/reports'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import type { TableColumn } from '@/types'
 import { StatTile } from '@/components/dashboard/StatTile'
 import { ReportMeter } from '@/components/shared/ReportMeter'
@@ -209,6 +210,7 @@ export default function WavePerformancePage() {
           />
         )}
       </ReportPanel>
+      {data && !isLoading && !isError && <ListSummary total={waves.length} unit="个" />}
     </div>
   )
 }

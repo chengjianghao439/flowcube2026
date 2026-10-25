@@ -1,0 +1,15 @@
+{
+  "methodCounts": {
+    "GET": 398
+  },
+  "invoiceQueries": [
+    "?invoiceType=1&keyword=DEMO-INV-2&page=1&pageSize=200",
+    "?invoiceType=1&keyword=DEMO-INV-2&status=2&page=1&pageSize=200",
+    "?invoiceType=1&page=1&pageSize=200",
+    "?invoiceType=1&status=2&page=1&pageSize=200",
+    "?invoiceType=2&page=1&pageSize=200",
+    "?invoiceType=2&status=2&page=1&pageSize=200"
+  ],
+  "paginationExplanation": "Component still supplies page=1/PAGE_SIZE=20 as baseline. Unchanged payloadClient.get collects pages in batches of 200 (api/client.ts:443-450), matching observed HTTP. No pagination code edited.",
+  "transport": "Synthetic server records method/path/query only; no auth headers/body or real database"
+}

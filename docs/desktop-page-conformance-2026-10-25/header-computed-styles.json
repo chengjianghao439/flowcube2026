@@ -1,0 +1,1453 @@
+{
+  "baseline": "83241d10fde1f43543f9e17d4b305b679e17bed2",
+  "baselineMethod": "Unchanged real TSX/DOM; temporarily load exact committed desktop-page-samples.css text into its Vite style element, measure all target th cells, restore current CSS in finally; no repo mutation",
+  "baselineCssSha256": "77a337e46df8a9bb3d3351419577d84970d5d488364d13149250d156aa675645",
+  "tables": {
+    "replenishment": {
+      "after": {
+        "cells": [
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-40 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-0-编码",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "编码"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-40 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-1-供应商型号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "供应商型号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-36 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-2-型号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "型号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-56 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-3-名称",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "名称"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-28 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-4-颜色",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "颜色"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-3 text-right font-medium",
+              "data-column-key": "column-5-建议采购量",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "建议采购量"
+          }
+        ],
+        "theadClass": "data-table-header sticky top-0 bg-muted/60",
+        "theadStyle": {
+          "background": "color(srgb 0.988235 0.988235 0.990588)",
+          "color": "rgb(29, 29, 31)",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "padding": "0px",
+          "position": "sticky",
+          "top": "0px"
+        }
+      },
+      "before": {
+        "cells": [
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-40 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-0-编码",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "编码"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-40 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-1-供应商型号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "供应商型号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-36 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-2-型号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "型号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-56 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-3-名称",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "名称"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-28 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-4-颜色",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "颜色"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-3 text-right font-medium",
+              "data-column-key": "column-5-建议采购量",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "建议采购量"
+          }
+        ],
+        "theadClass": "data-table-header sticky top-0 bg-muted/60",
+        "theadStyle": {
+          "background": "color(srgb 0.988235 0.988235 0.990588)",
+          "color": "rgb(29, 29, 31)",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "padding": "0px",
+          "position": "sticky",
+          "top": "0px"
+        }
+      }
+    },
+    "ledger": {
+      "after": {
+        "cells": [
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-0-日期",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "日期"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-1-凭证号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "凭证号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-2-摘要",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "摘要"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-3-借方",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "借方"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-4-贷方",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "贷方"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-5-余额",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "余额"
+          }
+        ],
+        "theadClass": "data-table-header sticky top-0 bg-muted/60 text-muted-foreground",
+        "theadStyle": {
+          "background": "color(srgb 0.988235 0.988235 0.990588)",
+          "color": "rgb(110, 110, 115)",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "padding": "0px",
+          "position": "sticky",
+          "top": "0px"
+        }
+      },
+      "before": {
+        "cells": [
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-0-日期",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "日期"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-1-凭证号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "凭证号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-2-摘要",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "摘要"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-3-借方",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "借方"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-4-贷方",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "贷方"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-5-余额",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "余额"
+          }
+        ],
+        "theadClass": "data-table-header sticky top-0 bg-muted/60 text-muted-foreground",
+        "theadStyle": {
+          "background": "color(srgb 0.988235 0.988235 0.990588)",
+          "color": "rgb(110, 110, 115)",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "padding": "0px",
+          "position": "sticky",
+          "top": "0px"
+        }
+      }
+    },
+    "procurement": {
+      "after": {
+        "cells": [
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head w-12 px-3 py-2 text-center font-medium",
+              "data-column-key": "column-0-选择",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": ""
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-40 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-1-编码",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "编码"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-40 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-2-供应商型号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "供应商型号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-36 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-3-型号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "型号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-56 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-4-名称",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "名称"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-28 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-5-颜色",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "颜色"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-20 px-3 py-3 text-left",
+              "data-column-key": "column-6-单位",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "单位"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-7-仓库",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "仓库"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-8-日均",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "日均"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-9-预测需求",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "预测需求"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-10-未发销售",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "未发销售"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-11-安全库存",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "安全库存"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-12-可用",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "可用"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-13-在途",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "在途"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-14-生成时建议量",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "生成时建议量"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-15-最新净需求 / 建议量",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "最新净需求 / 建议量"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-16-采购量",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "采购量"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-17-供应商",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "供应商"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-18-建议到货",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "建议到货"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-44 px-3 py-2 text-left font-medium",
+              "data-column-key": "column-19-交期核对",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "交期核对"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-20-状态",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "状态"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-center font-medium",
+              "data-column-key": "column-21-操作",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "操作"
+          }
+        ],
+        "theadClass": "data-table-header bg-muted/40 text-muted-foreground [&_th]:whitespace-nowrap",
+        "theadStyle": {
+          "background": "rgb(245, 245, 247)",
+          "color": "rgb(110, 110, 115)",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "padding": "0px",
+          "position": "static",
+          "top": "auto"
+        }
+      },
+      "before": {
+        "cells": [
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head w-12 px-3 py-2 text-center font-medium",
+              "data-column-key": "column-0-选择",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": ""
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-40 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-1-编码",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "编码"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-40 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-2-供应商型号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "供应商型号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-36 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-3-型号",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "型号"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-56 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-4-名称",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "名称"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-28 px-3 py-3 text-left font-medium",
+              "data-column-key": "column-5-颜色",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "颜色"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-20 px-3 py-3 text-left",
+              "data-column-key": "column-6-单位",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "单位"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-7-仓库",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "仓库"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-8-日均",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "日均"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-9-预测需求",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "预测需求"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-10-未发销售",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "未发销售"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-11-安全库存",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "安全库存"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-12-可用",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "可用"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-13-在途",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "在途"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-14-生成时建议量",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "生成时建议量"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-15-最新净需求 / 建议量",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "最新净需求 / 建议量"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-right font-medium",
+              "data-column-key": "column-16-采购量",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "采购量"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-17-供应商",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "供应商"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-18-建议到货",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "建议到货"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head min-w-44 px-3 py-2 text-left font-medium",
+              "data-column-key": "column-19-交期核对",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "交期核对"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-left font-medium",
+              "data-column-key": "column-20-状态",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "状态"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-3 py-2 text-center font-medium",
+              "data-column-key": "column-21-操作",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "操作"
+          }
+        ],
+        "theadClass": "data-table-header bg-muted/40 text-muted-foreground [&_th]:whitespace-nowrap",
+        "theadStyle": {
+          "background": "rgb(245, 245, 247)",
+          "color": "rgb(110, 110, 115)",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "padding": "0px",
+          "position": "static",
+          "top": "auto"
+        }
+      }
+    },
+    "abc": {
+      "after": {
+        "cells": [
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-left font-medium",
+              "data-column-key": "column-0-档位",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "档位"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-right font-medium",
+              "data-column-key": "column-1-盘点周期（天）",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "盘点周期（天）"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-right font-medium",
+              "data-column-key": "column-2-单次上限（SKU）",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "单次上限（SKU）"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-center font-medium",
+              "data-column-key": "column-3-启用",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "启用"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-left font-medium",
+              "data-column-key": "column-4-来源",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "来源"
+          }
+        ],
+        "theadClass": "data-table-header bg-muted/40 text-muted-foreground",
+        "theadStyle": {
+          "background": "rgb(245, 245, 247)",
+          "color": "rgb(110, 110, 115)",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "padding": "0px",
+          "position": "static",
+          "top": "auto"
+        }
+      },
+      "before": {
+        "cells": [
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-left font-medium",
+              "data-column-key": "column-0-档位",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "档位"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-right font-medium",
+              "data-column-key": "column-1-盘点周期（天）",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "盘点周期（天）"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-right font-medium",
+              "data-column-key": "column-2-单次上限（SKU）",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "单次上限（SKU）"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-center font-medium",
+              "data-column-key": "column-3-启用",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "启用"
+          },
+          {
+            "attrs": {
+              "class": "fc-table-header-cell relative text-table-head px-4 py-2 text-left font-medium",
+              "data-column-key": "column-4-来源",
+              "scope": "col"
+            },
+            "style": {
+              "background": "rgb(245, 245, 247)",
+              "color": "rgb(110, 110, 115)",
+              "fontSize": "12px",
+              "fontWeight": "600",
+              "padding": "10px 16px",
+              "position": "relative",
+              "top": "0px"
+            },
+            "text": "来源"
+          }
+        ],
+        "theadClass": "data-table-header bg-muted/40 text-muted-foreground",
+        "theadStyle": {
+          "background": "rgb(245, 245, 247)",
+          "color": "rgb(110, 110, 115)",
+          "fontSize": "14px",
+          "fontWeight": "400",
+          "padding": "0px",
+          "position": "static",
+          "top": "auto"
+        }
+      }
+    }
+  }
+}

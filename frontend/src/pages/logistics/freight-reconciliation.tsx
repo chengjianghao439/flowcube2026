@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -131,10 +132,12 @@ export default function FreightReconciliationPage() {
 
       <SectionCard title="运费账单" noPadding>
         <DataTable columns={billColumns} data={bills?.list ?? []} loading={billsLoading} rowKey="id" emptyText="暂无运费账单（点「录入账单」添加，或对接平台回传）" />
+        {bills && !billsLoading && <ListSummary total={bills.pagination.total} unit="张" />}
       </SectionCard>
 
       <SectionCard title="月结汇总单（应付）" noPadding>
         <DataTable columns={settlementColumns} data={settlements?.list ?? []} loading={settlementsLoading} rowKey="id" emptyText="暂无汇总单（选承运商 + 账期后「生成应付」）" />
+        {settlements && !settlementsLoading && <ListSummary total={settlements.pagination.total} unit="单" />}
       </SectionCard>
 
       <Dialog open={billDialog} onOpenChange={v => !v && setBillDialog(false)}>

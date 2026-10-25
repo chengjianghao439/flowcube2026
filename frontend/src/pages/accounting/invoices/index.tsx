@@ -8,7 +8,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
  */
 import { useMemo, useState, useEffect, useId } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, BadgeCheck, Undo2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +19,8 @@ import DataTable from '@/components/shared/DataTable'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import { cn } from '@/lib/utils'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { toast } from '@/lib/toast'
 import { formatDisplayDate, todayYmd } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
@@ -28,7 +29,8 @@ import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useChangeInvoiceStatus, useDeleteInvoice } from '@/hooks/useInvoices'
 import type { TableColumn } from '@/types'
-import type { Invoice, CreateInvoiceParams } from '@/types/accounting'
+import { INVOICE_STATUS_LABELS, type Invoice, type CreateInvoiceParams } from '@/types/accounting'
+import InvoiceQueryDialog, { type InvoiceQueryValues } from './InvoiceQueryDialog'
 
 const PAGE_SIZE = 20
 // 统一走 lib/format 的 amount（会计口径：千分位 + 两位小数、不带 ¥）
@@ -127,10 +129,10 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
         </DialogHeader>
         <div className="fc-form-dialog-body grid grid-cols-2 gap-4 py-1">
           <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceCode`}>发票代码</Label><Input id={`${inputId}-invoiceCode`} value={f.invoiceCode} onChange={e => setF(s => ({ ...s, invoiceCode: e.target.value }))} disabled={isPending} className="font-mono" /></div>
-          <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceNo`}>发票号码 *</Label><Input id={`${inputId}-invoiceNo`} value={f.invoiceNo} onChange={e => setF(s => ({ ...s, invoiceNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
-          <div className="space-y-1.5 col-span-2"><Label htmlFor={`${inputId}-partyName`}>{invoiceType === 1 ? '供应商' : '客户'} *</Label><Input id={`${inputId}-partyName`} value={f.partyName} onChange={e => setF(s => ({ ...s, partyName: e.target.value }))} disabled={isPending} /></div>
+          <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceNo`}>发票号码 <span className="text-destructive-ink">*</span></Label><Input id={`${inputId}-invoiceNo`} value={f.invoiceNo} onChange={e => setF(s => ({ ...s, invoiceNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
+          <div className="space-y-1.5 col-span-2"><Label htmlFor={`${inputId}-partyName`}>{invoiceType === 1 ? '供应商' : '客户'} <span className="text-destructive-ink">*</span></Label><Input id={`${inputId}-partyName`} value={f.partyName} onChange={e => setF(s => ({ ...s, partyName: e.target.value }))} disabled={isPending} /></div>
           <div className="space-y-1.5 col-span-2"><Label htmlFor={`${inputId}-partyTaxNo`}>对方纳税人识别号</Label><Input id={`${inputId}-partyTaxNo`} value={f.partyTaxNo} onChange={e => setF(s => ({ ...s, partyTaxNo: e.target.value }))} disabled={isPending} className="font-mono" /></div>
-          <div className="space-y-1.5"><Label htmlFor={`${inputId}-withTax`}>价税合计 *</Label><Input id={`${inputId}-withTax`} type="number" value={f.withTax} onChange={e => setF(s => ({ ...s, withTax: e.target.value }))} disabled={isPending} className="text-right tabular-nums" /></div>
+          <div className="space-y-1.5"><Label htmlFor={`${inputId}-withTax`}>价税合计 <span className="text-destructive-ink">*</span></Label><Input id={`${inputId}-withTax`} type="number" value={f.withTax} onChange={e => setF(s => ({ ...s, withTax: e.target.value }))} disabled={isPending} className="text-right tabular-nums" /></div>
           <div className="space-y-1.5">
             <Label htmlFor={`${inputId}-taxRate`}>税率</Label>
             <Select value={f.taxRate} onValueChange={v => { if (draft.canEdit()) setF(s => ({ ...s, taxRate: v })) }} disabled={isPending}>
@@ -138,12 +140,12 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
               <SelectContent>{TAX_RATES.map(r => <SelectItem key={r} value={String(r)}>{(r * 100).toFixed(0)}%</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div className="col-span-2 flex items-center justify-around rounded-md bg-muted/30 px-3 py-2 text-sm">
+          <div className="col-span-2 flex items-center justify-around rounded-[var(--radius-button)] bg-[hsl(var(--surface-subtle))] px-3 py-2 text-sm">
             <span>不含税 <span className="tabular-nums font-medium">{m(noTax)}</span></span>
             <span>税额 <span className="tabular-nums font-medium">{m(taxAmount)}</span></span>
             <span>价税合计 <span className="tabular-nums font-medium">{m(withTax)}</span></span>
           </div>
-          <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceDate`}>开票日期 *</Label><DatePicker id={`${inputId}-invoiceDate`} value={f.invoiceDate} onChange={v => { if (draft.canEdit()) setF(s => ({ ...s, invoiceDate: v })) }} disabled={isPending} /></div>
+          <div className="space-y-1.5"><Label htmlFor={`${inputId}-invoiceDate`}>开票日期 <span className="text-destructive-ink">*</span></Label><DatePicker id={`${inputId}-invoiceDate`} value={f.invoiceDate} onChange={v => { if (draft.canEdit()) setF(s => ({ ...s, invoiceDate: v })) }} disabled={isPending} /></div>
           <div className="space-y-1.5"><Label htmlFor={`${inputId}-sourceNo`}>关联单号（选填）</Label><Input id={`${inputId}-sourceNo`} value={f.sourceNo} onChange={e => setF(s => ({ ...s, sourceNo: e.target.value }))} disabled={isPending} placeholder="采购/销售单号" /></div>
           <div className="space-y-1.5 col-span-2"><Label htmlFor={`${inputId}-remark`}>备注</Label><Input id={`${inputId}-remark`} value={f.remark} onChange={e => setF(s => ({ ...s, remark: e.target.value }))} disabled={isPending} /></div>
         </div>
@@ -164,7 +166,10 @@ export default function InvoicesPage() {
   const canManage = can(PERMISSIONS.INVOICE_MANAGE)
   const [invoiceType, setInvoiceType] = useState(1)
   const [keyword, setKeyword] = useState('')
-  const query = useMemo(() => ({ invoiceType, keyword: keyword || undefined, page: 1, pageSize: PAGE_SIZE }), [invoiceType, keyword])
+  const [status, setStatus] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
+  const initialQuery = useMemo(() => ({ keyword, status }), [keyword, status])
+  const query = useMemo(() => ({ invoiceType, keyword: keyword || undefined, status: status ? Number(status) : undefined, page: 1, pageSize: PAGE_SIZE }), [invoiceType, keyword, status])
   // `isFetching`（而非 `isLoading`）：已有数据时后台刷新 isLoading 不成立，但仍在"刷新中"。
   const { data, isLoading, isFetching, isError, error, refetch } = useInvoices(query)
   const list = data?.list ?? []
@@ -180,6 +185,14 @@ export default function InvoicesPage() {
     changeStatus({ id: inv.id, action }, { onSuccess: () => toast.success(`已${label}`) })
   }
 
+  function applyQuery(values: InvoiceQueryValues) {
+    setKeyword(values.keyword); setStatus(values.status); setQueryOpen(false)
+  }
+  const chips = [
+    keyword && { key: 'keyword', label: `关键词：${keyword}`, onRemove: () => setKeyword('') },
+    status && { key: 'status', label: `状态：${INVOICE_STATUS_LABELS[invoiceType][Number(status)]}`, onRemove: () => setStatus('') },
+  ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
+
   const columns: TableColumn<Invoice>[] = [
     { key: 'invoiceNo', title: '发票号码', width: 130, render: (_v, r) => <span className="font-mono text-doc-code-muted">{r.invoiceNo}</span> },
     { key: 'partyName', title: invoiceType === 1 ? '供应商' : '客户', render: (_v, r) => <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{r.partyName}</span> },
@@ -190,21 +203,25 @@ export default function InvoicesPage() {
     { key: 'invoiceDate', title: '开票日期', width: 110, render: (_v, r) => formatDisplayDate(r.invoiceDate, '') },
     { key: 'sourceNo', title: '关联单号', width: 120, render: (_v, r) => r.sourceNo || '—' },
     { key: 'status', title: '状态', width: 90, render: (_v, r) => <SoftStatusLabel label={r.statusName} tone={statusTone(r.invoiceType, r.status)} /> },
-    { key: 'actions', title: '操作', width: 190, render: (_v, r) => canManage && (
-      <div className="flex items-center gap-1">
-        {r.status === 1 && (
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground" title={isError ? '列表加载失败，请先重试再编辑' : isFetching ? '列表刷新中，请稍候再编辑' : '编辑'} disabled={isFetching || isError} onClick={() => { setEditTarget(r); setDialogOpen(true) }}><Pencil className="h-3.5 w-3.5" /></Button>
-        )}
-        {r.invoiceType === 1 && r.status === 1 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-primary" onClick={() => doStatus(r, 'certify', '认证')}><BadgeCheck className="mr-1 h-3.5 w-3.5" />认证</Button>}
-        {r.invoiceType === 1 && r.status === 2 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-success-ink" onClick={() => doStatus(r, 'deduct', '抵扣')}>抵扣</Button>}
-        {r.invoiceType === 2 && r.status === 1 && <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive-ink" onClick={() => doStatus(r, 'redFlush', '红冲')}><Undo2 className="mr-1 h-3.5 w-3.5" />红冲</Button>}
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink" title="删除" onClick={() => setDeleteTarget(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
-      </div>
-    ) },
+    { key: 'actions', title: '操作', width: 190, render: (_v, r) => {
+      if (!canManage) return null
+      const primary = r.invoiceType === 1 && r.status === 1 ? { label: '认证', action: 'certify' as const }
+        : r.invoiceType === 1 && r.status === 2 ? { label: '抵扣', action: 'deduct' as const }
+          : r.invoiceType === 2 && r.status === 1 ? { label: '红冲', action: 'redFlush' as const } : null
+      // 非 status=1 原本不可编辑，后端也拒绝；无推进动作时保留原单一删除入口。
+      if (!primary) return <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink" title="删除" onClick={() => setDeleteTarget(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
+      return <TableActionsMenu primaryLabel={primary.label} primaryVariant={primary.action === 'redFlush' ? 'destructive' : 'outline'}
+        onPrimaryClick={() => doStatus(r, primary.action, primary.label)}
+        items={[
+          ...(r.status === 1 ? [{ label: '编辑', icon: <Pencil className="mr-1.5 h-3.5 w-3.5" />, disabled: isFetching || isError, afterMenuClose: true,
+            onClick: () => { setEditTarget(r); setDialogOpen(true) } }] : []),
+          { label: '删除', icon: <Trash2 className="mr-1.5 h-3.5 w-3.5" />, destructive: true, afterMenuClose: true, onClick: () => setDeleteTarget(r) },
+        ]} />
+    } },
   ]
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="发票管理"
         description="进项/销项发票池与认证抵扣台账；税额在生成凭证时按发票自动拆分为进项/销项税额"
@@ -212,26 +229,36 @@ export default function InvoicesPage() {
       />
 
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg border border-border/70 bg-card p-0.5">
+      <div className="fc-segmented-control w-fit" role="group" aria-label="发票类型">
           {[{ v: 1, l: '进项发票' }, { v: 2, l: '销项发票' }].map(t => (
-            <button key={t.v} onClick={() => { setInvoiceType(t.v); }}
-              className={cn('rounded-md px-3 py-1.5 text-sm transition-colors', invoiceType === t.v ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>{t.l}</button>
+            <button key={t.v} type="button" aria-pressed={invoiceType === t.v}
+              onClick={() => { if (invoiceType !== t.v) { setInvoiceType(t.v); setStatus('') } }} className="fc-print-category">{t.l}</button>
           ))}
-        </div>
-        <Input value={keyword} onChange={e => { setKeyword(e.target.value); }} placeholder="发票号 / 单位 / 单号" className="h-9 w-52" />
-        {!isError && <span className="ml-auto text-sm text-muted-foreground">共 {total} 张</span>}
       </div>
 
-      <div className="card-base p-2">
-        {isError ? (
+      <div className="fc-list-toolbar">
+        <OrderStatusFilter label="发票状态分类" value={status} options={[
+          { value: '', label: '全部状态' },
+          ...Object.entries(INVOICE_STATUS_LABELS[invoiceType]).map(([value, label]) => ({ value, label })),
+        ]} onChange={setStatus} />
+        <div className="fc-list-toolbar-actions"><Button variant="outline" onClick={() => setQueryOpen(true)}><Search className="mr-1.5 h-4 w-4" aria-hidden />查询</Button></div>
+      </div>
+      {chips.length > 0 && <div className="fc-list-filter-chips flex flex-wrap items-center gap-2">
+        {chips.map(chip => <span key={chip.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+          {chip.label}<button type="button" onClick={chip.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${chip.label}」`}><X className="h-3 w-3" /></button>
+        </span>)}
+        <Button size="sm" variant="ghost" onClick={() => { setKeyword(''); setStatus('') }}>清空</Button>
+      </div>}
+
+      {isError ? (
           <QueryErrorState error={error} onRetry={() => void refetch()} title="发票列表加载失败" compact />
         ) : (
           <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" columnStorageKey={`acct-invoices-${invoiceType}`} />
         )}
-      </div>
 
-      {!isError && <ListSummary total={total} />}
+      {!isError && <ListSummary total={total} unit="张" />}
+
+      <InvoiceQueryDialog open={queryOpen} invoiceType={invoiceType} initial={initialQuery} onClose={() => setQueryOpen(false)} onApply={applyQuery} />
 
       <InvoiceDialog open={dialogOpen} invoiceType={editTarget?.invoiceType ?? invoiceType} edit={editTarget} onClose={() => { setDialogOpen(false); setEditTarget(null) }} />
       <ConfirmDialog

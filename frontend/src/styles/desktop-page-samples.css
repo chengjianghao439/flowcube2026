@@ -691,3 +691,12 @@ body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-men
   color:hsl(var(--muted-foreground));
   text-decoration-line:none;
 }
+
+/* 显式紧凑表：仅供已标记的桌面表格使用，颜色与状态继续沿标准表规则。 */
+:is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) table.fc-report-table.fc-table-compact {
+  font-size:12.5px;
+}
+:is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) table.fc-report-table.fc-table-compact > :is(thead,tbody,tfoot) > tr > :is(th,td) {
+  padding:6px 12px;
+  font-size:12.5px;
+}

@@ -1,0 +1,73 @@
+{
+  "baseline": "83241d10fde1f43543f9e17d4b305b679e17bed2",
+  "method": "TypeScript AST top-level function body statements excluding final JSX return; source text equality, not just grep. Invoice page filters and row presentation are separately reviewed authorized exceptions.",
+  "preserved": [
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "function": "InvoiceDialog",
+      "nonReturnStatementsIdentical": true
+    },
+    {
+      "file": "frontend/src/pages/reports/replenishment.tsx",
+      "function": "ReplenishmentPage",
+      "nonReturnStatementsIdentical": true
+    },
+    {
+      "file": "frontend/src/pages/accounting/backfills/index.tsx",
+      "function": "BackfillsPage",
+      "nonReturnStatementsIdentical": true
+    },
+    {
+      "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "function": "VouchersPage",
+      "nonReturnStatementsIdentical": true
+    },
+    {
+      "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "function": "FreightReconciliationPage",
+      "nonReturnStatementsIdentical": true
+    },
+    {
+      "file": "frontend/src/pages/reports/wave-performance.tsx",
+      "function": "WavePerformancePage",
+      "nonReturnStatementsIdentical": true
+    },
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "function": "DetailDialog",
+      "nonReturnStatementsIdentical": true
+    }
+  ],
+  "doStatusIdentical": true,
+  "headerPages": [
+    {
+      "file": "frontend/src/pages/reports/replenishment.tsx",
+      "entireFileIdentical": false,
+      "headerSubtreesIdentical": true,
+      "onlyGridContainmentChange": true
+    },
+    {
+      "file": "frontend/src/pages/accounting/ledger/index.tsx",
+      "entireFileIdentical": true,
+      "headerSubtreesIdentical": true,
+      "onlyGridContainmentChange": false
+    },
+    {
+      "file": "frontend/src/pages/procurement/detail.tsx",
+      "entireFileIdentical": true,
+      "headerSubtreesIdentical": true,
+      "onlyGridContainmentChange": false
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/abc.tsx",
+      "entireFileIdentical": true,
+      "headerSubtreesIdentical": true,
+      "onlyGridContainmentChange": false
+    }
+  ],
+  "css": {
+    "appendOnly": true,
+    "addedLines": 9,
+    "hexLiteralCount": 0
+  }
+}

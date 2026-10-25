@@ -42,8 +42,11 @@ async function mount(raw: string) {
   await vi.waitFor(() => expect(host.textContent).toContain('OFFLINE-INV-7'))
 }
 async function openEditor() {
-  await vi.waitFor(() => expect(host.querySelector<HTMLButtonElement>('button[title="编辑"]')?.disabled).toBe(false))
-  await act(async () => host.querySelector<HTMLButtonElement>('button[title="编辑"]')!.click())
+  await vi.waitFor(() => expect(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]')).not.toBeNull())
+  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
+  const editItem = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === '编辑')
+  await vi.waitFor(() => expect(editItem()?.hasAttribute('data-disabled')).toBe(false))
+  await act(async () => editItem()!.click())
   await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
 }
 function dateInput() {

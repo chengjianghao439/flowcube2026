@@ -307,20 +307,20 @@ function DetailDialog({
             ) : !sourcesQuery.data?.sources?.length ? (
               <div className="text-xs text-muted-foreground">暂无来源记录</div>
             ) : (
-              <ReportTable className="w-full text-xs">
+              <ReportTable className="fc-table-compact w-full">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-1 pr-3 font-medium">来源条码</th>
-                    <th className="py-1 pr-3 font-medium">来源批次</th>
-                    <th className="py-1 font-medium text-right">累计贡献</th>
+                    <th className="font-medium">来源条码</th>
+                    <th className="font-medium">来源批次</th>
+                    <th className="font-medium text-right">累计贡献</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sourcesQuery.data.sources.map((s) => (
                     <tr key={s.sourceContainerId} className="border-b last:border-0">
-                      <td className="py-1 pr-3 font-mono">{s.sourceBarcode ?? `#${s.sourceContainerId}`}</td>
-                      <td className="py-1 pr-3 text-muted-foreground">{s.sourceBatchNo ?? '—'}</td>
-                      <td className="py-1 text-right tabular-nums">{s.contributedQty}</td>
+                      <td className="font-mono">{s.sourceBarcode ?? `#${s.sourceContainerId}`}</td>
+                      <td className="text-muted-foreground">{s.sourceBatchNo ?? '—'}</td>
+                      <td className="text-right tabular-nums">{s.contributedQty}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -339,26 +339,26 @@ function DetailDialog({
             ) : !data?.length ? (
               <EmptyState variant="no-data" title="暂无流水" compact />
             ) : (
-              <ReportTable className="w-full text-sm">
+              <ReportTable className="fc-table-compact w-full">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-2 pr-3 font-medium">时间</th>
-                    <th className="py-2 pr-3 font-medium">类型</th>
-                    <th className="py-2 pr-3 font-medium text-right">数量</th>
-                    <th className="py-2 pr-3 font-medium">备注</th>
-                    <th className="py-2 font-medium">操作人</th>
+                    <th className="font-medium">时间</th>
+                    <th className="font-medium">类型</th>
+                    <th className="font-medium text-right">数量</th>
+                    <th className="font-medium">备注</th>
+                    <th className="font-medium">操作人</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.map((m, i) => (
                     <tr key={i} className="border-b last:border-0">
-                      <td className="py-2 pr-3 whitespace-nowrap">{formatDisplayDateTime(m.createdAt)}</td>
-                      <td className="py-2 pr-3">
+                      <td className="whitespace-nowrap">{formatDisplayDateTime(m.createdAt)}</td>
+                      <td>
                         <SoftStatusLabel label={m.moveTypeName ?? TYPE_NAMES[m.type] ?? `类型${m.type}`} tone={TYPE_TONE[m.type] ?? 'info'} />
                       </td>
-                      <td className="py-2 pr-3 text-right tabular-nums">{m.qty}</td>
-                      <td className="py-2 pr-3 text-muted-foreground">{m.remark ?? '—'}</td>
-                      <td className="py-2">{m.operatorName ?? '—'}</td>
+                      <td className="text-right tabular-nums">{m.qty}</td>
+                      <td className="text-muted-foreground">{m.remark ?? '—'}</td>
+                      <td>{m.operatorName ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>

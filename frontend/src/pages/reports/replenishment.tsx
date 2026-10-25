@@ -241,7 +241,7 @@ export default function ReplenishmentPage() {
       )}
 
       <Dialog open={confirmOpen} onOpenChange={v => !v && setConfirmOpen(false)}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="grid-cols-1 sm:max-w-3xl">
           <DialogHeader description={<>{<>
               将勾选的 <span className="font-semibold text-foreground">{selectedRows.length}</span> 项补货建议生成一张采购申请单（仓库「
               {selectedRows[0]?.warehouseName ?? '—'}」），保存为草稿，核对后提交审批。创建时重新校验需求和覆盖；建议数量已满足包装与起订规则。

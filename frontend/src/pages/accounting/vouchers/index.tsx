@@ -456,13 +456,9 @@ export default function VouchersPage() {
         </div>
       )}
 
-      {!isError && !isLoading && data && <div className="text-sm text-muted-foreground">共 {total} 张</div>}
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />}
 
-      <div className="card-base p-2">
-        {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />}
-      </div>
-
-      {!isError && !isLoading && data && <ListSummary total={total} />}
+      {!isError && !isLoading && data && <ListSummary total={total} unit="张" />}
 
       <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} />
       <ManualDialog open={manualOpen} onClose={() => setManualOpen(false)} />
