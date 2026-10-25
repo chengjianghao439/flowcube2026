@@ -335,7 +335,7 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip {
   box-shadow:0 4px 16px rgb(var(--shadow-ink) / 10%); pointer-events:none;
 }
 body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { animation:desktop-tool-open 140ms ease-out; }
-.desktop-workspace .fc-status-label { border-radius:5px; padding:1px 7px; font-size:11.5px; line-height:18px; font-weight:500; }
+.desktop-workspace .fc-status-label { border-radius:5px; padding:1px 7px; font-size:11.5px; line-height:18px; font-weight:500; white-space:nowrap; }
 .desktop-workspace .fc-table-actions { border-radius:var(--radius-button); border-color:hsl(var(--border)); }
 .desktop-workspace .fc-table-actions > button { min-height:30px; }
 .desktop-workspace .desktop-table td:is([data-column-key="createdAt"],[data-column-key="updatedAt"],[data-column-key="operatorName"],[data-column-key="remark"]) { color:hsl(var(--muted-foreground)); }
@@ -448,10 +448,8 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { an
 body:has(.desktop-shell-sample) .fc-form-dialog { display:flex; flex-direction:column; gap:0; padding:0; overflow:hidden; }
 body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-header { flex-shrink:0; padding:18px 48px 16px 24px; border-bottom:1px solid hsl(var(--border)); }
 body:has(.desktop-shell-sample) .fc-form-dialog-body { flex:1 1 auto; min-width:0; min-height:0; overflow-y:auto; padding:18px 24px; }
-body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-footer,
-body:has(.desktop-shell-sample) .fc-form-dialog > form > .fc-dialog-footer { flex-shrink:0; padding:12px 20px; border-top:1px solid hsl(var(--border)); background:hsl(var(--surface-subtle)); }
-body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-footer .fc-button,
-body:has(.desktop-shell-sample) .fc-form-dialog > form > .fc-dialog-footer .fc-button { height:36px; font-size:13px; }
+body:has(.desktop-shell-sample) .fc-dialog-footer { flex-shrink:0; padding:12px 20px; border-top:1px solid hsl(var(--border)); background:hsl(var(--surface-subtle)); }
+body:has(.desktop-shell-sample) .fc-dialog-footer .fc-button { height:36px; font-size:13px; }
 body:has(.desktop-shell-sample) .fc-master-form-status { flex-shrink:0; margin:0; border-top:1px solid hsl(var(--border)); }
 @media (max-width:640px) {
   body:has(.desktop-shell-sample) .fc-master-form .grid-cols-2 { grid-template-columns:minmax(0,1fr); }
@@ -754,4 +752,16 @@ body:has(.desktop-shell-sample) :is(.desktop-shell-sample,.fc-dialog,.fc-app-dia
     transition:none !important;
     scale:none !important;
   }
+}
+
+/* 同一套详情页签基础件：销售与采购使用通栏密度，其余 ContentTabs 保留原布局。 */
+.desktop-workspace :is(.fc-detail-view-tabs-wide,.desktop-purchase-detail .fc-detail-view-tabs) > button {
+  flex:1;
+  min-width:7rem;
+  padding-block:6px;
+}
+/* 经源码清单核对的人员列；商品、客户等长名称继续正常折行。 */
+.desktop-workspace .desktop-table td:is([data-column-key="operatorName"],[data-column-key="realName"],[data-column-key="applicantName"],[data-column-key="manager"],[data-column-key="managerName"],[data-column-key="ownerName"],[data-column-key="userName"]) :is(.min-w-0,.whitespace-normal) {
+  white-space:nowrap;
+  overflow-wrap:normal;
 }

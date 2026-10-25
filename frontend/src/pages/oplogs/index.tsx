@@ -189,7 +189,7 @@ export default function OpLogsPage() {
         <>
           <Button variant="outline" onClick={() => downloadExport('/export/oplogs', exportParams).catch(e => toast.error((e as Error).message))}>导出</Button>
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-          {can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="destructive" size="sm" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined}
+          {can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="outline" size="sm" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5 hover:text-destructive-ink" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined}
         </>
       } />
       {chips.length > 0 && (

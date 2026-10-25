@@ -8,6 +8,8 @@ import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { PurchaseProductIdentity } from './PurchaseProductIdentity'
 import { PurchaseEntryTable } from './PurchaseEntryTable'
 import { PurchaseQuantitySummary } from './PurchaseQuantitySummary'
+import { PurchaseOrderOverview } from './PurchaseOrderOverview'
+import { OrderFact, OrderFacts } from '@/components/shared/OrderFacts'
 import { groupPurchaseQuantities, purchaseDraftLineAmount, restorePurchaseEntryPrice, summarizePurchaseDraft } from './purchaseSummary'
 import { usePurchaseEditEntry } from './usePurchaseEditEntry'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
@@ -625,14 +627,10 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         }
       />
 
-      <div className="desktop-order-overview flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border pb-3 text-sm">
-        <p className="tabular-nums"><span className="mr-3 text-muted-foreground">采购金额</span><strong>{money(order.totalAmount)}</strong></p>
-        <span className="text-muted-foreground">{order.items?.length ?? 0} 行商品</span>
-        <PurchaseQuantitySummary groups={groupPurchaseQuantities(order.items ?? [], 'saved')} />
-      </div>
-      <OrderDetailSections type="purchase" id={order.id} compactTabs>
-      <SectionCard title="基础信息" compact>
-        <dl className="desktop-order-facts grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-3 [&>*]:min-w-0">
+      <PurchaseOrderOverview order={order} />
+      <OrderDetailSections type="purchase" id={order.id}>
+      <SectionCard title="基础信息" compact contentClassName="p-3">
+        <OrderFacts>
           {[
             ['供应商',     order.supplierName],
             ['仓库',       order.warehouseName],
@@ -640,10 +638,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             ['经办人',     order.operatorName],
             ['创建时间',   formatDisplayDateTime(order.createdAt)],
           ].map(([label, value]) => (
-            <div key={label} className="flex gap-3">
-              <dt className="shrink-0 text-muted-foreground">{label}</dt>
-              <dd className="min-w-0 font-medium [overflow-wrap:anywhere]">{value}</dd>
-            </div>
+            <OrderFact key={label} label={label!}>{value}</OrderFact>
           ))}
           {(order.totalOrderedQty ?? 0) > 0 && !!order.items?.length && order.items.every(i => i.productId === order.items![0].productId && i.unit === order.items![0].unit) && (() => {
             const ordered = order.totalOrderedQty ?? 0
@@ -651,28 +646,23 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
             const pct = ordered > 0 ? Math.min(100, Math.round(received / ordered * 100)) : 0
             const fullyReceived = received >= ordered
             return (
-              <div>
-                <dt className="mb-0.5 text-helper">收货进度</dt>
-                <dd className={cn('font-medium', fullyReceived && 'text-success-ink')}>{qty(received)} / {qty(ordered)} {order.items![0].unit}</dd>
+              <OrderFact label="收货进度">
+                <span className={cn('font-medium', fullyReceived && 'text-success-ink')}>{qty(received)} / {qty(ordered)} {order.items![0].unit}</span>
                 <div className="mt-1.5 h-1.5 w-full max-w-32 rounded-full bg-muted">
                   <div
                     className="h-1.5 rounded-full transition-all"
                     style={{ width: `${pct}%`, background: fullyReceived ? 'hsl(var(--success))' : 'hsl(var(--primary))' }}
                   />
                 </div>
-              </div>
+              </OrderFact>
             )
           })()}
           {order.remark && (
-            <div className="col-span-full min-w-0">
-              <dt className="mb-0.5 text-helper">备注</dt>
-              <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{order.remark}</dd>
-            </div>
+            <OrderFact label="备注" className="col-span-full"><span className="whitespace-pre-wrap [overflow-wrap:anywhere]">{order.remark}</span></OrderFact>
           )}
           {!!order.inboundTasks?.length && (
-            <div className="col-span-full min-w-0">
-              <dt className="mb-0.5 text-helper">关联收货入库单</dt>
-              <dd className="flex flex-wrap items-center gap-2">
+            <OrderFact label="关联收货入库单" className="col-span-full">
+              <span className="inline-flex flex-wrap items-center gap-2 align-middle">
                 {order.inboundTasks.map(t => {
                   // 跟收货订单详情页保持一致：不能只看 status（4=已完成）字段，还要看
                   // receiptStatus——打印超时/上架超期等异常也会让它显示"异常中"，
@@ -695,10 +685,10 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                     </button>
                   )
                 })}
-              </dd>
-            </div>
+              </span>
+            </OrderFact>
           )}
-        </dl>
+        </OrderFacts>
       </SectionCard>
 
       <SectionCard title="商品明细" compact noPadding>

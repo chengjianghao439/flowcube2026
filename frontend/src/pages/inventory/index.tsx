@@ -287,7 +287,7 @@ export default function InventoryPage() {
     { key: 'beforeQty', title: '变动前', width: 90, render: v => <span className="text-muted-foreground">{v as number}</span> },
     { key: 'afterQty', title: '变动后', width: 90, render: v => <span>{v as number}</span> },
     { key: 'supplierName', title: '供应商', width: 140, render: v => (v as string) || '-' },
-    { key: 'operatorName', title: '操作人', width: 90 },
+    { key: 'operatorName', title: '操作人', width: 112, minWidth: 112 },
     { key: 'remark', title: '备注', expandableText: true, render: v => (v as string) || '-' },
   ]
 

@@ -1,0 +1,172 @@
+[
+  {
+    "file": "frontend/src/components/shared/UserMenu.tsx",
+    "line": 188,
+    "element": "<Button\n              type=\"button\"\n              variant=\"destructive\"\n              onClick={() => {\n                setLogoutOpen(false)\n                performSessionLogout()\n              }}\n            >\n              退出登录\n            </Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/credit-overrides/index.tsx",
+    "line": 304,
+    "element": "<Button variant=\"destructive\" disabled={rejecting || !rejectReason.trim()} onClick={() => {\n            if (!rejectTarget) return\n            reject({ id: rejectTarget.id, expectedTaskId: rejectTarget.currentTaskId!, reason: rejectReason.trim() }, { onSuccess: () => { toast.success('已驳回'); setRejectTarget(null) }, onError: (e: Error) => toast.error(e.message) })\n          }}>{rejecting ? '提交中…' : '确认驳回'}</Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/disposal/components/DisposalDetailDialog.tsx",
+    "line": 165,
+    "element": "<Button variant=\"destructive\" onClick={() => confirmAction({\n              title: '执行报废',\n              description: '将整单报废，按原明细扣减库存条码余量并留报废台账，此操作不可撤销。未知结果须核对原请求，不能另发执行。',\n              confirmText: '执行报废',\n              variant: 'destructive',\n              onConfirm: async () => {\n                if (!mayAct(PERMISSIONS.INVENTORY_DISPOSAL_EXECUTE) || !mayExecuteDisposal() || write.blocked) return\n                const result = await write.execute()\n                if (result && write.canApply(result) && mayAct(PERMISSIONS.INVENTORY_DISPOSAL_EXECUTE)) { toast.success('报废完成'); onClose() }\n              },\n            })} disabled={write.block",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/disposal/components/DisposalDetailDialog.tsx",
+    "line": 200,
+    "element": "<Button variant=\"destructive\" disabled={actionsDisabled || !rejectReason.trim() || mutation.reject.isPending}\n            onClick={() => {\n              if (!rejectDraft || !rejectDraft.reason.trim() || !mayReadReject(rejectDraft) || !mayAct(PERMISSIONS.INVENTORY_DISPOSAL_APPROVE)) return\n              run(() => mutation.reject.mutateAsync({ id: rejectDraft.id, reason: rejectDraft.reason.trim() }), '已驳回', PERMISSIONS.INVENTORY_DISPOSAL_APPROVE)\n              setRejectOpen(false)\n            }}>确认驳回</Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/fixed-assets/index.tsx",
+    "line": 137,
+    "element": "<Button variant=\"destructive\" disabled={isPending} onClick={() => dispose({ disposeType: Number(form.disposeType), disposeDate: form.disposeDate, income: Number(form.income) || 0, expense: Number(form.expense) || 0 })}>\n            {isPending ? '处置中…' : '确认处置'}\n          </Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/index.tsx",
+    "line": 99,
+    "element": "<Button variant=\"destructive\" disabled={write.busy || reloading || !!target.deletedAt} onClick={() => { setError(''); void (write.pendingRecord ? write.retry() : write.submit({ kind: 'delete', id: target.id, data: { revision: target.revision } })).then(accept) }}>{write.pendingRecord ? '按原请求重试' : '确认删除'}</Button>",
+    "ancestors": [
+      "Button",
+      "div",
+      "AppDialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/picking-waves/index.tsx",
+    "line": 310,
+    "element": "<Button\n                variant=\"destructive\"\n                onClick={() => confirmAction({\n                  title: '取消批次',\n                  description: `确定取消批次「${detail.waveNo}」吗？此操作不可随意撤销。`,\n                  variant: 'destructive',\n                  confirmText: '取消批次',\n                  onConfirm: () => cancelMut.mutate(detail.id),\n                })}\n                disabled={cancelMut.isPending}\n              >\n                取消\n              </Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/price-change/index.tsx",
+    "line": 284,
+    "element": "<Button variant=\"destructive\" onClick={() => rejectTarget && rejectMut.mutate({ id: rejectTarget.id, reason: rejectReason })} disabled={rejectMut.isPending}>确认驳回</Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/purchase/form/index.tsx",
+    "line": 750,
+    "element": "<Button\n              variant=\"destructive\"\n              disabled={rejectMutate.isPending || !rejectReason.trim()}\n              onClick={() => rejectMutate.mutate(\n                { id: order.id, reason: rejectReason.trim() },\n                { onSettled: () => { setRejectOpen(false); setRejectReason('') } },\n              )}\n            >\n              {rejectMutate.isPending ? '驳回中…' : '确认驳回'}\n            </Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/purchase/index.tsx",
+    "line": 428,
+    "element": "<Button\n              variant=\"destructive\"\n              disabled={reject.isPending || !rejectReason.trim()}\n              onClick={() => rejectTarget && reject.mutate(\n                { id: rejectTarget.id, reason: rejectReason.trim() },\n                { onSettled: () => { setRejectTarget(null); setRejectReason('') } },\n              )}\n            >\n              {reject.isPending ? '驳回中…' : '确认驳回'}\n            </Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/refunds/components/RefundDetailDialog.tsx",
+    "line": 194,
+    "element": "<Button variant=\"destructive\" onClick={() => confirmAction({\n              title: '执行退款',\n              description: '将从退款账户出账 ' + money(refund?.amount) + ' 并冲减该销售单已收金额，此操作不可撤销。',\n              confirmText: '执行退款',\n              variant: 'destructive',\n              onConfirm: () => runExecute(),\n            })} disabled={execute.isPending || actionLocked}>执行退款</Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/sale/components/SaleCancelDialog.tsx",
+    "line": 24,
+    "element": "<Button variant=\"destructive\" disabled={loading || frozen} onClick={() => void confirm()}>{loading ? '处理中…' : confirmText}</Button>",
+    "ancestors": [
+      "Button",
+      "div",
+      "AppDialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/settings/printers/index.tsx",
+    "line": 434,
+    "element": "<Button size=\"sm\" variant=\"destructive\" onClick={() => setDeleteTarget(p)}>删除</Button>",
+    "ancestors": [
+      "Button",
+      "div"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/sorting-bins/index.tsx",
+    "line": 259,
+    "element": "<Button size=\"sm\" variant=\"destructive\" onClick={() => helpers.openDelete(row)}>删除</Button>",
+    "ancestors": [
+      "Button",
+      "div"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/stockcheck/components/CheckDetailDialog.tsx",
+    "line": 326,
+    "element": "<Button variant=\"destructive\" onClick={() => setCancelConfirm(true)} disabled={cancel.isPending || cancelLocked}>取消盘点</Button>",
+    "ancestors": [
+      "Button",
+      "DialogFooter",
+      "DialogContent",
+      "Dialog"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/transfer/index.tsx",
+    "line": 301,
+    "element": "<Button\n              variant=\"destructive\"\n              disabled={pendingId === forceCloseState.id || !forceCloseReason.trim()}\n              onClick={() => {\n                if (!forceCloseState.id || !canActOnTransfer(forceCloseState.id, [3])) return\n                mut(() => forceCloseTransferApi(forceCloseState.id!, forceCloseReason.trim()), forceCloseState.id, [3])\n                setForceCloseState({ open: false, id: null })\n              }}\n            >\n              {pendingId === forceCloseState.id ? '处理中…' : '确认异常了结'}\n            </Button>",
+    "ancestors": [
+      "Button",
+      "div",
+      "AppDialog",
+      "div"
+    ]
+  }
+]

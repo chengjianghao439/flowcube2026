@@ -1,0 +1,201 @@
+[
+  {
+    "file": "frontend/src/components/shared/ContentTabs.tsx",
+    "lines": [
+      "6",
+      "35",
+      "37",
+      "39–40"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/components/shared/DetailViewTabs.tsx",
+    "lines": [
+      "1–13"
+    ],
+    "newFile": true
+  },
+  {
+    "file": "frontend/src/components/shared/OrderFacts.tsx",
+    "lines": [
+      "1–9"
+    ],
+    "newFile": true
+  },
+  {
+    "file": "frontend/src/components/shared/OrderOverviewStrip.tsx",
+    "lines": [
+      "1–19"
+    ],
+    "newFile": true
+  },
+  {
+    "file": "frontend/src/components/shared/ReceiptPanel.tsx",
+    "lines": [
+      "117"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/approvals/flows.select.test.tsx",
+    "lines": [
+      "1–92"
+    ],
+    "newFile": true
+  },
+  {
+    "file": "frontend/src/pages/approvals/flows.tsx",
+    "lines": [
+      "11",
+      "57",
+      "222–225",
+      "259–266",
+      "271–278",
+      "284–290",
+      "296–303"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/customers/index.tsx",
+    "lines": [
+      "105"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/departments/index.tsx",
+    "lines": [
+      "5",
+      "351–352"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/inventory/index.tsx",
+    "lines": [
+      "290"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/oplogs/index.tsx",
+    "lines": [
+      "192"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/price-change/index.tsx",
+    "lines": [
+      "192"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/products/index.tsx",
+    "lines": [
+      "192"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/purchase/form/PurchaseOrderOverview.tsx",
+    "lines": [
+      "1–16"
+    ],
+    "newFile": true
+  },
+  {
+    "file": "frontend/src/pages/purchase/form/index.tsx",
+    "lines": [
+      "11–12",
+      "630–633",
+      "641",
+      "649–650",
+      "657",
+      "661",
+      "664–665",
+      "688–689",
+      "691"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/reports/replenishment.tsx",
+    "lines": [
+      "2",
+      "214",
+      "216",
+      "240–241"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/returns/index.tsx",
+    "lines": [
+      "255"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/sale/form/components/SaleOrderDetailTabs.tsx",
+    "lines": [
+      "2",
+      "16–20"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/sale/form/components/SaleOrderInfoCard.tsx",
+    "lines": [
+      "2",
+      "11–23",
+      "25–26"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/sale/form/components/SaleOrderOverview.tsx",
+    "lines": [
+      "6",
+      "20",
+      "23"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/sale/index.tsx",
+    "lines": [
+      "244–246"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/settings/pda-devices/index.tsx",
+    "lines": [
+      "39",
+      "62",
+      "145",
+      "153–154",
+      "165"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/settings/print-templates/index.tsx",
+    "lines": [
+      "17",
+      "104–105"
+    ],
+    "newFile": false
+  },
+  {
+    "file": "frontend/src/pages/transfer/index.tsx",
+    "lines": [
+      "198"
+    ],
+    "newFile": false
+  }
+]

@@ -1,4 +1,5 @@
 import { Activity, CalendarClock, ClipboardList, History, PackageCheck, ScanLine } from 'lucide-react'
+import { DetailViewTabsList, DetailViewTabsTrigger } from '@/components/shared/DetailViewTabs'
 
 export type SaleDetailTab = 'info' | 'fulfillment' | 'progress' | 'scan' | 'pack' | 'log'
 
@@ -12,10 +13,9 @@ const tabs = [
 ] as const
 
 export function SaleOrderDetailTabs({ value, onChange }: { value: SaleDetailTab; onChange: (tab: SaleDetailTab) => void }) {
-  return <div className="desktop-detail-tabs flex gap-1 overflow-x-auto rounded-lg border border-border bg-muted/30 p-1">
-    {tabs.map(([key, label, Icon]) => <button key={key} type="button" aria-pressed={value === key} onClick={() => onChange(key)}
-      className={`flex min-w-28 flex-1 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-[background-color,color,box-shadow] ${value === key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-      <Icon className="h-4 w-4" />{label}
-    </button>)}
-  </div>
+  return <DetailViewTabsList className="fc-detail-view-tabs-wide">
+    {tabs.map(([key, label, Icon]) => <DetailViewTabsTrigger key={key} aria-pressed={value === key} onClick={() => onChange(key)}>
+      <Icon className="h-4 w-4" aria-hidden />{label}
+    </DetailViewTabsTrigger>)}
+  </DetailViewTabsList>
 }

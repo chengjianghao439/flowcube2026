@@ -1,4 +1,5 @@
 import { qty } from '@/lib/format'
+import ListSummary from '@/components/shared/ListSummary'
 import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
 import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
@@ -211,11 +212,7 @@ export default function ReplenishmentPage() {
             </span>
           ))}
           <Button size="sm" variant="ghost" onClick={reset}>清空</Button>
-          <div className="ml-auto text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项待补货</div>
         </div>
-      )}
-      {(chips.length === 0) && (
-        <div className="flex justify-end text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项待补货</div>
       )}
 
       {isError && !data ? (
@@ -239,6 +236,8 @@ export default function ReplenishmentPage() {
           emptyText="暂无待补货商品（所有商品的可用 + 在途都在补货点之上，或已有单据覆盖需求）"
         />
       )}
+
+      {!isError && !isLoading && data && <ListSummary total={total} unit="项待补货" />}
 
       <Dialog open={confirmOpen} onOpenChange={v => !v && setConfirmOpen(false)}>
         <DialogContent className="grid-cols-1 sm:max-w-3xl">

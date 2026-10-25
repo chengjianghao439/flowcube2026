@@ -241,9 +241,9 @@ export default function SalePage() {
     { key: 'warehouseName', title: '仓库', width: 8 },
     { key: 'totalAmount', title: '折后金额', width: 10, align: 'right', render: (_, r) => <span className="font-medium tabular-nums whitespace-nowrap">{money(Math.max(0, r.totalAmount - (r.discountAmount ?? 0)))}</span> },
     { key: 'remark', title: '备注', expandableText: true, width: 15, render: v => (v as string) || '—' },
-    { key: 'status', title: '状态', width: 8, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
-    { key: 'receivableStatus', title: '回款状态', width: 8, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className="whitespace-nowrap" title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },
-    { key: 'operatorName', title: '经办人', width: 7 },
+    { key: 'status', title: '状态', width: 8, minWidth:112, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
+    { key: 'receivableStatus', title: '回款状态', width: 8, minWidth:112, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className="whitespace-nowrap" title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },
+    { key: 'operatorName', title: '经办人', width: 9, minWidth:112 },
     { key: 'createdAt', title: '创建时间', width: 10, render: v => formatDisplayDateTime(v) },
     { key:'id', title:'操作', width:10, render:(_,r) => <SaleRowActions row={r} anyPending={cancel.isPending || deleteMutate.isPending || !!cancel.recovery?.blocked}
         onAsk={(title,desc,cb)=>openConfirm(title,desc,()=>{closeConfirm();cb()})}

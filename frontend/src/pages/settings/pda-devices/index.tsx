@@ -36,6 +36,7 @@ import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import ListSummary from '@/components/shared/ListSummary'
 import PageHeader from '@/components/shared/PageHeader'
+import { FilterCard } from '@/components/shared/FilterCard'
 import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -58,7 +59,7 @@ export default function PdaDevicesPage() {
   const [editing, setEditing] = useState<PdaDevice | null>(null)
   const [resetTarget, setResetTarget] = useState<PdaDevice | null>(null)
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['pda-devices', keyword],
     queryFn: () => listPdaDevicesApi({ page: 1, pageSize: 20, keyword }),
   })
@@ -141,8 +142,7 @@ export default function PdaDevicesPage() {
         description="绑定仓库后，这台 PDA 只能作业本仓的单据；未绑定的设备可在任何仓作业。 停用设备或重置密钥会让这台设备立即退出登录——设备丢失时请立即「停用」。"
         actions={<Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
       />
-      <section className="fc-list-workbench min-w-0 rounded-xl border border-border bg-card" aria-label="PDA设备列表">
-        <div className="fc-list-toolbar">
+      <FilterCard>
           <Input
             className="h-9 w-64"
             aria-label="搜索设备名称或设备码"
@@ -150,9 +150,8 @@ export default function PdaDevicesPage() {
             value={keyword}
             onChange={e => { setKeyword(e.target.value); }}
           />
-        </div>
-
-
+      </FilterCard>
+      <section className="min-w-0" aria-label="PDA设备列表">
         <DataTable
           columns={columns}
           data={data?.list ?? []}
@@ -163,7 +162,7 @@ export default function PdaDevicesPage() {
         />
       </section>
 
-      {(data?.pagination?.total ?? 0) > 20 && (
+      {!isError && !isLoading && data && (
         <ListSummary total={data?.pagination?.total ?? 0} unit="台" />
       )}
 

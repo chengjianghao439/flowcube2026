@@ -1263,7 +1263,7 @@ ReportTable 只对可完整验证占位矩阵及单列叶子的表头建立列�
 
 ### 电脑端收尾：页脚、计数与命名（2026-10-25）
 
-fc-form-dialog 的直接页脚及 form 内页脚统一 surface-subtle 背景、12px/20px 内边距和原上边框，其按钮 36px/13px，与 app-dialog 同规格。只匹配这两种结构，头部/正文、app-dialog、ConfirmDialog 和其他特殊页脚不借此改造。BaseCrudPage 的 fc-master-form 同样接收该规则。既有 ReportTable 的 12 处 thead 冲淡背景类只作死类删除，th 仍由不透明标准规则着色，sticky、列宽及其他类保持。
+初次收尾只统一 fc-form-dialog 的两种页脚结构；有数据走查增补已将规格推广到电脑端整个 fc-dialog-footer 家族（包括资金账户查询）：surface-subtle 背景、12px/20px 内边距、上边框，其按钮 36px/13px，与 app-dialog 同规格。只改页脚的样式值，头部/正文、app-dialog 及特殊页脚的 flex 布局保持。BaseCrudPage 的 fc-master-form 同样接收该规则。既有 ReportTable 的 12 处 thead 冲淡背景类只作死类删除，th 仍由不透明标准规则着色，sticky、列宽及其他类保持。
 
 段控按钮统一命名 fc-segmented-option，两页与 CSS 同步更名，状态/focus/reduced-motion 声明不变。审批流/会计期间的计数单位为个，打印机为台，平均成本对账为条；计数取当前原列表长度，汇总仅在相应成功/加载条件满足时出现，不借用匹配数、差异项数或别处统计。查询、列表和错误行为保持。仓库三种 meter 色源直接使用 muted-foreground/blue-60/blue-80，控制条形 currentColor，左右文本沿原各自字色。逐处行号、完整级联/计算对照、状态图与未覆盖项见 [收尾报告](desktop-closeout-review-2026-10-25.md)。
 
@@ -1272,3 +1272,12 @@ fc-form-dialog 的直接页脚及 form 内页脚统一 surface-subtle 背景、1
 ERP 列表以 DataTable 自带卡片后的 ListSummary 为标准，销售、条码打印、运费对账及嵌入履约/处置来源区域统一到卡外计数；计数数据、成功/加载/失败条件与截断口径保持。成套配件沿既有 FilterCard。共享 Label 将字段末尾或后接括号提示的必填星号呈现为 text-destructive-ink 独立 span，原生标签的三个例外同步处理；保留名称、标签关联和校验，不自动解析正文模板示例。
 
 共享 Radix 弹窗与工具浮层进入 200ms、退出 140ms，减动效关闭；进场结束不保留 transform，避免破坏日历 fixed 定位。顶栏主导航和用户菜单通过 hidden/aria-hidden/inert 与 CSS display 离散过渡退场，原开关/回调不变。可用按钮统一独立 scale .98、120ms；禁用与列宽拖动手柄排除。调用方直接卸载的业务弹窗无法仅凭 CSS 完成退出动画，至少成套配件编辑/删除入口仍属未完成范围，不得概称全系统浮层已通过。逐处 TSX 差异、实际时序、按压计算值及验收边界见 [第六轮报告](desktop-walkthrough-review-2026-10-25.md)。
+
+
+### 有数据走查增补：单据详情与短列（2026-10-25）
+
+销售与采购详情共用 OrderOverviewStrip、OrderFacts、DetailViewTabsList/Trigger；原字段、状态、动作回调、Radix 焦点与 KeepAlive 挂载语义保留。采购摘要只用已有单据状态，不额外推导收货枚举；逐商品数量只在明细卡原页脚保留一处。采购首行静态蓝底本次未复现：移开指针的前三行与销售列表同为白/现有斑马/白，蓝色仅在实际 hover 时出现，因此不新增首行覆盖。
+
+状态标记保持单行；人员列只按核对后的 operatorName、realName、applicantName、manager、managerName、ownerName、userName 收窄，不把商品/客户等长名称一并改成单行。商品与客户的 70px 状态列、商品改价的 80px 状态列调整为 96px；四处 90px 人员列调整为 112px，销售保留比例列并设置最小宽度。手动列宽与截断提示沿原组件处理。
+
+补货计数使用原 pagination.total 并落在表后；打印模板用返回数组长度，部门树用页面已有 rows.length 并明确“个可见部门”（包含搜索匹配所需的祖先行），设备用原分页 total。PDA 设备管理的桌面搜索只搬入 FilterCard，保留即时 keyword 请求，不改成草稿/查询按钮。审批流原生选择框的五类入口统一为共享 Select；空值 sentinel 只服务控件，提交仍沿原转换和校验，部门默认 0、隐藏角色与不可用用户的原设置保留。日志清理的页头入口使用危险色 outline，原确认动作与权限不变。价格等级四色仅登记，未定义新颜色契约。逐处行号、浏览器计算值与边界见 [有数据走查报告](desktop-data-state-review-2026-10-25.md)。

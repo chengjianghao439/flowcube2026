@@ -1,0 +1,221 @@
+{
+  "baseline": "3e1fdd80c9ecef280eec2a19bad39afa6ea021db",
+  "invariants": [
+    {
+      "file": "frontend/src/components/shared/ContentTabs.tsx",
+      "same": true,
+      "items": []
+    },
+    {
+      "file": "frontend/src/components/shared/ReceiptPanel.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useQuery",
+          "sha256": "481c198155b381ee287aaa770da63ecac8777762935eca9bfad8957876de97a4"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/approvals/flows.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useQuery",
+          "sha256": "30797e2a9b84a770667390ddf2b6d24ae3fc3aee12a64cab2a931eb10c0d1a23"
+        },
+        {
+          "kind": "setStep",
+          "sha256": "6746b15711abf5d2a58ae615011b4cc7d30fa74f5891fca8818a6ba4ab84af75"
+        },
+        {
+          "kind": "handleSave",
+          "sha256": "100ce1fc03f06744095bceeac2d75a85c758fd441dfe65bbf546cd579c0ac8df"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/customers/index.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useMutation",
+          "sha256": "a2abbfd0ba278b8cd45c2a7d8b2480fb11c356a5be5a3aa8dc3c632d9f85c297"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/departments/index.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "handleSave",
+          "sha256": "fb0b8bfc89157487c1fc972319dd56dec02afb48b92a04fb2931b22488ea6047"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "same": true,
+      "items": []
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useQuery",
+          "sha256": "18bd90c6ea24063d78deba4950f8a2d429803d89d8488b0122122e69365f808e"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "50e98437d9cd6075cf954587b89f0e82c76d3fa5592d05b085cd9945cda7d08c"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/price-change/index.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useQuery",
+          "sha256": "ba43e5118ebc3ff4cea70c084e728b03ca7fe0371c821a1c21b2e6d58a9be9bb"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "896f683493fe51d936696967a97d8c01076b81cecb578aa6b2fd83025edbcec0"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "8a2d22b16bf9611f077bf471de4de4fbb1fb0a7d33c935676247aabca7018c9b"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "0c6915d3ce6c08fe52705636e90481b3347ca07e2f0e08b98af53d3d03e91f31"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "f8fd6ce3dcfbc44ac192bb08d5bb8482c708e53a8d94c24310caf7ada8ab32c7"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "e04a96d067cc15b2d72cd4fe959399fc50b7a63809fcd0ae6ef58e32ce1927d9"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/products/index.tsx",
+      "same": true,
+      "items": []
+    },
+    {
+      "file": "frontend/src/pages/purchase/form/index.tsx",
+      "same": true,
+      "items": []
+    },
+    {
+      "file": "frontend/src/pages/reports/replenishment.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useMutation",
+          "sha256": "66a6a8ea85e2f9bd7fd1e7070dc94e935378397b64f38385a90e956b44865abe"
+        },
+        {
+          "kind": "useQuery",
+          "sha256": "d87c096fac9652f960bd1f2e51d1328f8651c15b22b0a9e11b8057beeeb3a815"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "91dc035acf15039ef55e07cf4a98cac39c79c9c5e11a26d807c341b892aaa47d"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/returns/index.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useQuery",
+          "sha256": "1f70f52879db036834b03e4dc4db7371783c8d4e18c00bce622ebb156b82e0e5"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/sale/form/components/SaleOrderDetailTabs.tsx",
+      "same": true,
+      "items": []
+    },
+    {
+      "file": "frontend/src/pages/sale/form/components/SaleOrderInfoCard.tsx",
+      "same": true,
+      "items": []
+    },
+    {
+      "file": "frontend/src/pages/sale/form/components/SaleOrderOverview.tsx",
+      "same": true,
+      "items": []
+    },
+    {
+      "file": "frontend/src/pages/sale/index.tsx",
+      "same": true,
+      "items": []
+    },
+    {
+      "file": "frontend/src/pages/settings/pda-devices/index.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useQuery",
+          "sha256": "9f5b20d609aa8856196f9cca5c89ebc9e81fad02c0450d8d8586bac3fd23c9cb"
+        },
+        {
+          "kind": "useQuery",
+          "sha256": "f43d782b01c0167e88ef4fed36e68cbc8e68670bae2aa84ed94d8ca0c7e373a1"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "b9301dbc8d0f459b763a27c5656b20b2edaccb65f98511dbc0fd24d0942c44d6"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "77a5c723c0d52f7016669df54ff2ab2e725b1289e52660ce787b50bc669b3e71"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "6dd073fac3ef952b305e3d1d0c09a29ce28bf846acaaad3ec2d3fd0fee3c6fea"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "cb8829b3dc5e73922a26dd4956b32486ee8932771067fbb7e14aced9b285ecb7"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/settings/print-templates/index.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useQuery",
+          "sha256": "a7096594837cbd19943fa1b862a7a7d2b44f6b19f7a79c679c1fe5fb04d91fd5"
+        },
+        {
+          "kind": "useMutation",
+          "sha256": "a0f7cae7cc8f0506d73521404ef5a0010208bc0d4d1a17e03efeb2d45b47ff37"
+        }
+      ]
+    },
+    {
+      "file": "frontend/src/pages/transfer/index.tsx",
+      "same": true,
+      "items": [
+        {
+          "kind": "useQuery",
+          "sha256": "0eaecec547fda654040fab2f8bb84c9d7cb9cb89fd0e3f9e3571a4ea88e56f4d"
+        }
+      ]
+    }
+  ],
+  "forbiddenChanged": [],
+  "priceFormUnchanged": true
+}

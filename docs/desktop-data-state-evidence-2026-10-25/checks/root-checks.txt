@@ -1,0 +1,50 @@
+
+> test:frontend-conventions
+> node --test tests/frontend-conventions.test.js
+
+TAP version 13
+# Subtest: 路由标题不超过 7 个汉字（标签栏 7rem + truncate，超了看不见）
+ok 1 - 路由标题不超过 7 个汉字（标签栏 7rem + truncate，超了看不见）
+  ---
+  duration_ms: 1.233083
+  type: 'test'
+  ...
+# Subtest: 菜单名必须等于路由标题（否则菜单与标签栏会各说各话）
+ok 2 - 菜单名必须等于路由标题（否则菜单与标签栏会各说各话）
+  ---
+  duration_ms: 0.2475
+  type: 'test'
+  ...
+# Subtest: 页面标题必须等于路由标题
+ok 3 - 页面标题必须等于路由标题
+  ---
+  duration_ms: 5.345
+  type: 'test'
+  ...
+# Subtest: 带日期筛选的查询弹窗必须能重置回本页默认口径
+ok 4 - 带日期筛选的查询弹窗必须能重置回本页默认口径
+  ---
+  duration_ms: 108.820792
+  type: 'test'
+  ...
+# Subtest: 只放一个图标的按钮必须有可读名称
+ok 5 - 只放一个图标的按钮必须有可读名称
+  ---
+  duration_ms: 12.3555
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 190.177333
+
+> test:agents-md-guard
+> node tests/agents-md-injection-guard.test.js
+
+agents-md-injection-guard: 目录链 1 层、docs 引用 30 个、npm 脚本引用 32 个、AGENTS.md 31451 字节（硬限 32768）、失败 0
+  [OK] AGENTS.md 注入守卫通过

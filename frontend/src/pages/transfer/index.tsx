@@ -195,7 +195,7 @@ export default function TransferPage() {
       const tone = status === 4 ? 'success' : status === 5 ? 'danger' : status === 1 ? 'draft' : 'active'
       return <SoftStatusLabel label={(row as TransferOrder).statusName} tone={tone} />
     } },
-    { key: 'operatorName', title: '经办人', width: 90 },
+    { key: 'operatorName', title: '经办人', width: 112, minWidth: 112 },
     { key: 'createdAt', title: '创建时间', width: 160, render: (v) => formatDisplayDateTime(v) },
     {
       key: 'remark', title: '备注', expandableText: true, width: 200,

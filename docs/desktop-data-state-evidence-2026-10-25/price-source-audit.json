@@ -1,0 +1,34 @@
+[
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 166,
+    "key": "'A'",
+    "field": "'salePriceA' as const",
+    "rate": "priceRates.A",
+    "color": "'text-blue-600'"
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 167,
+    "key": "'B'",
+    "field": "'salePriceB' as const",
+    "rate": "priceRates.B",
+    "color": "'text-emerald-600'"
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 168,
+    "key": "'C'",
+    "field": "'salePriceC' as const",
+    "rate": "priceRates.C",
+    "color": "'text-orange-600'"
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 169,
+    "key": "'D'",
+    "field": "'salePriceD' as const",
+    "rate": "priceRates.D",
+    "color": "'text-rose-600'"
+  }
+]
