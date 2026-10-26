@@ -1,7 +1,7 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const golden = require('./fixtures/frontend-style-v3.json')
-const { designBaseline } = require('../scripts/browser-smoke/style-design-baseline.cjs')
+const { legacyDesignBaseline: designBaseline, designBaseline: desktopBaseline } = require('../scripts/browser-smoke/style-design-baseline.cjs')
 
 test('reviewed F12 change touches exactly nine dark text colors, leaving v3 golden immutable', () => {
   const original = JSON.stringify(golden), updated = designBaseline(golden), changes = []
@@ -19,4 +19,17 @@ test('missing or previously changed golden slots cannot be silently approved', (
     const changed = JSON.parse(JSON.stringify(golden)); changed['1280-dark'].primary.color = value
     assert.throws(() => designBaseline(changed), /Reviewed v3 color slot changed/)
   }
+})
+test('approved desktop projection changes only its 96 exact light material slots', () => {
+  const original = JSON.stringify(golden), legacy = designBaseline(golden), updated = desktopBaseline(golden)
+  const changes = []
+  for (const [state, controls] of Object.entries(legacy)) for (const [id, props] of Object.entries(controls)) {
+    for (const [prop, value] of Object.entries(props)) if (updated[state][id][prop] !== value) changes.push({ state, id, prop })
+  }
+  assert.equal(changes.length, 96)
+  assert.ok(changes.every(({ state, prop }) => state.includes('light') && ['backgroundColor', 'color', 'borderColor', 'borderRadius', 'boxShadow'].includes(prop)))
+  assert.equal(JSON.stringify(golden), original)
+  const changed = structuredClone(golden)
+  changed['1280-light'].primary.backgroundColor = 'rgb(200, 0, 0)'
+  assert.throws(() => desktopBaseline(changed), /Reviewed desktop slot changed/)
 })

@@ -1297,3 +1297,8 @@ ERP 列表以 DataTable 自带卡片后的 ListSummary 为标准，销售、条�
 会计报表三种视图、合并资产负债表/利润表及账套列表使用原查询状态呈现加载与失败。失败时复用 QueryErrorState，不将数据缺失或旧缓存显示为当前金额，也不以零值推导“不平”；重试只调用所属查询的 refetch，保留当前期间、账套和视图。读取中使用 role=status，错误区使用 role=alert；重试读取期间隐藏旧金额和重试入口。各合并报表独立呈现，不因一侧失败隐藏另一侧的成功结果。
 
 成功零值及原业务空态继续显示。查询键、API、权限、自动重试配置、会计金额和建账流程均未改。`frontend/src/pages/accounting/report-read-state.test.tsx` 沿现有前端全量测试进入 CI；合成 transport 回归与真实页面故障注入分别留证，详见[本轮报告](accounting-report-read-state-2026-10-26.md)。
+
+
+### 2026-10-26 发布样式边界订正
+
+浅色电脑端精修必须同时限定主题与真实 `.pda-root`（含游客页 `#pda-username`）上下文，原 `.dark` 块不变不能替代计算样式检查。旧编译器基线保留，已批准的设计变化单列精确差异；真实桌面、暗色、PDA 根与 portal 的级联用浏览器守卫覆盖。原因、文件范围及反向验证见 [发布候选样式边界订正](desktop-release-style-boundary-2026-10-26.md)。

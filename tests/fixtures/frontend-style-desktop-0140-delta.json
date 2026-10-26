@@ -1,0 +1,674 @@
+[
+  {
+    "state": "1280-light",
+    "id": "badge",
+    "prop": "backgroundColor",
+    "expected": "rgb(50, 94, 189)",
+    "actual": "rgb(0, 67, 206)"
+  },
+  {
+    "state": "1280-light",
+    "id": "badge",
+    "prop": "borderRadius",
+    "expected": "4px",
+    "actual": "12px"
+  },
+  {
+    "state": "1280-light",
+    "id": "badge",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  },
+  {
+    "state": "1280-light",
+    "id": "card",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "card",
+    "prop": "borderRadius",
+    "expected": "8px",
+    "actual": "16px"
+  },
+  {
+    "state": "1280-light",
+    "id": "card",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light",
+    "id": "dialog",
+    "prop": "backgroundColor",
+    "expected": "rgb(246, 247, 248)",
+    "actual": "rgb(245, 245, 247)"
+  },
+  {
+    "state": "1280-light",
+    "id": "dialog",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "dialog",
+    "prop": "borderRadius",
+    "expected": "8px",
+    "actual": "20px"
+  },
+  {
+    "state": "1280-light",
+    "id": "dialog",
+    "prop": "boxShadow",
+    "expected": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px",
+    "actual": "rgba(20, 24, 31, 0.16) 0px 24px 64px 0px"
+  },
+  {
+    "state": "1280-light",
+    "id": "dialog",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light",
+    "id": "first",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "first",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light",
+    "id": "input",
+    "prop": "backgroundColor",
+    "expected": "rgb(246, 247, 248)",
+    "actual": "rgb(245, 245, 247)"
+  },
+  {
+    "state": "1280-light",
+    "id": "input",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "input",
+    "prop": "borderRadius",
+    "expected": "6px",
+    "actual": "14px"
+  },
+  {
+    "state": "1280-light",
+    "id": "input",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light",
+    "id": "palette",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "pda",
+    "prop": "backgroundColor",
+    "expected": "rgb(50, 94, 189)",
+    "actual": "rgb(0, 45, 156)"
+  },
+  {
+    "state": "1280-light",
+    "id": "pda",
+    "prop": "borderRadius",
+    "expected": "6px",
+    "actual": "10px"
+  },
+  {
+    "state": "1280-light",
+    "id": "pda",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  },
+  {
+    "state": "1280-light",
+    "id": "primary",
+    "prop": "backgroundColor",
+    "expected": "rgb(50, 94, 189)",
+    "actual": "rgb(0, 45, 156)"
+  },
+  {
+    "state": "1280-light",
+    "id": "primary",
+    "prop": "borderRadius",
+    "expected": "6px",
+    "actual": "10px"
+  },
+  {
+    "state": "1280-light",
+    "id": "primary",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  },
+  {
+    "state": "1280-light",
+    "id": "second",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "second",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light",
+    "id": "secondary",
+    "prop": "backgroundColor",
+    "expected": "rgba(241, 245, 249, 0.4)",
+    "actual": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)"
+  },
+  {
+    "state": "1280-light",
+    "id": "secondary",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "secondary",
+    "prop": "borderRadius",
+    "expected": "6px",
+    "actual": "10px"
+  },
+  {
+    "state": "1280-light",
+    "id": "secondary",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light",
+    "id": "success",
+    "prop": "backgroundColor",
+    "expected": "rgba(22, 163, 74, 0.1)",
+    "actual": "oklab(0.52721 -0.119721 0.073976 / 0.1)"
+  },
+  {
+    "state": "1280-light",
+    "id": "success",
+    "prop": "borderColor",
+    "expected": "rgba(22, 163, 74, 0.2)",
+    "actual": "oklab(0.52721 -0.119721 0.073976 / 0.2)"
+  },
+  {
+    "state": "1280-light",
+    "id": "success",
+    "prop": "color",
+    "expected": "rgb(22, 163, 74)",
+    "actual": "rgb(25, 128, 56)"
+  },
+  {
+    "state": "1280-light",
+    "id": "surface",
+    "prop": "backgroundColor",
+    "expected": "color(srgb 0.98362 0.9883 0.99298)",
+    "actual": "color(srgb 0.988235 0.988235 0.990588)"
+  },
+  {
+    "state": "1280-light",
+    "id": "surface",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "surface",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light",
+    "id": "title",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light",
+    "id": "title",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light",
+    "id": "warning",
+    "prop": "backgroundColor",
+    "expected": "rgba(217, 119, 6, 0.1)",
+    "actual": "oklab(0.5458 0.00970358 0.11144 / 0.1)"
+  },
+  {
+    "state": "1280-light",
+    "id": "warning",
+    "prop": "borderColor",
+    "expected": "rgba(217, 119, 6, 0.2)",
+    "actual": "oklab(0.5458 0.00970358 0.11144 / 0.2)"
+  },
+  {
+    "state": "1280-light",
+    "id": "warning",
+    "prop": "color",
+    "expected": "rgb(217, 119, 6)",
+    "actual": "rgb(142, 106, 0)"
+  },
+  {
+    "state": "375-light",
+    "id": "badge",
+    "prop": "backgroundColor",
+    "expected": "rgb(50, 94, 189)",
+    "actual": "rgb(0, 67, 206)"
+  },
+  {
+    "state": "375-light",
+    "id": "badge",
+    "prop": "borderRadius",
+    "expected": "4px",
+    "actual": "12px"
+  },
+  {
+    "state": "375-light",
+    "id": "badge",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  },
+  {
+    "state": "375-light",
+    "id": "card",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "card",
+    "prop": "borderRadius",
+    "expected": "8px",
+    "actual": "16px"
+  },
+  {
+    "state": "375-light",
+    "id": "card",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "375-light",
+    "id": "dialog",
+    "prop": "backgroundColor",
+    "expected": "rgb(246, 247, 248)",
+    "actual": "rgb(245, 245, 247)"
+  },
+  {
+    "state": "375-light",
+    "id": "dialog",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "dialog",
+    "prop": "borderRadius",
+    "expected": "0px",
+    "actual": "20px"
+  },
+  {
+    "state": "375-light",
+    "id": "dialog",
+    "prop": "boxShadow",
+    "expected": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.1) 0px 10px 15px -3px, rgba(0, 0, 0, 0.1) 0px 4px 6px -4px",
+    "actual": "rgba(20, 24, 31, 0.16) 0px 24px 64px 0px"
+  },
+  {
+    "state": "375-light",
+    "id": "dialog",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "375-light",
+    "id": "first",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "first",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "375-light",
+    "id": "input",
+    "prop": "backgroundColor",
+    "expected": "rgb(246, 247, 248)",
+    "actual": "rgb(245, 245, 247)"
+  },
+  {
+    "state": "375-light",
+    "id": "input",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "input",
+    "prop": "borderRadius",
+    "expected": "6px",
+    "actual": "14px"
+  },
+  {
+    "state": "375-light",
+    "id": "input",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "375-light",
+    "id": "palette",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "pda",
+    "prop": "backgroundColor",
+    "expected": "rgb(50, 94, 189)",
+    "actual": "rgb(0, 45, 156)"
+  },
+  {
+    "state": "375-light",
+    "id": "pda",
+    "prop": "borderRadius",
+    "expected": "6px",
+    "actual": "10px"
+  },
+  {
+    "state": "375-light",
+    "id": "pda",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  },
+  {
+    "state": "375-light",
+    "id": "primary",
+    "prop": "backgroundColor",
+    "expected": "rgb(50, 94, 189)",
+    "actual": "rgb(0, 45, 156)"
+  },
+  {
+    "state": "375-light",
+    "id": "primary",
+    "prop": "borderRadius",
+    "expected": "6px",
+    "actual": "10px"
+  },
+  {
+    "state": "375-light",
+    "id": "primary",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  },
+  {
+    "state": "375-light",
+    "id": "second",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "second",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "375-light",
+    "id": "secondary",
+    "prop": "backgroundColor",
+    "expected": "rgba(241, 245, 249, 0.4)",
+    "actual": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)"
+  },
+  {
+    "state": "375-light",
+    "id": "secondary",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "secondary",
+    "prop": "borderRadius",
+    "expected": "6px",
+    "actual": "10px"
+  },
+  {
+    "state": "375-light",
+    "id": "secondary",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "375-light",
+    "id": "success",
+    "prop": "backgroundColor",
+    "expected": "rgba(22, 163, 74, 0.1)",
+    "actual": "oklab(0.52721 -0.119721 0.073976 / 0.1)"
+  },
+  {
+    "state": "375-light",
+    "id": "success",
+    "prop": "borderColor",
+    "expected": "rgba(22, 163, 74, 0.2)",
+    "actual": "oklab(0.52721 -0.119721 0.073976 / 0.2)"
+  },
+  {
+    "state": "375-light",
+    "id": "success",
+    "prop": "color",
+    "expected": "rgb(22, 163, 74)",
+    "actual": "rgb(25, 128, 56)"
+  },
+  {
+    "state": "375-light",
+    "id": "surface",
+    "prop": "backgroundColor",
+    "expected": "color(srgb 0.98362 0.9883 0.99298)",
+    "actual": "color(srgb 0.988235 0.988235 0.990588)"
+  },
+  {
+    "state": "375-light",
+    "id": "surface",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "surface",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "375-light",
+    "id": "title",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "375-light",
+    "id": "title",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "375-light",
+    "id": "warning",
+    "prop": "backgroundColor",
+    "expected": "rgba(217, 119, 6, 0.1)",
+    "actual": "oklab(0.5458 0.00970358 0.11144 / 0.1)"
+  },
+  {
+    "state": "375-light",
+    "id": "warning",
+    "prop": "borderColor",
+    "expected": "rgba(217, 119, 6, 0.2)",
+    "actual": "oklab(0.5458 0.00970358 0.11144 / 0.2)"
+  },
+  {
+    "state": "375-light",
+    "id": "warning",
+    "prop": "color",
+    "expected": "rgb(217, 119, 6)",
+    "actual": "rgb(142, 106, 0)"
+  },
+  {
+    "state": "1280-light-hover-primary",
+    "id": "primary",
+    "prop": "backgroundColor",
+    "expected": "rgba(50, 94, 189, 0.9)",
+    "actual": "rgb(0, 29, 108)"
+  },
+  {
+    "state": "1280-light-hover-primary",
+    "id": "primary",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  },
+  {
+    "state": "1280-light-hover-secondary",
+    "id": "secondary",
+    "prop": "backgroundColor",
+    "expected": "rgb(241, 245, 249)",
+    "actual": "rgb(245, 245, 247)"
+  },
+  {
+    "state": "1280-light-hover-secondary",
+    "id": "secondary",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light-hover-secondary",
+    "id": "secondary",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light-hover-pda",
+    "id": "pda",
+    "prop": "backgroundColor",
+    "expected": "rgba(50, 94, 189, 0.9)",
+    "actual": "rgb(0, 29, 108)"
+  },
+  {
+    "state": "1280-light-hover-pda",
+    "id": "pda",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  },
+  {
+    "state": "1280-light-focus-input",
+    "id": "input",
+    "prop": "backgroundColor",
+    "expected": "rgb(246, 247, 248)",
+    "actual": "rgb(245, 245, 247)"
+  },
+  {
+    "state": "1280-light-focus-input",
+    "id": "input",
+    "prop": "borderColor",
+    "expected": "rgb(226, 232, 240)",
+    "actual": "rgb(210, 210, 215)"
+  },
+  {
+    "state": "1280-light-focus-input",
+    "id": "input",
+    "prop": "boxShadow",
+    "expected": "rgb(246, 247, 248) 0px 0px 0px 2px, rgb(50, 94, 189) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+    "actual": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 245, 247) 0px 0px 0px 2px, rgb(0, 67, 206) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+  },
+  {
+    "state": "1280-light-focus-input",
+    "id": "input",
+    "prop": "color",
+    "expected": "rgb(2, 8, 23)",
+    "actual": "rgb(29, 29, 31)"
+  },
+  {
+    "state": "1280-light-focus-primary",
+    "id": "primary",
+    "prop": "backgroundColor",
+    "expected": "rgb(50, 94, 189)",
+    "actual": "rgb(0, 45, 156)"
+  },
+  {
+    "state": "1280-light-focus-primary",
+    "id": "primary",
+    "prop": "boxShadow",
+    "expected": "rgb(246, 247, 248) 0px 0px 0px 2px, rgb(50, 94, 189) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+    "actual": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgb(245, 245, 247) 0px 0px 0px 2px, rgb(0, 67, 206) 0px 0px 0px 4px, rgba(0, 0, 0, 0) 0px 0px 0px 0px"
+  },
+  {
+    "state": "1280-light-focus-primary",
+    "id": "primary",
+    "prop": "color",
+    "expected": "rgb(248, 250, 252)",
+    "actual": "rgb(255, 255, 255)"
+  }
+]

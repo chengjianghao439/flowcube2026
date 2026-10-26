@@ -2,7 +2,71 @@
 @import "./styles/fonts.css";
 @config "../tailwind.config.js";
 /* Light primitives are shared by the ERP shell, login, print and portals. */
+/* 保留暗色与 PDA 的既有基础令牌；浅色电脑端在独立条件内覆盖。 */
 :root {
+  --background: 220 14% 97%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  /* primary: 降饱和(83→58) + 略深(53→47)，对标 Linear/飞书后台风格 */
+  --primary: 221 58% 47%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 44%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  /* destructive: 降饱和(84→68) + 深暗(60→42)，稳重酒红而非消防车红 */
+  --destructive: 3 68% 42%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221 58% 47%;
+  --radius: 0.5rem;
+  /* Sidebar — 浅色工具型风格，与主背景同色系 */
+  --sidebar-background: 210 40% 97.5%;
+  --sidebar-foreground: 222.2 47.4% 11.2%;
+  --sidebar-primary: 221 58% 47%;
+  --sidebar-primary-foreground: 221 58% 47%;
+  --sidebar-accent: 210 40% 93%;
+  --sidebar-accent-foreground: 222.2 47.4% 11.2%;
+  --sidebar-border: 214.3 31.8% 91.4%;
+  --sidebar-ring: 221 58% 47%;
+  /* 语义扩展 token */
+  --success: 142.1 76.2% 36.3%;
+  --success-foreground: 355.7 100% 97.3%;
+  --warning: 32.1 94.6% 43.7%;
+  --warning-foreground: 355.7 100% 97.3%;
+  --info: 199.4 95.5% 39.4%;
+  --info-foreground: 210 40% 98%;
+  /* 状态浅底上的文字与实心动作底色分开，12–14px 文字也达到 AA。 */
+  --success-ink: 142.1 76.2% 25%;
+  --warning-ink: 32.1 94.6% 28%;
+  --info-ink: 199.4 95.5% 29%;
+  --destructive-ink: 3 68% 42%;
+}
+:root {
+  --blue-10: 213.3333 100.0000% 96.4706%;
+  --blue-20: 217.0213 100.0000% 90.7843%;
+  --blue-30: 217.0787 100.0000% 82.5490%;
+  --blue-60: 219.1632 99.1701% 52.7451%;
+  --blue-70: 220.4854 100.0000% 40.3922%;
+  --blue-80: 222.6923 100.0000% 30.5882%;
+  --blue-90: 223.8889 100.0000% 21.1765%;
+  --primary-action: var(--blue-80);
+  --primary-hover: var(--blue-90);
+  --radius-button: 10px;
+  --radius-dialog: 20px;
+  --shadow-card: 0 4px 24px rgb(20 24 31 / 5%);
+  --shadow-popover: 0 24px 64px rgb(20 24 31 / 16%);
+  --shadow-ink: 20 24 31;
+  --surface-subtle: var(--background);
+  --selection: var(--blue-20);
+}
+:root:not(.dark):not(:has(:where(.pda-root,#pda-username))) {
   --blue-10: 213.3333 100.0000% 96.4706%;
   --blue-20: 217.0213 100.0000% 90.7843%;
   --blue-30: 217.0787 100.0000% 82.5490%;
@@ -58,6 +122,7 @@
   --destructive-ink: 355.0943 76.0766% 40.9804%;
   --surface-subtle: var(--background);
   --selection: var(--blue-20);
+  font-variant-numeric:tabular-nums;
 }
 
 .dark {
@@ -106,13 +171,13 @@
 
 /* Shared controls outside AppLayout (login and portals) use the same material.
  * Existing primary utility names and disabled/focus states remain unchanged. */
-body:not(:has(.pda-root)) .fc-button { border-radius:var(--radius-button); }
-body:not(:has(.pda-root)) .fc-button.bg-primary { background-color:hsl(var(--primary-action)); }
-body:not(:has(.pda-root)) .fc-button.bg-primary:is(:hover,:active):not(:disabled) { background-color:hsl(var(--primary-hover)); }
-body:not(:has(.pda-root)) .fc-button.bg-destructive:is(:hover,:active):not(:disabled) {
+:where(:root:not(.dark)) body:not(:has(:where(.pda-root,#pda-username))) .fc-button { border-radius:var(--radius-button); }
+:where(:root:not(.dark)) body:not(:has(:where(.pda-root,#pda-username))) .fc-button.bg-primary { background-color:hsl(var(--primary-action)); }
+:where(:root:not(.dark)) body:not(:has(:where(.pda-root,#pda-username))) .fc-button.bg-primary:is(:hover,:active):not(:disabled) { background-color:hsl(var(--primary-hover)); }
+:where(:root:not(.dark)) body:not(:has(:where(.pda-root,#pda-username))) .fc-button.bg-destructive:is(:hover,:active):not(:disabled) {
   background-color:color-mix(in srgb,hsl(var(--destructive)) 85%,hsl(var(--foreground)));
 }
-body:not(:has(.pda-root)) :is(.fc-dialog,.fc-app-dialog) { border-radius:var(--radius-dialog); box-shadow:var(--shadow-popover); }
+:where(:root:not(.dark)) body:not(:has(:where(.pda-root,#pda-username))) :is(.fc-dialog,.fc-app-dialog) { border-radius:var(--radius-dialog); box-shadow:var(--shadow-popover); }
 
 /* 共用表格与普通明细表头使用相同的不透明底色。 */
 .data-table-header-surface,
@@ -157,7 +222,6 @@ body:not(:has(.pda-root)) :is(.fc-dialog,.fc-app-dialog) { border-radius:var(--r
   }
   body {
     @apply font-sans bg-background text-foreground;
-    font-variant-numeric:tabular-nums;
   }
 
   /*
@@ -210,7 +274,8 @@ body:not(:has(.pda-root)) :is(.fc-dialog,.fc-app-dialog) { border-radius:var(--r
   @media (min-width: 1400px) { max-width: 1400px; }
 }
 @layer base {
-  input::placeholder, textarea::placeholder { color:hsl(var(--muted-foreground)); }
+  input::placeholder, textarea::placeholder { color: var(--color-gray-400); }
+  :root:not(.dark):not(:has(:where(.pda-root,#pda-username))) :is(input,textarea)::placeholder { color:hsl(var(--muted-foreground)); }
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
 }
 

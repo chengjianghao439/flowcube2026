@@ -1,3 +1,5 @@
+/* 精修规则仅覆盖浅色电脑端；暗色与 PDA 由既有组件样式负责。 */
+@scope (:root:not(.dark):not(:has(:where(.pda-root,#pda-username)))) {
 /* ERP refinement: approved website materials + the original compact application reference.
    The layout owns these tokens. Portals receive them only while the ERP shell exists. */
 .desktop-shell-sample,
@@ -764,4 +766,6 @@ body:has(.desktop-shell-sample) :is(.desktop-shell-sample,.fc-dialog,.fc-app-dia
 .desktop-workspace .desktop-table td:is([data-column-key="operatorName"],[data-column-key="realName"],[data-column-key="applicantName"],[data-column-key="manager"],[data-column-key="managerName"],[data-column-key="ownerName"],[data-column-key="userName"]) :is(.min-w-0,.whitespace-normal) {
   white-space:nowrap;
   overflow-wrap:normal;
+}
+
 }

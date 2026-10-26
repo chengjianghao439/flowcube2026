@@ -10,7 +10,7 @@ const path = require('node:path')
 const { createRequire } = require('node:module')
 const { pathToFileURL } = require('node:url')
 const assert = require('node:assert/strict')
-const { designBaseline } = require('./style-design-baseline.cjs')
+const { designBaseline, legacyDesignBaseline } = require('./style-design-baseline.cjs')
 const frontend = path.join(__dirname, '../../frontend')
 const requireFrontend = createRequire(path.join(frontend, 'package.json'))
 const { build } = requireFrontend('esbuild')
@@ -176,7 +176,9 @@ async function main() {
     // Adding all main candidates would alter historically un-emitted palette
     // utilities, so only the existing edge section adds further candidates.
     const fixtureClasses = ['text-success text-warning text-page-title', ...[...readFileSync(fixture, 'utf8').split('<section')[1].matchAll(/className="([^"]*)"/g)].map(match => match[1])].join(' ')
-    const source = readFileSync(path.join(frontend, 'src/index.css'), 'utf8') + `\n@source inline("${fixtureClasses}");`
+    const source = readFileSync(path.join(frontend, 'src/index.css'), 'utf8')
+      + '\n' + readFileSync(path.join(frontend, 'src/styles/desktop-page-samples.css'), 'utf8')
+      + `\n@source inline("${fixtureClasses}");`
     const css = await postcss(plugins).process(source, { from: path.join(frontend, 'src/index.css') })
     const result = await build({ entryPoints: [fixture], bundle: true, write: false, format: 'iife', jsx: 'automatic', tsconfig: path.join(frontend, 'tsconfig.app.json'), nodePaths: [path.join(frontend, 'node_modules')], define: { 'process.env.NODE_ENV': '"test"', 'import.meta.env': '{}', 'import.meta.hot': 'undefined' } })
     const htmlPath = path.join(temporary, 'index.html')
@@ -192,6 +194,31 @@ async function main() {
     const report = compare(expected, actual)
     console.log(JSON.stringify(report, null, 2))
     assert.equal(report.differences.length, 0, 'Shared control styles differ from pre-migration baseline')
+    // A size="pda" button in desktop markup is not a PDA page. Re-run every
+    // width, theme, hover and focus state with the real PdaLayout root marker;
+    // both shared controls and portal dialogs must retain the legacy material.
+    evaluate(`document.querySelector('main').classList.add('pda-root')`)
+    cli('click', '#open-dialog')
+    cli('wait', '#dialog')
+    settle()
+    const pda = compare(legacyDesignBaseline(JSON.parse(readFileSync(golden, 'utf8'))), await captureStates())
+    console.log(JSON.stringify({ pdaBoundary: pda }, null, 2))
+    assert.equal(pda.differences.length, 0, 'Desktop refinement leaked into the PDA root')
+    evaluate(`document.querySelector('main').classList.remove('pda-root')`)
+    cli('mouse', 'move', '1', '1')
+    evaluate(`(() => { const main = document.querySelector('main'), button = document.getElementById('primary'); button.blur(); main.classList.add('desktop-workspace', 'desktop-shell-sample'); const table = document.createElement('div'); table.id = 'boundary-table'; table.className = 'desktop-table'; button.before(table); table.append(button); })()`)
+    const scoped = {}
+    for (const mode of ['desktop-light', 'desktop-dark', 'pda-light', 'pda-login']) {
+      evaluate(`document.getElementById('pda-username')?.remove(); document.documentElement.classList.toggle('dark', ${mode === 'desktop-dark'}); document.querySelector('main').classList.toggle('pda-root', ${mode === 'pda-light'}); if (${mode === 'pda-login'}) { const marker = document.createElement('input'); marker.id = 'pda-username'; marker.type = 'hidden'; document.querySelector('main').append(marker); }`)
+      settle()
+      scoped[mode] = capture({ primary: ['backgroundColor', 'borderRadius', 'height', 'fontSize'] }).primary
+    }
+    assert.deepEqual(scoped['desktop-light'], { backgroundColor: 'rgb(237, 245, 255)', borderRadius: '10px', height: '30px', fontSize: '12px' })
+    assert.deepEqual(scoped['desktop-dark'], { backgroundColor: 'rgb(75, 131, 221)', borderRadius: '6px', height: '40px', fontSize: '14px' })
+    assert.deepEqual(scoped['pda-light'], { backgroundColor: 'rgb(50, 94, 189)', borderRadius: '6px', height: '40px', fontSize: '14px' })
+    assert.deepEqual(scoped['pda-login'], scoped['pda-light'])
+    console.log(JSON.stringify({ desktopScope: scoped }))
+    evaluate(`document.getElementById('pda-username')?.remove(); document.querySelector('main').classList.remove('desktop-workspace', 'desktop-shell-sample', 'pda-root'); document.getElementById('boundary-table').replaceWith(document.getElementById('primary'))`)
     const touch = await verifyTouchAction()
     // The real Dialog also opens/closes through its accessible buttons.
     cli('click', '#open-dialog')
