@@ -1,0 +1,8 @@
+
+ RUN  v4.1.11 /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend
+
+
+ Test Files  2 passed (2)
+      Tests  27 passed (27)
+   Start at  20:09:19
+   Duration  3.75s (transform 554ms, setup 0ms, import 900ms, tests 2.64s, environment 146ms)

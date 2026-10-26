@@ -3,16 +3,16 @@
 
 export const axisTick = { fontSize: 11, fill: 'hsl(var(--muted-foreground))' } as const
 
-/** 分类配色：语义色打头，其余用几个协调的固定色轮转（饼图/多序列） */
+/** 分类配色复用品牌蓝与语义色，不另外维护图表色板。 */
 export const CHART_COLORS = [
-  'hsl(var(--primary))', '#4a8a78', '#b78b46', '#4e83aa',
-  '#7775a8', '#578b93', '#a87955', '#a36676',
+  'hsl(var(--blue-70))', 'hsl(var(--success))', 'hsl(var(--warning))', 'hsl(var(--blue-60))',
+  'hsl(var(--blue-80))', 'hsl(var(--success-ink))', 'hsl(var(--destructive))', 'hsl(var(--blue-30))',
 ]
 
 /** 图形采用克制的分类色；状态与错误文案仍沿用原业务语义色。 */
 export const CHART_TONES = {
-  primary: 'hsl(var(--primary))', success: '#4a8a78', destructive: '#b96a65',
-  warning: '#b78b46', info: '#4e83aa',
+  primary: 'hsl(var(--primary))', success: 'hsl(var(--success))', destructive: 'hsl(var(--destructive))',
+  warning: 'hsl(var(--warning))', info: 'hsl(var(--blue-60))',
 } as const
 
 /** 金额格式化与业务/财务页面同源（lib/format 的 money），仪表盘不再另存一份实现 */

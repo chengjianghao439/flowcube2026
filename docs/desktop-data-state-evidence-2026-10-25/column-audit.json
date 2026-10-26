@@ -1,0 +1,1484 @@
+{
+  "before": [
+    {
+      "file": "frontend/src/components/shared/FulfillmentTodos.tsx",
+      "line": 32,
+      "key": "'ownerName'",
+      "title": "'负责人'",
+      "width": "110",
+      "render": "v => v ? String(v) : '待认领'"
+    },
+    {
+      "file": "frontend/src/components/shared/FulfillmentTodos.tsx",
+      "line": 34,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "120",
+      "render": "(_, r) => <span className=\"flex flex-wrap items-center gap-1\"><SoftStatusLabel label={r.status === 'resolved' ? '已处理' : r.status === 'processing' ? '处理中' : '待处理'} tone={r.status === 'resolved' ? 'success' : r.status === 'processing' ? 'active' : 'warning'} />{r.overdue ? <span className=\"text-xs font-medium text-destructive-ink\">已超时</span> : r.dueSoon ? <span className=\"text-xs font-medium text-warning-ink\">即将到期</span> : null}</span>"
+    },
+    {
+      "file": "frontend/src/components/shared/ReceiptPanel.tsx",
+      "line": 112,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(v, row) => (\n      <SoftStatusLabel label={(row as PaymentReceipt).statusName} tone={RECEIPT_TONE[v as number] ?? 'draft'} />\n    )"
+    },
+    {
+      "file": "frontend/src/components/shared/ReceiptPanel.tsx",
+      "line": 117,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "90",
+      "render": "v => (v as string) || '—'"
+    },
+    {
+      "file": "frontend/src/components/shared/StatementPanel.tsx",
+      "line": 135,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v, row) => (\n      <SoftStatusLabel label={(row as ReconciliationStatement).statusName} tone={ST_TONE[v as number] ?? 'draft'} />\n    )"
+    },
+    {
+      "file": "frontend/src/pages/accounting/backfills/index.tsx",
+      "line": 432,
+      "key": "'bizTypeName'",
+      "title": "'业务类型'",
+      "width": "110",
+      "render": "(_v, r) => <SoftStatusLabel label={r.bizTypeName} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/backfills/index.tsx",
+      "line": 446,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "140",
+      "render": "(_v, r) => {\n      const s = statusOf(r)\n      return (\n        <span className=\"flex flex-wrap items-center gap-1\">\n          <SoftStatusLabel label={s.label} tone={s.tone} />\n          {/* 已记账但调整凭证没生成：这是唯一需要再点一次的状态，必须显式标出来 */}\n          {r.voucherPending && <SoftStatusLabel label=\"凭证待生成\" tone=\"danger\" />}\n          {r.voucherNotRequired && <SoftStatusLabel label={r.bizType === 'supplier_refund' ? zeroProof : '不涉及凭证'} tone=\"draft\" />}\n        </span>\n      )\n    }"
+    },
+    {
+      "file": "frontend/src/pages/accounting/consolidation/index.tsx",
+      "line": 93,
+      "key": "'isGroup'",
+      "title": "'类型'",
+      "width": "90",
+      "render": "(_, r) => <SoftStatusLabel label={r.isGroup ? '集团' : '公司'} tone={r.isGroup ? 'warning' : 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/consolidation/index.tsx",
+      "line": 94,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, r) => <SoftStatusLabel label={r.isActive ? '启用' : '停用'} tone={r.isActive ? 'success' : 'danger'} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "line": 205,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_v, r) => <SoftStatusLabel label={r.statusName} tone={statusTone(r.invoiceType, r.status)} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/periods/index.tsx",
+      "line": 75,
+      "key": "'closed'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, r) => r.closed\n        ? <SoftStatusLabel label=\"已结账\" tone=\"success\" />\n        : <SoftStatusLabel label=\"未结账\" tone=\"active\" />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/periods/index.tsx",
+      "line": 81,
+      "key": "'closingStatus'",
+      "title": "'损益结转'",
+      "width": "120",
+      "render": "(_, r) => <SoftStatusLabel label={CLOSING_STATUS_LABELS[r.closingStatus] ?? r.closingStatus} tone={closingTone(r.closingStatus)} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/periods/index.tsx",
+      "line": 85,
+      "key": "'yearClosingStatus'",
+      "title": "'年度结转'",
+      "width": "120",
+      "render": "(_, r) => r.yearClosingStatus\n        ? <SoftStatusLabel label={CLOSING_STATUS_LABELS[r.yearClosingStatus] ?? r.yearClosingStatus} tone={closingTone(r.yearClosingStatus)} />\n        : <span className=\"text-muted-foreground\">—</span>"
+    },
+    {
+      "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "line": 387,
+      "key": "'sourceTypeName'",
+      "title": "'来源'",
+      "width": "100",
+      "render": "(_v, r) => <SoftStatusLabel label={r.sourceTypeName} tone={r.sourceType === 'manual' ? 'draft' : 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "line": 391,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_v, r) => (\n      <span className=\"flex items-center gap-1\">\n        <SoftStatusLabel label={VOUCHER_STATUS_LABELS[r.status]} tone={statusTone(r.status)} />\n        {r.isReversal === 1 && <SoftStatusLabel label=\"红字\" tone=\"danger\" />}\n      </span>\n    )"
+    },
+    {
+      "file": "frontend/src/pages/approvals/flows.tsx",
+      "line": 169,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={row.isActive ? 'success' : 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/approvals/pending.tsx",
+      "line": 50,
+      "key": "'applicantName'",
+      "title": "'申请/制单人'",
+      "width": "100"
+    },
+    {
+      "file": "frontend/src/pages/carriers/index.tsx",
+      "line": 81,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "v => <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} />"
+    },
+    {
+      "file": "frontend/src/pages/credit-overrides/index.tsx",
+      "line": 210,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "220",
+      "render": "(_, row) => <div className=\"space-y-1\"><SoftStatusLabel label={row.statusName} tone={row.approvalValidity==='invalid' ? 'warning' : (row.statusTone as 'draft' | 'warning' | 'success' | 'danger')} />{(row.requestInvalidReason || row.approvalInvalidReason) && <p className=\"whitespace-normal text-xs text-muted-foreground\">{row.requestInvalidReason || row.approvalInvalidReason}</p>}</div>"
+    },
+    {
+      "file": "frontend/src/pages/customers/index.tsx",
+      "line": 95,
+      "key": "'priceLevelName' as keyof Customer",
+      "title": "'价格等级'",
+      "width": "120",
+      "render": "(_, row) => <SoftStatusLabel label={`价格${row.priceLevel ?? 'A'}`} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/customers/index.tsx",
+      "line": 96,
+      "key": "'settlementType'",
+      "title": "'结算方式'",
+      "width": "110",
+      "render": "(_, row) => (\n      <SoftStatusLabel\n        label={row.settlementType === SETTLEMENT_TYPE.MONTHLY ? `月结 ${row.paymentTermsDays} 天` : row.settlementTypeName}\n        tone={(SETTLEMENT_TYPE_TONE[String(row.settlementType) as keyof typeof SETTLEMENT_TYPE_TONE] ?? 'info') as StatusTone}\n      />\n    )"
+    },
+    {
+      "file": "frontend/src/pages/customers/index.tsx",
+      "line": 105,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "70",
+      "render": "(v)=> <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} />"
+    },
+    {
+      "file": "frontend/src/pages/departments/index.tsx",
+      "line": 239,
+      "key": "'managerName'",
+      "title": "'负责人'",
+      "width": "140",
+      "render": "(_v, row) => (\n        <span>\n          <span className=\"block\">{row.dept.managerName || <span className=\"text-muted-foreground\">—</span>}</span>\n          {row.dept.managerIsActive === false && !row.dept.managerIsDevelopment && <span className=\"block text-xs text-destructive-ink\">{row.dept.managerName ? '负责人已禁用' : '负责人已删除'}</span>}\n        </span>\n      )"
+    },
+    {
+      "file": "frontend/src/pages/disposal/index.tsx",
+      "line": 93,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(v, row) => <SoftStatusLabel label={(row as DisposalOrder).statusName} tone={DISPOSAL_STATUS_TONE[v as number] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/disposal/index.tsx",
+      "line": 101,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "100"
+    },
+    {
+      "file": "frontend/src/pages/finance/accounts/index.tsx",
+      "line": 186,
+      "key": "'type'",
+      "title": "'类型'",
+      "width": "100",
+      "render": "(_, row) => <SoftStatusLabel label={(row as FinanceAccount).typeName} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/finance/accounts/index.tsx",
+      "line": 195,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => {\n      const r = row as FinanceAccount\n      return <SoftStatusLabel label={r.isActive ? '启用' : '停用'} tone={activeTone(r.isActive)} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/finance/expense-categories/index.tsx",
+      "line": 25,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, row) => {\n      const c = row as ExpenseCategory\n      return <SoftStatusLabel label={c.isActive ? '启用' : '停用'} tone={activeTone(c.isActive)} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/finance/expenses/index.tsx",
+      "line": 298,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, row) => {\n      const c = row as ExpenseClaim\n      return <SoftStatusLabel label={c.statusName} tone={c.statusTone as StatusTone} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/finance/transactions/index.tsx",
+      "line": 189,
+      "key": "'bizType'",
+      "title": "'类型'",
+      "width": "100",
+      "render": "(_, row) => {\n      const t = row as AccountTransaction\n      // 余额调整是人工对平账目的动作，与常规收付款区分开\n      return <SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/finance/transactions/index.tsx",
+      "line": 210,
+      "key": "'operatorName'",
+      "title": "'操作人'",
+      "width": "100",
+      "render": "v => (v as string) || <span className=\"text-muted-foreground\">—</span>"
+    },
+    {
+      "file": "frontend/src/pages/fixed-assets/index.tsx",
+      "line": 182,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, r) => <SoftStatusLabel label={ASSET_STATUS[r.status]?.label ?? '未知'} tone={ASSET_STATUS[r.status]?.tone ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/inbound-tasks/index.tsx",
+      "line": 243,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "7.53",
+      "render": "(_, row) => <InboundTaskStatus task={row as InboundTask} onView={() => openDetail(row as InboundTask)} />"
+    },
+    {
+      "file": "frontend/src/pages/inbound-tasks/index.tsx",
+      "line": 249,
+      "key": "'operatorName'",
+      "title": "'操作人'",
+      "width": "11.05",
+      "render": "v => {\n        const text = String(v ?? '')\n        return text\n          ? <span className=\"block min-w-0 whitespace-normal [overflow-wrap:anywhere] \" title={text}>{text}</span>\n          : <span className=\"whitespace-nowrap text-muted-foreground\">—</span>\n      }"
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 283,
+      "key": "'typeName'",
+      "title": "'类型'",
+      "width": "80",
+      "render": "(_, r) => <SoftStatusLabel label={TYPE_NAMES[r.type]} tone={TYPE_TONE[r.type] ?? 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 290,
+      "key": "'operatorName'",
+      "title": "'操作人'",
+      "width": "90"
+    },
+    {
+      "file": "frontend/src/pages/kits/index.tsx",
+      "line": 57,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, row) => <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} />"
+    },
+    {
+      "file": "frontend/src/pages/locations/index.tsx",
+      "line": 132,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "v => <SoftStatusLabel label={STATUS_LABEL[v as number]} tone={activeTone(Number(v) === 1)} />"
+    },
+    {
+      "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "line": 79,
+      "key": "'reconciled'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "v => <SoftStatusLabel label={v ? '已核对' : '待核对'} tone={v ? 'success' : 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "line": 88,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, r) => <SoftStatusLabel label={r.statusLabel} tone={r.statusTone} />"
+    },
+    {
+      "file": "frontend/src/pages/logistics/index.tsx",
+      "line": 110,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, r) => <SoftStatusLabel label={r.statusLabel} tone={r.statusTone} />"
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "line": 146,
+      "key": "'userName'",
+      "title": "'操作人'",
+      "width": "120",
+      "render": "(v) => formatOperator(v)"
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "line": 147,
+      "key": "'method'",
+      "title": "'操作类型'",
+      "width": "100",
+      "render": "(v) => <SoftStatusLabel label={formatHttpMethod(v)} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "line": 163,
+      "key": "'statusCode'",
+      "title": "'结果'",
+      "width": "130",
+      "render": "(v, row) => {\n        const tone = getStatusTone(v)\n        return <SoftStatusLabel label={formatOperationResult(row.path, v)} tone={RESULT_TONE[tone]} />\n      }"
+    },
+    {
+      "file": "frontend/src/pages/payments/PaymentsView.tsx",
+      "line": 118,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "130",
+      "render": "(v, row) => {\n      const r = row as PaymentRecord\n      // 现结当天到期，逾期信息原本挂在到期日列上；那列换成创建日期后移到这里，避免丢失\n      const overdue = r.status !== 3 && r.dueDate && new Date(r.dueDate) < new Date()\n      return (\n        <div className=\"flex flex-wrap items-center gap-1.5\">\n          <SoftStatusLabel label={r.statusName} tone={ST_TONE[v as number] ?? 'draft'} />\n          {overdue && <SoftStatusLabel label=\"已逾期\" tone=\"danger\" />}\n        </div>\n      )\n    }"
+    },
+    {
+      "file": "frontend/src/pages/payments/PaymentsView.tsx",
+      "line": 130,
+      "key": "'confirmStatus'",
+      "title": "'结算确认'",
+      "width": "100",
+      "render": "(_: unknown, row: PaymentRecord) => (\n      row.confirmStatus === 0\n        ? <SoftStatusLabel label=\"待确认\" tone=\"warning\" />\n        : <span className=\"text-xs text-muted-foreground\">{row.confirmedByName ? `已确认 · ${row.confirmedByName}` : '已确认'}</span>\n    )"
+    },
+    {
+      "file": "frontend/src/pages/picking-waves/index.tsx",
+      "line": 181,
+      "key": "'status'",
+      "title": "'状态 / 下一步'",
+      "width": "220",
+      "render": "(_, row) => {\n        const tone = row.status === 4 ? 'success' : row.status === 5 ? 'danger' : row.status === 1 ? 'draft' : 'active'\n        const copy = getWaveClosureCopy(row)\n        return (\n          <div className=\"space-y-1\">\n            <SoftStatusLabel label={WAVE_STATUS_LABEL[row.status]} tone={tone} />\n            <p className=\"text-xs text-muted-foreground\">{copy.nextAction}</p>\n          </div>\n        )\n      }"
+    },
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "line": 132,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "v => Number(v) === 1\n        ? <SoftStatusLabel label=\"在库\" tone=\"active\" />\n        : <SoftStatusLabel label=\"空置\" tone=\"draft\" />"
+    },
+    {
+      "file": "frontend/src/pages/portal/statements.tsx",
+      "line": 44,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, row) => {\n      const r = row as PortalStatementRow\n      const tone = r.status === 3 ? 'success' : r.status === 2 ? 'active' : 'draft'\n      return <SoftStatusLabel label={r.statusName} tone={tone} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/price-change/index.tsx",
+      "line": 192,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(v) => <SoftStatusLabel label={STATUS_LABEL[Number(v)] ?? String(v)} tone={STATUS_TONE[Number(v)] ?? 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/procurement/index.tsx",
+      "line": 67,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "110",
+      "render": "(_, r) => <SoftStatusLabel label={r.statusName} tone={STATUS_TONE[r.status] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/products/index.tsx",
+      "line": 192,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "70",
+      "render": "(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} />"
+    },
+    {
+      "file": "frontend/src/pages/purchase/index.tsx",
+      "line": 226,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "8",
+      "render": "(v, row) => <StatusBadge type=\"purchase\" status={v as number} aria-label={(row as PurchaseOrder).statusName} />"
+    },
+    {
+      "file": "frontend/src/pages/purchase/index.tsx",
+      "line": 230,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "11"
+    },
+    {
+      "file": "frontend/src/pages/purchase-requisitions/index.tsx",
+      "line": 111,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, r) => <SoftStatusLabel label={r.statusName} tone={r.statusTone} />"
+    },
+    {
+      "file": "frontend/src/pages/racks/index.tsx",
+      "line": 136,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.status === 1 ? '启用' : '停用'} tone={activeTone(row.status === 1)} />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/refunds/index.tsx",
+      "line": 83,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v, row) => <SoftStatusLabel label={(row as RefundOrder).statusName} tone={STATUS_TONE[v as number] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/reports/ReconciliationView.tsx",
+      "line": 152,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "120",
+      "render": "(v, row) => {\n      const record = row as ReconciliationRecord\n      const overdue = isOverdue(record)\n      // 逾期本身就表示未结清：status=1（未付/未收）且逾期时只显示「已逾期」，不再叠加「未付」；\n      // 部分付/部分收仍保留（它比逾期多一层信息）\n      const hideBase = overdue && Number(v) === 1\n      return (\n        <div className=\"flex flex-wrap items-center gap-1.5\">\n          {!hideBase && (\n            <SoftStatusLabel\n              label={record.statusName}\n              tone={Number(v) === 3 ? 'success' : Number(v) === 2 ? 'active' : 'draft'}\n            />\n          )}\n          {overdue && <SoftStatusLabel label=\"逾期\" tone=\"danger\" />}\n          {type === 1 && record.confirmStatus === 0 && <SoftStatusLabel label=\"待确认\" tone=\"warning\" />}\n        </div>\n      )\n    }"
+    },
+    {
+      "file": "frontend/src/pages/reports/avg-cost-reconciliation.tsx",
+      "line": 60,
+      "key": "'drifted'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, r) => <SoftStatusLabel label={r.drifted ? '账面差异' : '一致'} tone={r.drifted ? 'danger' : 'success'} />"
+    },
+    {
+      "file": "frontend/src/pages/reports/inventory-aging.tsx",
+      "line": 76,
+      "key": "'isStale'",
+      "title": "'滞销'",
+      "width": "96",
+      "render": "(_, r) => r.isStale ? <SoftStatusLabel label={`滞销${r.daysSinceOutbound != null ? ` ${r.daysSinceOutbound}天` : ''}`} tone=\"danger\" /> : <span className=\"text-xs text-muted-foreground\">正常</span>"
+    },
+    {
+      "file": "frontend/src/pages/reports/inventory-aging.tsx",
+      "line": 86,
+      "key": "'expiryState'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, r) => r.expiryState === 'expired' ? <SoftStatusLabel label=\"已过期\" tone=\"danger\" /> : <SoftStatusLabel label=\"临期\" tone=\"warning\" />"
+    },
+    {
+      "file": "frontend/src/pages/reports/wave-performance.tsx",
+      "line": 104,
+      "key": "'statusName'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, w) => <SoftStatusLabel label={w.statusName} tone={STATUS_TONE[w.status] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/returns/index.tsx",
+      "line": 250,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v, row) => {\n      const status = v as number\n      const tone = status === 3 ? 'success' : status === 4 ? 'danger' : status === 1 ? 'draft' : 'active'\n      return <SoftStatusLabel label={(row as RowType).statusName} tone={tone} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/returns/index.tsx",
+      "line": 255,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "90"
+    },
+    {
+      "file": "frontend/src/pages/sale/commercial/CommercialSalePage.tsx",
+      "line": 332,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100"
+    },
+    {
+      "file": "frontend/src/pages/sale/form/components/SaleOrderWarehouseViews.tsx",
+      "line": 24,
+      "key": "'operatorName'",
+      "title": "'操作人'",
+      "width": "110",
+      "render": "v => (v as string) || '-'"
+    },
+    {
+      "file": "frontend/src/pages/sale/index.tsx",
+      "line": 244,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "8",
+      "render": "(_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> }"
+    },
+    {
+      "file": "frontend/src/pages/sale/index.tsx",
+      "line": 245,
+      "key": "'receivableStatus'",
+      "title": "'回款状态'",
+      "width": "8",
+      "render": "(_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className=\"whitespace-nowrap\" title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> }"
+    },
+    {
+      "file": "frontend/src/pages/sale/index.tsx",
+      "line": 246,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "7"
+    },
+    {
+      "file": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+      "line": 253,
+      "key": "'latestJob'",
+      "title": "'条码状态'",
+      "width": "130",
+      "render": "(_, row) => (\n          <div className=\"space-y-1\">\n            {barcodeStatusBadge(row)}\n            {/* 作废原因跟着**业务状态**走（解释为什么这张条码不能再补打），不跟任务结果混在一起 */}\n            {row.voidReason && (\n              <div className=\"text-[11px] leading-4 text-muted-foreground\">原因：{row.voidReason}</div>\n            )}\n          </div>\n        )"
+    },
+    {
+      "file": "frontend/src/pages/settings/pda-devices/index.tsx",
+      "line": 113,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "10",
+      "render": "(v) => {\n        const status = v as PdaDeviceStatus\n        return <SoftStatusLabel label={STATUS_LABEL[status]} tone={status === 'active' ? 'success' : 'draft'} />\n      }"
+    },
+    {
+      "file": "frontend/src/pages/settings/print-templates/index.tsx",
+      "line": 66,
+      "key": "'isDefault'",
+      "title": "'默认'",
+      "width": "80",
+      "render": "v => v ? <SoftStatusLabel label=\"默认\" tone=\"active\" /> : <span className=\"text-muted-foreground\">—</span>"
+    },
+    {
+      "file": "frontend/src/pages/settings/printers/index.tsx",
+      "line": 379,
+      "key": "'typeName'",
+      "title": "'类型'",
+      "width": "110",
+      "render": "(_, p) => <SoftStatusLabel label={TYPE_LABEL[p.type]} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/settings/printers/index.tsx",
+      "line": 383,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, p) => (\n        <SoftStatusLabel\n          label={p.status === 1 ? '在线' : '离线'}\n          tone={activeTone(p.status === 1)}\n          onClick={canManagePrinters ? () => { if (managePermissionRef.current) toggleStatus.mutate(p) } : undefined}\n        />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/settings/printers/index.tsx",
+      "line": 393,
+      "key": "'source'",
+      "title": "'来源'",
+      "width": "110",
+      "render": "(_, p) => (\n        <SoftStatusLabel\n          label={formatPrinterSource(p.source) || sourceBadgeLabel(p.source)}\n          tone={p.source === 'client' ? 'success' : p.source === 'local_desktop' ? 'info' : 'draft'}\n          title={p.source ? `原始来源：${p.source}` : undefined}\n        />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/sorting-bins/index.tsx",
+      "line": 188,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(v) => <SoftStatusLabel label={SORTING_BIN_STATUS_LABEL[v as number]} tone={SORTING_BIN_STATUS_TONE[v as number] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/abc.tsx",
+      "line": 133,
+      "key": "'abcClass'",
+      "title": "'档位'",
+      "width": "120",
+      "render": "(_, r) => <SoftStatusLabel label={`${r.abcClass} 类`} tone={ABC_TONE[r.abcClass] ?? 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/abc.tsx",
+      "line": 153,
+      "key": "'abcClass'",
+      "title": "'类别'",
+      "width": "130",
+      "render": "(_, r) => <SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/index.tsx",
+      "line": 48,
+      "key": "'checkType'",
+      "title": "'类型'",
+      "width": "120",
+      "render": "(_,row)=>{ const r=row as StockCheck; return <SoftStatusLabel label={r.checkType===2?`分批盘点${r.scopeValue?`·${r.scopeValue}`:''}`:'全盘'} tone=\"info\" /> }"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/index.tsx",
+      "line": 49,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v,row)=><SoftStatusLabel label={(row as StockCheck).statusName} tone={STATUS_TONE[v as number] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/index.tsx",
+      "line": 50,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "100"
+    },
+    {
+      "file": "frontend/src/pages/supplier-refunds/index.tsx",
+      "line": 58,
+      "key": "'status'",
+      "title": "'业务阶段'",
+      "width": "100",
+      "render": "(_, r) => <SoftStatusLabel label={SUPPLIER_REFUND_STATUS_NAME[r.status] || '状态待核对'} tone={({ 1: 'draft', 2: 'active', 3: 'success', 4: 'danger' } as Record<number, StatusTone>)[r.status] || 'warning'} />"
+    },
+    {
+      "file": "frontend/src/pages/suppliers/index.tsx",
+      "line": 91,
+      "key": "'settlementType'",
+      "title": "'结算方式'",
+      "width": "110",
+      "render": "(_,r)=>(\n      <SoftStatusLabel\n        label={r.settlementType === SETTLEMENT_TYPE.MONTHLY ? `月结 ${r.paymentTermsDays} 天` : r.settlementTypeName}\n        tone={(SETTLEMENT_TYPE_TONE[String(r.settlementType) as keyof typeof SETTLEMENT_TYPE_TONE] ?? 'info') as StatusTone}\n      />\n    )"
+    },
+    {
+      "file": "frontend/src/pages/suppliers/index.tsx",
+      "line": 97,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} />"
+    },
+    {
+      "file": "frontend/src/pages/transfer/index.tsx",
+      "line": 193,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v, row) => {\n      const status = v as number\n      const tone = status === 4 ? 'success' : status === 5 ? 'danger' : status === 1 ? 'draft' : 'active'\n      return <SoftStatusLabel label={(row as TransferOrder).statusName} tone={tone} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/transfer/index.tsx",
+      "line": 198,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "90"
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 74,
+      "key": "'realName'",
+      "title": "'姓名'",
+      "width": "120"
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 75,
+      "key": "'roleName'",
+      "title": "'角色'",
+      "width": "100",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.roleName} tone={row.roleId === 1 ? 'active' : 'info'} />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 89,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.isActive ? '启用' : '禁用'} tone={activeTone(row.isActive)} />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 97,
+      "key": "'allowSelfApprove'",
+      "title": "'自行审批'",
+      "width": "90",
+      "render": "(_, row) => (row.allowSelfApprove\n        ? <SoftStatusLabel label=\"已开启\" tone=\"warning\" />\n        : <span className=\"text-muted-foreground\">—</span>)"
+    },
+    {
+      "file": "frontend/src/pages/warehouses/index.tsx",
+      "line": 52,
+      "key": "'typeName'",
+      "title": "'类型'",
+      "width": "90",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.typeName} tone=\"info\" />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/warehouses/index.tsx",
+      "line": 58,
+      "key": "'manager'",
+      "title": "'负责人'",
+      "width": "100",
+      "render": "(v) => (v as string) || '-'"
+    },
+    {
+      "file": "frontend/src/pages/warehouses/index.tsx",
+      "line": 61,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} />\n      )"
+    }
+  ],
+  "after": [
+    {
+      "file": "frontend/src/components/shared/FulfillmentTodos.tsx",
+      "line": 32,
+      "key": "'ownerName'",
+      "title": "'负责人'",
+      "width": "110",
+      "render": "v => v ? String(v) : '待认领'"
+    },
+    {
+      "file": "frontend/src/components/shared/FulfillmentTodos.tsx",
+      "line": 34,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "120",
+      "render": "(_, r) => <span className=\"flex flex-wrap items-center gap-1\"><SoftStatusLabel label={r.status === 'resolved' ? '已处理' : r.status === 'processing' ? '处理中' : '待处理'} tone={r.status === 'resolved' ? 'success' : r.status === 'processing' ? 'active' : 'warning'} />{r.overdue ? <span className=\"text-xs font-medium text-destructive-ink\">已超时</span> : r.dueSoon ? <span className=\"text-xs font-medium text-warning-ink\">即将到期</span> : null}</span>"
+    },
+    {
+      "file": "frontend/src/components/shared/ReceiptPanel.tsx",
+      "line": 112,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(v, row) => (\n      <SoftStatusLabel label={(row as PaymentReceipt).statusName} tone={RECEIPT_TONE[v as number] ?? 'draft'} />\n    )"
+    },
+    {
+      "file": "frontend/src/components/shared/ReceiptPanel.tsx",
+      "line": 117,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "112",
+      "minWidth": "112",
+      "render": "v => (v as string) || '—'"
+    },
+    {
+      "file": "frontend/src/components/shared/StatementPanel.tsx",
+      "line": 135,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v, row) => (\n      <SoftStatusLabel label={(row as ReconciliationStatement).statusName} tone={ST_TONE[v as number] ?? 'draft'} />\n    )"
+    },
+    {
+      "file": "frontend/src/pages/accounting/backfills/index.tsx",
+      "line": 432,
+      "key": "'bizTypeName'",
+      "title": "'业务类型'",
+      "width": "110",
+      "render": "(_v, r) => <SoftStatusLabel label={r.bizTypeName} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/backfills/index.tsx",
+      "line": 446,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "140",
+      "render": "(_v, r) => {\n      const s = statusOf(r)\n      return (\n        <span className=\"flex flex-wrap items-center gap-1\">\n          <SoftStatusLabel label={s.label} tone={s.tone} />\n          {/* 已记账但调整凭证没生成：这是唯一需要再点一次的状态，必须显式标出来 */}\n          {r.voucherPending && <SoftStatusLabel label=\"凭证待生成\" tone=\"danger\" />}\n          {r.voucherNotRequired && <SoftStatusLabel label={r.bizType === 'supplier_refund' ? zeroProof : '不涉及凭证'} tone=\"draft\" />}\n        </span>\n      )\n    }"
+    },
+    {
+      "file": "frontend/src/pages/accounting/consolidation/index.tsx",
+      "line": 93,
+      "key": "'isGroup'",
+      "title": "'类型'",
+      "width": "90",
+      "render": "(_, r) => <SoftStatusLabel label={r.isGroup ? '集团' : '公司'} tone={r.isGroup ? 'warning' : 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/consolidation/index.tsx",
+      "line": 94,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, r) => <SoftStatusLabel label={r.isActive ? '启用' : '停用'} tone={r.isActive ? 'success' : 'danger'} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "line": 205,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_v, r) => <SoftStatusLabel label={r.statusName} tone={statusTone(r.invoiceType, r.status)} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/periods/index.tsx",
+      "line": 75,
+      "key": "'closed'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, r) => r.closed\n        ? <SoftStatusLabel label=\"已结账\" tone=\"success\" />\n        : <SoftStatusLabel label=\"未结账\" tone=\"active\" />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/periods/index.tsx",
+      "line": 81,
+      "key": "'closingStatus'",
+      "title": "'损益结转'",
+      "width": "120",
+      "render": "(_, r) => <SoftStatusLabel label={CLOSING_STATUS_LABELS[r.closingStatus] ?? r.closingStatus} tone={closingTone(r.closingStatus)} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/periods/index.tsx",
+      "line": 85,
+      "key": "'yearClosingStatus'",
+      "title": "'年度结转'",
+      "width": "120",
+      "render": "(_, r) => r.yearClosingStatus\n        ? <SoftStatusLabel label={CLOSING_STATUS_LABELS[r.yearClosingStatus] ?? r.yearClosingStatus} tone={closingTone(r.yearClosingStatus)} />\n        : <span className=\"text-muted-foreground\">—</span>"
+    },
+    {
+      "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "line": 387,
+      "key": "'sourceTypeName'",
+      "title": "'来源'",
+      "width": "100",
+      "render": "(_v, r) => <SoftStatusLabel label={r.sourceTypeName} tone={r.sourceType === 'manual' ? 'draft' : 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "line": 391,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_v, r) => (\n      <span className=\"flex items-center gap-1\">\n        <SoftStatusLabel label={VOUCHER_STATUS_LABELS[r.status]} tone={statusTone(r.status)} />\n        {r.isReversal === 1 && <SoftStatusLabel label=\"红字\" tone=\"danger\" />}\n      </span>\n    )"
+    },
+    {
+      "file": "frontend/src/pages/approvals/flows.tsx",
+      "line": 171,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={row.isActive ? 'success' : 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/approvals/pending.tsx",
+      "line": 50,
+      "key": "'applicantName'",
+      "title": "'申请/制单人'",
+      "width": "100"
+    },
+    {
+      "file": "frontend/src/pages/carriers/index.tsx",
+      "line": 81,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "v => <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} />"
+    },
+    {
+      "file": "frontend/src/pages/credit-overrides/index.tsx",
+      "line": 210,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "220",
+      "render": "(_, row) => <div className=\"space-y-1\"><SoftStatusLabel label={row.statusName} tone={row.approvalValidity==='invalid' ? 'warning' : (row.statusTone as 'draft' | 'warning' | 'success' | 'danger')} />{(row.requestInvalidReason || row.approvalInvalidReason) && <p className=\"whitespace-normal text-xs text-muted-foreground\">{row.requestInvalidReason || row.approvalInvalidReason}</p>}</div>"
+    },
+    {
+      "file": "frontend/src/pages/customers/index.tsx",
+      "line": 95,
+      "key": "'priceLevelName' as keyof Customer",
+      "title": "'价格等级'",
+      "width": "120",
+      "render": "(_, row) => <SoftStatusLabel label={`价格${row.priceLevel ?? 'A'}`} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/customers/index.tsx",
+      "line": 96,
+      "key": "'settlementType'",
+      "title": "'结算方式'",
+      "width": "110",
+      "render": "(_, row) => (\n      <SoftStatusLabel\n        label={row.settlementType === SETTLEMENT_TYPE.MONTHLY ? `月结 ${row.paymentTermsDays} 天` : row.settlementTypeName}\n        tone={(SETTLEMENT_TYPE_TONE[String(row.settlementType) as keyof typeof SETTLEMENT_TYPE_TONE] ?? 'info') as StatusTone}\n      />\n    )"
+    },
+    {
+      "file": "frontend/src/pages/customers/index.tsx",
+      "line": 105,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "96",
+      "minWidth": "96",
+      "render": "(v)=> <SoftStatusLabel label={v ? '启用' : '停用'} tone={activeTone(v as boolean)} />"
+    },
+    {
+      "file": "frontend/src/pages/departments/index.tsx",
+      "line": 240,
+      "key": "'managerName'",
+      "title": "'负责人'",
+      "width": "140",
+      "render": "(_v, row) => (\n        <span>\n          <span className=\"block\">{row.dept.managerName || <span className=\"text-muted-foreground\">—</span>}</span>\n          {row.dept.managerIsActive === false && !row.dept.managerIsDevelopment && <span className=\"block text-xs text-destructive-ink\">{row.dept.managerName ? '负责人已禁用' : '负责人已删除'}</span>}\n        </span>\n      )"
+    },
+    {
+      "file": "frontend/src/pages/disposal/index.tsx",
+      "line": 93,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(v, row) => <SoftStatusLabel label={(row as DisposalOrder).statusName} tone={DISPOSAL_STATUS_TONE[v as number] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/disposal/index.tsx",
+      "line": 101,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "100"
+    },
+    {
+      "file": "frontend/src/pages/finance/accounts/index.tsx",
+      "line": 186,
+      "key": "'type'",
+      "title": "'类型'",
+      "width": "100",
+      "render": "(_, row) => <SoftStatusLabel label={(row as FinanceAccount).typeName} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/finance/accounts/index.tsx",
+      "line": 195,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => {\n      const r = row as FinanceAccount\n      return <SoftStatusLabel label={r.isActive ? '启用' : '停用'} tone={activeTone(r.isActive)} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/finance/expense-categories/index.tsx",
+      "line": 25,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, row) => {\n      const c = row as ExpenseCategory\n      return <SoftStatusLabel label={c.isActive ? '启用' : '停用'} tone={activeTone(c.isActive)} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/finance/expenses/index.tsx",
+      "line": 298,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, row) => {\n      const c = row as ExpenseClaim\n      return <SoftStatusLabel label={c.statusName} tone={c.statusTone as StatusTone} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/finance/transactions/index.tsx",
+      "line": 189,
+      "key": "'bizType'",
+      "title": "'类型'",
+      "width": "100",
+      "render": "(_, row) => {\n      const t = row as AccountTransaction\n      // 余额调整是人工对平账目的动作，与常规收付款区分开\n      return <SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/finance/transactions/index.tsx",
+      "line": 210,
+      "key": "'operatorName'",
+      "title": "'操作人'",
+      "width": "100",
+      "render": "v => (v as string) || <span className=\"text-muted-foreground\">—</span>"
+    },
+    {
+      "file": "frontend/src/pages/fixed-assets/index.tsx",
+      "line": 182,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, r) => <SoftStatusLabel label={ASSET_STATUS[r.status]?.label ?? '未知'} tone={ASSET_STATUS[r.status]?.tone ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/inbound-tasks/index.tsx",
+      "line": 243,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "7.53",
+      "render": "(_, row) => <InboundTaskStatus task={row as InboundTask} onView={() => openDetail(row as InboundTask)} />"
+    },
+    {
+      "file": "frontend/src/pages/inbound-tasks/index.tsx",
+      "line": 249,
+      "key": "'operatorName'",
+      "title": "'操作人'",
+      "width": "11.05",
+      "render": "v => {\n        const text = String(v ?? '')\n        return text\n          ? <span className=\"block min-w-0 whitespace-normal [overflow-wrap:anywhere] \" title={text}>{text}</span>\n          : <span className=\"whitespace-nowrap text-muted-foreground\">—</span>\n      }"
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 283,
+      "key": "'typeName'",
+      "title": "'类型'",
+      "width": "80",
+      "render": "(_, r) => <SoftStatusLabel label={TYPE_NAMES[r.type]} tone={TYPE_TONE[r.type] ?? 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 290,
+      "key": "'operatorName'",
+      "title": "'操作人'",
+      "width": "112",
+      "minWidth": "112"
+    },
+    {
+      "file": "frontend/src/pages/kits/index.tsx",
+      "line": 57,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, row) => <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} />"
+    },
+    {
+      "file": "frontend/src/pages/locations/index.tsx",
+      "line": 132,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "v => <SoftStatusLabel label={STATUS_LABEL[v as number]} tone={activeTone(Number(v) === 1)} />"
+    },
+    {
+      "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "line": 79,
+      "key": "'reconciled'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "v => <SoftStatusLabel label={v ? '已核对' : '待核对'} tone={v ? 'success' : 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+      "line": 88,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, r) => <SoftStatusLabel label={r.statusLabel} tone={r.statusTone} />"
+    },
+    {
+      "file": "frontend/src/pages/logistics/index.tsx",
+      "line": 110,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, r) => <SoftStatusLabel label={r.statusLabel} tone={r.statusTone} />"
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "line": 146,
+      "key": "'userName'",
+      "title": "'操作人'",
+      "width": "120",
+      "render": "(v) => formatOperator(v)"
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "line": 147,
+      "key": "'method'",
+      "title": "'操作类型'",
+      "width": "100",
+      "render": "(v) => <SoftStatusLabel label={formatHttpMethod(v)} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "line": 163,
+      "key": "'statusCode'",
+      "title": "'结果'",
+      "width": "130",
+      "render": "(v, row) => {\n        const tone = getStatusTone(v)\n        return <SoftStatusLabel label={formatOperationResult(row.path, v)} tone={RESULT_TONE[tone]} />\n      }"
+    },
+    {
+      "file": "frontend/src/pages/payments/PaymentsView.tsx",
+      "line": 118,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "130",
+      "render": "(v, row) => {\n      const r = row as PaymentRecord\n      // 现结当天到期，逾期信息原本挂在到期日列上；那列换成创建日期后移到这里，避免丢失\n      const overdue = r.status !== 3 && r.dueDate && new Date(r.dueDate) < new Date()\n      return (\n        <div className=\"flex flex-wrap items-center gap-1.5\">\n          <SoftStatusLabel label={r.statusName} tone={ST_TONE[v as number] ?? 'draft'} />\n          {overdue && <SoftStatusLabel label=\"已逾期\" tone=\"danger\" />}\n        </div>\n      )\n    }"
+    },
+    {
+      "file": "frontend/src/pages/payments/PaymentsView.tsx",
+      "line": 130,
+      "key": "'confirmStatus'",
+      "title": "'结算确认'",
+      "width": "100",
+      "render": "(_: unknown, row: PaymentRecord) => (\n      row.confirmStatus === 0\n        ? <SoftStatusLabel label=\"待确认\" tone=\"warning\" />\n        : <span className=\"text-xs text-muted-foreground\">{row.confirmedByName ? `已确认 · ${row.confirmedByName}` : '已确认'}</span>\n    )"
+    },
+    {
+      "file": "frontend/src/pages/picking-waves/index.tsx",
+      "line": 181,
+      "key": "'status'",
+      "title": "'状态 / 下一步'",
+      "width": "220",
+      "render": "(_, row) => {\n        const tone = row.status === 4 ? 'success' : row.status === 5 ? 'danger' : row.status === 1 ? 'draft' : 'active'\n        const copy = getWaveClosureCopy(row)\n        return (\n          <div className=\"space-y-1\">\n            <SoftStatusLabel label={WAVE_STATUS_LABEL[row.status]} tone={tone} />\n            <p className=\"text-xs text-muted-foreground\">{copy.nextAction}</p>\n          </div>\n        )\n      }"
+    },
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "line": 132,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "v => Number(v) === 1\n        ? <SoftStatusLabel label=\"在库\" tone=\"active\" />\n        : <SoftStatusLabel label=\"空置\" tone=\"draft\" />"
+    },
+    {
+      "file": "frontend/src/pages/portal/statements.tsx",
+      "line": 44,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, row) => {\n      const r = row as PortalStatementRow\n      const tone = r.status === 3 ? 'success' : r.status === 2 ? 'active' : 'draft'\n      return <SoftStatusLabel label={r.statusName} tone={tone} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/price-change/index.tsx",
+      "line": 192,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "96",
+      "minWidth": "96",
+      "render": "(v) => <SoftStatusLabel label={STATUS_LABEL[Number(v)] ?? String(v)} tone={STATUS_TONE[Number(v)] ?? 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/procurement/index.tsx",
+      "line": 67,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "110",
+      "render": "(_, r) => <SoftStatusLabel label={r.statusName} tone={STATUS_TONE[r.status] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/products/index.tsx",
+      "line": 192,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "96",
+      "minWidth": "96",
+      "render": "(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} />"
+    },
+    {
+      "file": "frontend/src/pages/purchase/index.tsx",
+      "line": 226,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "8",
+      "render": "(v, row) => <StatusBadge type=\"purchase\" status={v as number} aria-label={(row as PurchaseOrder).statusName} />"
+    },
+    {
+      "file": "frontend/src/pages/purchase/index.tsx",
+      "line": 230,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "11"
+    },
+    {
+      "file": "frontend/src/pages/purchase-requisitions/index.tsx",
+      "line": 111,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, r) => <SoftStatusLabel label={r.statusName} tone={r.statusTone} />"
+    },
+    {
+      "file": "frontend/src/pages/racks/index.tsx",
+      "line": 136,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.status === 1 ? '启用' : '停用'} tone={activeTone(row.status === 1)} />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/refunds/index.tsx",
+      "line": 83,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v, row) => <SoftStatusLabel label={(row as RefundOrder).statusName} tone={STATUS_TONE[v as number] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/reports/ReconciliationView.tsx",
+      "line": 152,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "120",
+      "render": "(v, row) => {\n      const record = row as ReconciliationRecord\n      const overdue = isOverdue(record)\n      // 逾期本身就表示未结清：status=1（未付/未收）且逾期时只显示「已逾期」，不再叠加「未付」；\n      // 部分付/部分收仍保留（它比逾期多一层信息）\n      const hideBase = overdue && Number(v) === 1\n      return (\n        <div className=\"flex flex-wrap items-center gap-1.5\">\n          {!hideBase && (\n            <SoftStatusLabel\n              label={record.statusName}\n              tone={Number(v) === 3 ? 'success' : Number(v) === 2 ? 'active' : 'draft'}\n            />\n          )}\n          {overdue && <SoftStatusLabel label=\"逾期\" tone=\"danger\" />}\n          {type === 1 && record.confirmStatus === 0 && <SoftStatusLabel label=\"待确认\" tone=\"warning\" />}\n        </div>\n      )\n    }"
+    },
+    {
+      "file": "frontend/src/pages/reports/avg-cost-reconciliation.tsx",
+      "line": 60,
+      "key": "'drifted'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, r) => <SoftStatusLabel label={r.drifted ? '账面差异' : '一致'} tone={r.drifted ? 'danger' : 'success'} />"
+    },
+    {
+      "file": "frontend/src/pages/reports/inventory-aging.tsx",
+      "line": 76,
+      "key": "'isStale'",
+      "title": "'滞销'",
+      "width": "96",
+      "render": "(_, r) => r.isStale ? <SoftStatusLabel label={`滞销${r.daysSinceOutbound != null ? ` ${r.daysSinceOutbound}天` : ''}`} tone=\"danger\" /> : <span className=\"text-xs text-muted-foreground\">正常</span>"
+    },
+    {
+      "file": "frontend/src/pages/reports/inventory-aging.tsx",
+      "line": 86,
+      "key": "'expiryState'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, r) => r.expiryState === 'expired' ? <SoftStatusLabel label=\"已过期\" tone=\"danger\" /> : <SoftStatusLabel label=\"临期\" tone=\"warning\" />"
+    },
+    {
+      "file": "frontend/src/pages/reports/wave-performance.tsx",
+      "line": 104,
+      "key": "'statusName'",
+      "title": "'状态'",
+      "width": "100",
+      "render": "(_, w) => <SoftStatusLabel label={w.statusName} tone={STATUS_TONE[w.status] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/returns/index.tsx",
+      "line": 250,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v, row) => {\n      const status = v as number\n      const tone = status === 3 ? 'success' : status === 4 ? 'danger' : status === 1 ? 'draft' : 'active'\n      return <SoftStatusLabel label={(row as RowType).statusName} tone={tone} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/returns/index.tsx",
+      "line": 255,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "112",
+      "minWidth": "112"
+    },
+    {
+      "file": "frontend/src/pages/sale/commercial/CommercialSalePage.tsx",
+      "line": 332,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "100"
+    },
+    {
+      "file": "frontend/src/pages/sale/form/components/SaleOrderWarehouseViews.tsx",
+      "line": 24,
+      "key": "'operatorName'",
+      "title": "'操作人'",
+      "width": "110",
+      "render": "v => (v as string) || '-'"
+    },
+    {
+      "file": "frontend/src/pages/sale/index.tsx",
+      "line": 244,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "8",
+      "minWidth": "112",
+      "render": "(_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> }"
+    },
+    {
+      "file": "frontend/src/pages/sale/index.tsx",
+      "line": 245,
+      "key": "'receivableStatus'",
+      "title": "'回款状态'",
+      "width": "8",
+      "minWidth": "112",
+      "render": "(_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className=\"whitespace-nowrap\" title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> }"
+    },
+    {
+      "file": "frontend/src/pages/sale/index.tsx",
+      "line": 246,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "9",
+      "minWidth": "112"
+    },
+    {
+      "file": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+      "line": 253,
+      "key": "'latestJob'",
+      "title": "'条码状态'",
+      "width": "130",
+      "render": "(_, row) => (\n          <div className=\"space-y-1\">\n            {barcodeStatusBadge(row)}\n            {/* 作废原因跟着**业务状态**走（解释为什么这张条码不能再补打），不跟任务结果混在一起 */}\n            {row.voidReason && (\n              <div className=\"text-[11px] leading-4 text-muted-foreground\">原因：{row.voidReason}</div>\n            )}\n          </div>\n        )"
+    },
+    {
+      "file": "frontend/src/pages/settings/pda-devices/index.tsx",
+      "line": 114,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "10",
+      "render": "(v) => {\n        const status = v as PdaDeviceStatus\n        return <SoftStatusLabel label={STATUS_LABEL[status]} tone={status === 'active' ? 'success' : 'draft'} />\n      }"
+    },
+    {
+      "file": "frontend/src/pages/settings/print-templates/index.tsx",
+      "line": 67,
+      "key": "'isDefault'",
+      "title": "'默认'",
+      "width": "80",
+      "render": "v => v ? <SoftStatusLabel label=\"默认\" tone=\"active\" /> : <span className=\"text-muted-foreground\">—</span>"
+    },
+    {
+      "file": "frontend/src/pages/settings/printers/index.tsx",
+      "line": 379,
+      "key": "'typeName'",
+      "title": "'类型'",
+      "width": "110",
+      "render": "(_, p) => <SoftStatusLabel label={TYPE_LABEL[p.type]} tone=\"info\" />"
+    },
+    {
+      "file": "frontend/src/pages/settings/printers/index.tsx",
+      "line": 383,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(_, p) => (\n        <SoftStatusLabel\n          label={p.status === 1 ? '在线' : '离线'}\n          tone={activeTone(p.status === 1)}\n          onClick={canManagePrinters ? () => { if (managePermissionRef.current) toggleStatus.mutate(p) } : undefined}\n        />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/settings/printers/index.tsx",
+      "line": 393,
+      "key": "'source'",
+      "title": "'来源'",
+      "width": "110",
+      "render": "(_, p) => (\n        <SoftStatusLabel\n          label={formatPrinterSource(p.source) || sourceBadgeLabel(p.source)}\n          tone={p.source === 'client' ? 'success' : p.source === 'local_desktop' ? 'info' : 'draft'}\n          title={p.source ? `原始来源：${p.source}` : undefined}\n        />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/sorting-bins/index.tsx",
+      "line": 188,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(v) => <SoftStatusLabel label={SORTING_BIN_STATUS_LABEL[v as number]} tone={SORTING_BIN_STATUS_TONE[v as number] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/abc.tsx",
+      "line": 133,
+      "key": "'abcClass'",
+      "title": "'档位'",
+      "width": "120",
+      "render": "(_, r) => <SoftStatusLabel label={`${r.abcClass} 类`} tone={ABC_TONE[r.abcClass] ?? 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/abc.tsx",
+      "line": 153,
+      "key": "'abcClass'",
+      "title": "'类别'",
+      "width": "130",
+      "render": "(_, r) => <SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} />"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/index.tsx",
+      "line": 48,
+      "key": "'checkType'",
+      "title": "'类型'",
+      "width": "120",
+      "render": "(_,row)=>{ const r=row as StockCheck; return <SoftStatusLabel label={r.checkType===2?`分批盘点${r.scopeValue?`·${r.scopeValue}`:''}`:'全盘'} tone=\"info\" /> }"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/index.tsx",
+      "line": 49,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v,row)=><SoftStatusLabel label={(row as StockCheck).statusName} tone={STATUS_TONE[v as number] ?? 'draft'} />"
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/index.tsx",
+      "line": 50,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "100"
+    },
+    {
+      "file": "frontend/src/pages/supplier-refunds/index.tsx",
+      "line": 58,
+      "key": "'status'",
+      "title": "'业务阶段'",
+      "width": "100",
+      "render": "(_, r) => <SoftStatusLabel label={SUPPLIER_REFUND_STATUS_NAME[r.status] || '状态待核对'} tone={({ 1: 'draft', 2: 'active', 3: 'success', 4: 'danger' } as Record<number, StatusTone>)[r.status] || 'warning'} />"
+    },
+    {
+      "file": "frontend/src/pages/suppliers/index.tsx",
+      "line": 91,
+      "key": "'settlementType'",
+      "title": "'结算方式'",
+      "width": "110",
+      "render": "(_,r)=>(\n      <SoftStatusLabel\n        label={r.settlementType === SETTLEMENT_TYPE.MONTHLY ? `月结 ${r.paymentTermsDays} 天` : r.settlementTypeName}\n        tone={(SETTLEMENT_TYPE_TONE[String(r.settlementType) as keyof typeof SETTLEMENT_TYPE_TONE] ?? 'info') as StatusTone}\n      />\n    )"
+    },
+    {
+      "file": "frontend/src/pages/suppliers/index.tsx",
+      "line": 97,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} />"
+    },
+    {
+      "file": "frontend/src/pages/transfer/index.tsx",
+      "line": 193,
+      "key": "'status'",
+      "title": "'状态'",
+      "width": "90",
+      "render": "(v, row) => {\n      const status = v as number\n      const tone = status === 4 ? 'success' : status === 5 ? 'danger' : status === 1 ? 'draft' : 'active'\n      return <SoftStatusLabel label={(row as TransferOrder).statusName} tone={tone} />\n    }"
+    },
+    {
+      "file": "frontend/src/pages/transfer/index.tsx",
+      "line": 198,
+      "key": "'operatorName'",
+      "title": "'经办人'",
+      "width": "112",
+      "minWidth": "112"
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 74,
+      "key": "'realName'",
+      "title": "'姓名'",
+      "width": "120"
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 75,
+      "key": "'roleName'",
+      "title": "'角色'",
+      "width": "100",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.roleName} tone={row.roleId === 1 ? 'active' : 'info'} />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 89,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.isActive ? '启用' : '禁用'} tone={activeTone(row.isActive)} />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/users/index.tsx",
+      "line": 97,
+      "key": "'allowSelfApprove'",
+      "title": "'自行审批'",
+      "width": "90",
+      "render": "(_, row) => (row.allowSelfApprove\n        ? <SoftStatusLabel label=\"已开启\" tone=\"warning\" />\n        : <span className=\"text-muted-foreground\">—</span>)"
+    },
+    {
+      "file": "frontend/src/pages/warehouses/index.tsx",
+      "line": 52,
+      "key": "'typeName'",
+      "title": "'类型'",
+      "width": "90",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.typeName} tone=\"info\" />\n      )"
+    },
+    {
+      "file": "frontend/src/pages/warehouses/index.tsx",
+      "line": 58,
+      "key": "'manager'",
+      "title": "'负责人'",
+      "width": "100",
+      "render": "(v) => (v as string) || '-'"
+    },
+    {
+      "file": "frontend/src/pages/warehouses/index.tsx",
+      "line": 61,
+      "key": "'isActive'",
+      "title": "'状态'",
+      "width": "80",
+      "render": "(_, row) => (\n        <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} />\n      )"
+    }
+  ]
+}

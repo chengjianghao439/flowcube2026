@@ -41,13 +41,13 @@ const cases=[
  {page:'/finance/transactions',api:'finance',op:'getAccountTransactionsApi',dialog:true,input:'关联单号 / 往来单位',open:'SYN42',close:'关闭'},
  {page:'/finance/expenses',api:'finance',op:'getExpenseClaimsApi',dialog:true,input:'单号 / 事由 / 申请人',open:'明细',close:'关闭'},
  {page:'/accounting/vouchers',api:'accounting',op:'getVouchersApi',dialog:true,input:'凭证号 / 单号 / 摘要',open:'查看',close:'关闭'},
- {page:'/accounting/invoices',api:'accounting',op:'getInvoicesApi',input:'发票号 / 单位 / 单号',open:'编辑',close:'取消'},
+ {page:'/accounting/invoices',api:'accounting',op:'getInvoicesApi',dialog:true,input:'发票号 / 单位 / 单号',open:'更多操作',menuAction:'编辑',close:'取消'},
  {page:'/accounting/fixed-assets',api:'assets',op:'listFixedAssetsApi',input:'编号 / 名称 / 类别',enter:true,open:'处置',close:'取消'},
 ]
 for(const c of cases)test('真实'+c.page+'应用筛选→实际明细/编辑弹窗关闭→切页返回',async()=>{
  await h.render(c.page);if(c.dialog)await h.click('查询');const input=(c.dialog?document:h.host).querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!;await h.input(input,'KEEP');if(c.dialog)await h.click('查询',document.querySelector('[role="dialog"]')!);else if(c.enter)await h.enter(input)
  expect(lastRead(c.api,c.op)?.args[0]).toMatchObject({keyword:'KEEP'});const params=lastRead(c.api,c.op)?.args[0];expect(h.activeText()).toContain('SYN42')
- await h.click(c.open);const dialog=document.querySelector('[role="dialog"]')!;expect(dialog).not.toBeNull();expect(dialog.textContent).not.toMatch(/加载失败|与这笔流水不符/);await h.click(c.close);expect(document.querySelector('[role="dialog"]')).toBeNull()
+ await h.click(c.open);if('menuAction' in c && c.menuAction)await h.click(c.menuAction);const dialog=document.querySelector('[role="dialog"]')!;expect(dialog).not.toBeNull();expect(dialog.textContent).not.toMatch(/加载失败|与这笔流水不符/);await h.click(c.close);expect(document.querySelector('[role="dialog"]')).toBeNull()
  await h.go('/dashboard');await h.go(c.page);expect(lastRead(c.api,c.op)?.args[0]).toEqual(params);expect(h.activeText()).toContain('SYN42')
  if(c.dialog){await h.click('查询');expect(document.querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!.value).toBe('KEEP');await h.click('取消')}else expect(h.host.querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!.value).toBe('KEEP')
 })

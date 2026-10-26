@@ -3,10 +3,12 @@ import { Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
@@ -52,9 +54,10 @@ interface FlowDraft {
 }
 const emptyStep = (stepOrder: number) => ({ stepOrder, approverType: APPROVER_TYPE.ROLE, roleId: '', departmentId: '', userId: '' })
 const emptyFlow = (): FlowDraft => ({ bizType: 'purchase_requisition', name: '', minAmount: '', maxAmount: '', isActive: true, remark: '', steps: [emptyStep(1)] })
+const NO_CHOICE = '__none__'
 
 export default function ApprovalFlowsPage() {
-  const { data: flows = [] } = useApprovalFlows()
+  const { data: flows = [], isSuccess } = useApprovalFlows()
   const { mutate: createFlow, isPending: creating } = useCreateApprovalFlow()
   const { mutate: updateFlow, isPending: updating } = useUpdateApprovalFlow()
   const { mutate: deleteFlow } = useDeleteApprovalFlow()
@@ -196,6 +199,7 @@ export default function ApprovalFlowsPage() {
 
 
       <DataTable columns={columns} data={flows} loading={false} rowKey="id" />
+      {isSuccess && <ListSummary total={flows.length} unit="个" />}
 
       <Dialog open={formOpen} onOpenChange={v => { if (!v) draft.requestClose() }}>
         <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog sm:max-w-4xl">
@@ -215,15 +219,10 @@ export default function ApprovalFlowsPage() {
             <div className="grid grid-cols-2 gap-x-5 gap-y-4">
               <div className="space-y-2">
                 <Label htmlFor={`${inputId}-bizType`}>业务类型</Label>
-                <select
-                  id={`${inputId}-bizType`}
-                  value={form.bizType}
-                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, bizType: e.target.value })}
-                  disabled={!!editing}
-                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {BIZ_TYPES.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-                </select>
+                <Select value={form.bizType} onValueChange={value => setForm({ ...form, bizType: value })} disabled={!!editing || draft.locked}>
+                  <SelectTrigger id={`${inputId}-bizType`} className="h-9 w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>{BIZ_TYPES.map(b => <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor={`${inputId}-name`}>流程名称</Label>
@@ -257,44 +256,51 @@ export default function ApprovalFlowsPage() {
                   <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                     <div className="space-y-1">
                       <Label htmlFor={`${inputId}-step-${i}-approverType`}>第 {s.stepOrder} 级审批人类型</Label>
-                      <select
-                        id={`${inputId}-step-${i}-approverType`}
-                        value={s.approverType}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { approverType: Number(e.target.value) })}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        <option value={APPROVER_TYPE.ROLE}>指定角色</option>
-                        <option value={APPROVER_TYPE.DEPT_MANAGER}>部门负责人</option>
-                        <option value={APPROVER_TYPE.USER}>指定用户</option>
-                      </select>
+                      <Select value={String(s.approverType)} onValueChange={value => setStep(i, { approverType: Number(value) })} disabled={draft.locked}>
+                        <SelectTrigger id={`${inputId}-step-${i}-approverType`} className="h-9 w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={String(APPROVER_TYPE.ROLE)}>指定角色</SelectItem>
+                          <SelectItem value={String(APPROVER_TYPE.DEPT_MANAGER)}>部门负责人</SelectItem>
+                          <SelectItem value={String(APPROVER_TYPE.USER)}>指定用户</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     {s.approverType === APPROVER_TYPE.ROLE && (
                       <div className="space-y-1">
                         <Label htmlFor={`${inputId}-step-${i}-roleId`}>第 {s.stepOrder} 级角色</Label>
-                        <select id={`${inputId}-step-${i}-roleId`} value={s.roleId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { roleId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                          <option value="">选择角色</option>
-                          {selectableRoles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                          {s.roleId && !selectableRoles.some(r => String(r.id) === s.roleId) && <option value={s.roleId}>当前隐藏角色（保留原设置）</option>}
-                        </select>
+                        <Select value={s.roleId || NO_CHOICE} onValueChange={value => setStep(i, { roleId: value === NO_CHOICE ? '' : value })} disabled={draft.locked}>
+                          <SelectTrigger id={`${inputId}-step-${i}-roleId`} className="h-9 w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_CHOICE}>选择角色</SelectItem>
+                            {selectableRoles.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
+                            {s.roleId && !selectableRoles.some(r => String(r.id) === s.roleId) && <SelectItem value={s.roleId}>当前隐藏角色（保留原设置）</SelectItem>}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
                     {s.approverType === APPROVER_TYPE.DEPT_MANAGER && (
                       <div className="space-y-1">
                         <Label htmlFor={`${inputId}-step-${i}-departmentId`}>第 {s.stepOrder} 级部门（留空=申请人所属部门）</Label>
-                        <select id={`${inputId}-step-${i}-departmentId`} value={s.departmentId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { departmentId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                          <option value="">申请人所属部门</option>
-                          {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                        </select>
+                        <Select value={!s.departmentId || s.departmentId === '0' ? NO_CHOICE : s.departmentId} onValueChange={value => setStep(i, { departmentId: value === NO_CHOICE ? '' : value })} disabled={draft.locked}>
+                          <SelectTrigger id={`${inputId}-step-${i}-departmentId`} className="h-9 w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_CHOICE}>申请人所属部门</SelectItem>
+                            {departments.map(d => <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
                     {s.approverType === APPROVER_TYPE.USER && (
                       <div className="space-y-1">
                         <Label htmlFor={`${inputId}-step-${i}-userId`}>第 {s.stepOrder} 级用户</Label>
-                        <select id={`${inputId}-step-${i}-userId`} value={s.userId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStep(i, { userId: e.target.value })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                          <option value="">选择用户</option>
-                          {users.map((u) => <option key={u.id} value={u.id}>{u.realName}</option>)}
-                          {s.userId && !users.some(u => String(u.id) === s.userId) && <option value={s.userId}>当前不可用用户（保留原设置）</option>}
-                        </select>
+                        <Select value={s.userId || NO_CHOICE} onValueChange={value => setStep(i, { userId: value === NO_CHOICE ? '' : value })} disabled={draft.locked}>
+                          <SelectTrigger id={`${inputId}-step-${i}-userId`} className="h-9 w-full"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_CHOICE}>选择用户</SelectItem>
+                            {users.map(u => <SelectItem key={u.id} value={String(u.id)}>{u.realName}</SelectItem>)}
+                            {s.userId && !users.some(u => String(u.id) === s.userId) && <SelectItem value={s.userId}>当前不可用用户（保留原设置）</SelectItem>}
+                          </SelectContent>
+                        </Select>
                       </div>
                     )}
                   </div>

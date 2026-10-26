@@ -1,0 +1,248 @@
+{
+  "ledger": [
+    {
+      "text": "日期",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "凭证号",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "摘要",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "借方",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "贷方",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "余额",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    }
+  ],
+  "kit": [
+    {
+      "text": "组件商品",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "基本单位",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "每套基本量",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "原版本 A 价",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "原分摊参考 / 来源",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "操作",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    }
+  ],
+  "payment": [
+    {
+      "text": "关联单号",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "本次核销",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "订单总额",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    },
+    {
+      "text": "剩余余额",
+      "before": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      },
+      "after": {
+        "background": "rgb(245, 245, 247)",
+        "fontWeight": "600",
+        "fontSize": "12px",
+        "padding": "10px 16px"
+      }
+    }
+  ]
+}

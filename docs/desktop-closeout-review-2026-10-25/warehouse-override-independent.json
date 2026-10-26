@@ -1,0 +1,72 @@
+{
+  "before": [
+    {
+      "color": "rgb(110, 110, 115)",
+      "inlineColor": "hsl(var(--muted-foreground))",
+      "label": "待拣货",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    },
+    {
+      "color": "rgb(15, 98, 254)",
+      "inlineColor": "hsl(var(--blue-60))",
+      "label": "待复核",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    },
+    {
+      "color": "rgb(0, 45, 156)",
+      "inlineColor": "hsl(var(--blue-80))",
+      "label": "待打包",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    }
+  ],
+  "disabled": [
+    {
+      "color": "rgb(110, 110, 115)",
+      "inlineColor": "hsl(var(--muted-foreground))",
+      "label": "待拣货",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    },
+    {
+      "color": "rgb(15, 98, 254)",
+      "inlineColor": "hsl(var(--blue-60))",
+      "label": "待复核",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    },
+    {
+      "color": "rgb(0, 45, 156)",
+      "inlineColor": "hsl(var(--blue-80))",
+      "label": "待打包",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    }
+  ],
+  "restored": [
+    {
+      "color": "rgb(110, 110, 115)",
+      "inlineColor": "hsl(var(--muted-foreground))",
+      "label": "待拣货",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    },
+    {
+      "color": "rgb(15, 98, 254)",
+      "inlineColor": "hsl(var(--blue-60))",
+      "label": "待复核",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    },
+    {
+      "color": "rgb(0, 45, 156)",
+      "inlineColor": "hsl(var(--blue-80))",
+      "label": "待打包",
+      "leftColor": "rgb(110, 110, 115)",
+      "rightColor": "rgb(29, 29, 31)"
+    }
+  ],
+  "rulesTemporarilyDisabled": 3
+}

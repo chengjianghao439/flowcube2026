@@ -1,0 +1,51 @@
+{
+  "typecheck": {
+    "command": "pnpm --dir frontend exec tsc -b",
+    "exit": 0
+  },
+  "build": {
+    "command": "VITE_ELECTRON=1 pnpm --dir frontend exec vite build --outDir /tmp/flowcube-desktop-data-state-20261025/dist",
+    "exit": 0,
+    "rerunAfterLastWidthChange": true
+  },
+  "lint": {
+    "initialChangedTsxFiles": 23,
+    "followupFile": "frontend/src/pages/price-change/index.tsx",
+    "exit": 0
+  },
+  "frontendFull": {
+    "exit": 0,
+    "files": 419,
+    "tests": 3789,
+    "scope": "before final price-change width constant adjustment"
+  },
+  "widthFollowup": {
+    "exit": 0,
+    "files": 1,
+    "tests": 21
+  },
+  "focused": {
+    "exit": 0,
+    "files": 3,
+    "tests": 18
+  },
+  "frontendConventions": {
+    "exit": 0,
+    "tests": 5
+  },
+  "agentsMdGuard": {
+    "exit": 0
+  },
+  "browserCleanup": {
+    "success": true,
+    "data": {
+      "sessions": []
+    }
+  },
+  "services": {
+    "ownedPreview5207": "stopped",
+    "ownedMock58365": "stopped",
+    "existing5197": "preserved, pid 54161"
+  },
+  "changedScope": "presentation only; price grade colors and dark blocks unchanged"
+}

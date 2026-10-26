@@ -1,0 +1,86 @@
+[
+  {
+    "file": "frontend/src/pages/accounting/ledger/index.tsx",
+    "line": 33,
+    "tableOpeningElement": "<ReportTable className=\"w-full text-sm\">",
+    "theadOpeningElement": "<thead className=\"sticky top-0 text-muted-foreground\">",
+    "removedOnly": "bg-muted/60"
+  },
+  {
+    "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+    "line": 207,
+    "tableOpeningElement": "<ReportTable className=\"w-full text-sm\">",
+    "theadOpeningElement": "<thead className=\"text-muted-foreground\">",
+    "removedOnly": "bg-muted/40"
+  },
+  {
+    "file": "frontend/src/pages/credit-overrides/index.tsx",
+    "line": 81,
+    "tableOpeningElement": "<ReportTable className=\"w-full min-w-[460px] text-sm\">",
+    "theadOpeningElement": "<thead className=\"sticky top-0\">",
+    "removedOnly": "bg-muted/60"
+  },
+  {
+    "file": "frontend/src/pages/finance/accounts/index.tsx",
+    "line": 327,
+    "tableOpeningElement": "<ReportTable className=\"w-full text-sm\">",
+    "theadOpeningElement": "<thead className=\"sticky top-0 text-xs text-muted-foreground\">",
+    "removedOnly": "bg-muted/50"
+  },
+  {
+    "file": "frontend/src/pages/finance/expenses/index.tsx",
+    "line": 455,
+    "tableOpeningElement": "<ReportTable className=\"w-full text-sm\">",
+    "theadOpeningElement": "<thead className=\"text-xs text-muted-foreground\">",
+    "removedOnly": "bg-muted/50"
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "line": 198,
+    "tableOpeningElement": "<ReportTable className=\"w-full min-w-[820px] text-sm\">",
+    "theadOpeningElement": "<thead className=\"text-left text-xs text-muted-foreground\">",
+    "removedOnly": "bg-muted"
+  },
+  {
+    "file": "frontend/src/pages/procurement/detail.tsx",
+    "line": 104,
+    "tableOpeningElement": "<ReportTable className=\"w-full min-w-[1900px] text-sm\">",
+    "theadOpeningElement": "<thead className=\"text-muted-foreground [&_th]:whitespace-nowrap\">",
+    "removedOnly": "bg-muted/40"
+  },
+  {
+    "file": "frontend/src/pages/reports/replenishment.tsx",
+    "line": 255,
+    "tableOpeningElement": "<ReportTable className=\"w-full min-w-[1500px] text-sm\">",
+    "theadOpeningElement": "<thead className=\"sticky top-0\">",
+    "removedOnly": "bg-muted/60"
+  },
+  {
+    "file": "frontend/src/pages/stockcheck/abc.tsx",
+    "line": 226,
+    "tableOpeningElement": "<ReportTable className=\"w-full text-sm\">",
+    "theadOpeningElement": "<thead className=\"text-muted-foreground\">",
+    "removedOnly": "bg-muted/40"
+  },
+  {
+    "file": "frontend/src/components/shared/payments/ReceiptDetailDialog.tsx",
+    "line": 72,
+    "tableOpeningElement": "<ReportTable className=\"w-full text-sm\">",
+    "theadOpeningElement": "<thead className=\"text-xs text-muted-foreground\">",
+    "removedOnly": "bg-muted/50"
+  },
+  {
+    "file": "frontend/src/components/shared/payments/SettlementConfirmDialog.tsx",
+    "line": 76,
+    "tableOpeningElement": "<ReportTable className=\"w-full text-sm\">",
+    "theadOpeningElement": "<thead className=\"text-xs text-muted-foreground\">",
+    "removedOnly": "bg-muted/50"
+  },
+  {
+    "file": "frontend/src/components/shared/payments/StatementDetailDialog.tsx",
+    "line": 116,
+    "tableOpeningElement": "<ReportTable className=\"w-full text-sm\">",
+    "theadOpeningElement": "<thead className=\"text-xs text-muted-foreground\">",
+    "removedOnly": "bg-muted/50"
+  }
+]

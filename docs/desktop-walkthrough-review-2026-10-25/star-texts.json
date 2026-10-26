@@ -1,0 +1,938 @@
+[
+  {
+    "file": "frontend/src/components/shared/UserMenu.tsx",
+    "line": 209,
+    "text": "当前密码 *",
+    "parents": [
+      "<Label htmlFor=\"profile-old-password\">",
+      "<div className=\"space-y-1\">",
+      "<form onSubmit={handlePwdSubmit} className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/UserMenu.tsx",
+    "line": 210,
+    "text": "新密码 *（至少 6 位）",
+    "parents": [
+      "<Label htmlFor=\"profile-new-password\">",
+      "<div className=\"space-y-1\">",
+      "<form onSubmit={handlePwdSubmit} className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/UserMenu.tsx",
+    "line": 211,
+    "text": "确认新密码 *",
+    "parents": [
+      "<Label htmlFor=\"profile-confirm-password\">",
+      "<div className=\"space-y-1\">",
+      "<form onSubmit={handlePwdSubmit} className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/BackfillRequestDialog.tsx",
+    "line": 52,
+    "text": "申请原因 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"space-y-3 py-1 text-sm\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+    "line": 232,
+    "text": "单号 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+    "line": 236,
+    "text": "供应商 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+    "line": 240,
+    "text": "金额 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+    "line": 244,
+    "text": "结算方式 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/CreateManualPayableDialog.tsx",
+    "line": 266,
+    "text": "借方科目 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/CreateStatementDialog.tsx",
+    "line": 108,
+    "text": "*",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-1 items-end gap-4 sm:grid-cols-[minmax(0,2fr)_repeat(2,minmax(160px,1fr))]\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/RegisterPaymentDialog.tsx",
+    "line": 213,
+    "text": "资金账户 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1 col-span-2\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/RegisterPaymentDialog.tsx",
+    "line": 223,
+    "text": "金额 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/RegisterPaymentDialog.tsx",
+    "line": 224,
+    "text": "日期 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+    "line": 328,
+    "text": "*",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1 col-span-2\">",
+      "<div className=\"grid grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_1fr_1fr] gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+    "line": 348,
+    "text": "日期 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_1fr_1fr] gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/payments/SettleReceiptDialog.tsx",
+    "line": 365,
+    "text": "*",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-[minmax(160px,1fr)_minmax(220px,1.4fr)_1fr_1fr] gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/components/ui/label.tsx",
+    "line": 16,
+    "text": "*",
+    "parents": [
+      "<span key={index} className=\"text-destructive-ink\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/accounts/index.tsx",
+    "line": 145,
+    "text": "科目编码 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/accounts/index.tsx",
+    "line": 156,
+    "text": "科目名称 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/accounts/index.tsx",
+    "line": 165,
+    "text": "科目类别 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/accounts/index.tsx",
+    "line": 180,
+    "text": "余额方向 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/invoices/index.tsx",
+    "line": 132,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<Label htmlFor={`${inputId}-invoiceNo`}>",
+      "<div className=\"space-y-1.5\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/invoices/index.tsx",
+    "line": 133,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<Label htmlFor={`${inputId}-partyName`}>",
+      "<div className=\"space-y-1.5 col-span-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/invoices/index.tsx",
+    "line": 135,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<Label htmlFor={`${inputId}-withTax`}>",
+      "<div className=\"space-y-1.5\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/invoices/index.tsx",
+    "line": 148,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<Label htmlFor={`${inputId}-invoiceDate`}>",
+      "<div className=\"space-y-1.5\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+    "line": 278,
+    "text": "记账日期 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/categories/index.tsx",
+    "line": 137,
+    "text": "分类名称 *",
+    "parents": [
+      "<Label htmlFor=\"category-name\">",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/credit-overrides/index.tsx",
+    "line": 108,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<Label htmlFor=\"credit-reason\">",
+      "<div className=\"space-y-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/customers/index.tsx",
+    "line": 137,
+    "text": "请先下载模板，按照格式填写后上传。列：客户编码（可空，留空自动生成）、客户名称*、联系人、电话、结算方式（现结或 1、月结或 2；留空默认月结）、授信额度（可空）、地址（选填，旧六列模板仍可用）。名称最多 100 字、联系人 50 字、电话 30 字、地址 200 字。电话支持数字、空格、+、(、)、-。格式无效、超限、名称或编码重复的行会跳过并显示行号和原因，不会截短资料。",
+    "parents": [
+      "<p className=\"max-w-4xl text-sm leading-6 text-muted-foreground\">",
+      "<div className=\"rounded-lg border border-border bg-card p-4 space-y-3\">",
+      "<div className=\"desktop-record-page space-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/disposal/components/CreateDisposalDialog.tsx",
+    "line": 146,
+    "text": "选择仓库 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-5\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/finance/accounts/index.tsx",
+    "line": 261,
+    "text": "账户名称 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-name`}>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/finance/accounts/index.tsx",
+    "line": 265,
+    "text": "类型 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-type`}>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/finance/accounts/index.tsx",
+    "line": 373,
+    "text": "调整后余额 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-adjusted`}>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/finance/expense-categories/index.tsx",
+    "line": 52,
+    "text": "类别名称 *",
+    "parents": [
+      "<Label htmlFor=\"expense-category-name\">",
+      "<div className=\"space-y-1\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/finance/expenses/index.tsx",
+    "line": 489,
+    "text": "付款账户 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<DialogContent>"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/finance/expenses/index.tsx",
+    "line": 549,
+    "text": "驳回原因 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<DialogContent>"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/fixed-assets/index.tsx",
+    "line": 48,
+    "text": "资产名称 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"fc-form-dialog-body space-y-3 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/fixed-assets/index.tsx",
+    "line": 63,
+    "text": "购置日期 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-x-5 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/fixed-assets/index.tsx",
+    "line": 67,
+    "text": "原值（元）*",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-x-5 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/fixed-assets/index.tsx",
+    "line": 77,
+    "text": "使用年限（月）*",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"grid grid-cols-2 gap-x-5 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/inbound-tasks/create.tsx",
+    "line": 196,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<label htmlFor={`${fieldPrefix}-supplier`} className=\"text-sm font-medium\">",
+      "<div className=\"space-y-1.5\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/inventory/index.tsx",
+    "line": 435,
+    "text": "商品 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-2\">",
+      "<form onSubmit={handleOp} className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/inventory/index.tsx",
+    "line": 437,
+    "text": "仓库 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-2\">",
+      "<form onSubmit={handleOp} className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/inventory/index.tsx",
+    "line": 446,
+    "text": "数量 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-2\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "line": 166,
+    "text": "配件名称 *",
+    "parents": [
+      "<Label htmlFor=\"kit-name\">",
+      "<div className=\"space-y-1.5\">",
+      "<fieldset disabled={!writable || locked} className=\"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "line": 167,
+    "text": "分类 *",
+    "parents": [
+      "<Label htmlFor=\"kit-category\">",
+      "<div className=\"space-y-1.5\">",
+      "<fieldset disabled={!writable || locked} className=\"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "line": 168,
+    "text": "供应商 *",
+    "parents": [
+      "<Label htmlFor=\"kit-supplier\">",
+      "<div className=\"space-y-1.5\">",
+      "<fieldset disabled={!writable || locked} className=\"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "line": 169,
+    "text": "单位 *",
+    "parents": [
+      "<Label htmlFor=\"kit-unit\">",
+      "<div className=\"space-y-1.5\">",
+      "<fieldset disabled={!writable || locked} className=\"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "line": 170,
+    "text": "型号 *",
+    "parents": [
+      "<Label htmlFor=\"kit-spec\">",
+      "<div className=\"space-y-1.5\">",
+      "<fieldset disabled={!writable || locked} className=\"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "line": 171,
+    "text": "颜色 *",
+    "parents": [
+      "<Label htmlFor=\"kit-color\">",
+      "<div className=\"space-y-1.5\">",
+      "<fieldset disabled={!writable || locked} className=\"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "line": 173,
+    "text": "进价 *",
+    "parents": [
+      "<Label htmlFor=\"kit-cost\">",
+      "<div className=\"space-y-1.5\">",
+      "<fieldset disabled={!writable || locked} className=\"grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/permissions/index.tsx",
+    "line": 63,
+    "text": "角色编码 *",
+    "parents": [
+      "<Label>",
+      "<div>",
+      "<div className=\"space-y-3 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/permissions/index.tsx",
+    "line": 67,
+    "text": "角色名称 *",
+    "parents": [
+      "<Label>",
+      "<div>",
+      "<div className=\"space-y-3 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/permissions/index.tsx",
+    "line": 111,
+    "text": "角色编码 *",
+    "parents": [
+      "<Label>",
+      "<div>",
+      "<div className=\"space-y-3 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/permissions/index.tsx",
+    "line": 115,
+    "text": "角色名称 *",
+    "parents": [
+      "<Label>",
+      "<div>",
+      "<div className=\"space-y-3 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/plastic-boxes/index.tsx",
+    "line": 209,
+    "text": "绑定商品 *",
+    "parents": [
+      "<Label htmlFor=\"plastic-box-product\">",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"space-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/plastic-boxes/index.tsx",
+    "line": 213,
+    "text": "所属仓库 *",
+    "parents": [
+      "<Label htmlFor=\"plastic-box-warehouse\">",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"space-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 325,
+    "text": "名称 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-3 gap-x-6 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 329,
+    "text": "分类 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-3 gap-x-6 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 345,
+    "text": "供应商 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-3 gap-x-6 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 359,
+    "text": "单位 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-3 gap-x-6 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 363,
+    "text": "型号 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-3 gap-x-6 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 367,
+    "text": "颜色 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-3 gap-x-6 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/products/form.tsx",
+    "line": 375,
+    "text": "进价 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-3 gap-x-6 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/purchase/form/index.tsx",
+    "line": 392,
+    "text": "供应商 *",
+    "parents": [
+      "<Label htmlFor={fieldId('supplier')}>",
+      "<div data-entry-field=\"party\" className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/purchase/form/index.tsx",
+    "line": 408,
+    "text": "入库仓库 *",
+    "parents": [
+      "<Label htmlFor={fieldId('warehouse')}>",
+      "<div data-entry-field=\"warehouse\" className=\"space-y-1.5\">",
+      "<div className=\"grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/purchase/form/index.tsx",
+    "line": 750,
+    "text": "驳回原因 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-2\">",
+      "<DialogContent className=\"sm:max-w-md\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/purchase/index.tsx",
+    "line": 418,
+    "text": "驳回原因 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-2\">",
+      "<DialogContent className=\"sm:max-w-md\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/purchase-requisitions/form.tsx",
+    "line": 383,
+    "text": "期望入库仓 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"desktop-form-fields desktop-requisition-fields grid grid-cols-4 gap-x-5 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/purchase-requisitions/form.tsx",
+    "line": 441,
+    "text": "驳回原因 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-2 py-2\">",
+      "<DialogContent className=\"sm:max-w-lg\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/racks/index.tsx",
+    "line": 219,
+    "text": "所属仓库 *",
+    "parents": [
+      "<Label htmlFor=\"rack-warehouse\">",
+      "<div className=\"space-y-2\">",
+      "<div className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/racks/index.tsx",
+    "line": 297,
+    "text": "货架编码 *",
+    "parents": [
+      "<Label htmlFor=\"rack-code\">",
+      "<div className=\"space-y-2\">",
+      "<div className=\"grid grid-cols-2 gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/refunds/index.tsx",
+    "line": 191,
+    "text": "销售单号 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-sale`}>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/refunds/index.tsx",
+    "line": 195,
+    "text": "退款金额 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-amount`}>",
+      "<div className=\"space-y-1\">",
+      "<div className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/returns/purchase/form/index.tsx",
+    "line": 379,
+    "text": "供应商 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"w-[272px] shrink-0 space-y-1.5\">",
+      "<div className=\"desktop-form-fields flex flex-wrap items-start gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/returns/purchase/form/index.tsx",
+    "line": 390,
+    "text": "退货仓库 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"w-56 shrink-0 space-y-1.5\">",
+      "<div className=\"desktop-form-fields flex flex-wrap items-start gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/returns/sale/form/index.tsx",
+    "line": 374,
+    "text": "客户 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"desktop-form-fields grid grid-cols-3 gap-x-5 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/returns/sale/form/index.tsx",
+    "line": 385,
+    "text": "退货仓库 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"desktop-form-fields grid grid-cols-3 gap-x-5 gap-y-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/sale/form/components/SaleOrderHeaderFields.tsx",
+    "line": 76,
+    "text": "客户 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-customer`}>",
+      "<div data-entry-field=\"party\" className=\"space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground\">",
+      "<div className=\"grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/sale/form/components/SaleOrderHeaderFields.tsx",
+    "line": 81,
+    "text": "出库仓库 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-warehouse`}>",
+      "<div data-entry-field=\"warehouse\" className=\"space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground\">",
+      "<div className=\"grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/settings/printers/index.tsx",
+    "line": 474,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<label className=\"text-label mb-1 block\">",
+      "<div>"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/settings/printers/index.tsx",
+    "line": 491,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<label className=\"text-label mb-1 block\">",
+      "<div>"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/stockcheck/index.tsx",
+    "line": 96,
+    "text": "选择仓库 *",
+    "parents": [
+      "<Label>",
+      "<div className=\"space-y-1\">",
+      "<form onSubmit={handleCreate} className=\"space-y-4 py-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/supplier-refunds/CreateRefundPage.tsx",
+    "line": 88,
+    "text": "真实银行回款日 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-date`}>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid max-w-3xl gap-4 sm:grid-cols-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/supplier-refunds/CreateRefundPage.tsx",
+    "line": 89,
+    "text": "收入账户 *",
+    "parents": [
+      "<Label htmlFor={`${fieldId}-account`}>",
+      "<div className=\"space-y-1.5\">",
+      "<div className=\"grid max-w-3xl gap-4 sm:grid-cols-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/suppliers/index.tsx",
+    "line": 133,
+    "text": "请先下载模板，按格式填写后上传。列：供应商编码（可空，留空自动生成）、供应商名称*、联系人、电话、结算方式（现结或 1、月结或 2；留空默认月结）、账期（天，仅月结有效）、采购提前期（天）、地址。名称最多 100 字、联系人 50 字、电话 30 字、地址 200 字。电话支持数字、空格、+、(、)、-。格式无效、超限、名称或编码重复的行会跳过并显示行号和原因，不会截短资料。",
+    "parents": [
+      "<p className=\"text-sm text-muted-foreground\">",
+      "<div className=\"space-y-3 rounded-lg border border-border bg-card p-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/transfer/form/index.tsx",
+    "line": 265,
+    "text": "调出仓库 *",
+    "parents": [
+      "<Label htmlFor=\"transfer-from\">",
+      "<div className=\"w-56 shrink-0 space-y-1.5\">",
+      "<div className=\"desktop-form-fields desktop-transfer-fields flex items-start gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/transfer/form/index.tsx",
+    "line": 277,
+    "text": "调入仓库 *",
+    "parents": [
+      "<Label htmlFor=\"transfer-to\">",
+      "<div className=\"w-56 shrink-0 space-y-1.5\">",
+      "<div className=\"desktop-form-fields desktop-transfer-fields flex items-start gap-4\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/users/components/UserFormDialog.tsx",
+    "line": 165,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<Label htmlFor=\"form-username\">",
+      "<div className=\"space-y-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/users/components/UserFormDialog.tsx",
+    "line": 182,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<Label htmlFor=\"form-password\">",
+      "<div className=\"space-y-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/users/components/UserFormDialog.tsx",
+    "line": 201,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<Label htmlFor=\"form-realName\">",
+      "<div className=\"space-y-2\">"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/users/components/UserFormDialog.tsx",
+    "line": 234,
+    "text": "*",
+    "parents": [
+      "<span className=\"text-destructive-ink\">",
+      "<legend className=\"text-sm font-medium\">",
+      "<fieldset className=\"space-y-2 sm:col-span-2\" aria-describedby={fieldErrors.roleId ? 'form-role-error' : undefined}>"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/warehouses/index.tsx",
+    "line": 111,
+    "text": "仓库名称 *",
+    "parents": [
+      "<Label htmlFor=\"warehouse-name\">",
+      "<div className=\"space-y-2\">",
+      "<div className={`grid gap-4 ${isEdit ? 'grid-cols-2' : 'grid-cols-1'}`}>"
+    ]
+  },
+  {
+    "file": "frontend/src/pages/warehouses/index.tsx",
+    "line": 118,
+    "text": "仓库类型 *",
+    "parents": [
+      "<Label id=\"warehouse-type-label\">",
+      "<div className=\"space-y-2\">",
+      "<div className=\"space-y-4\">"
+    ]
+  }
+]

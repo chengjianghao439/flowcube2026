@@ -1,0 +1,377 @@
+{
+  "form-before": {
+    "attrs": {
+      "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2"
+    },
+    "rules": [
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "currentcolor"
+          },
+          "border-top": {
+            "priority": "",
+            "value": "0px solid"
+          },
+          "padding": {
+            "priority": "",
+            "value": "0px"
+          }
+        },
+        "order": 6,
+        "selector": "*, ::after, ::before, ::backdrop, ::file-selector-button"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "hsl(var(--border))"
+          }
+        },
+        "order": 1736,
+        "selector": "*"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/styles/desktop-page-samples.css"
+        ],
+        "declarations": {
+          "border-top": {
+            "priority": "",
+            "value": "1px solid hsl(var(--border))"
+          },
+          "padding": {
+            "priority": "",
+            "value": "14px 24px"
+          }
+        },
+        "order": 2258,
+        "selector": "body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-footer, body:has(.desktop-shell-sample) .fc-form-dialog > form > .fc-dialog-footer"
+      }
+    ]
+  },
+  "form-after": {
+    "attrs": {
+      "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2"
+    },
+    "rules": [
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "currentcolor"
+          },
+          "border-top": {
+            "priority": "",
+            "value": "0px solid"
+          },
+          "padding": {
+            "priority": "",
+            "value": "0px"
+          }
+        },
+        "order": 6,
+        "selector": "*, ::after, ::before, ::backdrop, ::file-selector-button"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "hsl(var(--border))"
+          }
+        },
+        "order": 1736,
+        "selector": "*"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/styles/desktop-page-samples.css"
+        ],
+        "declarations": {
+          "background": {
+            "priority": "",
+            "value": "hsl(var(--surface-subtle))"
+          },
+          "border-top": {
+            "priority": "",
+            "value": "1px solid hsl(var(--border))"
+          },
+          "padding": {
+            "priority": "",
+            "value": "12px 20px"
+          }
+        },
+        "order": 2258,
+        "selector": "body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-footer, body:has(.desktop-shell-sample) .fc-form-dialog > form > .fc-dialog-footer"
+      }
+    ]
+  },
+  "form-button-before": {
+    "attrs": {
+      "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+    },
+    "rules": [
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "currentcolor"
+          },
+          "border-top": {
+            "priority": "",
+            "value": "0px solid"
+          },
+          "padding": {
+            "priority": "",
+            "value": "0px"
+          }
+        },
+        "order": 6,
+        "selector": "*, ::after, ::before, ::backdrop, ::file-selector-button"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "background-color": {
+            "priority": "",
+            "value": "transparent"
+          },
+          "font-size": {
+            "priority": "",
+            "value": "inherit"
+          }
+        },
+        "order": 24,
+        "selector": "button, input, select, optgroup, textarea, ::file-selector-button"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "utilities"
+        ],
+        "declarations": {
+          "height": {
+            "priority": "",
+            "value": "calc(var(--spacing) * 10)"
+          }
+        },
+        "order": 252,
+        "selector": ".h-10"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "utilities"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "hsl(var(--border))"
+          }
+        },
+        "order": 580,
+        "selector": ".border-border"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "utilities"
+        ],
+        "declarations": {
+          "background-color": {
+            "priority": "",
+            "value": "hsl(var(--muted))"
+          }
+        },
+        "order": 771,
+        "selector": ".bg-muted\\/40"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "utilities"
+        ],
+        "declarations": {
+          "font-size": {
+            "priority": "",
+            "value": "var(--text-sm)"
+          }
+        },
+        "order": 967,
+        "selector": ".text-sm"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "hsl(var(--border))"
+          }
+        },
+        "order": 1736,
+        "selector": "*"
+      }
+    ]
+  },
+  "form-button-after": {
+    "attrs": {
+      "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+    },
+    "rules": [
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "currentcolor"
+          },
+          "border-top": {
+            "priority": "",
+            "value": "0px solid"
+          },
+          "padding": {
+            "priority": "",
+            "value": "0px"
+          }
+        },
+        "order": 6,
+        "selector": "*, ::after, ::before, ::backdrop, ::file-selector-button"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "background-color": {
+            "priority": "",
+            "value": "transparent"
+          },
+          "font-size": {
+            "priority": "",
+            "value": "inherit"
+          }
+        },
+        "order": 24,
+        "selector": "button, input, select, optgroup, textarea, ::file-selector-button"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "utilities"
+        ],
+        "declarations": {
+          "height": {
+            "priority": "",
+            "value": "calc(var(--spacing) * 10)"
+          }
+        },
+        "order": 252,
+        "selector": ".h-10"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "utilities"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "hsl(var(--border))"
+          }
+        },
+        "order": 580,
+        "selector": ".border-border"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "utilities"
+        ],
+        "declarations": {
+          "background-color": {
+            "priority": "",
+            "value": "hsl(var(--muted))"
+          }
+        },
+        "order": 771,
+        "selector": ".bg-muted\\/40"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "utilities"
+        ],
+        "declarations": {
+          "font-size": {
+            "priority": "",
+            "value": "var(--text-sm)"
+          }
+        },
+        "order": 967,
+        "selector": ".text-sm"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/index.css",
+          "base"
+        ],
+        "declarations": {
+          "border-color": {
+            "priority": "",
+            "value": "hsl(var(--border))"
+          }
+        },
+        "order": 1736,
+        "selector": "*"
+      },
+      {
+        "context": [
+          "/Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend/src/styles/desktop-page-samples.css"
+        ],
+        "declarations": {
+          "font-size": {
+            "priority": "",
+            "value": "13px"
+          },
+          "height": {
+            "priority": "",
+            "value": "36px"
+          }
+        },
+        "order": 2259,
+        "selector": "body:has(.desktop-shell-sample) .fc-form-dialog > .fc-dialog-footer .fc-button, body:has(.desktop-shell-sample) .fc-form-dialog > form > .fc-dialog-footer .fc-button"
+      }
+    ]
+  }
+}

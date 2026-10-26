@@ -1,0 +1,148 @@
+[
+  {
+    "file": "frontend/src/components/layout/TopNav.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 6,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": false,
+    "gatesChange": {
+      "removed": [
+        "open"
+      ],
+      "added": []
+    }
+  },
+  {
+    "file": "frontend/src/components/shared/ConfirmDialog.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": false,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 4,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/components/shared/FulfillmentTodos.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 7,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/components/shared/UserMenu.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 18,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/components/ui/label.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": false,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 0,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/pages/customers/index.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 19,
+    "bindingsUnchanged": false,
+    "bindingChange": {
+      "removed": [
+        "unit=\"条\""
+      ],
+      "added": [
+        "unit=\"位\""
+      ]
+    },
+    "jsxGatesUnchanged": false,
+    "gatesChange": {
+      "removed": [
+        "!isError && !isFetching && data"
+      ],
+      "added": []
+    }
+  },
+  {
+    "file": "frontend/src/pages/disposal/HandlingSourcesPanel.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 9,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/pages/inbound-tasks/create.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 15,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/pages/kits/index.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 13,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 11,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/pages/sale/index.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 30,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 19,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/pages/settings/printers/index.tsx",
+    "kind": "product",
+    "nonJsxProgramUnchanged": true,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 21,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  },
+  {
+    "file": "frontend/src/test/workspaceReturn.finance.test.tsx",
+    "kind": "verification",
+    "nonJsxProgramUnchanged": false,
+    "eventHandlersUnchanged": true,
+    "eventHandlerCount": 0,
+    "bindingsUnchanged": true,
+    "jsxGatesUnchanged": true
+  }
+]

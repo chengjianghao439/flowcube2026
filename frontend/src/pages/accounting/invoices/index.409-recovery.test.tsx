@@ -62,11 +62,20 @@ const inputByValue = (v: string) => [...document.querySelectorAll('input')].find
 function setNativeValue(el: HTMLInputElement, v: string) {
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, v)
 }
-/** 操作列编辑按钮（列表刷新中 title 会变，需一并匹配） */
-const editBtn = () => document.querySelector('button[title="编辑"], button[title*="列表刷新中"]') as HTMLButtonElement | null
+/** 编辑已归入行菜单；验证实际 Radix 禁用属性，不把它伪装成原生按钮。 */
+const editBtn = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === '编辑')
+async function openEditMenu() {
+  if (editBtn()) return
+  const trigger = host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]')
+  expect(trigger).toBeTruthy()
+  await act(async () => trigger!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
+  await vi.waitFor(() => expect(editBtn()).toBeTruthy())
+}
 async function openEditor() {
+  await openEditMenu()
   const b = editBtn()
-  expect(b, '应找到操作列的「编辑」按钮').toBeTruthy()
+  expect(b, '应找到操作列的「编辑」菜单项').toBeTruthy()
+  expect(b!.hasAttribute('data-disabled')).toBe(false)
   await act(async () => { b!.click() })
   await vi.waitFor(() => expect(dialog()).toBeTruthy())
 }
@@ -210,7 +219,8 @@ it('★ 列表刷新期间**阻止重新编辑**（等刷新完成后再开，�
   await vi.waitFor(() => expect(dialog()).toBeNull())
 
   // **刷新仍 pending** ⇒ 编辑入口被**明确阻止**（不自动续开到旧 row / 旧 revision）
-  expect(editBtn()?.disabled, '列表刷新未完成时应阻止重新编辑').toBe(true)
+  await openEditMenu()
+  expect(editBtn()?.hasAttribute('data-disabled'), '列表刷新未完成时应阻止重新编辑').toBe(true)
   // 属性之外再**实际点一次**：不得打开弹窗、也不得发出额外更新请求
   const updateCallsBefore = vi.mocked(updateInvoiceApi).mock.calls.length
   await act(async () => { editBtn()!.click() })
@@ -223,7 +233,7 @@ it('★ 列表刷新期间**阻止重新编辑**（等刷新完成后再开，�
   vi.mocked(getInvoicesApi).mockResolvedValue(latest as never)
   await act(async () => { release(latest as never) })
   await vi.waitFor(() => expect(document.body.textContent).toContain('INV-9'))
-  expect(editBtn()?.disabled).toBe(false)
+  expect(editBtn()?.hasAttribute('data-disabled')).toBe(false)
 
   await openEditor()
   await vi.waitFor(() => expect(inputByValue('他人改过')).toBeTruthy())
@@ -237,7 +247,8 @@ it('★ 列表刷新期间**阻止重新编辑**（等刷新完成后再开，�
 it('★ 列表刷新**失败**时给出可读错误与**真实重试入口**；点重试恢复后可正常再开', async () => {
   await mount()
   await vi.waitFor(() => expect(document.body.textContent).toContain('INV-1'))
-  expect(editBtn()?.disabled).toBe(false)
+  await openEditMenu()
+  expect(editBtn()?.hasAttribute('data-disabled')).toBe(false)
 
   // 列表重取失败 ⇒ 出现可读错误 + 重试按钮（表格被错误态替代，故编辑入口随列表消失）
   vi.mocked(getInvoicesApi).mockRejectedValue(new Error('boom'))
@@ -251,7 +262,8 @@ it('★ 列表刷新**失败**时给出可读错误与**真实重试入口**；�
   vi.mocked(getInvoicesApi).mockResolvedValue(pageOf([baseInvoice({ revision: 9, remark: '他人改过', invoiceNo: 'INV-9' })]) as never)
   await act(async () => { retry!.click() })
   await vi.waitFor(() => expect(document.body.textContent).toContain('INV-9'))
-  expect(editBtn()?.disabled).toBe(false)
+  await openEditMenu()
+  expect(editBtn()?.hasAttribute('data-disabled')).toBe(false)
   await openEditor()
   await vi.waitFor(() => expect(inputByValue('他人改过')).toBeTruthy())
 })

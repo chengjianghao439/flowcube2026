@@ -1,0 +1,245 @@
+{
+  "before": {
+    "children": [
+      {
+        "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left",
+        "clientWidth": 920,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 1201,
+        "scrollWidth": 920,
+        "width": 920
+      },
+      {
+        "class": "space-y-3 py-2",
+        "clientWidth": 920,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 1201,
+        "scrollWidth": 920,
+        "width": 920
+      },
+      {
+        "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2",
+        "clientWidth": 920,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 1201,
+        "scrollWidth": 920,
+        "width": 920
+      },
+      {
+        "class": "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground",
+        "clientWidth": 16,
+        "gridColumns": "none",
+        "left": 991,
+        "minWidth": "0px",
+        "overflowX": "visible",
+        "right": 1007,
+        "scrollWidth": 16,
+        "width": 16
+      }
+    ],
+    "dialog": {
+      "class": "fc-dialog fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg sm:max-w-3xl",
+      "clientWidth": 766,
+      "gridColumns": "920px",
+      "left": 256,
+      "minWidth": "0px",
+      "overflowX": "auto",
+      "right": 1024,
+      "scrollWidth": 968,
+      "width": 768
+    },
+    "footer": {
+      "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2",
+      "clientWidth": 920,
+      "gridColumns": "none",
+      "left": 281,
+      "minWidth": "auto",
+      "overflowX": "visible",
+      "right": 1201,
+      "scrollWidth": 920,
+      "width": 920
+    },
+    "tableScroll": {
+      "class": "max-h-56 overflow-auto rounded-md border",
+      "clientWidth": 918,
+      "gridColumns": "none",
+      "left": 281,
+      "minWidth": "0px",
+      "overflowX": "auto",
+      "right": 1201,
+      "scrollWidth": 918,
+      "width": 920
+    }
+  },
+  "restored": {
+    "children": [
+      {
+        "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left",
+        "clientWidth": 920,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 1201,
+        "scrollWidth": 920,
+        "width": 920
+      },
+      {
+        "class": "space-y-3 py-2",
+        "clientWidth": 920,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 1201,
+        "scrollWidth": 920,
+        "width": 920
+      },
+      {
+        "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2",
+        "clientWidth": 920,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 1201,
+        "scrollWidth": 920,
+        "width": 920
+      },
+      {
+        "class": "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground",
+        "clientWidth": 16,
+        "gridColumns": "none",
+        "left": 991,
+        "minWidth": "0px",
+        "overflowX": "visible",
+        "right": 1007,
+        "scrollWidth": 16,
+        "width": 16
+      }
+    ],
+    "dialog": {
+      "class": "fc-dialog fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg sm:max-w-3xl",
+      "clientWidth": 766,
+      "gridColumns": "920px",
+      "left": 256,
+      "minWidth": "0px",
+      "overflowX": "auto",
+      "right": 1024,
+      "scrollWidth": 968,
+      "width": 768
+    },
+    "footer": {
+      "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2",
+      "clientWidth": 920,
+      "gridColumns": "none",
+      "left": 281,
+      "minWidth": "auto",
+      "overflowX": "visible",
+      "right": 1201,
+      "scrollWidth": 920,
+      "width": 920
+    },
+    "tableScroll": {
+      "class": "max-h-56 overflow-auto rounded-md border",
+      "clientWidth": 918,
+      "gridColumns": "none",
+      "left": 281,
+      "minWidth": "0px",
+      "overflowX": "auto",
+      "right": 1201,
+      "scrollWidth": 918,
+      "width": 920
+    }
+  },
+  "trial": {
+    "children": [
+      {
+        "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left",
+        "clientWidth": 718,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 999,
+        "scrollWidth": 718,
+        "width": 718
+      },
+      {
+        "class": "space-y-3 py-2",
+        "clientWidth": 718,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 999,
+        "scrollWidth": 718,
+        "width": 718
+      },
+      {
+        "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2",
+        "clientWidth": 718,
+        "gridColumns": "none",
+        "left": 281,
+        "minWidth": "auto",
+        "overflowX": "visible",
+        "right": 999,
+        "scrollWidth": 718,
+        "width": 718
+      },
+      {
+        "class": "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground",
+        "clientWidth": 16,
+        "gridColumns": "none",
+        "left": 991,
+        "minWidth": "0px",
+        "overflowX": "visible",
+        "right": 1007,
+        "scrollWidth": 16,
+        "width": 16
+      }
+    ],
+    "dialog": {
+      "class": "fc-dialog fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg sm:max-w-3xl",
+      "clientWidth": 766,
+      "gridColumns": "718px",
+      "left": 256,
+      "minWidth": "0px",
+      "overflowX": "auto",
+      "right": 1024,
+      "scrollWidth": 766,
+      "width": 768
+    },
+    "footer": {
+      "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2",
+      "clientWidth": 718,
+      "gridColumns": "none",
+      "left": 281,
+      "minWidth": "auto",
+      "overflowX": "visible",
+      "right": 999,
+      "scrollWidth": 718,
+      "width": 718
+    },
+    "tableScroll": {
+      "class": "max-h-56 overflow-auto rounded-md border",
+      "clientWidth": 716,
+      "gridColumns": "none",
+      "left": 281,
+      "minWidth": "0px",
+      "overflowX": "auto",
+      "right": 999,
+      "scrollWidth": 918,
+      "width": 718
+    }
+  }
+}

@@ -193,7 +193,7 @@ export default function InboundTaskCreatePage() {
       <SectionCard title="订单信息" compact>
         <div className="desktop-inbound-create-fields grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="space-y-1.5">
-            <label htmlFor={`${fieldPrefix}-supplier`} className="text-sm font-medium">供应商 *</label>
+            <label htmlFor={`${fieldPrefix}-supplier`} className="text-sm font-medium">供应商 <span className="text-destructive-ink">*</span></label>
             <PickerField id={`${fieldPrefix}-supplier`}
               value={supplier?.name ?? ''}
               placeholder="点击选择供应商…"

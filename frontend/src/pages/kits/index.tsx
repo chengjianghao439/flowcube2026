@@ -4,6 +4,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { FilterCard } from '@/components/shared/FilterCard'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -60,9 +61,11 @@ export default function KitsPage() {
     <PageHeader title="成套配件"
         description={!query.isError && !query.isLoading && query.data?.truncated ? <><span role="status">已读取 {query.data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 条，请缩小查询范围。</span> 已保存的销售单保留原成交资料，库存按真实组件管理。</> : '已保存的销售单保留原成交资料，库存按真实组件管理。'}  actions={canCreate ? <Button onClick={() => setEditor('new')}>新增配件</Button> : undefined} />
 
-    <form key={keyword} className="mb-4 flex max-w-xl gap-2" onSubmit={event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('keyword'); updateKeyword(String(value ?? '').trim()) }}>
+    <FilterCard className="mb-4">
+    <form key={keyword} className="flex w-full max-w-xl gap-2" onSubmit={event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('keyword'); updateKeyword(String(value ?? '').trim()) }}>
       <Input name="keyword" aria-label="搜索成套配件" defaultValue={keyword} maxLength={100} autoComplete="off" placeholder="按编码、名称、型号、颜色或供应商型号搜索" /><Button variant="outline" type="submit">查询</Button>{keyword && <Button variant="ghost" type="button" onClick={() => updateKeyword('')}>清空</Button>}
     </form>
+    </FilterCard>
     {query.isError ? <QueryErrorState error={query.error} title="成套配件加载失败" onRetry={() => void query.refetch()} /> : <KitsTable columns={columns} data={query.data?.list ?? EMPTY_KITS} loading={query.isLoading} emptyText="暂无成套配件；有维护权限的员工可添加固定商品组成。" columnStorageKey="kits-v2" virtualized preserveFocus retainFocusedRow={editor != null || !!deleting} />}
     {!query.isError && !query.isLoading && query.data && !query.data.truncated && <ListSummary total={total} />}
     {editor != null && <KitEditor key={editor} id={editor} source={query.readOwner} onClose={() => setEditor(null)} />}

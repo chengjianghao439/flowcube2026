@@ -1,0 +1,29 @@
+{
+  "stars": [
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "color": "rgb(184, 25, 38)",
+      "radius": "0px"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "color": "rgb(184, 25, 38)",
+      "radius": "0px"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "color": "rgb(184, 25, 38)",
+      "radius": "0px"
+    },
+    {
+      "background": "rgba(0, 0, 0, 0)",
+      "color": "rgb(184, 25, 38)",
+      "radius": "0px"
+    }
+  ],
+  "summary": {
+    "background": "rgb(245, 245, 247)",
+    "color": "rgb(29, 29, 31)",
+    "radius": "10px"
+  }
+}

@@ -1,4 +1,5 @@
 import { qty } from '@/lib/format'
+import ListSummary from '@/components/shared/ListSummary'
 import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
 import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
@@ -211,11 +212,7 @@ export default function ReplenishmentPage() {
             </span>
           ))}
           <Button size="sm" variant="ghost" onClick={reset}>清空</Button>
-          <div className="ml-auto text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项待补货</div>
         </div>
-      )}
-      {(chips.length === 0) && (
-        <div className="flex justify-end text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项待补货</div>
       )}
 
       {isError && !data ? (
@@ -240,8 +237,10 @@ export default function ReplenishmentPage() {
         />
       )}
 
+      {!isError && !isLoading && data && <ListSummary total={total} unit="项待补货" />}
+
       <Dialog open={confirmOpen} onOpenChange={v => !v && setConfirmOpen(false)}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="grid-cols-1 sm:max-w-3xl">
           <DialogHeader description={<>{<>
               将勾选的 <span className="font-semibold text-foreground">{selectedRows.length}</span> 项补货建议生成一张采购申请单（仓库「
               {selectedRows[0]?.warehouseName ?? '—'}」），保存为草稿，核对后提交审批。创建时重新校验需求和覆盖；建议数量已满足包装与起订规则。
@@ -252,7 +251,7 @@ export default function ReplenishmentPage() {
 
             <div className="max-h-56 overflow-auto rounded-md border">
               <ReportTable className="w-full min-w-[1500px] text-sm">
-                <thead className="sticky top-0 bg-muted/60">
+                <thead className="sticky top-0">
                   <tr className="text-left text-muted-foreground">
                     <ProductIdentityHeaders />
                     <th className="px-4 py-3 text-right font-medium">建议采购量</th>

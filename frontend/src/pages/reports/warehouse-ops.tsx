@@ -23,11 +23,11 @@ import { CHART_TONES } from '@/components/dashboard/chartTheme'
 
 // ── 流程瓶颈条 ─────────────────────────────────────────────────────────────
 const FLOW_COLOR: Record<number, string> = {
-  [WT_STATUS.PENDING]: '#9699a1',
+  [WT_STATUS.PENDING]: 'hsl(var(--muted-foreground))',
   [WT_STATUS.PICKING]: CHART_TONES.primary,
   [WT_STATUS.SORTING]: CHART_TONES.warning,
-  [WT_STATUS.CHECKING]: '#a87955',
-  [WT_STATUS.PACKING]: '#7775a8',
+  [WT_STATUS.CHECKING]: 'hsl(var(--blue-60))',
+  [WT_STATUS.PACKING]: 'hsl(var(--blue-80))',
   [WT_STATUS.SHIPPING]: CHART_TONES.info,
 }
 

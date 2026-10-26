@@ -1,0 +1,32 @@
+{
+  "methodCounts": {
+    "GET": 198
+  },
+  "paths": [
+    "/api/accounting/invoices",
+    "/api/accounting/ledger/account/1",
+    "/api/accounting/ledger/trial-balance",
+    "/api/accounting/periods",
+    "/api/approvals/flows",
+    "/api/customers",
+    "/api/departments",
+    "/api/health",
+    "/api/kits",
+    "/api/notifications",
+    "/api/payments",
+    "/api/payments/receipts",
+    "/api/payments/receipts/701",
+    "/api/print-jobs/barcodes",
+    "/api/printer-bindings",
+    "/api/printers",
+    "/api/reports/avg-cost-reconciliation",
+    "/api/reports/warehouse-ops",
+    "/api/roles",
+    "/api/settings",
+    "/api/settings/logo",
+    "/api/suppliers",
+    "/api/users"
+  ],
+  "noWriteRequests": true,
+  "scope": "Owned synthetic HTTP only; no headers/body/auth secrets recorded"
+}

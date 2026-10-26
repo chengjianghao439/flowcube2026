@@ -14,6 +14,7 @@ import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -99,6 +100,8 @@ export default function PrintTemplatesPage() {
         rowKey="id"
         emptyState={<EmptyState variant="no-data" title="暂无打印模板" description={canManage ? '使用右上角「新建模板」添加单据打印模板。' : '当前没有可查看的打印模板，请联系管理员配置。'} />}
       />}
+
+      {!isError && !isLoading && data && <ListSummary total={data.length} unit="个模板" />}
 
       <ConfirmDialog
         open={!!deleteTarget && canManage}

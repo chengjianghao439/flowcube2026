@@ -1,0 +1,1660 @@
+{
+  "form": {
+    "before": {
+      "dialogBodies": [
+        {
+          "attrs": {
+            "class": "fc-form-dialog-body grid grid-cols-2 gap-4 py-1"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "grid",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "16px",
+            "height": "447px",
+            "justifyContent": "normal",
+            "minHeight": "0px",
+            "padding": "18px 24px",
+            "width": 670
+          },
+          "text": "发票代码\n发票号码 *\n供应商 *\n对方纳税人识别号\n价税合计 *\n税率\n13%\n不含税 0.00\n税额 0.00\n价税合计 0.00\n开票日期 *\n关联单号（选填）\n备注"
+        }
+      ],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "83px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "18px 48px 16px 24px",
+            "width": 670
+          },
+          "text": "录入进项发票\n填写发票资料、往来单位与金额。"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "14px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "40px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 62
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2",
+            "disabled": ""
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "14px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "40px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 62
+          },
+          "text": "保存"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "8px",
+            "height": "69px",
+            "justifyContent": "flex-end",
+            "minHeight": "auto",
+            "padding": "14px 24px",
+            "width": 670
+          },
+          "text": "取消\n保存"
+        }
+      ],
+      "meters": [],
+      "segments": [
+        {
+          "attrs": {
+            "aria-pressed": "true",
+            "class": "fc-print-category",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgb(255, 255, 255)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(0, 67, 206)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "进项发票"
+        },
+        {
+          "attrs": {
+            "aria-pressed": "false",
+            "class": "fc-print-category",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "销项发票"
+        }
+      ]
+    },
+    "after": {
+      "dialogBodies": [
+        {
+          "attrs": {
+            "class": "fc-form-dialog-body grid grid-cols-2 gap-4 py-1"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "grid",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "16px",
+            "height": "455px",
+            "justifyContent": "normal",
+            "minHeight": "0px",
+            "padding": "18px 24px",
+            "width": 670
+          },
+          "text": "发票代码\n发票号码 *\n供应商 *\n对方纳税人识别号\n价税合计 *\n税率\n13%\n不含税 0.00\n税额 0.00\n价税合计 0.00\n开票日期 *\n关联单号（选填）\n备注"
+        }
+      ],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "83px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "18px 48px 16px 24px",
+            "width": 670
+          },
+          "text": "录入进项发票\n填写发票资料、往来单位与金额。"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2",
+            "disabled": ""
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "保存"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "8px",
+            "height": "61px",
+            "justifyContent": "flex-end",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 670
+          },
+          "text": "取消\n保存"
+        }
+      ],
+      "meters": [],
+      "segments": [
+        {
+          "attrs": {
+            "aria-pressed": "true",
+            "class": "fc-segmented-option",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgb(255, 255, 255)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(0, 67, 206)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "进项发票"
+        },
+        {
+          "attrs": {
+            "aria-pressed": "false",
+            "class": "fc-segmented-option",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "销项发票"
+        }
+      ]
+    }
+  },
+  "master-form": {
+    "before": {
+      "dialogBodies": [
+        {
+          "attrs": {
+            "class": "fc-form-dialog-body min-h-0 overflow-y-auto"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "447px",
+            "justifyContent": "normal",
+            "minHeight": "0px",
+            "padding": "18px 24px",
+            "width": 766
+          },
+          "text": "供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）"
+        }
+      ],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "83px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "18px 48px 16px 24px",
+            "width": 766
+          },
+          "text": "新建供应商\n填写供应商资料并核对必填项。"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "14px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "40px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 62
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2",
+            "disabled": ""
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "14px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "40px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 62
+          },
+          "text": "创建"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "8px",
+            "height": "69px",
+            "justifyContent": "flex-end",
+            "minHeight": "auto",
+            "padding": "14px 24px",
+            "width": 766
+          },
+          "text": "取消\n创建"
+        }
+      ],
+      "meters": [],
+      "segments": []
+    },
+    "after": {
+      "dialogBodies": [
+        {
+          "attrs": {
+            "class": "fc-form-dialog-body min-h-0 overflow-y-auto"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "455px",
+            "justifyContent": "normal",
+            "minHeight": "0px",
+            "padding": "18px 24px",
+            "width": 766
+          },
+          "text": "供应商与联系方式\n名称 *\n0/100\n联系人\n0/50\n电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与供货\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应付账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n采购提前期（天）"
+        }
+      ],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "83px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "18px 48px 16px 24px",
+            "width": 766
+          },
+          "text": "新建供应商\n填写供应商资料并核对必填项。"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2",
+            "disabled": ""
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "创建"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "8px",
+            "height": "61px",
+            "justifyContent": "flex-end",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 766
+          },
+          "text": "取消\n创建"
+        }
+      ],
+      "meters": [],
+      "segments": []
+    }
+  },
+  "wrapped-form": {
+    "before": {
+      "dialogBodies": [
+        {
+          "attrs": {
+            "class": "fc-form-dialog-body"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "415.688px",
+            "justifyContent": "normal",
+            "minHeight": "0px",
+            "padding": "18px 24px",
+            "width": 766
+          },
+          "text": "客户与联系方式\n客户名称 *\n0/100\n联系人\n0/50\n联系电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与授信\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应收账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n启用授信信控\n\n未启用时，不对该客户执行授信额度校验。"
+        }
+      ],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "83px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "18px 48px 16px 24px",
+            "width": 766
+          },
+          "text": "新增客户\n填写客户资料、联系方式与结算信息。"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2",
+            "type": "button"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "14px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "40px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 62
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2",
+            "type": "submit"
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "14px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "40px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 62
+          },
+          "text": "保存"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "8px",
+            "height": "69px",
+            "justifyContent": "flex-end",
+            "minHeight": "auto",
+            "padding": "14px 24px",
+            "width": 766
+          },
+          "text": "取消\n保存"
+        }
+      ],
+      "meters": [],
+      "segments": []
+    },
+    "after": {
+      "dialogBodies": [
+        {
+          "attrs": {
+            "class": "fc-form-dialog-body"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "423.688px",
+            "justifyContent": "normal",
+            "minHeight": "0px",
+            "padding": "18px 24px",
+            "width": 766
+          },
+          "text": "客户与联系方式\n客户名称 *\n0/100\n联系人\n0/50\n联系电话\n0/30\n邮箱\n地址\n0/200\n备注\n0/500\n结算与授信\n结算方式\n月结\n现结\n月结\n\n从结算发生当天起算账期\n\n应收账期\n30 天\n30 天\n60 天\n90 天\n\n至少每 30 天结算一次\n\n启用授信信控\n\n未启用时，不对该客户执行授信额度校验。"
+        }
+      ],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-dialog-header flex flex-col space-y-1.5 pr-6 text-left"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "83px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "18px 48px 16px 24px",
+            "width": 766
+          },
+          "text": "新增客户\n填写客户资料、联系方式与结算信息。"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2",
+            "type": "button"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2",
+            "type": "submit"
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "保存"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-dialog-footer flex flex-wrap items-center justify-end gap-2"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "8px",
+            "height": "61px",
+            "justifyContent": "flex-end",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 766
+          },
+          "text": "取消\n保存"
+        }
+      ],
+      "meters": [],
+      "segments": []
+    }
+  },
+  "app-footer": {
+    "before": {
+      "dialogBodies": [],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-header flex min-h-14 shrink-0 items-start justify-between gap-4 border-b px-5 py-3.5"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "16px",
+            "height": "77px",
+            "justifyContent": "space-between",
+            "minHeight": "56px",
+            "padding": "14px 20px",
+            "width": 518
+          },
+          "text": "查询发票\n设置发票的筛选条件。\n关闭"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "重置"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "查询"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-footer shrink-0 border-t bg-muted/20 px-5 py-3"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px 0px 15px 15px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "61px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 518
+          },
+          "text": "重置\n取消\n查询"
+        }
+      ],
+      "meters": [],
+      "segments": [
+        {
+          "attrs": {
+            "aria-pressed": "true",
+            "class": "fc-print-category",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgb(255, 255, 255)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(0, 67, 206)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "进项发票"
+        },
+        {
+          "attrs": {
+            "aria-pressed": "false",
+            "class": "fc-print-category",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "销项发票"
+        }
+      ]
+    },
+    "after": {
+      "dialogBodies": [],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-header flex min-h-14 shrink-0 items-start justify-between gap-4 border-b px-5 py-3.5"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "16px",
+            "height": "77px",
+            "justifyContent": "space-between",
+            "minHeight": "56px",
+            "padding": "14px 20px",
+            "width": 518
+          },
+          "text": "查询发票\n设置发票的筛选条件。\n关闭"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "重置"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "查询"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-footer shrink-0 border-t bg-muted/20 px-5 py-3"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px 0px 15px 15px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "61px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 518
+          },
+          "text": "重置\n取消\n查询"
+        }
+      ],
+      "meters": [],
+      "segments": [
+        {
+          "attrs": {
+            "aria-pressed": "true",
+            "class": "fc-segmented-option",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgb(255, 255, 255)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(0, 67, 206)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "进项发票"
+        },
+        {
+          "attrs": {
+            "aria-pressed": "false",
+            "class": "fc-segmented-option",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "销项发票"
+        }
+      ]
+    }
+  },
+  "confirm-footer": {
+    "before": {
+      "dialogBodies": [],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-header flex min-h-14 shrink-0 items-start justify-between gap-4 border-b px-5 py-3.5"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "16px",
+            "height": "56px",
+            "justifyContent": "space-between",
+            "minHeight": "56px",
+            "padding": "14px 20px",
+            "width": 518
+          },
+          "text": "删除发票「DEMO-INV-3」\n关闭"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/95 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "rgb(218, 30, 40)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 86
+          },
+          "text": "确认删除"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-footer shrink-0 border-t bg-muted/20 px-5 py-3"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px 0px 15px 15px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "61px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 518
+          },
+          "text": "取消\n确认删除"
+        }
+      ],
+      "meters": [],
+      "segments": [
+        {
+          "attrs": {
+            "aria-pressed": "true",
+            "class": "fc-print-category",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgb(255, 255, 255)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(0, 67, 206)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "进项发票"
+        },
+        {
+          "attrs": {
+            "aria-pressed": "false",
+            "class": "fc-print-category",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "销项发票"
+        }
+      ]
+    },
+    "after": {
+      "dialogBodies": [],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-header flex min-h-14 shrink-0 items-start justify-between gap-4 border-b px-5 py-3.5"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "16px",
+            "height": "56px",
+            "justifyContent": "space-between",
+            "minHeight": "56px",
+            "padding": "14px 20px",
+            "width": 518
+          },
+          "text": "删除发票「DEMO-INV-3」\n关闭"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "取消"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/95 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "rgb(218, 30, 40)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 86
+          },
+          "text": "确认删除"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-footer shrink-0 border-t bg-muted/20 px-5 py-3"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px 0px 15px 15px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "61px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 518
+          },
+          "text": "取消\n确认删除"
+        }
+      ],
+      "meters": [],
+      "segments": [
+        {
+          "attrs": {
+            "aria-pressed": "true",
+            "class": "fc-segmented-option",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgb(255, 255, 255)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(0, 67, 206)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "进项发票"
+        },
+        {
+          "attrs": {
+            "aria-pressed": "false",
+            "class": "fc-segmented-option",
+            "type": "button"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "7px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "display": "flex",
+            "fontSize": "12px",
+            "fontWeight": "500",
+            "gap": "7px",
+            "height": "32px",
+            "justifyContent": "center",
+            "minHeight": "32px",
+            "padding": "6px 12px",
+            "width": 74
+          },
+          "text": "销项发票"
+        }
+      ]
+    }
+  },
+  "kit-header": {
+    "before": {
+      "dialogBodies": [],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-header flex min-h-14 shrink-0 items-start justify-between gap-4 border-b px-5 py-3.5"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "16px",
+            "height": "77px",
+            "justifyContent": "space-between",
+            "minHeight": "56px",
+            "padding": "14px 20px",
+            "width": 1098
+          },
+          "text": "新增成套配件\n核对套内商品、每套量与分摊设置。\n关闭"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 112
+          },
+          "text": "复制草稿内容"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "关闭"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 86
+          },
+          "text": "创建配件"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-footer shrink-0 border-t bg-muted/20 px-5 py-3"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px 0px 15px 15px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "61px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 1098
+          },
+          "text": "复制草稿内容\n关闭\n创建配件"
+        }
+      ],
+      "meters": [],
+      "segments": []
+    },
+    "after": {
+      "dialogBodies": [],
+      "dialogHeads": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-header flex min-h-14 shrink-0 items-start justify-between gap-4 border-b px-5 py-3.5"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "borderRadius": "0px",
+            "borderTop": "0px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "16px",
+            "height": "77px",
+            "justifyContent": "space-between",
+            "minHeight": "56px",
+            "padding": "14px 20px",
+            "width": 1098
+          },
+          "text": "新增成套配件\n核对套内商品、每套量与分摊设置。\n关闭"
+        }
+      ],
+      "footerButtons": [
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 112
+          },
+          "text": "复制草稿内容"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "oklab(0.970708 0.000790298 -0.00252372 / 0.4)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 60
+          },
+          "text": "关闭"
+        },
+        {
+          "attrs": {
+            "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+          },
+          "style": {
+            "background": "rgb(0, 45, 156)",
+            "borderRadius": "10px",
+            "borderTop": "1px solid rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 255)",
+            "display": "flex",
+            "fontSize": "13px",
+            "fontWeight": "500",
+            "gap": "6px",
+            "height": "36px",
+            "justifyContent": "center",
+            "minHeight": "auto",
+            "padding": "8px 16px",
+            "width": 86
+          },
+          "text": "创建配件"
+        }
+      ],
+      "footers": [
+        {
+          "attrs": {
+            "class": "fc-app-dialog-footer shrink-0 border-t bg-muted/20 px-5 py-3"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "borderRadius": "0px 0px 15px 15px",
+            "borderTop": "1px solid rgb(210, 210, 215)",
+            "color": "rgb(29, 29, 31)",
+            "display": "block",
+            "fontSize": "13.5px",
+            "fontWeight": "400",
+            "gap": "normal",
+            "height": "61px",
+            "justifyContent": "normal",
+            "minHeight": "auto",
+            "padding": "12px 20px",
+            "width": 1098
+          },
+          "text": "复制草稿内容\n关闭\n创建配件"
+        }
+      ],
+      "meters": [],
+      "segments": []
+    }
+  }
+}

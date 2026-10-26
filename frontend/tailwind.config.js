@@ -98,6 +98,7 @@ export default {
       fontFamily: {
         sans: [
           'Inter',
+          'Noto Sans SC',
           '-apple-system',
           'BlinkMacSystemFont',
           'PingFang SC',
@@ -105,7 +106,7 @@ export default {
           'Microsoft YaHei',
           'sans-serif',
         ],
-        display: ['Inter', 'sans-serif'],
+        display: ['Inter', 'Noto Sans SC', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       borderRadius: {

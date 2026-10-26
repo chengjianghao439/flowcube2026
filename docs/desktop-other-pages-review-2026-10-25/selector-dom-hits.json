@@ -1,0 +1,1060 @@
+[
+  {
+    "rules": [
+      {
+        "count": 2,
+        "elements": [
+          {
+            "attrs": {
+              "class": "desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background"
+            },
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          },
+          {
+            "attrs": {
+              "data-radix-popper-content-wrapper": "",
+              "style": "position: fixed; left: 0px; top: 0px; transform: translate(672px, 52px); min-width: max-content; z-index: 50; --radix-popper-available-width: 1424px; --radix-popper-available-height: 940px; --radix-popper-anchor-width: 176px; --radix-popper-anchor-height: 34px; --radix-popper-transform-origin: 100% 0px;"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "flex shrink-0 flex-col border-b border-border bg-background"
+            },
+            "background": "rgba(255, 255, 255, 0.86)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "HEADER"
+          }
+        ],
+        "selector": ".desktop-shell-sample > header"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "fc-popover z-50 rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 fc-global-search-results w-[560px] max-w-[calc(100vw-2rem)] overflow-hidden",
+              "data-align": "end",
+              "data-search-results": "true",
+              "data-side": "bottom",
+              "data-state": "open",
+              "id": "radix-:rd:",
+              "role": "presentation",
+              "style": "--radix-popover-content-transform-origin: var(--radix-popper-transform-origin); --radix-popover-content-available-width: var(--radix-popper-available-width); --radix-popover-content-available-height: var(--radix-popper-available-height); --radix-popover-trigger-width: var(--radix-popper-anchor-width); --radix-popover-trigger-height: var(--radix-popper-anchor-height);",
+              "tabindex": "-1"
+            },
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "14px",
+            "shadow": "rgba(20, 24, 31, 0.16) 0px 24px 64px 0px",
+            "tag": "DIV"
+          }
+        ],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "aria-activedescendant": "radix-:r2p:",
+              "aria-busy": "false",
+              "aria-label": "搜索结果",
+              "class": "fc-global-search-list max-h-[min(420px,calc(var(--radix-popover-content-available-height)-40px))] overflow-y-auto overscroll-contain",
+              "cmdk-list": "",
+              "id": "radix-:r9:",
+              "role": "listbox",
+              "style": "--cmdk-list-height: 283.0px;",
+              "tabindex": "-1"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]"
+      },
+      {
+        "count": 3,
+        "elements": [
+          {
+            "attrs": {
+              "aria-disabled": "false",
+              "aria-selected": "false",
+              "class": "fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none",
+              "cmdk-item": "",
+              "data-disabled": "false",
+              "data-selected": "false",
+              "data-value": "[\"product\",12,\"/products\"]",
+              "id": "radix-:r2n:",
+              "role": "option"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "8px",
+            "shadow": "none",
+            "tag": "DIV"
+          },
+          {
+            "attrs": {
+              "aria-disabled": "false",
+              "aria-selected": "true",
+              "class": "fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none",
+              "cmdk-item": "",
+              "data-disabled": "false",
+              "data-selected": "true",
+              "data-value": "[\"product\",11,\"/products\"]",
+              "id": "radix-:r2p:",
+              "role": "option"
+            },
+            "background": "rgb(237, 245, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "8px",
+            "shadow": "none",
+            "tag": "DIV"
+          },
+          {
+            "attrs": {
+              "aria-disabled": "false",
+              "aria-selected": "false",
+              "class": "fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none",
+              "cmdk-item": "",
+              "data-disabled": "false",
+              "data-selected": "false",
+              "data-value": "[\"purchase\",101,\"/purchase/101\"]",
+              "id": "radix-:r2v:",
+              "role": "option"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "8px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "aria-disabled": "false",
+              "aria-selected": "true",
+              "class": "fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none",
+              "cmdk-item": "",
+              "data-disabled": "false",
+              "data-selected": "true",
+              "data-value": "[\"product\",11,\"/products\"]",
+              "id": "radix-:r2p:",
+              "role": "option"
+            },
+            "background": "rgb(237, 245, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "8px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])"
+      },
+      {
+        "count": 2,
+        "elements": [
+          {
+            "attrs": {
+              "aria-hidden": "true",
+              "cmdk-group-heading": "",
+              "id": "radix-:r2l:"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          },
+          {
+            "attrs": {
+              "aria-hidden": "true",
+              "cmdk-group-heading": "",
+              "id": "radix-:r2t:"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "fc-global-search-footer flex items-center justify-between border-t px-4 py-2 text-xs text-muted-foreground"
+            },
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-footer"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "fc-popover z-50 rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 fc-global-search-results w-[560px] max-w-[calc(100vw-2rem)] overflow-hidden",
+              "data-align": "end",
+              "data-search-results": "true",
+              "data-side": "bottom",
+              "data-state": "open",
+              "id": "radix-:rd:",
+              "role": "presentation",
+              "style": "--radix-popover-content-transform-origin: var(--radix-popper-transform-origin); --radix-popover-content-available-width: var(--radix-popper-available-width); --radix-popover-content-available-height: var(--radix-popper-available-height); --radix-popover-trigger-width: var(--radix-popper-anchor-width); --radix-popover-trigger-height: var(--radix-popper-anchor-height);",
+              "tabindex": "-1"
+            },
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "14px",
+            "shadow": "rgba(20, 24, 31, 0.16) 0px 24px 64px 0px",
+            "tag": "DIV"
+          }
+        ],
+        "selector": "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]"
+      }
+    ],
+    "url": "http://127.0.0.1:5199/?review=1792882889427803000#/inventory",
+    "name": "search-selected"
+  },
+  {
+    "rules": [
+      {
+        "count": 2,
+        "elements": [
+          {
+            "attrs": {
+              "class": "desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background"
+            },
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          },
+          {
+            "attrs": {
+              "data-radix-popper-content-wrapper": "",
+              "dir": "ltr",
+              "style": "position: fixed; left: 0px; top: 0px; transform: translate(1240px, 340px); min-width: max-content; z-index: 50; --radix-popper-available-width: 1440px; --radix-popper-available-height: 659.84375px; --radix-popper-anchor-width: 26px; --radix-popper-anchor-height: 30px; --radix-popper-transform-origin: 100% 0px;"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "flex shrink-0 flex-col border-b border-border bg-background"
+            },
+            "background": "rgba(255, 255, 255, 0.86)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "HEADER"
+          }
+        ],
+        "selector": ".desktop-shell-sample > header"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-footer"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "aria-labelledby": "radix-:r26:",
+              "aria-orientation": "vertical",
+              "class": "fc-dropdown-menu z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+              "data-align": "end",
+              "data-orientation": "vertical",
+              "data-radix-menu-content": "",
+              "data-side": "bottom",
+              "data-state": "open",
+              "dir": "ltr",
+              "id": "radix-:r27:",
+              "role": "menu",
+              "style": "outline: none; --radix-dropdown-menu-content-transform-origin: var(--radix-popper-transform-origin); --radix-dropdown-menu-content-available-width: var(--radix-popper-available-width); --radix-dropdown-menu-content-available-height: var(--radix-popper-available-height); --radix-dropdown-menu-trigger-width: var(--radix-popper-anchor-width); --radix-dropdown-menu-trigger-height: var(--radix-popper-anchor-height); pointer-events: auto;",
+              "tabindex": "-1"
+            },
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "14px",
+            "shadow": "rgba(20, 24, 31, 0.16) 0px 24px 64px 0px",
+            "tag": "DIV"
+          }
+        ],
+        "selector": "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]"
+      }
+    ],
+    "url": "http://127.0.0.1:5199/?review=1792882890242304000#/purchase?endDate=2026-10-25&startDate=2026-10-19",
+    "name": "purchase-menu"
+  },
+  {
+    "rules": [
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background"
+            },
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "flex shrink-0 flex-col border-b border-border bg-background"
+            },
+            "background": "rgba(255, 255, 255, 0.86)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "HEADER"
+          }
+        ],
+        "selector": ".desktop-shell-sample > header"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-footer"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-md"
+            },
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "14px",
+            "shadow": "rgba(20, 24, 31, 0.16) 0px 24px 64px 0px",
+            "tag": "UL"
+          }
+        ],
+        "selector": ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]"
+      }
+    ],
+    "url": "http://127.0.0.1:5199/?review=1792882890242304000#/purchase?endDate=2026-10-25&startDate=2026-10-19",
+    "name": "topnav-menu"
+  },
+  {
+    "rules": [
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background"
+            },
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "flex shrink-0 flex-col border-b border-border bg-background"
+            },
+            "background": "rgba(255, 255, 255, 0.86)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "HEADER"
+          }
+        ],
+        "selector": ".desktop-shell-sample > header"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-footer"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul"
+      },
+      {
+        "count": 2,
+        "elements": [
+          {
+            "attrs": {
+              "class": "fc-tax-panel rounded-lg border border-border bg-card"
+            },
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "16px",
+            "shadow": "rgba(20, 24, 31, 0.05) 0px 4px 24px 0px",
+            "tag": "DIV"
+          },
+          {
+            "attrs": {
+              "class": "fc-tax-panel rounded-lg border border-border bg-card"
+            },
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "16px",
+            "shadow": "rgba(20, 24, 31, 0.05) 0px 4px 24px 0px",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]"
+      }
+    ],
+    "url": "http://127.0.0.1:5199/?review=1792882890896546000#/accounting/tax",
+    "name": "tax"
+  },
+  {
+    "rules": [
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background"
+            },
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "flex shrink-0 flex-col border-b border-border bg-background"
+            },
+            "background": "rgba(255, 255, 255, 0.86)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "HEADER"
+          }
+        ],
+        "selector": ".desktop-shell-sample > header"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-footer"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "aria-label": "PDA设备列表",
+              "class": "fc-list-workbench min-w-0 rounded-xl border border-border bg-card"
+            },
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "16px",
+            "shadow": "rgba(20, 24, 31, 0.05) 0px 4px 24px 0px",
+            "tag": "SECTION"
+          }
+        ],
+        "selector": ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "desktop-table min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden"
+            },
+            "background": "rgb(255, 255, 255)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px 0px 15px 15px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]"
+      }
+    ],
+    "url": "http://127.0.0.1:5199/?review=1792882891182707000#/settings/pda-devices",
+    "name": "device-workbench"
+  },
+  {
+    "rules": [
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background"
+            },
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "flex shrink-0 flex-col border-b border-border bg-background"
+            },
+            "background": "rgba(255, 255, 255, 0.86)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "HEADER"
+          }
+        ],
+        "selector": ".desktop-shell-sample > header"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-footer"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "aria-label": "待拣货",
+              "aria-valuetext": "4 个任务",
+              "class": "fc-report-meter min-w-0 flex-1",
+              "max": "4",
+              "min": "0",
+              "style": "color: rgb(150, 153, 161);",
+              "value": "4"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "radius": "999px",
+            "shadow": "none",
+            "tag": "METER"
+          }
+        ],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "aria-label": "待复核",
+              "aria-valuetext": "2 个任务",
+              "class": "fc-report-meter min-w-0 flex-1",
+              "max": "4",
+              "min": "0",
+              "style": "color: rgb(168, 121, 85);",
+              "value": "2"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(15, 98, 254)",
+            "radius": "999px",
+            "shadow": "none",
+            "tag": "METER"
+          }
+        ],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "aria-label": "待打包",
+              "aria-valuetext": "1 个任务",
+              "class": "fc-report-meter min-w-0 flex-1",
+              "max": "4",
+              "min": "0",
+              "style": "color: rgb(119, 117, 168);",
+              "value": "1"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(0, 45, 156)",
+            "radius": "999px",
+            "shadow": "none",
+            "tag": "METER"
+          }
+        ],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]"
+      }
+    ],
+    "url": "http://127.0.0.1:5199/?review=1792882891425878000#/reports/warehouse-ops",
+    "name": "warehouse-ops"
+  },
+  {
+    "rules": [
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background"
+            },
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "DIV"
+          }
+        ],
+        "selector": ".desktop-shell-sample,\nbody:has(.desktop-shell-sample) [data-radix-popper-content-wrapper]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "flex shrink-0 flex-col border-b border-border bg-background"
+            },
+            "background": "rgba(255, 255, 255, 0.86)",
+            "color": "rgb(29, 29, 31)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "HEADER"
+          }
+        ],
+        "selector": ".desktop-shell-sample > header"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results.fc-popover[data-search-results][role=\"presentation\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-results .fc-global-search-list[cmdk-list][role=\"listbox\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][role=\"option\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-result[cmdk-item][data-selected=\"true\"]:not([data-disabled=\"true\"]):not([aria-disabled=\"true\"])"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-list [cmdk-group-heading]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) .fc-global-search-footer"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": "body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-shell-sample .desktop-nav nav [role=\"menu\"] > ul"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace :is(.fc-list-workbench,.fc-tax-panel)"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-list-workbench > .desktop-table.bg-card.border:last-child"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待拣货\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待复核\"]"
+      },
+      {
+        "count": 0,
+        "elements": [],
+        "selector": ".desktop-workspace .fc-report-panel .fc-report-meter[aria-label=\"待打包\"]"
+      },
+      {
+        "count": 1,
+        "elements": [
+          {
+            "attrs": {
+              "class": "text-primary hover:underline",
+              "disabled": "",
+              "title": "暂不支持此单据类型"
+            },
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "radius": "0px",
+            "shadow": "none",
+            "tag": "BUTTON"
+          }
+        ],
+        "selector": ".desktop-workspace .desktop-table button.text-primary:not(.fc-button):disabled"
+      }
+    ],
+    "url": "http://127.0.0.1:5199/?review=1792883296780802000#/approvals/pending",
+    "name": "approval-disabled"
+  }
+]

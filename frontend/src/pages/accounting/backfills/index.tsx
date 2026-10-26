@@ -532,11 +532,9 @@ export default function BackfillsPage() {
         </Select>
       </div>
 
-      <div className="card-base p-2">
-        {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : (
-          <DataTable virtualized preserveFocus retainFocusedRow={!!(detailRow || approveTarget || rejectTarget || cancelTarget || executeTarget || regenTarget)} columns={columns} data={list} loading={isLoading} emptyText="暂无补录申请" columnStorageKey="acct-backfills" />
-        )}
-      </div>
+      {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : (
+        <DataTable virtualized preserveFocus retainFocusedRow={!!(detailRow || approveTarget || rejectTarget || cancelTarget || executeTarget || regenTarget)} columns={columns} data={list} loading={isLoading} emptyText="暂无补录申请" columnStorageKey="acct-backfills" />
+      )}
 
       {!isError && !isLoading && data && !data.truncated && <ListSummary total={total} />}
 

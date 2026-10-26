@@ -452,7 +452,7 @@ export default function ExpenseClaimsPage() {
           )}
           <div className="max-h-80 overflow-y-auto rounded-md border">
             <ReportTable className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground">
+              <thead className="text-xs text-muted-foreground">
                 <tr>
                   <th className="px-2 py-1.5 text-left">类别</th>
                   <th className="px-2 py-1.5 text-left">发生日期</th>

@@ -9,6 +9,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Lock, Unlock, RefreshCcw } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -122,6 +123,7 @@ export default function AccountingPeriodsPage() {
 
 
       <DataTable columns={columns} data={data ?? []} loading={isLoading} rowKey="period" />
+      {data && !isLoading && <ListSummary total={data.length} unit="个" />}
 
       {/* 生成结转确认 */}
       <Dialog open={!!generating} onOpenChange={v => !v && setGenerating(null)}>

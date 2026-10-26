@@ -69,10 +69,9 @@ export default function UserMenu() {
         <ChevronDown className="size-3 text-muted-foreground" />
       </button>
 
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 w-72 bg-popover text-popover-foreground rounded-lg shadow-lg border z-50 overflow-hidden">
+      {menuOpen && <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />}
+          <div className="fc-topnav-menu absolute right-0 top-full mt-1 w-72 bg-popover text-popover-foreground rounded-lg shadow-lg border z-50 overflow-hidden"
+            hidden={!menuOpen} aria-hidden={!menuOpen || undefined} {...(!menuOpen ? { inert: '' } : {})}>
             {/* 登录信息卡片 */}
             <div className="px-4 py-3 border-b bg-muted/30">
               <div className="flex items-center gap-3">
@@ -130,8 +129,6 @@ export default function UserMenu() {
               </button>
             </div>
           </div>
-        </>
-      )}
 
       {/* 我的信息弹窗 */}
       <Dialog open={infoOpen} onOpenChange={setInfoOpen}>

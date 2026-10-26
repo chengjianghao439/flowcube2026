@@ -1,0 +1,482 @@
+{
+  "bg-orange-500/15": [
+    {
+      "file": "frontend/src/components/dashboard/widgets/FunWidgets.tsx",
+      "line": 105
+    }
+  ],
+  "text-orange-500": [
+    {
+      "file": "frontend/src/components/dashboard/widgets/FunWidgets.tsx",
+      "line": 105
+    },
+    {
+      "file": "frontend/src/components/dashboard/widgets/FunWidgets.tsx",
+      "line": 113
+    },
+    {
+      "file": "frontend/src/components/shared/LimitedInput.tsx",
+      "line": 33
+    },
+    {
+      "file": "frontend/src/components/shared/LimitedTextarea.tsx",
+      "line": 61
+    }
+  ],
+  "text-red-500": [
+    {
+      "file": "frontend/src/components/dashboard/widgets/FunWidgets.tsx",
+      "line": 106
+    },
+    {
+      "file": "frontend/src/components/dashboard/widgets/FunWidgets.tsx",
+      "line": 113
+    },
+    {
+      "file": "frontend/src/components/shared/UserMenu.tsx",
+      "line": 127
+    },
+    {
+      "file": "frontend/src/pages/reports/index.tsx",
+      "line": 53
+    },
+    {
+      "file": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "line": 162
+    },
+    {
+      "file": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "line": 188
+    }
+  ],
+  "text-amber-500": [
+    {
+      "file": "frontend/src/components/dashboard/widgets/FunWidgets.tsx",
+      "line": 113
+    },
+    {
+      "file": "frontend/src/components/dashboard/widgets/FunWidgets.tsx",
+      "line": 134
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 380
+    }
+  ],
+  "text-orange-400": [
+    {
+      "file": "frontend/src/components/dashboard/widgets/ListWidgets.tsx",
+      "line": 109
+    }
+  ],
+  "bg-orange-400": [
+    {
+      "file": "frontend/src/components/layout/WorkspaceTabs.tsx",
+      "line": 255
+    }
+  ],
+  "border-green-200": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 45
+    }
+  ],
+  "bg-green-50": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 45
+    }
+  ],
+  "text-green-600": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 46
+    },
+    {
+      "file": "frontend/src/pages/reports/index.tsx",
+      "line": 52
+    },
+    {
+      "file": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "line": 165
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/components/CheckDetailDialog.tsx",
+      "line": 293
+    }
+  ],
+  "text-green-800": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 47
+    }
+  ],
+  "text-green-600/70": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 48
+    }
+  ],
+  "hover:text-green-800": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 48
+    }
+  ],
+  "bg-green-600/70": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 49
+    }
+  ],
+  "border-red-200": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 53
+    }
+  ],
+  "bg-red-50": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 53
+    },
+    {
+      "file": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "line": 184
+    }
+  ],
+  "text-red-600": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 54
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/components/CheckDetailDialog.tsx",
+      "line": 293
+    }
+  ],
+  "text-red-800": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 55
+    }
+  ],
+  "text-red-600/70": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 56
+    }
+  ],
+  "hover:text-red-800": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 56
+    }
+  ],
+  "bg-red-600/70": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 57
+    }
+  ],
+  "border-orange-200": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 61
+    }
+  ],
+  "bg-orange-50": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 61
+    }
+  ],
+  "text-orange-600": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 62
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 168
+    }
+  ],
+  "text-orange-800": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 63
+    }
+  ],
+  "text-orange-600/70": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 64
+    }
+  ],
+  "hover:text-orange-800": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 64
+    }
+  ],
+  "bg-orange-600/70": [
+    {
+      "file": "frontend/src/components/shared/AppToast.tsx",
+      "line": 65
+    }
+  ],
+  "hover:bg-red-50": [
+    {
+      "file": "frontend/src/components/shared/UserMenu.tsx",
+      "line": 127
+    }
+  ],
+  "bg-yellow-500/10": [
+    {
+      "file": "frontend/src/generated/status.ts",
+      "line": 237
+    }
+  ],
+  "bg-orange-500/10": [
+    {
+      "file": "frontend/src/generated/status.ts",
+      "line": 247
+    }
+  ],
+  "bg-green-500/10": [
+    {
+      "file": "frontend/src/generated/status.ts",
+      "line": 257
+    }
+  ],
+  "bg-red-500/5": [
+    {
+      "file": "frontend/src/generated/status.ts",
+      "line": 262
+    }
+  ],
+  "hover:text-orange-500": [
+    {
+      "file": "frontend/src/pages/accounting/accounts/index.tsx",
+      "line": 300
+    },
+    {
+      "file": "frontend/src/pages/categories/index.tsx",
+      "line": 283
+    }
+  ],
+  "hover:text-green-600": [
+    {
+      "file": "frontend/src/pages/accounting/accounts/index.tsx",
+      "line": 300
+    },
+    {
+      "file": "frontend/src/pages/categories/index.tsx",
+      "line": 284
+    }
+  ],
+  "text-amber-600": [
+    {
+      "file": "frontend/src/pages/accounting/tax/index.tsx",
+      "line": 102
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 92
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 381
+    },
+    {
+      "file": "frontend/src/pages/reports/inventory-aging.tsx",
+      "line": 71
+    },
+    {
+      "file": "frontend/src/pages/reports/inventory-aging.tsx",
+      "line": 122
+    },
+    {
+      "file": "frontend/src/pages/transfer/form/index.tsx",
+      "line": 493
+    }
+  ],
+  "border-amber-300": [
+    {
+      "file": "frontend/src/pages/inbound-tasks/CloseReceivingDialog.tsx",
+      "line": 20
+    },
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "line": 143
+    },
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "line": 480
+    }
+  ],
+  "bg-amber-50": [
+    {
+      "file": "frontend/src/pages/inbound-tasks/CloseReceivingDialog.tsx",
+      "line": 20
+    },
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "line": 480
+    },
+    {
+      "file": "frontend/src/pages/reports/role-workbench.tsx",
+      "line": 25
+    },
+    {
+      "file": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "line": 581
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 581
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 644
+    }
+  ],
+  "text-emerald-600": [
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 92
+    },
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 383
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 167
+    },
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 443
+    },
+    {
+      "file": "frontend/src/pages/settings/pda-devices/index.tsx",
+      "line": 122
+    },
+    {
+      "file": "frontend/src/pages/transfer/form/index.tsx",
+      "line": 494
+    }
+  ],
+  "text-emerald-500": [
+    {
+      "file": "frontend/src/pages/inventory/index.tsx",
+      "line": 382
+    }
+  ],
+  "text-amber-700": [
+    {
+      "file": "frontend/src/pages/inventory/trace.tsx",
+      "line": 57
+    },
+    {
+      "file": "frontend/src/pages/oplogs/index.tsx",
+      "line": 158
+    },
+    {
+      "file": "frontend/src/pages/reports/role-workbench.tsx",
+      "line": 25
+    },
+    {
+      "file": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "line": 581
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 581
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 644
+    }
+  ],
+  "text-amber-900": [
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "line": 480
+    }
+  ],
+  "text-rose-600": [
+    {
+      "file": "frontend/src/pages/products/form.tsx",
+      "line": 169
+    }
+  ],
+  "border-rose-200": [
+    {
+      "file": "frontend/src/pages/reports/role-workbench.tsx",
+      "line": 22
+    }
+  ],
+  "bg-rose-50": [
+    {
+      "file": "frontend/src/pages/reports/role-workbench.tsx",
+      "line": 22
+    }
+  ],
+  "text-rose-700": [
+    {
+      "file": "frontend/src/pages/reports/role-workbench.tsx",
+      "line": 22
+    }
+  ],
+  "border-amber-200": [
+    {
+      "file": "frontend/src/pages/reports/role-workbench.tsx",
+      "line": 25
+    },
+    {
+      "file": "frontend/src/pages/returns/purchase/form/index.tsx",
+      "line": 581
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 581
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 623
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 644
+    },
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 659
+    }
+  ],
+  "border-red-100": [
+    {
+      "file": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "line": 184
+    }
+  ],
+  "text-red-400": [
+    {
+      "file": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "line": 185
+    }
+  ],
+  "text-red-700": [
+    {
+      "file": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "line": 187
+    }
+  ],
+  "bg-amber-50/40": [
+    {
+      "file": "frontend/src/pages/returns/sale/form/index.tsx",
+      "line": 623
+    }
+  ]
+}

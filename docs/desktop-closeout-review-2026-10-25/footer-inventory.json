@@ -1,0 +1,170 @@
+[
+  {
+    "file": "frontend/src/pages/sorting-bins/index.tsx",
+    "line": 62,
+    "footers": [
+      {
+        "line": 83,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n          <Button variant=\"outline\" onClick={onClose}>取消</Button>\n          <Button disabled={!warehouseId || !prefix || !from || !to || mut.isPending} onClick={() => mut.mutate()}>批量创建</Button>\n        </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/approvals/flows.tsx",
+    "line": 201,
+    "footers": [
+      {
+        "line": 316,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n            <Button variant=\"outline\" onClick={draft.requestClose} disabled={draft.locked}>取消</Button>\n            <Button onClick={handleSave} disabled={draft.locked}>{editing ? '保存修改' : '保存'}</Button>\n          </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/credit-overrides/index.tsx",
+    "line": 67,
+    "footers": [
+      {
+        "line": 113,
+        "opening": "<DialogFooter className=\"gap-2 sm:space-x-0\">",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter className=\"gap-2 sm:space-x-0\">\n          <Button variant=\"outline\" onClick={onClose} disabled={isPending}>取消</Button>\n          <Button\n            disabled={!picked || !reason.trim() || isPending}\n            onClick={() => create({ saleOrderId: picked!, reason: reason.trim() }, {\n              onSuccess: (r) => { onCreated(r.overrideNo); onClose(); toast.success(`已创建申请单 ${r.overrideNo}，请提交审批`) },\n              onError: (e: Error) => toast.error(e.message),\n            })}\n          >创建申请</Button>\n        </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/credit-overrides/index.tsx",
+    "line": 277,
+    "footers": [
+      {
+        "line": 283,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter><Button variant=\"outline\" disabled={approving} onClick={()=>setApproveTarget(null)}>取消</Button><Button disabled={approving || (approveTarget?.isSelfApproval && !approveReason.trim())} onClick={()=>{\n            if (!approveTarget?.currentTaskId) return\n            approve({id:approveTarget.id,expectedTaskId:approveTarget.currentTaskId,reason:approveReason},{onSuccess:()=>{setApproveTarget(null);toast.success('当前节点已批准')},onError:(e:Error)=>toast.error(e.message)})\n          }}>确认批准</Button></DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/credit-overrides/index.tsx",
+    "line": 294,
+    "footers": [
+      {
+        "line": 304,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter><Button variant=\"outline\" disabled={rejecting} onClick={() => setRejectTarget(null)}>取消</Button><Button variant=\"destructive\" disabled={rejecting || !rejectReason.trim()} onClick={() => {\n            if (!rejectTarget) return\n            reject({ id: rejectTarget.id, expectedTaskId: rejectTarget.currentTaskId!, reason: rejectReason.trim() }, { onSuccess: () => { toast.success('已驳回'); setRejectTarget(null) }, onError: (e: Error) => toast.error(e.message) })\n          }}>{rejecting ? '提交中…' : '确认驳回'}</Button></DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/price-change/index.tsx",
+    "line": 233,
+    "footers": [
+      {
+        "line": 260,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n            <Button variant=\"outline\" onClick={() => setCreateOpen(false)}>取消</Button>\n            {canUpdate && <Button onClick={() => createMut.mutate()} disabled={!product || !newPrice || createMut.isPending}>创建申请</Button>}\n          </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/price-change/index.tsx",
+    "line": 276,
+    "footers": [
+      {
+        "line": 282,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n            <Button variant=\"outline\" onClick={() => setRejectTarget(null)}>取消</Button>\n            {canApprove && <Button variant=\"destructive\" onClick={() => rejectTarget && rejectMut.mutate({ id: rejectTarget.id, reason: rejectReason })} disabled={rejectMut.isPending}>确认驳回</Button>}\n          </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/departments/index.tsx",
+    "line": 351,
+    "footers": [
+      {
+        "line": 411,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n            <Button variant=\"outline\" onClick={() => setFormOpen(false)} disabled={savePending}>取消</Button>\n            <Button onClick={handleSave} disabled={savePending}>{savePending ? '保存中…' : editing ? '保存修改' : '保存'}</Button>\n          </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/fixed-assets/index.tsx",
+    "line": 44,
+    "footers": [
+      {
+        "line": 82,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n          <Button variant=\"outline\" onClick={onClose} disabled={isPending}>取消</Button>\n          <Button disabled={!form.assetName.trim() || !form.originalCost || !form.usefulMonths || isPending} onClick={() => create({\n            assetName: form.assetName.trim(), category: form.category.trim() || null,\n            departmentName: form.departmentName.trim() || null,\n            acquireDate: form.acquireDate, originalCost: Number(form.originalCost),\n            residualRate: Number(form.residualRate), usefulMonths: Number(form.usefulMonths),\n          })}>{isPending ? '创建中…' : '创建'}</Button>\n        </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/fixed-assets/index.tsx",
+    "line": 107,
+    "footers": [
+      {
+        "line": 135,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n          <Button variant=\"outline\" onClick={onClose} disabled={isPending}>取消</Button>\n          <Button variant=\"destructive\" disabled={isPending} onClick={() => dispose({ disposeType: Number(form.disposeType), disposeDate: form.disposeDate, income: Number(form.income) || 0, expense: Number(form.expense) || 0 })}>\n            {isPending ? '处置中…' : '确认处置'}\n          </Button>\n        </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/disposal/components/CreateDisposalDialog.tsx",
+    "line": 134,
+    "footers": [
+      {
+        "line": 262,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n          <Button type=\"button\" variant=\"outline\" onClick={onClose} disabled={submitting}>关闭并保留圈选</Button>\n          {canCreate && <Button onClick={handleCreate} disabled={!readable || submitting || mutation.create.isPending}>\n            {submitting || mutation.create.isPending ? '创建中…' : '创建报废草稿'}\n          </Button>}\n        </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/customers/components/CustomerFormDialog.tsx",
+    "line": 90,
+    "footers": [
+      {
+        "line": 149,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n            <Button type=\"button\" variant=\"outline\" onClick={draft.requestClose} disabled={loading}>取消</Button>\n            <Button type=\"submit\" disabled={loading}>{loading ? '保存中…' : (isEdit ? '保存修改' : '保存')}</Button>\n          </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/accounting/invoices/index.tsx",
+    "line": 117,
+    "footers": [
+      {
+        "line": 152,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n          <Button variant=\"outline\" onClick={draft.requestClose} disabled={isPending}>取消</Button>\n          <Button onClick={submit} disabled={isPending || !f.invoiceNo.trim() || !f.partyName.trim() || !(withTax > 0)}>{isPending ? '保存中…' : (edit ? '保存修改' : '保存')}</Button>\n        </DialogFooter>"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/BaseCrudPage.tsx",
+    "line": 211,
+    "footers": [
+      {
+        "line": 227,
+        "opening": "<DialogFooter>",
+        "hasExtraInfo": false,
+        "source": "<DialogFooter>\n            <Button variant=\"outline\" disabled={saveMut.isPending} onClick={closeDialog}>{saved ? '关闭' : '取消'}</Button>\n            <Button\n              disabled={saved || !(editing ? canEdit : canCreate) || (canSubmit && !canSubmit(editing)) || saveMut.isPending}\n              onClick={() => saveMut.mutate()}\n            >\n              {saveMut.isPending ? '保存中…' : (editing ? '保存修改' : '创建')}\n            </Button>\n          </DialogFooter>"
+      }
+    ]
+  }
+]

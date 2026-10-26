@@ -1,0 +1,203 @@
+{
+  "baseline": "83241d10fde1f43543f9e17d4b305b679e17bed2",
+  "branch": "codex/desktop-ibm-style",
+  "node": "v22.23.2",
+  "remoteMainBeforePush": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+  "checks": [
+    {
+      "name": "lint",
+      "command": "pnpm --dir frontend lint",
+      "exitCode": 0,
+      "result": null,
+      "logSha256": "62341d0742a4669bf8254a6933f7bb8a6c994c4c6b85013354e9106ec7ac56c6",
+      "logExcerpt": [
+        "",
+        "> flowcube-frontend@0.13.8 lint /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend",
+        "> eslint .",
+        ""
+      ]
+    },
+    {
+      "name": "types",
+      "command": "tsc -p frontend/tsconfig.app.json --noEmit",
+      "exitCode": 0,
+      "result": null,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "logExcerpt": []
+    },
+    {
+      "name": "build",
+      "command": "pnpm --dir frontend build --outDir /tmp/flowcube-page-conformance-20261025/dist",
+      "exitCode": 0,
+      "result": "5.59s",
+      "logSha256": "5a9d4033185ac501ae1de3e0d9580c0e9cd36185678ad7c2438836233d8ab714",
+      "logExcerpt": [
+        "",
+        "> flowcube-frontend@0.13.8 build /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend",
+        "> cross-env VITE_ELECTRON=1 vite build --outDir /tmp/flowcube-page-conformance-20261025/dist",
+        "",
+        "...",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/vendor-barcode-CQ1pCttT.js                                                                             84.83 kB │ gzip:  20.49 kB",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/DatePicker-BpujkK2A.js                                                                                 86.43 kB │ gzip:  23.27 kB",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/index-CIL0SfGb.js                                                                                     103.75 kB │ gzip:  30.36 kB",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/vendor-core-Q-5fFGCP.js                                                                               119.60 kB │ gzip:  32.50 kB",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/index-m8fnOZH5.js                                                                                     164.33 kB │ gzip:  48.10 kB",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/vendor-react-BrtsTF-Q.js                                                                              178.07 kB │ gzip:  58.35 kB",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/index-DJtrl1XU.js                                                                                     205.58 kB │ gzip:  64.63 kB",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/vendor-ui-CepfSOcG.js                                                                                 279.97 kB │ gzip:  73.13 kB",
+        "../../../../../../../tmp/flowcube-page-conformance-20261025/dist/assets/vendor-charts-J3Kj0IQk.js                                                                             442.08 kB │ gzip: 125.28 kB",
+        "✓ built in 5.59s"
+      ]
+    },
+    {
+      "name": "invoice-tests",
+      "command": "pnpm --dir frontend exec vitest run src/pages/accounting/invoices/index.filters.test.ts src/pages/accounting/invoices/index.date.test.tsx src/pages/accounting/invoices/index.409-recovery.test.tsx",
+      "exitCode": 0,
+      "result": "3 files / 17 tests",
+      "logSha256": "18cbce7db6015e9d8d88ef71e6cbb9ef0294db0a8ab8be5c7facdf223d75e547",
+      "logExcerpt": [
+        "",
+        " RUN  v4.1.11 /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend",
+        "",
+        "",
+        " Test Files  3 passed (3)",
+        "      Tests  17 passed (17)",
+        "   Start at  15:57:32",
+        "   Duration  2.66s (transform 1.08s, setup 0ms, import 2.44s, tests 2.67s, environment 835ms)",
+        ""
+      ]
+    },
+    {
+      "name": "frontend-conventions",
+      "command": "pnpm test:frontend-conventions",
+      "exitCode": 0,
+      "result": "5/5",
+      "logSha256": "d486389537421192eb4d0f17aceef4e3417716adb7e1f0bfe697c8d285c1702a",
+      "logExcerpt": [
+        "",
+        "> flowcube@ test:frontend-conventions /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube",
+        "> node --test tests/frontend-conventions.test.js",
+        "",
+        "...",
+        "  ...",
+        "1..5",
+        "# tests 5",
+        "# suites 0",
+        "# pass 5",
+        "# fail 0",
+        "# cancelled 0",
+        "# skipped 0",
+        "# todo 0",
+        "# duration_ms 164.571959"
+      ]
+    },
+    {
+      "name": "api-route-contract",
+      "command": "pnpm test:api-route-contract",
+      "exitCode": 0,
+      "result": "0 failures",
+      "logSha256": "93f37e2c9411f8164c99fc79df579844b45b0ee23ece7cb376bff0b809642f0e",
+      "logExcerpt": [
+        "",
+        "> flowcube@ test:api-route-contract /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube",
+        "> node tests/api-route-contract.test.js",
+        "",
+        "api-route-contract: 后端 64 个挂载 / 571 条路由、前端 59 个文件 / 286 条静态调用、失败 0",
+        "  [OK] 前端调用的每个接口后端都有对应注册"
+      ]
+    },
+    {
+      "name": "status-rules",
+      "command": "node --test tests/status-rules-integrity.test.js",
+      "exitCode": 0,
+      "result": "1/1",
+      "logSha256": "b6b70d9c9f74f829f1e6b147c455c50d2fdb3142e34085bc921165b4c4b1b60d",
+      "logExcerpt": [
+        "TAP version 13",
+        "# 状态机动作表完整性（documentStatusRules）",
+        "#   [PASS] 机器数量与已知清单一致（16，warehouseTask 独立）",
+        "#   [PASS] purchase(采购单) 有 actions",
+        "...",
+        "  ...",
+        "1..1",
+        "# tests 1",
+        "# suites 0",
+        "# pass 1",
+        "# fail 0",
+        "# cancelled 0",
+        "# skipped 0",
+        "# todo 0",
+        "# duration_ms 61.200959"
+      ]
+    },
+    {
+      "name": "agents-md-guard",
+      "command": "pnpm test:agents-md-guard",
+      "exitCode": 0,
+      "result": "0 failures",
+      "logSha256": "b67caef24badfbdd25ceefb689d048f8e795961429b9bf616aaea8412e2616e8",
+      "logExcerpt": [
+        "",
+        "> flowcube@ test:agents-md-guard /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube",
+        "> node tests/agents-md-injection-guard.test.js",
+        "",
+        "agents-md-injection-guard: 目录链 1 层、docs 引用 30 个、npm 脚本引用 32 个、AGENTS.md 31451 字节（硬限 32768）、失败 0",
+        "  [OK] AGENTS.md 注入守卫通过"
+      ]
+    },
+    {
+      "name": "source-audit",
+      "command": "node /tmp/flowcube-page-conformance-20261025/source-audit.cjs",
+      "exitCode": 0,
+      "evidence": "source-audit.json"
+    },
+    {
+      "name": "final-diff-check",
+      "command": "git diff --check",
+      "exitCode": 0
+    },
+    {
+      "name": "evidence-consistency",
+      "result": "79 unique captures; table card ancestors, summary units, compact th/td, invoice request field set, JSON and image references validated",
+      "exitCode": 0
+    }
+  ],
+  "browser": {
+    "routes": 10,
+    "captures": 79,
+    "imageSheets": 12,
+    "viewport": [
+      1280,
+      633
+    ],
+    "methodCounts": {
+      "GET": 398
+    },
+    "source": "Current real React routes, synthetic local HTTP; no database",
+    "ownedSession": "flowcube-page-conformance-20261025",
+    "closed": true,
+    "finalSessionList": [],
+    "stoppedOwnedPorts": [
+      5201,
+      58359
+    ],
+    "original5197PidPreserved": 54161
+  },
+  "validationOrder": "17 invoice tests passed after final test helper migration. Only a subsequent single replenishment DialogContent class was changed; lint/types/build repeated after it. Other root guards run on this batch; docs guard rerun after report completion.",
+  "release": "No merge, rebase, tag, version bump, deployment or business write. Push confirmation belongs in delivery response, not this self-referential commit.",
+  "redBeforeImplementation": {
+    "exitCode": 1,
+    "result": "3 missing-feature tests failed, 2 existing action/permission tests passed",
+    "logSha256": "f6c4bacccd60d04ef97bc12de01d374db7e36bf29360b940765f8f7097b62d94",
+    "logExcerpt": [
+      "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯",
+      "",
+      "",
+      " Test Files  1 failed (1)",
+      "      Tests  3 failed | 2 passed (5)",
+      "   Start at  15:50:26",
+      "   Duration  1.53s (transform 269ms, setup 0ms, import 758ms, tests 399ms, environment 285ms)",
+      ""
+    ]
+  }
+}

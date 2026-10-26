@@ -1,0 +1,150 @@
+{
+  "baseline": "2f2037ea1e711bc2000946fbc8317b3d3e5b7978",
+  "records": [
+    {
+      "file": "frontend/src/pages/accounting/ledger/index.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "4ac26d386520cc9567327ca3a9e508af427060d41ef36a706691c71e872621c4",
+      "resultSha256": "7d625b1c8bc3289d0bb767f8da91842aa0f098265849f5788db856f6150a6006",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "b19ddea236b7fee79dd893389bdd08c96569b76a44a23624d46cd15f531618ef",
+      "resultSha256": "fb113818c3924450b7c1696c48dd227a3fb340ce78468ac5ea8edf65194593e2",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/credit-overrides/index.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "5e9daaeddb2e36e9fbda0ddf6fda37702b9b218dc5c66c049c1018211241ae80",
+      "resultSha256": "fd67c2dc612e730395cc8c86fa00ab7db57bf9cb12db3177ab4600c3eb81aaa4",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/finance/accounts/index.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "ac10a438200c0528e35294c38dc751b720f4b4790f1c9152545b68c6b541cd26",
+      "resultSha256": "21d4c9be285c19aef496cea3e9ab80137b600eee36e967c17c48cc2545be5559",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/finance/expenses/index.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "c845c636da64622108f9d0f70476cca33bc3635612a771d5f3335947e532f267",
+      "resultSha256": "0ce432de122c3197dcf4d7001ce7cfeacfe9f2c6b15c867a6edd31907fee65fc",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/kits/KitEditor.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "6b7440c877f69fc6d14920a56fe5c7bca4100bc5f92342ad02ab171fa345ec58",
+      "resultSha256": "d8c4109e53d0cf0fa7bc6c1d1498871e3c03a960ee711feeeb4fcc8f158a7197",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/procurement/detail.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "c1ecc84b4cca5ff717807dc52b76a7a6d69010fea43f2f80111cea665c993ed2",
+      "resultSha256": "771333eb4f7d9558a1b1e05ad1d6fd1d33031533ddc4500114678a2358ecc871",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/reports/replenishment.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "51edf028aa723a62243fe2899bf0c7a4bb5605faf6a1c42c4962625e8dd032dd",
+      "resultSha256": "5af125d21097d7768793b99c8943588927c0169b936f6851298b2c28fb1f9de1",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/stockcheck/abc.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "00db2be06a305f3f7cd908053dd08e021dfc4fb7c141a69e8f8c8589871cf514",
+      "resultSha256": "df740c60e98295dcb7220476f89d3e33150be9af19d4819898a76578c2eb9bfd",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/components/shared/payments/ReceiptDetailDialog.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "46c0732e30e4e7882f006ced98d9bfb8b1bcb4a3e2580033570b8f6f6c33188a",
+      "resultSha256": "d587720c3b9960cb6b971bcc4c01734976a514d3cb9bfdc26aa791a25b45d756",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/components/shared/payments/SettlementConfirmDialog.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "93ffa1292b99a39987dc5b51fc4b8437557accce275838d7123fe957bdba2b94",
+      "resultSha256": "52cb23f9c7c776a4d19b4bab7ceb428e941f96a97c46acc4dc67b369635d4d3a",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/components/shared/payments/StatementDetailDialog.tsx",
+      "scope": "Remove only one dead thead background class; all th/td, callbacks and other attributes byte-identical",
+      "baselineSha256": "6e33ad19e07ef1a35df8cc15f720f25378fd7a534c780416c33a1b2c9025dd4c",
+      "resultSha256": "f7e6dd8f5e40f677eb8068092c54b1b7f485da5c28cd054d1487179284eebf21",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/accounting/invoices/index.tsx",
+      "scope": "Rename one segment button class only",
+      "baselineSha256": "5f6f57f63b12c396a9c5dd60fb4b2c680b86da747135a4ed41a9144807de5cf1",
+      "resultSha256": "d0db70ac539db7b41f2724650fe04bd43a998e9cfb4902a2ef114bd7a34134bb",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+      "scope": "Rename one segment button class only",
+      "baselineSha256": "bcaeea5ecc579e40bf8931af37e44eb156822c7ff1488f9f0c08638d83089bc9",
+      "resultSha256": "c8789a22463fbf22387c800629c0273dccfd9453b79657d46cff0a91af055fc2",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/reports/warehouse-ops.tsx",
+      "scope": "Replace exactly three color string literals; status keys, values/counts and rendering flow unchanged",
+      "baselineSha256": "67dd79adbc170af5ee42814618445ac1a0f8ef771c554d2e19976ab1e8742f2b",
+      "resultSha256": "4f793e96a1e4d15ed2bdcb3d0c5518355bd3040bae3ccef4aa2b7ad5e5b78bec",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/approvals/flows.tsx",
+      "scope": "Add import and read-only list summary; query success flags only gate new summary visibility. Count source: flows.length; current successful array",
+      "baselineSha256": "b1fe6c1af023a3594bd08a747546ada344eeaa0d71ae3042b2e99c4e35878ac7",
+      "resultSha256": "12f5905efda8d123098dfccaec98fd5b1ece9c20db07022b6c51f99778d744b8",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/accounting/periods/index.tsx",
+      "scope": "Add import and read-only list summary; query success flags only gate new summary visibility. Count source: data.length; current periods array",
+      "baselineSha256": "be29c5f43e5810877f2c5f2f7d9ede588073593d75e40635a0f0e1c69506459c",
+      "resultSha256": "d8c8ec2c07e898b9e99cb459f97faac16610a84b6c0c1bb825221630e1e0a7eb",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/settings/printers/index.tsx",
+      "scope": "Add import and read-only list summary; query success flags only gate new summary visibility. Count source: printers.length; current printers array",
+      "baselineSha256": "561db6f2d1a4cb9e9fc2bf308067e000c177e63685f7b261f4fa584ba6825625",
+      "resultSha256": "8f43bc296bcf2720062d526f0bd335ca359296e5429913ce0868ce11e99c70bb",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/pages/reports/avg-cost-reconciliation.tsx",
+      "scope": "Add import and read-only list summary; query success flags only gate new summary visibility. Count source: data.list.length; actual returned product/warehouse rows, not matchedRows or driftedCount",
+      "baselineSha256": "6ab7ccd41f39308c54dc9f9451b069d364eae28bcbebe2a858067384f1bfdce2",
+      "resultSha256": "c27fdcfe50be0451480f84c8ae5cc926edb2e23470b44804ee7334b1f4da1781",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    },
+    {
+      "file": "frontend/src/styles/desktop-page-samples.css",
+      "scope": "Only two form-footer rule blocks changed/added; five segment selectors renamed with declarations unchanged; retained meter rules unchanged except explanatory comment",
+      "baselineSha256": "b4e40f017367ede04c7af3d754ead77de0ba0976c27149f402ba317e6d7d6e78",
+      "resultSha256": "e5c65a4e97abdd9a6bbe20e7deebadccfdbbb8ce7b8ae71d0778deae78f25923",
+      "identicalAfterReversingOnlyAllowedPresentationEdits": true
+    }
+  ],
+  "productSourceOldSegmentNameOccurrences": 0,
+  "historicalEvidencePolicy": "Prior committed review evidence retains original captured class names; not rewritten to manufacture repository-wide zero hits.",
+  "footerInventory": "14 explicit fc-form-dialog DialogContent targets, 14 DialogFooter nodes; no additional left-side text in target footers. AppDialog KitEditor and ordinary CommercialShipDialog extra footer content outside new selectors.",
+  "meterOverrides": "Three existing aria-label rules retained byte-identical; inline source colors now token based.",
+  "logicScope": "Reversing only listed presentation edits reconstructs every changed production file byte-for-byte. No API, query parameters, business handlers, props interfaces or permissions changed."
+}

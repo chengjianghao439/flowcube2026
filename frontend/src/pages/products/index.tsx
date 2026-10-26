@@ -189,7 +189,7 @@ export default function ProductsPage() {
         r.allowDecimalQty === false && <span className="rounded bg-warning/10 px-1 text-xs text-warning-ink">整数数量</span>}</div>
     }},
     { key:'supplierName', title:'供应商', width:140, render:v=>(v as string)||'-' },
-    { key:'isActive', title:'状态', width:70, render:(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} /> },
+    { key:'isActive', title:'状态', width:96, minWidth:96, render:(_,r)=><SoftStatusLabel label={r.isActive?'启用':'停用'} tone={activeTone(r.isActive)} /> },
     { key:'id', title:'操作', width:140, render:(_,r)=>(
       <TableActionsMenu
         primaryLabel={canUpdate ? '编辑' : '查看'}

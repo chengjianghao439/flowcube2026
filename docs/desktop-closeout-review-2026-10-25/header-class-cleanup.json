@@ -1,0 +1,86 @@
+[
+  {
+    "file": "frontend/src/pages/accounting/ledger/index.tsx",
+    "before": "sticky top-0 bg-muted/60 text-muted-foreground",
+    "after": "sticky top-0 text-muted-foreground",
+    "removed": "bg-muted/60",
+    "line": 33
+  },
+  {
+    "file": "frontend/src/pages/accounting/vouchers/index.tsx",
+    "before": "bg-muted/40 text-muted-foreground",
+    "after": "text-muted-foreground",
+    "removed": "bg-muted/40",
+    "line": 207
+  },
+  {
+    "file": "frontend/src/pages/credit-overrides/index.tsx",
+    "before": "sticky top-0 bg-muted/60",
+    "after": "sticky top-0",
+    "removed": "bg-muted/60",
+    "line": 81
+  },
+  {
+    "file": "frontend/src/pages/finance/accounts/index.tsx",
+    "before": "sticky top-0 bg-muted/50 text-xs text-muted-foreground",
+    "after": "sticky top-0 text-xs text-muted-foreground",
+    "removed": "bg-muted/50",
+    "line": 327
+  },
+  {
+    "file": "frontend/src/pages/finance/expenses/index.tsx",
+    "before": "bg-muted/50 text-xs text-muted-foreground",
+    "after": "text-xs text-muted-foreground",
+    "removed": "bg-muted/50",
+    "line": 455
+  },
+  {
+    "file": "frontend/src/pages/kits/KitEditor.tsx",
+    "before": "bg-muted text-left text-xs text-muted-foreground",
+    "after": "text-left text-xs text-muted-foreground",
+    "removed": "bg-muted",
+    "line": 198
+  },
+  {
+    "file": "frontend/src/pages/procurement/detail.tsx",
+    "before": "bg-muted/40 text-muted-foreground [&_th]:whitespace-nowrap",
+    "after": "text-muted-foreground [&_th]:whitespace-nowrap",
+    "removed": "bg-muted/40",
+    "line": 104
+  },
+  {
+    "file": "frontend/src/pages/reports/replenishment.tsx",
+    "before": "sticky top-0 bg-muted/60",
+    "after": "sticky top-0",
+    "removed": "bg-muted/60",
+    "line": 255
+  },
+  {
+    "file": "frontend/src/pages/stockcheck/abc.tsx",
+    "before": "bg-muted/40 text-muted-foreground",
+    "after": "text-muted-foreground",
+    "removed": "bg-muted/40",
+    "line": 226
+  },
+  {
+    "file": "frontend/src/components/shared/payments/ReceiptDetailDialog.tsx",
+    "before": "bg-muted/50 text-xs text-muted-foreground",
+    "after": "text-xs text-muted-foreground",
+    "removed": "bg-muted/50",
+    "line": 72
+  },
+  {
+    "file": "frontend/src/components/shared/payments/SettlementConfirmDialog.tsx",
+    "before": "bg-muted/50 text-xs text-muted-foreground",
+    "after": "text-xs text-muted-foreground",
+    "removed": "bg-muted/50",
+    "line": 76
+  },
+  {
+    "file": "frontend/src/components/shared/payments/StatementDetailDialog.tsx",
+    "before": "bg-muted/50 text-xs text-muted-foreground",
+    "after": "text-xs text-muted-foreground",
+    "removed": "bg-muted/50",
+    "line": 116
+  }
+]

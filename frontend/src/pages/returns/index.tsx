@@ -252,7 +252,7 @@ export default function ReturnsPage() {
       const tone = status === 3 ? 'success' : status === 4 ? 'danger' : status === 1 ? 'draft' : 'active'
       return <SoftStatusLabel label={(row as RowType).statusName} tone={tone} />
     } },
-    { key: 'operatorName', title: '经办人', width: 90 },
+    { key: 'operatorName', title: '经办人', width: 112, minWidth: 112 },
     ...(type === 'purchase' ? [{ key: 'createdAt', title: '时间', width: 160, render: (v: unknown) => formatDisplayDateTime(v) } satisfies TableColumn<RowType>] : []),
     {
       key: 'remark', title: '备注', expandableText: true, width: 200,

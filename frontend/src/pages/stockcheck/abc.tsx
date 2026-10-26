@@ -223,7 +223,7 @@ export default function AbcClassPage() {
           </FilterCard>
           <div className="overflow-x-auto rounded-lg border border-border">
             <ReportTable className="w-full text-sm">
-              <thead className="bg-muted/40 text-muted-foreground">
+              <thead className="text-muted-foreground">
                 <tr>
                   <th className="px-4 py-2 text-left font-medium">档位</th>
                   <th className="px-4 py-2 text-right font-medium">盘点周期（天）</th>

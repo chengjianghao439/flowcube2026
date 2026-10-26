@@ -1,0 +1,443 @@
+{
+  "labels": {
+    "labels-before": [
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "客户名称 *",
+        "text": "客户名称 *"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "联系人",
+        "text": "联系人"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "联系电话",
+        "text": "联系电话"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "邮箱",
+        "text": "邮箱"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "地址",
+        "text": "地址"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "备注",
+        "text": "备注"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "结算方式",
+        "text": "结算方式"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "应收账期",
+        "text": "应收账期"
+      }
+    ],
+    "labels-after": [
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "客户名称 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "客户名称 *"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "联系人",
+        "markers": [],
+        "text": "联系人"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "联系电话",
+        "markers": [],
+        "text": "联系电话"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "邮箱",
+        "markers": [],
+        "text": "邮箱"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "地址",
+        "markers": [],
+        "text": "地址"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "备注",
+        "markers": [],
+        "text": "备注"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "结算方式",
+        "markers": [],
+        "text": "结算方式"
+      },
+      {
+        "color": "rgb(29, 29, 31)",
+        "html": "应收账期",
+        "markers": [],
+        "text": "应收账期"
+      }
+    ],
+    "invoice-markers-after": [
+      {
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "发票号码 *"
+      },
+      {
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "供应商 *"
+      },
+      {
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "价税合计 *"
+      },
+      {
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "开票日期 *"
+      }
+    ],
+    "sale-markers-after": [
+      {
+        "html": "客户 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "客户 *"
+      },
+      {
+        "html": "出库仓库 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "出库仓库 *"
+      }
+    ],
+    "purchase-form-markers-after": [
+      {
+        "html": "供应商 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "供应商 *"
+      },
+      {
+        "html": "入库仓库 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "入库仓库 *"
+      }
+    ],
+    "inbound-form-markers-after": [
+      {
+        "html": "供应商 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "供应商 *"
+      }
+    ],
+    "kit-markers-after": [
+      {
+        "html": "配件名称 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "配件名称 *"
+      },
+      {
+        "html": "分类 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "分类 *"
+      },
+      {
+        "html": "供应商 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "供应商 *"
+      },
+      {
+        "html": "单位 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "单位 *"
+      },
+      {
+        "html": "型号 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "型号 *"
+      },
+      {
+        "html": "颜色 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "颜色 *"
+      },
+      {
+        "html": "进价 <span class=\"text-destructive-ink\">*</span>",
+        "markers": [
+          {
+            "color": "rgb(184, 25, 38)",
+            "text": "*"
+          }
+        ],
+        "text": "进价 *"
+      }
+    ],
+    "password-markers-after": [
+      {
+        "colors": [
+          "rgb(184, 25, 38)"
+        ],
+        "html": "当前密码 <span class=\"text-destructive-ink\">*</span>",
+        "text": "当前密码 *"
+      },
+      {
+        "colors": [
+          "rgb(184, 25, 38)"
+        ],
+        "html": "新密码 <span class=\"text-destructive-ink\">*</span>（至少 6 位）",
+        "text": "新密码 *（至少 6 位）"
+      },
+      {
+        "colors": [
+          "rgb(184, 25, 38)"
+        ],
+        "html": "确认新密码 <span class=\"text-destructive-ink\">*</span>",
+        "text": "确认新密码 *"
+      }
+    ]
+  },
+  "placement": {
+    "summary-customers": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 2 位</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "FOOTER px-1 py-3",
+        "text": "共 2 位"
+      }
+    ],
+    "summary-logistics-freight-reconciliation": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 1 张</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "SECTION ",
+        "text": "共 1 张"
+      },
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 1 单</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "SECTION ",
+        "text": "共 1 单"
+      }
+    ],
+    "summary-products": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 2 件</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "DIV desktop-record-page space-y-4",
+        "text": "共 2 件"
+      }
+    ],
+    "summary-inventory": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 4 条</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "DIV space-y-4",
+        "text": "共 4 条"
+      }
+    ],
+    "summary-purchase": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 1 单</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "DIV space-y-4",
+        "text": "共 1 单"
+      }
+    ],
+    "summary-users": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 1 个</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "DIV space-y-4",
+        "text": "共 1 个"
+      }
+    ],
+    "summary-settings-barcode-print-query": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 2 条</div>",
+        "insideTableCard": false,
+        "padding": "0px",
+        "parent": "DIV fc-list-footer",
+        "text": "共 2 条"
+      }
+    ],
+    "summary-sale": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 6 单</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "SECTION min-w-0",
+        "text": "共 6 单"
+      }
+    ]
+  },
+  "embedded": {
+    "fulfillment-summary-normal": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 1 项</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "SECTION ",
+        "text": "共 1 项"
+      }
+    ],
+    "handling-summary-empty": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 0 条</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "SECTION space-y-3",
+        "text": "共 0 条"
+      },
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 0 单</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "DIV space-y-4",
+        "text": "共 0 单"
+      }
+    ],
+    "handling-summary-normal": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 1 条</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "SECTION space-y-3",
+        "text": "共 1 条"
+      },
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 0 单</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "DIV space-y-4",
+        "text": "共 0 单"
+      }
+    ],
+    "fulfillment-summary-empty": [
+      {
+        "background": "rgba(0, 0, 0, 0)",
+        "html": "<div class=\"px-1 py-3 text-xs text-muted-foreground\" role=\"status\">共 0 项</div>",
+        "insideTableCard": false,
+        "padding": "12px 4px",
+        "parent": "SECTION ",
+        "text": "共 0 项"
+      }
+    ]
+  },
+  "kitSearch": {
+    "inFilterCard": true,
+    "input": "",
+    "url": "http://127.0.0.1:5205/?review=1792929896583136000#/kits"
+  }
+}

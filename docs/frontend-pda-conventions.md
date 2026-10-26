@@ -8,6 +8,10 @@
 
 ---
 
+- **其他电脑端页面精修（2026-10-25，本地实现）**：只在已复核电脑端 CSS 后追加令牌规则，保留 TSX、utility、结构与交互。搜索按真实 cmdk `data-selected` / `data-disabled` 及分组属性匹配；其内层 listbox 只作为滚动列表，不另叠浮层阴影。当前 Popover 内联挂载，顶栏毛玻璃的层叠上下文须保证搜索高于工作面、低于对话框。浮层 14px、工作面沿面板令牌，内嵌表格底角随父面板扣边框；不重复 ReportTable 合计和库存 tabular-nums utility。库存继续与主表共用浅灰表头。普通文字入口的禁用态不能继续显示可用主色及 hover 下划线，fc-button 各变体保留自身状态。仓库运营最初以流程 aria-label 将三处内联旧色映射到令牌；收尾轮已将 TSX 色源直接对齐同一令牌，保留原兼容映射，未来改文案须核对选择器。逐页状态、合成响应及明确未覆盖项见 [本轮复核记录](desktop-other-pages-review-2026-10-25.md)；不据此认定全岗位、虚拟列表大数据、PDA 或出纸通过。
+
+- **浅色品牌样式校正（2026-10-25，本地实现）**：`index.css :root` 统一 IBM Carbon 蓝、中性与状态令牌，登录页和 ERP 浮层共用；桌面样式不再另抄一套颜色。保留 TSX、类名和交互，既有蓝色 utility 通过样式配置接品牌令牌，真实浅色语义 utility 通过桌面作用域兼容映射；`dark:` 变体不能去掉前缀当裸类，`.dark` 原令牌块保持不变。搜索框保留圆角矩形；SaleOrderDetailTabs / ContentTabs 保留源码分段形态，库存保留自身下划线，不用通用 CSS 抹平不同组件的形态。WorkspaceTabs 保留自身 2px 指示条，OrderStatusFilter 按 Radix 实际 `radiogroup` / `data-state` 呈现；行操作只调整普通主按钮，危险变体保留红色。Inter、Noto Sans SC 和既有 JetBrains Mono 随包按 Unicode 子集加载，OFL 许可证随产物分发；字体 URL 必须在构建后解析到实际文件或内联资源，不能以 dev 加载正常或 build exit 0 代替。共享根令牌与字体适用于共用入口，ERP 专属兼容映射不进入 PDA 组件；本轮未做 PDA 真机、Windows 安装或实际打印验收。逐页选择器、合成数据范围与验证结果见 [本轮检查记录](desktop-ibm-style-review-2026-10-25.md)。
+
 - **电脑端统一呈现（2026-10-23，本地实现）**：用户确认销售列表、销售新建/详情与系统设置样板后，`AppLayout` 统一启用 `desktop-shell-sample` 和 `desktop-workspace` 作用域，共用表格、表单面板、页头、状态筛选与控件沿用确认后的浅色蓝色皮肤。`desktop-page-sample` 保留原样板页面标记；其他 ERP 页面通过共用外壳继承视觉，不逐页重写业务。官网使用独立 `official-site` 样式与确认原稿结构；PDA 和对外查询页不进入 ERP 皮肤。销售查询、默认日期、筛选、真实汇总、虚拟表格、列宽和内部滚动、单据状态、金额/数量、权限、改单只读、保存请求与未知结果恢复沿用原逻辑；不能按静态参考稿补写死的状态、配置或仓库。输入框视觉样式须让校验等语义 utility 保持优先。系统设置按接口原始键分为企业信息、单据编号、业务参数，未知键保留在业务参数，字段标签、备注、类型、原值与保存键不变；图片/时间戳继续排除在普通配置批量保存之外，Logo 沿用独立接口。样板计划见 `docs/superpowers/plans/2026-10-23-desktop-page-samples.md`；合成数据浏览器预览仅证明前端显示与交互，不等于真实业务写入或生产验收。
 
 - **电脑端共用表头与商品列（2026-10-24，本地实现）**：普通单行原生明细/报表通过 `ReportTable` 复用 `TableColumnHeader` 与既有列宽交互，保留原行、输入、排序、复选框和合计；试算平衡等跨行/跨列报表保留原有分组语义。录入单据可显式选用 `ProductIdentitySummary` 组合商品身份，独立主数据/分析列不机械折叠；只显示接口已有字段，不补查或改写提交。真实多选列仍保留，不能用空白占位列伪装选择；不可转换的采购计划移除整列空白选择表头与表体。日历、打印画布、PDA 不进入这套表格交互。逐入口台账、预览数据边界和本批验证见 [电脑端逐页检查](desktop-ui-review-2026-10-24.md)。
@@ -1239,7 +1243,7 @@ DialogHeader 的可选 description 与 AppDialog 的显式 descriptionInHeader �
 
 #### 共用表头与分组列宽统一（2026-10-24）
 
-普通明细使用 ReportTable → TableColumnHeader → TableColumnResizeHandle，与 DataTable、ResizableTable 共用 useTableColumns。可调整表头显式标记 data-resizable，退出静态竖线规则；叶列分隔线只由共用把手绘制。电脑端继续沿 #fafafa、12px/18px、500 字重及 10px/16px 内边距，标题可自然换行，不强制固定行高。分组标题保留原跨行/跨列，只画组边界；每个数据列具有自己的鼠标、方向键与适应宽度入口。按 data-column-key 测量实际标题，合计行按 colspan 的逻辑位置定位，避免量到相邻借贷列。
+普通明细使用 ReportTable → TableColumnHeader → TableColumnResizeHandle，与 DataTable、ResizableTable 共用 useTableColumns。可调整表头显式标记 data-resizable，退出静态竖线规则；叶列分隔线只由共用把手绘制。当前电脑端表头沿已复核品牌样式使用 surface-subtle 实色、muted-foreground 字色、12px/18px、600 字重及 10px/16px 内边距；显式紧凑表密度见下文。标题可自然换行，不强制固定行高。分组标题保留原跨行/跨列，只画组边界；每个数据列具有自己的鼠标、方向键与适应宽度入口。按 data-column-key 测量实际标题，合计行按 colspan 的逻辑位置定位，避免量到相邻借贷列。
 
 ReportTable 只对可完整验证占位矩阵及单列叶子的表头建立列组；显式 colgroup 或无法可靠映射的原结构沿原路径呈现，不猜列关系。盘点详情、处置详情、报废建议及已选明细不再维护并行网格表头，商品身份复用 ProductIdentityHeaders/Cells。只读盘点移除无按钮的末列，编辑时沿原状态保留“刷新账面”，列名明确“操作”；有效选择列保留，报废明细的移除列也标明操作。行备注用跨完整行的单元格呈现，不能放在 tr 下形成无效结构。
 
@@ -1248,3 +1252,32 @@ ReportTable 只对可完整验证占位矩阵及单列叶子的表头建立列�
 ### v0.13.8 发版前接口校对
 
 页头与操作栏的必填说明支持 ReactNode，以保留现有强调、链接及条件业务提示；BaseCrudPage 的提示入口沿用同一类型。合并页面的测试视图补齐必填说明。仅调整类型和夹具，不改渲染位置、权限或业务行为。完整类型检查与四文件十九例组件回归通过；整批发版结果另记。
+
+### 点名偏离页面归编（2026-10-25）
+
+发票、跨期补录与凭证直接使用 DataTable 的表格卡，撤除外侧重复卡；列表计数使用表后 ListSummary。运费账单/汇总单单位分别为张/单；批次效率按实际返回 waves 数组计个数，不能把独立近 30 天汇总当作筛选列表总数，原查询上限保持。补货确认、账簿明细、采购计划详情与 ABC 规则已经通过 ReportTable 获得标准表头，按实际 DOM/计算值核对后不再重复覆盖。补货确认弹窗显式单列 minmax(0,1fr)，避免宽表撑大隐式 grid 后裁切说明与页脚，横向滚动保留在原表格容器。
+
+发票类型沿共享段控；状态页签、查询草稿与 chips 复用同一已应用状态源。查询只有原接口支持的关键词和状态，没有日期；打开回填、取消不应用、重置仅清草稿。类型切换清除类型相关状态，原 page 参数与客户端自动取齐机制不变。行推进动作沿原状态/权限与回调，编辑仍仅 status=1；已抵扣/已红冲保持原单一删除入口，不因行操作归组获得编辑资格。表单必填星号与金额带只换为已有令牌，原日期、计算、草稿/409 与提交合同保持。
+
+显式紧凑表在桌面工作区/ERP 弹窗的 table 上同时使用 fc-report-table 与 fc-table-compact，统一 th/td 为 6px/12px、12.5px；颜色、状态、列宽与合计沿共享组件，只覆盖密度，不用固定行高。本轮仅迁移塑料盒详情来源贡献与流水两表，其余弹窗不自动进入变体。逐文件差异、四表表头改前/后测量、合成响应浏览器状态与未覆盖范围见 [本轮报告](desktop-page-conformance-2026-10-25.md)。
+
+### 电脑端收尾：页脚、计数与命名（2026-10-25）
+
+初次收尾只统一 fc-form-dialog 的两种页脚结构；有数据走查增补已将规格推广到电脑端整个 fc-dialog-footer 家族（包括资金账户查询）：surface-subtle 背景、12px/20px 内边距、上边框，其按钮 36px/13px，与 app-dialog 同规格。只改页脚的样式值，头部/正文、app-dialog 及特殊页脚的 flex 布局保持。BaseCrudPage 的 fc-master-form 同样接收该规则。既有 ReportTable 的 12 处 thead 冲淡背景类只作死类删除，th 仍由不透明标准规则着色，sticky、列宽及其他类保持。
+
+段控按钮统一命名 fc-segmented-option，两页与 CSS 同步更名，状态/focus/reduced-motion 声明不变。审批流/会计期间的计数单位为个，打印机为台，平均成本对账为条；计数取当前原列表长度，汇总仅在相应成功/加载条件满足时出现，不借用匹配数、差异项数或别处统计。查询、列表和错误行为保持。仓库三种 meter 色源直接使用 muted-foreground/blue-60/blue-80，控制条形 currentColor，左右文本沿原各自字色。逐处行号、完整级联/计算对照、状态图与未覆盖项见 [收尾报告](desktop-closeout-review-2026-10-25.md)。
+
+### 桌面走查归编与动效（2026-10-25）
+
+ERP 列表以 DataTable 自带卡片后的 ListSummary 为标准，销售、条码打印、运费对账及嵌入履约/处置来源区域统一到卡外计数；计数数据、成功/加载/失败条件与截断口径保持。成套配件沿既有 FilterCard。共享 Label 将字段末尾或后接括号提示的必填星号呈现为 text-destructive-ink 独立 span，原生标签的三个例外同步处理；保留名称、标签关联和校验，不自动解析正文模板示例。
+
+共享 Radix 弹窗与工具浮层进入 200ms、退出 140ms，减动效关闭；进场结束不保留 transform，避免破坏日历 fixed 定位。顶栏主导航和用户菜单通过 hidden/aria-hidden/inert 与 CSS display 离散过渡退场，原开关/回调不变。可用按钮统一独立 scale .98、120ms；禁用与列宽拖动手柄排除。调用方直接卸载的业务弹窗无法仅凭 CSS 完成退出动画，至少成套配件编辑/删除入口仍属未完成范围，不得概称全系统浮层已通过。逐处 TSX 差异、实际时序、按压计算值及验收边界见 [第六轮报告](desktop-walkthrough-review-2026-10-25.md)。
+
+
+### 有数据走查增补：单据详情与短列（2026-10-25）
+
+销售与采购详情共用 OrderOverviewStrip、OrderFacts、DetailViewTabsList/Trigger；原字段、状态、动作回调、Radix 焦点与 KeepAlive 挂载语义保留。采购摘要只用已有单据状态，不额外推导收货枚举；逐商品数量只在明细卡原页脚保留一处。采购首行静态蓝底本次未复现：移开指针的前三行与销售列表同为白/现有斑马/白，蓝色仅在实际 hover 时出现，因此不新增首行覆盖。
+
+状态标记保持单行；人员列只按核对后的 operatorName、realName、applicantName、manager、managerName、ownerName、userName 收窄，不把商品/客户等长名称一并改成单行。商品与客户的 70px 状态列、商品改价的 80px 状态列调整为 96px；四处 90px 人员列调整为 112px，销售保留比例列并设置最小宽度。手动列宽与截断提示沿原组件处理。
+
+补货计数使用原 pagination.total 并落在表后；打印模板用返回数组长度，部门树用页面已有 rows.length 并明确“个可见部门”（包含搜索匹配所需的祖先行），设备用原分页 total。PDA 设备管理的桌面搜索只搬入 FilterCard，保留即时 keyword 请求，不改成草稿/查询按钮。审批流原生选择框的五类入口统一为共享 Select；空值 sentinel 只服务控件，提交仍沿原转换和校验，部门默认 0、隐藏角色与不可用用户的原设置保留。日志清理的页头入口使用危险色 outline，原确认动作与权限不变。价格等级四色仅登记，未定义新颜色契约。逐处行号、浏览器计算值与边界见 [有数据走查报告](desktop-data-state-review-2026-10-25.md)。

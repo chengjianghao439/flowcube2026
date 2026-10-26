@@ -1,0 +1,959 @@
+{
+  "rules": "/* 显式紧凑表：仅供已标记的桌面表格使用，颜色与状态继续沿标准表规则。 */\n:is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) table.fc-report-table.fc-table-compact {\n  font-size:12.5px;\n}\n:is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) table.fc-report-table.fc-table-compact > :is(thead,tbody,tfoot) > tr > :is(th,td) {\n  padding:6px 12px;\n  font-size:12.5px;\n}",
+  "scope": "Desktop workspace or dialogs owned by desktop shell; both fc-report-table and fc-table-compact on the table element",
+  "source": [
+    {
+      "file": "frontend/src/pages/plastic-boxes/index.tsx",
+      "lines": [
+        310,
+        342
+      ],
+      "openingElement": "<ReportTable className=\"fc-table-compact w-full\">"
+    },
+    {
+      "file": "frontend/src/components/shared/ReportTable.tsx",
+      "facts": "Spreads native table attributes, emits fc-report-table, adds data-table-header on thead and fc-table-header-cell on leaf th. Existing colors and row states inherited."
+    }
+  ],
+  "computedTables": [
+    {
+      "attrs": {
+        "aria-busy": "false",
+        "class": "table-fixed text-sm",
+        "style": "width: 1520px; min-width: 100%;"
+      },
+      "cardAncestors": [],
+      "cells": [
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "barcode"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "DEMO-PLASTIC-001"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "productCode"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "DEMO-HJ01"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "articleNumber"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "DEMO-101"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "spec"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "110° / 冷轧钢"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "productName"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "缓冲铰链 · 全盖"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "color"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "镀镍"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "warehouseName"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "演示一仓"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "remainingQty"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "50"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "status"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "在库"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "createdAt"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "2026-10-25 09:30"
+        },
+        {
+          "attrs": {
+            "class": "overflow-hidden px-4 py-2.5 text-foreground align-middle",
+            "data-column-key": "id"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "13px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "11px 16px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "详情"
+        }
+      ],
+      "headers": [
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "barcode",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "条码"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "productCode",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "编码"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "articleNumber",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "供应商型号"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "spec",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "型号"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "productName",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "名称"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "color",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "颜色"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "warehouseName",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "仓库"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "remainingQty",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "当前数量"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "status",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "状态"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "createdAt",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "创建时间"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head cursor-move select-none",
+            "data-column-key": "id",
+            "draggable": "true",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "10px 16px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "操作"
+        }
+      ]
+    },
+    {
+      "attrs": {
+        "class": "fc-report-table text-sm tabular-nums [&_th]:font-medium [&_th]:text-muted-foreground [&_td]:leading-6 [&_td]:align-middle [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr:hover]:bg-muted/20 [&_tfoot]:bg-muted/30 [&_tfoot]:font-semibold table-fixed fc-table-compact w-full",
+        "style": "width: 100%; min-width: 336px;"
+      },
+      "cardAncestors": [],
+      "cells": [
+        {
+          "attrs": {
+            "class": "font-mono"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "DEMO-SOURCE-001"
+        },
+        {
+          "attrs": {
+            "class": "text-muted-foreground"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "DEMO-BATCH-A"
+        },
+        {
+          "attrs": {
+            "class": "text-right tabular-nums"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "70"
+        },
+        {
+          "attrs": {
+            "class": "font-mono"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "DEMO-SOURCE-002"
+        },
+        {
+          "attrs": {
+            "class": "text-muted-foreground"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "DEMO-BATCH-B"
+        },
+        {
+          "attrs": {
+            "class": "text-right tabular-nums"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "30"
+        }
+      ],
+      "headers": [
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head font-medium",
+            "data-column-key": "column-0-来源条码",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "来源条码"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head font-medium",
+            "data-column-key": "column-1-来源批次",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "来源批次"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-table-head font-medium text-right",
+            "data-column-key": "column-2-累计贡献",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "累计贡献"
+        }
+      ]
+    },
+    {
+      "attrs": {
+        "class": "fc-report-table text-sm tabular-nums [&_th]:font-medium [&_th]:text-muted-foreground [&_td]:leading-6 [&_td]:align-middle [&_tbody_tr]:border-b [&_tbody_tr]:border-border/60 [&_tbody_tr:last-child]:border-0 [&_tbody_tr:hover]:bg-muted/20 [&_tfoot]:bg-muted/30 [&_tfoot]:font-semibold table-fixed fc-table-compact w-full",
+        "style": "width: 100%; min-width: 560px;"
+      },
+      "cardAncestors": [],
+      "cells": [
+        {
+          "attrs": {
+            "class": "whitespace-nowrap"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "2026-10-25 09:30"
+        },
+        {
+          "attrs": {},
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "入库"
+        },
+        {
+          "attrs": {
+            "class": "text-right tabular-nums"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "100"
+        },
+        {
+          "attrs": {
+            "class": "text-muted-foreground"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "合成样式核对"
+        },
+        {
+          "attrs": {},
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "演示预览"
+        },
+        {
+          "attrs": {
+            "class": "whitespace-nowrap"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "2026-10-25 09:30"
+        },
+        {
+          "attrs": {},
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "出库"
+        },
+        {
+          "attrs": {
+            "class": "text-right tabular-nums"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "-50"
+        },
+        {
+          "attrs": {
+            "class": "text-muted-foreground"
+          },
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "合成样式核对"
+        },
+        {
+          "attrs": {},
+          "style": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(29, 29, 31)",
+            "fontSize": "12.5px",
+            "fontWeight": "400",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "static",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "演示预览"
+        }
+      ],
+      "headers": [
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head font-medium",
+            "data-column-key": "column-0-时间",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "时间"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head font-medium",
+            "data-column-key": "column-1-类型",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "类型"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-table-head font-medium text-right",
+            "data-column-key": "column-2-数量",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "数量"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head font-medium",
+            "data-column-key": "column-3-备注",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "备注"
+        },
+        {
+          "attrs": {
+            "class": "fc-table-header-cell relative px-4 py-2.5 text-left text-table-head font-medium",
+            "data-column-key": "column-4-操作人",
+            "scope": "col"
+          },
+          "style": {
+            "background": "rgb(245, 245, 247)",
+            "color": "rgb(110, 110, 115)",
+            "fontSize": "12.5px",
+            "fontWeight": "600",
+            "numeric": "tabular-nums",
+            "opacity": "1",
+            "padding": "6px 12px",
+            "position": "relative",
+            "radius": "0px",
+            "shadow": "none"
+          },
+          "text": "操作人"
+        }
+      ]
+    }
+  ],
+  "statusSafety": "Only font-size/padding added; no background/color/opacity/state declarations; noncompact table cells unaffected; all th and td measured, without !important",
+  "sharedControls": [
+    {
+      "name": "type selector",
+      "sameElement": "button.fc-print-category[aria-pressed]",
+      "container": "div.fc-segmented-control[role=group][aria-label=发票类型]",
+      "evidence": "invoices-input-after"
+    },
+    {
+      "name": "status tabs",
+      "container": "OrderStatusFilter -> role=radiogroup",
+      "items": "ToggleGroupItem -> role=radio and aria-checked",
+      "evidence": "invoices-status-after"
+    },
+    {
+      "name": "query",
+      "roles": "AppDialog role=dialog, Radix SelectTrigger role=combobox, SelectItem role=option",
+      "evidence": "invoice-query-output-options"
+    },
+    {
+      "name": "row menu",
+      "roles": "Radix menu/menuitem with disabled items using data-disabled/aria-disabled",
+      "evidence": "invoice-menu-after; background disable verified by existing unit regressions, not this browser capture"
+    }
+  ]
+}

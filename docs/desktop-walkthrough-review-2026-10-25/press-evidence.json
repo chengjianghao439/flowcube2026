@@ -1,0 +1,350 @@
+{
+  "primary-press-before": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+      },
+      "bg": "rgb(0, 29, 108)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0.15s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "none",
+      "text": "新增客户",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow"
+    },
+    "active": {
+      "active": true,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+      },
+      "bg": "rgb(0, 29, 108)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0.15s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "0.98",
+      "text": "新增客户",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow"
+    }
+  },
+  "primary-press-after": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+      },
+      "bg": "rgb(0, 29, 108)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "1",
+      "text": "新增客户",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    },
+    "active": {
+      "active": true,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+      },
+      "bg": "rgb(0, 29, 108)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "0.98",
+      "text": "新增客户",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    }
+  },
+  "row-action-press-after": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "class": "border-r border-border/60 shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-transparent text-foreground hover:bg-muted",
+        "type": "button"
+      },
+      "bg": "rgb(0, 45, 156)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 30,
+      "offsetWidth": 49,
+      "scale": "1",
+      "text": "认证",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    },
+    "active": {
+      "active": true,
+      "attrs": {
+        "class": "border-r border-border/60 shrink-0 whitespace-nowrap px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-transparent text-foreground hover:bg-muted",
+        "type": "button"
+      },
+      "bg": "rgb(0, 45, 156)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 30,
+      "offsetWidth": 49,
+      "scale": "0.98",
+      "text": "认证",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    }
+  },
+  "segment-press-after": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "aria-pressed": "true",
+        "class": "fc-segmented-option",
+        "type": "button"
+      },
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 67, 206)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 32,
+      "offsetWidth": 74,
+      "scale": "1",
+      "text": "进项发票",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    },
+    "active": {
+      "active": true,
+      "attrs": {
+        "aria-pressed": "true",
+        "class": "fc-segmented-option",
+        "type": "button"
+      },
+      "bg": "rgb(255, 255, 255)",
+      "color": "rgb(0, 67, 206)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 32,
+      "offsetWidth": 74,
+      "scale": "0.98",
+      "text": "进项发票",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    }
+  },
+  "status-tab-press-after": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "aria-checked": "true",
+        "class": "fc-toggle-group-item inline-flex min-w-7 shrink-0 items-center justify-center gap-1.5 rounded-md font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50 data-[state=on]:text-primary motion-reduce:transition-none [&_svg]:size-3.5 [&_svg]:shrink-0 min-h-10 border-b-2 border-transparent px-3 text-sm shadow-none data-[state=on]:border-primary data-[state=on]:bg-transparent data-[state=on]:shadow-none",
+        "data-radix-collection-item": "",
+        "data-state": "on",
+        "role": "radio",
+        "tabindex": "-1",
+        "type": "button"
+      },
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(29, 29, 31)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 40,
+      "offsetWidth": 80,
+      "scale": "1",
+      "text": "全部状态",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    },
+    "active": {
+      "active": true,
+      "attrs": {
+        "aria-checked": "true",
+        "class": "fc-toggle-group-item inline-flex min-w-7 shrink-0 items-center justify-center gap-1.5 rounded-md font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-50 data-[state=on]:text-primary motion-reduce:transition-none [&_svg]:size-3.5 [&_svg]:shrink-0 min-h-10 border-b-2 border-transparent px-3 text-sm shadow-none data-[state=on]:border-primary data-[state=on]:bg-transparent data-[state=on]:shadow-none",
+        "data-radix-collection-item": "",
+        "data-state": "on",
+        "role": "radio",
+        "tabindex": "0",
+        "type": "button"
+      },
+      "bg": "rgba(0, 0, 0, 0)",
+      "color": "rgb(29, 29, 31)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 40,
+      "offsetWidth": 80,
+      "scale": "0.98",
+      "text": "全部状态",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    }
+  },
+  "danger-press-after": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/95 h-10 px-4 py-2"
+      },
+      "bg": "color(srgb 0.743726 0.117059 0.151569)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "1",
+      "text": "确认删除",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    },
+    "active": {
+      "active": true,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/95 h-10 px-4 py-2"
+      },
+      "bg": "color(srgb 0.743726 0.117059 0.151569)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "0.98",
+      "text": "确认删除",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    }
+  },
+  "disabled-press-after": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2",
+        "disabled": ""
+      },
+      "bg": "rgb(0, 45, 156)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": true,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": false,
+      "offsetHeight": 36,
+      "offsetWidth": 60,
+      "scale": "1",
+      "text": "保存",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    },
+    "active": {
+      "active": false,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2",
+        "disabled": ""
+      },
+      "bg": "rgb(0, 45, 156)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": true,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": false,
+      "offsetHeight": 36,
+      "offsetWidth": 60,
+      "scale": "1",
+      "text": "保存",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    }
+  },
+  "anchor-button-press-after": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2",
+        "data-discover": "true",
+        "href": "#/stockcheck"
+      },
+      "bg": "rgb(245, 245, 247)",
+      "color": "rgb(29, 29, 31)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "1",
+      "text": "查看盘点",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    },
+    "active": {
+      "active": true,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border-border bg-muted/40 text-foreground hover:bg-muted hover:border-border active:bg-muted/80 h-10 px-4 py-2",
+        "data-discover": "true",
+        "href": "#/stockcheck"
+      },
+      "bg": "oklab(0.970708 0.000790298 -0.00252372 / 0.8)",
+      "color": "rgb(29, 29, 31)",
+      "disabled": false,
+      "duration": "0.15s, 0.15s, 0.15s, 0.15s, 0.15s, 0.12s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "0.98",
+      "text": "查看盘点",
+      "transform": "none",
+      "transition": "background-color, border-color, color, box-shadow, opacity, scale"
+    }
+  },
+  "primary-press-reduced": {
+    "hover": {
+      "active": false,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+      },
+      "bg": "rgb(0, 29, 108)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "none",
+      "text": "新建销售",
+      "transform": "none",
+      "transition": "none"
+    },
+    "active": {
+      "active": true,
+      "attrs": {
+        "class": "fc-button inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent text-sm font-medium ring-offset-background transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 active:scale-[0.98] [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95 h-10 px-4 py-2"
+      },
+      "bg": "rgb(0, 29, 108)",
+      "color": "rgb(255, 255, 255)",
+      "disabled": false,
+      "duration": "0s",
+      "hover": true,
+      "offsetHeight": 36,
+      "offsetWidth": 86,
+      "scale": "none",
+      "text": "新建销售",
+      "transform": "none",
+      "transition": "none"
+    }
+  }
+}

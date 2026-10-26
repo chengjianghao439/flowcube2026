@@ -1,0 +1,65 @@
+{
+  "dialog": {
+    "clientWidth": 766,
+    "gridColumns": "718px",
+    "left": 256,
+    "right": 1024,
+    "scrollWidth": 766,
+    "width": 768
+  },
+  "footer": {
+    "clientWidth": 718,
+    "gridColumns": "none",
+    "left": 281,
+    "right": 999,
+    "scrollWidth": 718,
+    "width": 718
+  },
+  "sticky": "sticky",
+  "tableScroll": {
+    "clientWidth": 716,
+    "gridColumns": "none",
+    "left": 281,
+    "right": 999,
+    "scrollWidth": 918,
+    "width": 718
+  },
+  "thead": [
+    {
+      "background": "rgb(245, 245, 247)",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "padding": "10px 16px"
+    },
+    {
+      "background": "rgb(245, 245, 247)",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "padding": "10px 16px"
+    },
+    {
+      "background": "rgb(245, 245, 247)",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "padding": "10px 16px"
+    },
+    {
+      "background": "rgb(245, 245, 247)",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "padding": "10px 16px"
+    },
+    {
+      "background": "rgb(245, 245, 247)",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "padding": "10px 16px"
+    },
+    {
+      "background": "rgb(245, 245, 247)",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "padding": "10px 16px"
+    }
+  ]
+}

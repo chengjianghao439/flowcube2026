@@ -69,7 +69,7 @@ export function ReceiptDetailDialog({ open, onClose, receiptId, type }: Props) {
         )}
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border">
           <ReportTable className="w-full text-sm">
-            <thead className="bg-muted/50 text-xs text-muted-foreground">
+            <thead className="text-xs text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 text-left">关联单号</th>
                 <th className="px-4 py-3 text-right">本次核销</th>

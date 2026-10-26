@@ -204,7 +204,7 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
             </div>
             <div className="overflow-x-auto rounded-lg border border-border/60">
               <ReportTable className="w-full text-sm">
-                <thead className="bg-muted/40 text-muted-foreground">
+                <thead className="text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-medium">摘要</th>
                     <th className="px-3 py-2 text-left font-medium">科目</th>
@@ -456,13 +456,9 @@ export default function VouchersPage() {
         </div>
       )}
 
-      {!isError && !isLoading && data && <div className="text-sm text-muted-foreground">共 {total} 张</div>}
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />}
 
-      <div className="card-base p-2">
-        {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />}
-      </div>
-
-      {!isError && !isLoading && data && <ListSummary total={total} />}
+      {!isError && !isLoading && data && <ListSummary total={total} unit="张" />}
 
       <GenerateDialog open={genOpen} onClose={() => setGenOpen(false)} />
       <ManualDialog open={manualOpen} onClose={() => setManualOpen(false)} />

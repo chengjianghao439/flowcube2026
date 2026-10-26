@@ -1,0 +1,51 @@
+
+ RUN  v4.1.11 /Users/chengjianghao/.codex/worktrees/desktop-ibm-style/flowcube/frontend
+
+ ❯ src/pages/approvals/flows.select.test.tsx (5 tests | 4 failed) 245ms
+   × 定制审批选择保持role分支的原提交值与空值口径 116ms
+   × 定制审批选择保持department分支的原提交值与空值口径 45ms
+   × 定制审批选择保持user分支的原提交值与空值口径 41ms
+   × 编辑沿原禁止更换业务类型，并保留已配置的隐藏角色 26ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/approvals/flows.select.test.tsx > 定制审批选择保持role分支的原提交值与空值口径
+ FAIL  src/pages/approvals/flows.select.test.tsx > 定制审批选择保持department分支的原提交值与空值口径
+ FAIL  src/pages/approvals/flows.select.test.tsx > 定制审批选择保持user分支的原提交值与空值口径
+AssertionError: expected 'SELECT' to be 'BUTTON' // Object.is equality
+
+Expected: "BUTTON"
+Received: "SELECT"
+
+ ❯ choose src/pages/approvals/flows.select.test.tsx:37:27
+     35| async function choose(name: RegExp, option: string) {
+     36|   const trigger = getByRole(document.body, 'combobox', { name })
+     37|   expect(trigger.tagName).toBe('BUTTON')
+       |                           ^
+     38|   const user = userEvent.setup()
+     39|   await act(async () => { await user.click(trigger) })
+ ❯ src/pages/approvals/flows.select.test.tsx:47:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/pages/approvals/flows.select.test.tsx > 编辑沿原禁止更换业务类型，并保留已配置的隐藏角色
+AssertionError: expected 'SELECT' to be 'BUTTON' // Object.is equality
+
+Expected: "BUTTON"
+Received: "SELECT"
+
+ ❯ src/pages/approvals/flows.select.test.tsx:67:23
+     65|   await render(); await click('编辑')
+     66|   const biz = getByRole(document.body, 'combobox', { name: '业务类型' }) a…
+     67|   expect(biz.tagName).toBe('BUTTON'); expect(biz.disabled).toBe(true)
+       |                       ^
+     68|   expect(getByRole(document.body, 'combobox', { name: /级角色$/ }).textCo…
+     69|   await click('保存')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 1 passed (5)
+   Start at  20:57:27
+   Duration  863ms (transform 244ms, setup 0ms, import 391ms, tests 245ms, environment 142ms)

@@ -1,0 +1,350 @@
+[
+  {
+    "file": "frontend/src/components/layout/TopNav.tsx",
+    "hunks": [
+      {
+        "beforeStart": 132,
+        "beforeLines": 1,
+        "afterStart": 131,
+        "afterLines": 0
+      },
+      {
+        "beforeStart": 134,
+        "beforeLines": 1,
+        "afterStart": 133,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 135,
+        "beforeLines": 0,
+        "afterStart": 135,
+        "afterLines": 3
+      },
+      {
+        "beforeStart": 182,
+        "beforeLines": 1,
+        "afterStart": 183,
+        "afterLines": 0
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/ConfirmDialog.tsx",
+    "hunks": [
+      {
+        "beforeStart": 89,
+        "beforeLines": 4,
+        "afterStart": 88,
+        "afterLines": 0
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/FulfillmentTodos.tsx",
+    "hunks": [
+      {
+        "beforeStart": 41,
+        "beforeLines": 1,
+        "afterStart": 41,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 51,
+        "beforeLines": 0,
+        "afterStart": 52,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 54,
+        "beforeLines": 1,
+        "afterStart": 55,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/shared/UserMenu.tsx",
+    "hunks": [
+      {
+        "beforeStart": 72,
+        "beforeLines": 4,
+        "afterStart": 72,
+        "afterLines": 3
+      },
+      {
+        "beforeStart": 133,
+        "beforeLines": 2,
+        "afterStart": 131,
+        "afterLines": 0
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/ui/label.tsx",
+    "hunks": [
+      {
+        "beforeStart": 10,
+        "beforeLines": 0,
+        "afterStart": 11,
+        "afterLines": 15
+      },
+      {
+        "beforeStart": 15,
+        "beforeLines": 1,
+        "afterStart": 30,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 20,
+        "beforeLines": 1,
+        "afterStart": 35,
+        "afterLines": 3
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/lib/statusTone.contrast.test.ts",
+    "hunks": [
+      {
+        "beforeStart": 8,
+        "beforeLines": 1,
+        "afterStart": 8,
+        "afterLines": 10
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/customers/index.tsx",
+    "hunks": [
+      {
+        "beforeStart": 132,
+        "beforeLines": 1,
+        "afterStart": 131,
+        "afterLines": 0
+      },
+      {
+        "beforeStart": 163,
+        "beforeLines": 1,
+        "afterStart": 162,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/disposal/HandlingSourcesPanel.tsx",
+    "hunks": [
+      {
+        "beforeStart": 63,
+        "beforeLines": 1,
+        "afterStart": 63,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 67,
+        "beforeLines": 0,
+        "afterStart": 68,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/inbound-tasks/create.tsx",
+    "hunks": [
+      {
+        "beforeStart": 196,
+        "beforeLines": 1,
+        "afterStart": 196,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/kits/index.tsx",
+    "hunks": [
+      {
+        "beforeStart": 6,
+        "beforeLines": 0,
+        "afterStart": 7,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 63,
+        "beforeLines": 1,
+        "afterStart": 64,
+        "afterLines": 2
+      },
+      {
+        "beforeStart": 65,
+        "beforeLines": 0,
+        "afterStart": 68,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/logistics/freight-reconciliation.tsx",
+    "hunks": [
+      {
+        "beforeStart": 132,
+        "beforeLines": 0,
+        "afterStart": 133,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 135,
+        "beforeLines": 1,
+        "afterStart": 135,
+        "afterLines": 0
+      },
+      {
+        "beforeStart": 136,
+        "beforeLines": 0,
+        "afterStart": 137,
+        "afterLines": 2
+      },
+      {
+        "beforeStart": 137,
+        "beforeLines": 0,
+        "afterStart": 140,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 140,
+        "beforeLines": 1,
+        "afterStart": 142,
+        "afterLines": 0
+      },
+      {
+        "beforeStart": 141,
+        "beforeLines": 0,
+        "afterStart": 144,
+        "afterLines": 2
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/sale/index.tsx",
+    "hunks": [
+      {
+        "beforeStart": 292,
+        "beforeLines": 1,
+        "afterStart": 292,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/settings/barcode-print-query/index.tsx",
+    "hunks": [
+      {
+        "beforeStart": 587,
+        "beforeLines": 1,
+        "afterStart": 587,
+        "afterLines": 2
+      },
+      {
+        "beforeStart": 590,
+        "beforeLines": 2,
+        "afterStart": 591,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/settings/printers/index.tsx",
+    "hunks": [
+      {
+        "beforeStart": 474,
+        "beforeLines": 1,
+        "afterStart": 474,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 491,
+        "beforeLines": 1,
+        "afterStart": 491,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/styles/desktop-page-samples.css",
+    "hunks": [
+      {
+        "beforeStart": 47,
+        "beforeLines": 1,
+        "afterStart": 46,
+        "afterLines": 0
+      },
+      {
+        "beforeStart": 92,
+        "beforeLines": 1,
+        "afterStart": 90,
+        "afterLines": 0
+      },
+      {
+        "beforeStart": 104,
+        "beforeLines": 2,
+        "afterStart": 101,
+        "afterLines": 0
+      },
+      {
+        "beforeStart": 306,
+        "beforeLines": 2,
+        "afterStart": 302,
+        "afterLines": 2
+      },
+      {
+        "beforeStart": 323,
+        "beforeLines": 1,
+        "afterStart": 319,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 450,
+        "beforeLines": 1,
+        "afterStart": 446,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 567,
+        "beforeLines": 2,
+        "afterStart": 562,
+        "afterLines": 0
+      },
+      {
+        "beforeStart": 704,
+        "beforeLines": 0,
+        "afterStart": 699,
+        "afterLines": 59
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/test/workspaceReturn.finance.test.tsx",
+    "hunks": [
+      {
+        "beforeStart": 44,
+        "beforeLines": 1,
+        "afterStart": 44,
+        "afterLines": 1
+      },
+      {
+        "beforeStart": 50,
+        "beforeLines": 1,
+        "afterStart": 50,
+        "afterLines": 1
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/ui/label.test.tsx",
+    "hunks": [
+      {
+        "afterStart": 1,
+        "afterLines": 40,
+        "newFile": true
+      }
+    ]
+  }
+]

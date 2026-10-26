@@ -189,7 +189,7 @@ export default function PriceChangePage() {
     { key: 'priceType', title: '价格类型', width: 90, render: (v) => PRICE_TYPE_LABEL[String(v)] ?? String(v) },
     { key: 'oldPrice', title: '现价', width: 90, align: 'right', render: (v) => v != null ? money(Number(v)) : '—' },
     { key: 'newPrice', title: '新价', width: 90, align: 'right', render: (v) => money(Number(v)) },
-    { key: 'status', title: '状态', width: 80, render: (v) => <SoftStatusLabel label={STATUS_LABEL[Number(v)] ?? String(v)} tone={STATUS_TONE[Number(v)] ?? 'info'} /> },
+    { key: 'status', title: '状态', width: 96, minWidth: 96, render: (v) => <SoftStatusLabel label={STATUS_LABEL[Number(v)] ?? String(v)} tone={STATUS_TONE[Number(v)] ?? 'info'} /> },
     { key: 'applicantName', title: '申请人', width: 100 },
     { key: 'createdAt', title: '申请时间', width: 160, render: v => formatDisplayDateTime(v) },
     { key: 'id', title: '操作', width: 200, render: (_, row) => (

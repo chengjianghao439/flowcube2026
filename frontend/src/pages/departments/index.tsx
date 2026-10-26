@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
@@ -346,6 +347,8 @@ export default function DepartmentsPage() {
           emptyText={kw ? '没有匹配的部门' : '暂无部门，点击右上角「新增部门」创建第一个部门'}
         />
       )}
+
+      {!isError && !isLoading && <ListSummary total={rows.length} unit="个可见部门" />}
 
       <Dialog open={formOpen} onOpenChange={(v) => !v && !savePending && setFormOpen(false)}>
         <DialogContent className="fc-form-dialog sm:max-w-2xl">

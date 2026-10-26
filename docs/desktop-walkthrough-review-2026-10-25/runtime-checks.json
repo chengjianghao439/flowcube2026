@@ -1,0 +1,215 @@
+{
+  "browser-environment": {
+    "discrete": true,
+    "menus": [
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1",
+          "hidden": "",
+          "inert": "",
+          "role": "menu"
+        },
+        "display": "none",
+        "inert": true
+      },
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1",
+          "hidden": "",
+          "inert": "",
+          "role": "menu"
+        },
+        "display": "none",
+        "inert": true
+      },
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1",
+          "hidden": "",
+          "inert": "",
+          "role": "menu"
+        },
+        "display": "none",
+        "inert": true
+      },
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1",
+          "hidden": "",
+          "inert": "",
+          "role": "menu"
+        },
+        "display": "none",
+        "inert": true
+      },
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1",
+          "hidden": "",
+          "inert": "",
+          "role": "menu"
+        },
+        "display": "none",
+        "inert": true
+      },
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1",
+          "hidden": "",
+          "inert": "",
+          "role": "menu"
+        },
+        "display": "none",
+        "inert": true
+      },
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1",
+          "hidden": "",
+          "inert": "",
+          "role": "menu"
+        },
+        "display": "none",
+        "inert": true
+      },
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute left-0 top-full z-50 min-w-[12rem] pt-1",
+          "hidden": "",
+          "inert": "",
+          "role": "menu"
+        },
+        "display": "none",
+        "inert": true
+      },
+      {
+        "attrs": {
+          "aria-hidden": "true",
+          "class": "fc-topnav-menu absolute right-0 top-full mt-1 w-72 bg-popover text-popover-foreground rounded-lg shadow-lg border z-50 overflow-hidden",
+          "hidden": "",
+          "inert": ""
+        },
+        "display": "none",
+        "inert": true
+      }
+    ],
+    "origin": "http://127.0.0.1:5205",
+    "primaryHover": "223.8889 100.0000% 21.1765%",
+    "reduced": false,
+    "shell": true,
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36",
+    "viewport": {
+      "h": 800,
+      "w": 1280
+    }
+  },
+  "nav-closed-after": [
+    {
+      "ariaHidden": "true",
+      "display": "none",
+      "hidden": true,
+      "inert": true,
+      "pointerEvents": "none"
+    },
+    {
+      "ariaHidden": "true",
+      "display": "none",
+      "hidden": true,
+      "inert": true,
+      "pointerEvents": "none"
+    },
+    {
+      "ariaHidden": "true",
+      "display": "none",
+      "hidden": true,
+      "inert": true,
+      "pointerEvents": "none"
+    },
+    {
+      "ariaHidden": "true",
+      "display": "none",
+      "hidden": true,
+      "inert": true,
+      "pointerEvents": "none"
+    },
+    {
+      "ariaHidden": "true",
+      "display": "none",
+      "hidden": true,
+      "inert": true,
+      "pointerEvents": "none"
+    },
+    {
+      "ariaHidden": "true",
+      "display": "none",
+      "hidden": true,
+      "inert": true,
+      "pointerEvents": "none"
+    },
+    {
+      "ariaHidden": "true",
+      "display": "none",
+      "hidden": true,
+      "inert": true,
+      "pointerEvents": "none"
+    },
+    {
+      "ariaHidden": "true",
+      "display": "none",
+      "hidden": true,
+      "inert": true,
+      "pointerEvents": "none"
+    }
+  ],
+  "user-menu-closed-after": {
+    "attrs": {
+      "aria-hidden": "true",
+      "class": "fc-topnav-menu absolute right-0 top-full mt-1 w-72 bg-popover text-popover-foreground rounded-lg shadow-lg border z-50 overflow-hidden",
+      "hidden": "",
+      "inert": ""
+    },
+    "display": "none",
+    "hidden": true,
+    "inert": true
+  },
+  "nav-keyboard-after": {
+    "inHidden": false,
+    "tag": "BUTTON",
+    "text": "销售"
+  },
+  "query-calendar-geometry-after": {
+    "calendarRect": {
+      "h": 322.1875,
+      "w": 246,
+      "x": 321,
+      "y": 190
+    },
+    "calendarText": "十月 2026\n一\n二\n三\n四\n五\n六\n日\n28\n29\n30\n1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n31\n1\n2\n3\n4\n5\n6\n7\n8\n清除\n今天",
+    "dialogTransform": "none",
+    "pointer": "none",
+    "viewport": {
+      "h": 800,
+      "w": 1280
+    }
+  },
+  "after-dialog-close": {
+    "active": "查询",
+    "bodyPointer": "auto",
+    "dialogs": 0,
+    "overlays": 0
+  },
+  "kit-after-close": {
+    "dialogs": 0,
+    "focus": "新增配件",
+    "pointer": "auto"
+  },
+  "reduced-support": true
+}
