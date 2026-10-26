@@ -1,0 +1,231 @@
+TAP version 13
+# Subtest: single: empty
+ok 1 - single: empty
+  ---
+  duration_ms: 4.613625
+  type: 'test'
+  ...
+# Subtest: single: ordinary asset
+ok 2 - single: ordinary asset
+  ---
+  duration_ms: 0.693667
+  type: 'test'
+  ...
+# Subtest: single: depreciation reduces asset
+not ok 3 - single: depreciation reduces asset
+  ---
+  duration_ms: 0.943709
+  type: 'test'
+  location: '/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:73:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    110 !== 90
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 90
+  actual: 110
+  operator: 'strictEqual'
+  stack: |-
+    check (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:65:10)
+    TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:76:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: single: negative net asset stays visible
+not ok 4 - single: negative net asset stays visible
+  ---
+  duration_ms: 0.5945
+  type: 'test'
+  location: '/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:73:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    22 !== -2
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: -2
+  actual: 22
+  operator: 'strictEqual'
+  stack: |-
+    check (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:65:10)
+    TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:76:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: single: credit asset balance stays negative
+ok 5 - single: credit asset balance stays negative
+  ---
+  duration_ms: 0.553375
+  type: 'test'
+  ...
+# Subtest: single: cent amounts retain two-place result
+not ok 6 - single: cent amounts retain two-place result
+  ---
+  duration_ms: 0.471209
+  type: 'test'
+  location: '/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:73:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    100.02 !== 100
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 100
+  actual: 100.02
+  operator: 'strictEqual'
+  stack: |-
+    check (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:65:10)
+    TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:76:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: single: reversed depreciation nets to zero
+ok 7 - single: reversed depreciation nets to zero
+  ---
+  duration_ms: 0.892666
+  type: 'test'
+  ...
+# Subtest: group: empty
+ok 8 - group: empty
+  ---
+  duration_ms: 0.793
+  type: 'test'
+  ...
+# Subtest: group: ordinary asset
+ok 9 - group: ordinary asset
+  ---
+  duration_ms: 0.723333
+  type: 'test'
+  ...
+# Subtest: group: depreciation reduces asset
+not ok 10 - group: depreciation reduces asset
+  ---
+  duration_ms: 0.778667
+  type: 'test'
+  location: '/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:73:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    110 !== 90
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 90
+  actual: 110
+  operator: 'strictEqual'
+  stack: |-
+    check (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:65:10)
+    TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:76:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: group: negative net asset stays visible
+not ok 11 - group: negative net asset stays visible
+  ---
+  duration_ms: 0.577625
+  type: 'test'
+  location: '/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:73:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    22 !== -2
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: -2
+  actual: 22
+  operator: 'strictEqual'
+  stack: |-
+    check (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:65:10)
+    TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:76:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: group: credit asset balance stays negative
+ok 12 - group: credit asset balance stays negative
+  ---
+  duration_ms: 0.494417
+  type: 'test'
+  ...
+# Subtest: group: cent amounts retain two-place result
+not ok 13 - group: cent amounts retain two-place result
+  ---
+  duration_ms: 0.527042
+  type: 'test'
+  location: '/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:73:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    100.02 !== 100
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 100
+  actual: 100.02
+  operator: 'strictEqual'
+  stack: |-
+    check (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:65:10)
+    TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:76:5)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: group: reversed depreciation nets to zero
+ok 14 - group: reversed depreciation nets to zero
+  ---
+  duration_ms: 0.508458
+  type: 'test'
+  ...
+# Subtest: company isolation and grouped sum both retain contra-asset sign
+not ok 15 - company isolation and grouped sum both retain contra-asset sign
+  ---
+  duration_ms: 0.552541
+  type: 'test'
+  location: '/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:80:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    110 !== 90
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 90
+  actual: 110
+  operator: 'strictEqual'
+  stack: |-
+    check (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:65:10)
+    TestContext.<anonymous> (/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/tests/accounting-statement-balances.test.js:82:3)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: single: read error never becomes a zero success
+ok 16 - single: read error never becomes a zero success
+  ---
+  duration_ms: 1.019584
+  type: 'test'
+  ...
+# Subtest: group: read error never becomes a zero success
+ok 17 - group: read error never becomes a zero success
+  ---
+  duration_ms: 0.500167
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 10
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 80.920625

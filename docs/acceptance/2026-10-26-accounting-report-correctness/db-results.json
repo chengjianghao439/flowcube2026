@@ -1,0 +1,479 @@
+{
+  "ownership": {
+    "database": "flowcube_accounting_report_test",
+    "serverUuid": "0e1ca57e-d10a-11f1-a4ce-96ef35dc7e7d",
+    "port": 32783,
+    "containerId": "7574622a0254febece494a5351e4eb959ca14b61ff0cbef0534f6d2845da9214",
+    "runnerPid": 92483
+  },
+  "ids": {
+    "main": 1,
+    "child": 2,
+    "reversal": 3
+  },
+  "period": "202610",
+  "single": {
+    "main": {
+      "before": {
+        "period": "202610",
+        "asOf": "2026-10-31",
+        "assets": [
+          {
+            "code": "1601",
+            "name": "固定资产",
+            "amount": 100
+          },
+          {
+            "code": "1602",
+            "name": "累计折旧",
+            "amount": 10
+          }
+        ],
+        "liabilities": [
+          {
+            "code": "2202",
+            "name": "应付账款",
+            "amount": 100
+          }
+        ],
+        "equity": [
+          {
+            "code": "——",
+            "name": "未分配利润（本期损益结转）",
+            "amount": -10
+          }
+        ],
+        "assetTotal": 110,
+        "liabTotal": 100,
+        "equityTotal": -10,
+        "liabEquityTotal": 90,
+        "balanced": false
+      },
+      "after": {
+        "period": "202610",
+        "asOf": "2026-10-31",
+        "assets": [
+          {
+            "code": "1601",
+            "name": "固定资产",
+            "amount": 100
+          },
+          {
+            "code": "1602",
+            "name": "累计折旧",
+            "amount": -10
+          }
+        ],
+        "liabilities": [
+          {
+            "code": "2202",
+            "name": "应付账款",
+            "amount": 100
+          }
+        ],
+        "equity": [
+          {
+            "code": "——",
+            "name": "未分配利润（本期损益结转）",
+            "amount": -10
+          }
+        ],
+        "assetTotal": 90,
+        "liabTotal": 100,
+        "equityTotal": -10,
+        "liabEquityTotal": 90,
+        "balanced": true
+      }
+    },
+    "child": {
+      "before": {
+        "period": "202610",
+        "asOf": "2026-10-31",
+        "assets": [
+          {
+            "code": "1601",
+            "name": "固定资产",
+            "amount": 200
+          },
+          {
+            "code": "1602",
+            "name": "累计折旧",
+            "amount": 20
+          }
+        ],
+        "liabilities": [
+          {
+            "code": "2202",
+            "name": "应付账款",
+            "amount": 200
+          }
+        ],
+        "equity": [
+          {
+            "code": "——",
+            "name": "未分配利润（本期损益结转）",
+            "amount": -20
+          }
+        ],
+        "assetTotal": 220,
+        "liabTotal": 200,
+        "equityTotal": -20,
+        "liabEquityTotal": 180,
+        "balanced": false
+      },
+      "after": {
+        "period": "202610",
+        "asOf": "2026-10-31",
+        "assets": [
+          {
+            "code": "1601",
+            "name": "固定资产",
+            "amount": 200
+          },
+          {
+            "code": "1602",
+            "name": "累计折旧",
+            "amount": -20
+          }
+        ],
+        "liabilities": [
+          {
+            "code": "2202",
+            "name": "应付账款",
+            "amount": 200
+          }
+        ],
+        "equity": [
+          {
+            "code": "——",
+            "name": "未分配利润（本期损益结转）",
+            "amount": -20
+          }
+        ],
+        "assetTotal": 180,
+        "liabTotal": 200,
+        "equityTotal": -20,
+        "liabEquityTotal": 180,
+        "balanced": true
+      }
+    },
+    "reversal": {
+      "before": {
+        "period": "202610",
+        "asOf": "2026-10-31",
+        "assets": [
+          {
+            "code": "1601",
+            "name": "固定资产",
+            "amount": 100
+          }
+        ],
+        "liabilities": [
+          {
+            "code": "2202",
+            "name": "应付账款",
+            "amount": 100
+          }
+        ],
+        "equity": [
+          {
+            "code": "——",
+            "name": "未分配利润（本期损益结转）",
+            "amount": 0
+          }
+        ],
+        "assetTotal": 100,
+        "liabTotal": 100,
+        "equityTotal": 0,
+        "liabEquityTotal": 100,
+        "balanced": true
+      },
+      "after": {
+        "period": "202610",
+        "asOf": "2026-10-31",
+        "assets": [
+          {
+            "code": "1601",
+            "name": "固定资产",
+            "amount": 100
+          }
+        ],
+        "liabilities": [
+          {
+            "code": "2202",
+            "name": "应付账款",
+            "amount": 100
+          }
+        ],
+        "equity": [
+          {
+            "code": "——",
+            "name": "未分配利润（本期损益结转）",
+            "amount": 0
+          }
+        ],
+        "assetTotal": 100,
+        "liabTotal": 100,
+        "equityTotal": 0,
+        "liabEquityTotal": 100,
+        "balanced": true
+      }
+    }
+  },
+  "group": {
+    "before": {
+      "period": "202610",
+      "asOf": "2026-10-31",
+      "groupId": 1,
+      "companies": [
+        {
+          "id": 1,
+          "code": "MAIN",
+          "name": "验收主账套（合成）"
+        },
+        {
+          "id": 2,
+          "code": "QA_CHILD",
+          "name": "验收子账套（合成）"
+        }
+      ],
+      "assets": [
+        {
+          "code": "1601",
+          "name": "固定资产",
+          "amount": 300
+        },
+        {
+          "code": "1602",
+          "name": "累计折旧",
+          "amount": 30
+        }
+      ],
+      "liabilities": [
+        {
+          "code": "2202",
+          "name": "应付账款",
+          "amount": 300
+        }
+      ],
+      "equity": [
+        {
+          "code": "——",
+          "name": "未分配利润（本期损益结转）",
+          "amount": -30
+        }
+      ],
+      "assetTotal": 330,
+      "liabTotal": 300,
+      "equityTotal": -30,
+      "liabEquityTotal": 270,
+      "balanced": false
+    },
+    "after": {
+      "period": "202610",
+      "asOf": "2026-10-31",
+      "groupId": 1,
+      "companies": [
+        {
+          "id": 1,
+          "code": "MAIN",
+          "name": "验收主账套（合成）"
+        },
+        {
+          "id": 2,
+          "code": "QA_CHILD",
+          "name": "验收子账套（合成）"
+        }
+      ],
+      "assets": [
+        {
+          "code": "1601",
+          "name": "固定资产",
+          "amount": 300
+        },
+        {
+          "code": "1602",
+          "name": "累计折旧",
+          "amount": -30
+        }
+      ],
+      "liabilities": [
+        {
+          "code": "2202",
+          "name": "应付账款",
+          "amount": 300
+        }
+      ],
+      "equity": [
+        {
+          "code": "——",
+          "name": "未分配利润（本期损益结转）",
+          "amount": -30
+        }
+      ],
+      "assetTotal": 270,
+      "liabTotal": 300,
+      "equityTotal": -30,
+      "liabEquityTotal": 270,
+      "balanced": true
+    }
+  },
+  "empty": {
+    "period": "202609",
+    "asOf": "2026-09-30",
+    "assets": [],
+    "liabilities": [],
+    "equity": [
+      {
+        "code": "——",
+        "name": "未分配利润（本期损益结转）",
+        "amount": 0
+      }
+    ],
+    "assetTotal": 0,
+    "liabTotal": 0,
+    "equityTotal": 0,
+    "liabEquityTotal": 0,
+    "balanced": true
+  },
+  "future": {
+    "period": "202611",
+    "asOf": "2026-11-30",
+    "assets": [
+      {
+        "code": "1601",
+        "name": "固定资产",
+        "amount": 150
+      },
+      {
+        "code": "1602",
+        "name": "累计折旧",
+        "amount": -10
+      }
+    ],
+    "liabilities": [
+      {
+        "code": "2202",
+        "name": "应付账款",
+        "amount": 150
+      }
+    ],
+    "equity": [
+      {
+        "code": "——",
+        "name": "未分配利润（本期损益结转）",
+        "amount": -10
+      }
+    ],
+    "assetTotal": 140,
+    "liabTotal": 150,
+    "equityTotal": -10,
+    "liabEquityTotal": 140,
+    "balanced": true
+  },
+  "raw": [
+    {
+      "company_id": 1,
+      "code": "1601",
+      "d": "100.00",
+      "c": "0.00"
+    },
+    {
+      "company_id": 1,
+      "code": "1602",
+      "d": "0.00",
+      "c": "10.00"
+    },
+    {
+      "company_id": 1,
+      "code": "2202",
+      "d": "0.00",
+      "c": "100.00"
+    },
+    {
+      "company_id": 1,
+      "code": "660203",
+      "d": "10.00",
+      "c": "0.00"
+    },
+    {
+      "company_id": 2,
+      "code": "1601",
+      "d": "200.00",
+      "c": "0.00"
+    },
+    {
+      "company_id": 2,
+      "code": "1602",
+      "d": "0.00",
+      "c": "20.00"
+    },
+    {
+      "company_id": 2,
+      "code": "2202",
+      "d": "0.00",
+      "c": "200.00"
+    },
+    {
+      "company_id": 2,
+      "code": "660203",
+      "d": "20.00",
+      "c": "0.00"
+    },
+    {
+      "company_id": 3,
+      "code": "1601",
+      "d": "100.00",
+      "c": "0.00"
+    },
+    {
+      "company_id": 3,
+      "code": "1602",
+      "d": "10.00",
+      "c": "10.00"
+    },
+    {
+      "company_id": 3,
+      "code": "2202",
+      "d": "0.00",
+      "c": "100.00"
+    },
+    {
+      "company_id": 3,
+      "code": "660203",
+      "d": "10.00",
+      "c": "10.00"
+    }
+  ],
+  "hashes": {
+    "before": {
+      "acct_vouchers": {
+        "rows": 8,
+        "sha256": "cf575fa2ac1f7e188ced056e564d813b8c95e34bde444661c9844e9eb2585c4e"
+      },
+      "acct_voucher_entries": {
+        "rows": 16,
+        "sha256": "60bb9b79963de7152f7b50ed03281edb3e63bc9b12250d681c1139ccd2650672"
+      },
+      "finance_account_transactions": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "after": {
+      "acct_vouchers": {
+        "rows": 8,
+        "sha256": "cf575fa2ac1f7e188ced056e564d813b8c95e34bde444661c9844e9eb2585c4e"
+      },
+      "acct_voucher_entries": {
+        "rows": 16,
+        "sha256": "60bb9b79963de7152f7b50ed03281edb3e63bc9b12250d681c1139ccd2650672"
+      },
+      "finance_account_transactions": {
+        "rows": 0,
+        "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      }
+    },
+    "unchanged": true
+  }
+}

@@ -1281,3 +1281,9 @@ ERP 列表以 DataTable 自带卡片后的 ListSummary 为标准，销售、条�
 状态标记保持单行；人员列只按核对后的 operatorName、realName、applicantName、manager、managerName、ownerName、userName 收窄，不把商品/客户等长名称一并改成单行。商品与客户的 70px 状态列、商品改价的 80px 状态列调整为 96px；四处 90px 人员列调整为 112px，销售保留比例列并设置最小宽度。手动列宽与截断提示沿原组件处理。
 
 补货计数使用原 pagination.total 并落在表后；打印模板用返回数组长度，部门树用页面已有 rows.length 并明确“个可见部门”（包含搜索匹配所需的祖先行），设备用原分页 total。PDA 设备管理的桌面搜索只搬入 FilterCard，保留即时 keyword 请求，不改成草稿/查询按钮。审批流原生选择框的五类入口统一为共享 Select；空值 sentinel 只服务控件，提交仍沿原转换和校验，部门默认 0、隐藏角色与不可用用户的原设置保留。日志清理的页头入口使用危险色 outline，原确认动作与权限不变。价格等级四色仅登记，未定义新颜色契约。逐处行号、浏览器计算值与边界见 [有数据走查报告](desktop-data-state-review-2026-10-25.md)。
+
+### 会计报表的失败与重试（2026-10-26）
+
+会计报表三种视图、合并资产负债表/利润表及账套列表使用原查询状态呈现加载与失败。失败时复用 QueryErrorState，不将数据缺失或旧缓存显示为当前金额，也不以零值推导“不平”；重试只调用所属查询的 refetch，保留当前期间、账套和视图。读取中使用 role=status，错误区使用 role=alert；重试读取期间隐藏旧金额和重试入口。各合并报表独立呈现，不因一侧失败隐藏另一侧的成功结果。
+
+成功零值及原业务空态继续显示。查询键、API、权限、自动重试配置、会计金额和建账流程均未改。`frontend/src/pages/accounting/report-read-state.test.tsx` 沿现有前端全量测试进入 CI；合成 transport 回归与真实页面故障注入分别留证，详见[本轮报告](accounting-report-read-state-2026-10-26.md)。

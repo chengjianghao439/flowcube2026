@@ -2,6 +2,7 @@ import { amount } from '@/lib/format'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ReportTable } from '@/components/shared/ReportTable'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 /**
  * 会计报表（文档 10 · Phase 2 简版）：利润表 / 资产负债表 / 现金流量表。
  * 简版口径：利润表=主营收入−成本−费用；资产负债表=资产 vs 负债+权益+未分配利润；
@@ -28,7 +29,7 @@ const TABS: Array<{ key: Tab; label: string }> = [
 ]
 
 function SimpleReport({ rows, loading }: { rows: ReportRow[]; loading: boolean }) {
-  if (loading) return <div className="py-12 text-center text-sm text-muted-foreground">加载中…</div>
+  if (loading) return <div role="status" className="py-12 text-center text-sm text-muted-foreground">加载中…</div>
   return (
     <ReportTable className="w-full text-sm">
       <tbody>
@@ -44,18 +45,27 @@ function SimpleReport({ rows, loading }: { rows: ReportRow[]; loading: boolean }
 }
 
 function IncomeView({ period }: { period: string }) {
-  const { data, isLoading } = useIncomeStatement(period)
-  return <div className="card-base overflow-hidden p-0"><SimpleReport rows={data?.rows ?? []} loading={isLoading} /></div>
+  const { data, isLoading, isFetching, isError, error, refetch } = useIncomeStatement(period)
+  return <div className="card-base overflow-hidden p-0">
+    {isError && !isFetching
+      ? <div role="alert"><QueryErrorState error={error} onRetry={() => void refetch()} title="利润表加载失败" compact /></div>
+      : <SimpleReport rows={data?.rows ?? []} loading={isLoading || isFetching} />}
+  </div>
 }
 
 function CashFlowView({ period }: { period: string }) {
-  const { data, isLoading } = useCashFlow(period)
-  return <div className="card-base overflow-hidden p-0"><SimpleReport rows={data?.rows ?? []} loading={isLoading} /></div>
+  const { data, isLoading, isFetching, isError, error, refetch } = useCashFlow(period)
+  return <div className="card-base overflow-hidden p-0">
+    {isError && !isFetching
+      ? <div role="alert"><QueryErrorState error={error} onRetry={() => void refetch()} title="现金流量表加载失败" compact /></div>
+      : <SimpleReport rows={data?.rows ?? []} loading={isLoading || isFetching} />}
+  </div>
 }
 
 function BalanceSheetView({ period }: { period: string }) {
-  const { data, isLoading } = useBalanceSheet(period)
-  if (isLoading || !data) return <div className="card-base p-12 text-center text-sm text-muted-foreground">加载中…</div>
+  const { data, isLoading, isFetching, isError, error, refetch } = useBalanceSheet(period)
+  if (isError && !isFetching) return <div role="alert" className="card-base"><QueryErrorState error={error} onRetry={() => void refetch()} title="资产负债表加载失败" compact /></div>
+  if (isLoading || isFetching || !data) return <div role="status" className="card-base p-12 text-center text-sm text-muted-foreground">资产负债表加载中…</div>
   const side = (title: string, items: BalanceSheetItem[], total: number, totalLabel: string) => (
     <div className="card-base overflow-hidden p-0">
       <div className="border-b border-border bg-muted/40 px-4 py-2 text-sm font-medium">{title}</div>

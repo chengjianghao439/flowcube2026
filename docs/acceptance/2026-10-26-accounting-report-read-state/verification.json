@@ -1,0 +1,68 @@
+{
+  "baseline": "61d598cee862f9b53e54e2dd36b56ae483ee1dd7",
+  "runtime": "Node 22.23.2",
+  "commands": [
+    {
+      "command": "npm --prefix frontend run test:unit -- src/pages/accounting/report-read-state.test.tsx --maxWorkers=2 (unfixed source; original 13 cases)",
+      "exitCode": 1,
+      "pass": 1,
+      "fail": 12,
+      "expectedFailure": true
+    },
+    {
+      "command": "npm --prefix frontend run test:unit -- src/pages/accounting/report-read-state.test.tsx --maxWorkers=2 (15 cases)",
+      "exitCode": 0,
+      "pass": 15,
+      "fail": 0
+    },
+    {
+      "command": "npm --prefix frontend run test:unit -- --maxWorkers=2 (final source)",
+      "exitCode": 0,
+      "files": 417,
+      "pass": 3790,
+      "fail": 0
+    },
+    {
+      "command": "npm run lint (cwd frontend)",
+      "exitCode": 0
+    },
+    {
+      "command": "npx tsc -b tsconfig.app.json (cwd frontend)",
+      "exitCode": 0
+    },
+    {
+      "command": "VITE_ELECTRON=1 npx vite build (cwd frontend)",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:frontend-conventions",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:accounting",
+      "exitCode": 0,
+      "pass": 238,
+      "fail": 0
+    },
+    {
+      "command": "npm run test:agents-md-guard",
+      "exitCode": 0
+    }
+  ],
+  "notes": [
+    "First full frontend run had two failures because the initial success branch removed existing missing-field fallbacks. Restoring those fallbacks made the final suite pass; no existing test or fixture changed.",
+    "Negative-path tests emit expected error-boundary stderr; final suite exit was 0.",
+    "Committed log copies only remove trailing whitespace and final blank lines."
+  ],
+  "notRun": [
+    "CI on new branch",
+    "all roles or real account data",
+    "offline/reconnect and malformed-success DTO validation",
+    "production/device/physical printing"
+  ],
+  "sourceSha256": {
+    "frontend/src/pages/accounting/reports/index.tsx": "32f29e2736de5db2c8ef4df9b9351f6ac409892d244690be2b87235ac2073968",
+    "frontend/src/pages/accounting/consolidation/index.tsx": "fc8c06cb26b8b660cbfc177d94d68883bb94566e1d3e85d651da0e51b6815de7",
+    "frontend/src/pages/accounting/report-read-state.test.tsx": "1677b3bf384567920da3d7941c7613f4b493d3a0e3d6b7b298f0dd0f21ad853e"
+  }
+}

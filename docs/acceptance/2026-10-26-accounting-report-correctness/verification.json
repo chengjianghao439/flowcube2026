@@ -1,0 +1,71 @@
+{
+  "runtime": "Node 22.23.2",
+  "baseline": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+  "commands": [
+    {
+      "command": "npm run test:accounting (before test addition)",
+      "exitCode": 0,
+      "pass": 221,
+      "fail": 0
+    },
+    {
+      "command": "node --test tests/accounting-statement-balances.test.js (unfixed source)",
+      "exitCode": 1,
+      "pass": 10,
+      "fail": 7
+    },
+    {
+      "command": "node --test tests/accounting-statement-balances.test.js (fixed source)",
+      "exitCode": 0,
+      "pass": 17,
+      "fail": 0
+    },
+    {
+      "command": "ACCOUNTING_REPORT_MUTANT=natural_asset node --test tests/accounting-statement-balances.test.js",
+      "exitCode": 1,
+      "pass": 10,
+      "fail": 7,
+      "expectedFailure": true
+    },
+    {
+      "command": "node --test tests/accounting-statement-balances.test.js (after mutation run)",
+      "exitCode": 0,
+      "pass": 17,
+      "fail": 0
+    },
+    {
+      "command": "npm run test:accounting",
+      "exitCode": 0,
+      "pass": 238,
+      "fail": 0
+    },
+    {
+      "command": "npm --prefix backend run lint",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run test:agents-md-guard",
+      "exitCode": 0
+    },
+    {
+      "command": "node backend/scripts/bootstrap-new-database.js (fresh owned instance only)",
+      "exitCode": 0
+    },
+    {
+      "command": "private owned-DB validation runner (real SQL, old and fixed services)",
+      "exitCode": 0
+    },
+    {
+      "command": "private authenticated API validation runner",
+      "exitCode": 0,
+      "checks": 5
+    }
+  ],
+  "notRun": [
+    "frontend tsc/build (no frontend source changed)",
+    "full DB smoke suite before release",
+    "CI on this branch",
+    "production or device acceptance"
+  ],
+  "logNormalization": "Only trailing whitespace removed from committed red/mutant output; original output retained privately."
+}

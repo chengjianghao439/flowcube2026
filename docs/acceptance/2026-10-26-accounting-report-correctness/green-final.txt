@@ -1,0 +1,112 @@
+TAP version 13
+# Subtest: single: empty
+ok 1 - single: empty
+  ---
+  duration_ms: 3.599792
+  type: 'test'
+  ...
+# Subtest: single: ordinary asset
+ok 2 - single: ordinary asset
+  ---
+  duration_ms: 0.760917
+  type: 'test'
+  ...
+# Subtest: single: depreciation reduces asset
+ok 3 - single: depreciation reduces asset
+  ---
+  duration_ms: 0.610417
+  type: 'test'
+  ...
+# Subtest: single: negative net asset stays visible
+ok 4 - single: negative net asset stays visible
+  ---
+  duration_ms: 0.544875
+  type: 'test'
+  ...
+# Subtest: single: credit asset balance stays negative
+ok 5 - single: credit asset balance stays negative
+  ---
+  duration_ms: 0.61825
+  type: 'test'
+  ...
+# Subtest: single: cent amounts retain two-place result
+ok 6 - single: cent amounts retain two-place result
+  ---
+  duration_ms: 0.499958
+  type: 'test'
+  ...
+# Subtest: single: reversed depreciation nets to zero
+ok 7 - single: reversed depreciation nets to zero
+  ---
+  duration_ms: 0.793166
+  type: 'test'
+  ...
+# Subtest: group: empty
+ok 8 - group: empty
+  ---
+  duration_ms: 0.647334
+  type: 'test'
+  ...
+# Subtest: group: ordinary asset
+ok 9 - group: ordinary asset
+  ---
+  duration_ms: 0.701125
+  type: 'test'
+  ...
+# Subtest: group: depreciation reduces asset
+ok 10 - group: depreciation reduces asset
+  ---
+  duration_ms: 0.715167
+  type: 'test'
+  ...
+# Subtest: group: negative net asset stays visible
+ok 11 - group: negative net asset stays visible
+  ---
+  duration_ms: 0.566083
+  type: 'test'
+  ...
+# Subtest: group: credit asset balance stays negative
+ok 12 - group: credit asset balance stays negative
+  ---
+  duration_ms: 0.487542
+  type: 'test'
+  ...
+# Subtest: group: cent amounts retain two-place result
+ok 13 - group: cent amounts retain two-place result
+  ---
+  duration_ms: 0.507542
+  type: 'test'
+  ...
+# Subtest: group: reversed depreciation nets to zero
+ok 14 - group: reversed depreciation nets to zero
+  ---
+  duration_ms: 0.487917
+  type: 'test'
+  ...
+# Subtest: company isolation and grouped sum both retain contra-asset sign
+ok 15 - company isolation and grouped sum both retain contra-asset sign
+  ---
+  duration_ms: 0.577583
+  type: 'test'
+  ...
+# Subtest: single: read error never becomes a zero success
+ok 16 - single: read error never becomes a zero success
+  ---
+  duration_ms: 0.882958
+  type: 'test'
+  ...
+# Subtest: group: read error never becomes a zero success
+ok 17 - group: read error never becomes a zero success
+  ---
+  duration_ms: 0.482417
+  type: 'test'
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 17
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 77.489042

@@ -1,0 +1,12 @@
+
+> flowcube-frontend@0.13.8 test:unit
+> vitest run src/pages/accounting/report-read-state.test.tsx --maxWorkers=2
+
+
+ RUN  v4.1.11 /Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/frontend
+
+
+ Test Files  1 passed (1)
+      Tests  15 passed (15)
+   Start at  15:26:21
+   Duration  1.10s (transform 202ms, setup 0ms, import 383ms, tests 499ms, environment 137ms)

@@ -1,0 +1,22 @@
+{
+  "root": "/Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube",
+  "api": "http://127.0.0.1:59821",
+  "frontend": "http://127.0.0.1:5173",
+  "ownedDatabase": "flowcube_accounting_report_test",
+  "port": 32784,
+  "serverUuid": "b8096a5c-d10e-11f1-a79a-a2fc1b9ab1b1",
+  "containerId": "14415a43bda9d28f30af6060dfa3b2574068ecd2546ccccef7c067409dc4e480",
+  "context": "colima-flowcube",
+  "fixture": {
+    "companies": 3,
+    "vouchers": 8,
+    "entries": 16,
+    "fundTransactions": 0
+  },
+  "faultInjection": {
+    "location": "private local API wrapper; no product change",
+    "status": 503,
+    "delayMs": 1800
+  },
+  "auth": "real login and active session; synthetic administrator only"
+}

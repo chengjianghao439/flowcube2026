@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { FilterCard } from '@/components/shared/FilterCard'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { ReportPanel } from '@/components/shared/ReportPanel'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -49,23 +50,25 @@ export default function ConsolidationPage() {
   const [newCode, setNewCode] = useState('')
   const [newName, setNewName] = useState('')
 
-  const { data: companies } = useQuery({
+  const companiesQuery = useQuery({
     queryKey: ['acct-companies'],
     queryFn: () => listCompaniesApi({ pageSize: 50 }),
   })
-  const companyList = companies?.list ?? []
+  const companyList = companiesQuery.data?.list ?? []
   const group = companyList.find(c => c.id === companyId)
 
-  const { data: bs } = useQuery({
+  const bsQuery = useQuery({
     queryKey: ['consol-bs', companyId, period],
     queryFn: () => getConsolidatedBalanceSheetApi(companyId, period),
     enabled: companyId > 0 && !!period,
   })
-  const { data: inc } = useQuery({
+  const incQuery = useQuery({
     queryKey: ['consol-inc', companyId, period],
     queryFn: () => getConsolidatedIncomeApi(companyId, period),
     enabled: companyId > 0 && !!period,
   })
+  const bs = bsQuery.data
+  const inc = incQuery.data
 
   const createMutation = useMutation({
     mutationFn: createCompanyApi,
@@ -119,7 +122,9 @@ export default function ConsolidationPage() {
 
 
       {/* 账套列表 */}
-      <DataTable columns={companyColumns} data={companyList} rowKey="id" loading={!companies} emptyText="暂无账套" />
+      {companiesQuery.isError && !companiesQuery.isFetching
+        ? <div role="alert" className="card-base"><QueryErrorState error={companiesQuery.error} onRetry={() => void companiesQuery.refetch()} title="账套列表加载失败" compact /></div>
+        : <DataTable columns={companyColumns} data={companyList} rowKey="id" loading={companiesQuery.isLoading || companiesQuery.isFetching} emptyText="暂无账套" />}
 
       {/* 合并报表 */}
       <FilterCard className="mb-4">
@@ -133,23 +138,35 @@ export default function ConsolidationPage() {
       {companyId > 0 && (group?.isGroup || companyId === 1) && (
         <div className="grid gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            <LedgerTable title="资产" rows={bs?.assets ?? []} total={bs?.assetTotal ?? 0} accent />
-            <LedgerTable title="负债" rows={bs?.liabilities ?? []} total={bs?.liabTotal ?? 0} />
-            <LedgerTable title="权益" rows={bs?.equity ?? []} total={bs?.equityTotal ?? 0} />
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm">
-              资产合计 <span className="font-semibold">{money(bs?.assetTotal ?? 0)}</span>
-              <span className="mx-2 text-muted-foreground">=</span>
-              负债+权益 <span className="font-semibold">{money(bs?.liabEquityTotal ?? 0)}</span>
-              <SoftStatusLabel label={bs?.balanced ? '平衡' : '不平！'} tone={bs?.balanced ? 'success' : 'danger'} />
-            </div>
+            {bsQuery.isError && !bsQuery.isFetching
+              ? <div role="alert" className="card-base"><QueryErrorState error={bsQuery.error} onRetry={() => void bsQuery.refetch()} title="合并资产负债表加载失败" compact /></div>
+              : bsQuery.isLoading || bsQuery.isFetching || !bs
+                ? <div role="status" className="card-base p-12 text-center text-sm text-muted-foreground">合并资产负债表加载中…</div>
+                : <>
+                  <LedgerTable title="资产" rows={bs.assets ?? []} total={bs.assetTotal ?? 0} accent />
+                  <LedgerTable title="负债" rows={bs.liabilities ?? []} total={bs.liabTotal ?? 0} />
+                  <LedgerTable title="权益" rows={bs.equity ?? []} total={bs.equityTotal ?? 0} />
+                  <div className="rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm">
+                    资产合计 <span className="font-semibold">{money(bs.assetTotal ?? 0)}</span>
+                    <span className="mx-2 text-muted-foreground">=</span>
+                    负债+权益 <span className="font-semibold">{money(bs.liabEquityTotal ?? 0)}</span>
+                    <SoftStatusLabel label={bs.balanced ? '平衡' : '不平！'} tone={bs.balanced ? 'success' : 'danger'} />
+                  </div>
+                </>}
           </div>
           <div className="space-y-2">
-            <LedgerTable title="收入" rows={inc?.revenue ?? []} total={inc?.revenueTotal ?? 0} />
-            <LedgerTable title="费用/成本" rows={inc?.expenses ?? []} total={inc?.expenseTotal ?? 0} />
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm">
-              净利润 <span className="font-semibold">{money(inc?.netProfit ?? 0)}</span>
-              <span className="ml-2 text-xs text-muted-foreground">（{inc?.companies.map(c => c.name).join(' + ') ?? '—'}）</span>
-            </div>
+            {incQuery.isError && !incQuery.isFetching
+              ? <div role="alert" className="card-base"><QueryErrorState error={incQuery.error} onRetry={() => void incQuery.refetch()} title="合并利润表加载失败" compact /></div>
+              : incQuery.isLoading || incQuery.isFetching || !inc
+                ? <div role="status" className="card-base p-12 text-center text-sm text-muted-foreground">合并利润表加载中…</div>
+                : <>
+                  <LedgerTable title="收入" rows={inc.revenue ?? []} total={inc.revenueTotal ?? 0} />
+                  <LedgerTable title="费用/成本" rows={inc.expenses ?? []} total={inc.expenseTotal ?? 0} />
+                  <div className="rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm">
+                    净利润 <span className="font-semibold">{money(inc.netProfit ?? 0)}</span>
+                    <span className="ml-2 text-xs text-muted-foreground">（{inc.companies.map(c => c.name).join(' + ')}）</span>
+                  </div>
+                </>}
           </div>
         </div>
       )}

@@ -1,0 +1,345 @@
+{
+  "requests": [
+    {
+      "path": "/api/accounting/reports/income?period=202610",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202610",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202610",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202610",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "delay"
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202611",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202611",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202611",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "none"
+    },
+    {
+      "path": "/api/accounting/reports/income?period=202611",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/income?period=202611",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/income?period=202611",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "none"
+    },
+    {
+      "path": "/api/accounting/reports/cash-flow?period=202611",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/cash-flow?period=202611",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/reports/cash-flow?period=202611",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "none"
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202610",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/companies?page=1&pageSize=200",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202610",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202610",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202610",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "delay"
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202611",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202611",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202611",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202611",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "delay"
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202609",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "none"
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202609",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "none"
+    },
+    {
+      "path": "/api/accounting/companies?page=1&pageSize=200",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202610",
+      "company": "1",
+      "status": 304,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202610",
+      "company": "1",
+      "status": 304,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/companies?page=1&pageSize=200",
+      "company": "1",
+      "status": 503,
+      "algorithm": "fixed",
+      "fault": "error"
+    },
+    {
+      "path": "/api/accounting/companies?page=1&pageSize=200",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "none"
+    },
+    {
+      "path": "/api/accounting/reports/income?period=202610",
+      "company": "1",
+      "status": 304,
+      "algorithm": "fixed",
+      "fault": "none"
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202610",
+      "company": "1",
+      "status": 304,
+      "algorithm": "fixed",
+      "fault": "none"
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202609",
+      "company": "1",
+      "status": 200,
+      "algorithm": "fixed",
+      "fault": "none"
+    }
+  ],
+  "checks": {
+    "sixFailureRetrySequencesVerified": true,
+    "balanceRetryDoesNotRefetchIncome": true,
+    "incomeRetryDoesNotRefetchBalance": true
+  },
+  "grouped": [
+    {
+      "path": "/api/accounting/reports/income?period=202610",
+      "company": "1",
+      "statuses": [
+        200,
+        304
+      ]
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202610",
+      "company": "1",
+      "statuses": [
+        503,
+        503,
+        200,
+        304
+      ]
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202611",
+      "company": "1",
+      "statuses": [
+        503,
+        503,
+        200
+      ]
+    },
+    {
+      "path": "/api/accounting/reports/income?period=202611",
+      "company": "1",
+      "statuses": [
+        503,
+        503,
+        200
+      ]
+    },
+    {
+      "path": "/api/accounting/reports/cash-flow?period=202611",
+      "company": "1",
+      "statuses": [
+        503,
+        503,
+        200
+      ]
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202610",
+      "company": "1",
+      "statuses": [
+        503,
+        503,
+        200,
+        304
+      ]
+    },
+    {
+      "path": "/api/accounting/companies?page=1&pageSize=200",
+      "company": "1",
+      "statuses": [
+        200,
+        503,
+        503,
+        200
+      ]
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202610",
+      "company": "1",
+      "statuses": [
+        200,
+        304
+      ]
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202611",
+      "company": "1",
+      "statuses": [
+        503,
+        503,
+        200
+      ]
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202611",
+      "company": "1",
+      "statuses": [
+        200
+      ]
+    },
+    {
+      "path": "/api/accounting/consolidation/income?groupId=1&period=202609",
+      "company": "1",
+      "statuses": [
+        200
+      ]
+    },
+    {
+      "path": "/api/accounting/consolidation/balance-sheet?groupId=1&period=202609",
+      "company": "1",
+      "statuses": [
+        200
+      ]
+    },
+    {
+      "path": "/api/accounting/reports/balance-sheet?period=202609",
+      "company": "1",
+      "statuses": [
+        200
+      ]
+    }
+  ]
+}
