@@ -1,0 +1,245 @@
+{
+  "version": "0.14.0",
+  "releaseSha": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+  "tag": "v0.14.0",
+  "tagSha": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+  "releaseUrl": "https://github.com/chengjianghao439/flowcube2026/releases/tag/v0.14.0",
+  "publishedAt": "2026-10-26T12:52:32Z",
+  "workflows": [
+    {
+      "conclusion": "success",
+      "databaseId": 40325076945,
+      "event": "push",
+      "headBranch": "v0.14.0",
+      "headSha": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40325076945",
+      "workflowName": "Build Desktop Installer"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40322860591,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40322860591",
+      "workflowName": "Security Scan"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40322860667,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40322860667",
+      "workflowName": "Build Desktop Installer"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40322860577,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40322860577",
+      "workflowName": "Deploy Browser App"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40322860741,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40322860741",
+      "workflowName": "Tests"
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 40322860663,
+      "event": "push",
+      "headBranch": "main",
+      "headSha": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "status": "completed",
+      "url": "https://github.com/chengjianghao439/flowcube2026/actions/runs/40322860663",
+      "workflowName": "Build PDA APK"
+    }
+  ],
+  "testsJobs": 27,
+  "independentVerification": {
+    "exit": 0,
+    "passed": 12,
+    "total": 12,
+    "exeBytes": 117744587,
+    "apkBytes": 20144821
+  },
+  "desktop": {
+    "version": "0.14.0",
+    "url": "/versions/v0.14.0/FlowCube-Setup-0.14.0.exe",
+    "sha256": "fb141bbad1ce60baac3f688d8ce2e90a555f79e5266a09e23a20529b24f5a6b4",
+    "size": 117744587,
+    "githubAssetName": "Jixu-Flow-Setup-0.14.0.exe"
+  },
+  "pda": {
+    "version": "0.14.0",
+    "versionCode": 160,
+    "downloadUrl": "https://jixuflow.com/api/pda/download?v=0.14.0&code=160&sha256=f6aa59be2825311fcce840e0469704bb5d9d4e042cd418a2f310b235e095f67d&t=1793018749395",
+    "sha256": "f6aa59be2825311fcce840e0469704bb5d9d4e042cd418a2f310b235e095f67d",
+    "size": 20144821,
+    "available": true
+  },
+  "model": {
+    "productionProbe": {
+      "ok": true,
+      "status": 200,
+      "contentReceived": true,
+      "valuesIncluded": false
+    },
+    "authenticationBoundary": {
+      "assistantEndpointUnauthenticatedStatus": 401,
+      "bodyStored": false
+    },
+    "frontendKeyExclusion": {
+      "modelKeyMatches": 0,
+      "keyValueIncluded": false
+    },
+    "productionLoadAndQuotaStressTested": false
+  },
+  "local": {
+    "frontendFiles": 423,
+    "frontendTests": 3833,
+    "agentTests": 210,
+    "accountingTests": 238,
+    "lintTypesBuild": "passed; affected CSS rebuilt after boundary correction",
+    "copyGuardAdjustment": "TaskPreview uses shared money formatter, original cents conversion retained",
+    "originalDeploymentTestPass": 92,
+    "originalDeploymentTestFail": 1,
+    "deploymentResourceIsolatedRecheckPass": 31,
+    "deploymentResourceIsolatedRecheckFail": 0,
+    "secretScanFindings": 0,
+    "dependencyAudit": [
+      {
+        "target": "backend",
+        "auditExit": 0,
+        "gateExit": 0,
+        "counts": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "message": "## npm audit — /var/folders/p_/qbf0z5n52cdbmh3kywwz91dc0000gn/T/flowcube-release-0140-20261026-65_c1mtx/audit-backend.json\n发现 0 项；阻断发布的高危/严重依赖 0 项。"
+      },
+      {
+        "target": "frontend",
+        "auditExit": 1,
+        "gateExit": 0,
+        "counts": {
+          "info": 0,
+          "low": 0,
+          "moderate": 2,
+          "high": 0,
+          "critical": 0,
+          "total": 2
+        },
+        "message": "## npm audit — /var/folders/p_/qbf0z5n52cdbmh3kywwz91dc0000gn/T/flowcube-release-0140-20261026-65_c1mtx/audit-frontend.json\n- [moderate] @vitest/mocker（传递依赖）：Vitest: Code injection via unauthenticated manual mock registration, Vitest: Windows backslash traversal bypasses the @vitest/mocker redirect allowlist fix\n- [moderate] vitest（直接依赖）：@vitest/mocker\n发现 2 项；阻断发布的高危/严重依赖 0 项。"
+      },
+      {
+        "target": "desktop",
+        "auditExit": 0,
+        "gateExit": 0,
+        "counts": {
+          "info": 0,
+          "low": 0,
+          "moderate": 0,
+          "high": 0,
+          "critical": 0,
+          "total": 0
+        },
+        "message": "## npm audit — /var/folders/p_/qbf0z5n52cdbmh3kywwz91dc0000gn/T/flowcube-release-0140-20261026-65_c1mtx/audit-desktop.json\n发现 0 项；阻断发布的高危/严重依赖 0 项。"
+      }
+    ],
+    "styleComparisonCount": 4140,
+    "scopedContextProperties": 16,
+    "scopeRemovalMutationRejected": true,
+    "darkDeclarationBlockUnchanged": true
+  },
+  "syntheticAccounting": {
+    "single": 90,
+    "consolidated": 270,
+    "apiReads": 5,
+    "voucherAndFundHashesUnchanged": true
+  },
+  "delivery": {
+    "image": "CI server HTTPS download, exact archive hash verified; local relay did not deliver image",
+    "runtimeImageProof": {
+      "runtimeMarkers": [
+        "==> HTTPS 镜像下载与 SHA256 校验通过"
+      ],
+      "workflowCommandEchoExcluded": true
+    },
+    "relayReceipts": {
+      "pda": {
+        "run": 40322860663,
+        "attempt": 1,
+        "artifact": 12649229826,
+        "bytes": 20144821,
+        "sha256": "f6aa59be2825311fcce840e0469704bb5d9d4e042cd418a2f310b235e095f67d",
+        "download_seconds": 56.2,
+        "upload_seconds": 2.8,
+        "total_seconds": 59.0
+      },
+      "desktop": {
+        "run": 40325076945,
+        "attempt": 1,
+        "artifact": 12650982308,
+        "bytes": 117744587,
+        "sha256": "fb141bbad1ce60baac3f688d8ce2e90a555f79e5266a09e23a20529b24f5a6b4",
+        "download_seconds": 137.3,
+        "upload_seconds": 10.0,
+        "total_seconds": 147.4
+      }
+    },
+    "operatorProxyDependency": true
+  },
+  "timeline": {
+    "firstOfficialEntryUtc": "2026-10-26T12:05:48.624770+00:00",
+    "finalApplicationCommitUtc": "2026-10-26T12:27:20+00:00",
+    "independentVerificationUtc": "2026-10-26T12:54:27.153764+00:00",
+    "firstEntryToIndependentSeconds": 2919,
+    "finalCommitToIndependentSeconds": 1627,
+    "resumedEntrySeconds": 718,
+    "initialCandidate": {
+      "sha": "75843dd4cf71e63ff839b860964219b1c39c3777",
+      "testsRun": 40319938655,
+      "result": "failed style browser gate; no tag, not a release success"
+    },
+    "transportInterruption": "Final SHA waiter exhausted bounded GitHub network retries before tag; recovered through HTTPS proxy and Node --use-env-proxy on same SHA, without bypassing gates"
+  },
+  "production": {
+    "applicationImageRevisionsMatch": true,
+    "mysqlContainerUnchanged": true,
+    "diskAvailableMb": 28904,
+    "imageReferences": 22,
+    "uniqueImages": 19,
+    "deletionPerformed": false
+  },
+  "resources": {
+    "ownBrowserClosed": true,
+    "ownedMysqlContainerAndVolumeRemoved": true,
+    "ownPreviewExited": true,
+    "ignoredLocalConfigRestoredByteForByte": true,
+    "mainFreedFromWorktree": true
+  },
+  "limits": [
+    "Windows installation and actual update prompt",
+    "PDA hardware and physical printing",
+    "all permission roles and large virtual lists",
+    "production model concurrency, pressure and quota stress",
+    "conditionally unmounted modal exit animations such as kits dialogs remain outside prior completed motion coverage"
+  ]
+}

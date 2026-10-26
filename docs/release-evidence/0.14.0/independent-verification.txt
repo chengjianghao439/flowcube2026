@@ -1,0 +1,22 @@
+(node:57984) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> release:verify
+> node scripts/verify-live-release.cjs --origin https://jixuflow.com
+
+(node:58009) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✅ 桌面更新清单版本：latest.json=0.14.0，期望 0.14.0
+✅ 桌面安装包路径：url=/versions/v0.14.0/FlowCube-Setup-0.14.0.exe
+✅ 桌面安装包摘要：sha256=fb141bbad1ce…
+✅ 桌面更新说明：notes 首行=# v0.14.0
+✅ 桌面更新接口版本：/api/app-update/latest=0.14.0，期望 0.14.0
+✅ PDA 已发布版本：/api/pda/version=0.14.0，期望 0.14.0
+✅ PDA 已发布 versionCode：versionCode=160，期望 160
+✅ PDA 安装包可下载：available=true，downloadUrl=已提供
+✅ PDA 更新说明：releaseNote=- 新增「小满」工作区，提供极序业务查询、使用帮…
+✅ 生产健康检查：/api/health=ok
+✅ 桌面下载完整性：117744587 字节，SHA256 一致
+✅ PDA 下载完整性：20144821 字节，SHA256 一致
+
+核对 https://jixuflow.com：12/12 项一致（期望桌面 0.14.0、PDA 0.14.0/160）

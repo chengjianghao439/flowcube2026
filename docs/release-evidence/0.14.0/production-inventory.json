@@ -1,0 +1,417 @@
+{
+  "disk": "Filesystem     1048576-blocks  Used Available Capacity Mounted on\n/dev/vda3               50018 18862     28904      40% /\n",
+  "images": [
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-26 20:41:31 +0800 CST",
+      "CreatedSince": "17 minutes ago",
+      "Digest": "<none>",
+      "ID": "sha256:c3d0affc4f69cdf7b7e1ad59c6e53592b4195bfe2ccd4e7276e78f3dd9e7736b",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "72.1MB",
+      "Tag": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "UniqueSize": "N/A",
+      "VirtualSize": "72.1MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-26 20:41:31 +0800 CST",
+      "CreatedSince": "17 minutes ago",
+      "Digest": "<none>",
+      "ID": "sha256:c3d0affc4f69cdf7b7e1ad59c6e53592b4195bfe2ccd4e7276e78f3dd9e7736b",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "72.1MB",
+      "Tag": "latest",
+      "UniqueSize": "N/A",
+      "VirtualSize": "72.1MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-26 20:41:01 +0800 CST",
+      "CreatedSince": "18 minutes ago",
+      "Digest": "<none>",
+      "ID": "sha256:f08354626ac4d2cdae9198b563d4bbb7d41997a7465330fa54b5943148f94f20",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "407MB",
+      "Tag": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "UniqueSize": "N/A",
+      "VirtualSize": "406.9MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-26 20:41:01 +0800 CST",
+      "CreatedSince": "18 minutes ago",
+      "Digest": "<none>",
+      "ID": "sha256:f08354626ac4d2cdae9198b563d4bbb7d41997a7465330fa54b5943148f94f20",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "407MB",
+      "Tag": "latest",
+      "UniqueSize": "N/A",
+      "VirtualSize": "406.9MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-24 23:54:42 +0800 CST",
+      "CreatedSince": "45 hours ago",
+      "Digest": "<none>",
+      "ID": "sha256:a65434e8a94ec8b093db306bc269b2315843e6d083b7254c3386e62a4a0840e3",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "67.1MB",
+      "Tag": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "UniqueSize": "N/A",
+      "VirtualSize": "67.14MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-24 23:54:06 +0800 CST",
+      "CreatedSince": "45 hours ago",
+      "Digest": "<none>",
+      "ID": "sha256:febd1809025725e694aebadbb49e11cdea22e5fa7b16dc49d8772d8089bd1ce4",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "407MB",
+      "Tag": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "UniqueSize": "N/A",
+      "VirtualSize": "406.7MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-23 15:04:30 +0800 CST",
+      "CreatedSince": "3 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:f121a94547fa5b05b03f4925a0afe74c74c18af7e85cf6df71c3e3a089f1f27c",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "67MB",
+      "Tag": "fe3716452043ed895d57a3fa4cecfe96c59a9406",
+      "UniqueSize": "N/A",
+      "VirtualSize": "66.96MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-23 15:03:57 +0800 CST",
+      "CreatedSince": "3 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:0b696fee2c134e2bdd812068f4ccebf38161235b7298f3381490e3794866bdae",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "404MB",
+      "Tag": "fe3716452043ed895d57a3fa4cecfe96c59a9406",
+      "UniqueSize": "N/A",
+      "VirtualSize": "403.9MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-22 14:08:04 +0800 CST",
+      "CreatedSince": "4 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:c0610c759604388f08303686056a07e78a4de1b525197a9ef23db9767f22277b",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "67MB",
+      "Tag": "29b1cf09b8470fd35c7d9c2b1ad6eb70e9a057f8",
+      "UniqueSize": "N/A",
+      "VirtualSize": "66.95MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-22 14:07:41 +0800 CST",
+      "CreatedSince": "4 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:f888a68a1cc5fc4c2c83715d1bba6b70cc9601039357bb1cc22246ab7f698b9a",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "404MB",
+      "Tag": "29b1cf09b8470fd35c7d9c2b1ad6eb70e9a057f8",
+      "UniqueSize": "N/A",
+      "VirtualSize": "403.6MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-21 06:36:32 +0800 CST",
+      "CreatedSince": "5 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:e32f1d89bc9727e1676ea68044534dc352775727b27c78c3dfd8b49df101d519",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "66.9MB",
+      "Tag": "8db3e40f22e3949b50d1d698086c1a9cac2c183f",
+      "UniqueSize": "N/A",
+      "VirtualSize": "66.94MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-21 06:35:59 +0800 CST",
+      "CreatedSince": "5 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:4d1f2a9f2b1669fb8f81fea20e0e18abb24392c8d6b44be292c5a9c2a6e1f74a",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "404MB",
+      "Tag": "8db3e40f22e3949b50d1d698086c1a9cac2c183f",
+      "UniqueSize": "N/A",
+      "VirtualSize": "403.6MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-21 02:59:11 +0800 CST",
+      "CreatedSince": "5 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:a1a386aec1739c23b50c059e513fb538c9db48cb36b6f13f221579e64f9df41a",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "66.9MB",
+      "Tag": "734ed9924a3b6d3051962a3f06f81f5a04fc4213",
+      "UniqueSize": "N/A",
+      "VirtualSize": "66.94MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-21 02:58:35 +0800 CST",
+      "CreatedSince": "5 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:2e14dbb8f1f6dd909db693222dc518ab02cf13632cbac0e44f6d929db3b201ca",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "404MB",
+      "Tag": "734ed9924a3b6d3051962a3f06f81f5a04fc4213",
+      "UniqueSize": "N/A",
+      "VirtualSize": "403.6MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-19 03:26:54 +0800 CST",
+      "CreatedSince": "7 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:0195b3281333ff317d9c63b3d61f5d887a53434ffc11705492a80ebe1e1baf99",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "66.9MB",
+      "Tag": "bd011c1db9a9c14a08fc786e7836ed5f68596eac",
+      "UniqueSize": "N/A",
+      "VirtualSize": "66.94MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-19 03:26:21 +0800 CST",
+      "CreatedSince": "7 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:476e8704320a99a059bdf9ea861280fac5cb35b8d8104328b1bf94f13b5e2936",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "404MB",
+      "Tag": "bd011c1db9a9c14a08fc786e7836ed5f68596eac",
+      "UniqueSize": "N/A",
+      "VirtualSize": "403.5MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-14 21:16:07 +0800 CST",
+      "CreatedSince": "12 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:d72933f7d1b3f04911f691fe9c9b86967361c45139d112bc55583ab3b052c955",
+      "Repository": "flowcube-frontend",
+      "SharedSize": "N/A",
+      "Size": "66.9MB",
+      "Tag": "710d094e0669d229919c4c20d186121c3f58c7d7",
+      "UniqueSize": "N/A",
+      "VirtualSize": "66.93MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-10-14 21:15:34 +0800 CST",
+      "CreatedSince": "12 days ago",
+      "Digest": "<none>",
+      "ID": "sha256:e7e4cb65e06104e56ef40406cd29cc6c1afbac4dfe6f3ad29bde09f4bc444a89",
+      "Repository": "flowcube-backend",
+      "SharedSize": "N/A",
+      "Size": "403MB",
+      "Tag": "710d094e0669d229919c4c20d186121c3f58c7d7",
+      "UniqueSize": "N/A",
+      "VirtualSize": "403.5MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-05-05 07:01:20 +0800 CST",
+      "CreatedSince": "5 months ago",
+      "Digest": "<none>",
+      "ID": "sha256:6cd09145362dfe6831b14545de3d5fd6cc75c37cfd6ef8561429c1fc73518b39",
+      "Repository": "mysql",
+      "SharedSize": "N/A",
+      "Size": "799MB",
+      "Tag": "8.0.46",
+      "UniqueSize": "N/A",
+      "VirtualSize": "799MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-03-20 09:13:38 +0800 CST",
+      "CreatedSince": "7 months ago",
+      "Digest": "<none>",
+      "ID": "sha256:a123df39bc7c56bb6e40f8e5ef90469cc191dd7afcbf6e0d618c61a12e225dde",
+      "Repository": "mysql",
+      "SharedSize": "N/A",
+      "Size": "786MB",
+      "Tag": "8.0",
+      "UniqueSize": "N/A",
+      "VirtualSize": "785.9MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2026-03-20 09:13:38 +0800 CST",
+      "CreatedSince": "7 months ago",
+      "Digest": "<none>",
+      "ID": "sha256:a123df39bc7c56bb6e40f8e5ef90469cc191dd7afcbf6e0d618c61a12e225dde",
+      "Repository": "flowcube-mysql-current",
+      "SharedSize": "N/A",
+      "Size": "786MB",
+      "Tag": "8.0.45",
+      "UniqueSize": "N/A",
+      "VirtualSize": "785.9MB"
+    },
+    {
+      "Containers": "N/A",
+      "CreatedAt": "2025-08-20 18:41:48 +0800 CST",
+      "CreatedSince": "14 months ago",
+      "Digest": "<none>",
+      "ID": "sha256:8a461db088d3b546203b41ea8496e497597bd0bc9a08a331ae5804c30a2a4c9e",
+      "Repository": "mcr.microsoft.com/playwright",
+      "SharedSize": "N/A",
+      "Size": "2.65GB",
+      "Tag": "v1.55.0-noble",
+      "UniqueSize": "N/A",
+      "VirtualSize": "2.647GB"
+    }
+  ],
+  "imageDetails": [
+    {
+      "id": "sha256:0195b3281333ff317d9c63b3d61f5d887a53434ffc11705492a80ebe1e1baf99",
+      "revision": "bd011c1db9a9c14a08fc786e7836ed5f68596eac",
+      "sizeBytes": 66939713
+    },
+    {
+      "id": "sha256:0b696fee2c134e2bdd812068f4ccebf38161235b7298f3381490e3794866bdae",
+      "revision": "fe3716452043ed895d57a3fa4cecfe96c59a9406",
+      "sizeBytes": 403901053
+    },
+    {
+      "id": "sha256:2e14dbb8f1f6dd909db693222dc518ab02cf13632cbac0e44f6d929db3b201ca",
+      "revision": "734ed9924a3b6d3051962a3f06f81f5a04fc4213",
+      "sizeBytes": 403562609
+    },
+    {
+      "id": "sha256:476e8704320a99a059bdf9ea861280fac5cb35b8d8104328b1bf94f13b5e2936",
+      "revision": "bd011c1db9a9c14a08fc786e7836ed5f68596eac",
+      "sizeBytes": 403506798
+    },
+    {
+      "id": "sha256:4d1f2a9f2b1669fb8f81fea20e0e18abb24392c8d6b44be292c5a9c2a6e1f74a",
+      "revision": "8db3e40f22e3949b50d1d698086c1a9cac2c183f",
+      "sizeBytes": 403562368
+    },
+    {
+      "id": "sha256:6cd09145362dfe6831b14545de3d5fd6cc75c37cfd6ef8561429c1fc73518b39",
+      "revision": null,
+      "sizeBytes": 799032353
+    },
+    {
+      "id": "sha256:8a461db088d3b546203b41ea8496e497597bd0bc9a08a331ae5804c30a2a4c9e",
+      "revision": null,
+      "sizeBytes": 2646562584
+    },
+    {
+      "id": "sha256:a123df39bc7c56bb6e40f8e5ef90469cc191dd7afcbf6e0d618c61a12e225dde",
+      "revision": null,
+      "sizeBytes": 785917511
+    },
+    {
+      "id": "sha256:a1a386aec1739c23b50c059e513fb538c9db48cb36b6f13f221579e64f9df41a",
+      "revision": "734ed9924a3b6d3051962a3f06f81f5a04fc4213",
+      "sizeBytes": 66942079
+    },
+    {
+      "id": "sha256:a65434e8a94ec8b093db306bc269b2315843e6d083b7254c3386e62a4a0840e3",
+      "revision": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "sizeBytes": 67140848
+    },
+    {
+      "id": "sha256:c0610c759604388f08303686056a07e78a4de1b525197a9ef23db9767f22277b",
+      "revision": "29b1cf09b8470fd35c7d9c2b1ad6eb70e9a057f8",
+      "sizeBytes": 66954082
+    },
+    {
+      "id": "sha256:c3d0affc4f69cdf7b7e1ad59c6e53592b4195bfe2ccd4e7276e78f3dd9e7736b",
+      "revision": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "sizeBytes": 72100045
+    },
+    {
+      "id": "sha256:d72933f7d1b3f04911f691fe9c9b86967361c45139d112bc55583ab3b052c955",
+      "revision": "710d094e0669d229919c4c20d186121c3f58c7d7",
+      "sizeBytes": 66930793
+    },
+    {
+      "id": "sha256:e32f1d89bc9727e1676ea68044534dc352775727b27c78c3dfd8b49df101d519",
+      "revision": "8db3e40f22e3949b50d1d698086c1a9cac2c183f",
+      "sizeBytes": 66942079
+    },
+    {
+      "id": "sha256:e7e4cb65e06104e56ef40406cd29cc6c1afbac4dfe6f3ad29bde09f4bc444a89",
+      "revision": "710d094e0669d229919c4c20d186121c3f58c7d7",
+      "sizeBytes": 403499124
+    },
+    {
+      "id": "sha256:f08354626ac4d2cdae9198b563d4bbb7d41997a7465330fa54b5943148f94f20",
+      "revision": "137e2e44d6d696d3929ea61c75992549a09a4fe3",
+      "sizeBytes": 406900461
+    },
+    {
+      "id": "sha256:f121a94547fa5b05b03f4925a0afe74c74c18af7e85cf6df71c3e3a089f1f27c",
+      "revision": "fe3716452043ed895d57a3fa4cecfe96c59a9406",
+      "sizeBytes": 66959803
+    },
+    {
+      "id": "sha256:f888a68a1cc5fc4c2c83715d1bba6b70cc9601039357bb1cc22246ab7f698b9a",
+      "revision": "29b1cf09b8470fd35c7d9c2b1ad6eb70e9a057f8",
+      "sizeBytes": 403617940
+    },
+    {
+      "id": "sha256:febd1809025725e694aebadbb49e11cdea22e5fa7b16dc49d8772d8089bd1ce4",
+      "revision": "54cef45522212f37c9a7fb1152d66e7fce7513ec",
+      "sizeBytes": 406727616
+    }
+  ],
+  "containerStates": [
+    {
+      "id": "fae47869cc1721c7a22abc00eece954f32304a7d4a8deb3c4f72d83c6aaed4ab",
+      "name": "/flowcube-frontend",
+      "imageId": "sha256:c3d0affc4f69cdf7b7e1ad59c6e53592b4195bfe2ccd4e7276e78f3dd9e7736b",
+      "status": "running",
+      "runtimeStatus": "Up 15 minutes"
+    },
+    {
+      "id": "8fefd4f521962d98bd2de5266be5a7df1d5b49b9e87d74254432178f4277d038",
+      "name": "/flowcube-backend",
+      "imageId": "sha256:f08354626ac4d2cdae9198b563d4bbb7d41997a7465330fa54b5943148f94f20",
+      "status": "running",
+      "runtimeStatus": "Up 15 minutes (healthy)"
+    },
+    {
+      "id": "0851f73a4cb6b5ac3d8e7bcd96568c2b8b3362ab1738a7b2cdc0f18fd2612308",
+      "name": "/flowcube-mysql",
+      "imageId": "sha256:6cd09145362dfe6831b14545de3d5fd6cc75c37cfd6ef8561429c1fc73518b39",
+      "status": "running",
+      "runtimeStatus": "Up 5 days (healthy)"
+    }
+  ],
+  "io": {
+    "iostat": "Linux 5.10.134-19.8.al8.x86_64 (iZ2zebh19pylvib5dyzz7wZ) \t10/26/26 \t_x86_64_\t(2 CPU)\n\navg-cpu:  %user   %nice %system %iowait  %steal   %idle\n           1.57    0.00    1.13    0.02    0.00   97.27\n\nDevice            r/s     w/s     rkB/s     wkB/s   rrqm/s   wrqm/s  %rrqm  %wrqm r_await w_await aqu-sz rareq-sz wareq-sz  svctm  %util\nvda              0.35    4.15      9.99     49.26     0.08     2.60  17.75  38.55    0.40    1.18   0.01    28.68    11.87   0.32   0.14\n\navg-cpu:  %user   %nice %system %iowait  %steal   %idle\n           1.00    0.00    0.50    0.00    0.00   98.50\n\nDevice            r/s     w/s     rkB/s     wkB/s   rrqm/s   wrqm/s  %rrqm  %wrqm r_await w_await aqu-sz rareq-sz wareq-sz  svctm  %util\nvda              1.00    0.00      8.00      0.00     0.00     0.00   0.00   0.00    0.00    0.00   0.00     8.00     0.00   2.00   0.20\n\n",
+    "vmstat": "procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----\n r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st\n 0  0 147536 376004 167156 2055420    0    0     5    25    4   30  2  1 97  0  0\n 0  0 147536 375828 167156 2055452    0    0     0     0 1310 2251  1  0 99  0  0\n",
+    "memory": "              total        used        free      shared  buff/cache   available\nMem:           3563        1025         367           2        2170        2254\nSwap:          2047         144        1903\n"
+  },
+  "deletionPerformed": false
+}
