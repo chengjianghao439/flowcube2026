@@ -105,7 +105,24 @@
       "modelKeyMatches": 0,
       "keyValueIncluded": false
     },
-    "productionLoadAndQuotaStressTested": false
+    "productionLoadAndQuotaStressTested": false,
+    "productionStorage": {
+      "mounts": [
+        {
+          "type": "volume",
+          "name": "flowcube_assistant_data",
+          "destination": "/var/lib/flowcube/assistant",
+          "rw": true
+        }
+      ],
+      "permissions": {
+        "nodeUid": 1000,
+        "ownerUid": 1000,
+        "mode": "700",
+        "readableWritable": true
+      },
+      "historyContentRead": false
+    }
   },
   "local": {
     "frontendFiles": 423,
@@ -218,7 +235,9 @@
       "testsRun": 40319938655,
       "result": "failed style browser gate; no tag, not a release success"
     },
-    "transportInterruption": "Final SHA waiter exhausted bounded GitHub network retries before tag; recovered through HTTPS proxy and Node --use-env-proxy on same SHA, without bypassing gates"
+    "transportInterruption": "Final SHA waiter exhausted bounded GitHub network retries before tag; recovered through HTTPS proxy and Node --use-env-proxy on same SHA, without bypassing gates",
+    "operationalCloseoutUtc": "2026-10-26T13:13:16.772995+00:00",
+    "firstEntryToOperationalCloseoutSeconds": 4048
   },
   "production": {
     "applicationImageRevisionsMatch": true,
@@ -233,7 +252,8 @@
     "ownedMysqlContainerAndVolumeRemoved": true,
     "ownPreviewExited": true,
     "ignoredLocalConfigRestoredByteForByte": true,
-    "mainFreedFromWorktree": true
+    "mainFreedFromWorktree": true,
+    "ownedSshControlConnectionExited": true
   },
   "limits": [
     "Windows installation and actual update prompt",
