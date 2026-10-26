@@ -1,0 +1,15 @@
+{
+  "browserSession": "flowcube-accounting-report-correctness",
+  "sessionsAfterClose": [],
+  "mysqlContainerId": "7574622a0254febece494a5351e4eb959ca14b61ff0cbef0534f6d2845da9214",
+  "mysqlVolumeName": "flowcube-accounting-3fde89a35772-data",
+  "containerRemoved": true,
+  "volumeRemoved": true,
+  "serviceCleanup": {
+    "apiClosed": true,
+    "frontendClosed": true
+  },
+  "mysqlRunnerExited": true,
+  "apiExited": true,
+  "frontendExited": true
+}

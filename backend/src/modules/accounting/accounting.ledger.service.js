@@ -275,7 +275,11 @@ async function getBalanceSheet({ period, companyId = 1 }) {
   let assetTotal = 0, liabTotal = 0, equityTotal = 0, revenueSum = 0, expenseSum = 0
   for (const r of rows) {
     const b = bal(r)
-    if (r.category === 1) { if (b) assets.push({ code: r.code, name: r.name, amount: b }); assetTotal += b }
+    if (r.category === 1) {
+      const assetAmount = round2(Number(r.d) - Number(r.c))
+      if (assetAmount) assets.push({ code: r.code, name: r.name, amount: assetAmount })
+      assetTotal += assetAmount
+    }
     else if (r.category === 2) { if (b) liabilities.push({ code: r.code, name: r.name, amount: b }); liabTotal += b }
     else if (r.category === 3) { if (b) equity.push({ code: r.code, name: r.name, amount: b }); equityTotal += b }
     else if (r.category === 5) revenueSum += b // 收入贷方为正
