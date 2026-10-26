@@ -205,6 +205,9 @@ jobs:
       - name: 安全扫描修复离线契约
         run: npm run test:security-scan-remediation
 
+      - name: 极序 Agent 离线任务图与本地接口契约
+        run: npm run test:agent
+
       - name: 上线验收独占实例入口守卫
         run: npm run test:go-live-runner
       - name: 收货编辑与归属入口契约

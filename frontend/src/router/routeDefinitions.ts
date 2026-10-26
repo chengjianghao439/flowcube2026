@@ -8,7 +8,7 @@ export type RouteTabIdentity =
   | { kind: 'full-url' }
   | { kind: 'query-keys'; keys: string[] }
 
-export type RouteComponentKey = 'WarehouseShippingPage' | 'SupplierRefundPage' | 'SupplierRefundCreatePage' | 'RefundRecoveryPage' | 'HandlingScrapPage' | 'DisposalRecoveryPage' | 'RepeatSaleRecoveryPage' | 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'KitsPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskEditPage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctBackfillsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
+export type RouteComponentKey = 'AssistantPage' | 'WarehouseShippingPage' | 'SupplierRefundPage' | 'SupplierRefundCreatePage' | 'RefundRecoveryPage' | 'HandlingScrapPage' | 'DisposalRecoveryPage' | 'RepeatSaleRecoveryPage' | 'PartyLedgerPage' | 'DashboardPage' | 'SalePage' | 'SaleFormPage' | 'PurchasePage' | 'PurchaseFormPage' | 'RequisitionsPage' | 'RequisitionFormPage' | 'ProductPage' | 'KitsPage' | 'PriceChangePage' | 'ProductFormPage' | 'CategoryPage' | 'WarehouseStructurePage' | 'InventoryPage' | 'InventoryTracePage' | 'PlasticBoxesPage' | 'StockcheckPage' | 'AbcClassPage' | 'DisposalPage' | 'ProcurementPlanListPage' | 'ProcurementPlanDetailPage' | 'TransferPage' | 'TransferFormPage' | 'InboundTasksPage' | 'InboundTaskCreatePage' | 'InboundTaskEditPage' | 'InboundTaskDetailPage' | 'PickingWavesPage' | 'CustomersPage' | 'CarriersPage' | 'CarrierAccountsPage' | 'LogisticsPage' | 'LogisticsDetailPage' | 'FreightReconciliationPage' | 'SuppliersPage' | 'ReturnsPage' | 'PurchaseReturnFormPage' | 'SaleReturnFormPage' | 'PayablePage' | 'ReceivablePage' | 'UsersPage' | 'DepartmentsPage' | 'ApprovalFlowsPage' | 'ApprovalPendingPage' | 'PermissionsPage' | 'SettingsPage' | 'BarcodePrintQueryPage' | 'OplogsPage' | 'ReportsPage' | 'RoleWorkbenchPage' | 'FinanceDashboardPage' | 'FinanceAccountsPage' | 'FinanceTransactionsPage' | 'ExpenseClaimsPage' | 'ExpenseCategoriesPage' | 'AcctAccountsPage' | 'AcctVouchersPage' | 'AcctLedgerPage' | 'AcctReportsPage' | 'AcctInvoicesPage' | 'RefundsPage' | 'CreditOverridesPage' | 'AcctPeriodsPage' | 'AcctBackfillsPage' | 'AcctConsolidationPage' | 'AcctTaxPage' | 'FixedAssetsPage' | 'AvgCostReconciliationPage' | 'ReconciliationPayablePage' | 'ReconciliationReceivablePage' | 'ProfitAnalysisPage' | 'KpiPage' | 'ReplenishmentPage' | 'InventoryAgingPage' | 'WavePerformancePage' | 'PdaAnomalyPage' | 'WarehouseOpsPage' | 'PrintTemplatesPage' | 'PrintTemplateEditorPage' | 'PrintersPage' | 'PdaDevicesPage' | 'PortalStatementsPage'
 
 type RouteNavMeta =
   | { kind: 'link'; label: string; order: number; iconKey?: string }
@@ -88,6 +88,13 @@ export const routeRegistry: RouteRegistryEntry[] = [
   {
     path: '/sale/new-kit', title: '新建销售单', permission: PERMISSIONS.SALE_ORDER_CREATE,
     componentKey: 'SaleFormPage', keepAlive: true, tabIdentity: { kind: 'query-keys', keys: ['sourceId', 'handlingSourceId'] },
+  },
+
+  {
+    path: '/assistant', title: '小满',
+    permission: [PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.REPORT_VIEW],
+    componentKey: 'AssistantPage', keepAlive: true, tabIdentity: pathnameIdentity,
+    nav: { kind: 'link', label: '小满', order: 15 },
   },
 
   // ── 采购 ──────────────────────────────────────────────
@@ -687,7 +694,6 @@ export const routeRegistry: RouteRegistryEntry[] = [
     componentKey: 'RoleWorkbenchPage',
     keepAlive: true,
     tabIdentity: pathnameIdentity,
-    nav: { kind: 'link', label: '待办中心', order: 15 },
     // 巡检功能已取消；仅兼容旧书签，当前待办/通知不能再生成这个处理入口。
     aliases: ['/reports/exception-workbench'],
   },

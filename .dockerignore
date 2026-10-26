@@ -1,6 +1,11 @@
 # Local credentials and deployment secrets never belong in the build context.
 **/.env
 **/.env.*
+agent/data/
+agent/tmp/
+agent/output/
+agent/test/
+agent/*.zip
 **/.npmrc
 **/*.pem
 **/*.key

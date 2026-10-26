@@ -84,6 +84,11 @@ services:
       DINGTALK_ALERT_WEBHOOK: ${DINGTALK_ALERT_WEBHOOK:-}
       DINGTALK_ALERT_SECRET: ${DINGTALK_ALERT_SECRET:-}
       APP_UPDATE_DOWNLOADS_DIR: /var/www/flowcube-downloads
+      # 小满在原后端进程内运行；凭据仅经后端环境注入，任务数据独立持久化。
+      AGENT_MODEL_BASE_URL: ${AGENT_MODEL_BASE_URL:-}
+      AGENT_MODEL_NAME: ${AGENT_MODEL_NAME:-}
+      AGENT_MODEL_API_KEY: ${AGENT_MODEL_API_KEY:-}
+      AGENT_DATA_DIR: /var/lib/flowcube/assistant
       # 日志集中检索（P2-12）：起 observability profile 后填 loki 服务地址即可接入
       LOKI_URL: ${LOKI_URL:-}
       # 官方快递连接仅注入后端；从根目录私有 .env 读取，不能进入 Vite 构建。
@@ -107,6 +112,7 @@ services:
       - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/var/www/flowcube-downloads
       # PDA 自动更新包从服务器工作区 backend/apk 发布；挂载后 CI 上传新 APK 可被后端立即读取。
       - ./backend/apk:/app/apk:ro
+      - assistant_data:/var/lib/flowcube/assistant
 
   frontend:
     image: flowcube-frontend:latest
@@ -168,6 +174,7 @@ services:
       - grafana_data:/var/lib/grafana
 
 volumes:
+  assistant_data:
   mysql_data:
   loki_data:
   grafana_data:

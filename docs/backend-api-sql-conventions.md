@@ -1,5 +1,11 @@
 # 后端 / API / 数据库规范
 
+### 2026-10-26 小满正式入口
+
+`/api/assistant` 与原后端同进程，复用全局 CORS、限流、并发及 drain；在全局大正文解析前挂载，先当前 `authMiddleware` 与仪表盘/报表任一查看权限，再解析最多32KiB的非压缩JSON。写路由仍显式挂入口权限；业务图另按实际工具权限和当前仓库范围执行，不能从入口查看权推导开单或资金权限。
+
+routes/controller/service 分工及统一 `successResponse` / `AppError` 信封保持；当前 actor 只取认证中间件查得的 `req.user`，不信正文或历史权限。共享运行时不监听端口，FlowClient 固定访问当前后端监听端口的回环正式API，不使用请求 Host 或外部 Flow URL。Docker 内运行源码固定路径 `/opt/flowcube-agent`，任务目录来自后端私有持久卷；损坏历史文件须保留并显式拒绝，不能从空集合继续覆盖。模型凭据仅后端环境注入，不返回前端或持久任务，不写入源码、日志、示例和构建变量。
+
 2026-10-08发布前只读核对发现销售单四列仍是已知旧VARCHAR容量：remark30、receiver_name5、receiver_phone11、receiver_address30。新增283按007/078既有声明分别订正为500/100/50/255，只匹配nullable、NULL默认、无EXTRA/生成表达式的已确认旧形状；字符集、排序规则、COMMENT保留，兼容NO_BACKSLASH_ESCAPES，未知或已正常容量不动。007/078和已执行迁移保持原字节，API现有长度校验和业务规则不改；正式写入只经本版发布入口。真实专属实例、反向守卫、重复和生产前后元数据证据见release-v0.13.1-result.md。
 
 > **来源**：本文件由 `AGENTS.md` 的 §5 迁出（2026-09-19 文档体系重构，原文见 `docs/agents-md-archive-2026-09-19.md`），内容为无损搬运。

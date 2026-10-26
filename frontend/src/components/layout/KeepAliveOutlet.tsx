@@ -64,6 +64,7 @@ function TabPanel({ tabKey, path, title, isActive }: TabPanelProps) {
   // 首次激活前不渲染，激活后永久保留（keep-alive 核心）
   const { companyId, companyName } = useCompanyStore()
   const isAccounting = normalizePath(path).startsWith('/accounting/')
+  const isConversation = normalizePath(path) === '/assistant'
   const mountedRef = useRef(false)
   if (isActive) mountedRef.current = true
   if (!mountedRef.current) return null
@@ -77,12 +78,12 @@ function TabPanel({ tabKey, path, title, isActive }: TabPanelProps) {
         <div
           key={tabKey}
           style={{ display: isActive ? 'block' : 'none' }}
-          className="h-full overflow-y-auto"
+          className={isConversation ? 'h-full overflow-hidden' : 'h-full overflow-y-auto'}
           data-workspace-scroll
         >
-          <div className="p-6">
+          <div className={isConversation ? 'h-full p-4' : 'p-6'}>
             {Comp ? (
-              <div key={isAccounting ? companyId : 'shared'}>
+              <div key={isAccounting ? companyId : 'shared'} className={isConversation ? 'h-full min-h-0' : undefined}>
                 <TabErrorBoundary tabName={title} resetKey={normalizePath(path)}>
                   <Suspense fallback={<PageLoader />}>
                     {isAccounting && <p className="mb-3 text-xs text-muted-foreground">当前账套：{companyName || (companyId === 1 ? '主账套' : `账套 ${companyId}`)}</p>}

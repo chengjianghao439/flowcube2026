@@ -1,5 +1,13 @@
 # 开发与验证命令（全量）
 
+## 小满接入与回归（2026-10-26）
+
+`npm run test:agent` 运行 `agent/test/*.test.js`，已接入 Tests CI 的 static job，位于后端依赖安装之后。使用 Node 22、合成模型/Flow 数据及真实回环 HTTP，验证业务图、当前权限与归属、请求边界、仓库筛选、数量政策、账款覆盖范围、候选接续、版本冲突、分页及原任务恢复；人物与交流范围回归区分极序讨论、实际业务请求和禁止的无关话题。正式 Express 包装另验当前认证/权限先于32KiB解析、当前仓库范围、成功信封、固定本机 Flow API、持久恢复与损坏文件保全、Docker 同后端镜像及私有卷配置；不读取本机模型配置或连接数据库。
+
+`npm --prefix frontend run test:unit -- src/components/agent/AgentWorkspace.test.tsx src/router/assistant.test.ts` 验证实际大页面、当前用户任务恢复、候选选择、改量唯一预览、账户选择、两段确认、旧版本回读、未知结果、读取失败与登录会话隔离；这些文件也由 Tests CI 原前端全量单测入口覆盖。前端另执行 lint、`./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit` 和 build；路由/KeepAlive/登录落地需补相关回归，UI 约定由 `test:frontend-conventions` 校验。真实模型、本地 API/GUI 和未验范围见 `local-preview-acceptance.md`。
+
+`npm --prefix frontend run test:unit -- src/api/assistant.test.ts src/api/client.refresh.test.ts` 使用真实 Axios 与合成 adapter，核对浏览器相对 API、Electron 绝对 API、原确认同服务器续期、网络失败不改址重放、换服务器/换用户的迟到结果及旧服务器401不续期或登出。组件另覆盖传输状态0进入原任务恢复。修改共享续期边界后须运行前端全量单测；样式沿既有 `src/lib/textWrapping.test.ts`，不能新增标题截断豁免。
+
 2026-10-14 云端 0.13.5 候选夹具维护：`test:return-payment-lock-order` 显式注入真实 `cashMoney` 并补齐原账款余额；旧锁顺序、金额与事件断言保留，另检查原始 DECIMAL4 绑定。`test:expense-pay-backfill-integration`、`test:party-profile` 与 `test:disposal-handling` 补齐新增现金行读取、真实仓库范围和普通销售冻结金额依据；未知 SQL/依赖继续拒绝。处置目标夹具使用真实净额模块、不可变合成成交快照和原已发应收，补断言关闭剩余后应收及原快照不变，不能用空 money guard 代替。
 
 云端 `umask 077` 下，`test:mysql8-dev-script`、`test:repair-smoke-instance-guard` 明确设置自己新建的假文件权限，保留宽权限负例；`smoke:nginx-headers` 仅让该测试新建的公开合成静态文件可由 Nginx worker 读取，不修改真实凭据、系统权限或全局 umask。前端全量测试的登录、工作区返回及异步按钮夹具与当前生产状态对齐；半分历史值同时断言“待核”，不改写金额。上述均不代表真实数据库闭环、实际浏览器或此前受阻探针已验。候选状态及发布阻塞见 `docs/runbooks/cloud-release-0.13.5-2026-10-14.md`。

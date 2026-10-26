@@ -21,6 +21,10 @@ RUN npm ci --omit=dev
 COPY scripts/browser-smoke/package*.json /opt/flowcube-browser-smoke/
 RUN npm ci --prefix /opt/flowcube-browser-smoke --omit=dev --ignore-scripts
 COPY --chown=node:node backend/ .
+# 小满与后端同进程；仅交付 ESM 包声明与运行源码，不复制任务或本地配置。
+COPY --chown=node:node agent/package.json /opt/flowcube-agent/package.json
+COPY --chown=node:node agent/src/ /opt/flowcube-agent/src/
+ENV AGENT_DATA_DIR=/var/lib/flowcube/assistant
 # Fail the image build if the native renderer or bundled Chinese font is missing.
 RUN node scripts/check-label-renderer.cjs
 COPY --chown=node:node docker/backend-entrypoint.sh /usr/local/bin/backend-entrypoint.sh

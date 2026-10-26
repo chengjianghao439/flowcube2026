@@ -19,6 +19,7 @@ const components: Record<definitions.RouteComponentKey, RouteComponent> = {
   HandlingScrapPage: lazy(() => import('@/pages/disposal/HandlingScrapPage')),
   DisposalRecoveryPage: lazy(() => import('@/pages/disposal/DisposalRecoveryPage')),
   RepeatSaleRecoveryPage: lazy(() => import('@/pages/sale/RepeatSaleRecoveryPage')),
+  AssistantPage: lazy(() => import('@/pages/assistant')),
   DashboardPage: lazy(() => import('@/pages/dashboard')),
   SalePage: lazy(() => import('@/pages/sale')),
   SaleFormPage: lazy(() => import('@/pages/sale/form')),
