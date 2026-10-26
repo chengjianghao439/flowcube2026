@@ -1,0 +1,7 @@
+    at limiterFn (file:///Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:1162:59)
+    at runHook (file:///Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/frontend/node_modules/@vitest/runner/dist/chunk-artifact.js:2621:10)
+
+ Test Files  417 passed (417)
+      Tests  3790 passed (3790)
+   Start at  15:32:13
+   Duration  163.40s (transform 5.85s, setup 0ms, import 58.23s, tests 177.45s, environment 54.47s)

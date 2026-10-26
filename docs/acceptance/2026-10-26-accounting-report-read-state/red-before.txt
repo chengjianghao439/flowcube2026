@@ -1,0 +1,231 @@
+
+> flowcube-frontend@0.13.8 test:unit
+> vitest run src/pages/accounting/report-read-state.test.tsx --maxWorkers=2
+
+
+ RUN  v4.1.11 /Users/chengjianghao/.codex/worktrees/accounting-report-correctness/flowcube/frontend
+
+ ❯ src/pages/accounting/report-read-state.test.tsx (13 tests | 12 failed) 11336ms
+   × '利润表' 首读失败显示错误并按原期间和账套重试 1034ms
+   × '资产负债表' 首读失败显示错误并按原期间和账套重试 1034ms
+   × '现金流量表' 首读失败显示错误并按原期间和账套重试 1018ms
+   × '利润表' 缓存后刷新失败隐藏旧数值，重试进行中不重复发送 1023ms
+   × '资产负债表' 缓存后刷新失败隐藏旧数值，重试进行中不重复发送 1037ms
+   × '现金流量表' 缓存后刷新失败隐藏旧数值，重试进行中不重复发送 1023ms
+   × '合并资产负债表' 首读失败不显示默认零值，其余报表可用，重试只请求失败项 1023ms
+   × '合并利润表' 首读失败不显示默认零值，其余报表可用，重试只请求失败项 1019ms
+   × '合并资产负债表' 缓存后失败隐藏旧金额，再次读取期间显示加载并恢复 1045ms
+   × '合并利润表' 缓存后失败隐藏旧金额，再次读取期间显示加载并恢复 1037ms
+   × 汇总初始加载期间不呈现零报表或不平结论 12ms
+   × 账套列表读取失败可重试，不能永久停在表格加载 1007ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 12 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '利润表' 首读失败显示错误并按原期间和账套重试
+AssertionError: expected '会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水…' to contain '利润表加载失败'
+
+Expected: "利润表加载失败"
+Received: "会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）利润表资产负债表现金流量表会计期间"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:80:35
+     78|   respond = url => url.pathname === path ? failure() : success(url)
+     79|   await mount('single'); await click(view.label)
+     80|   await wait(() => expect(text()).toContain(view.label + '加载失败'))
+       |                                   ^
+     81|   expect(text()).not.toContain('加载中'); expect(text()).not.toContain(vi…
+     82|   expect(button('重试')).toBeTruthy()
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '资产负债表' 首读失败显示错误并按原期间和账套重试
+AssertionError: expected '会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水…' to contain '资产负债表加载失败'
+
+Expected: "资产负债表加载失败"
+Received: "会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）利润表资产负债表现金流量表会计期间期末时点加载中…"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:80:35
+     78|   respond = url => url.pathname === path ? failure() : success(url)
+     79|   await mount('single'); await click(view.label)
+     80|   await wait(() => expect(text()).toContain(view.label + '加载失败'))
+       |                                   ^
+     81|   expect(text()).not.toContain('加载中'); expect(text()).not.toContain(vi…
+     82|   expect(button('重试')).toBeTruthy()
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '现金流量表' 首读失败显示错误并按原期间和账套重试
+AssertionError: expected '会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水…' to contain '现金流量表加载失败'
+
+Expected: "现金流量表加载失败"
+Received: "会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）利润表资产负债表现金流量表会计期间"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:80:35
+     78|   respond = url => url.pathname === path ? failure() : success(url)
+     79|   await mount('single'); await click(view.label)
+     80|   await wait(() => expect(text()).toContain(view.label + '加载失败'))
+       |                                   ^
+     81|   expect(text()).not.toContain('加载中'); expect(text()).not.toContain(vi…
+     82|   expect(button('重试')).toBeTruthy()
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '利润表' 缓存后刷新失败隐藏旧数值，重试进行中不重复发送
+AssertionError: expected '会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水…' to contain '利润表加载失败'
+
+Expected: "利润表加载失败"
+Received: "会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）利润表资产负债表现金流量表会计期间合成报表项目91.23"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:94:65
+     92|   await mount('single'); await click(view.label); await wait(() => exp…
+     93|   respond = url => url.pathname === path ? failure(403) : success(url)
+     94|   await refresh('acct-ledger'); await wait(() => expect(text()).toCont…
+       |                                                                 ^
+     95|   expect(text()).not.toContain(view.amount)
+     96|   let release!: (value: Response) => void
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '资产负债表' 缓存后刷新失败隐藏旧数值，重试进行中不重复发送
+AssertionError: expected '会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水…' to contain '资产负债表加载失败'
+
+Expected: "资产负债表加载失败"
+Received: "会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）利润表资产负债表现金流量表会计期间期末时点资产 90.00 = 负债+所有者权益 90.00，会计等式成立资产1601合成固定资产100.001602合成累计折旧-10.00资产合计90.00负债2202合成应付100.00负债合计100.00所有者权益合成未分配利润-10.00所有者权益合计-10.00"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:94:65
+     92|   await mount('single'); await click(view.label); await wait(() => exp…
+     93|   respond = url => url.pathname === path ? failure(403) : success(url)
+     94|   await refresh('acct-ledger'); await wait(() => expect(text()).toCont…
+       |                                                                 ^
+     95|   expect(text()).not.toContain(view.amount)
+     96|   let release!: (value: Response) => void
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '现金流量表' 缓存后刷新失败隐藏旧数值，重试进行中不重复发送
+AssertionError: expected '会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水…' to contain '现金流量表加载失败'
+
+Expected: "现金流量表加载失败"
+Received: "会计报表利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）利润表资产负债表现金流量表会计期间合成报表项目91.23"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:94:65
+     92|   await mount('single'); await click(view.label); await wait(() => exp…
+     93|   respond = url => url.pathname === path ? failure(403) : success(url)
+     94|   await refresh('acct-ledger'); await wait(() => expect(text()).toCont…
+       |                                                                 ^
+     95|   expect(text()).not.toContain(view.amount)
+     96|   let release!: (value: Response) => void
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '合并资产负债表' 首读失败不显示默认零值，其余报表可用，重试只请求失败项
+AssertionError: expected '合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套…' to contain '合并资产负债表加载失败'
+
+Expected: "合并资产负债表加载失败"
+Received: "合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。导出新建账套编码名称类型状态操作QA_MAIN合成主账套集团启用当前账套合并期间合并根：合成主账套资产¥0.00无数据负债¥0.00无数据权益¥0.00无数据资产合计 ¥0.00=负债+权益 ¥0.00不平！收入¥240.456001合成汇总收入¥240.45费用/成本¥0.00无数据净利润 ¥240.45（合成主账套）"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:120:57
+    118|   const path = '/api/accounting/consolidation/' + view.endpoint
+    119|   respond = url => url.pathname === path ? failure() : success(url)
+    120|   await mount('group'); await wait(() => expect(text()).toContain(view…
+       |                                                         ^
+    121|   await wait(() => expect(text()).toContain(view.sibling))
+    122|   expect(text()).not.toContain(view.hidden); expect(text()).not.toCont…
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '合并利润表' 首读失败不显示默认零值，其余报表可用，重试只请求失败项
+AssertionError: expected '合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套…' to contain '合并利润表加载失败'
+
+Expected: "合并利润表加载失败"
+Received: "合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。导出新建账套编码名称类型状态操作QA_MAIN合成主账套集团启用当前账套合并期间合并根：合成主账套资产¥90.001601合成固定资产¥100.001602合成累计折旧¥-10.00负债¥100.002202合成应付¥100.00权益¥-10.00——合成未分配利润¥-10.00资产合计 ¥90.00=负债+权益 ¥90.00平衡收入¥0.00无数据费用/成本¥0.00无数据净利润 ¥0.00（—）"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:120:57
+    118|   const path = '/api/accounting/consolidation/' + view.endpoint
+    119|   respond = url => url.pathname === path ? failure() : success(url)
+    120|   await mount('group'); await wait(() => expect(text()).toContain(view…
+       |                                                         ^
+    121|   await wait(() => expect(text()).toContain(view.sibling))
+    122|   expect(text()).not.toContain(view.hidden); expect(text()).not.toCont…
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '合并资产负债表' 缓存后失败隐藏旧金额，再次读取期间显示加载并恢复
+AssertionError: expected '合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套…' to contain '合并资产负债表加载失败'
+
+Expected: "合并资产负债表加载失败"
+Received: "合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。导出新建账套编码名称类型状态操作QA_MAIN合成主账套集团启用当前账套合并期间合并根：合成主账套资产¥90.001601合成固定资产¥100.001602合成累计折旧¥-10.00负债¥100.002202合成应付¥100.00权益¥-10.00——合成未分配利润¥-10.00资产合计 ¥90.00=负债+权益 ¥90.00平衡收入¥240.456001合成汇总收入¥240.45费用/成本¥0.00无数据净利润 ¥240.45（合成主账套）"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:134:35
+    132|   respond = url => url.pathname === path ? failure() : success(url)
+    133|   await refresh(view.prefix); await wait(() => expect(cache(view.prefi…
+    134|   await wait(() => expect(text()).toContain(view.label + '加载失败'))
+       |                                   ^
+    135|   expect(cache(view.prefix)?.state.data).toBeTruthy(); expect(text()).…
+    136|   let release!: (value: Response) => void
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > '合并利润表' 缓存后失败隐藏旧金额，再次读取期间显示加载并恢复
+AssertionError: expected '合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套…' to contain '合并利润表加载失败'
+
+Expected: "合并利润表加载失败"
+Received: "合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。导出新建账套编码名称类型状态操作QA_MAIN合成主账套集团启用当前账套合并期间合并根：合成主账套资产¥90.001601合成固定资产¥100.001602合成累计折旧¥-10.00负债¥100.002202合成应付¥100.00权益¥-10.00——合成未分配利润¥-10.00资产合计 ¥90.00=负债+权益 ¥90.00平衡收入¥240.456001合成汇总收入¥240.45费用/成本¥0.00无数据净利润 ¥240.45（合成主账套）"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:134:35
+    132|   respond = url => url.pathname === path ? failure() : success(url)
+    133|   await refresh(view.prefix); await wait(() => expect(cache(view.prefi…
+    134|   await wait(() => expect(text()).toContain(view.label + '加载失败'))
+       |                                   ^
+    135|   expect(cache(view.prefix)?.state.data).toBeTruthy(); expect(text()).…
+    136|   let release!: (value: Response) => void
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > 汇总初始加载期间不呈现零报表或不平结论
+AssertionError: expected '合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套…' to contain '合并资产负债表加载中'
+
+Expected: "合并资产负债表加载中"
+Received: "合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。导出新建账套编码名称类型状态操作QA_MAIN合成主账套集团启用当前账套合并期间合并根：合成主账套资产¥0.00无数据负债¥0.00无数据权益¥0.00无数据资产合计 ¥0.00=负债+权益 ¥0.00不平！收入¥0.00无数据费用/成本¥0.00无数据净利润 ¥0.00（—）"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:148:18
+    146|   respond = url => url.pathname.includes('/consolidation/') ? new Prom…
+    147|   await mount('group'); await wait(() => expect(releases).toHaveLength…
+    148|   expect(text()).toContain('合并资产负债表加载中'); expect(text()).toContain('合并…
+       |                  ^
+    149|   expect(text()).not.toMatch(/资产合计|净利润|不平！/)
+    150|   await act(async () => releases.forEach(release => release()))
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/12]⎯
+
+ FAIL  src/pages/accounting/report-read-state.test.tsx > 账套列表读取失败可重试，不能永久停在表格加载
+AssertionError: expected '合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套…' to contain '账套列表加载失败'
+
+Expected: "账套列表加载失败"
+Received: "合并报表与账套多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。导出新建账套编码名称类型状态操作合并期间选择集团账套后可查看合并报表资产¥90.001601合成固定资产¥100.001602合成累计折旧¥-10.00负债¥100.002202合成应付¥100.00权益¥-10.00——合成未分配利润¥-10.00资产合计 ¥90.00=负债+权益 ¥90.00平衡收入¥240.456001合成汇总收入¥240.45费用/成本¥0.00无数据净利润 ¥240.45（合成主账套）"
+
+ ❯ src/pages/accounting/report-read-state.test.tsx:156:57
+    154| test('账套列表读取失败可重试，不能永久停在表格加载', async () => {
+    155|   respond = url => url.pathname.endsWith('/companies') ? failure() : s…
+    156|   await mount('group'); await wait(() => expect(text()).toContain('账套列…
+       |                                                         ^
+    157|   respond = success; await click('重试'); await wait(() => expect(text()…
+    158|   expect(reads.filter(read => read.path.endsWith('/companies'))).toHav…
+ ❯ src/pages/accounting/report-read-state.test.tsx:49:158
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  12 failed | 1 passed (13)
+   Start at  15:23:49
+   Duration  12.04s (transform 233ms, setup 0ms, import 397ms, tests 11.34s, environment 214ms)

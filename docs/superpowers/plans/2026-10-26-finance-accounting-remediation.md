@@ -74,7 +74,7 @@
 
 ### B2. 现有报表的使用说明
 
-- [ ] 2026-10-26实测新增项：单体报表读取失败后一直显示加载，汇总报表失败时用零值与“不平”代替错误；应有明确失败/重试呈现。本批A没有前端改动，此项未完成。
+- [x] 2026-10-26实测新增项：单体报表持续加载、汇总报表失败显示零值/“不平”的两处问题，已在用户追加授权后补齐明确失败与原条件重试。见[本轮报告](../../accounting-report-read-state-2026-10-26.md)；B2其余说明校准仍待执行。
 
 **可能改动：** `frontend/src/pages/accounting/reports/index.tsx`、`frontend/src/pages/accounting/consolidation/index.tsx`、`backend/src/modules/accounting/consolidation.service.js` 注释、`docs/finance-permission-time.md`。
 

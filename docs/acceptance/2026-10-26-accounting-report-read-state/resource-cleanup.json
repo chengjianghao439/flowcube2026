@@ -1,0 +1,16 @@
+{
+  "browserSession": "flowcube-report-read-state",
+  "sessionsAfterClose": [],
+  "containerRemoved": true,
+  "volumeRemoved": true,
+  "containerId": "14415a43bda9d28f30af6060dfa3b2574068ecd2546ccccef7c067409dc4e480",
+  "volumeName": "flowcube-accounting-193a06593138-data",
+  "services": {
+    "apiClosed": true,
+    "frontendClosed": true
+  },
+  "runnerExited": true,
+  "apiExited": true,
+  "frontendExited": true,
+  "preExisting5197StillListening": true
+}
