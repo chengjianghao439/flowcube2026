@@ -3,18 +3,20 @@ import { join } from 'node:path';
 import { config } from './config.js';
 import { buildHealth } from './health.js';
 import { TaskStore } from './tasks.js';
-import { handleMessage, confirmTask } from './agent.js';
+import { handleMessage, confirmTask, cancelTask } from './agent.js';
 import { TOOLS } from './tools.js';
 import { assertTaskAccess, listTaskViews, safeTaskView, sanitizePreview } from './task-access.js';
+import { BUSINESS_PAGE_IDS } from './routing.js';
 export { FlowClient } from './flow.js';
 
 const failure = (status, message) => Object.assign(new Error(message), { status });
 
 function response(out) {
   const view = out.task ? safeTaskView(out.task) : null;
-  return { reply: view?.reply ?? out.reply, task: view ? { id: view.id, graph: view.graph, state: view.state, revision: view.revision, userText: view.userText } : null,
+  return { reply: view?.reply ?? out.reply, task: view ? { id: view.id, graph: view.graph, state: view.state, queryOutcome: view.queryOutcome, revision: view.revision, confirmationBlocked: view.confirmationBlocked, userText: view.userText } : null,
     preview: view?.state === 'AWAITING_CONFIRM' ? view.preview : sanitizePreview(out.preview), result: view?.result ?? out.result,
-    candidates: view?.candidates ?? out.candidates, diffs: out.diffs };
+    candidates: view?.candidates ?? out.candidates, diffs: out.diffs,
+    businessPages: Array.isArray(out.businessPages) ? out.businessPages.filter(page => BUSINESS_PAGE_IDS.includes(page)) : undefined };
 }
 
 export function createAgentRuntime({ dataDir = config.dataDir, store = new TaskStore(join(dataDir, 'tasks.json')), messageOptions = {} } = {}) {
@@ -38,11 +40,12 @@ export function createAgentRuntime({ dataDir = config.dataDir, store = new TaskS
         try { return response(await handleMessage(store, client, actor, message, { ...messageOptions, taskId, choiceId })); }
         finally { executing.delete(lock); }
       }
-      const match = pathname.match(/^\/tasks\/([\w-]{1,100})(\/confirm)?$/);
+      const match = pathname.match(/^\/tasks\/([\w-]{1,100})(\/(?:confirm|cancel))?$/);
       if (match) {
         const task = assertTaskAccess(store.get(match[1]), actor);
         if (method === 'GET' && !match[2]) return { task: safeTaskView(task) };
         if (method === 'POST' && match[2]) {
+          if (match[2] === '/cancel') return response(await cancelTask(store, task.id, actor));
           const { revision } = body;
           if (revision != null && (!Number.isSafeInteger(revision) || revision < 0)) throw failure(400, '预览版本无效');
           return response(await confirmTask(store, client, task.id, actor, { revision }));

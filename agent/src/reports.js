@@ -1,13 +1,21 @@
 // 仅把本次工具返回的可见事实排成简报；不从数量推断人员、设备或供应商原因。
 const rowsOf = value => Array.isArray(value) ? value : Array.isArray(value?.list) ? value.list : [];
 const top = rows => rows.slice(0, 5);
-const money = value => Number.isFinite(Number(value)) ? `¥${Number(value).toFixed(2)}` : '金额未返回';
+const missingValue = value => value == null || (typeof value === 'string' && value.trim() === '');
+const money = value => !missingValue(value) && Number.isFinite(Number(value)) ? `¥${Number(value).toFixed(2)}` : '金额未返回';
 const identity = row => row.taskNo || row.orderNo || row.bizNo || row.no || row.documentNo || (row.id != null ? `#${row.id}` : '单号未返回');
 const sampleNote = (data, rows) => data?.pagination?.total != null ? `共 ${data.pagination.total} 项` : `本次返回 ${rows.length} 项`;
+export const replenishmentBasisNote = '低库存按提醒阈值筛选；补货另按各商品、仓库的安全库存与目标、需求及在途试算，两者口径不同。';
+
+export function statisticsTime(value) {
+  if (missingValue(value)) return '统计时点未返回';
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? `北京时间 ${date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}` : '统计时点未返回';
+}
 
 export function briefingReply(data) {
   const sections = data.sections || {};
-  const lines = [`经营简报（当前可访问范围，${new Date(data.asOf).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })}）`];
+  const lines = [`经营简报（当前可访问范围，${statisticsTime(data.asOf)}）`];
   const summary = sections.summary;
   if (summary?.ok) {
     const value = summary.data || {};
@@ -25,6 +33,7 @@ export function briefingReply(data) {
     const rows = rowsOf(value);
     if (key === 'lowStock') {
       lines.push(`${label}：${sampleNote(value, rows)}${rows.length ? '；' + top(rows).map(row => `${row.name || row.productName || row.code || identity(row)}${row.warehouseName ? `（${row.warehouseName}）` : ''} 库存 ${row.quantity ?? '未返回'}${row.unit || ''}`).join('；') : ''}${rows.length > 5 ? '；仅列前 5 项' : ''}`);
+      lines.push(replenishmentBasisNote);
     } else if (key === 'creditWarning') {
       const customers = value?.top ?? rows;
       const counts = [value?.overCount != null ? `超限 ${value.overCount} 位` : '', value?.highRiskCount != null ? `高占用 ${value.highRiskCount} 位` : ''].filter(Boolean);

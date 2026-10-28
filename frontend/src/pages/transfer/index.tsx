@@ -177,6 +177,8 @@ export default function TransferPage() {
   }
 
   // 当前生效筛选摘要（可逐项移除）
+  const customDateRange = (effectiveStartDate || effectiveEndDate)
+    && (effectiveStartDate !== defaultRange.start || effectiveEndDate !== defaultRange.end)
   const chips = [
     keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
     remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
@@ -184,6 +186,7 @@ export default function TransferPage() {
     statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
     productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
+    customDateRange && { key: 'date', label: `创建日期：${effectiveStartDate || '起始不限'} ~ ${effectiveEndDate || '截至不限'}`, onRemove: () => updateParams({ startDate: null, endDate: null, range: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<TransferOrder>[] = [

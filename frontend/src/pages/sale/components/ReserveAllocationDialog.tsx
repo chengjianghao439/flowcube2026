@@ -179,17 +179,19 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
           {isError && <QueryErrorState error={error} onRetry={() => { void refetch() }} description="没能加载占库预览，请重试后核对商品和仓库" />}
 
           {!readUnavailable && (
-            <div className="overflow-x-auto rounded-xl border border-border">
-              <ReportTable className="w-full min-w-[1560px] text-sm">
+            <>
+            <p className="mb-2 text-xs text-muted-foreground">横向滚动可查看完整库存参考；可拖动表头分隔线调整列宽。</p>
+            <div role="region" aria-label="占库商品明细，可横向滚动" tabIndex={0} className="overflow-x-auto rounded-xl border border-border">
+              <ReportTable className="w-full text-sm">
                 <thead data-selection-column className="sticky top-0 z-[1] data-table-header text-xs text-muted-foreground">
                   <tr>
                     <th className="w-12 px-4 py-3">
                       <input type="checkbox" checked={allChecked} disabled={frozen} onChange={e => toggleAll(e.target.checked)} aria-label="全选可占商品" />
                     </th>
-                    <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
-                    <th className="w-44 px-3 py-3 text-left">订购情况</th>
-                    <th className="w-52 px-3 py-3 text-left">发货仓库</th>
-                    <th className="w-36 px-3 py-3 text-left">本次占库</th>
+                    <ProductIdentityHeaders density="compact" /><th className="min-w-16 px-3 py-3 text-left">单位</th>
+                    <th className="w-32 px-3 py-3 text-left">订购情况</th>
+                    <th className="w-40 px-3 py-3 text-left">发货仓库</th>
+                    <th className="w-32 px-3 py-3 text-left">本次占库</th>
                     <th className="w-40 px-4 py-3 text-right">库存参考</th>
                   </tr>
                 </thead>
@@ -209,7 +211,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                         <td className="px-4 py-4 text-center">
                           <input type="checkbox" checked={!!st.checked} disabled={frozen || fullyReserved} onChange={e => setRow(item.itemId, { checked: e.target.checked })} aria-label={`选择 ${item.productName} ${item.spec || ''} ${item.color || ''}`} />
                         </td>
-                        <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
+                        <ProductIdentityCells product={item} density="compact" /><td className="px-3 py-3">{item.unit || '—'}</td>
                         <td className="px-3 py-4">
                           <div className="grid grid-cols-3 gap-2 text-center">
                             <div><div className="text-[11px] text-muted-foreground">需求</div><div className="mt-1 font-semibold tabular-nums">{item.quantity}</div></div>
@@ -256,6 +258,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                 </tbody>
               </ReportTable>
             </div>
+            </>
           )}
         </div>
 

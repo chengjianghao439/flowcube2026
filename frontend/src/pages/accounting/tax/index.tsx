@@ -40,9 +40,9 @@ export default function TaxFilingPage() {
       <FilterCard className="mb-4">
         <div className="text-sm font-medium">申报期间</div>
         <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="w-32 text-center" />
-        <div className="flex gap-1">
-          <Button size="sm" variant={tab === 'vat' ? 'default' : 'outline'} onClick={() => setTab('vat')}>增值税</Button>
-          <Button size="sm" variant={tab === 'income' ? 'default' : 'outline'} onClick={() => setTab('income')}>所得税</Button>
+        <div className="fc-segmented-control" role="group" aria-label="报税类别">
+          <button type="button" className="fc-segmented-option" aria-pressed={tab === 'vat'} onClick={() => setTab('vat')}>增值税</button>
+          <button type="button" className="fc-segmented-option" aria-pressed={tab === 'income'} onClick={() => setTab('income')}>所得税</button>
         </div>
       </FilterCard>
 

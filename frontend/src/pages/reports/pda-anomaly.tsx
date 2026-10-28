@@ -10,7 +10,6 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { StatTile } from '@/components/dashboard/StatTile'
-import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -65,12 +64,9 @@ export default function PdaAnomalyPage() {
       <PageHeader
         title="PDA 异常分析"
         description="核对扫码错误、撤销与异常趋势。"
-        actions={(
-          <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
-        )}
       />
 
-      {isError && !data && (
+      {isError && (
         <QueryErrorState
           error={error}
           onRetry={() => void refetch()}
@@ -121,7 +117,7 @@ export default function PdaAnomalyPage() {
             helper="用于快速判断异常是否在增多"
             empty={data.dailyTrend.length === 0}
             emptyTitle="暂无每日趋势"
-            emptyDescription="当前筛选条件下没有错误趋势数据"
+            emptyDescription="当前筛选范围内暂无统计数据"
           >
             <CompactColumnChart rows={data.dailyTrend.map(row => ({ label: row.date, value: row.errorCount }))} label="错误次数" color={CHART_TONES.destructive} />
           </ReportPanel>
@@ -132,7 +128,7 @@ export default function PdaAnomalyPage() {
             helper="聚焦培训和流程修正"
             empty={data.byOperator.length === 0}
             emptyTitle="暂无操作员错误数据"
-            emptyDescription="暂无操作员错误记录"
+            emptyDescription="当前筛选范围内暂无统计数据"
           >
             <div className="space-y-2">
               {data.byOperator.map(r => (
@@ -147,7 +143,7 @@ export default function PdaAnomalyPage() {
             helper="用于排查误扫或流程不熟"
             empty={data.undoByOperator.length === 0}
             emptyTitle="暂无撤销数据"
-            emptyDescription="暂无撤销统计"
+            emptyDescription="当前筛选范围内暂无统计数据"
           >
             <div className="space-y-2">
               {data.undoByOperator.map(r => (
@@ -162,7 +158,7 @@ export default function PdaAnomalyPage() {
             helper="查看流程或设备问题"
             empty={data.byReason.length === 0}
             emptyTitle="暂无错误原因数据"
-            emptyDescription="暂无错误原因分布"
+            emptyDescription="当前筛选范围内暂无统计数据"
           >
             <div className="space-y-2">
               {data.byReason.map(r => (
@@ -177,7 +173,7 @@ export default function PdaAnomalyPage() {
             helper="方便定位并修正问题"
             empty={data.byBarcode.length === 0}
             emptyTitle="暂无条码异常数据"
-            emptyDescription="暂无条码问题记录"
+            emptyDescription="当前筛选范围内暂无统计数据"
           >
             <div className="space-y-2">
               {data.byBarcode.map(r => (

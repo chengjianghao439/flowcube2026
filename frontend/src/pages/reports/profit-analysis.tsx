@@ -88,13 +88,14 @@ export default function ProfitAnalysisPage() {
     { label: '本月', ...monthRange },
   ]
 
-  /** 成本单元格：金额 + 来源小字（来源是行级提示，不能只靠汇总） */
+  /** 正常快照说明集中在表前；估算、缺失及未知来源仍须逐行可核。 */
   function costCell(v: unknown, row: unknown) {
-    const note = costBasisNote(row as Parameters<typeof costBasisNote>[0])
+    const source = row as Parameters<typeof costBasisNote>[0]
+    const note = costBasisNote(source)
     return (
       <div className="space-y-0.5">
         <div className="text-muted-foreground">{money(Number(v))}</div>
-        <div className={`text-[11px] leading-4 ${note.warn ? 'text-warning-ink' : 'text-muted-foreground'}`}>{note.text}</div>
+        {source.costBasis !== 'snapshot' && <div className={`text-[11px] leading-4 ${note.warn ? 'text-warning-ink' : 'text-muted-foreground'}`}>{note.text}</div>}
       </div>
     )
   }
@@ -210,7 +211,7 @@ export default function ProfitAnalysisPage() {
       </div>
 
       <KeepAliveSection active={tab === 'sale' && (!isError || !!data)}>
-        <p className="mb-3 text-xs text-muted-foreground">按毛利展示前 20 单；上方汇总覆盖全部符合条件的销售单。</p>
+        <p className="mb-3 text-xs text-muted-foreground">按毛利展示前 20 单；上方汇总覆盖全部符合条件的销售单。估算、缺失或来源待核实的情况在对应行注明。</p>
         <DataTable
           columns={saleColumns}
           data={data?.saleOrders ?? []}
@@ -221,7 +222,7 @@ export default function ProfitAnalysisPage() {
       </KeepAliveSection>
 
       <KeepAliveSection active={tab === 'product' && (!isError || !!data)}>
-        <p className="mb-3 text-xs text-muted-foreground">按毛利展示前 20 种商品，销售额已分摊整单折扣。</p>
+        <p className="mb-3 text-xs text-muted-foreground">按毛利展示前 20 种商品，销售额已分摊整单折扣。估算、缺失或来源待核实的情况在对应行注明。</p>
         <DataTable
           columns={productColumns}
           data={data?.products ?? []}

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { fields, widths, productIdentityHeaderCells } from './productIdentityHeaderCells'
+import { fields, productIdentityWidths, productIdentityHeaderCells, type ProductIdentityHeaderProps } from './productIdentityHeaderCells'
 import { ProductIdentitySummary } from './ProductIdentitySummary'
 
 type ProductIdentity = {
@@ -7,11 +7,11 @@ type ProductIdentity = {
   productName?: string | null; name?: string | null
   articleNumber?: string | null; spec?: string | null; color?: string | null
 }
-export function ProductIdentityHeaders() { return <>{productIdentityHeaderCells()}</> }
-export function ProductIdentityCells({ product, nameContent, compact = false }: { product: ProductIdentity; nameContent?: ReactNode; compact?: boolean }) {
+export function ProductIdentityHeaders(props: ProductIdentityHeaderProps) { return <>{productIdentityHeaderCells(props)}</> }
+export function ProductIdentityCells({ product, nameContent, compact = false, density }: { product: ProductIdentity; nameContent?: ReactNode; compact?: boolean } & ProductIdentityHeaderProps) {
   if (compact) return <td className="px-4 py-3"><ProductIdentitySummary product={product} name={nameContent} /></td>
   const values = [product.productCode ?? product.code, product.articleNumber, product.spec, nameContent ?? product.productName ?? product.name, product.color]
-  return <>{values.map((value, i) => <td key={fields[i]} className={`${widths[i]} px-3 py-3 break-words leading-6`}>{value == null || value === '' ? '—' : value}</td>)}</>
+  return <>{values.map((value, i) => <td key={fields[i]} className={`${productIdentityWidths(density)[i]} px-3 py-3 break-words leading-6`}>{value == null || value === '' ? '—' : value}</td>)}</>
 }
 
 /** Single-product summaries retain labeled fields rather than concatenated metadata. */

@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 import { useTableColumns } from './useTableColumns'
 import { TableColumnHeader } from './TableColumnHeader'
 import { ProductIdentityHeaders } from './ProductIdentityCells'
-import { productIdentityHeaderCells } from './productIdentityHeaderCells'
+import { productIdentityHeaderCells, type ProductIdentityHeaderProps } from './productIdentityHeaderCells'
 import type { TableColumn } from '@/types'
 
 type NodeProps = { children?: ReactNode }
@@ -12,7 +12,7 @@ function elements(children: ReactNode): ReactElement<NodeProps>[] {
   return Children.toArray(children).flatMap(child => {
     if (!isValidElement<NodeProps>(child)) return []
     if (child.type === Fragment) return elements(child.props.children)
-    if (child.type === ProductIdentityHeaders) return elements(productIdentityHeaderCells())
+    if (child.type === ProductIdentityHeaders) return elements(productIdentityHeaderCells((child as ReactElement<ProductIdentityHeaderProps>).props))
     return [child]
   })
 }

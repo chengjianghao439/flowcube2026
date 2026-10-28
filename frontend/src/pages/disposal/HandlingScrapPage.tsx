@@ -10,6 +10,7 @@ import { readHandlingSourceId, mayHandle } from '@/lib/disposalHandlingRecovery'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
 import { createRequestKey } from '@/lib/requestKey'
 import { useWorkspaceStore } from '@/store/workspaceStore'
+import { WorkspaceListReturnButton } from '@/components/shared/WorkspaceListReturnButton'
 import CreateDisposalDialog from './components/CreateDisposalDialog'
 function Draft({ id, path }: { id: number; path: string }) {
   const source = useDisposalHandlingSource(id, 3), navigate = useNavigate(), [open, setOpen] = useState(true), [operationUuid] = useState(() => crypto.randomUUID()), [requestKey] = useState(() => createRequestKey('handling-scrap'))
@@ -23,6 +24,10 @@ function Draft({ id, path }: { id: number; path: string }) {
 }
 export default function HandlingScrapPage() {
   const tab = useContext(TabPathContext), location = useLocation(), path = tab || location.pathname + location.search, id = readHandlingSourceId(path)
-  if (typeof id !== 'number') return <div className="space-y-4"><p role="alert" className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">处理来源参数无效，请从来源列表打开；原参数保留</p></div>
+  if (typeof id !== 'number') return <div className="space-y-4"><PageHeader
+    title="来源报废草稿"
+    description={<span role="alert">处理来源参数无效，请从来源列表打开；原参数保留</span>}
+    actions={<WorkspaceListReturnButton listPath="/disposals" permission={P.INVENTORY_DISPOSAL_VIEW} tabKey={buildWorkspaceTabRegistrationFromPath(path).key}>返回报废处理</WorkspaceListReturnButton>}
+  /></div>
   return <Draft key={buildWorkspaceTabRegistrationFromPath(path).key} id={id} path={path} />
 }

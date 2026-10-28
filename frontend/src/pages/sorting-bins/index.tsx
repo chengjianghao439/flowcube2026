@@ -256,7 +256,7 @@ function SortingBinsManagementPage({ notice }: { notice?: ReactNode }) {
           ) : (
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => helpers.openEdit(row)}>编辑</Button>
-              <Button size="sm" variant="destructive" onClick={() => helpers.openDelete(row)}>删除</Button>
+              <Button size="sm" variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" onClick={() => helpers.openDelete(row)}>删除</Button>
             </div>
           )
         )}

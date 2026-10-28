@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Copy, Plus, Trash2 } from 'lucide-react'
 import { toast } from '@/lib/toast'
-import PageHeader from '@/components/shared/PageHeader'
+import { ActionBar } from '@/components/shared/ActionBar'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
@@ -198,11 +198,11 @@ export default function PermissionsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <ActionBar
         title="权限管理"
         description="提示：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改；系统内置角色不可删除。"
-        status={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /><span className="text-sm text-muted-foreground">{roleList.find(r => r.id === selectedRole)?.name ?? ''}</span></> : undefined}
-        actions={isSuperAdmin ? (
+        subtitle={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /><span className="text-sm text-muted-foreground">{roleList.find(r => r.id === selectedRole)?.name ?? ''}</span></> : undefined}
+        rightActions={isSuperAdmin ? (
           editing ? (
             <>
               <Button variant="outline" onClick={cancelEdit} disabled={save.isPending}>取消编辑</Button>

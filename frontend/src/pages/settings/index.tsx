@@ -5,7 +5,7 @@ import { getSettingsApi, updateSettingsApi, getLogoApi, uploadLogoApi } from '@/
 // 与 BrandLogo 组件的查询键保持一致（那里为避免 react-refresh warning 未导出常量）
 const BRAND_LOGO_QUERY_KEY = ['brand-logo']
 import { toast } from '@/lib/toast'
-import PageHeader from '@/components/shared/PageHeader'
+import { ActionBar } from '@/components/shared/ActionBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -115,11 +115,11 @@ export default function SettingsPage() {
 
   return (
     <div className="desktop-page-sample settings-page-sample space-y-5">
-      <PageHeader
+      <ActionBar
         title="系统设置"
         description={!canUpdate ? <>当前账号无修改权限{isDirty && '。有未保存的更改，关闭标签前请先保存。'}</> : isDirty ? '有未保存的更改，关闭标签前请先保存。' : editing ? '正在编辑全局配置，保存后立即生效并回到查看状态。' : '维护企业资料与业务参数。'}
-        status={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /></> : undefined}
-        actions={canUpdate ? (
+        subtitle={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /></> : undefined}
+        rightActions={canUpdate ? (
           editing ? (
             <>
               <Button variant="outline" onClick={cancelEdit} disabled={save.isPending}>取消编辑</Button>

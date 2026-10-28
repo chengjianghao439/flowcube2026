@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ReportTable } from './ReportTable'
+import { ProductIdentityCells, ProductIdentityHeaders } from './ProductIdentityCells'
 let host: HTMLDivElement, root: Root
 beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); localStorage.clear(); host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
 afterEach(() => { act(() => root.unmount()); host.remove(); localStorage.clear() })
@@ -49,4 +50,29 @@ test('保留表格说明在列定义之前，不重复说明或丢失原行标�
   expect(host.querySelector('table')?.firstElementChild?.tagName).toBe('CAPTION')
   expect(host.querySelectorAll('caption')).toHaveLength(1)
   expect(host.querySelector('tbody th[scope="row"]')?.textContent).toBe('需求')
+})
+test('局部紧凑商品身份保留五列及原列宽记忆，未定制时才使用紧凑默认值', () => {
+  const render = (density?: 'compact') => <ReportTable><thead><tr><ProductIdentityHeaders density={density} /></tr></thead><tbody><tr><ProductIdentityCells density={density} product={{ productCode: 'T05-001', articleNumber: '供应商型号', spec: '型号', productName: '长商品名称', color: '蓝色' }} /></tr></tbody></ReportTable>
+  act(() => root.render(render()))
+  const headers = () => [...host.querySelectorAll('thead th')].map(cell => cell.textContent)
+  const originalHeaders = headers()
+  const originalWidth = host.querySelector('table')!.style.minWidth
+  const handle = host.querySelector<HTMLButtonElement>('button[aria-label="调整编码列宽"]')!
+  act(() => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+  const storedKey = localStorage.key(0)!
+  const savedLayout = localStorage.getItem(storedKey)
+  const customizedWidth = host.querySelector('table')!.style.minWidth
+  act(() => root.render(render('compact')))
+  expect(headers()).toEqual(originalHeaders)
+  expect(host.querySelectorAll('tbody td')).toHaveLength(5)
+  expect(host.querySelector('table')!.style.minWidth).toBe(customizedWidth)
+  expect(localStorage.key(0)).toBe(storedKey)
+  expect(localStorage.getItem(storedKey)).toBe(savedLayout)
+  act(() => root.unmount())
+  localStorage.clear()
+  root = createRoot(host)
+  act(() => root.render(render('compact')))
+  expect(parseFloat(host.querySelector('table')!.style.minWidth)).toBeLessThan(parseFloat(originalWidth))
+  expect(host.querySelectorAll('button[aria-label^="调整"]')).toHaveLength(5)
+  expect(headers()).toEqual(originalHeaders)
 })

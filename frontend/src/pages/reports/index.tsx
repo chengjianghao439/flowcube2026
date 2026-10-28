@@ -110,7 +110,7 @@ export default function ReportsPage() {
     <div className="space-y-5">
       <PageHeader
         title="报表中心"
-        description="查看采购、销售与库存统计。"
+        description={tab === 'purchase' ? '采购按订单创建日期及当前仓库范围统计；月度与供应商含未取消订单，商品仅含已完成订单；两榜按金额降序。' : '查看采购、销售与库存统计。'}
       />
 
       <section className="rounded-lg border border-border bg-card p-5 space-y-4">
@@ -147,16 +147,14 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className="flex gap-1 border-b">
+        <div className="fc-segmented-control w-fit" role="group" aria-label="统计类别">
           {summaryTabs.map(item => (
             <button
               key={item.key}
+              type="button"
+              aria-pressed={tab === item.key}
               onClick={() => setTab(item.key)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                tab === item.key
-                  ? 'border-b-2 border-primary text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className="fc-segmented-option"
             >
               {item.label}
             </button>
@@ -184,7 +182,7 @@ export default function ReportsPage() {
                     {!!purchaseQ.data.byMonth.length && <MonthlyAmountChart rows={purchaseQ.data.byMonth} label="采购金额" />}
                   </div>
                   <div className="rounded-lg border border-border bg-card p-5">
-                    <h3 className="mb-4 text-card-title">供应商排名 Top 10</h3>
+                    <h3 className="mb-4 text-card-title">供应商采购金额 Top 20</h3>
                     <DataTable
                       columns={[
                         rankColumn(),
@@ -199,7 +197,7 @@ export default function ReportsPage() {
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-card p-5">
-                  <h3 className="mb-4 text-card-title">商品采购量 Top 20</h3>
+                  <h3 className="mb-4 text-card-title">商品采购金额 Top 20</h3>
                   <DataTable
                     columns={[
                       rankColumn(),

@@ -1,5 +1,8 @@
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
+import { WorkspaceListReturnButton } from '@/components/shared/WorkspaceListReturnButton'
+import { ReturnUnavailable } from '@/pages/returns/ReturnUnavailable'
+import { PERMISSIONS as P } from '@/lib/permission-codes'
 import { money, unitPrice } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
@@ -102,10 +105,10 @@ export default function SaleReturnFormPage() {
   }
 
   if (isNew && new URLSearchParams(tabPath.split('?')[1] ?? '').has('handlingSourceId')) {
-    return <p role="alert">处理来源参数无效，销售退货不支持此来源；原参数保留</p>
+    return <ReturnUnavailable type="sale" tabPath={tabPath} message="处理来源参数无效，销售退货不支持此来源；原参数保留" />
   }
   if (isNew) return <FormView key={registration.key} tabPath={tabPath} tabKey={registration.key} />
-  if (!returnId) return <p role="alert">退货单路由无效，请从列表重新打开</p>
+  if (!returnId) return <ReturnUnavailable type="sale" tabPath={tabPath} message="退货单路由无效，请从列表重新打开" />
   return <DetailView key={returnId!} returnId={returnId!} closeTab={closeTab} tabPath={tabPath} />
 }
 
@@ -356,11 +359,12 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
         title="新建销售退货单"
         description={boundSource ? `已关联原单 ${boundSource.orderNo}。${isKit ? '请按原成交行、实际出库批次和组件选择；原成交资料不随套定义改版变化。' : isOrdinaryNet ? '可调整本次退货数量或移除不退商品；原单价仅供参考，净冲减金额提交后核定。' : '退货单价默认取原单真实成交价，数量默认取剩余可退数量。'}` : '本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择客户、仓库与商品填写。'}
         subtitle={<UnsavedBadge show={isDirty} />}
-        rightActions={
+        rightActions={<>
+          <WorkspaceListReturnButton listPath="/returns/sale" permission={P.RETURN_ORDER_VIEW} tabKey={tabKey} disabled={submitting || loadingSource || write.busy} />
           <Button onClick={handleSubmit} disabled={submitting || locked || loadingSource} className="gap-1.5">
             {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中…</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
           </Button>
-        }
+        </>}
       />
 
       {createdReturn && <div role="status" className="rounded-md border p-3 space-y-2"><p>退货单 {createdReturn.returnNo} 已创建，可查看单据。</p><Button variant="outline" disabled={!ownerCurrent} onClick={() => openCreatedReturn(createdReturn)}>查看已创建退货单</Button></div>}
@@ -671,7 +675,7 @@ function ReverseTaskCard({ reverse }: { reverse: SaleReturnReverseTask }) {
   )
 }
 
-function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabPath: string }) {
+function DetailView({ returnId, tabPath }: { returnId: number; closeTab: () => void; tabPath: string }) {
   const qc = useQueryClient()
   const [detailOwner] = useState(captureKitReadOwner)
   const facts = useSourceReturnFacts(returnId, detailOwner)
@@ -732,7 +736,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
     return <div className="flex h-40 items-center justify-center text-muted-body"><Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…</div>
   }
   if (!ret) {
-    return <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground"><p className="text-sm">销售退货单不存在或已删除</p></div>
+    return <ReturnUnavailable type="sale" tabPath={tabPath} message="销售退货单不存在或已删除" />
   }
 
   return (

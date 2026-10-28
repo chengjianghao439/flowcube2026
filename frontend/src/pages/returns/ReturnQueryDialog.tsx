@@ -1,4 +1,3 @@
-import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useState } from 'react'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
@@ -67,12 +66,13 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
         open={open}
         dialogId="return-query"
         title={type === 'purchase' ? '查询采购退货单' : '查询销售退货单'}
-        width={type === 'sale' ? 680 : 520}
+        width={680}
         onClose={onClose}
         onReset={() => setDraft(resetDraft())}
         onApply={() => onApply(draft)}
       >
-        <QueryFormLayout>
+        <div className="grid content-start grid-cols-1 gap-x-5 gap-y-3 px-5 py-4 sm:grid-cols-2">
+          <p className="col-span-full text-sm font-semibold">订单条件</p>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">单号</span>
             <Input
@@ -126,17 +126,7 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
             onClear={() => setDraft(d => ({ ...d, productId: null, productCode: '', productName: '' }))}
           />
 
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground">经办人</span>
-            <OperatorSelectField
-              value={draft.operatorId}
-              onChange={id => set('operatorId', id)}
-              onChangeName={name => set('operatorName', name)}
-              enabled={open}
-              placeholder="全部经办人"
-              className="h-9"
-            />
-          </label>
+          <p className="col-span-full border-t pt-4 text-sm font-semibold">日期与经办</p>
 
           <label className="fc-query-date-start flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
@@ -149,7 +139,20 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
               onChange={v => set('endDate', v)} className="h-9" />
           </label>
 
-          <label className="flex flex-col gap-1 col-span-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">经办人</span>
+            <OperatorSelectField
+              value={draft.operatorId}
+              onChange={id => set('operatorId', id)}
+              onChangeName={name => set('operatorName', name)}
+              enabled={open}
+              placeholder="全部经办人"
+              className="h-9"
+            />
+          </label>
+
+          <p className="col-span-full border-t pt-4 text-sm font-semibold">备注条件</p>
+          <label className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">备注</span>
             <Input
               placeholder="按退货单备注内容查询…"
@@ -159,7 +162,7 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
               className="h-9"
             />
           </label>
-        </QueryFormLayout>
+        </div>
       </QueryDialog>
 
       {type === 'purchase' ? (

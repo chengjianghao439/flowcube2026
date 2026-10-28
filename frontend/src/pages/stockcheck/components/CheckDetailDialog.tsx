@@ -226,13 +226,14 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   return (
     <>
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose() }}>
-      <DialogContent className="grid-cols-1 max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader description={"核对盘点商品、账面量、实盘量与差异。"}>
+      <DialogContent className="flex max-w-6xl max-h-[90vh] flex-col overflow-hidden">
+        <DialogHeader className="shrink-0" description={"核对盘点商品、账面量、实盘量与差异。"}>
           <DialogTitle className="flex items-center gap-3">
             盘点单详情
             {check && <SoftStatusLabel label={check.statusName} tone={check.status===1?'active':check.status===2?'success':'danger'} />}
           </DialogTitle>
         </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto">
         {error && <QueryErrorState error={error} title={readTitle} onRetry={() => { void refetch() }} />}
         {!error && isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
         {check && (
@@ -244,13 +245,14 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
               <div><span className="text-muted-foreground">经办人：</span>{check.operatorName}</div>
               {check.remark && <div className="col-span-3"><span className="text-muted-foreground">备注：</span>{check.remark}</div>}
             </div>
-            <div className="overflow-x-auto">
-              <ReportTable className="w-full min-w-[1440px] text-sm"><thead><tr>
-                <ProductIdentityHeaders />
-                <th className="w-20">单位</th>
-                <th className="w-32">账面数量</th>
-                <th className="w-44">实盘数量</th>
-                <th className="w-32">差异</th>
+            <p className="text-xs text-muted-foreground">横向滚动可查看完整明细；可拖动表头分隔线调整列宽。</p>
+            <div role="region" aria-label="盘点商品明细，可横向滚动" tabIndex={0} className="overflow-x-auto">
+              <ReportTable className="w-full text-sm"><thead><tr>
+                <ProductIdentityHeaders density="compact" />
+                <th className="w-16">单位</th>
+                <th className="w-28">账面数量</th>
+                <th className="w-36">实盘数量</th>
+                <th className="w-24">差异</th>
                 {check.status === 1 && <th className="w-28">操作</th>}
               </tr></thead><tbody>
               {check.items?.map((item: CheckItem)=>{
@@ -262,7 +264,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
                   : (actual!=null && !hasError ? actual - item.bookQty : null)
                 return (
                   <tr key={item.id} className="border-b last:border-0">
-                    <ProductIdentityCells product={item} />
+                    <ProductIdentityCells product={item} density="compact" />
                     <td className="text-sm text-muted-foreground">{item.unit}</td>
                     <td className="text-sm">{item.bookQty}</td>
                     <td>
@@ -312,7 +314,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
           </div>
           </OrderDetailSections>
         )}
-        <DialogFooter className="gap-2">
+        </div>
+        <DialogFooter className="shrink-0 gap-2">
           {canOperate && <>
             <Button variant="outline" onClick={handleSave} disabled={updateItems.isPending || saveLocked}>保存实盘数</Button>
             <Button onClick={() => {

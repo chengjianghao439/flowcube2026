@@ -128,7 +128,7 @@ export default function LocationsPage() {
     { key: 'zone',    title: '库区', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'aisle',   title: '通道', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
     { key: 'rack',    title: '货架', render: v => (v as string | null) ?? <span className="text-muted-foreground">—</span> },
-    { key: 'capacity', title: '容量', width: 80 },
+    { key: 'capacity', title: '容量', width: 80, render: v => v == null ? <span className="text-muted-foreground">—</span> : String(v) },
     { key: 'status', title: '状态', width: 80,
       render: v => <SoftStatusLabel label={STATUS_LABEL[v as number]} tone={activeTone(Number(v) === 1)} /> },
     { key: 'containerCount', title: '条码数', width: 80,

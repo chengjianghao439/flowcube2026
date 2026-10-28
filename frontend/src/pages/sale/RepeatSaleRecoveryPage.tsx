@@ -1,4 +1,5 @@
 import PageHeader from '@/components/shared/PageHeader'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
@@ -39,7 +40,7 @@ function RecoveryRecords({ records }: { records: QueryRecord[] }) {
   // 保留本上下文刚核对成功的结果入口；切账号/服务器/权限代次由父key卸载。
   const [known, setKnown] = useState(records)
   useEffect(() => { setKnown(previous => { const additions = records.filter(record => !previous.some(old => recordKey(old) === recordKey(record))); return additions.length ? [...previous, ...additions] : previous }) }, [records])
-  return known.length ? <div className="space-y-3">{known.map(record => <RecoveryItem key={recordKey(record)} record={record} />)}</div> : <p>当前账号和服务器没有待确认的重复开单请求。</p>
+  return known.length ? <div className="space-y-3">{known.map(record => <RecoveryItem key={recordKey(record)} record={record} />)}</div> : <div className="rounded-lg border border-border bg-card"><EmptyState variant="no-data" title="没有待核对的开单请求" description="当前账号和服务器没有待核对的重复开单记录。结果未知时请保留原请求，继续核对。" /></div>
 }
 
 /** 已登录的本人查询落点；不挂来源读取、选品或新建表单，也不自动POST。 */

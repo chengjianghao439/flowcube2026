@@ -614,7 +614,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
               </>
             )}
             {canConfirm && (
-              <Button variant="outline" disabled={isPending}
+              <Button disabled={isPending}
                 onClick={() => ask('提交采购单', '提交后采购单将进入待收货阶段，后续由收货入库单承接到货。', 'default', () => {
                   setConfirmState(s => ({ ...s, open: false }))
                   confirmMutate.mutate(order.id)

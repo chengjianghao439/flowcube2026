@@ -249,3 +249,218 @@ test('到账前金额的旧全额错误快照在选户和确认时重新核对�
     }
   }
 });
+
+// T04：到账原文中的金额、客户与指定目标分别核对；不把指定核销降级为全客户分配。
+for (const message of ['合成客户付了25元核销', '合成客户C000123付了25元核销']) {
+  test(`口语付款保留原客户，不采用模型改写：${message}`, async () => {
+    for (const parseIntent of [rules.parseIntent, async () => ({ graph: 'D-receipt', customerKeyword: '另一客户', amountCents: 2500 })]) {
+      const { store, client, searches } = receiptContext();
+      const out = await handleMessage(store, client, actor, message, { parseIntent });
+      assert.equal(out.task.state, 'AWAITING_CONFIRM');
+      assert.equal(out.preview.amountCents, 2500);
+      assert.deepEqual(searches, [message.startsWith('合成客户C') ? '合成客户C000123' : '合成客户']);
+    }
+  });
+}
+for (const message of ['甲公司付了25元，把SL20261026009那笔核销掉', '甲公司到账25元，只核销那笔', '甲公司2026-10-26到账25元核销', '甲公司昨天到账25元核销']) {
+  test(`指定目标或日期明确停步且模型不能抹掉：${message}`, async () => {
+    for (const parseIntent of [rules.parseIntent, async () => ({ graph: 'D-receipt', customerKeyword: '另一客户', amountCents: 2500 }), async () => ({ graph: 'D-ledger', customerKeyword: '甲公司' }), async () => { throw new Error('synthetic model failure'); }]) {
+      const calls = [];
+      const noFlow = path => { calls.push(path); throw new Error('UNEXPECTED_FLOW'); };
+      const out = await handleMessage(new TaskStore(null), { get: noFlow, post: noFlow }, actor, message, { parseIntent });
+      assert.equal(out.preview, undefined);
+      assert.match(out.reply, /指定|日期/);
+      assert.match(out.reply, /收付款页/);
+      assert.match(out.reply, /未登记|未生成/);
+      if (message.includes('SL')) assert.match(out.reply, /SL20261026009/);
+      assert.deepEqual(calls, []);
+    }
+  });
+}
+for (const original of ['合成客户付了5元，把SL20261026009那笔核销掉', '合成客户2026-10-26到账5元核销']) {
+  test(`未执行旧收款快照不能忽略原文目标和日期：${original}`, async () => {
+    for (const operation of ['select', 'confirm', 'settle']) {
+      const { store, client } = receiptContext();
+      const out = await handleMessage(store, client, actor, '合成客户到账5元核销', rules);
+      out.task.userText = original;
+      if (operation === 'settle') {
+        out.task.graph = 'D-settle';
+        Object.assign(out.task.preview, { receiptId: 90, receiptNo: 'RC-OLD', totalCents: 500 });
+      }
+      if (operation === 'select') await assert.rejects(tryAccountSelection(store, actor, '2', client, out.task), /指定|日期/);
+      else {
+        const result = await confirmTask(store, client, out.task.id, actor);
+        assert.equal(result.task.state, 'EXPIRED');
+        assert.match(result.reply, /指定|日期/);
+        if (operation === 'settle') assert.match(result.reply, /不要重复登记|勿重复登记/);
+      }
+    }
+  });
+}
+for (const name of ['和成公司', '钱氏公司']) {
+  test(`客户名中的普通汉字不能被付款词清理误删：${name}`, async () => {
+    const { store, client, searches } = receiptContext();
+    const out = await handleMessage(store, client, actor, `${name}付了25元并核销`, rules);
+    assert.equal(out.preview.amountCents, 2500);
+    assert.deepEqual(searches, [name]);
+  });
+}
+test('模型补出的单号、日期或客户不能替原文授权收款', async () => {
+  for (const [message, extra] of [['合成客户到账25元核销', { orderNo: 'SL20261026009' }], ['合成客户到账25元核销', { paymentDate: '2026-10-26' }], ['到账25元核销', {}]]) {
+    const { store, client, searches } = receiptContext();
+    const out = await handleMessage(store, client, actor, message, { parseIntent: async () => ({ graph: 'D-receipt', customerKeyword: '合成客户', amountCents: 2500, ...extra }) });
+    assert.equal(out.task?.preview ?? null, null);
+    assert.match(out.reply, /原文|付款客户/);
+    assert.deepEqual(searches, []);
+  }
+});
+for (const [name, shortened] of [['张钱', '张'], ['给力五金', '力五金'], ['帮忙商贸', '商贸'], ['请益公司', '益公司'], ['甲收款五金', '甲'], ['甲核销服务', '甲']]) {
+  test(`真实图不能把原名缩成另一客户：${name}`, async () => {
+    for (const fullExists of [false, true]) {
+      const searches = [];
+      const client = { get: async path => {
+        const url = new URL(path, 'http://synthetic');
+        if (url.pathname === '/api/search/') {
+          const keyword = url.searchParams.get('q'); searches.push(keyword);
+          if (keyword === name && fullExists) return [{ id: 7, type: 'customer', title: name }];
+          if (keyword === shortened) return [{ id: 8, type: 'customer', title: shortened }];
+          return [];
+        }
+        if (url.pathname === '/api/customers/7') return { id: 7, name };
+        if (url.pathname === '/api/customers/8') return { id: 8, name: shortened };
+        if (url.pathname === '/api/payments/') return { list: [{ id: 11, orderNo: 'SL20261026007', totalAmount: 100, paidAmount: 0, balance: 100, status: 1 }], total: 1 };
+        if (url.pathname === '/api/payments/party-ledger') return { summary: { closingBalance: 100 }, unassignedCount: 0 };
+        if (url.pathname === '/api/finance/accounts/active') return [{ id: 5, name: '合成基本户' }];
+        assert.fail(path);
+      }, post: () => assert.fail('原名边界回归不能写入') };
+      const out = await handleMessage(new TaskStore(null), client, actor, `${name}到账25元核销`, { parseIntent: async () => ({ graph: 'D-receipt', customerKeyword: shortened, amountCents: 2500 }) });
+      assert.deepEqual(searches, [name]);
+      if (fullExists) assert.equal(out.preview.customer.name, name);
+      else {
+        assert.equal(out.preview, undefined);
+        assert.match(out.reply, /客户名.*到账.*金额.*核销/);
+      }
+    }
+  });
+}
+test('无到账谓词的给力五金核销需核两种原文解读，不同客户停步消歧', async () => {
+  const searches = [];
+  const client = { get: async path => {
+    const url = new URL(path, 'http://synthetic');
+    if (url.pathname === '/api/search/') {
+      const keyword = url.searchParams.get('q'); searches.push(keyword);
+      if (keyword === '给力五金') return [{ id: 7, type: 'customer', title: '给力五金' }];
+      if (keyword === '力五金') return [{ id: 8, type: 'customer', title: '力五金' }];
+    }
+    assert.fail(`双解读冲突不应读取账款: ${path}`);
+  }, post: () => assert.fail('双解读冲突不能写入') };
+  const out = await handleMessage(new TaskStore(null), client, actor, '给力五金核销', rules);
+  assert.deepEqual(searches, ['给力五金', '力五金']);
+  assert.equal(out.preview, undefined);
+  assert.match(out.reply, /客户.*(?:歧义|不唯一|解读)/);
+  assert.match(out.reply, /客户名.*到账.*金额.*核销/);
+});
+test('旧给客户核销仅命令解读有候选时仍可达原预览', async () => {
+  const { store, client } = receiptContext();
+  const originalGet = client.get;
+  const searches = [];
+  client.get = async path => {
+    const url = new URL(path, 'http://synthetic');
+    if (url.pathname === '/api/search/') {
+      searches.push(url.searchParams.get('q'));
+      if (url.searchParams.get('q') === '给合成客户') return [];
+    }
+    return originalGet(path);
+  };
+  const out = await handleMessage(store, client, actor, '给合成客户核销', rules);
+  assert.equal(out.task.state, 'AWAITING_CONFIRM');
+  assert.equal(out.preview.customer.name, '合成客户');
+  assert.deepEqual(searches, ['给合成客户', '合成客户', '合成客户']);
+});
+test('旧命令选择通过后候选变动仍重核，保存的选择不可沿用', async () => {
+  const { store, client } = receiptContext();
+  const originalGet = client.get;
+  let selecting = false, selectionReads = 0;
+  client.get = async path => {
+    const url = new URL(path, 'http://synthetic');
+    if (url.pathname === '/api/search/') {
+      if (url.searchParams.get('q') === '给合成客户') return [];
+      if (url.searchParams.get('q') === '合成客户') {
+        if (selecting && ++selectionReads > 1) return [{ id: 8, type: 'customer', title: '另一合成客户' }];
+        return [{ id: 7, type: 'customer', title: '合成客户' }, { id: 8, type: 'customer', title: '另一合成客户' }];
+      }
+    }
+    return originalGet(path);
+  };
+  const pending = await handleMessage(store, client, actor, '给合成客户核销', rules);
+  assert.equal(pending.task.state, 'DISAMBIGUATING');
+  selecting = true;
+  const out = await handleMessage(store, client, actor, '选这个', { ...rules, taskId: pending.task.id, choiceId: 7 });
+  assert.equal(out.preview, undefined);
+  assert.equal(out.task.state, 'FAILED_FINAL');
+  assert.match(out.reply, /原先选择的对象已不可见/);
+  assert.equal(out.task.selections.customer, 7);
+});
+for (const name of ['甲收款五金', '甲核销服务']) {
+  test(`实际付款主体不能被名称里的业务名词截成另一客户：${name}`, async () => {
+    const { store, client, searches } = receiptContext();
+    const out = await handleMessage(store, client, actor, `${name}到账25元核销`, rules);
+    assert.equal(out.task.state, 'AWAITING_CONFIRM');
+    assert.deepEqual(searches, [name]);
+  });
+}
+for (const operation of ['select', 'confirm', 'settle']) {
+  test(`旧错客户预览必须重核原文身份并失效：${operation}`, async () => {
+    const { store, client } = receiptContext();
+    const out = await handleMessage(store, client, actor, '合成客户到账25元核销', rules);
+    out.task.userText = '给力五金到账25元核销';
+    const baseGet = client.get;
+    client.get = async path => {
+      const url = new URL(path, 'http://synthetic');
+      if (url.pathname === '/api/search/') return [{ id: 8, type: 'customer', title: '给力五金' }];
+      return baseGet(path);
+    };
+    if (operation === 'settle') {
+      out.task.graph = 'D-settle';
+      Object.assign(out.task.preview, { receiptId: 90, receiptNo: 'RC-LEGACY', totalCents: 2500 });
+    }
+    if (operation === 'select') await assert.rejects(tryAccountSelection(store, actor, '2', client, out.task), /客户/);
+    else {
+      const blocked = await confirmTask(store, client, out.task.id, actor);
+      assert.match(blocked.reply, /客户/);
+      if (operation === 'settle') assert.match(blocked.reply, /原收款已登记.*不要重复登记/);
+    }
+    assert.equal(out.task.state, 'EXPIRED');
+    assert.equal(out.task.preview.account, null);
+  });
+}
+for (const operation of ['select', 'confirm', 'settle']) {
+  for (const proof of ['saved-selection', 'unavailable']) {
+    test(`未执行收款客户证明失效即停止：${operation}/${proof}`, async () => {
+      const { store, client } = receiptContext();
+      const out = await handleMessage(store, client, actor, '合成客户到账25元核销', rules);
+      const baseGet = client.get;
+      if (proof === 'saved-selection') out.task.selections = { customer: 8 };
+      client.get = async path => {
+        const url = new URL(path, 'http://synthetic');
+        if (url.pathname === '/api/search/') {
+          if (proof === 'unavailable') throw new Error('synthetic customer 503');
+          return [{ id: 7, type: 'customer', title: '合成客户' }, { id: 8, type: 'customer', title: '合成客户分店' }];
+        }
+        return baseGet(path);
+      };
+      if (operation === 'settle') {
+        out.task.graph = 'D-settle';
+        Object.assign(out.task.preview, { receiptId: 90, receiptNo: 'RC-LEGACY', totalCents: 2500 });
+      }
+      if (operation === 'select') await assert.rejects(tryAccountSelection(store, actor, '2', client, out.task), /客户/);
+      else {
+        const blocked = await confirmTask(store, client, out.task.id, actor);
+        assert.match(blocked.reply, /客户/);
+        if (operation === 'settle') assert.match(blocked.reply, /原收款已登记.*不要重复登记/);
+      }
+      assert.equal(out.task.state, 'EXPIRED');
+      assert.equal(out.task.preview.account, null);
+    });
+  }
+}

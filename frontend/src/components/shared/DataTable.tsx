@@ -146,7 +146,7 @@ export default function DataTable<T extends object>({
   const getRowKey = useCallback((row: T) => String(row[rowKey]), [rowKey])
   return (
     <div className="desktop-table min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden">
-      <div className="overflow-x-auto" data-table-scroll>
+      <div className="overflow-x-auto" data-table-scroll style={!loading && data.length === 0 ? { containerType: 'inline-size' } : undefined}>
         <table aria-rowcount={renderVirtual ? data.length + 1 : undefined} ref={tableRef} aria-busy={loading} className="table-fixed text-sm" style={usesPercent ? { width: '100%', minWidth: percentMinWidth } : { width: tableWidth, minWidth: hasCustomWidths ? 0 : '100%' }}>
           <colgroup ref={colgroupRef}>
             {isSelectEnabled && <col style={{ width: 56 }} />}
@@ -218,11 +218,14 @@ export default function DataTable<T extends object>({
               ))
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={colCount} className={emptyState ? 'px-4 text-center' : 'px-4 py-16 text-center'}>
-                  {emptyState ?? <div className="fc-table-empty flex flex-col items-center gap-2 text-muted-foreground">
-                    <Inbox className="h-8 w-8 opacity-40" />
-                    <span className="text-sm">{emptyText}</span>
-                  </div>}
+                <td colSpan={colCount} className="p-0 text-center">
+                  {/* 空行按滚动视口居中；横滚时跟随可视区域，列布局与表头保持原宽。 */}
+                  <div className={`sticky left-0 box-border max-w-full px-4 ${emptyState ? '' : 'py-16'}`} style={{ width: '100cqi' }}>
+                    {emptyState ?? <div className="fc-table-empty flex flex-col items-center gap-2 text-muted-foreground">
+                      <Inbox className="h-8 w-8 opacity-40" />
+                      <span className="text-sm">{emptyText}</span>
+                    </div>}
+                  </div>
                 </td>
               </tr>
             ) : (

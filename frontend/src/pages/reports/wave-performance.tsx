@@ -11,7 +11,6 @@ import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
-import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -132,12 +131,9 @@ export default function WavePerformancePage() {
       <PageHeader
         title="批次效率"
         description="核对批次时长、商品分布与效率。"
-        actions={(
-          <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
-        )}
       />
 
-      {isError && !data && (
+      {isError && (
         <QueryErrorState
           error={error}
           onRetry={() => void refetch()}
@@ -166,7 +162,7 @@ export default function WavePerformancePage() {
       />
 
       {/* 汇总卡片 */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      {!isError && <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <StatTile icon={Layers} label="总批次数" value={data?.summary.totalWaves ?? '-'} hint="近 30 天" />
         <StatTile
           icon={CheckCircle2}
@@ -183,33 +179,25 @@ export default function WavePerformancePage() {
         />
         <StatTile icon={Boxes} label="平均 SKU 数" value={data?.summary.avgSkuCount ?? '—'} hint="每批次平均种类" />
         <StatTile icon={PackageOpen} label="累计拣货量" value={data?.summary.totalPickedQty.toFixed(0) ?? '-'} hint="件" />
-      </div>
+      </div>}
 
       {/* 批次明细表 */}
-      <ReportPanel
+      {!isError && (isLoading || data) && <ReportPanel
         title="批次明细"
         description="点击列标题排序，查看每个批次的任务数、SKU 与效率。"
         helper="当前列表支持按任务数、SKU、拣货量和时长排序"
-        empty={!isLoading && !isError && waves.length === 0}
-        emptyTitle="暂无批次数据"
-        emptyDescription="当前筛选条件下没有批次记录"
       >
-        {isLoading ? (
-          <div className="flex h-40 items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          </div>
-        ) : (
-          <DataTable
-            columns={cols}
-            data={waves}
-            rowKey="id"
-            emptyText="暂无批次数据"
-            sortKey={sortField}
-            sortDirection={sortAsc ? 'asc' : 'desc'}
-            onSortChange={toggleSort}
-          />
-        )}
-      </ReportPanel>
+        <DataTable
+          columns={cols}
+          data={waves}
+          loading={isLoading}
+          rowKey="id"
+          emptyText="当前筛选范围内没有批次记录"
+          sortKey={sortField}
+          sortDirection={sortAsc ? 'asc' : 'desc'}
+          onSortChange={toggleSort}
+        />
+      </ReportPanel>}
       {data && !isLoading && !isError && <ListSummary total={waves.length} unit="个" />}
     </div>
   )

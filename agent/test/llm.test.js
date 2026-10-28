@@ -48,7 +48,7 @@ function makeFlowMock() {
       const kw = url.searchParams.get('q') || '';
       let hits = [];
       if (kw.includes('上翻支撑')) hits = [{ id: 3, type: 'product', title: '上翻支撑·标准型' }];
-      else if (kw.includes('演示客户')) hits = [{ id: 1, type: 'customer', title: '演示客户甲公司' }];
+      else if (kw.includes('演示客户') || kw === '甲公司') hits = [{ id: 1, type: 'customer', title: '演示客户甲公司' }];
       return ok(res, hits);
     }
     if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, allowDecimalQty: false }); }
@@ -97,10 +97,11 @@ test('LLM 意图 → 执行：核销落到任务图 D-receipt 并出登记预览
   const client = new FlowClient(`http://127.0.0.1:${server.address().port}`, 't');
   const store = new TaskStore(null);
   const fakeParse = async () => ({ graph: 'D-receipt', customerKeyword: '演示客户甲公司' });
-  const out = await handleMessage(store, client, FULL_ACTOR, '甲公司钱到账了，帮我核销', { parseIntent: fakeParse });
+  const out = await handleMessage(store, client, FULL_ACTOR, '甲公司到账，帮我核销', { parseIntent: fakeParse });
   assert.equal(out.task.graph, 'D-receipt');
   assert.equal(out.task.state, 'AWAITING_CONFIRM');
   assert.equal(out.preview.totalCents, 10000);
+  assert.equal(out.task.intent.customerKeyword, '甲公司'); // 原文客户优先，模型不能改写为演示客户
   server.close();
 });
 
@@ -121,4 +122,13 @@ test('LLM 异常 → 回退规则规划器照常工作', async () => {
   assert.ok(out.task);
   assert.equal(out.task.graph, 'F-briefing');
   server.close();
+});
+
+
+test('D-receipt 校验保留指定单号和业务日期，不丢字段', () => {
+  const intent = validateIntent({ graph: 'D-receipt', customerKeyword: '甲公司', amount: 25, orderNo: 'SL20261026009', paymentDate: '2026-10-26' });
+  assert.equal(intent.orderNo, 'SL20261026009');
+  assert.equal(intent.paymentDate, '2026-10-26');
+  assert.equal(validateIntent({ graph: 'D-receipt', customerKeyword: '甲公司', orderNo: {} }), null);
+  assert.equal(validateIntent({ graph: 'D-receipt', customerKeyword: '甲公司', paymentDate: {} }), null);
 });

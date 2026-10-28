@@ -25,6 +25,10 @@ import {
 import { APPROVER_TYPE } from '@/types/approval'
 import type { ApprovalFlow } from '@/types/approval'
 import type { TableColumn } from '@/types'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 const BIZ_TYPES = [
   { value: 'purchase_requisition', label: '采购申请单' },
@@ -57,7 +61,9 @@ const emptyFlow = (): FlowDraft => ({ bizType: 'purchase_requisition', name: '',
 const NO_CHOICE = '__none__'
 
 export default function ApprovalFlowsPage() {
-  const { data: flows = [], isSuccess } = useApprovalFlows()
+  const { data: flows = [], isSuccess, isLoading, isError, error, refetch } = useApprovalFlows()
+  const { can } = usePermission()
+  const canManage = can(PERMISSIONS.APPROVAL_FLOW_MANAGE)
   const { mutate: createFlow, isPending: creating } = useCreateApprovalFlow()
   const { mutate: updateFlow, isPending: updating } = useUpdateApprovalFlow()
   const { mutate: deleteFlow } = useDeleteApprovalFlow()
@@ -178,14 +184,14 @@ export default function ApprovalFlowsPage() {
       key: 'id',
       title: '操作',
       width: 120,
-      render: (_, row) => (
+      render: (_, row) => canManage ? (
         <TableActionsMenu
           primaryLabel="编辑"
           primaryVariant="outline"
           onPrimaryClick={() => openEdit(row)}
           items={[{ label: '删除', destructive: true, separatorBefore: true, onClick: () => setDeleteTarget(row) }]}
         />
-      ),
+      ) : null,
     },
   ]
 
@@ -194,12 +200,12 @@ export default function ApprovalFlowsPage() {
       <PageHeader
         title="审批流配置"
         description="按业务类型 + 金额区间配置多级审批节点（指定角色 / 部门负责人 / 指定用户）"
-        actions={<Button onClick={openCreate}>新增审批流</Button>}
+        actions={canManage && <Button onClick={openCreate}>新增审批流</Button>}
       />
 
 
-      <DataTable columns={columns} data={flows} loading={false} rowKey="id" />
-      {isSuccess && <ListSummary total={flows.length} unit="个" />}
+      {isError ? <QueryErrorState compact title="审批流加载失败" error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={flows} loading={isLoading || !isSuccess} rowKey="id" emptyState={<EmptyState variant={canManage ? 'no-data' : 'no-permission'} compact title={canManage ? '暂无审批流' : '当前账号没有审批流管理权限'} description={canManage ? '点击上方“新增审批流”，配置业务类型、适用金额与审批节点。' : '请联系管理员核对当前账号权限。'} />} />}
+      {isSuccess && !isError && <ListSummary total={flows.length} unit="个" />}
 
       <Dialog open={formOpen} onOpenChange={v => { if (!v) draft.requestClose() }}>
         <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog sm:max-w-4xl">

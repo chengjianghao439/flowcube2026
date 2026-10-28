@@ -4,11 +4,13 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import LocationsPage from './index'
 import type { Location } from '@/types/locations'
+import type { TableColumn } from '@/types'
 
 const mocks = vi.hoisted(() => ({ editing: null as Location | null }))
 vi.mock('@tanstack/react-query', async (importOriginal) => ({ ...await importOriginal<typeof import('@tanstack/react-query')>(), useQuery: () => ({ data: [] }), useMutation: () => ({}) }))
 vi.mock('@/components/shared/BaseCrudPage', () => ({
-  default: (props: { onOpen: (row: Location | null) => void; renderForm: (row: Location | null) => ReactNode; canSubmit: () => boolean }) => <>
+  default: (props: { onOpen: (row: Location | null) => void; renderForm: (row: Location | null) => ReactNode; canSubmit: () => boolean; columns: TableColumn<Location>[] }) => <>
+    {[null, undefined, 0, 24].map((value, index) => { const column = props.columns.find(column => column.key === 'capacity')!; return <output key={index} data-capacity>{(column.render ? column.render(value, {} as Location) : String(value ?? '')) as ReactNode}</output> })}
     <button onClick={() => props.onOpen(mocks.editing)}>打开表单</button>
     {props.renderForm(mocks.editing)}
     <button id="save" disabled={!props.canSubmit()}>保存</button>
@@ -63,4 +65,10 @@ test('历史手写编码分段不全时保持原编码，补齐分段后正常�
   expect(code()).toBe('LEGACY-01')
   for (const [key, value] of Object.entries({ aisle: '1', rack: '2', level: '3', position: '4' })) await edit(key, value)
   expect(code()).toBe('A01-02-0304')
+})
+
+
+test('容量缺值与真实零分开呈现，非零容量保留原值', async () => {
+  await act(async () => root.render(<LocationsPage />))
+  expect([...host.querySelectorAll('[data-capacity]')].map(cell => cell.textContent)).toEqual(['—', '—', '0', '24'])
 })

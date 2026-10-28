@@ -13,6 +13,7 @@ import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { todayYmd } from '@/lib/dateTime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -60,10 +61,10 @@ function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   const set = (patch: Partial<ExpQuery>) => setV(p => ({ ...p, ...patch }))
   return (
-    <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader description={"设置费用报销单的筛选条件。"}><DialogTitle>查询费用报销单</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+    <QueryDialog open={open} dialogId="finance-expenses-query" title="查询费用报销单" width={680}
+      onClose={onClose} onReset={() => setV(EMPTY_EXP_QUERY)}
+      onApply={() => { onApply(v); onClose() }}>
+        <div className="space-y-3 px-5 py-4">
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label>关键字</Label>
@@ -100,13 +101,7 @@ function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setV(EMPTY_EXP_QUERY)}>清空</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </QueryDialog>
   )
 }
 

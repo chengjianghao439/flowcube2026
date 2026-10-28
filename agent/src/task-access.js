@@ -78,9 +78,10 @@ export function safeTaskView(task) {
   const expired = task.state === 'AWAITING_CONFIRM' && task.previewExpired();
   return safeValue({
     id: task.id, graph: task.graph, state: expired ? 'EXPIRED' : task.state,
+    queryOutcome: task.state === 'FAILED_FINAL' && ['A-inventory', 'D-ledger'].includes(task.graph) && task.queryOutcome === 'not_found' ? 'not_found' : undefined,
     userText: task.userText, reply: expired ? '预览已过期，请重新发起试算。' : task.reply,
     preview: sanitizePreview(task.preview), result: task.result, error: task.error, candidates: task.candidates,
-    revision: task.revision, createdAt: task.createdAt, updatedAt: task.updatedAt || task.createdAt,
+    revision: task.revision, confirmationBlocked: task.confirmationBlocked || null, createdAt: task.createdAt, updatedAt: task.updatedAt || task.createdAt,
   }, task.requestKey);
 }
 

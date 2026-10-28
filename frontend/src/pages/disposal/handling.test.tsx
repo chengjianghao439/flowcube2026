@@ -64,7 +64,8 @@ test.each(['sourceNo=', 'sourceType=', 'sourceNo=&sourceNo=', 'sourceType=&sourc
   const registration = buildWorkspaceTabRegistrationFromPath('/disposals/new?handlingSourceId=11&' + extra)
   await leaf(HandlingScrapPage, registration.path, async host => {
     expect(host.querySelector('[role="alert"]')?.textContent ?? '').toContain('处理来源参数无效')
-    expect(host.textContent).not.toContain('来源报废草稿')
+    expect(host.querySelector('h1')?.textContent).toBe('来源报废草稿')
+    expect(host.textContent).not.toContain('继续填写草稿')
   })
   const params = new URLSearchParams(registration.path.split('?')[1])
   const original = new URLSearchParams(extra)

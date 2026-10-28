@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { FlowClient } from '../src/flow.js';
 import { TaskStore } from '../src/tasks.js';
+import { listTaskViews } from '../src/task-access.js';
 import { handleMessage, confirmTask } from '../src/agent.js';
 
 const FULL = { username: 't', realName: '测试员', roleId: 2, roleName: '全权', permissions: ['dashboard.view', 'inventory.view', 'report.view', 'product.view', 'customer.view', 'price.list.view', 'sale.order.view', 'sale.order.create', 'sale.order.reserve', 'purchase.order.create', 'purchase.order.view', 'payment.view', 'payment.execute', 'finance.account.view', 'warehouse.view', 'warehouse.task.view'], warehouseIds: null, unrestrictedWarehouseScope: true, isSuper: false };
@@ -94,6 +95,23 @@ async function ctx(opts) {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   return { server, state, client: new FlowClient(`http://127.0.0.1:${server.address().port}`, 't'), store: new TaskStore(null) };
 }
+
+test('初始收款文字把卡片字段留卡，保留未结口径、选户和两段确认边界', async t => {
+  for (const accounts of [[{ id: 5, name: '基本户' }], [{ id: 5, name: '基本户' }, { id: 6, name: '合成备用户' }]]) {
+    const { server, state, client, store } = await ctx({ accounts });
+    t.after(() => server.close());
+    const out = await handleMessage(store, client, FULL, '演示客户甲公司到账 1000 核销');
+    assert.equal(out.preview.amountCents, 100000);
+    assert.equal(out.preview.customer.name, '演示客户甲公司');
+    assert.equal(state.receipts.length, 0);
+    assert.match(out.reply, /第 1 段/);
+    assert.match(out.reply, /未结 2 笔共 ¥2152\.00/);
+    assert.match(out.reply, /本次只看已关联应收/);
+    assert.doesNotMatch(out.reply, /客户 演示客户|本次到账|入账账户「|日期 \d/);
+    if (accounts.length > 1) assert.match(out.reply, /1）基本户；2）合成备用户.*选定.*确认登记/);
+    else assert.match(out.reply, /确认登记后.*下一张卡.*确认核销分配/);
+  }
+});
 
 test('图 D 全链（不写金额=全额）：登记预览 → 确认① 落收款单 → 核销预览 → 确认② 逐笔结清对平', async () => {
   const { server, state, client, store } = await ctx();
@@ -213,4 +231,130 @@ test('图 D 无资金账户：停步引导建账，零登记', async () => {
   assert.match(out.reply, /资金账户/);
   assert.equal(state.receipts.length, 0);
   server.close();
+});
+
+test('旧指定目标任务登记结果未知仍查原键恢复，第二段停止且不重复收款', async () => {
+  const { server, state, client, store } = await ctx();
+  try {
+    const out = await handleMessage(store, client, FULL, '演示客户甲公司到账25元核销');
+    await confirmTask(store, client, out.task.id, FULL);
+    const originalKey = out.task.requestKey;
+    out.task.userText = '演示客户甲公司付了25元，把SL20261026009那笔核销掉';
+    out.task.state = 'RESULT_UNKNOWN';
+    const recovered = await confirmTask(store, client, out.task.id, FULL);
+    assert.equal(recovered.task.graph, 'D-settle');
+    assert.equal(out.task.requestKey, originalKey);
+    assert.equal(state.receipts.length, 1);
+    const stopped = await confirmTask(store, client, recovered.task.id, FULL);
+    assert.equal(stopped.task.state, 'EXPIRED');
+    assert.match(stopped.reply, /原收款已登记/);
+    assert.equal(state.receipts.length, 1);
+    assert.equal(state.settleCalls, 0);
+  } finally { server.close(); }
+});
+
+test('旧指定目标核销结果未知只恢复原回执，不再次核销', async () => {
+  const { server, state, client, store } = await ctx();
+  try {
+    const out = await handleMessage(store, client, FULL, '演示客户甲公司到账25元核销');
+    const stage2 = await confirmTask(store, client, out.task.id, FULL);
+    await confirmTask(store, client, stage2.task.id, FULL);
+    const originalKey = stage2.task.requestKey;
+    stage2.task.userText = '演示客户甲公司付了25元，把SL20261026009那笔核销掉';
+    stage2.task.state = 'RESULT_UNKNOWN';
+    const recovered = await confirmTask(store, client, stage2.task.id, FULL);
+    assert.equal(recovered.task.state, 'DONE');
+    assert.equal(stage2.task.requestKey, originalKey);
+    assert.equal(state.settleCalls, 1);
+    assert.equal(state.receipts.length, 1);
+  } finally { server.close(); }
+});
+
+test('旧核销快照金额与原文不符时保留收款，零新增核销', async () => {
+  const { server, state, client, store } = await ctx();
+  try {
+    const out = await handleMessage(store, client, FULL, '演示客户甲公司到账25元核销');
+    const stage2 = await confirmTask(store, client, out.task.id, FULL);
+    stage2.task.userText = '演示客户甲公司到账5元核销';
+    const blocked = await confirmTask(store, client, stage2.task.id, FULL);
+    assert.equal(blocked.task.state, 'EXPIRED');
+    assert.match(blocked.reply, /金额/);
+    assert.match(blocked.reply, /原收款已登记.*不要重复登记/);
+    assert.equal(state.receipts.length, 1);
+    assert.equal(state.receipts[0].amount, 25);
+    assert.equal(state.settleCalls, 0);
+  } finally { server.close(); }
+});
+
+for (const revokeChoice of [false, true]) {
+  test(`两客户候选选择后完整两段保留客户身份：${revokeChoice ? '撤销原候选拒绝核销' : '正常完成'}`, async () => {
+    const { server, state, client, store } = await ctx();
+    const baseGet = client.get.bind(client);
+    let revoked = false;
+    client.get = async (...args) => {
+      if (args[0].startsWith('/api/search/')) return [
+        ...(!revoked ? [{ id: 1, type: 'customer', title: '演示客户甲公司' }] : []),
+        { id: 2, type: 'customer', title: '演示客户甲公司分店' },
+      ];
+      return baseGet(...args);
+    };
+    try {
+      const pending = await handleMessage(store, client, FULL, '演示客户甲公司到账25元核销');
+      assert.equal(pending.task.state, 'DISAMBIGUATING');
+      const chosen = await handleMessage(store, client, FULL, '选这个', { taskId: pending.task.id, choiceId: 1 });
+      assert.equal(chosen.task.selections.customer, 1);
+      const stage2 = await confirmTask(store, client, chosen.task.id, FULL);
+      assert.equal(stage2.task.graph, 'D-settle');
+      assert.equal(state.receipts.length, 1);
+      if (revokeChoice) revoked = true;
+      const result = await confirmTask(store, client, stage2.task.id, FULL);
+      if (revokeChoice) {
+        assert.equal(result.task.state, 'EXPIRED');
+        assert.match(result.reply, /客户/);
+        assert.match(result.reply, /原收款已登记.*不要重复登记/);
+        assert.equal(state.settleCalls, 0);
+      } else {
+        assert.equal(result.task.state, 'DONE');
+        assert.equal(stage2.task.selections.customer, 1);
+        assert.equal(state.settleCalls, 1);
+        assert.equal(state.receipts[0].settledAmount, 25);
+      }
+      assert.equal(state.receipts.length, 1);
+    } finally { server.close(); }
+  });
+}
+
+
+test('T13两段显式关联仍是独立ID和原键，恢复与过期均不另建或重复登记', async () => {
+  const { server, state, client, store } = await ctx();
+  try {
+    const first = await handleMessage(store, client, FULL, '演示客户甲公司到账25元核销');
+    const firstId = first.task.id, firstKey = first.task.requestKey;
+    const second = await confirmTask(store, client, firstId, FULL);
+    const secondId = second.task.id, secondKey = second.task.requestKey;
+    assert.notEqual(firstId, secondId);
+    assert.notEqual(firstKey, secondKey);
+    assert.equal(first.task.result.stage2TaskId, secondId);
+    assert.equal(first.task.result.receiptId, second.preview.receiptId);
+    const views = listTaskViews(store, FULL);
+    assert.equal(views.length, 2);
+    assert.equal(views.find(row => row.id === firstId).result.stage2TaskId, secondId);
+    assert.doesNotMatch(JSON.stringify(views), /"actor"|"payload"|"requestKey"/);
+    assert.equal(listTaskViews(store, { ...FULL, username: 'different-owner' }).length, 0);
+    assert.equal(listTaskViews(store, { ...FULL, permissions: [] }).length, 0);
+    const restored = await confirmTask(store, client, firstId, FULL);
+    assert.equal(restored.task.id, secondId);
+    assert.equal(restored.task.requestKey, secondKey);
+    assert.equal(store.tasks.size, 2);
+    assert.equal(state.receipts.length, 1);
+    assert.equal(state.settleCalls, 0, '恢复第二段不代替第二次确认');
+    second.task.preview.expiresAt = '2000-01-01T00:00:00Z';
+    const expired = await confirmTask(store, client, secondId, FULL);
+    assert.equal(expired.task.state, 'EXPIRED');
+    assert.equal(first.task.requestKey, firstKey);
+    assert.equal(second.task.requestKey, secondKey);
+    assert.equal(store.tasks.size, 2);
+    assert.equal(state.receipts.length, 1);
+    assert.equal(state.settleCalls, 0);
+  } finally { server.close(); }
 });

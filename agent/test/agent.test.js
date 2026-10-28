@@ -156,10 +156,12 @@ test('A4 结果未知：响应丢失后查回执恢复，不重复建单', async
   server.close();
 });
 
-test('图外意图：明确婉拒，不拼凑操作', async () => {
-  const { server, client, store } = await setup();
+test('图外意图：明确婉拒，不拼凑操作', async t => {
+  const { server, client, store, state } = await setup();
+  t.after(() => server.close());
   const out = await handleMessage(store, client, FULL_ACTOR, '帮我把铰链的价格改成 5 块');
   assert.equal(out.task, null);
-  assert.match(out.reply, /原系统对应页面/);
-  server.close();
+  assert.match(out.reply, /不能代办.*没有执行操作/);
+  assert.deepEqual(out.businessPages, ['price-change']);
+  assert.equal(state.orders.length, 0);
 });

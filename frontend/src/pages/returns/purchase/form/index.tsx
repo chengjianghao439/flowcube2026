@@ -1,5 +1,7 @@
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
+import { WorkspaceListReturnButton } from '@/components/shared/WorkspaceListReturnButton'
+import { ReturnUnavailable } from '@/pages/returns/ReturnUnavailable'
 import { readHandlingSourceId, handlingConfig, mayHandle, handlingQty } from '@/lib/disposalHandlingRecovery'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
 import { useDisposalHandlingSource } from '@/hooks/useDisposalHandlingSource'
@@ -104,10 +106,10 @@ export default function PurchaseReturnFormPage() {
   }
 
   const handlingId = readHandlingSourceId(tabPath)
-  if (handlingId === 'invalid' || (handlingId !== null && !isNew)) return <p role="alert">处理来源参数无效，请从来源列表重新打开；原参数保留</p>
+  if (handlingId === 'invalid' || (handlingId !== null && !isNew)) return <ReturnUnavailable type="purchase" tabPath={tabPath} message="处理来源参数无效，请从来源列表重新打开；原参数保留" />
   if (isNew && typeof handlingId === 'number') return <HandlingReturnView sourceId={handlingId} tabPath={tabPath} tabKey={registration.key} />
   if (isNew) return <FormView key={registration.key} tabPath={tabPath} tabKey={registration.key} />
-  if (!returnId) return <p role="alert">退货单路由无效，请从列表重新打开</p>
+  if (!returnId) return <ReturnUnavailable type="purchase" tabPath={tabPath} message="退货单路由无效，请从列表重新打开" />
   return <DetailView returnId={returnId!} closeTab={closeTab} tabPath={tabPath} />
 }
 
@@ -357,11 +359,12 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
         title="新建采购退货单"
         description={`${handling ? `处理来源：${handling.source.data?.source.productName ?? '核对中'}；可关联基本量 ${handling.source.data?.source.budget.availableQuantity ?? '—'}。请填写准确采购单并明确选择原采购行。` : ''}${boundSource ? `已锚定原单 ${boundSource.orderNo}。商品、单位和原成交价只读；可按行填写本次退货数量，填 0 或移除表示本次不退，数量不得超过剩余可退量。` : '本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择供应商、仓库与商品填写。'}`}
         subtitle={<UnsavedBadge show={isDirty} />}
-        rightActions={
+        rightActions={<>
+          <WorkspaceListReturnButton listPath="/returns/purchase" permission={P.RETURN_ORDER_VIEW} tabKey={tabKey} disabled={submitting || loadingSource || !!handling?.write.busy} />
           <Button onClick={handleSubmit} disabled={submitting || locked || loadingSource} className="gap-1.5">
             {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中…</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
           </Button>
-        }
+        </>}
       />
 
       {handling && <>{handling.source.error && <p role="alert">{handling.source.error}</p>}<HandlingOperationPanel write={handling.write} />
@@ -596,7 +599,7 @@ function TaskProgressCard({ task }: { task: PurchaseReturn['task'] }) {
   )
 }
 
-function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabPath: string }) {
+function DetailView({ returnId, tabPath }: { returnId: number; closeTab: () => void; tabPath: string }) {
   useSyncExternalStore(subscribeRefund, refundRevision)
   const [confirmOwner] = useState(captureRefundOwner), active = useActiveWorkspaceTab(), confirmActive = useRef({active,generation:0})
   if (confirmActive.current.active !== active) confirmActive.current.generation++
@@ -655,7 +658,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
     return <div className="flex h-40 items-center justify-center text-muted-body"><Loader2 className="mr-2 h-4 w-4 animate-spin" />加载中…</div>
   }
   if (!ret) {
-    return <div className="flex h-40 flex-col items-center justify-center gap-3 text-muted-foreground"><p className="text-sm">采购退货单不存在或已删除</p></div>
+    return <ReturnUnavailable type="purchase" tabPath={tabPath} message="采购退货单不存在或已删除" />
   }
 
   return (
