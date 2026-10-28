@@ -74,6 +74,8 @@ app.use(createDrainMiddleware())
 app.use('/api', createApiLimiter())
 app.use('/api/auth/login', loginLimiter)
 app.use('/api', createRequestConcurrencyGuard())
+// 小满共用现有入口保护；其32KiB正文必须在身份与权限验证之后解析。
+app.use('/api/assistant', require('./modules/assistant/assistant.routes'))
 app.use('/api', express.json({ limit: '2mb' }))
 app.use('/api', express.urlencoded({ extended: false, limit: '64kb', parameterLimit: 1000 }))
 app.use('/api', validateBodyBudget)

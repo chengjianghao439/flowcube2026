@@ -19,4 +19,10 @@ if [ "$#" -gt 0 ]; then
   exec su-exec node:node "$@"
 fi
 
+# 仅正常服务启动准备私有任务目录；不递归改历史文件，也不干扰迁移/发布命令。
+assistant_data_dir="${AGENT_DATA_DIR:-/var/lib/flowcube/assistant}"
+mkdir -p "$assistant_data_dir"
+chown node:node "$assistant_data_dir"
+chmod 700 "$assistant_data_dir"
+
 exec su-exec node:node node index.js

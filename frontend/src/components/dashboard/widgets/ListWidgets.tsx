@@ -163,7 +163,7 @@ export function BoardWorkbench() {
     <WidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="待处理与关注" icon={ListTodo} tone="primary" scrollBody
       action={<div className="flex items-center gap-3">
         {data && data.summary.totalAlerts > 0 && <SoftStatusLabel label="有岗位关注事项" tone="warning" />}
-        <button type="button" className="text-sm text-primary hover:underline" onClick={() => go('/reports/role-workbench', '待办中心')}>查看全部</button>
+        <button type="button" className="text-sm text-primary hover:underline" onClick={() => go('/reports/role-workbench', '待办中心')}>进入待办中心</button>
       </div>}>
       <FulfillmentTodos summary />
       {cards.length === 0 ? <p className={EMPTY_HINT}>暂无岗位关注事项；财务与系统提醒可在待办中心查看。</p> : (

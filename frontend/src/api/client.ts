@@ -36,7 +36,9 @@ async function tryRefreshTokens(config: InternalAxiosRequestConfig): Promise<Ref
   assertCurrentAuthSession(config)
   const { token, refreshToken, sessionGeneration } = useAuthStore.getState()
   if (!refreshToken) return { kind: 'failed' }
-  const baseURL = apiClient.defaults.baseURL
+  const baseURL = config.baseURL ?? apiClient.defaults.baseURL
+  // 旧服务器的迟到401不能把原会话的刷新凭据发送到新服务器。
+  if (baseURL !== apiClient.defaults.baseURL) return { kind: 'superseded' }
   if (refreshInFlight && refreshInFlight.sessionGeneration === sessionGeneration && refreshInFlight.refreshToken === refreshToken && refreshInFlight.baseURL === baseURL) return refreshInFlight.promise
   const isCurrentSession = () => {
     const current = useAuthStore.getState()
@@ -293,6 +295,10 @@ apiClient.interceptors.response.use(
     const transportCode = error.code
     const rawMsg  = error.message
     const cfg     = error.config as InternalAxiosRequestConfig | undefined
+
+    if (status === 401 && cfg && (cfg.baseURL ?? apiClient.defaults.baseURL) !== apiClient.defaults.baseURL) {
+      return Promise.reject(new axios.CanceledError('服务器已变化，忽略原服务器登录结果'))
+    }
 
     if (
       cfg

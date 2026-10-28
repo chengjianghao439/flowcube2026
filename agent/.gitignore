@@ -1,0 +1,5 @@
+# 本地模型配置（BYOK 密钥）：只许本机 600 权限保存，禁止入库
+.env.local
+.env.local.tmp
+data/
+node_modules/

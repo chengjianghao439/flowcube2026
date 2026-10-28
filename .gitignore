@@ -1,4 +1,8 @@
 node_modules/
+agent/data/
+agent/tmp/
+agent/output/
+agent/*.zip
 dist/
 .env
 .env.*

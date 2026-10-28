@@ -1,0 +1,14 @@
+{
+  "description": "极序 Agent — 受 Flow 规则约束的任务执行体（独立服务，只走 Flow 正式 API）",
+  "engines": {
+    "node": ">=20"
+  },
+  "name": "jixu-agent",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "type": "module",
+  "version": "0.1.0"
+}

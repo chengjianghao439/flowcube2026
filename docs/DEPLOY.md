@@ -16,6 +16,21 @@
 
 ## 对外访问链路（域名 + 正式证书）
 
+### 小满的部署接入（2026-10-26，代码接入不代表已上线）
+
+小满正式请求为现有 `/api/assistant/*`。前端与 Electron 安装包跟随当前 ERP API 地址，经现有 Nginx `/api/` 代理进入原后端，不开放8932或新增生产服务。`Dockerfile.backend` 复制 `agent/package.json` 与 `agent/src/` 至 `/opt/flowcube-agent`；`scripts/build-deploy-images.sh` 仍只构建、打同 SHA revision 并归档原 backend/frontend 两个镜像，`server-update.sh` 原健康/权限门禁与应用回退不变。业务规则仍走原 Flow API，任务运行时不会在迁移或发布辅助命令中启动第二监听进程。
+
+Compose 只向 backend 注入以下模型变量，不能传给 Vite 构建或写进交付物：
+
+| 变量 | 要求 |
+|---|---|
+| `AGENT_MODEL_BASE_URL` | 启用自然语言模型时必须，与提供方兼容接口地址一致 |
+| `AGENT_MODEL_NAME` | 启用模型时必须，使用账户实际可用名称 |
+| `AGENT_MODEL_API_KEY` | 启用模型时必须，沿受保护的生产进程环境注入，禁止回显 |
+| `AGENT_DATA_DIR` | Compose 固定为 `/var/lib/flowcube/assistant`，挂载 `assistant_data` 命名卷 |
+
+未配置模型时只提供规则可识别业务与稳定概念解释，不可宣称已启用模型。后端入口仅正常服务启动准备私有任务目录；显式迁移/发布命令不创建目录或加载运行时。应用回退保留任务卷，不使用 `down -v`。历史文件若损坏返回明确503并保持原文件，须核对修复，不自动清空。生产配置和启动由统一发布任务在同 SHA 门禁通过后执行；本地隔离构建页面不能代替生产模型配置、Windows 安装包或上线验收。
+
 生产不直接用容器端口对外。宿主机 Caddy 独占 80+443，前端容器（nginx）回环暴露 8080：
 
 ```text
