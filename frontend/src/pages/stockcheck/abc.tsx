@@ -278,7 +278,7 @@ export default function AbcClassPage() {
             {warehouseSelect}
           </FilterCard>
           <p className="text-xs leading-5 text-muted-foreground">
-            {warehouseId > 0 ? '仅显示所选仓库的覆盖统计。' : '按仓库与档位展示当前账号可查看、已启用且有在库容器的仓库。'}
+            {warehouseId > 0 ? '仅显示所选仓库的覆盖统计。' : '按仓库与档位展示当前账号可查看、已启用且有库存条码在库的仓库。'}
             应盘商品按各仓已分档商品统计；规则启用时，从未盘点或超过该档周期的商品计为到期未盘。按期盘点率 =（应盘商品 − 到期未盘）/ 应盘商品。
           </p>
           <DataTable columns={coverageColumns} data={coverageRows} loading={coverageQ.isLoading} rowKey="rowKey" emptyText="暂无按期盘点数据（先运行一次分档重算）" />

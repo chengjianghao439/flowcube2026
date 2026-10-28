@@ -259,7 +259,7 @@ export function useAssistantConversation() {
     catch (cause) {
       if (mounted.current) {
         refreshPreviewFreeze(original.id)
-        setError(cause instanceof AssistantRequestError || cause instanceof PreviewFreezeStorageError ? cause.message : '暂未取得放弃结果，正在读取原任务；确认已暂停。')
+        setError(cause instanceof AssistantRequestError || cause instanceof PreviewFreezeStorageError ? cause.message : '暂未取得放弃结果，正在加载原任务；确认已暂停。')
         if (!(cause instanceof PreviewFreezeStorageError)) await readPreview(original)
       }
     } finally { locked.current = false; if (mounted.current) setBusy(false) }
