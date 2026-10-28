@@ -68,6 +68,25 @@ test('cancel restores original configuration, including values in dynamically ad
   } finally { view.close() }
 })
 
+test('the single settings save action preserves pending disable and sends the original form once', async () => {
+  let finish!: () => void
+  state.update.mockImplementation(() => new Promise<null>(resolve => { finish = () => resolve(null) }))
+  const view = await mount()
+  try {
+    await act(async () => { await view.user.click(getByRole(view.host, 'button', { name: '编辑' })) })
+    await act(async () => { await view.user.type(getByLabelText(view.host, '企业名称'), '更改') })
+    const save = getByRole(view.host, 'button', { name: '保存修改' }) as HTMLButtonElement
+    await act(async () => save.click())
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+    expect(save.disabled).toBe(true)
+    expect((getByRole(view.host, 'button', { name: '取消编辑' }) as HTMLButtonElement).disabled).toBe(true)
+    await act(async () => save.click())
+    expect(state.update).toHaveBeenCalledTimes(1)
+    expect(state.update).toHaveBeenCalledWith({ company_name: '原企业更改', future_rule: '0' })
+    await act(async () => finish())
+  } finally { view.close() }
+})
+
 test('read-only users can see real dynamic settings without edit or logo-upload actions', async () => {
   state.editable = false
   const view = await mount()

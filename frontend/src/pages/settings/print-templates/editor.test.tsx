@@ -34,6 +34,77 @@ async function render(path = '/settings/print-templates/10') {
 function btn(text: string) { return [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === text || b.getAttribute('aria-label') === text)! }
 async function click(text: string) { await act(async () => { btn(text).click() }); await act(async () => { await new Promise(r => setTimeout(r, 20)) }) }
 
+const a4Template = { ...tpl, type: 1, paperSize: 'A4', layout: { elements: [] } }
+function mockCanvasGeometry(initialWidth: number) {
+  // jsdom 没有布局；这里只模拟画布列宽与 ResizeObserver 通知，不代表 GUI 几何验收。
+  let width = initialWidth
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
+  const observers: { notify: () => void; observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] = []
+  Object.assign(globalThis, { ResizeObserver: class {
+    observe = vi.fn()
+    disconnect = vi.fn()
+    constructor(notify: () => void) { observers.push({ notify, observe: this.observe, disconnect: this.disconnect }) }
+  } })
+  return { observers, setWidth: (next: number) => { width = next } }
+}
+function zoomText() { return btn('放大画布').previousElementSibling?.textContent }
+
+test('已有 A4 详情延迟返回后首屏自动适应，并在真实挂载的画布列观察尺寸', async () => {
+  const geometry = mockCanvasGeometry(942)
+  let resolveDetail!: (value: typeof a4Template) => void
+  mocks.detail.mockReturnValue(new Promise(resolve => { resolveDetail = resolve }))
+  await render()
+  expect(host.textContent).toContain('正在加载模板')
+  expect(geometry.observers).toHaveLength(0)
+  await act(async () => { resolveDetail(a4Template) })
+  await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+  expect(zoomText()).toBe('85%')
+  expect(geometry.observers).toHaveLength(1)
+  const col = geometry.observers[0].observe.mock.calls[0][0] as HTMLElement
+  expect(col.isConnected).toBe(true)
+  expect(col.contains(host.querySelector('.cursor-crosshair'))).toBe(true)
+  act(() => root.unmount())
+  expect(geometry.observers[0].disconnect).toHaveBeenCalledTimes(1)
+  root = createRoot(host)
+})
+
+test('画布隐藏时不改缩放，再激活和窗口变宽后继续自动适应', async () => {
+  const geometry = mockCanvasGeometry(942)
+  mocks.detail.mockResolvedValue(a4Template)
+  await render()
+  expect(zoomText()).toBe('85%')
+  geometry.setWidth(0)
+  act(() => geometry.observers[0].notify())
+  expect(zoomText()).toBe('85%')
+  geometry.setWidth(783)
+  act(() => geometry.observers[0].notify())
+  expect(zoomText()).toBe('70%')
+  geometry.setWidth(1250)
+  act(() => window.dispatchEvent(new Event('resize')))
+  expect(zoomText()).toBe('100%')
+})
+
+test('手动缩放优先于观察器及窗口变化，点击适应后恢复自动调整且保存不含缩放', async () => {
+  const geometry = mockCanvasGeometry(942)
+  mocks.detail.mockResolvedValue(a4Template)
+  await render()
+  expect(zoomText()).toBe('85%')
+  await click('放大画布')
+  const manualZoom = zoomText()
+  expect(manualZoom).not.toBe('85%')
+  geometry.setWidth(783)
+  act(() => { geometry.observers[0].notify(); window.dispatchEvent(new Event('resize')) })
+  expect(zoomText()).toBe(manualZoom)
+  await click('适应画布')
+  expect(zoomText()).toBe('70%')
+  geometry.setWidth(942)
+  act(() => geometry.observers[0].notify())
+  expect(zoomText()).toBe('85%')
+  await click('保存')
+  expect(mocks.save.mock.calls.at(-1)![0].paperSize).toBe('A4')
+  expect(mocks.save.mock.calls.at(-1)![0].layout).not.toHaveProperty('editorZoom')
+})
+
 test('模板编辑器查看权不授予保存，撤销管理权即时隐藏保存', async () => {
   mocks.permissions = ['print.template.view']
   await render(); expect(host.textContent).toContain('真实测试商品'); expect(btn('保存')).toBeUndefined()

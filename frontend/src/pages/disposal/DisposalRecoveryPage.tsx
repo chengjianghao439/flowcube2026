@@ -1,4 +1,5 @@
 import PageHeader from '@/components/shared/PageHeader'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { useOwnHandlingRecords, useDisposalHandlingOperation } from '@/hooks/useDisposalHandlingOperation'
 import { handlingEpoch, ownHandlingRecords } from '@/lib/disposalHandlingRecovery'
 import { HandlingOperationPanel } from './HandlingOperationPanel'
@@ -35,7 +36,7 @@ function Records({ records }: { records: DisposalExecutionRecord[] }) {
     const added = records.filter(record => !previous.some(old => recordIdentity(old) === recordIdentity(record)))
     return added.length ? [...previous, ...added] : previous
   }) }, [records])
-  return known.length ? <div className="space-y-3">{known.map(record => <Item key={recordIdentity(record)} record={record} />)}</div> : <p>当前账号和服务器没有待确认报废请求。</p>
+  return known.length ? <div className="space-y-3">{known.map(record => <Item key={recordIdentity(record)} record={record} />)}</div> : <div className="rounded-lg border border-border bg-card"><EmptyState variant="no-data" title="没有待核对的报废请求" description="当前账号和服务器没有待核对报废请求。结果未知时请保留原请求，继续核对。" /></div>
 }
 function HandlingItem({ identity, kind }: { identity: string; kind: string }) {
   const active = useActiveWorkspaceTab(), write = useDisposalHandlingOperation(identity, active, () => false)
@@ -46,7 +47,7 @@ function HandlingRecords() {
   const { records, error } = useOwnHandlingRecords()
   const [known, setKnown] = useState(records)
   useEffect(() => { setKnown(previous => { const added = records.filter(r => !previous.some(old => old.operationUuid === r.operationUuid)); return added.length ? [...previous, ...added] : previous }) }, [records])
-  return <section><h2 className="mb-3 text-section-title">处理意图与关联结果</h2>{error ? <p role="alert">{error}</p> : known.map(record => <HandlingItem key={record.operationUuid} identity={record.draftIdentity} kind={record.kind} />)}</section>
+  return <section><h2 className="mb-3 text-section-title">处理意图与关联结果</h2>{error ? <p role="alert">{error}</p> : known.length ? known.map(record => <HandlingItem key={record.operationUuid} identity={record.draftIdentity} kind={record.kind} />) : <div className="rounded-lg border border-border bg-card"><EmptyState variant="no-data" compact title="没有待核对的处理意图" description="当前账号和服务器没有待核对的处理意图与关联结果。" /></div>}</section>
 }
 /** Auth-only，本人查询；不挂业务详情、审批、仓库、建议或执行表单。 */
 export default function DisposalRecoveryPage() {

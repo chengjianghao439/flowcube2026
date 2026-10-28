@@ -171,7 +171,7 @@ export default function AbcClassPage() {
     }}>
       <SelectTrigger aria-label="当前仓库" className="h-9 w-52"><SelectValue /></SelectTrigger>
       <SelectContent>
-        <SelectItem value="0">{tab === 'rules' ? '全局默认（所有仓库）' : '请选择仓库'}</SelectItem>
+        <SelectItem value="0">{tab === 'rules' ? '全局默认（所有仓库）' : tab === 'coverage' ? '全部可查看仓库' : '请选择仓库'}</SelectItem>
         {warehouses?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
       </SelectContent>
     </Select>
@@ -210,6 +210,7 @@ export default function AbcClassPage() {
               {recompute.isPending ? '重算中…' : '重算本仓分档'}
             </Button>
           </FilterCard>
+          {warehouseId > 0 && <p className="text-xs text-muted-foreground">仅显示所选仓库已保存的商品分档；统计口径与天数用于重算，不会自动改写已有结果。</p>}
           {warehouseId <= 0
             ? <EmptyState variant="empty-folder" title="先选择仓库" description="商品分档按仓划分，选择仓库后查看该仓结果。" className="rounded-xl border border-border bg-card" />
             : <DataTable columns={abcColumns} data={abcQ.data ?? []} loading={abcQ.isLoading} />}
@@ -220,6 +221,18 @@ export default function AbcClassPage() {
             {warehouseId === 0 && globalPolicy.isError && <Button size="sm" variant="outline" onClick={() => void globalPolicy.refetch()}>重试权限读取</Button>}
             {rulesEditing && canEditRules && <EditModeBadge />}
             <UnsavedBadge show={hasUnsavedRules} />
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {canEditRules && (rulesEditing ? (
+                <>
+                  <Button variant="outline" disabled={saveRules.isPending} onClick={cancelRuleEdit}>取消编辑</Button>
+                  <Button disabled={saveRules.isPending || !draft.length} onClick={() => saveRules.mutate({ warehouseId, rules: draft.map(r => ({ ...r })) })}>
+                    {saveRules.isPending ? '保存中…' : '保存修改'}
+                  </Button>
+                </>
+              ) : (
+                <Button variant="outline" disabled={!draft.length} onClick={() => setRulesEditing(true)}>编辑规则</Button>
+              ))}
+            </div>
           </FilterCard>
           <div className="overflow-x-auto rounded-lg border border-border">
             <ReportTable className="w-full text-sm">
@@ -259,24 +272,15 @@ export default function AbcClassPage() {
               </tbody>
             </ReportTable>
           </div>
-          <div className="flex justify-end">
-            {canEditRules && (rulesEditing ? (
-              <>
-                <Button variant="outline" disabled={saveRules.isPending} onClick={cancelRuleEdit}>取消编辑</Button>
-                <Button className="ml-2" disabled={saveRules.isPending || !draft.length} onClick={() => saveRules.mutate({ warehouseId, rules: draft.map(r => ({ ...r })) })}>
-                  {saveRules.isPending ? '保存中…' : '保存修改'}
-                </Button>
-              </>
-            ) : (
-              <Button variant="outline" disabled={!draft.length} onClick={() => setRulesEditing(true)}>编辑规则</Button>
-            ))}
-          </div>
         </div> },
         { value: 'coverage', label: '按期盘点率', content: <div className="space-y-4">
           <FilterCard>
             {warehouseSelect}
-            <span className="text-sm text-muted-foreground">按「距上次盘点的天数超过该档位的周期」判定到期；按期盘点率 = 已按期盘 / 应盘。</span>
           </FilterCard>
+          <p className="text-xs leading-5 text-muted-foreground">
+            {warehouseId > 0 ? '仅显示所选仓库的覆盖统计。' : '按仓库与档位展示当前账号可查看、已启用且有库存条码在库的仓库。'}
+            应盘商品按各仓已分档商品统计；规则启用时，从未盘点或超过该档周期的商品计为到期未盘。按期盘点率 =（应盘商品 − 到期未盘）/ 应盘商品。
+          </p>
           <DataTable columns={coverageColumns} data={coverageRows} loading={coverageQ.isLoading} rowKey="rowKey" emptyText="暂无按期盘点数据（先运行一次分档重算）" />
         </div> },
       ]} />

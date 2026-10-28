@@ -256,7 +256,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
           className="shrink-0"
         />
 
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
           {can(PERMISSIONS.CATEGORY_CREATE) && cat.level < 4 && (
             <Button
               size="sm" variant="ghost"

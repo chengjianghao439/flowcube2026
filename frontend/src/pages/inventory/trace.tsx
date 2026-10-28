@@ -71,6 +71,11 @@ function ContainerKindIcon({ kind }: { kind?: 'inventory' | 'plastic_box' }) {
 }
 
 function LogRow({ item }: { item: ContainerLogItem }) {
+  // 流水数量与方向分开保存；调整及未知类型保留原符号，不能按文案推断。
+  const rawQty = Number(item.qty)
+  const qty = item.type === 1 ? Math.abs(rawQty) : item.type === 2 ? -Math.abs(rawQty) : rawQty
+  const repeatedRemark = item.remark === item.moveTypeName || item.remark === item.refNo
+    || (item.moveTypeName && item.refNo && item.remark === `${item.moveTypeName} ${item.refNo}`)
   return (
     <div className="flex items-center justify-between px-4 py-2">
       <div className="min-w-0 flex-1">
@@ -80,11 +85,11 @@ function LogRow({ item }: { item: ContainerLogItem }) {
           )}
           {item.refNo && <span className="text-xs text-muted-foreground">单据 {item.refNo}</span>}
         </div>
-        {item.remark && <div className="mt-1 text-sm text-muted-foreground">{item.remark}</div>}
+        {item.remark && !repeatedRemark && <div className="mt-1 text-sm text-muted-foreground">{item.remark}</div>}
       </div>
       <div className="text-right">
-        <div className={`font-medium ${item.qty < 0 ? 'text-destructive-ink' : ''}`}>
-          {item.qty > 0 ? '+' : ''}{Number(item.qty)}
+        <div className={`font-medium ${qty < 0 ? 'text-destructive-ink' : ''}`}>
+          {qty > 0 ? '+' : ''}{qty}
         </div>
         <div className="text-xs text-muted-foreground">{formatDisplayDateTime(item.createdAt)}</div>
         {item.operatorName && <div className="text-xs text-muted-foreground">操作人 {item.operatorName}</div>}

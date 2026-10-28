@@ -6,6 +6,8 @@
 
 routes/controller/service 分工及统一 `successResponse` / `AppError` 信封保持；当前 actor 只取认证中间件查得的 `req.user`，不信正文或历史权限。共享运行时不监听端口，FlowClient 固定访问当前后端监听端口的回环正式API，不使用请求 Host 或外部 Flow URL。Docker 内运行源码固定路径 `/opt/flowcube-agent`，任务目录来自后端私有持久卷；损坏历史文件须保留并显式拒绝，不能从空集合继续覆盖。模型凭据仅后端环境注入，不返回前端或持久任务，不写入源码、日志、示例和构建变量。
 
+小满销售预览修订先持久化 `confirmationBlocked`，解析歧义、非法数量和读取失败均保留原正文/预览/版本；确认入口对暂停状态返回409。澄清或“继续原版”重读商品数量政策、价格和库存成功才增加 revision 并解锁，旧版本仍409。`POST /api/assistant/tasks/:id/cancel` 沿同一认证、入口权限、32KiB及结构预算链，和确认/改量共用任务锁；再次复核属主、当前查看/仓库及办理权限，只让合法尚未执行且未过期的任务进入 CANCELLED，重复幂等。取消不更换 requestKey、不调用业务写入，执行/结果未知/已完成不取消或藏结果。D-settle 取消仅放弃核销预览，第一段已登记收款及结果保留。覆盖由 `npm run test:agent` 的 preview-controls 与正式回环 embedded-api 承担；写路由继续显式登记 requireAnyPermission，不增加真实角色权限。
+
 2026-10-08发布前只读核对发现销售单四列仍是已知旧VARCHAR容量：remark30、receiver_name5、receiver_phone11、receiver_address30。新增283按007/078既有声明分别订正为500/100/50/255，只匹配nullable、NULL默认、无EXTRA/生成表达式的已确认旧形状；字符集、排序规则、COMMENT保留，兼容NO_BACKSLASH_ESCAPES，未知或已正常容量不动。007/078和已执行迁移保持原字节，API现有长度校验和业务规则不改；正式写入只经本版发布入口。真实专属实例、反向守卫、重复和生产前后元数据证据见release-v0.13.1-result.md。
 
 > **来源**：本文件由 `AGENTS.md` 的 §5 迁出（2026-09-19 文档体系重构，原文见 `docs/agents-md-archive-2026-09-19.md`），内容为无损搬运。

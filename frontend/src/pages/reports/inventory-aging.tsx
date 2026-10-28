@@ -68,7 +68,7 @@ export default function InventoryAgingPage() {
     { key: 'qty0_30', title: '0-30天', width: 80, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'qty30_60', title: '30-60天', width: 82, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'qty60_90', title: '60-90天', width: 82, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
-    { key: 'qty90p', title: '90+天', width: 82, align: 'right', render: v => Number(v) > 0 ? <span className="tabular-nums font-medium text-amber-600">{fmtQty(v)}</span> : <span className="tabular-nums text-muted-foreground">—</span> },
+    { key: 'qty90p', title: '90+天', width: 82, align: 'right', render: v => <span className={`tabular-nums ${Number(v) > 0 ? 'font-medium text-amber-600' : 'text-muted-foreground'}`}>{fmtQty(v)}</span> },
     { key: 'totalQty', title: '合计', width: 80, align: 'right', render: v => <span className="tabular-nums font-medium">{fmtQty(v)}</span> },
     { key: 'avgAgeDays', title: '平均存放时长', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
     { key: 'totalValue', title: '金额', width: 110, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },

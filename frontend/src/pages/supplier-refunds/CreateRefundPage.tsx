@@ -18,6 +18,7 @@ import { createRequestKey } from '@/lib/requestKey';
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta';
 import { MAX_WORKSPACE_TABS, useWorkspaceStore } from '@/store/workspaceStore';
 import { RefundRecoveryPanel } from './RecoveryPanel';
+import { WorkspaceListReturnButton } from '@/components/shared/WorkspaceListReturnButton';
 // 原价沿 DECIMAL(18,8) 的十位整数与来源四/八位文本展示，不参与现金或回执解析。
 function sourceUnitPriceLabel(value: unknown): string {
     return typeof value === 'string' && /^\d{1,10}\.(?:\d{4}|\d{8})$/.test(value) ? `¥${value}` : '—';
@@ -109,6 +110,11 @@ export default function SupplierRefundCreatePage() {
     const tab = useContext(TabPathContext), location = useLocation(), path = tab || location.pathname + location.search, params = new URLSearchParams(path.split('?')[1] || ''), values = params.getAll('purchaseReturnId');
     const id = values.length === 1 && /^[1-9]\d*$/.test(values[0]) && Number.isSafeInteger(Number(values[0])) ? Number(values[0]) : null;
     if (path.split('?')[0] !== '/supplier-refunds/new' || !id)
-        return <div className="space-y-4"><PageHeader title="供应商退款" description={<span role="alert">退款来源定位无效或缺少完整原单查看权限，请从准确采购退货草稿打开；原输入保留。</span>} /></div>;
+        return <div className="space-y-4"><PageHeader title="供应商退款" description={<span role="alert">退款来源定位无效或缺少完整原单查看权限，请从准确采购退货草稿打开；原输入保留。</span>}
+          actions={<>
+            <WorkspaceListReturnButton listPath="/returns/purchase" permission={P.RETURN_ORDER_VIEW} tabKey={buildWorkspaceTabRegistrationFromPath(path).key}>返回采购退货</WorkspaceListReturnButton>
+            <WorkspaceListReturnButton listPath="/supplier-refunds" permission={P.SUPPLIER_REFUND_VIEW} tabKey={buildWorkspaceTabRegistrationFromPath(path).key}>返回供应商退款</WorkspaceListReturnButton>
+          </>}
+        /></div>;
     return <CreateRefundDraft key={buildWorkspaceTabRegistrationFromPath(path).key} purchaseReturnId={id} identity={buildWorkspaceTabRegistrationFromPath(path).key}/>;
 }

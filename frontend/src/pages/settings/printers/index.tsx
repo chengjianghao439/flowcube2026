@@ -378,7 +378,7 @@ export default function PrintersPage() {
     { key: 'code', title: '编码', width: 130, render: v => <span className="text-doc-code-muted">{String(v)}</span> },
     {
       key: 'typeName', title: '类型', width: 110,
-      render: (_, p) => <SoftStatusLabel label={TYPE_LABEL[p.type]} tone="info" />,
+      render: (_, p) => <SoftStatusLabel label={TYPE_LABEL[p.type] || p.typeName?.trim() || '未知类型'} tone="info" />,
     },
     {
       key: 'status', title: '状态', width: 90,
@@ -407,7 +407,7 @@ export default function PrintersPage() {
           <div className="flex items-start gap-2 font-medium text-foreground"><Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden /><span className="min-w-0">{getDeviceName(p)}</span></div>
           {canManagePrinters && <div className="flex items-center gap-2">
             <input
-              className="input h-8 w-32"
+              className="input h-8 w-32 px-2"
               aria-label={`设备别名 ${getDeviceName(p)}`}
               placeholder={p.clientHostname || p.clientId}
               value={aliasDraft[p.clientId] ?? p.clientAliasName ?? ''}

@@ -59,7 +59,7 @@ export default function SupplierRefundPage() {
     ];
     return <div className="space-y-4">
       <PageHeader title="供应商退款"
-        description="确认冻结退款单后，另行登记银行实际回款；退款与实物退货分别处理。"  actions={<><Button variant="outline" disabled={!scope.current() || list.isFetching} onClick={list.retry}>刷新</Button><Button disabled={!scope.current()} onClick={() => { if (scope.current()) navigate('/returns/purchase'); }}>选择采购退货来源</Button></>} />
+        description="确认冻结退款单后，另行登记银行实际回款；退款与实物退货分别处理。列表按当前账号的查看权限与仓库范围展示。"  actions={<><Button variant="outline" disabled={!scope.current() || list.isFetching} onClick={list.retry}>刷新</Button><Button disabled={!scope.current()} onClick={() => { if (scope.current()) navigate('/returns/purchase'); }}>选择采购退货来源</Button></>} />
 
       {scope.error && <p role="alert" className="text-sm text-warning-ink">{scope.error}</p>}
       <RefundRecoveryEntry />

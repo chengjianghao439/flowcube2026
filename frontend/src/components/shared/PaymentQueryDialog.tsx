@@ -52,12 +52,12 @@ export function PaymentQueryBar({ query, onChange, labels, clearValue = EMPTY_PA
       key: 'date',
       text: sameDay
         ? `${labels.dateLabel}：${query.startDate}`
-        : `${labels.dateLabel}：${query.startDate || '…'} ~ ${query.endDate || '…'}`,
+        : `${labels.dateLabel}：${query.startDate || '起始不限'} ~ ${query.endDate || '截至不限'}`,
       onClear: drop('startDate', 'endDate'),
     })
   }
   if (query.dueStart || query.dueEnd) {
-    chips.push({ key: 'due', text: `到期日：${query.dueStart || '…'} ~ ${query.dueEnd || '…'}`, onClear: drop('dueStart', 'dueEnd') })
+    chips.push({ key: 'due', text: `到期日：${query.dueStart || '起始不限'} ~ ${query.dueEnd || '截至不限'}`, onClear: drop('dueStart', 'dueEnd') })
   }
   if (query.minAmount || query.maxAmount) {
     chips.push({ key: 'amount', text: `${labels.amountLabel}：${query.minAmount || '0'} ~ ${query.maxAmount || '不限'}`, onClear: drop('minAmount', 'maxAmount') })

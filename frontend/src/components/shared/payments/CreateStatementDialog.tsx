@@ -13,6 +13,8 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 
 
 interface Props {
@@ -52,7 +54,7 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const { data: candidates, isFetching } = useQuery({
+  const { data: candidates, isFetching, isPaused, isError, error, refetch } = useQuery({
     queryKey: ['statement-candidates', type, applied],
     queryFn: () => getStatementCandidatesApi({ type, partyName: applied!.partyName, startDate: applied!.startDate, endDate: applied!.endDate }),
     enabled: active && open && !!applied,
@@ -60,7 +62,8 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
 
   // 必须 useMemo：`candidates ?? []` 每次渲染都是新数组引用，会让下面依赖 list 的
   // useMemo 每次都重算（等于没缓存）
-  const list = useMemo(() => candidates ?? [], [candidates])
+  const candidatesReady = !!applied && !isFetching && !isPaused && !isError && candidates !== undefined
+  const list = useMemo(() => candidatesReady ? candidates ?? [] : [], [candidates, candidatesReady])
   const pickedTotal = useMemo(
     () => list.filter(x => picked.has(x.id)).reduce((s, x) => s + x.totalAmount, 0),
     [list, picked],
@@ -84,7 +87,7 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
 
   return (
     <AppDialog descriptionInHeader
-      description={!applied ? <>填写{partyLabel}与期间后点「查待对账账款」</> : isFetching ? <span role="status">加载中…</span> : !list.length ? "该期间内没有未对账的月结账款" : "选择往来方、账期与本次对账的账款。"}
+      description={!applied ? <>填写{partyLabel}与期间后点「查待对账账款」</> : isFetching ? <span role="status">加载中…</span> : isError ? '账款读取失败，请重试核对。' : !candidatesReady ? <span role="status">等待查询结果…</span> : !list.length ? "该期间内没有未对账的月结账款" : "选择往来方、账期与本次对账的账款。"}
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="payment-statement-create"
@@ -96,8 +99,8 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          {canExecute && <Button disabled={!validPicked.length || mut.isPending} onClick={() => mut.mutate()}>
-            {mut.isPending ? '生成中…' : `生成对账单（${validPicked.length} 笔 / ${money(pickedTotal)}）`}
+          {canExecute && <Button disabled={!candidatesReady || !validPicked.length || mut.isPending} onClick={() => mut.mutate()}>
+            {mut.isPending ? '生成中…' : candidatesReady ? `生成对账单（${validPicked.length} 笔 / ${money(pickedTotal)}）` : applied ? '生成对账单（待核对）' : '生成对账单'}
           </Button>}
         </div>
       }
@@ -122,9 +125,11 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
 
         <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border">
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-sm">
-            <span className="font-medium">待对账账款{applied ? `（${list.length} 笔）` : ''}</span>
+            <span className="font-medium">待对账账款{candidatesReady ? `（${list.length} 笔）` : ''}</span>
             <div className="flex items-center gap-3 text-xs">
-              <span className="text-muted-foreground">已选 {validPicked.length} 笔 · 合计 <span className="tabular-nums font-medium text-foreground">{money(pickedTotal)}</span></span>
+              {candidatesReady
+                ? <span className="text-muted-foreground">已选 {validPicked.length} 笔 · 合计 <span className="tabular-nums font-medium text-foreground">{money(pickedTotal)}</span></span>
+                : <span className="text-muted-foreground">{applied ? '已选账款待核对' : '尚未查询'} · 合计 —</span>}
               <Button size="sm" variant="outline" disabled={!list.length}
                 onClick={() => setPicked(validPicked.length === list.length ? new Set() : new Set(list.map(x => x.id)))}>
                 {validPicked.length === list.length && list.length > 0 ? '取消全选' : '全选'}
@@ -132,6 +137,11 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
+            {!applied ? <EmptyState variant="no-data" compact title={`请先填写${partyLabel}与期间`} description="点击“查待对账账款”后，在此选择本次对账的月结账款。" />
+              : isFetching ? null
+              : isError ? <QueryErrorState compact title="待对账账款加载失败" error={error} onRetry={() => void refetch()} />
+              : !candidatesReady ? <p role="status" className="p-4 text-sm text-muted-foreground">{isPaused ? '查询已暂停，请恢复网络后重试。' : '正在等待账款查询结果。'}</p>
+              : !list.length ? <EmptyState variant="no-result" compact title="当前条件无待对账账款" description={`可调整${partyLabel}或期间后重新查询。`} /> : null}
             {list.map(it => (
               <label key={it.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/30">
                 <input

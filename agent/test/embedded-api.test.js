@@ -67,6 +67,9 @@ async function fixture({ dataDir, seed = [], defaultLoader = false } = {}) {
   app.get('/api/warehouses', (_req, res) => successResponse(res, [{ id: 1, name: '一仓' }, { id: 2, name: '二仓' }]));
   app.get('/api/inventory/query-by-product', (req, res) => successResponse(res, { productId: 7, productName: '合成铰链', unit: '件', containers: [{ id: 20, warehouseId: Number(req.query.warehouseId), remainingQty: 5, barcode: 'SYNTHETIC-SCOPE-TWO' }] }));
   app.get('/api/inventory/stock', (_req, res) => successResponse(res, { list: [1, 2].map(warehouseId => ({ id: warehouseId, warehouseId, productId: 7, quantity: 5, reserved: 0, available: 5 })) }));
+  app.get('/api/customers/4', (_req, res) => successResponse(res, { id: 4, name: '合成客户', priceLevel: 'A', creditLimit: null }));
+  app.get('/api/products/7', (_req, res) => successResponse(res, { id: 7, name: '合成铰链', unit: '个', code: 'SYNTHETIC-7', allowDecimalQty: false }));
+  app.get('/api/price-lists/customer-price', (_req, res) => successResponse(res, { salePrice: 2, priceLevel: 'A' }));
   app.get('/api/system/request-status/:key', (req, res) => successResponse(res, { status: 'success', resourceId: 8 }));
   app.get('/api/sale/8', (_req, res) => successResponse(res, { id: 8, orderNo: 'SL-SYNTHETIC-RECOVERED', totalAmount: 1, status: 0 }));
   app.post('/api/sale/', () => assert.fail('恢复不应重发创建'));
@@ -102,8 +105,9 @@ test('正式模块导入与挂载不启动监听、不读任务或加载模型�
   assert.equal(f.loads(), 0);
 }));
 test('健康、任务、聊天与确认均先认证，畸形大正文不能越过身份检查', () => usingFixture(async f => {
-  for (const path of ['/health', '/tasks', '/tasks/unknown', '/chat', '/tasks/unknown/confirm']) {
-    const out = await f.request(path, { id: null, method: path.includes('chat') || path.endsWith('confirm') ? 'POST' : 'GET', raw: path.includes('chat') || path.endsWith('confirm') ? '{'.repeat(40000) : undefined });
+  for (const path of ['/health', '/tasks', '/tasks/unknown', '/chat', '/tasks/unknown/confirm', '/tasks/unknown/cancel']) {
+    const write = path.includes('chat') || /\/(confirm|cancel)$/.test(path);
+    const out = await f.request(path, { id: null, method: write ? 'POST' : 'GET', raw: write ? '{'.repeat(40000) : undefined });
     assert.equal(out.status, 401, path);
     assert.equal(out.body.success, false);
   }
@@ -111,13 +115,59 @@ test('健康、任务、聊天与确认均先认证，畸形大正文不能越�
 }));
 test('实时岗位缺少两个入口权限时，先拒绝再解析正文或加载运行时', () => usingFixture(async f => {
   f.users.get(11).permissions = ['inventory.view'];
-  for (const path of ['/health', '/chat', '/tasks/unknown/confirm']) {
+  for (const path of ['/health', '/chat', '/tasks/unknown/confirm', '/tasks/unknown/cancel']) {
     const out = await f.request(path, { method: path === '/health' ? 'GET' : 'POST', raw: path === '/health' ? undefined : '{'.repeat(40000) });
     assert.equal(out.status, 403);
     assert.equal(out.body.code, 'PERMISSION_DENIED');
   }
   assert.equal(f.loads(), 0);
 }));
+test('取消入口沿正式32KiB、结构预算、JSON及压缩限制，零业务调用', () => usingFixture(async f => {
+  const path = '/tasks/original/cancel';
+  for (const chunked of [false, true]) assert.equal((await f.request(path, { method: 'POST', body: { padding: 'x'.repeat(40000) }, chunked })).status, 413);
+  assert.equal(f.loads(), 0);
+  for (const raw of ['{', '[]', 'null']) assert.equal((await f.request(path, { method: 'POST', raw })).status, 400);
+  for (const headers of [{ 'Content-Type': 'text/plain' }, { 'Content-Encoding': 'gzip' }]) assert.equal((await f.request(path, { method: 'POST', body: {}, headers })).status, 415);
+  const deep = {}; let node = deep;
+  for (let n = 0; n < 35; n++) { node.next = {}; node = node.next; }
+  assert.equal((await f.request(path, { method: 'POST', body: deep })).status, 400);
+  assert.equal(f.flowCalls.length, 0);
+}));
+
+const pendingPreview = () => ({ id: 'preview-control', graph: 'B-sale-draft', state: 'AWAITING_CONFIRM', actor: { id: 11, username: 'owner', permissions: full, warehouseIds: null },
+  userText: '合成预览', requestKey: 'synthetic-original-private-key', revision: 1, steps: [], preview: { customer: { id: 4, name: '合成客户' }, warehouseId: 1, warehouseName: '一仓', totalCents: 400,
+    lines: [{ productId: 7, productName: '合成铰链', qty: 2 }], payload: { synthetic: true }, expiresAt: '2099-01-01T00:00:00Z' } });
+test('正式HTTP改量失败冻结，恢复后旧版409，取消幂等且持久恢复', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'xiaoman-preview-http-'));
+  try {
+    await usingFixture(async f => {
+      const path = '/tasks/preview-control';
+      const failed = await f.request('/chat', { method: 'POST', body: { taskId: 'preview-control', message: '改成-3个' } });
+      assert.equal(failed.status, 200);
+      assert.ok(failed.body.data.task.confirmationBlocked);
+      assert.equal((await f.request(`${path}/confirm`, { method: 'POST', body: { revision: 1 } })).body.code, 'PREVIEW_CONFIRMATION_BLOCKED');
+      const fixed = await f.request('/chat', { method: 'POST', body: { taskId: 'preview-control', message: '改成3个吧' } });
+      assert.equal(fixed.body.data.task.revision, 2);
+      assert.equal(fixed.body.data.task.confirmationBlocked, null);
+      assert.equal((await f.request(`${path}/confirm`, { method: 'POST', body: { revision: 1 } })).body.code, 'PREVIEW_REVISION_CONFLICT');
+      assert.equal((await f.request(`${path}/cancel`, { id: 12, method: 'POST', body: {} })).status, 403);
+      f.users.get(11).permissions = full.filter(p => p !== 'sale.order.create');
+      assert.equal((await f.request(`${path}/cancel`, { method: 'POST', body: {} })).status, 403);
+      f.users.get(11).permissions = [...full];
+      for (let n = 0; n < 2; n++) assert.equal((await f.request(`${path}/cancel`, { method: 'POST', body: {} })).body.data.task.state, 'CANCELLED');
+      assert.equal((await f.request(`${path}/confirm`, { method: 'POST', body: { revision: 2 } })).status, 409);
+      assert.equal(f.flowCalls.some(call => call.method !== 'GET'), false);
+      const persisted = JSON.parse(await readFile(join(directory, 'tasks.json'), 'utf8'))[0];
+      assert.equal(persisted.requestKey, 'synthetic-original-private-key');
+    }, { dataDir: directory, seed: [pendingPreview()] });
+    await usingFixture(async f => {
+      const detail = await f.request('/tasks/preview-control');
+      assert.equal(detail.body.data.task.state, 'CANCELLED');
+      assert.doesNotMatch(JSON.stringify(detail.body), /synthetic-original-private-key|"payload"|"actor"/);
+      assert.equal((await f.request('/tasks/preview-control/cancel', { method: 'POST', body: {} })).body.data.task.state, 'CANCELLED');
+    }, { dataDir: directory });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 test('入口支持报表权限，健康走正式成功信封且不泄漏密钥或原始配置', () => usingFixture(async f => {
   f.users.get(11).permissions = ['report.view'];
   const out = await f.request('/health', { headers: { Host: 'untrusted.invalid:9999', 'X-Forwarded-Host': 'untrusted.invalid' } });

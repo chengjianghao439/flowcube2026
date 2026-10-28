@@ -8,10 +8,10 @@ import { collectList } from './pagination.js';
 import { parseIntentLLM, chatCompletion } from './llm.js';
 import { hasPerm, PermissionDeniedError, denialReply } from './perms.js';
 import { assertTaskAccess, ownsTask, rememberOutput, isCurrentDiscussion } from './task-access.js';
-import { briefingReply, stuckReply } from './reports.js';
+import { briefingReply, stuckReply, statisticsTime, replenishmentBasisNote } from './reports.js';
 import { CHAT_GRAPH, FLOW_CHAT_SCOPE, smallTalkReply, knownConceptReply, buildChatMessages, unverifiedChatReply } from './persona.js';
-import { classifyMessage, ruleGraphFor, activeTopicText } from './routing.js';
-import { assertReceiptAmountCents, assertReceiptPreviewAmount, parseReceiptAmount } from './receipt-amount.js';
+import { classifyMessage, ruleGraphFor, activeTopicText, splitRequests, parseSaleRequest, debtCustomerKeyword, missingBusinessSlots, businessPagesFor, CLARIFY_SALE_REPLY, UNRECOGNIZED_BUSINESS_REPLY } from './routing.js';
+import { assertReceiptAmountCents, assertReceiptOriginalAmount, assertReceiptPreviewAmount, parseReceiptAmount, assertReceiptRequestSupported } from './receipt-amount.js';
 
 // 工具调用统一入口：先验发起人权限（与后端 requirePermission 同码），无权零调用、明确拒绝。
 const run = (tool, client, args, actor) => {
@@ -57,6 +57,7 @@ async function resolveEntity(client, task, actor, keyword, type, slot) {
 
 function entityFailure(store, task, error) {
   task.error = error.message;
+  if (error.code === 'ENTITY_NOT_FOUND' && ['A-inventory', 'D-ledger'].includes(task.graph)) task.queryOutcome = 'not_found';
   if (error.code === 'CHOICE_REQUIRED') {
     task.selection = error.selection;
     task.candidates = error.candidates.map(({ id, type, title, subtitle, details }) => ({ id, type, title, subtitle, details }));
@@ -153,7 +154,9 @@ async function graphInventory(store, client, actor, text, presetKeyword, options
       const short = w.name.match(/[一二三四五六七八九十\d]+号?仓(?:库)?$/)?.[0];
       if (short) keyword = keyword.replace(short, '');
     }
-    keyword = keyword.replace(/帮我查一下|帮我查|查一下|只查|只看|还剩多少|还有多少|有多少|库存|在哪个仓|在哪|？|\?/g, '').replace(/^[的在\s]+|[的\s]+$/g, '').trim();
+    keyword = keyword.replace(/^(?:(?:请|麻烦|帮我|先|查一下|查询|查看|查|看看|看一下|只查|只看)\s*)+/, '')
+      .replace(/还剩多少|还有多少|有多少|库存|在哪个仓|在哪|？|\?/g, '').replace(/^[的在：:\s]+|[的。！!\s]+$/g, '').trim();
+    if (!keyword) throw new Error('请提供要查询的商品名称；指定仓库时也请写出仓库名称。');
     task.intent = { graph: 'A-inventory', productKeyword: keyword, warehouseKeyword: explicit ? warehouses[0].name : undefined };
     task.accessWarehouseIds = warehouses.map(w => Number(w.id));
     hit = await resolveEntity(client, task, actor, keyword, 'product', 'product');
@@ -199,7 +202,7 @@ async function graphInventory(store, client, actor, text, presetKeyword, options
   }
   task.transition('DONE'); store.save();
   const scopeNote = explicit ? `（仅 ${warehouses[0].name}）` : Array.isArray(actor?.warehouseIds) ? '（按你的仓库范围统计）' : '（全部可访问仓库）';
-  let reply = `${result.product}：现存 ${result.onHand}，预占 ${result.reserved ?? '—'}，可用 ${result.available ?? '—'}${scopeNote}（口径：现存以容器实存为准；统计时点 ${new Date(result.asOf).toLocaleString('zh-CN')}）。`;
+  let reply = `${result.product}：现存 ${result.onHand}，预占 ${result.reserved ?? '—'}，可用 ${result.available ?? '—'}${scopeNote}（口径：现存以容器实存为准；统计时点 ${statisticsTime(result.asOf)}）。`;
   if (perWarehouse.length > 1) {
     reply += '分仓：' + perWarehouse.map(w => `${w.warehouseName} 现存 ${w.onHand}/可用 ${w.available ?? '—'}`).join('；') + '。';
   }
@@ -230,7 +233,7 @@ export async function buildSalePreview(client, { customerHit, lines, warehouseId
     const unitPriceCents = toCents(price.salePrice);
     outLines.push({
       productId: hits[0].id, productName: product.name || hits[0].title, qty: line.qty, unit: product.unit, allowDecimalQty: product.allowDecimalQty,
-      unitPrice: Number(price.salePrice), unitPriceCents, priceSource: { level: price.priceLevel, source: price.source },
+      unitPrice: Number(price.salePrice), unitPriceCents, priceSource: { level: price.priceLevel, source: price.source, name: price.priceLevelName },
       available: stock ? Number(stock.available) : 0,
       shortage: Math.max(0, line.qty - (stock ? Number(stock.available) : 0)),
       lineAmountCents: amountCents(price.salePrice, line.qty),
@@ -268,21 +271,9 @@ async function graphSaleDraft(store, client, actor, text, preset) {
     customerKeyword = preset.customerKeyword;
     lines = preset.lines;
   } else {
-    const m = text.match(/给(.+?)开单[：:](.+)$/);
-    if (!m) return null;
-    customerKeyword = m[1].trim();
-    const linesText = m[2];
-    lines = [];
-    for (const seg of linesText.split(/[，,、]/)) {
-      const lm = seg.trim().match(/^(.+?)\s*(\d+(?:\.\d+)?)\s*(个|件|条|只|套|箱|把)?$/);
-      if (!lm) {
-        const task = store.create({ graph: 'B-sale-draft', userText: text, actor });
-        task.error = `无法解析明细「${seg.trim()}」，请按「商品名 数量」书写`;
-        task.transition('DISAMBIGUATING'); task.transition('FAILED_FINAL'); store.save();
-        return { task, reply: task.error };
-      }
-      lines.push({ productKeyword: lm[1].trim(), qty: Number(lm[2]) });
-    }
+    const parsed = parseSaleRequest(text);
+    if (!parsed) return { task: null, reply: CLARIFY_SALE_REPLY, businessPages: ['sale'] };
+    ({ customerKeyword, lines } = parsed);
   }
   const task = preset?.task || store.create({ graph: 'B-sale-draft', userText: text, actor });
   if (task.state === 'CREATED') task.transition('DISAMBIGUATING');
@@ -316,8 +307,7 @@ async function graphSaleDraft(store, client, actor, text, preset) {
   task.transition('AWAITING_CONFIRM');
   store.save();
   const shortageLines = preview.lines.filter(l => l.shortage > 0);
-  const reply = `销售单草稿已试算（待确认）：客户 ${preview.customer.name}，合计 ¥${(preview.totalCents / 100).toFixed(2)}。` +
-    preview.lines.map(l => `${l.productName} ×${l.qty}，单价 ¥${l.unitPrice ?? (l.unitPriceCents / 100).toFixed(2)}（${l.priceSource.level} 档价）`).join('；') + '。' +
+  const reply = '销售草稿已试算，尚未建单；' +
     (shortageLines.length ? `注意缺口：${shortageLines.map(l => `${l.productName} 需 ${l.qty}、可用 ${l.available}、缺 ${l.shortage}`).join('；')}。建草稿不受缺口影响，占库时会被拦。` : '库存可用量充足。') +
     `确认请在界面点击确认，预览 10 分钟内有效。`;
   return { task, reply, preview };
@@ -326,6 +316,26 @@ async function graphSaleDraft(store, client, actor, text, preset) {
 // ---------- 确认执行：按任务图分发 ----------
 export async function confirmTask(store, client, taskId, actor, options = {}) {
   return store.exclusive(taskId, async () => rememberOutput(store, await confirmTaskUnlocked(store, client, taskId, actor, options)));
+}
+
+export async function cancelTask(store, taskId, actor) {
+  return store.exclusive(taskId, async () => rememberOutput(store, cancelTaskUnlocked(store, taskId, actor)));
+}
+
+function cancelTaskUnlocked(store, taskId, actor) {
+  const task = assertTaskAccess(store.get(taskId), actor);
+  const permission = { 'B-sale-draft': 'sale.order.create', 'B2-reserve': 'sale.order.reserve', 'C-purchase-draft': 'purchase.order.create', 'D-receipt': 'payment.execute', 'D-settle': 'payment.execute' }[task.graph];
+  if (!permission || !hasPerm(actor, permission)) throw Object.assign(new Error('当前权限不允许处理这份预览'), { status: 403 });
+  const reply = task.graph === 'D-settle'
+    ? `已放弃核销预览。收款已登记${task.preview?.receiptNo ? `（${task.preview.receiptNo}）` : ''}，原收款单和登记结果保留；尚未执行本次核销。`
+    : '已放弃这份预览，尚未执行本次业务操作。原记录保留。';
+  if (task.state === 'CANCELLED') return { task, reply, result: task.result };
+  if (!['CREATED', 'DISAMBIGUATING', 'PLANNED', 'DRY_RUNNING', 'AWAITING_CONFIRM'].includes(task.state) || task.previewExpired()) {
+    throw Object.assign(new Error('只能放弃尚未执行且未过期的预览。已完成或待核对的结果仍保留，请查看原任务。'), { status: 409, code: 'PREVIEW_CANCEL_NOT_ALLOWED' });
+  }
+  task.transition('CANCELLED');
+  store.save();
+  return { task, reply, result: task.result };
 }
 
 async function confirmTaskUnlocked(store, client, taskId, actor, options) {
@@ -337,13 +347,15 @@ async function confirmTaskUnlocked(store, client, taskId, actor, options) {
     if (task.graph === 'D-receipt' && task.result?.stage2TaskId) {
       const next = store.get(task.result.stage2TaskId);
       if (next?.state === 'AWAITING_CONFIRM' && !next.previewExpired()) { assertTaskAccess(next, actor); return { task: next, preview: next.preview, reply: '收款已经登记，已恢复原核销预览。请核对分配后确认，不要重复登记收款。' }; }
+      if (next?.state === 'CANCELLED') return { task, result: task.result, reply: '收款已登记，原核销预览已放弃。登记结果保留，请到收付款页处理原收款单，不要重复登记。' };
       return { task, result: task.result, reply: next?.state === 'DONE' ? '原收款与核销任务已完成，无需重复登记。' : '收款已登记，原核销预览已失效或正在核对，请到收付款页处理原收款单，不要重新登记。' };
     }
     return { task, reply: '此任务已经完成，已返回原结果，无需重复确认。', result: task.result };
   }
   if (['EXECUTING', 'RESULT_UNKNOWN', 'CONFIRMED', 'ESCALATED', 'VERIFYING'].includes(task.state)) return recoverTask(store, client, task);
   if (options.revision != null && (!Number.isSafeInteger(Number(options.revision)) || Number(options.revision) !== Number(task.revision))) throw Object.assign(new Error('预览已更新，请核对最新版本后再确认'), { status: 409, code: 'PREVIEW_REVISION_CONFLICT' });
-  if (task.state !== 'AWAITING_CONFIRM') throw new Error(`任务不在待确认状态（当前 ${task.state}）`);
+  if (task.state !== 'AWAITING_CONFIRM') throw Object.assign(new Error(`任务不在待确认状态（当前 ${task.state}）`), { status: 409 });
+  if (task.confirmationBlocked) throw Object.assign(new Error(task.confirmationBlocked), { status: 409, code: 'PREVIEW_CONFIRMATION_BLOCKED' });
   if (task.previewExpired()) {
     task.transition('EXPIRED'); store.save();
     return { task, reply: '预览已过期（超过 10 分钟），数据可能已变，请重新发起，我重新试算。' };
@@ -502,7 +514,7 @@ async function graphReplenishment(store, client, actor, text) {
     for (const w of warehouses) items.push(...(await replenishmentItems(client, w.id, actor)));
     task.result = { items };
     task.transition('DONE'); store.save();
-    if (!items.length) return { task, reply: `当前没有补货建议（按系统补货口径，建议量为 0 的商品不列）。`, result: task.result };
+    if (!items.length) return { task, reply: `当前没有补货建议（按系统补货口径，建议量为 0 的商品不列）。${replenishmentBasisNote}`, result: task.result };
     const bySupplier = new Map();
     for (const i of items) {
       const k = i.supplierName || '未指定供应商';
@@ -511,7 +523,7 @@ async function graphReplenishment(store, client, actor, text) {
     }
     const reply = `补货建议（系统口径，含在途与安全库存）：` +
       [...bySupplier.entries()].map(([s, lines]) => `【${s}】${lines.join('；')}`).join('。') +
-      `。要按建议建采购草稿，说「按补货建议建采购草稿」。`;
+      `。${replenishmentBasisNote}要按建议建采购草稿，说「按补货建议建采购草稿」。`;
     return { task, reply, result: task.result };
   } catch (e) {
     task.error = e.message; task.transition('FAILED_FINAL'); store.save();
@@ -585,9 +597,7 @@ async function graphPurchaseDraft(store, client, actor, text) {
   }
   task.setPreview(preview);
   task.transition('AWAITING_CONFIRM'); store.save();
-  const reply = `采购草稿已试算（待确认）：将按供应商建 ${preview.drafts.length} 张草稿，合计 ¥${(preview.grandTotalCents / 100).toFixed(2)}。` +
-    preview.drafts.map(d => `【${d.supplierName}】${d.lines.map(l => `${l.productName} ×${l.qty} @成本价 ¥${l.unitPrice ?? (l.unitPriceCents / 100).toFixed(2)}`).join('；')}，小计 ¥${(d.totalCents / 100).toFixed(2)}`).join('。') +
-    `。确认请在界面点击确认，预览 10 分钟内有效。`;
+  const reply = '采购草稿已按供应商和仓库拆分试算，尚未建单。请核对卡片中的明细与小计，再点击确认；预览 10 分钟内有效。';
   return { task, reply, preview };
 }
 
@@ -697,9 +707,7 @@ async function graphReserve(store, client, actor, text, presetOrderNo) {
   }
   task.setPreview(preview);
   task.transition('AWAITING_CONFIRM'); store.save();
-  const reply = `占库已试算（待确认）：销售单 ${orderNo}（${preview.customer.name}，${preview.warehouseName}），待占 ${preview.totalRemain} 件：` +
-    preview.lines.map(l => `${l.productName} ×${l.remainToReserve}（可用 ${l.available}）`).join('；') +
-    `。确认请在界面点击确认，预览 10 分钟内有效。`;
+  const reply = '占库已试算，尚未执行。请核对卡片中的待占量与可用量，再点击确认；预览 10 分钟内有效。';
   return { task, reply, preview };
 }
 
@@ -761,7 +769,8 @@ async function confirmReserve(store, client, task, actor) {
 
 // ---------- 图 D 入口：查往来 ----------
 async function graphLedger(store, client, actor, text, presetKeyword, existingTask) {
-  const keyword = presetKeyword ?? text.replace(/帮我查一下|帮我查|查一下|的账|应收|结清了吗|结清|欠款|？|\?/g, '').replace(/的\s*$/, '').trim();
+  const keyword = presetKeyword ?? debtCustomerKeyword(text) ?? text.replace(/帮我查一下|帮我查|查一下|的账|应收|结清了吗|结清|欠款|？|\?/g, '').replace(/的\s*$/, '').trim();
+  if (!keyword) return { task: null, reply: '请提供要查询的客户全称。尚未查询账款。', businessPages: ['receivable'] };
   const task = existingTask || store.create({ graph: 'D-ledger', userText: text, actor });
   if (task.state === 'CREATED') task.transition('DISAMBIGUATING');
   task.intent = { graph: 'D-ledger', customerKeyword: keyword };
@@ -773,13 +782,14 @@ async function graphLedger(store, client, actor, text, presetKeyword, existingTa
   clearChoice(task);
   task.transition('DRY_RUNNING');
   const data = await run('payments.party_ledger', client, { partyType: 'customer', partyId: hit.id }, actor);
+  data.asOf = new Date().toISOString();
   task.result = data;
   task.transition('DONE'); store.save();
   const ledger = data.ledger || {};
   const labels = { openingBalance: '期初', increase: '本期增加', decrease: '本期减少', closingBalance: '期末' };
   const amounts = Object.entries(labels).filter(([key]) => ledger.summary?.[key] != null).map(([key, label]) => `${label} ¥${ledger.summary[key]}`);
   const count = ledger.pagination?.total;
-  return { task, reply: `${hit.title} · 客户应收侧台账\n${amounts.join('；') || '台账缺少汇总金额，请到客户往来页核对明细'}${count != null ? `\n本次查询口径共 ${count} 条流水。` : ''}\n${ledgerScopeNote(ledger)}`, result: data };
+  return { task, reply: `${hit.title} · 客户应收侧台账（查询时点 ${statisticsTime(data.asOf)}）\n${amounts.join('；') || '台账缺少汇总金额，请到客户往来页核对明细'}${count != null ? `\n本次查询口径共 ${count} 条流水。` : ''}\n${ledgerScopeNote(ledger)}`, result: data };
 }
 
 function ledgerScopeNote(ledger, unavailable = false) {
@@ -881,6 +891,41 @@ export async function buildReceiptPreview(client, actor, { customerHit, amountCe
   };
 }
 
+async function resolveReceiptCustomer(client, task, actor, customerKeyword) {
+  const commandKeyword = task.intent?.commandCustomerKeyword;
+  let keyword = customerKeyword;
+  if (commandKeyword && commandKeyword !== customerKeyword) {
+    const originalHits = await resolveOne(client, customerKeyword, 'customer', actor);
+    const commandHits = await resolveOne(client, commandKeyword, 'customer', actor);
+    const originalIds = new Set(originalHits.map(hit => String(hit.id)));
+    const commandIds = new Set(commandHits.map(hit => String(hit.id)));
+    if (originalIds.size && commandIds.size
+      && (originalIds.size !== commandIds.size || [...originalIds].some(id => !commandIds.has(id)))) {
+      throw new Error('客户解读不唯一：原片段和去掉命令前缀后命中不同客户。请按「客户名 到账 金额 核销」重述，未生成收款预览。');
+    }
+    if (!originalHits.length && commandHits.length) keyword = commandKeyword;
+  }
+  // 沿原候选协议重新读取，保存的选择必须仍属于本次解读的当前候选，不能沿用旧身份。
+  return resolveEntity(client, task, actor, keyword, 'customer', 'customer');
+}
+
+async function assertReceiptPreviewCustomer(client, actor, task) {
+  const parsed = parseReceiptAmount(task.userText);
+  assertReceiptRequestSupported(parsed);
+  if (!parsed.customerKeyword) throw new Error('无法从原文核对付款客户，请重新试算。');
+  let hit;
+  try {
+    // 不沿用旧意图里可能被模型或旧解析器缩短的客户；保存选择仍必须命中当前原文候选。
+    hit = await resolveReceiptCustomer(client, { intent: parsed, selections: task.selections }, actor, parsed.customerKeyword);
+  } catch (error) { throw new Error(`客户身份无法由原文和当前候选核对，请重新试算：${error.message}`); }
+  const customerId = Number(task.preview?.customer?.id);
+  if (!Number.isSafeInteger(customerId) || customerId <= 0 || Number(hit.id) !== customerId
+    || (task.selections?.customer != null && Number(task.selections.customer) !== customerId)
+    || (task.graph === 'D-receipt' && Number(task.preview?.payload?.partyId) !== customerId)) {
+    throw new Error('预览客户与原文当前候选或原保存选择不一致，已停止，请重新试算。');
+  }
+}
+
 async function graphReceipt(store, client, actor, text, preset) {
   const task = preset?.task || store.create({ graph: 'D-receipt', userText: text, actor });
   if (task.state === 'CREATED') task.transition('DISAMBIGUATING');
@@ -890,24 +935,30 @@ async function graphReceipt(store, client, actor, text, preset) {
   let customerKeyword;
   try {
     const parsed = parseReceiptAmount(text);
+    task.intent = { graph: 'D-receipt', ...parsed };
+    assertReceiptRequestSupported(parsed);
+    if (preset?.orderNo || preset?.paymentDate) throw new Error('模型提供的指定单据或日期不能由原文核对，请到原收付款页办理。未生成收款预览。');
     // 两条意图路径共用原文金额边界；模型不能把负数改成正数，或补出省略的金额。
     if (preset?.amountCents != null) {
       assertReceiptAmountCents(preset.amountCents);
       if (parsed.amountCents == null || parsed.amountCents !== preset.amountCents) throw new Error('到账金额未能由原文核对，或与原文不一致，请用数字重述后重新试算。');
     }
     amountCents = parsed.amountCents;
-    customerKeyword = preset ? preset.customerKeyword : parsed.customerText
-      .replace(/核销|收款|到账|收到|帮我|请|把|给|了/g, '')
-      .replace(/[，,。:：、\s]+/g, ' ')
-      .trim();
+    // 客户同样以原文为准；模型不能把甲公司的到账款改给另一客户。
+    customerKeyword = parsed.customerKeyword;
+    if (!customerKeyword) throw new Error('请提供付款客户的名称或编码，未生成收款预览。');
   } catch (error) {
     task.error = error.message; task.transition('FAILED_FINAL'); store.save();
     return { task, reply: error.message };
   }
-  task.intent = { graph: 'D-receipt', customerKeyword, amountCents };
+  task.intent = { ...task.intent, graph: 'D-receipt', customerKeyword, amountCents };
   let hit;
-  try { hit = await resolveEntity(client, task, actor, customerKeyword, 'customer', 'customer'); }
-  catch (e) { return entityFailure(store, task, e); }
+  try { hit = await resolveReceiptCustomer(client, task, actor, customerKeyword); }
+  catch (e) {
+    const out = entityFailure(store, task, e);
+    if (e.code === 'ENTITY_NOT_FOUND') out.reply += '。请按「客户名 到账 金额 核销」重述，我不会缩短客户原名或改用其他客户。';
+    return out;
+  }
   clearChoice(task);
   task.transition('DRY_RUNNING');
   let preview;
@@ -932,10 +983,10 @@ async function graphReceipt(store, client, actor, text, preset) {
   store.save();
   if (preview.needsAccountChoice) {
     const list = preview.accounts.map((a, i) => `${i + 1}）${a.name}`).join('；');
-    const reply = `收款登记已试算（待选账户 · 第 1 段）：客户 ${preview.customer.name}，未结 ${preview.unsettledCount} 笔共 ¥${(preview.unsettledTotalCents / 100).toFixed(2)}；本次到账 ¥${(preview.amountCents / 100).toFixed(2)}，日期 ${preview.paymentDate}。可用资金账户 ${preview.accounts.length} 个：${list}。请回复序号或账户名选定入账账户，选定后我再请你确认登记，预览 10 分钟内有效。${preview.scopeNote}`;
+    const reply = `收款登记已试算（待选账户 · 第 1 段），尚未登记；关联未结 ${preview.unsettledCount} 笔共 ¥${(preview.unsettledTotalCents / 100).toFixed(2)}。请在卡片选择入账账户，也可回复序号或账户名：${list}；选定后我再请你确认登记，预览 10 分钟内有效。${preview.scopeNote}`;
     return { task, reply, preview };
   }
-  const reply = `收款登记已试算（待确认 · 第 1 段）：客户 ${preview.customer.name}，未结 ${preview.unsettledCount} 笔共 ¥${(preview.unsettledTotalCents / 100).toFixed(2)}；本次到账 ¥${(preview.amountCents / 100).toFixed(2)}，入账账户「${preview.account.name}」，日期 ${preview.paymentDate}。确认登记后，下一张卡再逐笔确认核销分配（账龄最老优先）。确认请在界面点击确认，预览 10 分钟内有效。${preview.scopeNote}`;
+  const reply = `收款登记已试算（待确认 · 第 1 段），尚未登记；关联未结 ${preview.unsettledCount} 笔共 ¥${(preview.unsettledTotalCents / 100).toFixed(2)}。确认登记后，下一张卡再逐笔确认核销分配（账龄最老优先）。请在卡片确认，预览 10 分钟内有效。${preview.scopeNote}`;
   return { task, reply, preview };
 }
 
@@ -954,7 +1005,13 @@ export async function tryAccountSelection(store, actor, text, client, task, choi
   if (!pending) return null;
   assertTaskAccess(pending, actor);
   if (pending.state !== 'AWAITING_CONFIRM' || !pending.preview?.needsAccountChoice || pending.previewExpired()) throw Object.assign(new Error('该收款任务当前不能选择账户，请核对原任务状态'), { status: 409 });
-  assertReceiptPreviewAmount(pending.preview, pending.userText);
+  try {
+    assertReceiptPreviewAmount(pending.preview, pending.userText);
+    await assertReceiptPreviewCustomer(client, actor, pending);
+  } catch (error) {
+    pending.error = error.message; pending.transition('EXPIRED'); store.save();
+    throw error;
+  }
   const accounts = pending.preview.accounts || [];
   const list = accounts.map((a, i) => `${i + 1}）${a.name}`).join('；');
   let chosen = null;
@@ -1014,6 +1071,7 @@ async function finishReceiptStage(store, client, task, receipt, recovered) {
   }
   const settlePreview = buildSettlePreview(task.preview, detail);
   const settleTask = store.create({ graph: 'D-settle', userText: task.userText, actor: task.actor });
+  if (task.selections?.customer != null) settleTask.selections = { customer: task.selections.customer };
   settleTask.transition('DISAMBIGUATING');
   settleTask.transition('DRY_RUNNING');
   settleTask.setPreview(settlePreview);
@@ -1036,7 +1094,10 @@ async function confirmReceiptDraft(store, client, task, actor) {
     const err = new PermissionDeniedError('payment.execute', task.graph);
     return { task, reply: denialReply(actor, err) + '（任务仍保留在待确认，未执行）' };
   }
-  try { assertReceiptPreviewAmount(task.preview, task.userText); }
+  try {
+    assertReceiptPreviewAmount(task.preview, task.userText);
+    await assertReceiptPreviewCustomer(client, actor, task);
+  }
   catch (error) {
     task.error = error.message; task.transition('EXPIRED'); store.save();
     return { task, reply: `${error.message}这份预览已失效，未登记收款。` };
@@ -1119,6 +1180,14 @@ async function confirmSettle(store, client, task, actor) {
     return { task, reply: denialReply(actor, err) + '（任务仍保留在待确认，未执行；已登记的收款单不受影响）' };
   }
   const p = task.preview;
+  try {
+    assertReceiptOriginalAmount(p.amountCents, task.userText);
+    await assertReceiptPreviewCustomer(client, actor, task);
+  }
+  catch (error) {
+    task.error = error.message; task.transition('EXPIRED'); store.save();
+    return { task, reply: `${error.message}原收款已登记，尚未执行本次核销，请到收付款页处理原收款单，不要重复登记。`, businessPages: ['receivable'] };
+  }
   // 新鲜度复核：逐笔余额与收款单剩余可核销额与预览不一致即拦截
   let records = null, detail = null;
   try {
@@ -1196,7 +1265,7 @@ const stuckGraph = (store, client, actor, t) => graphSimple(store, client, actor
 
 const REFUSAL = {
   task: null,
-  reply: '小满目前支持查库存、销售草稿与占库、补货与采购草稿、往来台账、收款核销、卡点和简报。审批、付款和发货请到原系统对应页面办理。',
+  reply: UNRECOGNIZED_BUSINESS_REPLY,
 };
 
 // ---------- 结构化意图执行（LLM 解析后的唯一入口） ----------
@@ -1205,7 +1274,7 @@ export async function executeIntent(store, client, actor, text, intent, task) {
     case 'A-inventory': return graphInventory(store, client, actor, text, intent.productKeyword, { warehouseKeyword: intent.warehouseKeyword, task });
     case 'B-sale-draft': return graphSaleDraft(store, client, actor, text, { customerKeyword: intent.customerKeyword, lines: intent.lines, task });
     case 'D-ledger': return graphLedger(store, client, actor, text, intent.customerKeyword, task);
-    case 'D-receipt': return graphReceipt(store, client, actor, text, { customerKeyword: intent.customerKeyword, amountCents: intent.amountCents ?? null, task });
+    case 'D-receipt': return graphReceipt(store, client, actor, text, { customerKeyword: intent.customerKeyword, amountCents: intent.amountCents ?? null, orderNo: intent.orderNo, paymentDate: intent.paymentDate, task });
     case 'C-replenishment': return graphReplenishment(store, client, actor, text);
     case 'C-purchase-draft': return graphPurchaseDraft(store, client, actor, text);
     case 'B2-reserve': return graphReserve(store, client, actor, text, intent.orderNo);
@@ -1218,15 +1287,30 @@ export async function executeIntent(store, client, actor, text, intent, task) {
 // ---------- 主入口：LLM 意图解析（已配置模型时）→ 回退规则规划器 ----------
 // opts.parseIntent 可注入（测试用）；默认 parseIntentLLM，未配置模型时自动跳过。
 export async function handleMessage(store, client, actor, text, opts = {}) {
-  const t = activeTopicText(text);
+  // 只允许完整、单一的当前预览控制意图；不能从混合命令中截取“放弃预览”。
+  if (cancelPreviewIntent(text)) {
+    if (!opts.taskId) return { task: null, reply: '请先选择要放弃的当前预览。尚未取消任何业务单据。' };
+    return cancelTask(store, opts.taskId, actor);
+  }
+  if (/(?:放弃|取消).{0,8}预览/.test(text)) return { task: null, reply: '请单独发送“放弃当前预览”。本条请求尚未处理；取消订单或删除草稿请到原业务页面办理。' };
+  const requests = splitRequests(activeTopicText(text));
+  const t = requests[0] || activeTopicText(text);
   const routing = classifyMessage(text);
-  if (routing.kind === 'blocked') return { task: null, reply: routing.reply };
-  const operation = async () => rememberOutput(store, await handleMessageUnlocked(store, client, actor, text, opts));
+  // 原整句和每个分句的越界检查先于续聊及拆分执行，后半句不能夹带绕规则指令。
+  const blocked = routing.kind === 'blocked' ? routing : requests.map(classifyMessage).find(route => route.kind === 'blocked');
+  if (blocked) return { task: null, reply: blocked.reply + (requests.length > 1 ? '\n这条消息中的其他事项也尚未处理，请分别发送。' : ''), businessPages: blocked.businessPages };
+  const finish = response => {
+    const out = { ...response };
+    if (requests.length > 1) out.reply += '\n本次只处理第一件请求。后面的事项尚未处理，请另发一条消息。';
+    if (!out.businessPages && (!out.task || out.task.state === 'FAILED_FINAL')) out.businessPages = businessPagesFor(t, out.task?.graph);
+    return rememberOutput(store, out);
+  };
+  const operation = async () => finish(await handleMessageUnlocked(store, client, actor, t, opts));
   if (opts.taskId) return store.exclusive(opts.taskId, operation);
   if (smallTalkReply(t)) return operation();
   const accountTask = pendingAccountTask(store, actor);
   const accountAnswer = accountTask && (/^\d+$/.test(t) || /选.{0,8}账户|入账账户/.test(t) || accountTask.preview.accounts?.some(account => t.includes(account.name)));
-  if (accountAnswer) return store.exclusive(accountTask.id, async () => rememberOutput(store, await tryAccountSelection(store, actor, t, client, accountTask)));
+  if (accountAnswer) return store.exclusive(accountTask.id, async () => finish(await tryAccountSelection(store, actor, t, client, accountTask)));
   return operation();
 }
 
@@ -1234,9 +1318,14 @@ async function continueTask(store, client, actor, text, opts) {
   const task = store.get(opts.taskId);
   if (!task) throw Object.assign(new Error('任务不存在'), { status: 404 });
   if (!ownsTask(task, actor)) throw Object.assign(new Error('只能查看或处理本人发起的任务'), { status: 403 });
-  const quantityEdit = /(?:改成|改为|改到)\s*[\d.零一二两三四五六七八九十百千]+\s*(?:个|件|条|只|套|箱|把)?[。！!]?$/;
+  const quantityEdit = /改成|改为|改到|改\s*[+\-\d.零一二两三四五六七八九十百千]|数量.{0,8}改/;
+  const resumeOriginal = /^(?:请)?继续原版[。！!]?$/u.test(text);
   const busy = ['EXECUTING', 'RESULT_UNKNOWN', 'CONFIRMED', 'VERIFYING', 'ESCALATED'].includes(task.state);
-  if (busy && (opts.choiceId != null || quantityEdit.test(text) || /开单|草稿|占库|核销|收款|到账|重新试算|重试|重新建|重新生成/.test(text))) throw Object.assign(new Error('此任务正在执行或结果尚未核实，请查询原任务，不能修改或另换请求键'), { status: 409 });
+  if (busy && (opts.choiceId != null || resumeOriginal || quantityEdit.test(text) || /开单|草稿|占库|核销|收款|到账|重新试算|重试|重新建|重新生成/.test(text))) throw Object.assign(new Error('此任务正在执行或结果尚未核实，请查询原任务，不能修改或另换请求键'), { status: 409 });
+  if (/^(?:确认|确认吧|确认建单|确认登记收款|确认核销)[。！!]?$/u.test(text)) {
+    assertTaskAccess(task, actor);
+    return { task, reply: task.confirmationBlocked || '请先核对当前预览，再点击卡片上的确认按钮。文字确认不会执行业务；收款登记与核销仍需分别确认。' };
+  }
   const accountReply = task.graph === 'D-receipt' && task.state === 'AWAITING_CONFIRM' && task.preview?.needsAccountChoice
     && (opts.choiceId != null || /^\d+$/.test(text) || task.preview.accounts?.some(account => text.includes(account.name)));
   if (accountReply) return tryAccountSelection(store, actor, text, client, task, opts.choiceId);
@@ -1249,7 +1338,7 @@ async function continueTask(store, client, actor, text, opts) {
     task.selections = { ...task.selections, [slot]: opts.choiceId };
     return executeIntent(store, client, actor, task.userText, task.intent, task);
   }
-  if (quantityEdit.test(text)) { assertTaskAccess(task, actor); return reviseSalePreview(store, client, actor, task, text); }
+  if (resumeOriginal || quantityEdit.test(text)) { assertTaskAccess(task, actor); return reviseSalePreview(store, client, actor, task, text, resumeOriginal); }
   if (task.state === 'DISAMBIGUATING' && /^(?:选|第)?[\d一二两三四五六七八九十]+(?:个|项|号)?[。！!]?$/u.test(text)) {
     assertTaskAccess(task, actor); return { task, reply: task.reply || task.error, candidates: task.candidates };
   }
@@ -1259,40 +1348,76 @@ async function continueTask(store, client, actor, text, opts) {
 
 function quantityNumber(raw) {
   if (/^\d+(?:\.\d+)?$/.test(raw)) return Number(raw);
-  const digits = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  // 只接受规范中文整数；“两”限单独使用或位于百/千之前，不猜“一二”“二百二”等省略。
+  const normalized = raw === '两' ? '二' : raw.replace(/两(?=[百千])/g, '二');
+  const digits = { 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
   let total = 0, digit = 0;
-  for (const char of raw) {
+  for (const char of normalized) {
     if (Object.hasOwn(digits, char)) digit = digits[char];
     else if (char === '十' || char === '百' || char === '千') { total += (digit || 1) * ({ 十: 10, 百: 100, 千: 1000 }[char]); digit = 0; }
     else return NaN;
   }
-  return total + digit;
+  total += digit;
+  if (!Number.isSafeInteger(total) || total < 0 || total > 9999) return NaN;
+  let canonical = '', remaining = total, needsZero = false;
+  for (const [place, unit] of [[1000, '千'], [100, '百'], [10, '十'], [1, '']]) {
+    const value = Math.floor(remaining / place);
+    remaining %= place;
+    if (!value) { if (canonical && remaining) needsZero = true; continue; }
+    canonical += `${needsZero ? '零' : ''}${'零一二三四五六七八九'[value]}${unit}`;
+    needsZero = false;
+  }
+  if (total >= 10 && total < 20) canonical = canonical.slice(1);
+  return normalized === (canonical || '零') ? total : NaN;
 }
 
-async function reviseSalePreview(store, client, actor, task, text) {
+function cancelPreviewIntent(text) {
+  return /^(?:请|帮我)?(?:放弃|取消)(?:当前|这份|这张)?预览(?:吧)?[。！!]?$/u.test(String(text).trim());
+}
+
+async function reviseSalePreview(store, client, actor, task, text, resumeOriginal = false) {
   if (task.graph !== 'B-sale-draft' || task.state !== 'AWAITING_CONFIRM' || task.previewExpired()) throw Object.assign(new Error('只能修改有效且待确认的销售草稿预览；请核对当前任务或重新试算'), { status: 409 });
   if (!hasPerm(actor, 'sale.order.create')) throw Object.assign(new Error('当前没有销售单新建权限，未修改预览'), { status: 403 });
-  const match = text.match(/^(.*?)(?:改成|改为|改到)\s*([\d.零一二两三四五六七八九十百千]+)\s*(?:个|件|条|只|套|箱|把)?[。！!]?$/);
-  if (!match || /审批|付款|发货|确认|提交|执行/.test(match[1])) return { task, reply: '小满可以修改这张待确认销售预览的数量。请说明「第几行数量改成多少」，修改后仍需在新预览卡确认。', preview: task.preview };
-  const qty = quantityNumber(match[2]);
-  const indexMatch = match[1].match(/第([\d零一二两三四五六七八九十百]+)行/);
+  const block = reason => {
+    task.confirmationBlocked = `尚未修改：${reason}。旧预览确认已暂停，请明确行号和数量，或回复“继续原版”重新试算。`;
+    store.save();
+    return { task, reply: task.confirmationBlocked, preview: task.preview };
+  };
+  // 先持久化暂停，即使读取中断或进程重启，原版本也不能继续确认。
+  block('正在重新核对当前预览');
+  const match = text.match(/^(.*?)(?:改成|改为|改到|改)\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)|[零一二两三四五六七八九十百千]+)\s*(?:个|件|条|只|套|箱|把)?(?:吧|啊)?[。！!]?$/);
+  if (!resumeOriginal && (!match || /单价|价格|金额|审批|付款|发货|确认|提交|执行/.test(match[1]))) return block('请使用阿拉伯数字说明“第几行数量改成多少”，目前仅支持修改数量');
+  if (!resumeOriginal && (match[2].split('.')[1] || '').replace(/0+$/, '').length > 2) return block('数量超过两位小数，不能自动舍入');
+  const qty = resumeOriginal ? null : /^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$/.test(match[2]) ? Number(match[2]) : quantityNumber(match[2]);
+  if (!resumeOriginal && !Number.isFinite(qty)) return block('无法确定中文数量的准确含义，请改用阿拉伯数字');
+  const prefix = match?.[1] || '';
+  const indexMatches = [...prefix.matchAll(/第([\d零一二两三四五六七八九十百]+)行/g)];
+  const indexMatch = indexMatches[0];
+  const named = task.preview.lines.map((line, i) => ({ line, i })).filter(({ line }) => prefix.includes(line.productName));
   let index = indexMatch ? quantityNumber(indexMatch[1]) - 1 : null;
+  if (!resumeOriginal && indexMatch && !Number.isSafeInteger(index)) return block('无法确定中文行号的准确含义，请改用阿拉伯数字');
+  if (!resumeOriginal && (indexMatches.length > 1 || named.length > 1 || (index != null && named.length === 1 && named[0].i !== index))) return block('行号和商品定位不唯一或不一致，请一次明确一行');
+  const remainder = prefix.replace(indexMatch?.[0] || '', '').replace(named[0]?.line.productName || '', '');
+  const contextOnly = /^(?:(?:请|帮我|把|将|刚才|这单|这张|当前|预览|的|数量|多了|少了)|[，,\s])*$/u.test(remainder);
+  if (!resumeOriginal && !contextOnly) return block('无法确定要改哪一行，请明确“第几行数量改成多少”');
   if (index == null) {
-    const named = task.preview.lines.map((line, i) => ({ line, i })).filter(({ line }) => match[1].includes(line.productName));
     if (named.length === 1) index = named[0].i;
-    else if (task.preview.lines.length === 1 && /数量|刚才|这单|这张/.test(match[1])) index = 0;
+    else if (task.preview.lines.length === 1 && contextOnly) index = 0;
   }
-  if (!Number.isSafeInteger(index) || index < 0 || index >= task.preview.lines.length) return { task, reply: '有多行或无法确定要改哪一行，请明确「第几行数量改成多少」，我没有猜行或改量。', preview: task.preview };
-  const lines = task.preview.lines.map((line, i) => ({ productKeyword: line.productName, productHit: { id: line.productId, title: line.productName }, qty: i === index ? qty : line.qty }));
+  if (!resumeOriginal && (!Number.isSafeInteger(index) || index < 0 || index >= task.preview.lines.length)) return block('有多行、行号不存在或无法确定要改哪一行，请明确“第几行数量改成多少”');
+  const original = task.preview;
+  const lines = original.lines.map((line, i) => ({ productKeyword: line.productName, productHit: { id: line.productId, title: line.productName }, qty: !resumeOriginal && i === index ? qty : line.qty }));
   let fresh;
-  try { fresh = await buildSalePreview(client, { customerHit: { id: task.preview.customer.id }, warehouseId: task.preview.warehouseId, lines }, actor); }
-  catch (error) { return { task, reply: `预览未修改：${error.message}`, preview: task.preview }; }
-  fresh.warehouseName = await warehouseName(client, fresh.warehouseId);
+  try {
+    fresh = await buildSalePreview(client, { customerHit: { id: original.customer.id }, warehouseId: original.warehouseId, lines }, actor);
+    fresh.warehouseName = await warehouseName(client, fresh.warehouseId);
+  } catch (error) { return block(error.message); }
   fresh.payload = salePayload(fresh);
   task.setPreview(fresh);
   task.error = null;
   store.save();
-  return { task, preview: task.preview, reply: `第 ${index + 1} 行「${fresh.lines[index].productName}」数量已改为 ${qty}，已重新读取商品规则、价格和库存试算，合计 ¥${(fresh.totalCents / 100).toFixed(2)}。这是第 ${task.revision} 版预览，请核对后点击确认，尚未建单。` };
+  const change = resumeOriginal ? '已保留原数量重新试算' : `第 ${index + 1} 行「${fresh.lines[index].productName}」数量 ${original.lines[index].qty} → ${qty}`;
+  return { task, preview: task.preview, reply: `${change}，已重新读取商品规则、价格和库存。合计 ¥${(original.totalCents / 100).toFixed(2)} → ¥${(fresh.totalCents / 100).toFixed(2)}。这是第 ${task.revision} 版预览，请核对后点击确认，尚未建单。` };
 }
 
 async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
@@ -1302,12 +1427,23 @@ async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
   const routing = classifyMessage(t);
   if (['blocked', 'outside', 'clarify'].includes(routing.kind)) return { task: null, reply: routing.reply };
   if (routing.kind === 'discussion') return chatGraph(store, actor, t, opts);
+  const missing = missingBusinessSlots(t, routing.graph);
+  if (missing) return { task: null, reply: missing };
+  // 完整常见句式先用确定性槽位；模型未配置、失败或返回 none 时仍可达原业务图。
+  const sale = routing.graph === 'B-sale-draft' && parseSaleRequest(t);
+  if (sale) return executeIntent(store, client, actor, t, sale);
+  const customerKeyword = routing.graph === 'D-ledger' && debtCustomerKeyword(t);
+  if (customerKeyword) return executeIntent(store, client, actor, t, { graph: 'D-ledger', customerKeyword });
+  // 指定收款目标/日期及非法金额先按原文停步，不能让模型换图或删字段绕过。
+  if (routing.graph === 'D-receipt') {
+    try { assertReceiptRequestSupported(parseReceiptAmount(t)); }
+    catch { return graphReceipt(store, client, actor, t); }
+  }
   const parseIntent = opts.parseIntent || (config.model.apiKey ? parseIntentLLM : null);
   if (parseIntent) {
     try {
       const intent = await parseIntent(t);
       if (intent && intent.graph !== 'none') return executeIntent(store, client, actor, t, intent);
-      if (intent && intent.graph === 'none') return REFUSAL;
     } catch { /* 模型异常 → 回退规则，不中断服务 */ }
   }
   // 规则规划器（确定性回退）

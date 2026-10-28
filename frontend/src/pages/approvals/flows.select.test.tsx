@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { getByRole } from '@testing-library/dom'
 import ApprovalFlowsPage from './flows'
 import { APPROVER_TYPE } from '@/types/approval'
+import { useAuthStore } from '@/store/authStore'
 
 const mocks = vi.hoisted(() => ({ flows: [] as unknown[], pending: false, create: vi.fn(), update: vi.fn(), error: vi.fn() }))
 vi.mock('@/hooks/useApprovals', () => ({
@@ -25,11 +26,12 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = vi.fn()
   Element.prototype.hasPointerCapture = () => false
   Element.prototype.setPointerCapture = vi.fn(); Element.prototype.releasePointerCapture = vi.fn()
+  useAuthStore.setState({ user: { roleId: 2, permissions: ['approval.flow.manage'] } as never })
   mocks.flows = []; mocks.pending = false; mocks.create.mockReset(); mocks.update.mockReset(); mocks.error.mockReset()
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   cache = new QueryClient({ defaultOptions: { queries: { retry: false } } })
 })
-afterEach(() => { act(() => root.unmount()); cache.clear(); host.remove() })
+afterEach(() => { act(() => root.unmount()); cache.clear(); host.remove(); useAuthStore.setState({ user: null }) })
 async function render() { await act(async () => root.render(<QueryClientProvider client={cache}><ApprovalFlowsPage /></QueryClientProvider>)) }
 async function click(name: string) { const user = userEvent.setup(); await act(async () => { await user.click(getByRole(document.body, 'button', { name })) }) }
 async function choose(name: RegExp, option: string) {
@@ -89,4 +91,14 @@ test('已有部门负责人节点的0仍显示申请人所属部门且提交保�
   expect(getByRole(document.body, 'combobox', { name: /级部门/ }).textContent).toContain('申请人所属部门')
   await click('保存修改')
   expect(mocks.update.mock.calls[0][0].data.steps[0].departmentId).toBe(0)
+})
+
+
+test('成功空流给出已有新增指引，撤管理权后不显示写入口', async () => {
+  await render()
+  expect(host.querySelector('.fc-empty-state')?.textContent).toContain('点击上方“新增审批流”')
+  await act(async () => useAuthStore.setState({ user: { roleId: 2, permissions: [] } as never }))
+  expect(host.textContent).not.toContain('新增审批流')
+  expect(host.querySelector('button')?.textContent).not.toBe('新增审批流')
+  expect(mocks.create).not.toHaveBeenCalled()
 })

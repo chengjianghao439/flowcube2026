@@ -92,8 +92,15 @@ function ReconciliationCard() {
       </div>
       {data?.supplierRefunds && <div className="mt-3 card-base p-3 text-sm space-y-1">
         <div className="font-medium">供应商退款</div>
-        <div className="tabular-nums">实际回款 {data.supplierRefunds.cashAmount4} / 分位投影 {data.supplierRefunds.projectedAmount2} / 舍入差 {data.supplierRefunds.roundingDifference4}</div>
-        <div className="tabular-nums">净已付 {data.supplierRefunds.netPaid4} / 账款已付 {data.supplierRefunds.currentPaid4} / 差 {data.supplierRefunds.paidDifference4}</div>
+        <p className="text-xs text-muted-foreground">保留四位原值核对历史精度；分位投影显示两位，舍入差单列保留。</p>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 py-2 sm:grid-cols-3">
+          <div><dt className="text-xs text-muted-foreground">实际回款（四位原值）</dt><dd className="tabular-nums">{data.supplierRefunds.cashAmount4}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">分位投影（两位）</dt><dd className="tabular-nums">{data.supplierRefunds.projectedAmount2}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">舍入差（四位）</dt><dd className="tabular-nums">{data.supplierRefunds.roundingDifference4}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">净已付（四位）</dt><dd className="tabular-nums">{data.supplierRefunds.netPaid4}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">账款已付（四位）</dt><dd className="tabular-nums">{data.supplierRefunds.currentPaid4}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">已付差额（四位）</dt><dd className="tabular-nums">{data.supplierRefunds.paidDifference4}</dd></div>
+        </dl>
         <div className="text-muted-foreground">净已付为原正付款减已收到供应商退款；采购总额仍沿原毛额口径。{!data.supplierRefunds.matched && `有 ${data.supplierRefunds.mismatchedPaymentCount ?? '部分'} 笔账款不一致，请逐笔财务核对。`}</div>
       </div>}
       {unpostedTotal > 0 && (

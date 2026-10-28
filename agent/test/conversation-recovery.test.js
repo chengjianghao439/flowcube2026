@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { handleMessage, confirmTask } from '../src/agent.js';
 import { TaskStore } from '../src/tasks.js';
 import { validateIntent } from '../src/llm.js';
-import { listTaskViews } from '../src/task-access.js';
+import { createAgentRuntime } from '../src/runtime.js';
+import { listTaskViews, safeTaskView } from '../src/task-access.js';
 
 const FULL = { id: 11, username: 'owner', roleId: 2, permissions: ['dashboard.view', 'inventory.view', 'report.view', 'product.view', 'customer.view', 'price.list.view', 'sale.order.view', 'sale.order.create', 'sale.order.reserve', 'purchase.order.create', 'purchase.order.view', 'payment.view', 'payment.execute', 'finance.account.view', 'warehouse.view', 'warehouse.task.view', 'approval.task.view'], warehouseIds: null, unrestrictedWarehouseScope: true };
 const product = (id = 1) => ({ id, type: 'product', title: id === 1 ? '合成铰链·全盖' : '合成铰链·半盖', subtitle: `P${id}`, details: [{ label: '单位', value: '个' }] });
@@ -242,3 +243,64 @@ test('聚合简报虽仅一仓有提醒，撤另一仓后也不能读取原全�
   const restricted = { ...FULL, warehouseIds: [2], unrestrictedWarehouseScope: false };
   assert.equal(listTaskViews(store, restricted).length, 0);
 });
+
+
+test('T13确定只读实体未找到带查询结果标记，权限和写图失败不冒充已答复', async () => {
+  for (const text of ['合成铰链库存', '合成客户欠款', saleText]) {
+    const { client, store } = fixture();
+    const original = client.get;
+    client.get = async path => path.startsWith('/api/search/') ? [] : original(path);
+    const runtime = createAgentRuntime({ store, messageOptions: rule });
+    const out = await runtime.dispatch({ method: 'POST', pathname: '/chat', body: { message: text }, actor: FULL, client });
+    assert.equal(out.task.state, 'FAILED_FINAL');
+    assert.equal(out.task.queryOutcome, text === saleText ? undefined : 'not_found');
+    const detail = await runtime.dispatch({ method: 'GET', pathname: `/tasks/${out.task.id}`, actor: FULL, client });
+    assert.equal(detail.task.queryOutcome, out.task.queryOutcome);
+    const denied = listTaskViews(store, { ...FULL, permissions: [] });
+    assert.equal(denied.length, 0);
+    const raw = store.get(out.task.id);
+    assert.equal(raw.state, 'FAILED_FINAL');
+    assert.equal(raw.requestKey, `agent-${raw.id}`);
+    assert.doesNotMatch(JSON.stringify(detail), /requestKey|"actor"|"payload"/);
+  }
+});
+test('T13错误文本不能推导只读未找到，已标记的写图或非失败状态也不暴露该标记', async () => {
+  for (const graph of ['A-inventory', 'D-ledger', 'B-sale-draft', 'D-receipt', 'D-settle']) {
+    const { store } = fixture();
+    const row = store.create({ graph, userText: '合成任务', actor: FULL });
+    Object.assign(row, { state: 'FAILED_FINAL', error: '未找到实体或请求失败' });
+    assert.equal(safeTaskView(row).queryOutcome, undefined);
+    row.queryOutcome = 'not_found';
+    assert.equal(safeTaskView(row).queryOutcome, ['A-inventory', 'D-ledger'].includes(graph) ? 'not_found' : undefined);
+    row.state = 'DONE';
+    assert.equal(safeTaskView(row).queryOutcome, undefined);
+  }
+});
+
+for (const recoveringState of ['CONFIRMED', 'EXECUTING', 'VERIFYING', 'RESULT_UNKNOWN', 'ESCALATED']) {
+  test(`最终审查：${recoveringState}确认入口仅查原键回执与原单，零业务POST`, async () => {
+    const { state, client, store } = fixture();
+    const initial = await handleMessage(store, client, FULL, saleText, rule);
+    const task = initial.task, originalKey = task.requestKey, originalId = task.id;
+    const receipts = [];
+    client.requestStatus = async (key, action) => { receipts.push([key, action]); return { resourceId: 8 }; };
+    const originalGet = client.get;
+    client.get = async path => {
+      if (path === '/api/sale/8') { state.calls.push(path); return { id: 8, orderNo: 'SL-SYNTHETIC-8', totalAmount: task.preview.totalCents / 100 }; }
+      return originalGet(path);
+    };
+    client.post = async () => { assert.fail('原任务恢复不得重发业务POST'); };
+    task.state = recoveringState;
+    state.calls.length = 0;
+    const runtime = createAgentRuntime({ store, messageOptions: rule });
+    const out = await runtime.dispatch({ method: 'POST', pathname: `/tasks/${originalId}/confirm`, body: { revision: task.revision }, actor: FULL, client });
+    assert.equal(out.task.id, originalId);
+    assert.equal(out.task.state, 'DONE');
+    assert.equal(out.result.recoveredViaReceipt, true);
+    assert.deepEqual(receipts, [[originalKey, 'sale.create']]);
+    assert.deepEqual(state.calls, ['/api/sale/8']);
+    assert.equal(task.requestKey, originalKey);
+    assert.equal(store.tasks.size, 1);
+    assert.equal(state.writes.length, 0);
+  });
+}

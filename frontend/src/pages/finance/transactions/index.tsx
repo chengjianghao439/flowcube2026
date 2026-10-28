@@ -8,12 +8,13 @@ import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { toast } from '@/lib/toast'
 import { downloadExport } from '@/lib/exportDownload'
@@ -58,10 +59,10 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   const set = (patch: Partial<TxQuery>) => setV(p => ({ ...p, ...patch }))
   return (
-    <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader description={"设置资金流水的筛选条件。"}><DialogTitle>查询资金流水</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+    <QueryDialog open={open} dialogId="finance-transactions-query" title="查询资金流水" width={680}
+      onClose={onClose} onReset={() => setV(EMPTY_TX_QUERY)}
+      onApply={() => { onApply(v); onClose() }}>
+        <div className="space-y-3 px-5 py-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor={`${inputId}-accountId`}>资金账户</Label>
@@ -113,13 +114,7 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setV({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' })}>清空</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </QueryDialog>
   )
 }
 

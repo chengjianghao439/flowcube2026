@@ -11,7 +11,6 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useState } from 'react'
 import { CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/shared/PageHeader'
 import { cn } from '@/lib/utils'
 import { useIncomeStatement, useBalanceSheet, useCashFlow } from '@/hooks/useLedger'
@@ -122,7 +121,7 @@ export default function ReportsPage() {
         </div>
         <span className="ml-2 text-sm text-muted-foreground">会计期间</span>
         <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-36 font-mono" />
-        {tab === 'balance' && <Button variant="ghost" size="sm" disabled className="text-xs text-muted-foreground">期末时点</Button>}
+        <span className="text-xs text-muted-foreground">{tab === 'balance' ? '期末时点：截至所选期间末累计余额' : '期间发生额：所选会计期间内'}</span>
       </FilterCard>
 
       <KeepAliveSection active={tab === 'income'}><IncomeView period={period} /></KeepAliveSection>

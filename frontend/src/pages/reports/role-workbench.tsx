@@ -3,6 +3,7 @@ import { DailyWork } from '@/components/shared/DailyWork'
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { Bell, Wallet } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -98,7 +99,9 @@ function ReminderBlock({ items, onOpen }: { items: NotificationItem[]; onOpen: (
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
-                  <span className="mt-0.5 shrink-0 text-base">{item.icon}</span>
+                  <span aria-hidden="true" className="mt-0.5 shrink-0">
+                    {item.category === 'finance' ? <Wallet className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                  </span>
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{item.text}</p>
                     <p className="mt-1 text-xs opacity-80">{getNotificationCategoryLabel(item.category)}提醒</p>
@@ -149,7 +152,7 @@ export default function RoleWorkbenchPage() {
       <PageHeader
         title="待办中心"
         description="按岗位查看待办与需要关注的事项。"
-        actions={<Button onClick={() => { void refetch(); void notificationsQ.refetch() }}>立即刷新</Button>}
+        actions={<Button onClick={() => { void refetch(); void notificationsQ.refetch() }}>刷新岗位待办与提醒</Button>}
       />
 
       <DailyWork />

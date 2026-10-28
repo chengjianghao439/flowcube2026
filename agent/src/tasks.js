@@ -39,6 +39,7 @@ export class Task {
     this.reply = null;
     this.candidates = null;
     this.revision = 0;
+    this.confirmationBlocked = null;
     this.createdAt = new Date().toISOString();
     this.updatedAt = this.createdAt;
     this.history = [{ state: 'CREATED', at: this.createdAt }];
@@ -63,6 +64,7 @@ export class Task {
     const now = Date.now();
     this.preview = { ...preview, builtAt: new Date(now).toISOString(), expiresAt: new Date(now + config.previewTtlMs).toISOString() };
     this.revision = (Number(this.revision) || 0) + 1;
+    this.confirmationBlocked = null;
     this.updatedAt = new Date(now).toISOString();
   }
 
@@ -106,7 +108,7 @@ export class TaskStore {
 
   get(id) { return this.tasks.get(id) || null; }
 
-  // 选择、改量、确认和原结果恢复用同一把任务锁，拒绝交错变更预览或重复执行。
+  // 选择、改量、取消、确认和原结果恢复用同一把任务锁，拒绝交错变更预览或重复执行。
   async exclusive(id, operation) {
     if (this.locks.has(id)) throw Object.assign(new Error('此任务正在处理中，请稍候查询原结果'), { status: 409, code: 'TASK_BUSY' });
     this.locks.add(id);

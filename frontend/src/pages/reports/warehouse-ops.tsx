@@ -4,7 +4,6 @@
  *
  * 一屏看清仓库全貌：今日核心指标、人员效率、流程瓶颈、每小时趋势、最新错误
  */
-import { useNavigate } from 'react-router-dom'
 import { Layers, BarChart3, AlertTriangle, Truck, PackageOpen, Undo2 } from 'lucide-react'
 import { getWarehouseOpsApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
@@ -12,7 +11,6 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { StatTile } from '@/components/dashboard/StatTile'
 import { Button } from '@/components/ui/button'
-import { useWorkspaceStore } from '@/store/workspaceStore'
 import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { WT_STATUS } from '@/generated/status'
@@ -48,8 +46,6 @@ function FlowBar({ items }: { items: FlowBottleneck[] }) {
 
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 export default function WarehouseOpsPage() {
-  const navigate = useNavigate()
-  const addTab = useWorkspaceStore(s => s.addTab)
   const warehouseOpsQ = usePollingReport({
     queryKey: ['warehouse-ops'],
     queryFn:  () => getWarehouseOpsApi(),
@@ -63,11 +59,6 @@ export default function WarehouseOpsPage() {
     ? formatDisplayDateTime(new Date(dataUpdatedAt))
     : '--'
 
-  function openPath(path: string, title: string) {
-    addTab({ key: path, title, path })
-    navigate(path)
-  }
-
   return (
     <div className="space-y-4">
       {/* 标题栏 */}
@@ -77,12 +68,6 @@ export default function WarehouseOpsPage() {
         actions={(
           <div className="flex flex-wrap gap-2">
             <span className="desktop-page-meta">实时数据 · 每分钟自动刷新 · 更新于 {updatedTime}</span>
-            <Button size="sm" variant="outline" onClick={() => openPath('/reports/wave-performance', '批次效率')}>
-              查看批次效率
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => openPath('/reports/pda-anomaly', 'PDA 异常分析')}>
-              查看异常分析
-            </Button>
             <Button size="sm" variant="outline" onClick={() => refetch()}>
               立即刷新
             </Button>

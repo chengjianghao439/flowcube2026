@@ -825,6 +825,40 @@ test('entry sample has a useful empty state and keeps missing lines beside the a
   }, undefined, false, () => {}, true)
 })
 
+test.each([false, true])('add actions explain warehouse prerequisite without a customer and retain ordinaryOnlySave=%s validation', async ordinaryOnlySave => {
+  await mount(async () => {
+    const actions = () => document.querySelector('[data-entry-field="add"]')!
+    expect(actions().textContent).toContain('请先选择出库仓库')
+    expect(actions().textContent).not.toContain('客户')
+    const ordinary = [...actions().querySelectorAll('button')].find(b => b.textContent === '添加商品')!
+    const kit = [...actions().querySelectorAll('button')].find(b => b.textContent === '添加套装')!
+    expect(ordinary.disabled).toBe(!ordinaryOnlySave)
+    expect(kit.disabled).toBe(true)
+    await click('添加商品')
+    expect(document.body.textContent).not.toContain('选普通')
+    await click('选择仓库')
+    expect(actions().textContent).not.toContain('请先选择出库仓库')
+    expect(kit.disabled).toBe(false)
+    await click('添加商品')
+    expect(document.body.textContent).toContain('选普通')
+    expect(mocks.execute).not.toHaveBeenCalled()
+  }, undefined, false, () => {}, ordinaryOnlySave)
+})
+
+test('add actions explain missing product-view permission independently of the warehouse', async () => {
+  useAuthStore.setState({ user: { ...useAuthStore.getState().user!, permissions: [PERMISSIONS.SALE_ORDER_CREATE] } })
+  await mount(async () => {
+    const actions = () => document.querySelector('[data-entry-field="add"]')!
+    expect(actions().textContent).toContain('当前账号无商品查看权限')
+    expect(actions().textContent).toContain('请先选择出库仓库')
+    await click('选择仓库')
+    expect(actions().textContent).not.toContain('请先选择出库仓库')
+    expect(actions().textContent).toContain('当前账号无商品查看权限')
+    expect([...actions().querySelectorAll('button')].every(button => button.disabled)).toBe(true)
+    expect(mocks.execute).not.toHaveBeenCalled()
+  }, undefined, false, () => {}, true)
+})
+
 test('entry sample collapses general supply explanations but keeps server prices and full totals', async () => {
   mocks.preview.mockImplementation(async body => {
     const result = fixturePreview(body)

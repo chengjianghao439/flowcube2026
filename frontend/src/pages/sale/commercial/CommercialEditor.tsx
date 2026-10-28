@@ -1,7 +1,7 @@
 import { SaleEntryTable } from '../form/components/SaleEntryTable'
 import { Plus, Save, Trash2 } from 'lucide-react'
 import { commercialWarehouseName } from './warehouseName'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MAX_WORKSPACE_TABS, useWorkspaceStore } from '@/store/workspaceStore'
 import type { SaleOrder } from '@/types/sale'
@@ -66,6 +66,7 @@ export default function CommercialEditor({
   reorder?: { source: ReturnType<typeof useSaleReorderSource>; write: RepeatSaleCreate }
 }) {
   const navigate = useNavigate()
+  const addPrerequisitesId = useId()
   // Header reuse without entering the legacy physical item initialization/pricing path.
   const headerOrder = useMemo(() => (order ? { ...order, items: [] } : undefined), [order])
   const h = useSaleOrderForm('', headerOrder, owner, reorder?.source.isActiveCurrent)
@@ -455,6 +456,10 @@ export default function CommercialEditor({
   const entryWarehouseId = adjust ? (order?.items?.find(item => item.quantity > 0)?.warehouseId ?? Number(h.warehouseId)) : Number(h.warehouseId)
   interaction.current.warehouseId = String(entryWarehouseId)
   const permission = order ? PERMISSIONS.SALE_ORDER_UPDATE : PERMISSIONS.SALE_ORDER_CREATE
+  const addPrerequisites = [
+    !h.warehouseId && '请先选择出库仓库，再添加商品或套装。',
+    !can(PERMISSIONS.PRODUCT_VIEW) && '当前账号无商品查看权限，无法添加商品或套装。',
+  ].filter(Boolean).join(' ')
   return (
     <div ref={entryRef} data-order-entry onKeyDown={navigateEntry} className="sample-order-editor flex flex-col gap-4">
       <ActionBar
@@ -546,6 +551,7 @@ export default function CommercialEditor({
         />
         <SectionCard title="商品明细" compact noPadding actions={
           <div data-entry-field="add" className="flex flex-wrap items-center gap-2">
+            {addPrerequisites && <p id={addPrerequisitesId} className="text-xs text-muted-foreground">{addPrerequisites}</p>}
             {visibleIssues.some(issue => issue.target === 'add') && <p role="alert" className="text-xs text-destructive-ink">请添加至少一条商品明细</p>}
             <Button
               data-entry-add
@@ -553,6 +559,7 @@ export default function CommercialEditor({
               className="gap-1.5"
               variant="outline"
               disabled={(!ordinaryOnlySave && !h.warehouseId) || !can(PERMISSIONS.PRODUCT_VIEW)}
+              aria-describedby={addPrerequisites ? addPrerequisitesId : undefined}
               onClick={() => { if (!h.warehouseId) { setValidationAttempted(true); return }; setPicker('ordinary') }}
             >
               <Plus className="h-4 w-4" />添加商品
@@ -562,6 +569,7 @@ export default function CommercialEditor({
               className="gap-1.5"
               variant="outline"
               disabled={!h.warehouseId || !can(PERMISSIONS.PRODUCT_VIEW)}
+              aria-describedby={addPrerequisites ? addPrerequisitesId : undefined}
               onClick={() => setPicker('kit')}
             >
               <Plus className="h-4 w-4" />添加套装

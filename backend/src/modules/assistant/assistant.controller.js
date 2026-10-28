@@ -14,6 +14,7 @@ function createAssistantController(activeService = service) {
     chat: handle('POST', '/chat'),
     detail: handle('GET', req => `/tasks/${encodeURIComponent(req.params.id)}`),
     confirm: handle('POST', req => `/tasks/${encodeURIComponent(req.params.id)}/confirm`),
+    cancel: handle('POST', req => `/tasks/${encodeURIComponent(req.params.id)}/cancel`),
   }
 }
 

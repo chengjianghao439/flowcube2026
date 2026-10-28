@@ -605,6 +605,8 @@ body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] :is([role="m
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-green-600\/70) { background-color:hsl(var(--success) / 0.7); }
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.border-red-100,.border-red-200,.border-rose-200) { border-color:hsl(var(--destructive) / 0.28); }
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-red-50,.bg-rose-50,.hover\:bg-red-50:hover) { background-color:hsl(var(--destructive) / 0.06); }
+/* 错误提示是独立浮层，浅红底须不透明，避免顶栏文字透过；仅覆盖桌面浅色 toast。 */
+:where(.desktop-shell-sample,body:has(.desktop-shell-sample)) .fc-toast.bg-red-50 { background-color:color-mix(in srgb,hsl(var(--destructive)) 6%,hsl(var(--card))); }
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.text-red-600\/70) { color:hsl(var(--destructive-ink) / 0.7); }
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.bg-red-600\/70) { background-color:hsl(var(--destructive) / 0.7); }
 :where(.desktop-shell-sample,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-radix-popper-content-wrapper])) :is(.border-amber-200,.border-orange-200) { border-color:hsl(var(--warning) / 0.28); }

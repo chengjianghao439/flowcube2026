@@ -1313,8 +1313,11 @@ export default function PrintTemplateEditor() {
   const canvasW = paper.w * canvasScale
   const canvasH = paper.h * canvasScale
 
+  // 旧模板加载/水合期间没有画布 DOM；同纸宽加载完也必须重新附着观察器。
+  const canvasReady = isNew || (!isLoading && hydrated !== null)
   /** 自动适应（修复「属性面板挡住画布」）：画布列变窄（窗口/面板变化）时，未手动缩放则把图纸缩到整图可见 */
   useEffect(() => {
+    if (!canvasReady) return
     const col = canvasColRef.current
     if (!col) return
     const fit = () => {
@@ -1341,7 +1344,7 @@ export default function PrintTemplateEditor() {
     // 窗口 resize 兜底（ResizeObserver 对 flex 布局列宽变化可能滞后/不触发）
     window.addEventListener('resize', fit)
     return () => { ro.disconnect(); window.removeEventListener('resize', fit) }
-  }, [paper.w])
+  }, [paper.w, canvasReady])
   // 单据类型（1-4）只用 A 系纸；热敏纸归标签类型（用 mm 输入），不在此下拉出现
   const paperSelectEntries = Object.entries(PAPER_SIZES).filter(([k]) => !k.startsWith('thermal'))
 
@@ -1854,7 +1857,7 @@ export default function PrintTemplateEditor() {
 
   // ── Loading state ────────────────────────────────────────────
   // isNew 不需要 hydrated（新建页没有远程数据）；编辑页等 remote 加载完成
-  if (!isNew && (isLoading || hydrated === null)) {
+  if (!canvasReady) {
     return (
       <div className="desktop-print-editor flex h-full min-h-0 flex-col gap-5 overflow-hidden">
         <PageHeader title="编辑打印模板"

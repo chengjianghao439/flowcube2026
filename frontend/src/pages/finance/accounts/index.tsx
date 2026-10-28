@@ -8,6 +8,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -49,10 +50,10 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
   const [v, setV] = useState<AcctQuery>(initial)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   return (
-    <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader description={"设置资金账户的筛选条件。"}><DialogTitle>查询资金账户</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+    <QueryDialog open={open} dialogId="finance-accounts-query" title="查询资金账户" width={520}
+      onClose={onClose} onReset={() => setV(EMPTY_ACCT_QUERY)}
+      onApply={() => { onApply(v); onClose() }}>
+        <div className="space-y-3 px-5 py-4">
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-keyword`}>关键字</Label>
             <Input id={`${fieldId}-keyword`} className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
@@ -82,13 +83,7 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setV(EMPTY_ACCT_QUERY)}>清空</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </QueryDialog>
   )
 }
 
@@ -245,7 +240,7 @@ export default function FinanceAccountsPage() {
 
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="fc-form-dialog max-w-2xl max-h-[90vh]">
           {/* 编辑态与默认（新建）态一眼可分 */}
           <DialogHeader description={editing ? <>
                 正在编辑：<span className="font-medium text-foreground">{editing.code ? `${editing.code} · ` : ''}{editing.name}</span>
@@ -256,7 +251,7 @@ export default function FinanceAccountsPage() {
             </DialogTitle>
 
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="fc-form-dialog-body grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label htmlFor={`${fieldId}-name`}>账户名称 *</Label>
               <Input id={`${fieldId}-name`} value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="如：工商银行基本户" />
@@ -311,8 +306,9 @@ export default function FinanceAccountsPage() {
 
       {/* 账户流水 */}
       <Dialog open={!!txAccount} onOpenChange={v => !v && setTxAccount(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="fc-form-dialog max-w-4xl max-h-[90vh]">
           <DialogHeader description={"核对该账户的逐笔收支与余额。"}><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-4 overflow-auto">
           {txAccount && (
             <div className="text-sm text-muted-foreground">
               当前余额 <span className="font-semibold text-foreground">{money(txAccount.currentBalance)}</span>
@@ -322,7 +318,7 @@ export default function FinanceAccountsPage() {
               </>}
             </div>
           )}
-          <div className="max-h-96 overflow-y-auto rounded-md border">
+          <div className="rounded-md border">
             <ReportTable className="w-full text-sm">
               <thead className="sticky top-0 text-xs text-muted-foreground">
                 <tr>
@@ -352,6 +348,7 @@ export default function FinanceAccountsPage() {
                 )}
               </tbody>
             </ReportTable>
+          </div>
           </div>
           <DialogFooter><Button variant="outline" onClick={() => setTxAccount(null)}>关闭</Button></DialogFooter>
         </DialogContent>
