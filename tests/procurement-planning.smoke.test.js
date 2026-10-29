@@ -98,7 +98,7 @@ test('real DB: ACTIVE projection ignores cache drift and scope protects transfer
   }
 })
 
-test('real DB: fully bound expected purchase still covers demand and retains unknown/late date evidence', async () => {
+test('real DB: fully bound expected purchase covers demand and ignores retired sale promise dates', async () => {
   const suffix = 'PD' + crypto.randomBytes(5).toString('hex')
   const warehouseId = await insert('INSERT INTO inventory_warehouses(code,name) VALUES(?,?)', [suffix, suffix])
   const productId = await insert('INSERT INTO product_items(code,name,unit) VALUES(?,?,?)', [suffix, suffix, '件'])
@@ -113,7 +113,8 @@ test('real DB: fully bound expected purchase still covers demand and retains unk
     const opts = { warehouseId, scopeWarehouseIds: [warehouseId], includeAll: true }
     let row = (await getSupplyRows(opts)).list.find(r => r.productId === productId)
     assert.equal(row.inTransit, 100); assert.equal(row.expectedBound, 100); assert.equal(row.netRequirement, 0)
-    assert.equal(row.earliestDemandDate, '2026-09-10'); assert.equal(row.lateSupplyQty, 100)
+    // 销售发货安排已下线：残留承诺日期不得再充当需求交期，因此没有“晚于交期”的供应量。
+    assert.equal(row.earliestDemandDate, null); assert.equal(row.lateSupplyQty, 0)
     assert.equal(row.expectedArrivals[0].expectedDate, '2026-09-20')
     await pool.query('UPDATE purchase_orders SET expected_date=NULL WHERE id=?', [purchaseId])
     row = (await getSupplyRows(opts)).list.find(r => r.productId === productId)
