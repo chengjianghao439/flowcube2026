@@ -6,12 +6,48 @@ const RULE_ROUTES = [
   ['C-replenishment', /补货|(?:哪些|什么).{0,8}货.{0,6}(?:补|缺)/],
   ['B2-reserve', /占库/],
   ['D-receipt', /核销/],
-  ['B-sale-draft', /开单/],
+  ['B-sale-draft', /开单|下一单(?!据)|开一单|做一单|来一单|下个单|开个单|做个单|来个单|销售草稿|(?:做|开|下|来|建|新建|创建)(?:一)?(?:个|张|份)?\s*(?:销售)?订单/],
   ['D-ledger', /应收|结清|的账|欠款/],
   ['A-inventory', /还剩|库存|有多少/],
 ];
-export const OUTSIDE_FLOW_REPLY = '这边只聊极序相关的事。你想看哪块业务？';
+const GUIDE_LINKS = [
+  ['销售订单', '/sale'],
+  ['新建销售单', '/sale/new-kit'],
+  ['采购订单', '/purchase'],
+  ['库存管理', '/inventory'],
+  ['客户往来', '/payments/receivable'],
+  ['供应商往来', '/payments/payable'],
+  ['待审批', '/approvals/pending'],
+  ['发货出库', '/warehouse-shipping'],
+  ['商品资料', '/products'],
+];
+const guideToken = ([label, path]) => `[[${label}|${path}]]`;
+function guideLinksFor(text) {
+  const picked = [];
+  const add = (label) => {
+    const item = GUIDE_LINKS.find(([name]) => name === label);
+    if (item && !picked.some(([, path]) => path === item[1])) picked.push(item);
+  };
+  if (/取消|作废/.test(text)) add('销售订单');
+  if (/改价|价格/.test(text)) { add('商品资料'); add('销售订单'); }
+  if (/审批|审核/.test(text)) add('待审批');
+  if (/付款|退款/.test(text)) add('供应商往来');
+  if (/发货|出库/.test(text)) add('发货出库');
+  if (/采购/.test(text)) add('采购订单');
+  if (/库存|还剩|有多少/.test(text)) add('库存管理');
+  if (/账款|欠款|应收|收款|台账/.test(text)) add('客户往来');
+  if (!picked.length) ['新建销售单', '库存管理', '采购订单', '客户往来'].forEach(add);
+  return picked.map(guideToken).join('、');
+}
+export const OUTSIDE_FLOW_REPLY = `这边只聊极序相关的事。要查库存或开单，直接说。也可以先打开 ${guideLinksFor('')}。`;
+export const DISCUSSION_CLOSED_REPLY = `小满不做开放讨论。要办事直接说，例如「做个订单」或「查库存」，也可以打开 ${guideLinksFor('')}。`;
 export const CLARIFY_BUSINESS_REPLY = '请说明要查询的对象：单据请给出类型和完整单号，账款请给出客户全称，库存请给出商品和仓库。我不会把“这张单”或“那笔款”猜成某一条记录。';
+export function blockedGuide(text) {
+  return `这一步我不能代为办理。请到对应菜单继续：${guideLinksFor(text)}。我不会替你提交。`;
+}
+export function guideReply(text) {
+  return `我没直接对上要办的事。可以直接说「做个订单」或「查库存」，也可以先打开 ${guideLinksFor(text)}。`;
+}
 
 export function ruleGraphFor(text) { return RULE_ROUTES.find(([, pattern]) => pattern.test(text))?.[0] || null; }
 
@@ -60,7 +96,7 @@ export function classifyMessage(input) {
   const readingProgress = /卡点|简报|进度|待审批|待发货|待出库|状态/.test(text)
     && !/(?:帮我|替我|直接|立即|马上).{0,5}(?:取消|删除|作废|付款|退款|发货|出库|审批|审核)/.test(text);
   if (!scopedDiscussion && !readingProgress && UNSUPPORTED_ACTION.test(text)) {
-    return { kind: 'blocked', reply: '这一步我目前不能代办。取消订单、改价、审批、付款和发货，请到原系统对应页面办理；我不会替你提交。' };
+    return { kind: 'blocked', reply: blockedGuide(text) };
   }
   if (reference && !identified) return { kind: 'clarify', reply: CLARIFY_BUSINESS_REPLY };
   if (identified) return { kind: 'business', graph: ruleGraphFor(text) };

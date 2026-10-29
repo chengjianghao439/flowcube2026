@@ -2,14 +2,13 @@
 // 有 apiKey 才走 LLM 规划器（parseIntentLLM），否则规则规划器。
 import { config } from './config.js';
 import { GRAPHS } from './llm.js';
-import { CHAT_GRAPH } from './persona.js';
 
 export function plannerMode(model = config.model) {
   return model.apiKey ? 'llm' : 'rule';
 }
 
 export function realGraphs() {
-  return [...GRAPHS.filter((g) => g !== 'none'), CHAT_GRAPH];
+  return GRAPHS.filter((g) => g !== 'none');
 }
 
 export function buildHealth() {

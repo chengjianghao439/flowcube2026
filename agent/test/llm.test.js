@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { readFileSync } from 'node:fs';
 import { validateIntent, parseIntentLLM } from '../src/llm.js';
 import { FlowClient } from '../src/flow.js';
 import { TaskStore } from '../src/tasks.js';
@@ -26,10 +27,25 @@ test('parseIntentLLM：mock 模型返回 JSON → 结构化意图', async () => 
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const intent = await parseIntentLLM('甲公司要订三个上翻支撑', { baseUrl: base, apiKey: 'k', model: 'deepseek-chat' });
+  const intent = await parseIntentLLM('甲公司要订三个上翻支撑', { baseUrl: base, apiKey: 'k', model: 'fixture-model' });
   assert.equal(intent.graph, 'B-sale-draft');
   assert.equal(intent.lines[0].qty, 3);
   server.close();
+});
+
+test('parseIntentLLM 的模型名只取参数或环境配置，源码不写死名称', async () => {
+  let seen;
+  const fetchImpl = async (_url, options) => {
+    seen = JSON.parse(options.body).model;
+    return { ok: true, json: async () => ({ choices: [{ message: { content: '{"graph":"none"}' } }] }) };
+  };
+  await parseIntentLLM('查一下库存', { baseUrl: 'http://fixture', apiKey: 'k', model: 'from-agent-model-name', fetchImpl });
+  assert.equal(seen, 'from-agent-model-name');
+  const source = readFileSync(new URL('../src/llm.js', import.meta.url), 'utf8');
+  const configSource = readFileSync(new URL('../src/config.js', import.meta.url), 'utf8');
+  assert.match(source, /model:\s*cfg\.model/);
+  assert.doesNotMatch(source, /deepseek|gpt-|claude-|qwen|moonshot|chatCompletion/i);
+  assert.match(configSource, /AGENT_MODEL_NAME/);
 });
 
 test('parseIntentLLM：模型胡说 → null（回退规则）', async () => {

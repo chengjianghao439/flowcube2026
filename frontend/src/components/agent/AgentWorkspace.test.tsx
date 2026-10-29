@@ -5,6 +5,7 @@ import { getByRole, getAllByRole, queryByRole } from '@testing-library/dom'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { useAuthStore } from '@/store/authStore'
+import { useWorkspaceStore, HOME_TAB } from '@/store/workspaceStore'
 import type { User } from '@/types'
 import AgentWorkspace from './AgentWorkspace'
 import { AssistantRequestError } from '@/api/assistant'
@@ -65,6 +66,28 @@ test('大页面直接展示小满与输入框，无须打开抽屉', async () =>
   expect(getByRole(host, 'heading', { name: '小满', level: 1 })).toBeTruthy()
   expect(getByRole(host, 'textbox', { name: '告诉小满要做什么' })).toBeTruthy()
   expect(queryByRole(host, 'dialog')).toBeNull()
+  expect(host.textContent).toContain('能做')
+  expect(host.textContent).toContain('不能做')
+  expect(host.textContent).toContain('不会擅自换成某一个')
+  expect(host.textContent).toContain('最近记录只留下走过业务的任务')
+  expect(host.textContent).toContain('闲聊不留')
+  expect(host.textContent).not.toContain('聊聊极序')
+  expect(getByRole(host, 'button', { name: '销售订单' })).toBeTruthy()
+})
+test('空白页菜单可以打开销售订单', async () => {
+  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key, recentKeys: [HOME_TAB.key] })
+  await render()
+  await click('销售订单')
+  expect(useWorkspaceStore.getState().tabs.some(tab => tab.path === '/sale')).toBe(true)
+})
+test('拒答里的菜单可以点开，不把路径当普通文字丢掉', async () => {
+  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key, recentKeys: [HOME_TAB.key] })
+  chat = { reply: '请到[[销售订单|/sale]]办理，我不会替你提交。' }
+  await render()
+  await send('把价格改成5块')
+  await click('销售订单')
+  expect(useWorkspaceStore.getState().tabs.some(tab => tab.path === '/sale')).toBe(true)
+  expect(host.textContent).not.toContain('[[销售订单|/sale]]')
 })
 test('刷新后从当前用户任务列表恢复原预览，确认携带原任务与版本', async () => {
   tasks = [task()]; await render()
@@ -176,10 +199,10 @@ test('占库预览只显示商品数量，不显示无意义零金额', async ()
   expect(host.textContent).toContain('×4')
   expect(host.textContent).not.toContain('¥0.00')
 })
-test('极序说明的重点与列表可读，模型文本不会作为HTML执行', async () => {
+test('业务回复的重点与列表可读，模型文本不会作为HTML执行', async () => {
   await render()
-  chat = { reply: '先看**关键信息**。\n\n1. 统一标题\n2. 保留当前草稿\n\n<script>synthetic()</script>', task: { id: 'discuss-1', graph: 'G-chat', state: 'DONE' } }
-  await send('极序页面设计怎样更清楚？')
+  chat = { reply: '先看**关键信息**。\n\n1. 统一标题\n2. 保留当前草稿\n\n<script>synthetic()</script>', task: { id: 'brief-1', graph: 'F-briefing', state: 'DONE' } }
+  await send('给我一份经营简报')
   expect(host.querySelector('.xiaoman-message-text strong')?.textContent).toBe('关键信息')
   expect(getByRole(host, 'list').querySelectorAll('li')).toHaveLength(2)
   expect(host.querySelector('script')).toBeNull()

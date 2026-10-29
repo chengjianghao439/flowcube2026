@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { handleMessage } from '../src/agent.js';
 import { TaskStore } from '../src/tasks.js';
+import { DISCUSSION_CLOSED_REPLY } from '../src/routing.js';
 
 const actor = { id: 11, username: 'routing-owner', isSuper: true, warehouseIds: null };
 function context() {
@@ -67,23 +68,34 @@ test('苹果公司和泛科技设计不属于极序交流，直接婉拒且零�
   }
 });
 
-test('极序概念、使用流程及页面设计可无工具讨论，不被业务名词挡回', async () => {
-  for (const message of ['极序里预占库存是什么意思', '极序的页面设计怎么更清楚', '请解释一下极序销售订单的状态机设计', '极序怎么查询欠款']) {
-    const { store, calls, client, options } = context();
+test('已有本地概念解释不进模型，页面设计和用法讨论直接拒绝', async () => {
+  for (const message of ['极序里预占库存是什么意思']) {
+    const { calls, client, options, store } = context();
     const out = await handleMessage(store, client, actor, message, options);
-    assert.equal(out.task?.graph, 'G-chat', message);
-    assert.equal(calls.chat.length, message.includes('预占库存') ? 0 : 1);
+    assert.equal(out.task, null, message);
+    assert.match(out.reply, /预占/);
+    assert.equal(calls.chat.length, 0);
+    assert.equal(calls.planner, 0);
+    assert.equal(calls.flow, 0);
+  }
+  for (const message of ['极序的页面设计怎么更清楚', '请解释一下极序销售订单的状态机设计', '极序怎么查询欠款']) {
+    const { calls, client, options, store } = context();
+    const out = await handleMessage(store, client, actor, message, options);
+    assert.equal(out.task, null, message);
+    assert.equal(out.reply, DISCUSSION_CLOSED_REPLY, message);
+    assert.equal(calls.chat.length, 0);
     assert.equal(calls.planner, 0);
     assert.equal(calls.flow, 0);
   }
 });
 
-test('当前选中G-chat时，新的完整欠款查询仍走正式业务规则', async () => {
+test('选中历史闲聊后，新的完整欠款查询仍走正式业务规则', async () => {
   const { store, calls, client, options } = context();
-  const previous = await handleMessage(store, client, actor, '小满在吗', options);
-  const out = await handleMessage(store, client, actor, '帮我查一下合成甲的欠款', { ...options, taskId: previous.task.id });
+  const previous = store.create({ graph: 'G-chat', actor, userText: '小满在吗' });
+  previous.state = 'DONE';
+  const out = await handleMessage(store, client, actor, '帮我查一下合成甲的欠款', { ...options, taskId: previous.id });
   assert.equal(out.task?.graph, 'D-ledger');
-  assert.notEqual(out.task.id, previous.task.id);
+  assert.notEqual(out.task.id, previous.id);
   assert.equal(out.task.state, 'DONE');
   assert.equal(calls.chat.length, 0);
   assert.equal(calls.ledger, 1);

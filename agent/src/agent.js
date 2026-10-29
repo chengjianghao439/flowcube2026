@@ -5,12 +5,12 @@ import { validateQty, toCents, diffPreview, amountCents } from './guards.js';
 import { FlowError } from './flow.js';
 import { config } from './config.js';
 import { collectList } from './pagination.js';
-import { parseIntentLLM, chatCompletion } from './llm.js';
+import { parseIntentLLM } from './llm.js';
 import { hasPerm, PermissionDeniedError, denialReply } from './perms.js';
-import { assertTaskAccess, ownsTask, rememberOutput, isCurrentDiscussion } from './task-access.js';
+import { assertTaskAccess, ownsTask, rememberOutput } from './task-access.js';
 import { briefingReply, stuckReply } from './reports.js';
-import { CHAT_GRAPH, FLOW_CHAT_SCOPE, smallTalkReply, knownConceptReply, buildChatMessages, unverifiedChatReply } from './persona.js';
-import { classifyMessage, ruleGraphFor, activeTopicText } from './routing.js';
+import { smallTalkReply, knownConceptReply } from './persona.js';
+import { classifyMessage, ruleGraphFor, activeTopicText, DISCUSSION_CLOSED_REPLY, guideReply } from './routing.js';
 import { assertReceiptAmountCents, assertReceiptPreviewAmount, parseReceiptAmount } from './receipt-amount.js';
 
 // 工具调用统一入口：先验发起人权限（与后端 requirePermission 同码），无权零调用、明确拒绝。
@@ -41,17 +41,59 @@ async function resolveOne(client, keyword, type, actor) {
   return hits;
 }
 
+function approximateHit(hit) {
+  return Number.isFinite(Number(hit?.searchRank)) && Number(hit.searchRank) >= 2;
+}
+function hitOutsideScope(hit, actor) {
+  if (!Array.isArray(actor?.warehouseIds)) return false;
+  const allowed = actor.warehouseIds.map(Number);
+  const ids = [];
+  if (hit?.warehouseId != null && hit.warehouseId !== '') ids.push(Number(hit.warehouseId));
+  if (Array.isArray(hit?.warehouseIds)) ids.push(...hit.warehouseIds.map(Number));
+  return ids.length > 0 && !ids.some(id => allowed.includes(id));
+}
+async function scopeHits(client, actor, hits, type) {
+  const allowed = Array.isArray(actor?.warehouseIds) ? actor.warehouseIds.map(Number) : null;
+  let pruned = false;
+  let visible = hits.filter(hit => {
+    const outside = hitOutsideScope(hit, actor);
+    if (outside) pruned = true;
+    return !outside;
+  });
+  if (type === 'product' && allowed && visible.some(approximateHit)) {
+    let rows;
+    try {
+      const data = await collectList(client, '/api/inventory/stock');
+      rows = data?.list ?? [];
+    } catch {
+      throw Object.assign(new Error('暂时对不上这些相近商品是否在你的仓库范围内，没有列出候选，也不会改查其他仓库。'), { code: 'ENTITY_NOT_FOUND' });
+    }
+    visible = visible.filter(hit => {
+      if (!approximateHit(hit)) return true;
+      const mine = rows.filter(row => String(row.productId) === String(hit.id));
+      if (!mine.length) return true;
+      const ok = mine.some(row => allowed.includes(Number(row.warehouseId)));
+      if (!ok) pruned = true;
+      return ok;
+    });
+  }
+  return { hits: visible, pruned };
+}
 async function resolveEntity(client, task, actor, keyword, type, slot) {
-  const hits = await resolveOne(client, keyword, type, actor);
+  const found = await resolveOne(client, keyword, type, actor);
+  const { hits, pruned } = await scopeHits(client, actor, found, type);
   const selected = task.selections?.[slot];
   if (selected != null) {
     const hit = hits.find(h => String(h.id) === String(selected));
     if (!hit) throw new Error('原先选择的对象已不可见或不再符合原搜索，请重新发起');
     return hit;
   }
-  if (hits.length === 1) return hits[0];
   const name = type === 'customer' ? '客户' : '商品';
-  const message = hits.length ? `「${keyword}」命中 ${hits.length} 个${name}，请选择一个后继续` : `未找到${name}「${keyword}」`;
+  const approximate = type === 'product' && hits.some(approximateHit);
+  if (hits.length === 1 && !approximate) return hits[0];
+  const message = !hits.length
+    ? (pruned ? `「${keyword}」的相近${name}不在你的仓库范围内，已拒绝，不会改用其他仓库。` : `未找到${name}「${keyword}」`)
+    : (approximate ? `「${keyword}」有 ${hits.length} 个相近${name}，请选一个后再继续。我不会自动换成某一个。` : `「${keyword}」命中 ${hits.length} 个${name}，请选择一个后继续`);
   throw Object.assign(new Error(message), { code: hits.length ? 'CHOICE_REQUIRED' : 'ENTITY_NOT_FOUND', candidates: hits, selection: { keyword, type, slot } });
 }
 
@@ -262,30 +304,73 @@ function salePayload(preview) {
   };
 }
 
+const SALE_DRAFT_PERMS = ['sale.order.create', 'sale.order.view', 'customer.view', 'price.list.view', 'product.view', 'inventory.view', 'warehouse.view', 'dashboard.view'];
+function splitSaleLines(linesText) {
+  const parts = String(linesText || '').split(/[，,、]/).map(seg => seg.trim()).filter(Boolean);
+  if (!parts.length) return [];
+  const lines = [];
+  for (const seg of parts) {
+    const forward = seg.match(/^(.+?)\s*(\d+(?:\.\d+)?)\s*(?:个|件|条|只|套|箱|把)?$/);
+    const reverse = seg.match(/^(\d+(?:\.\d+)?)\s*(?:个|件|条|只|套|箱|把)\s*(.+)$/);
+    if (forward?.[1].trim()) lines.push({ productKeyword: forward[1].trim(), qty: Number(forward[2]) });
+    else if (reverse?.[2].trim()) lines.push({ productKeyword: reverse[2].trim(), qty: Number(reverse[1]) });
+    else return null;
+  }
+  return lines;
+}
+function saleIntakeReply(customerKeyword, lines) {
+  if (customerKeyword && !lines?.length) return `客户先按「${customerKeyword}」。还差商品和数量，例如「缓冲铰链 10个」。说全了我就试算，还没建单。`;
+  if (!customerKeyword && lines?.length) return '商品先记下了。客户是谁？可以说「给某客户开单：商品 数量」。还没建单。';
+  return '好，按销售草稿来办。请告诉我客户是谁、要哪些商品、各多少。例如「给华南客户开单：缓冲铰链 10个」。缺了这两样我先问你。还没建单。';
+}
+function saleDraftFromText(text, prior) {
+  const formal = String(text || '').match(/给(.+?)开单[：:](.+)$/);
+  if (formal) {
+    const lines = splitSaleLines(formal[2]);
+    if (!lines) {
+      const bad = formal[2].split(/[，,、]/).map(seg => seg.trim()).find(seg => seg && !splitSaleLines(seg));
+      return { explicit: true, badSegment: bad || formal[2].trim(), customerKeyword: formal[1].trim(), lines: [] };
+    }
+    return { explicit: true, customerKeyword: formal[1].trim(), lines };
+  }
+  const loose = splitSaleLines(text);
+  if (loose?.length && prior?.customerKeyword) return { explicit: true, customerKeyword: prior.customerKeyword, lines: loose };
+  let customerKeyword = prior?.customerKeyword || null;
+  const plain = String(text || '').trim();
+  if (!customerKeyword && prior?.intake && plain.length <= 40 && !/[0-9]/.test(plain) && !/库存|简报|卡点|欠款|采购|审批|发货|付款|改价|开单|订单|下一单/.test(plain)) {
+    customerKeyword = plain.replace(/^(?:客户(?:是|叫|为)?|给)\s*[:：]?\s*/, '').replace(/[。！!？?]/g, '').trim() || null;
+  }
+  return { explicit: false, customerKeyword, lines: prior?.lines?.length ? prior.lines : [] };
+}
 async function graphSaleDraft(store, client, actor, text, preset) {
-  let customerKeyword, lines;
-  if (preset) {
+  let customerKeyword, lines, badSegment = null;
+  const prior = preset?.task?.intent?.intake ? preset.task.intent : null;
+  if (preset?.customerKeyword && Array.isArray(preset.lines)) {
     customerKeyword = preset.customerKeyword;
     lines = preset.lines;
   } else {
-    const m = text.match(/给(.+?)开单[：:](.+)$/);
-    if (!m) return null;
-    customerKeyword = m[1].trim();
-    const linesText = m[2];
-    lines = [];
-    for (const seg of linesText.split(/[，,、]/)) {
-      const lm = seg.trim().match(/^(.+?)\s*(\d+(?:\.\d+)?)\s*(个|件|条|只|套|箱|把)?$/);
-      if (!lm) {
-        const task = store.create({ graph: 'B-sale-draft', userText: text, actor });
-        task.error = `无法解析明细「${seg.trim()}」，请按「商品名 数量」书写`;
-        task.transition('DISAMBIGUATING'); task.transition('FAILED_FINAL'); store.save();
-        return { task, reply: task.error };
-      }
-      lines.push({ productKeyword: lm[1].trim(), qty: Number(lm[2]) });
-    }
+    const parsed = saleDraftFromText(text, prior);
+    customerKeyword = parsed.customerKeyword;
+    lines = parsed.lines;
+    badSegment = parsed.badSegment;
   }
   const task = preset?.task || store.create({ graph: 'B-sale-draft', userText: text, actor });
   if (task.state === 'CREATED') task.transition('DISAMBIGUATING');
+  if (badSegment) {
+    task.error = `无法解析明细「${badSegment}」，请按「商品名 数量」书写`;
+    if (task.state === 'DISAMBIGUATING') task.transition('FAILED_FINAL');
+    else { task.transition('DISAMBIGUATING'); task.transition('FAILED_FINAL'); }
+    store.save();
+    return { task, reply: task.error };
+  }
+  if (!customerKeyword || !lines?.length) {
+    task.intent = { graph: 'B-sale-draft', intake: true, customerKeyword: customerKeyword || undefined, lines: lines || [] };
+    task.error = null;
+    const denied = denyIfMissing(task, actor, SALE_DRAFT_PERMS);
+    if (denied) { store.save(); return denied; }
+    store.save();
+    return { task, reply: saleIntakeReply(customerKeyword, lines) };
+  }
   task.intent = { graph: 'B-sale-draft', customerKeyword, lines: lines.map(({ productKeyword, qty }) => ({ productKeyword, qty })) };
   const denied = denyIfMissing(task, actor, ['sale.order.create', 'sale.order.view', 'customer.view', 'price.list.view', 'product.view', 'inventory.view', 'warehouse.view', 'dashboard.view']);
   if (denied) { store.save(); return denied; }
@@ -1194,10 +1279,7 @@ const briefingGraph = (store, client, actor, t) => graphSimple(store, client, ac
 const stuckGraph = (store, client, actor, t) => graphSimple(store, client, actor, t, 'E-stuck', 'tasks.progress', stuckReply,
   { anyOf: ['warehouse.task.view', 'inventory.view'] });
 
-const REFUSAL = {
-  task: null,
-  reply: '小满目前支持查库存、销售草稿与占库、补货与采购草稿、往来台账、收款核销、卡点和简报。审批、付款和发货请到原系统对应页面办理。',
-};
+const refusal = (text) => ({ task: null, reply: guideReply(text) });
 
 // ---------- 结构化意图执行（LLM 解析后的唯一入口） ----------
 export async function executeIntent(store, client, actor, text, intent, task) {
@@ -1211,7 +1293,7 @@ export async function executeIntent(store, client, actor, text, intent, task) {
     case 'B2-reserve': return graphReserve(store, client, actor, text, intent.orderNo);
     case 'E-stuck': return stuckGraph(store, client, actor, text);
     case 'F-briefing': return briefingGraph(store, client, actor, text);
-    default: return REFUSAL;
+    default: return refusal(text);
   }
 }
 
@@ -1240,6 +1322,10 @@ async function continueTask(store, client, actor, text, opts) {
   const accountReply = task.graph === 'D-receipt' && task.state === 'AWAITING_CONFIRM' && task.preview?.needsAccountChoice
     && (opts.choiceId != null || /^\d+$/.test(text) || task.preview.accounts?.some(account => text.includes(account.name)));
   if (accountReply) return tryAccountSelection(store, actor, text, client, task, opts.choiceId);
+  if (task.graph === 'B-sale-draft' && task.intent?.intake && task.state === 'DISAMBIGUATING' && !task.candidates?.length && opts.choiceId == null) {
+    const nextGraph = ruleGraphFor(text);
+    if (!nextGraph || nextGraph === 'B-sale-draft') return graphSaleDraft(store, client, actor, text, { task });
+  }
   if (opts.choiceId != null) {
     assertTaskAccess(task, actor);
     if (task.state !== 'DISAMBIGUATING' || !task.selection || !task.candidates?.some(c => String(c.id) === String(opts.choiceId))) throw Object.assign(new Error('请选择本任务原候选列表中的对象'), { status: 400 });
@@ -1298,16 +1384,21 @@ async function reviseSalePreview(store, client, actor, task, text) {
 async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
   const t = activeTopicText(text);
   if (opts.taskId) return continueTask(store, client, actor, t, opts);
-  if (smallTalkReply(t)) return chatGraph(store, actor, t, opts);
+  const greeting = smallTalkReply(t);
+  if (greeting) return { task: null, reply: greeting };
   const routing = classifyMessage(t);
   if (['blocked', 'outside', 'clarify'].includes(routing.kind)) return { task: null, reply: routing.reply };
-  if (routing.kind === 'discussion') return chatGraph(store, actor, t, opts);
+  if (routing.kind === 'discussion') {
+    const local = knownConceptReply(t);
+    if (local) return { task: null, reply: local };
+    return { task: null, reply: DISCUSSION_CLOSED_REPLY };
+  }
   const parseIntent = opts.parseIntent || (config.model.apiKey ? parseIntentLLM : null);
   if (parseIntent) {
     try {
       const intent = await parseIntent(t);
       if (intent && intent.graph !== 'none') return executeIntent(store, client, actor, t, intent);
-      if (intent && intent.graph === 'none') return REFUSAL;
+      if (intent && intent.graph === 'none' && ruleGraphFor(t) !== 'B-sale-draft') return refusal(t);
     } catch { /* 模型异常 → 回退规则，不中断服务 */ }
   }
   // 规则规划器（确定性回退）
@@ -1318,41 +1409,9 @@ async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
     case 'C-replenishment': return graphReplenishment(store, client, actor, t);
     case 'B2-reserve': return graphReserve(store, client, actor, t);
     case 'D-receipt': return graphReceipt(store, client, actor, t);
-    case 'B-sale-draft': return await graphSaleDraft(store, client, actor, t) || REFUSAL;
+    case 'B-sale-draft': return await graphSaleDraft(store, client, actor, t) || refusal(t);
     case 'D-ledger': return graphLedger(store, client, actor, t);
     case 'A-inventory': return graphInventory(store, client, actor, t);
-    default: return REFUSAL;
-  }
-}
-
-async function chatGraph(store, actor, text, opts) {
-  const task = store.create({ graph: CHAT_GRAPH, userText: text, actor });
-  task.discussionScope = FLOW_CHAT_SCOPE;
-  task.transition('DRY_RUNNING');
-  const discussionText = activeTopicText(text);
-  const identityReply = smallTalkReply(discussionText);
-  const localReply = identityReply || knownConceptReply(discussionText);
-  task.discussionKind = identityReply ? 'identity' : 'product';
-  if (localReply) { task.transition('DONE'); return { task, reply: localReply }; }
-  const history = [...store.tasks.values()]
-    .filter(previous => previous.id !== task.id && previous.graph === CHAT_GRAPH && isCurrentDiscussion(previous) && previous.discussionKind === 'product'
-      && previous.state === 'DONE' && previous.reply && ownsTask(previous, actor))
-    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
-    .slice(-6).flatMap(previous => [{ role: 'user', content: activeTopicText(previous.userText) }, { role: 'assistant', content: previous.reply }]);
-  try {
-    const reply = await (opts.chatModel || chatCompletion)({ messages: buildChatMessages(history, discussionText) });
-    if (reply == null) {
-      task.error = '极序交流服务尚未连接'; task.transition('FAILED_FINAL');
-      return { task, reply: '极序交流服务还没接上，暂时无法讨论这个问题。问候和已有的业务查询仍然可以用。' };
-    }
-    if (typeof reply !== 'string' || !reply.trim() || unverifiedChatReply(reply)) {
-      task.error = '交流内容含无法核实的系统事实'; task.transition('FAILED_FINAL');
-      return { task, reply: '这条回复里有无法核实的系统事实，我没有把它当作结果。本轮没有执行任何业务操作。' };
-    }
-    task.transition('DONE');
-    return { task, reply: reply.trim().slice(0, 4000) };
-  } catch {
-    task.error = '极序交流服务暂时无法连接'; task.transition('FAILED_FINAL');
-    return { task, reply: '小满暂时连不上交流服务。刚才没有执行任何业务操作，稍后可以再试。' };
+    default: return refusal(t);
   }
 }

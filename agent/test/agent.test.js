@@ -160,6 +160,8 @@ test('图外意图：明确婉拒，不拼凑操作', async () => {
   const { server, client, store } = await setup();
   const out = await handleMessage(store, client, FULL_ACTOR, '帮我把铰链的价格改成 5 块');
   assert.equal(out.task, null);
-  assert.match(out.reply, /原系统对应页面/);
+  assert.match(out.reply, /不能代为办理/);
+  assert.match(out.reply, /\[\[商品资料\|\/products\]\]/);
+  assert.doesNotMatch(out.reply, /目前支持查库存/);
   server.close();
 });

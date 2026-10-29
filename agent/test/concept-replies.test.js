@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { handleMessage } from '../src/agent.js';
 import { TaskStore } from '../src/tasks.js';
 import { unverifiedChatReply } from '../src/persona.js';
+import { DISCUSSION_CLOSED_REPLY } from '../src/routing.js';
 
 const actor = { id: 11, username: 'concept-owner', permissions: [], warehouseIds: [] };
 const noFlow = { get: () => assert.fail('概念或范围外话题不能读取业务数据'), post: () => assert.fail('不能写业务') };
@@ -29,7 +30,7 @@ test('预占及现存可用核心概念提供稳定解释，不依赖模型或�
   for (const message of ['极序里预占库存是什么意思？', '极序里现存和可用库存有什么区别？']) {
     let modelCalls = 0;
     const out = await handleMessage(new TaskStore(null), noFlow, actor, message, { parseIntent: async () => null, chatModel: async () => { modelCalls++; throw new Error('不应调用模型'); } });
-    assert.equal(out.task?.state, 'DONE');
+    assert.equal(out.task, null);
     assert.match(out.reply, /预占/);
     assert.match(out.reply, /不会.*扣减.*实存/);
     assert.match(out.reply, /不.*发货/);
@@ -39,12 +40,12 @@ test('预占及现存可用核心概念提供稳定解释，不依赖模型或�
     assert.equal(modelCalls, 0);
   }
 });
-test('极序页面设计真实风格回答可通过实际消息入口', async () => {
+test('极序页面设计不进入讨论模型', async () => {
   let modelCalls = 0;
-  const out = await handleMessage(new TaskStore(null), noFlow, actor, '极序的页面设计怎样更清楚？', { parseIntent: async () => null, chatModel: async () => { modelCalls++; return design; } });
-  assert.equal(out.task?.state, 'DONE');
-  assert.equal(out.reply, design);
-  assert.equal(modelCalls, 1);
+  const out = await handleMessage(new TaskStore(null), noFlow, actor, '极序的页面设计怎样更清楚？', { parseIntent: async () => { modelCalls++; return null; }, chatModel: async () => { modelCalls++; return design; } });
+  assert.equal(out.task, null);
+  assert.equal(out.reply, DISCUSSION_CLOSED_REPLY);
+  assert.equal(modelCalls, 0);
 });
 test('气温问法不会被裸有多少路由为库存，零模型和Flow调用', async () => {
   for (const message of ['今天有多少度？', '外面还有多少度？']) {
@@ -60,7 +61,7 @@ test('极序审批概念本地解释区分业务审批、收款确认与核销�
   const explanation = '审批是对业务申请进行复核的环节。具体节点和人员取决于实际配置，我没有读取你当前的审批配置；这里仅解释含义，不代审批。';
   const opts = { parseIntent: async () => null, chatModel: async () => { modelCalls++; return explanation; } };
   const out = await handleMessage(new TaskStore(null), noFlow, actor, '极序里的审批是什么意思？', opts);
-  assert.equal(out.task?.state, 'DONE');
+  assert.equal(out.task, null);
   assert.match(out.reply, /有权人员/);
   assert.match(out.reply, /不等于.*预览.*确认/);
   assert.match(out.reply, /收款.*确认后.*入账/);

@@ -1,5 +1,6 @@
 // LLM 意图解析层：模型只做一件事——把用户的话解析成结构化意图（选哪张任务图 + 参数）。
-// 模型不调工具、不生成数字、不执行写操作；执行永远走 agent.js 的确定性任务图与守卫。
+// 模型不调工具、不生成数字、不执行写操作，也不再提供开放讨论。执行永远走 agent.js 的确定性任务图与守卫。
+// 模型名只取 config.model.name，即环境变量 AGENT_MODEL_NAME；代码不写死名称。
 // 输出经严格校验（图枚举、参数类型与上限），不合格一律返回 null → 回退规则规划器。
 import { config } from './config.js';
 
@@ -8,7 +9,7 @@ export const GRAPHS = ['A-inventory', 'B-sale-draft', 'B2-reserve', 'C-replenish
 const INTENT_SYSTEM = `你是小满的意图解析器。只输出 JSON，不要任何解释文字。
 把用户的话解析为下列任务图之一：
 - A-inventory 查库存：需要 productKeyword（商品关键词，如"缓冲铰链"）；用户指定仓库时必须给 warehouseKeyword（如"二仓"），不把仓名拼进商品关键词
-- B-sale-draft 建销售单草稿：需要 customerKeyword（客户关键词）与 lines（数组，每项 productKeyword 与 qty 数字；中文数字转阿拉伯数字）
+- B-sale-draft 建销售单草稿：需要 customerKeyword（客户关键词）与 lines（数组，每项 productKeyword 与 qty 数字；中文数字转阿拉伯数字）。「做个订单 / 开单 / 下一单」若没说客户或商品，不要编造，输出 {"graph":"none"}
 - B2-reserve 销售单占库：需要 orderNo（销售单号，如 SL20261026005）
 - C-replenishment 看补货建议：无参数
 - C-purchase-draft 按补货建议建采购草稿：无参数（用户明确说要"建采购单/采购草稿"时才用；只问建议用 C-replenishment）
@@ -96,23 +97,4 @@ export async function parseIntentLLM(text, { baseUrl, apiKey, model, fetchImpl }
   let parsed;
   try { parsed = JSON.parse(content); } catch { return null; }
   return validateIntent(parsed);
-}
-
-// 极序交流与业务意图解析分离。此函数只接收纯文本消息，没有 FlowClient、工具或业务快照参数。
-export async function chatCompletion({ messages }, { baseUrl, apiKey, model, fetchImpl } = {}) {
-  const endpoint = baseUrl ?? config.model.baseUrl;
-  const key = apiKey ?? config.model.apiKey;
-  const name = model ?? config.model.name;
-  if (!endpoint || !key || !name) return null;
-  const response = await (fetchImpl || fetch)(`${endpoint.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST', signal: AbortSignal.timeout(20000),
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: name, messages: messages.map(({ role, content }) => ({ role, content })), temperature: 0.6, max_tokens: 700 }),
-  });
-  if (!response.ok) throw new Error('聊天服务暂不可用');
-  const data = await response.json();
-  if (data?.choices?.[0]?.message?.tool_calls?.length) throw new Error('聊天返回了不支持的工具调用');
-  const reply = data?.choices?.[0]?.message?.content;
-  if (typeof reply !== 'string' || !reply.trim()) throw new Error('聊天服务未返回文本');
-  return reply.trim().slice(0, 4000);
 }
