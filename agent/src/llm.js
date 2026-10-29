@@ -9,7 +9,7 @@ export const GRAPHS = ['A-inventory', 'B-sale-draft', 'B2-reserve', 'C-replenish
 const INTENT_SYSTEM = `你是小满的意图解析器。只输出 JSON，不要任何解释文字。
 把用户的话解析为下列任务图之一：
 - A-inventory 查库存：需要 productKeyword（商品关键词，如"缓冲铰链"）；用户指定仓库时必须给 warehouseKeyword（如"二仓"），不把仓名拼进商品关键词
-- B-sale-draft 建销售单草稿：需要 customerKeyword（客户关键词）与 lines（数组，每项 productKeyword 与 qty 数字；中文数字转阿拉伯数字）
+- B-sale-draft 建销售单草稿：需要 customerKeyword（客户关键词）与 lines（数组，每项 productKeyword 与 qty 数字；中文数字转阿拉伯数字）。「做个订单 / 开单 / 下一单」若没说客户或商品，不要编造，输出 {"graph":"none"}
 - B2-reserve 销售单占库：需要 orderNo（销售单号，如 SL20261026005）
 - C-replenishment 看补货建议：无参数
 - C-purchase-draft 按补货建议建采购草稿：无参数（用户明确说要"建采购单/采购草稿"时才用；只问建议用 C-replenishment）

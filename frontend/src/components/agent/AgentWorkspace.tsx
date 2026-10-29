@@ -8,7 +8,7 @@ import { GRAPH_LABELS, TASK_STATE_LABELS } from './types'
 import { useAssistantConversation } from './useAssistantConversation'
 import TaskPreview from './TaskPreview'
 import ResultLinks from './ResultLinks'
-import MessageText from './MessageText'
+import MessageText, { ASSISTANT_GUIDE_LINKS, useOpenWorkspacePath } from './MessageText'
 import './xiaoman.css'
 
 const PROMPTS = [
@@ -24,6 +24,7 @@ export default function AgentWorkspace() {
 }
 function Conversation() {
   const state = useAssistantConversation()
+  const openGuide = useOpenWorkspacePath()
   const { selected, busy, loading } = state
   const log = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
@@ -42,7 +43,7 @@ function Conversation() {
         <button className="xiaoman-new" type="button" disabled={busy || loading} onClick={() => { followEnd.current = true; state.newTask(); input.current?.focus() }}><Plus size={16} aria-hidden="true" />新对话</button>
         <div className="xiaoman-history-heading"><h2>最近记录</h2><button type="button" aria-label="刷新最近记录" disabled={busy || loading} onClick={() => void state.loadTasks()}><RefreshCw size={14} aria-hidden="true" /></button></div>
         <div className="xiaoman-history">
-          {loading ? <p className="xiaoman-sidebar-hint" role="status">正在找回最近记录…</p> : state.historyError ? <div className="xiaoman-history-error" role="alert"><p>{state.historyError}</p><button type="button" onClick={() => void state.loadTasks()}>重试读取任务</button></div> : state.tasks.length === 0 ? <p className="xiaoman-sidebar-hint">办过的事会留在这里，方便回来继续。</p> : state.tasks.map(task => <button
+          {loading ? <p className="xiaoman-sidebar-hint" role="status">正在找回最近记录…</p> : state.historyError ? <div className="xiaoman-history-error" role="alert"><p>{state.historyError}</p><button type="button" onClick={() => void state.loadTasks()}>重试读取任务</button></div> : state.tasks.length === 0 ? <p className="xiaoman-sidebar-hint">最近记录只留下走过业务的任务。打招呼、本地短回和闲聊不会出现在这里。</p> : state.tasks.map(task => <button
             key={task.id} type="button" disabled={busy} aria-label={`打开记录：${GRAPH_LABELS[task.graph] || '业务'}，${task.userText || '最近记录'}`}
             aria-current={selected?.id === task.id ? 'true' : undefined} className={`xiaoman-history-item ${selected?.id === task.id ? 'is-selected' : ''}`}
             onClick={() => { followEnd.current = true; void state.selectTask(task.id) }}>
@@ -57,7 +58,14 @@ function Conversation() {
           <div className="xiaoman-thread-content">
             {state.messages.length === 0 ? <div className="xiaoman-welcome">
               <span className="xiaoman-mark" aria-hidden="true">满</span><h2>今天想先办哪件事？</h2>
-              <p>可以查库存、开销售草稿、看补货或经营简报。闲聊和使用讨论先不做。</p>
+              <div className="xiaoman-scope">
+                <h3>能做</h3>
+                <p>查库存、开销售或采购草稿、看账款和收款、查仓库里卡住的作业、看经营简报。商品名不太准时，会列出你权限内的相近商品让你点选，不会擅自换成某一个。</p>
+                <h3>不能做</h3>
+                <p>取消订单、改价、审批、付款、发货，请走下面的菜单。大额硬拦这轮不做。卡点只看仓库执行，不扩到商务。闲聊不留。</p>
+                <p>最近记录只留下走过业务的任务。打招呼、本地短回和闲聊不进列表，不是聊天记录丢了。</p>
+              </div>
+              <div className="xiaoman-guides">{ASSISTANT_GUIDE_LINKS.map(link => <button type="button" key={link.path} className="xiaoman-guide" disabled={busy || loading} onClick={() => openGuide(link.path)}>{link.label}</button>)}</div>
               <div className="xiaoman-prompts">{PROMPTS.map(({ label, hint, text, Icon }) => <button type="button" key={label} disabled={busy || loading} onClick={() => fill(text)}><Icon size={19} aria-hidden="true" /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</div>
             </div> : <div role="log" aria-live="polite" aria-label="小满对话" className="xiaoman-messages">{state.messages.map(message => <div key={message.id} className={`xiaoman-message is-${message.role}`}>
               {message.role === 'assistant' && <span className="xiaoman-avatar" aria-hidden="true">满</span>}<div className="xiaoman-message-text">{message.role === 'assistant' ? <MessageText text={message.text} /> : message.text}</div>

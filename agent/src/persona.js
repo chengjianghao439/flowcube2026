@@ -4,7 +4,7 @@ export const CHAT_GRAPH = 'G-chat';
 
 export function smallTalkReply(text) {
   if (/你(?:叫|是).*(?:什么|谁)|叫什么名字|你的名字|小满是谁/.test(text)) return '我叫小满，名字取自“小满”节气。这里只聊极序相关的事。';
-  if (/^(?:小满[，,！! ]*)?(?:在吗|在不在|你好|嗨|哈喽|hello|hi)[？?！!。 ]*$/i.test(text)) return '在。你想看极序哪块业务？';
+  if (/^(?:小满[，,！! ]*)?(?:在吗|在不在|你好|嗨|哈喽|hello|hi)[？?！!。 ]*$/i.test(text)) return '在。直接说想办的事就行，比如「做个订单」。';
   if (/^(?:谢谢|多谢|谢啦|谢谢你|辛苦了|辛苦啦)[！!。～~ ]*$/.test(text)) return '不客气。';
   if (/你.*(?:没听懂|没明白|答错|理解错)|^(?:不对|不是这个意思|又错了)[！!。 ]*$/.test(text)) return '刚才理解偏了。你指出要改的地方，我按你的意思重新来。';
   return null;
