@@ -174,3 +174,42 @@ test('关闭其他/全部沿原脏守卫，取消不删除；确认全部回仪�
   expect(useWorkspaceStore.getState().tabs).toEqual([HOME_TAB])
   expect(location()).toBe('/dashboard')
 })
+
+
+test('直接进入新路由时，标签延后登记挂载仍滚入视图且不抢当前焦点', async () => {
+  const focus = document.createElement('input'); document.body.append(focus); focus.focus()
+  try {
+    await render('/settings/print-templates/new')
+    const active = tab('新建打印模板')
+    expect(active).toBeTruthy()
+    expect(vi.mocked(Element.prototype.scrollIntoView).mock.instances).toContain(active.parentElement)
+    expect(document.activeElement).toBe(focus)
+    vi.mocked(Element.prototype.scrollIntoView).mockClear()
+    await act(async () => useDirtyGuardStore.getState().setDirty(active.getAttribute('id')!, true))
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+  } finally { focus.remove() }
+})
+
+test('容器变窄后活动标签重新可见，溢出方向按钮随滚动更新且不改变路由或焦点', async () => {
+  await render()
+  const viewport = host.querySelector('[role="tablist"]')!.parentElement!
+  let width = 300
+  Object.defineProperties(viewport, { clientWidth: { configurable: true, get: () => width }, scrollWidth: { configurable: true, get: () => 900 } })
+  viewport.scrollBy = vi.fn((options: ScrollToOptions) => { viewport.scrollLeft += options.left ?? 0; viewport.dispatchEvent(new Event('scroll')) }) as typeof viewport.scrollBy
+  act(() => tab('销售订单').focus())
+  vi.mocked(Element.prototype.scrollIntoView).mockClear()
+  act(() => window.dispatchEvent(new Event('resize')))
+  expect(vi.mocked(Element.prototype.scrollIntoView).mock.instances).toContain(tab('销售订单').parentElement)
+  expect(namedButton('向左滚动标签').disabled).toBe(true)
+  expect(namedButton('向右滚动标签').disabled).toBe(false)
+  await click(namedButton('向右滚动标签'))
+  expect(viewport.scrollBy).toHaveBeenCalled()
+  expect(namedButton('向左滚动标签').disabled).toBe(false)
+  expect(location()).toBe('/sale?keyword=原筛选')
+  expect(document.activeElement).toBe(tab('销售订单'))
+  act(() => { viewport.scrollLeft = 600; viewport.dispatchEvent(new Event('scroll')) })
+  expect(namedButton('向右滚动标签').disabled).toBe(true)
+  width = 1000
+  act(() => window.dispatchEvent(new Event('resize')))
+  expect(namedButton('向右滚动标签')).toBeUndefined()
+})

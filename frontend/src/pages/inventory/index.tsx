@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { qty as formatQty } from '@/lib/format'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
@@ -47,7 +48,7 @@ import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib
 import { importStockApi } from '@/api/inventory'
 
 const inventoryColumns: (TableColumn<object> & { headerTitle?: string })[] = [
-  ...productIdentityColumns().map((column, index) => ({ ...column, width: [160, 160, 144, 224, 112][index] })),
+  ...productIdentityColumns(),
   { key: 'unit', title: '单位', width: 80 },
   { key: 'categoryPath', title: '分类路径', width: 180 },
   { key: 'warehouseName', title: '仓库', width: 112 },
@@ -386,12 +387,12 @@ export default function InventoryPage() {
           {/* 库存表格 */}
           <div className="desktop-table desktop-inventory-table card-base overflow-hidden">
             <div className="overflow-x-auto">
-              <ResizableTable columns={inventoryColumns} columnStorageKey="inventory-overview" minWidth={1816} aria-rowcount={list.length + 1}>
-                {!overviewLoading && list.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={list} columns={13} getRowKey={inventoryRowKey} renderRow={renderInventoryRow} /> : <tbody>
+              <ResizableTable columns={inventoryColumns} columnStorageKey="inventory-overview" minWidth={1376} aria-rowcount={list.length + 1}>
+                {!overviewLoading && list.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={list} columns={9} getRowKey={inventoryRowKey} renderRow={renderInventoryRow} /> : <tbody>
                   {overviewLoading ? (
-                    <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
+                    <tr><td colSpan={9} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
                   ) : list.length === 0 ? (
-                    <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">暂无库存数据</td></tr>
+                    <tr><td colSpan={9} className="py-16 text-center text-sm text-muted-foreground">暂无库存数据</td></tr>
                   ) : (
                     list.map(renderInventoryRow)
                   )}
@@ -420,7 +421,7 @@ export default function InventoryPage() {
 
       {recovery?.blocked && <div className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm space-y-2" role="status">
         <p>{recovery.error || recovery.message || '上次出库结果待确认，请先核对；暂勿另发出库。'}</p>
-        {recovery.record && <p className="text-xs text-muted-foreground">{recovery.record.display?.productName || `商品 #${recovery.record.body.productId}`} · {recovery.record.display?.warehouseName || `仓库 #${recovery.record.body.warehouseId}`} · 数量 {formatQty(recovery.record.body.quantity)}{recovery.record.body.remark ? ` · ${recovery.record.body.remark}` : ''}</p>}
+        {recovery.record && <p className="text-xs text-muted-foreground"><ProductIdentitySummary product={{ productName: recovery.record.display?.productName || `商品 #${recovery.record.body.productId}` }} /> {recovery.record.display?.warehouseName || `仓库 #${recovery.record.body.warehouseId}`} · 数量 {formatQty(recovery.record.body.quantity)}{recovery.record.body.remark ? ` · ${recovery.record.body.remark}` : ''}</p>}
         <div className="flex gap-2">
           <Button size="sm" variant="outline" disabled={recovery.busy} onClick={() => { void recovery.query().then(r => { if (r?.status === 'success') setOpOpen(false) }).catch(e => toast.error(e.message)) }}>查询上次结果</Button>
           {can(PERMISSIONS.INVENTORY_ADJUST) && recovery.record?.phase === 'pending' && <Button size="sm" variant="outline" disabled={recovery.busy || !!recovery.error} onClick={() => { if (!can(PERMISSIONS.INVENTORY_ADJUST)) return; void recovery.retry().then(r => { if (r?.status === 'success') setOpOpen(false) }).catch(e => toast.error(e.message)) }}>按原内容重试</Button>}

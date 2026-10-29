@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
@@ -18,7 +19,7 @@ import { validateReservationBatch } from './reservationSnapshot'
 import type { InventoryOverviewItem, InventoryReservationDisplayRow, InventoryReservationSnapshotParams,
   InventoryReservationSnapshotResult, InventoryReservationSummary } from '@/types/inventory'
 
-type Item = Pick<InventoryOverviewItem, 'productId' | 'warehouseId' | 'productName' | 'warehouseName' | 'unit'>
+type Item = Pick<InventoryOverviewItem, 'productId' | 'warehouseId' | 'productName' | 'warehouseName' | 'unit'> & Partial<Pick<InventoryOverviewItem, 'productCode' | 'spec' | 'color' | 'articleNumber'>>
 type Cursor = Pick<InventoryReservationSnapshotParams, 'snapshotId' | 'offset'>
 function readKey() {
   const state = useAuthStore.getState()
@@ -95,7 +96,7 @@ export function ReservationSnapshotRead({ item, owner, server, generation, rende
     </tr>
   }
   return <div className="space-y-3">
-    <p className="text-sm">{item.productName} · {item.warehouseName} · 数量单位：{item.unit || '基本单位'}</p>
+    <div className="space-y-1 text-sm"><ProductIdentitySummary product={item} /><p>{item.warehouseName} · 数量单位：{item.unit || '基本单位'}</p></div>
     <form className="flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); setKeyword(draft.trim()); refresh() }}>
       <Input className="h-8 w-64" aria-label="筛选销售原单" placeholder="销售单号或客户" maxLength={100} value={draft} onChange={event => setDraft(event.target.value)} />
       <Button size="sm" type="submit">查询</Button><Button size="sm" variant="outline" type="button" onClick={refresh}>刷新</Button>

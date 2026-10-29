@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { money } from '@/lib/format'
 import { useMutation } from '@tanstack/react-query'
@@ -80,7 +81,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
               {settlement?.lines.map((l, i) => (
                 <tr key={i} className="border-t">
                   <td className="px-2 py-1.5 text-doc-code">{l.taskNo}</td>
-                  <td className="px-2 py-1.5">{l.productName}{l.articleNumber ? <span className="text-xs text-muted-foreground"> · {l.articleNumber}</span> : null}</td>
+                  <td className="px-2 py-1.5"><ProductIdentitySummary product={l} /></td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{l.putawayQty}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{money(l.unitPrice)}</td>
                   <td className="px-2 py-1.5 text-right tabular-nums">{money(l.amount)}</td>

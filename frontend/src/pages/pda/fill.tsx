@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 /**
  * PDA 放货 /pda/fill（批 A · 塑料盒作业流）
  *
@@ -29,6 +30,7 @@ interface ScannedSource {
   containerId: number
   barcode: string
   productHint: string
+  product?: import('@/components/shared/ProductIdentitySummary').ProductIdentitySummaryValue
   remainingQty: number
 }
 
@@ -139,7 +141,7 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
       setSource({
         containerId: d.containerId,
         barcode: d.barcode,
-        productHint: `${d.productName}（${d.productCode}）`,
+        productHint: '', product: d,
         remainingQty: d.remainingQty,
       })
       setStep('target')
@@ -231,7 +233,7 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
           </p>
           {source && (
             <p className="text-sm text-foreground">
-              来源：<span className="font-mono">{source.barcode}</span> {source.productHint} · <span className="font-semibold">{source.remainingQty}</span> 件
+              来源：<span className="font-mono">{source.barcode}</span> {source.product ? <ProductIdentitySummary product={source.product} /> : source.productHint} · <span className="font-semibold">{source.remainingQty}</span> 件
             </p>
           )}
           {box && <p className="text-sm text-foreground">目标盒：<span className="font-mono">{box.barcode}</span></p>}

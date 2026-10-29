@@ -286,7 +286,7 @@ export default function PickingWavesPage() {
                   <h3 className="text-card-title">批次商品汇总</h3>
                   <p className="text-muted-body">按商品查看应拣与已拣，快速定位缺口。</p>
                 </div>
-                <div className="overflow-x-auto"><ResizableTable columns={[...productIdentityColumns(), { key: 'totalQty', title: '应拣', width: 80, align: 'right' }, { key: 'pickedQty', title: '已拣', width: 80, align: 'right' }]} columnStorageKey="picking-wave-items" minWidth={960}>
+                <div className="overflow-x-auto"><ResizableTable columns={[...productIdentityColumns(), { key: 'totalQty', title: '应拣', width: 80, align: 'right' }, { key: 'pickedQty', title: '已拣', width: 80, align: 'right' }]} columnStorageKey="picking-wave-items" minWidth={520}>
                   <tbody className="divide-y divide-border">
                     {detail.items.map(item => (
                       <tr key={item.id}>

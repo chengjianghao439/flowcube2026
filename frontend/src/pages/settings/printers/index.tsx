@@ -404,10 +404,10 @@ export default function PrintersPage() {
       key: 'clientId', title: '所属设备', width: 240,
       render: (_, p) => p.clientId ? (
         <div className="space-y-1">
-          <div className="flex items-start gap-2 font-medium text-foreground"><Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden /><span className="min-w-0">{getDeviceName(p)}</span></div>
-          {canManagePrinters && <div className="flex items-center gap-2">
+          <div className="flex items-start gap-2 font-medium text-foreground"><Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden /><span className="min-w-0 break-words">{getDeviceName(p)}</span></div>
+          {canManagePrinters && <div className="flex w-full flex-wrap items-center gap-2">
             <input
-              className="input h-8 w-32 px-2"
+              className="input h-8 min-w-40 flex-1 px-2"
               aria-label={`设备别名 ${getDeviceName(p)}`}
               placeholder={p.clientHostname || p.clientId}
               value={aliasDraft[p.clientId] ?? p.clientAliasName ?? ''}

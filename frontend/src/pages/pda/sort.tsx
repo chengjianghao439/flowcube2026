@@ -313,7 +313,7 @@ export default function PdaSortPage() {
                 <p className="text-xs text-muted-foreground mt-1">分拣格编号</p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="min-w-0"><p className="text-xs text-muted-foreground">商品</p><PdaProductIdentity code={hint.productCode} name={hint.productName} view="detail" /></div>
+                <div className="min-w-0"><p className="text-xs text-muted-foreground">商品</p><PdaProductIdentity product={hint} code={hint.productCode} name={hint.productName} view="detail" /></div>
                 <div><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{hint.qty} {hint.unit}</p></div>
                 <div><p className="text-xs text-muted-foreground">任务号</p><p className="font-mono text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.taskNo}</p></div>
                 <div><p className="text-xs text-muted-foreground">客户</p><p className="text-xs min-w-0 whitespace-normal [overflow-wrap:anywhere]">{hint.customerName}</p></div>

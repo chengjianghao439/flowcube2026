@@ -6,6 +6,7 @@ export interface PurchaseQuantityItem {
   id?: number | string
   productId: number
   productName?: string
+  productCode?: string | null; spec?: string | null; color?: string | null; articleNumber?: string | null
   unit: string
   entryUnit?: string | null
   quantity: number
@@ -23,6 +24,7 @@ export interface PurchaseQuantityGroup {
   key: string
   productId: number
   productName: string
+  productCode?: string | null; spec?: string | null; color?: string | null; articleNumber?: string | null
   entryUnit: string
   baseUnit: string
   conversionRate: number | null
@@ -101,6 +103,7 @@ export function groupPurchaseQuantities(items: readonly PurchaseQuantityItem[], 
       key,
       productId: item.productId,
       productName: item.productName || '',
+      productCode: item.productCode, spec: item.spec, color: item.color, articleNumber: item.articleNumber,
       entryUnit,
       baseUnit,
       conversionRate: rate,

@@ -91,7 +91,7 @@ afterEach(async () => {
 test('21条普通来源自动完整读取，不提供员工翻页', async () => {
   respond = url => batch(url, 21); await draw(); await wait(() => expect(cached()?.state.status).toBe('success'))
   expect(data()?.list).toHaveLength(21)
-  expect(host.textContent).toContain('SYN-HP1 ')
+  expect(host.textContent).toContain('SYN-HP1合成来源1')
   expect(host.textContent).not.toMatch(/上一页|下一页|第 \d+ \/ \d+ 页/)
 })
 test.each([5000, 5001])('真实收集器%i来源按100批有界读取并披露数量/截断', async total => {
@@ -108,7 +108,7 @@ test('真实虚拟来源末条与链接可达，滚动保留聚焦目标入口',
   const first = button('创建正常目标')!; await act(async () => first.focus())
   const scroll = host.querySelector<HTMLElement>('[data-workspace-scroll]')!
   await act(async () => { scroll.scrollTop = 5000 * 48 - 480; scroll.dispatchEvent(new Event('scroll')) })
-  await wait(() => expect(host.textContent).toContain('SYN-HP1 '))
+  await wait(() => expect(host.textContent).toContain('SYN-HP1合成来源1'))
   expect(first.isConnected).toBe(true); expect(document.activeElement).toBe(first)
   await click('SYN-SO100001')
   expect(host.querySelector('[data-location]')?.textContent).toBe('/sale/100001')
@@ -190,7 +190,7 @@ test('虚拟来源打开解除后保留原按钮，关闭返回原焦点并保�
   await click('核对解除'); await reason('滚动前核对草稿')
   const scroll = host.querySelector<HTMLElement>('[data-workspace-scroll]')!
   await act(async () => { scroll.scrollTop = 5000 * 48 - 480; scroll.dispatchEvent(new Event('scroll')) })
-  await wait(() => expect(host.textContent).toContain('SYN-HP1 '))
+  await wait(() => expect(host.textContent).toContain('SYN-HP1合成来源1'))
   expect(trigger.isConnected).toBe(true)
   await click('关闭并保留说明')
   await wait(() => expect(document.activeElement).toBe(trigger))
@@ -204,9 +204,9 @@ test('读取owner变更丢弃旧服务器晚响应，撤回查看权即时隐藏
   respond = url => url.hostname === 'handling-continuous.fixture.invalid' ? new Promise(resolve => { finish = resolve }) : batch(url, 21)
   await draw(); await wait(() => expect(finish).toBeTypeOf('function'))
   await act(async () => setApiClientBaseURL('http://handling-current.fixture.invalid/api'))
-  await wait(() => expect(host.textContent).toContain('SYN-HP21 '))
+  await wait(() => expect(host.textContent).toContain('SYN-HP21合成来源21'))
   await act(async () => finish(batch(requests[0], 101)))
-  expect(host.textContent).not.toContain('SYN-HP101 ')
+  expect(host.textContent).not.toContain('SYN-HP101合成来源101')
   await act(async () => useAuthStore.getState().updateUser({ permissions: [P.SALE_ORDER_VIEW] }))
   expect(host.querySelector('article')).toBeNull()
   expect(button('创建正常目标')).toBeUndefined(); expect(button('核对解除')).toBeUndefined()

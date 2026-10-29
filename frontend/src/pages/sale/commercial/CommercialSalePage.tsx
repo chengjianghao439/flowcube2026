@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReturnSourceButton } from '@/pages/returns/ReturnSourceButton'
 import { ReorderSourceButton } from '../ReorderSourceButton'
 import { useSaleReorderSource } from '@/hooks/useSaleReorderSource'
@@ -326,14 +327,14 @@ export default function CommercialSalePage({
           <h3 className="text-sm font-semibold">发货批次</h3>
           <DataTable virtualized rowKey="id" columns={[
             { key: 'taskNo', title: '任务', width: 150 },
-            { key: 'productName', title: '商品', width: 260, render: value => <span className="whitespace-normal break-words">{String(value)}</span> },
+            { key: 'productName', title: '商品', width: 260, render: (_, row) => <ProductIdentitySummary product={row} /> },
             { key: 'quantity', title: '数量', width: 100, align: 'right' },
             { key: 'warehouse', title: '发货仓库', width: 130 },
             { key: 'status', title: '状态', width: 100 },
             { key: 'result', title: '发货记录', width: 220 },
           ]} data={order.commercialDispatches.map(f => {
             const group = order.commercialGroups?.find(g => g.id === f.groupId)
-            return { id: f.dispatchGroupId, taskNo: f.taskNo, productName: group?.kitName ?? group?.components[0]?.productName ?? `原成交行 #${f.groupId}`,
+            return { ...(group?.kind === 'kit' ? { ...group.metadata.kitIdentity, productCode: group.kitCode } : group?.components[0] ?? {}), id: f.dispatchGroupId, taskNo: f.taskNo, productName: group?.kitName ?? group?.components[0]?.productName ?? `原成交行 #${f.groupId}`,
               quantity: `${f.quantity}${commercialUnit(group)}`, warehouse: commercialWarehouseName(order, f.warehouseId),
               status: WT_STATUS_NAME[String(f.taskStatus) as keyof typeof WT_STATUS_NAME] ?? '未知状态',
               result: [f.confirmedShipped ? '已确认实发' : f.outstanding ? '待完成' : '原批次（未确认）', !f.active && '已撤销批次', f.taskDeletedAt && '任务已删除'].filter(Boolean).join(' · ') }

@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { DISPOSE_TYPE_LABELS } from '@/types/disposal'
 import { DISPOSAL_STATUS_LABEL } from './constants'
@@ -14,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { HandlingOperationPanel } from './HandlingOperationPanel'
 import type { ConversionSnapshot } from '@/types/disposal-handling'
-const itemLabels: Record<string,string> = { product_code:'历史编码', product_name:'历史名称', unit:'历史单位', quantity:'批准基本量', dispose_type:'处理方式', unit_value:'原参考单价', remark:'原行备注' }
+const itemLabels: Record<string,string> = { unit:'历史单位', quantity:'批准基本量', dispose_type:'处理方式', unit_value:'原参考单价', remark:'原行备注' }
 const headLabels: Record<string,string> = { disposal_no:'原单号', warehouse_name:'原仓名称', status:'原状态', total_value:'原参考估值', remark:'原备注', operator_name:'原制单人', approved_by_name:'批准人', approved_at:'批准时间' }
 export function ConversionDialog({ id, open, onClose }: { id: number; open: boolean; onClose: () => void }) {
   useSyncExternalStore(subscribeHandling, handlingRevision)
@@ -43,7 +44,7 @@ export function ConversionDialog({ id, open, onClose }: { id: number; open: bool
   }
   function display(key: string, v: unknown) { return v == null ? '未记录' : key === 'status' ? DISPOSAL_STATUS_LABEL[Number(v)] ?? '状态待核对' : key === 'dispose_type' ? DISPOSE_TYPE_LABELS[Number(v) as 1 | 2 | 3] ?? '方式待核对' : key.endsWith('_at') ? formatDisplayDateTime(String(v)) : String(v) }
   return <Dialog open={open && active && handlingOwnerCurrent(owner) && mayHandle(P.INVENTORY_DISPOSAL_VIEW)} onOpenChange={v => { if (!v && current()) onClose() }}><DialogContent className="max-w-6xl"><DialogHeader description={<>{readError && <span role="alert">{readError} </span>}{preview?.conversion && <span>该旧单已有整单签认，不可另建来源。 </span>}{preview && !eligible && <span role="alert">当前旧单不符合签认资格，请沿原流程或人工核对；完整历史预览保留。 </span>}核对完整历史批准依据。签认只保存每行处理意图（含报废行），不执行库存、资金或沿用旧批准创建新报废执行。</>}><DialogTitle>旧单整单签认</DialogTitle></DialogHeader>
-    {preview && <><div className="grid grid-cols-3 gap-2">{Object.keys(headLabels).map(key => { const value = preview.snapshot.head[key]; return <p key={key}>{headLabels[key] ?? '历史记录'}：{display(key,value)}</p> })}</div><h3>原批准证据</h3><p>{Object.entries(preview.snapshot.approval).filter(([key]) => key !== 'approved_by').map(([key,value]) => `${headLabels[key] ?? '批准记录'}：${display(key,value)}`).join(' · ')}</p><div className="overflow-auto"><ReportTable><thead><tr>{Object.keys(itemLabels).map(key => <th key={key}>{itemLabels[key]}</th>)}</tr></thead><tbody>{preview.snapshot.items.map(row => <tr key={String(row.id)}>{Object.keys(itemLabels).map(key => <td key={key}>{display(key,row[key])}</td>)}</tr>)}</tbody></ReportTable></div></>}
+    {preview && <><div className="grid grid-cols-3 gap-2">{Object.keys(headLabels).map(key => { const value = preview.snapshot.head[key]; return <p key={key}>{headLabels[key] ?? '历史记录'}：{display(key,value)}</p> })}</div><h3>原批准证据</h3><p>{Object.entries(preview.snapshot.approval).filter(([key]) => key !== 'approved_by').map(([key,value]) => `${headLabels[key] ?? '批准记录'}：${display(key,value)}`).join(' · ')}</p><div className="overflow-auto"><ReportTable><thead><tr><th>商品</th>{Object.keys(itemLabels).map(key => <th key={key}>{itemLabels[key]}</th>)}</tr></thead><tbody>{preview.snapshot.items.map(row => <tr key={String(row.id)}><td><ProductIdentitySummary product={{ productCode: typeof row.product_code === 'string' ? row.product_code : undefined, productName: typeof row.product_name === 'string' ? row.product_name : undefined }} /></td>{Object.keys(itemLabels).map(key => <td key={key}>{display(key,row[key])}</td>)}</tr>)}</tbody></ReportTable></div></>}
     <label>签认说明<Input aria-label="签认说明" maxLength={500} value={reason} disabled={!current() || write.blocked} onChange={e => { if (current() && !write.blocked) setReason(e.target.value) }} /></label><HandlingOperationPanel write={write} /><Button disabled={!current() || write.blocked || !preview || !eligible || !reason.trim()} onClick={() => void sign()}>确认整单签认</Button><Button variant="outline" onClick={() => { if (current()) onClose() }}>关闭并保留历史资料</Button>
   </DialogContent></Dialog>
 }

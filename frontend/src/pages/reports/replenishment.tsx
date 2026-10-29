@@ -250,7 +250,7 @@ export default function ReplenishmentPage() {
           <div className="space-y-3 py-2">
 
             <div className="max-h-56 overflow-auto rounded-md border">
-              <ReportTable className="w-full min-w-[1500px] text-sm">
+              <ReportTable className="w-full min-w-[520px] text-sm">
                 <thead className="sticky top-0">
                   <tr className="text-left text-muted-foreground">
                     <ProductIdentityHeaders />

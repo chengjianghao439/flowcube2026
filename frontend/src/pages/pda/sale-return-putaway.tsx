@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -138,7 +139,7 @@ export default function PdaSaleReturnPutawayPage() {
             <ul className="divide-y rounded-md border px-3">
               {task.pendingPutawayContainers.map(container => (
                 <li key={container.id} className="flex justify-between gap-3 py-2">
-                  <div><p className="font-mono">{container.barcode}</p><p className="text-muted-foreground">{container.productName}</p></div>
+                  <div><p className="font-mono">{container.barcode}</p><ProductIdentitySummary product={container} /></div>
                   <span className="shrink-0">数量 {container.qty}</span>
                 </li>
               ))}

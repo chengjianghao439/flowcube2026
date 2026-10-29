@@ -25,6 +25,7 @@ interface ProductSummary {
   productId: number
   productCode: string | null
   productName: string
+  spec?: string | null; color?: string | null; articleNumber?: string | null
   unit: string | null
   orderedQty: number
   receivedQty: number
@@ -57,6 +58,7 @@ function groupProducts(task: InboundTask): ProductSummary[] {
       productId: item.productId,
       productCode: item.productCode,
       productName: item.productName,
+      spec: item.spec, color: item.color, articleNumber: item.articleNumber,
       unit: item.unit,
       orderedQty: item.orderedQty,
       receivedQty: item.receivedQty,
@@ -89,7 +91,7 @@ function ProductCard({
       <div className="space-y-2">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <PdaProductIdentity code={product.productCode} name={product.productName} view="overview" />
+            <PdaProductIdentity product={product} code={product.productCode} name={product.productName} view="overview" />
           </div>
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${product.remainingQty > 0 ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success-ink'}`}>
             剩余 {product.remainingQty}
@@ -134,7 +136,7 @@ function ReceiveEditor({
   return (
     <PdaCard active className="space-y-4">
       <div>
-        <PdaProductIdentity code={product.productCode} name={product.productName} view="detail" />
+        <PdaProductIdentity product={product} code={product.productCode} name={product.productName} view="detail" />
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
           <span>应到 {product.orderedQty}</span>
           <span>已收 {product.receivedQty}</span>
@@ -550,6 +552,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
       {overReceivePrompt && (
         <PdaOverReceiveDialog
           productName={overReceivePrompt.product.productName}
+          product={overReceivePrompt.product}
           unit={overReceivePrompt.product.unit ?? ''}
           orderedQty={overReceivePrompt.orderedQty}
           receivedQty={overReceivePrompt.receivedQty}

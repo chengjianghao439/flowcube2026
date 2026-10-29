@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 /**
  * PDA 塑料盒作业 /pda/split
  *
@@ -49,6 +50,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
   const [boxId, setBoxId] = useState<number | null>(null)
   const [barcode, setBarcode] = useState<string | null>(null)
   const [productHint, setProductHint] = useState('')
+  const [product, setProduct] = useState<import('@/components/shared/ProductIdentitySummary').ProductIdentitySummaryValue | null>(null)
   const [remaining, setRemaining] = useState(0)
   const [qtyStr, setQtyStr] = useState('1')
   const [perBoxQty, setPerBoxQty] = useState('1')
@@ -103,7 +105,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
       setMode(isBox ? 'repack' : 'split')
       setBoxId(d.containerId)
       setBarcode(d.barcode)
-      setProductHint(`${d.productName}（${d.productCode}）`)
+      setProduct(d); setProductHint('')
       setRemaining(d.remainingQty)
       setQtyStr('1')
       setPerBoxQty('1')
@@ -195,7 +197,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
     if (!rec || boxId || fixedMode === 'repack') return
     setFormContext(plasticReadContext())
     setMode('split'); setBoxId(rec.sourceContainerId); setBarcode(rec.sourceBarcode ?? `#${rec.sourceContainerId}`)
-    setProductHint('原提交数据，请先核对结果'); setRemaining(rec.remaining ?? 0)
+    setProduct(null); setProductHint('原提交数据，请先核对结果'); setRemaining(rec.remaining ?? 0)
     setQtyStr(rec.body ? String(rec.body.qty) : ''); setPrintLabel(rec.body?.printLabel ?? false)
     setRestoredSnapshot(true); setStep('form')
   }, [splitAction.records, boxId, fixedMode])
@@ -217,7 +219,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
     setStep('scan')
     setBoxId(null)
     setBarcode(null)
-    setProductHint('')
+    setProductHint(''); setProduct(null)
     setRemaining(0)
     setQtyStr('1')
     setDimension(null)
@@ -289,7 +291,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
         {step === 'form' && boxId && contextCurrent && (
           <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 space-y-3">
             <p className="font-mono text-lg font-bold text-foreground">{barcode}</p>
-            <p className="text-sm text-foreground">{productHint}</p>
+            <div className="text-sm text-foreground">{product ? <ProductIdentitySummary product={product} /> : productHint}</div>
             <p className="text-xs text-muted-foreground">
               作业方向：<span className="font-semibold text-foreground">{mode === 'repack' ? '还原整件（盒 → 整件码）' : '拆出散件盒（整件 → 盒）'}</span>
             </p>

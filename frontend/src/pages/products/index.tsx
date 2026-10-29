@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -177,9 +178,9 @@ export default function ProductsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const cols = useMemo<TableColumn<Product>[]>(() => [
-    ...productIdentityColumns({code: 'code', name: 'name'}).map(column => column.key === 'name' ? {
+    ...productIdentityColumns({code: 'code', name: 'name'}).map(column => column.key === 'productIdentity' ? {
       ...column,
-      render: (_: unknown, row: Product) => <><span className="block break-words leading-6">{row.name || '—'}</span>{hasKeyword && row.searchMatch && <span className="block text-xs leading-5 text-muted-foreground">命中：{row.searchMatch}</span>}</>,
+      render: (_: unknown, row: Product) => <><ProductIdentitySummary product={row} />{hasKeyword && row.searchMatch && <span className="block text-xs leading-5 text-muted-foreground">命中：{row.searchMatch}</span>}</>,
     } : column),
     { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
     { key:'unit', title:'单位', width:140, render:(_,r)=>{

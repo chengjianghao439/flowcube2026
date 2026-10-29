@@ -1,16 +1,14 @@
-import PdaOverviewText from './PdaOverviewText'
+import { ProductIdentitySummary, type ProductIdentitySummaryValue } from '@/components/shared/ProductIdentitySummary'
 
-/** PDA 以编码识别商品；总览压缩名称，进入作业详情后展示全名。 */
-export default function PdaProductIdentity({ code, name, view }: {
+/** PDA 与桌面共用商品身份层级，作业总览也完整显示当前数据。 */
+export default function PdaProductIdentity({ product, code, name, spec, color, articleNumber }: {
+  product?: ProductIdentitySummaryValue
   code?: string | null
   name?: string | null
-  view: 'overview' | 'detail'
+  spec?: string | null
+  color?: string | null
+  articleNumber?: string | null
+  view?: 'overview' | 'detail'
 }) {
-  const fullName = name || '—'
-  return <div className="min-w-0">
-    <p className="font-mono font-semibold text-foreground whitespace-normal [overflow-wrap:anywhere]">{code || '—'}</p>
-    {view === 'overview'
-      ? <PdaOverviewText>{fullName}</PdaOverviewText>
-      : <p className="text-sm text-muted-foreground whitespace-normal [overflow-wrap:anywhere]">{fullName}</p>}
-  </div>
+  return <ProductIdentitySummary product={{ ...product, code: code ?? product?.code, name: name ?? product?.name, spec: spec ?? product?.spec, color: color ?? product?.color, articleNumber: articleNumber ?? product?.articleNumber }} />
 }

@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { useState } from 'react'
 import { Search, Package, History, Layers } from 'lucide-react'
@@ -27,7 +28,7 @@ function ContainerBlock({ data }: { data: Awaited<ReturnType<typeof getContainer
           </div>
           <div>
             <div className="font-mono text-sm font-medium">{data.barcode}</div>
-            <div className="text-sm text-muted-foreground">{data.productName}</div>
+            <ProductIdentitySummary product={data} />
           </div>
         </div>
         <div className="text-right">
@@ -37,10 +38,6 @@ function ContainerBlock({ data }: { data: Awaited<ReturnType<typeof getContainer
       </div>
 
       <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground">商品编码：</span>
-          <span className="font-mono">{data.productCode}</span>
-        </div>
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground">类型：</span>
           <span>{containerKind}</span>

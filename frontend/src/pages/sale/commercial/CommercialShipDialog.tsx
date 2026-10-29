@@ -77,7 +77,7 @@ export default function CommercialShipDialog({
                 </td>
               </tr>
             })}
-            {!available.length && <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">没有可选发货余量，请核对原批次和实物归还进度。</td></tr>}
+            {!available.length && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">没有可选发货余量，请核对原批次和实物归还进度。</td></tr>}
             </tbody>
           </ReportTable>
         </div>

@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 type Line = {
   kind: string; productCode: string | null; productName: string | null; quantity: string | null; unitPrice: string | null; amount: string | null; unit: string | null
@@ -37,7 +38,7 @@ function Value({ value }: { value: Line | null }) {
     {value.entryQty != null && value.entryUnit && value.entryUnit !== value.unit && <p className="text-xs text-muted-foreground">{value.entryQtyBasis === 'current_conversion' ? '当前换算量' : '录入'} {value.entryQty} {value.entryUnit}{value.entryUnitPrice ? ` · 单价 ${value.entryUnitPrice}` : ''}{value.conversionRate ? `（换算率 ${value.conversionRate}）` : ''}</p>}
     {value.originalEntryQty && value.entryUnit && value.entryQtyBasis === 'current_conversion' && <p className="text-xs text-muted-foreground">原录入依据 {value.originalEntryQty} {value.entryUnit}{value.entryQty == null ? ' · 当前量无法按两位换算' : ''}</p>}
     {value.kitVersionId && <p className="text-xs text-muted-foreground">套件版本 #{value.kitVersionId} · 保存的资料 {value.snapshotRevision ?? '未记录'}</p>}
-    {!!value.components.length && <ul className="space-y-1 text-xs text-muted-foreground">{value.components.map((c,index) => <li key={index}>{c.productCode} {c.productName} · {c.requiredQty ?? '未记录'} · 参考价 {c.referencePrice ?? '未记录'}{c.saleItemId ? ` · 关联行 #${c.saleItemId}` : ''}</li>)}</ul>}
+    {!!value.components.length && <ul className="space-y-1 text-xs text-muted-foreground">{value.components.map((c,index) => <li key={index}><ProductIdentitySummary product={c} />{c.requiredQty ?? '未记录'} · 参考价 {c.referencePrice ?? '未记录'}{c.saleItemId ? ` · 关联行 #${c.saleItemId}` : ''}</li>)}</ul>}
   </div>
 }
 export function OrderChangeDetails({ payload }: { payload: unknown }) {
@@ -48,7 +49,7 @@ export function OrderChangeDetails({ payload }: { payload: unknown }) {
     {change.hiddenRowCount > 0 && <p className="text-muted-foreground">部分明细因范围未展示</p>}
     {!!change.rows.length && <details className="rounded-md border">
       <summary className="cursor-pointer px-3 py-2 font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">查看 {change.rows.length} 行变更</summary>
-      <div className="overflow-x-auto px-3 pb-3"><ReportTable className="w-full min-w-[480px] text-xs"><thead><tr className="border-b text-left text-muted-foreground"><th className="py-2 font-medium">商品 / 变更</th><th className="px-3 py-2 font-medium">改前</th><th className="px-3 py-2 font-medium">改后</th></tr></thead><tbody className="divide-y">{change.rows.map((row,index) => <tr key={`${row.key}-${index}`}><td className="max-w-48 py-2 align-top"><p className="break-words">{(row.after || row.before)?.productCode} {(row.after || row.before)?.productName}</p><p className="mt-1 text-muted-foreground">{{added:'新增',removed:'删除',changed:'变更'}[row.action]}</p></td><td className="px-3 py-2 align-top"><Value value={row.before} /></td><td className="px-3 py-2 align-top"><Value value={row.after} /></td></tr>)}</tbody></ReportTable></div>
+      <div className="overflow-x-auto px-3 pb-3"><ReportTable className="w-full min-w-[480px] text-xs"><thead><tr className="border-b text-left text-muted-foreground"><th className="py-2 font-medium">商品 / 变更</th><th className="px-3 py-2 font-medium">改前</th><th className="px-3 py-2 font-medium">改后</th></tr></thead><tbody className="divide-y">{change.rows.map((row,index) => <tr key={`${row.key}-${index}`}><td className="max-w-48 py-2 align-top"><ProductIdentitySummary product={row.after || row.before || {}} /><p className="mt-1 text-muted-foreground">{{added:'新增',removed:'删除',changed:'变更'}[row.action]}</p></td><td className="px-3 py-2 align-top"><Value value={row.before} /></td><td className="px-3 py-2 align-top"><Value value={row.after} /></td></tr>)}</tbody></ReportTable></div>
       {(change.applicant || change.approver) && <p className="px-3 pb-3 text-muted-foreground">申请人：{change.applicant || '未记录'} · 批准人：{change.approver || '未记录'}</p>}
     </details>}
   </div>

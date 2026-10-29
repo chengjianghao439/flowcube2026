@@ -65,6 +65,8 @@ function TabPanel({ tabKey, path, title, isActive }: TabPanelProps) {
   const { companyId, companyName } = useCompanyStore()
   const isAccounting = normalizePath(path).startsWith('/accounting/')
   const isConversation = normalizePath(path) === '/assistant'
+  const isPrintEditor = /^\/settings\/print-templates\/(?:new|\d+)$/.test(normalizePath(path))
+  const hasInternalScroll = isConversation || isPrintEditor
   const mountedRef = useRef(false)
   if (isActive) mountedRef.current = true
   if (!mountedRef.current) return null
@@ -78,12 +80,12 @@ function TabPanel({ tabKey, path, title, isActive }: TabPanelProps) {
         <div
           key={tabKey}
           style={{ display: isActive ? 'block' : 'none' }}
-          className={isConversation ? 'h-full overflow-hidden' : 'h-full overflow-y-auto'}
+          className={hasInternalScroll ? 'h-full overflow-hidden' : 'h-full overflow-y-auto'}
           data-workspace-scroll
         >
-          <div className={isConversation ? 'h-full p-4' : 'p-6'}>
+          <div className={hasInternalScroll ? 'h-full min-h-0 p-4' : 'p-6'}>
             {Comp ? (
-              <div key={isAccounting ? companyId : 'shared'} className={isConversation ? 'h-full min-h-0' : undefined}>
+              <div key={isAccounting ? companyId : 'shared'} className={hasInternalScroll ? 'h-full min-h-0' : undefined}>
                 <TabErrorBoundary tabName={title} resetKey={normalizePath(path)}>
                   <Suspense fallback={<PageLoader />}>
                     {isAccounting && <p className="mb-3 text-xs text-muted-foreground">当前账套：{companyName || (companyId === 1 ? '主账套' : `账套 ${companyId}`)}</p>}

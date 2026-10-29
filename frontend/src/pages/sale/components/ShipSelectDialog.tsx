@@ -71,7 +71,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, recove
 
         <OrdinarySaleRecoveryNotice recovery={recovery} onConfirmed={onClose} />
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
-          <ReportTable className="w-full min-w-[1560px] text-sm">
+          <ReportTable className="w-full min-w-[760px] text-sm">
             <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr>
                 <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" disabled={frozen} checked={allSelected} onChange={e => { if (!submitting.current && !frozen) setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }]))) }} /></th>
@@ -99,7 +99,7 @@ export default function ShipSelectDialog({ open, onClose, order, loading, recove
                   </tr>
                 )
               })}
-              {!undispatched.length && <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">没有可发货明细，请先占库</td></tr>}
+              {!undispatched.length && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">没有可发货明细，请先占库</td></tr>}
             </tbody>
           </ReportTable>
         </div>

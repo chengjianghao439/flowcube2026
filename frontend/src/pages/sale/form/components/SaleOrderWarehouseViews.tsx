@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import DataTable from '@/components/shared/DataTable'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -13,11 +14,7 @@ export function SaleOrderScanDetails({ order }: { order: SaleOrder }) {
             <DataTable
               virtualized
               columns={[
-                { key: 'productCode', title: '编码', width: 130 },
-                { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
-                { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
-                { key: 'productName', title: '名称', width: 180 },
-                { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
+                ...productIdentityColumns(),
                 { key: 'unit', title: '单位', width: 70 },
                 { key: 'barcode', title: '条码', width: 140 },
                 { key: 'qtyLabel', title: '条码数量', width: 100 },
@@ -85,11 +82,7 @@ export function SaleOrderPackingDetails({ order }: { order: SaleOrder }) {
                     <DataTable
               virtualized
                       columns={[
-                        { key: 'productCode', title: '编码', width: 130 },
-                        { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
-                        { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
-                        { key: 'productName', title: '名称', width: 180 },
-                        { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
+                        ...productIdentityColumns(),
                         { key: 'unit', title: '单位', width: 70 },
                         { key: 'qty', title: '数量', width: 80 },
                         { key: 'packedAt', title: '操作时间', width: 150, render: v => v ? formatDisplayDateTime(v as string) : '-' },
@@ -114,11 +107,7 @@ export function SaleOrderPickingProgress({ order }: { order: SaleOrder }) {
   return ((order.taskNo || order.tasks?.length || order.commercialDispatches?.length) ? <DataTable
                 virtualized
                 columns={[
-                  { key: 'productCode', title: '编码', width: 130 },
-                  { key: 'articleNumber', title: '供应商型号', width: 110, render: v => (v as string) || '-' },
-                  { key: 'spec', title: '型号', width: 110, render: v => (v as string) || '-' },
-                  { key: 'productName', title: '名称', width: 180 },
-                  { key: 'color', title: '颜色', width: 100, render: v => (v as string) || '-' },
+                  ...productIdentityColumns(),
                   { key: 'unit', title: '单位', width: 70 },
                   { key: 'quantity', title: '订单数量', width: 90, align: 'right' },
                   { key: 'picked', title: '取货数量', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v ?? 0)}</span> },

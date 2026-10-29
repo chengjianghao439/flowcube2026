@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ResizableTable } from './ResizableTable'
 import { productIdentityColumns } from './productIdentityColumns'
 import { money, unitPrice } from '@/lib/format'
@@ -156,8 +157,8 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
   }
   const hasStock = warehouseId != null && warehouseId > 0
   const purchaseLayout = compact && mode === 'purchase' && !!explicitContext
-  const compactWidths = purchaseLayout ? [104, 132, 112, 232, 80, 56, 140] : [104, 132, 116, 208, 84, 74, 114]
-  const columnCount = 7 + (hasStock ? 1 : 0) + (mode === 'sale' ? 1 : 0)
+  const compactWidths = purchaseLayout ? [360, 56, 140] : [360, 74, 114]
+  const columnCount = 3 + (hasStock ? 1 : 0) + (mode === 'sale' ? 1 : 0)
   const scrollToIndex = useRef<((index: number) => void) | null>(null)
   const registerScroll = useCallback((scroll: ((index: number) => void) | null) => { scrollToIndex.current = scroll }, [])
   const renderRow = (product: ProductFinderResult, index: number) => <tr key={product.id} data-finder-key={product.id} aria-selected={selectedId === product.id} tabIndex={pending ? -1 : 0} onClick={() => { if (current() && !pending) setSelectedId(product.id) }} onDoubleClick={() => confirm(product)} onKeyDown={e => {
@@ -196,19 +197,19 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
           <div className="min-h-0 flex-1 overflow-auto" data-table-scroll={compact ? '' : undefined} aria-busy={!!pending}>
             {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} title={explicitContext && forbidden ? '没有商品查看权限' : '商品加载失败'} compact /> : <ResizableTable columns={[
               ...productIdentityColumns({ code: 'code', name: 'name' }).map((column, index) => ({ ...column, width: compact ? compactWidths[index] : column.width })),
-              { key: 'unit', title: '单位', width: compact ? compactWidths[5] : 80 },
-              { key: 'source', title: mode === 'purchase' ? '供应商' : '分类', width: compact ? compactWidths[6] : 180 },
+              { key: 'unit', title: '单位', width: compact ? compactWidths[1] : 80 },
+              { key: 'source', title: mode === 'purchase' ? '供应商' : '分类', width: compact ? compactWidths[2] : 180 },
               ...(hasStock ? [{ key: 'stock', title: '可用库存', width: 86, align: 'right' as const }] : []),
               ...(mode === 'sale' ? [{ key: 'salePrice', title: compact ? '价格 A 参考' : '参考售价', width: 106, align: 'right' as const }] : []),
             ]} columnStorageKey={`product-finder:${compact ? purchaseLayout ? 'compact-purchase' : 'compact' : 'full'}:${mode}:${hasStock ? 'stock' : 'plain'}`}
-              minWidth={compact ? purchaseLayout ? hasStock ? 940 : 860 : 1024 : 1200} stickyHeader className={purchaseLayout ? 'text-[13px]' : 'text-sm'}>
+              minWidth={compact ? purchaseLayout ? hasStock ? 660 : 580 : 760 : 760} stickyHeader className={purchaseLayout ? 'text-[13px]' : 'text-sm'}>
               {compact && !query.isLoading && products.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={products} columns={columnCount} getRowKey={product => product.id} renderRow={renderRow} onScrollToIndexReady={registerScroll} /> : <tbody className="divide-y divide-border">{query.isLoading ? <tr><td colSpan={columnCount} className="py-20 text-center text-muted-foreground">正在加载商品…</td></tr> : !products.length ? <tr><td colSpan={columnCount} className="py-16 text-center"><PackageSearch className="mx-auto mb-3 h-7 w-7 text-muted-foreground/50" /><p className="font-medium">没有匹配的商品</p>{!compact && <p className="mt-1 text-xs text-muted-foreground">试试其他关键词，或切换到全部分类。</p>}</td></tr> : products.map(renderRow)}</tbody>}
             </ResizableTable>}
           </div>
         </div>
       </div>}
       {(!compact || selected) && <div className={cn('shrink-0 border-t bg-muted/20', compact ? 'px-4 py-2 whitespace-normal [overflow-wrap:anywhere]' : 'min-h-[94px] px-5 py-3')} aria-live="polite">
-        {selected ? <><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span className="text-xs text-muted-foreground">已选商品</span><span className="font-medium">{selected.name}</span><span className="font-mono text-xs text-muted-foreground">{selected.code}</span></div><div className={cn('flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground', compact ? 'mt-1' : 'mt-2')}><span>分类：{selected.categoryPath || selected.categoryName || '未分类'}</span><span>供应商：{selected.supplierName || '—'}</span><span>条码：{selected.barcode || '—'}</span>{mode === 'sale' && !compact && <span>参考售价来自商品基础价格，实际成交价以订单为准。</span>}</div></> : <div className="flex items-center gap-3 py-3 text-sm text-muted-foreground"><PackageSearch className="h-5 w-5" />选择商品后，在这里核对完整分类、供应商和条码。</div>}
+        {selected ? <><div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span className="text-xs text-muted-foreground">已选商品</span><ProductIdentitySummary product={selected} /></div><div className={cn('flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground', compact ? 'mt-1' : 'mt-2')}><span>分类：{selected.categoryPath || selected.categoryName || '未分类'}</span><span>供应商：{selected.supplierName || '—'}</span><span>条码：{selected.barcode || '—'}</span>{mode === 'sale' && !compact && <span>参考售价来自商品基础价格，实际成交价以订单为准。</span>}</div></> : <div className="flex items-center gap-3 py-3 text-sm text-muted-foreground"><PackageSearch className="h-5 w-5" />选择商品后，在这里核对完整分类、供应商和条码。</div>}
       </div>}
     </div>
   </AppDialog>

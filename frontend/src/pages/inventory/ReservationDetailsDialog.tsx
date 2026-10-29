@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import type { InventoryOverviewItem, InventoryReservationSummary } from '@/types/inventory'
 import { ReservationSnapshotRead } from './ReservationSnapshotRead'
 
-type Item = Pick<InventoryOverviewItem, 'productId' | 'warehouseId' | 'productName' | 'warehouseName' | 'unit'>
+type Item = Pick<InventoryOverviewItem, 'productId' | 'warehouseId' | 'productName' | 'warehouseName' | 'unit'> & Partial<Pick<InventoryOverviewItem, 'productCode' | 'spec' | 'color' | 'articleNumber'>>
 
 export default function ReservationDetailsDialog({ open, onClose, item }: { open: boolean; onClose: () => void; item: Item | null }) {
   const active = useActiveWorkspaceTab()

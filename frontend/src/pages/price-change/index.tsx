@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
 import { useApprovalReadScope } from '@/hooks/useApprovalReadScope'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -80,7 +81,7 @@ export default function PriceChangePage() {
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [product, setProduct] = useState<{ id: number; code: string; name: string } | null>(null)
+  const [product, setProduct] = useState<{ id: number; code: string; name: string; spec?: string | null; color?: string | null; articleNumber?: string | null } | null>(null)
   const [productFinderOpen, setProductFinderOpen] = useState(false)
   const [priceType, setPriceType] = useState('sale')
   const [newPrice, setNewPrice] = useState('')
@@ -105,10 +106,10 @@ export default function PriceChangePage() {
     let obsolete = false
     const identity = `${scope.key}:${preselectProductId}`
     if (canPreselectProduct && preselectProductId != null && !product && consumedProduct.current !== identity) {
-      payloadClient.get<{ id: number; code: string; name: string }>(`/products/${preselectProductId}`).then((p) => {
+      payloadClient.get<{ id: number; code: string; name: string; spec?: string | null; color?: string | null; articleNumber?: string | null }>(`/products/${preselectProductId}`).then((p) => {
         if (!obsolete && scope.isCurrent() && p?.id === preselectProductId) {
           consumedProduct.current = identity
-          setProduct({ id: p.id, code: p.code, name: p.name })
+          setProduct({ id: p.id, code: p.code, name: p.name, spec: p.spec, color: p.color, articleNumber: p.articleNumber })
           setCreateOpen(true)
         }
       }).catch(() => { /* 商品不可查看时保留当前输入 */ })
@@ -195,7 +196,7 @@ export default function PriceChangePage() {
     { key: 'id', title: '操作', width: 200, render: (_, row) => (
       <div className="flex gap-1">
         <OrderActivityDialog onOpenChange={setManualDetailOpen} type="price" id={row.id} title={row.requestNo} fields={[
-          ['商品', row.productName], ['价格类型', PRICE_TYPE_LABEL[row.priceType]], ['原价格', row.oldPrice], ['申请价格', row.newPrice], ['状态', STATUS_LABEL[row.status]], ['申请人', row.applicantName], ['申请原因', row.reason],
+          ['商品', <ProductIdentitySummary product={row} />], ['价格类型', PRICE_TYPE_LABEL[row.priceType]], ['原价格', row.oldPrice], ['申请价格', row.newPrice], ['状态', STATUS_LABEL[row.status]], ['申请人', row.applicantName], ['申请原因', row.reason],
         ]} />
         {row.status === 1 && (
           <>
@@ -226,7 +227,7 @@ export default function PriceChangePage() {
 
       <ApprovalHandoffNotice {...handoff} />
       {handoff.data && <OrderActivityDialog type="price" id={handoff.data.id} title={handoff.data.requestNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
-        ['商品', handoff.data.productName], ['价格类型', PRICE_TYPE_LABEL[handoff.data.priceType]], ['原价格', handoff.data.oldPrice], ['申请价格', handoff.data.newPrice], ['状态', handoff.data.statusName], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason],
+        ['商品', <ProductIdentitySummary product={handoff.data} />], ['价格类型', PRICE_TYPE_LABEL[handoff.data.priceType]], ['原价格', handoff.data.oldPrice], ['申请价格', handoff.data.newPrice], ['状态', handoff.data.statusName], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason],
       ]} />}
       {/* 新建改价申请 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -236,7 +237,7 @@ export default function PriceChangePage() {
             <div>
               <p className="mb-1 text-sm font-medium">商品</p>
               <Button variant="outline" className="h-auto min-h-10 w-full justify-start whitespace-normal py-2 text-left" onClick={() => setProductFinderOpen(true)}>
-                {product ? `${product.code} · ${product.name}` : '选择商品…'}
+                {product ? <ProductIdentitySummary product={product} /> : '选择商品…'}
               </Button>
             </div>
             <div>
@@ -268,13 +269,13 @@ export default function PriceChangePage() {
       <ProductFinderModal
         open={productFinderOpen}
         onClose={() => setProductFinderOpen(false)}
-        onConfirm={(p) => { setProduct({ id: p.id, code: p.code, name: p.name }); setProductFinderOpen(false) }}
+        onConfirm={(p) => { setProduct({ id: p.id, code: p.code, name: p.name, spec: p.spec, color: p.color, articleNumber: p.articleNumber }); setProductFinderOpen(false) }}
       />
 
       {/* 驳回 */}
       <Dialog open={!!rejectTarget} onOpenChange={(o) => { if (!o) setRejectTarget(null) }}>
         <DialogContent className="fc-form-dialog max-w-lg">
-          <DialogHeader description={<>{<>商品「{rejectTarget?.productName}」：¥{rejectTarget?.oldPrice ?? '—'} → ¥{rejectTarget?.newPrice}</>}</>}><DialogTitle>驳回改价申请</DialogTitle></DialogHeader>
+          <DialogHeader description={<><ProductIdentitySummary product={rejectTarget || {}} /><span>¥{rejectTarget?.oldPrice ?? '—'} → ¥{rejectTarget?.newPrice}</span></>}><DialogTitle>驳回改价申请</DialogTitle></DialogHeader>
           <div className="fc-form-dialog-body space-y-4">
 
             <label className="block space-y-2"><span className="text-sm font-medium">驳回理由（选填）</span><Input value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="驳回理由（选填）" /></label>

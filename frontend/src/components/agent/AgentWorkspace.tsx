@@ -45,7 +45,7 @@ function Conversation() {
       aria-current={selected?.id === task.id ? 'true' : undefined} className={`xiaoman-history-item ${selected?.id === task.id ? 'is-selected' : ''}`}
       onClick={() => { followEnd.current = true; void state.selectTask(task.id) }}>
       <span className="xiaoman-history-title">{taskHistoryTitle(task)}</span>
-      <span className="xiaoman-history-meta"><span>{taskHistoryStatus(task)}</span>{task.updatedAt && <time dateTime={task.updatedAt}>{formatDisplayDateTime(task.updatedAt)}</time>}</span>
+      <span className="xiaoman-history-meta"><span className="xiaoman-history-status">{taskHistoryStatus(task)}</span>{task.updatedAt && <time dateTime={task.updatedAt}>{formatDisplayDateTime(task.updatedAt)}</time>}</span>
     </button>
   }
   function fill(text: string) { state.setInput(text); input.current?.focus() }

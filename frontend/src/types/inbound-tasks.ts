@@ -119,6 +119,7 @@ export interface InboundQuantityGroup {
   key: string
   productId: number
   productName: string
+  productCode?: string | null
   unit: string | null
   spec?: string | null
   color?: string | null

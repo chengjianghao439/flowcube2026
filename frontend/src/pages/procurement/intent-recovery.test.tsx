@@ -38,8 +38,8 @@ test('只读采购计划没有空白选择列，草稿仍保留真实多选', as
     expect(caption.textContent).toContain('预测窗口 30 天')
     expect(caption.textContent).toContain('转换时仍会重新核对')
     expect(host.textContent?.match(/需求与覆盖读取于/g)).toHaveLength(1)
-    expect(host.querySelector('thead th')?.textContent).toBe('编码')
+    expect(host.querySelector('thead th')?.textContent).toBe('商品')
     expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(0)
-    expect(host.querySelector('tbody td')?.textContent).toBe('SYNTHETIC1')
+    expect(host.querySelector('tbody td')?.textContent).toContain('SYNTHETIC1合成商品1')
   } finally { plan.status = 1 }
 })

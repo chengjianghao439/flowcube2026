@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useEffect, useState } from 'react'
 import { Clock3 } from 'lucide-react'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -21,7 +22,7 @@ function priceSourceLabel(value: AssistantLine['priceSource']) {
 }
 function ProductLines({ lines, reserve = false }: { lines: AssistantLine[]; reserve?: boolean }) {
   return <div className="xiaoman-lines">{lines.map((line, i) => <div className="xiaoman-product" key={`${line.productId}-${i}`}>
-    <div><strong>{line.productName}</strong>{line.unitPrice != null || line.unitPriceCents != null ? <span className="xiaoman-line-detail">单价 {line.unitPrice != null ? `¥${line.unitPrice}` : money(line.unitPriceCents ?? undefined)} · {priceSourceLabel(line.priceSource)}</span> : null}{reserve && <span className="xiaoman-line-detail">可用 {line.available ?? '—'}</span>}</div>
+    <div><ProductIdentitySummary product={line} />{line.unitPrice != null || line.unitPriceCents != null ? <span className="xiaoman-line-detail">单价 {line.unitPrice != null ? `¥${line.unitPrice}` : money(line.unitPriceCents ?? undefined)} · {priceSourceLabel(line.priceSource)}</span> : null}{reserve && <span className="xiaoman-line-detail">可用 {line.available ?? '—'}</span>}</div>
     <span className="xiaoman-quantity">×{line.qty}{line.unit ? ` ${line.unit}` : ''}</span>
   </div>)}</div>
 }

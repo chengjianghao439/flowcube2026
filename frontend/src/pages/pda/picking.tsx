@@ -97,19 +97,12 @@ function SkuCard({ sku, tasksById, onTaskSelect, startingId }: {
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <PdaProductIdentity code={sku.productCode} name={sku.productName} view="overview" />
+            <PdaProductIdentity product={sku} code={sku.productCode} name={sku.productName} view="overview" />
           </div>
           <span className={`shrink-0 rounded-lg px-2 py-1 text-right text-xs font-semibold ${done ? 'bg-success/10 text-success-ink' : 'bg-primary/10 text-primary'}`}>
             {done ? '已拣齐' : <>还需拣 {formatQty(remaining)} {sku.unit}</>}
           </span>
         </div>
-        {(sku.spec || sku.color || sku.articleNumber) && (
-          <div className="mt-2 space-y-0.5 text-xs leading-5 text-muted-foreground">
-            {sku.spec && <p className="whitespace-normal [overflow-wrap:anywhere]">型号：{sku.spec}</p>}
-            {sku.color && <p className="whitespace-normal [overflow-wrap:anywhere]">颜色：{sku.color}</p>}
-            {sku.articleNumber && <p className="whitespace-normal [overflow-wrap:anywhere]">供应商型号：{sku.articleNumber}</p>}
-          </div>
-        )}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs">
           <span className="text-foreground">已拣 {formatQty(sku.totalPicked)} / 共需 {formatQty(sku.totalRequired)} {sku.unit}</span>
           <span className="shrink-0 text-muted-foreground">涉及 {sku.orderCount} 单</span>

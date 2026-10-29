@@ -1,9 +1,10 @@
+import type { ReactNode } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import type { DocumentType } from '@/api/document-activity'
 import { OrderDetailSections } from './OrderDetailSections'
-export function OrderActivityDialog({ type, id, title, fields, open: controlledOpen, onOpenChange, hideTrigger = false }: { type: DocumentType; id: number; title: string; fields: [string, string | number | null | undefined][]; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean }) {
+export function OrderActivityDialog({ type, id, title, fields, open: controlledOpen, onOpenChange, hideTrigger = false }: { type: DocumentType; id: number; title: string; fields: [string, ReactNode][]; open?: boolean; onOpenChange?: (open: boolean) => void; hideTrigger?: boolean }) {
   const [localOpen, setLocalOpen] = useState(false)
   const open = controlledOpen ?? localOpen
   const unmountState = useRef({ uncontrolled: controlledOpen === undefined, open: localOpen, notify: onOpenChange })

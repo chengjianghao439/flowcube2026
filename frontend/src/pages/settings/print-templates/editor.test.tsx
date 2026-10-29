@@ -35,17 +35,20 @@ function btn(text: string) { return [...host.querySelectorAll('button')].find(b 
 async function click(text: string) { await act(async () => { btn(text).click() }); await act(async () => { await new Promise(r => setTimeout(r, 20)) }) }
 
 const a4Template = { ...tpl, type: 1, paperSize: 'A4', layout: { elements: [] } }
-function mockCanvasGeometry(initialWidth: number) {
+function mockCanvasGeometry(initialWidth: number, initialHeight = 700) {
   // jsdom 没有布局；这里只模拟画布列宽与 ResizeObserver 通知，不代表 GUI 几何验收。
   let width = initialWidth
+  let height = initialHeight
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(() => height)
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.getAttribute('role') === 'status' ? 20 : height })
   const observers: { notify: () => void; observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] = []
   Object.assign(globalThis, { ResizeObserver: class {
     observe = vi.fn()
     disconnect = vi.fn()
     constructor(notify: () => void) { observers.push({ notify, observe: this.observe, disconnect: this.disconnect }) }
   } })
-  return { observers, setWidth: (next: number) => { width = next } }
+  return { observers, setWidth: (next: number) => { width = next }, setHeight: (next: number) => { height = next } }
 }
 function zoomText() { return btn('放大画布').previousElementSibling?.textContent }
 
@@ -95,7 +98,7 @@ test('手动缩放优先于观察器及窗口变化，点击适应后恢复自�
   geometry.setWidth(783)
   act(() => { geometry.observers[0].notify(); window.dispatchEvent(new Event('resize')) })
   expect(zoomText()).toBe(manualZoom)
-  await click('适应画布')
+  await click('适应宽度')
   expect(zoomText()).toBe('70%')
   geometry.setWidth(942)
   act(() => geometry.observers[0].notify())
@@ -280,4 +283,34 @@ test('对齐分段组支持方向键且不能清空已有对齐，多选附加�
   await act(async () => { await user.keyboard('{ArrowRight}') })
   await click('保存')
   expect(mocks.save.mock.calls.at(-1)![0].layout.elements[0]).toMatchObject({ x: element.x + 1, y: element.y })
+})
+
+
+test('整页同时按可用宽高缩放A4，恢复后保留整页模式，手动缩放优先且保存毫米不变', async () => {
+  const geometry = mockCanvasGeometry(942, 500)
+  mocks.detail.mockResolvedValue(a4Template)
+  await render()
+  expect(zoomText()).toBe('85%')
+  await click('整页')
+  const canvas = host.querySelector<HTMLElement>('.cursor-crosshair')!
+  expect(parseFloat(canvas.style.height)).toBeLessThanOrEqual(500 - 32 - 20 - 12)
+  expect(parseFloat(canvas.style.width)).toBeLessThanOrEqual(942 - 48)
+  const fitted = zoomText()
+  geometry.setHeight(0); geometry.setWidth(0)
+  act(() => geometry.observers[0].notify())
+  expect(zoomText()).toBe(fitted)
+  geometry.setHeight(700); geometry.setWidth(942)
+  act(() => geometry.observers[0].notify())
+  expect(parseFloat(canvas.style.height)).toBeLessThanOrEqual(700 - 32 - 20 - 12)
+  expect(zoomText()).not.toBe(fitted)
+  await click('放大画布')
+  const manual = zoomText()
+  geometry.setHeight(500)
+  act(() => geometry.observers[0].notify())
+  expect(zoomText()).toBe(manual)
+  await click('适应宽度')
+  expect(zoomText()).toBe('85%')
+  await click('保存')
+  expect(mocks.save.mock.calls.at(-1)![0]).toMatchObject({ paperSize: 'A4', layout: { elements: [] } })
+  expect(mocks.save.mock.calls.at(-1)![0].layout).not.toHaveProperty('editorZoom')
 })

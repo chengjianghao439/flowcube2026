@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { Button } from '@/components/ui/button'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -57,9 +58,7 @@ export function SourceComponents({
               className="border-b last:border-b-0"
             >
               <td className="p-2">
-                <p className="font-medium">
-                  {item.productCode} · {item.productName}
-                </p>
+                <ProductIdentitySummary product={item} />
                 <p className="text-xs text-muted-foreground">
                   <SourceLabel source={item} />
                 </p>

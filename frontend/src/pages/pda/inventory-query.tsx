@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 /**
  * PDA 只读库存查询（无副作用）
  * 路由：/pda/inventory-query
@@ -35,7 +36,7 @@ function ContainerRow({ c }: { c: InventoryQueryContainer }) {
             {c.containerStatus === 'waiting_putaway' ? ' · 待上架' : ''}
           </span>
         </div>
-        <p className="font-medium text-foreground [overflow-wrap:anywhere]">{c.productName}</p>
+        <ProductIdentitySummary product={c} />
         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted-foreground [&>span]:min-w-0 [&>span]:[overflow-wrap:anywhere]">
           <span>仓库：{c.warehouseName}</span>
           <span>库位：{c.locationCode ?? '—'}</span>

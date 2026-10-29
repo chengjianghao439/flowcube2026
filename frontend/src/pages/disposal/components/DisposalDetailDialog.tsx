@@ -114,7 +114,7 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
             </div>
 
             <div className="overflow-x-auto">
-              <ReportTable className="w-full min-w-[1440px] text-sm"><thead><tr>
+              <ReportTable className="w-full min-w-[760px] text-sm"><thead><tr>
                 <ProductIdentityHeaders />
                 <th className="w-20">单位</th>
                 <th className="w-32">数量</th>
@@ -133,7 +133,7 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
                     <SoftStatusLabel label={DISPOSE_TYPE_LABELS[item.disposeType]} tone={DISPOSE_TYPE_TONES[item.disposeType]} />
                   </td>
                 </tr>
-                {item.remark && <tr><td colSpan={10} className="text-xs text-muted-foreground">行备注：{item.remark}</td></tr>}
+                {item.remark && <tr><td colSpan={6} className="text-xs text-muted-foreground">行备注：{item.remark}</td></tr>}
                 </Fragment>
               ))}
             </tbody></ReportTable></div>

@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import type { KitReadOwner } from '@/api/kits'
 import type { CommercialGroup } from '@/types/sale-commercial'
 import { commercialUnit } from '@/pages/sale/commercial/commercialDraft'
@@ -119,7 +120,7 @@ export function OrderFulfillmentPanel({ type, id, readOwner, commercialGroups }:
     setOwner(issue.owner_id == null ? '' : String(issue.owner_id)); setOperation(issue.status === 'resolved' ? 'reopen' : 'progress')
   }
   const columns: TableColumn<DeliveryItem>[] = [
-    ...productIdentityColumns().map(column => ({ ...column, width: column.key === 'productName' ? 160 : column.key === 'color' ? 80 : 120 })),
+    ...productIdentityColumns(),
     { key: 'unit', title: '单位', width: 55 }, { key: 'warehouseName', title: '仓库', width: 95 },
     { key: 'remaining', title: '还需发货', width: 90 }, { key: 'physical', title: '现货可供本单', width: 120 },
     { key: 'boundQty', title: '已安排采购', width: 100 }, { key: 'shortage', title: '还缺货源', width: 95 },
@@ -178,7 +179,7 @@ export function OrderFulfillmentPanel({ type, id, readOwner, commercialGroups }:
         {data.delivery?.commercialGroups?.map(group => {
           const savedGroup = commercialGroups.find(g => g.id === group.groupId)
           return <p key={group.groupId}>
-            {savedGroup?.kitName ?? savedGroup?.components[0]?.productName ?? '原成交行'} · 还需发 {group.remainingQty} {savedGroup ? commercialUnit(savedGroup) : '（单位待核对）'} · {group.readyDate ? `预计备齐 ${group.readyDate}` : '备齐日期未知'} · {group.readyDateExplanation}
+            <ProductIdentitySummary product={savedGroup?.kind === 'kit' ? { productCode: savedGroup.kitCode, productName: savedGroup.kitName, ...savedGroup.metadata.kitIdentity } : savedGroup?.components[0] ?? { productName: '原成交行' }} />还需发 {group.remainingQty} {savedGroup ? commercialUnit(savedGroup) : '（单位待核对）'} · {group.readyDate ? `预计备齐 ${group.readyDate}` : '备齐日期未知'} · {group.readyDateExplanation}
           </p>
         }) ?? <p>成套备货安排尚未提供，备齐日期待核对。</p>}
       </div>}
@@ -190,7 +191,7 @@ export function OrderFulfillmentPanel({ type, id, readOwner, commercialGroups }:
       {type === 'purchase' && <div className="mt-4"><p className="mb-2 text-sm font-medium">正在等待这批采购的销售订单</p>
         {data.impacts.length ? <DataTable columns={[
           { key: 'orderNo', title: '销售单号', render: (_, r) => <a className="text-primary underline" href={`#/sale/${r.saleId}?focus=fulfillment`}>{r.orderNo}</a> },
-          { key: 'productCode', title: '商品编码' }, { key: 'productName', title: '商品名称' }, { key: 'quantity', title: '等待到货数量' }, { key: 'unit', title: '单位' },
+          ...productIdentityColumns(), { key: 'quantity', title: '等待到货数量' }, { key: 'unit', title: '单位' },
           { key: 'promisedDate', title: '约定发货日期', render: v => v ? String(v) : '未设置' },
         ]} data={data.impacts.map((r, i) => ({ ...r, id: i }))} rowKey="id" /> : <p className="text-sm text-muted-foreground">当前没有你可查看的销售订单关联这批采购。</p>}
       </div>}

@@ -1,10 +1,10 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useId } from 'react'
 import { SaleEntryTable } from './SaleEntryTable'
 import type { EntryIssue } from '@/lib/orderEntry'
 import { money } from '@/lib/format'
-import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -63,15 +63,7 @@ export function SaleOrderItemsTable({
               onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
               className={cn('block w-full rounded-md text-left text-sm transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', compact ? 'px-1 py-1' : 'overflow-hidden px-2 py-1.5', invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5')}
             >
-              {item.productName ? <>
-                <span className={cn('break-words font-medium', compact && 'block leading-5')}>
-                  {compact && <span className="mr-2 font-mono text-xs font-normal text-muted-foreground">{item.productCode}</span>}
-                  {item.productName}
-                </span>
-                {compact && (item.spec || item.color || item.articleNumber) && <span className="mt-0.5 block break-words text-xs leading-5 text-muted-foreground">
-                  {[item.spec && `型号 ${item.spec}`, item.color && `颜色 ${item.color}`, item.articleNumber && `供应商型号 ${item.articleNumber}`].filter(Boolean).join(' · ')}
-                </span>}
-              </> : <span className="text-muted-foreground">点击选择商品…</span>}
+              {item.productName ? <ProductIdentitySummary product={item} /> : <span className="text-muted-foreground">点击选择商品…</span>}
             </button>
             const unitCell = <td className={compact ? 'align-top' : 'py-2.5 text-center'}>
               <span className={cn('text-muted-body', compact && 'block py-2')}>{item.entryUnit || item.unit || '—'}</span>
@@ -91,7 +83,7 @@ export function SaleOrderItemsTable({
               {quantityIssue && <p id={quantityErrorId} role="alert" className="mt-1 text-xs leading-5 text-destructive-ink">{quantityIssue.message}</p>}
             </td>
             return <tr key={item._key} className="border-b border-border/40 transition-colors hover:bg-muted/20">
-              {compact ? <td className="align-top">{productButton}</td> : <ProductIdentityCells compact product={item} nameContent={productButton} />}
+              <td className="align-top">{productButton}</td>
               {compact ? <>{quantityCell}{unitCell}</> : <>{unitCell}{quantityCell}</>}
               <td className="px-3 py-3 align-top">
                 <Input

@@ -129,7 +129,7 @@ function PackageCard({ pkg, active, onActivate, onFinish, finishing, onPrintLabe
           {pkg.items.map(item => (
             <div key={item.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/50 last:border-0">
               <div className="min-w-0">
-                <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
+                <PdaProductIdentity product={item} code={item.productCode} name={item.productName} view="detail" />
                 {/* 来源取货标签：同一商品多行时靠这行才分得清哪一份是哪张码，避免移出错行 */}
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {item.labelBarcode ? `取货码 ${item.labelBarcode}` : '按商品码装箱'}
@@ -813,7 +813,7 @@ export default function PdaPackPage() {
                   {/* 原货名：整行移出后原明细行会被删掉，只有冻结快照还记得这是哪件货 */}
                   {frozenRecord.metadata?.productName != null && (
                     <div className="min-w-0">
-                      商品 <span className="font-mono break-all">{String(frozenRecord.metadata.productName)}</span>
+                      <PdaProductIdentity name={String(frozenRecord.metadata.productName)} code={typeof frozenRecord.metadata.productCode === 'string' ? frozenRecord.metadata.productCode : undefined} />
                     </div>
                   )}
                   <div>数量 <span className="font-mono">{frozenRecord.metadata?.qty == null ? '整份' : String(frozenRecord.metadata.qty)}</span></div>

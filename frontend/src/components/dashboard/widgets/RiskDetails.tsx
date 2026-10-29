@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -77,11 +78,7 @@ export default function RiskDetails({
                       className="flex items-center gap-4 border-b py-3"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">{row.name}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {row.code} · 型号 {row.spec || '—'} · 颜色{' '}
-                          {row.color || '—'}
-                        </p>
+                        <ProductIdentitySummary product={row} />
                         <p className="mt-1 text-xs">{row.warehouseName}</p>
                       </div>
                       <strong className="text-sm tabular-nums">

@@ -116,8 +116,8 @@ async function mount(run: (host: HTMLElement, cache: QueryClient) => Promise<voi
 test('owned panel uses actual saved commercial readyDate and preserves original issue/date actions and purchase links', async () => {
   await mount(async (host) => {
     expect(mocks.get.mock.calls[0]).toEqual(['sale', 80, expect.any(AbortSignal), owner])
-    expect(host.textContent).toContain('套A · 还需发 1 套 · 预计备齐 2026-10-05')
-    expect(host.textContent).toContain('套B · 还需发 1 套 · 备齐日期未知')
+    expect(host.textContent).toContain('套A还需发 1 套 · 预计备齐 2026-10-05')
+    expect(host.textContent).toContain('套B还需发 1 套 · 备齐日期未知')
     expect(host.textContent).toContain('修改安排')
     expect(host.textContent).toContain('重新检测')
     expect(host.querySelector('a[href="#/purchase/44?focus=fulfillment"]')).toBeTruthy()

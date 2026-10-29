@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useRef, useState, useSyncExternalStore } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -38,7 +39,7 @@ export function HandlingIntentDialog({ open, onClose }: { open: boolean; onClose
   }
   return <><Dialog open={open && active && handlingOwnerCurrent(owner) && mayHandle(P.INVENTORY_DISPOSAL_VIEW)} onOpenChange={next => { if (!next && current()) onClose() }}><DialogContent><DialogHeader description={<>{<>仅保存要处理的基本量，不预占或承诺现货；正常目标仍重新核对库存与原审批。</>}</>}><DialogTitle>保存处理意图</DialogTitle></DialogHeader>
 
-    <Button disabled={!editable() || !mayHandle(P.PRODUCT_VIEW)} onClick={() => { if (editable()) { setFinderVisited(true); setFinder(true) } }}>{product ? `${product.code} ${product.name}` : '选择意图商品'}</Button>
+    <Button className="h-auto min-h-10 whitespace-normal py-2 text-left" disabled={!editable() || !mayHandle(P.PRODUCT_VIEW)} onClick={() => { if (editable()) { setFinderVisited(true); setFinder(true) } }}>{product ? <ProductIdentitySummary product={product} /> : '选择意图商品'}</Button>
     <label>处理仓库<select aria-label="处理仓库" value={warehouseId} disabled={!editable()} onChange={e => { if (editable()) setWarehouseId(e.target.value) }}><option value="">请选择</option>{warehouses.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
     <label>处理方式<select aria-label="处理方式" value={type} disabled={!editable()} onChange={e => { if (editable()) setType(Number(e.target.value) as 1 | 2 | 3) }}><option value={1}>正常销售</option><option value={2}>采购退货</option><option value={3}>重新报废</option></select></label>
     <label>意图基本量<Input quantity aria-label="意图基本量" value={quantity} disabled={!editable()} onChange={e => { if (editable()) setQuantity(e.target.value) }} />{product?.unit}</label>

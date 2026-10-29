@@ -1,6 +1,7 @@
 import type { CreateKitInput, KitDefinition, UpdateKitInput } from '@/types/kits'
 export interface KitComponentDraft {
   productId: number; code: string; name: string; unit: string
+  spec?: string | null; color?: string | null; articleNumber?: string | null
   allowDecimal: boolean; active: boolean; quantity: string; weight: string
 }
 export interface KitDraft {
@@ -21,7 +22,7 @@ export function draftFromKit(kit: KitDefinition): KitDraft {
     unit: kit.unit || '套', spec: kit.spec ?? '', color: kit.color ?? '', articleNumber: kit.articleNumber ?? '', costPrice: kit.costPrice != null ? String(kit.costPrice) : '', remark: kit.remark ?? '',
     mode: components.length && components.every(c => c.weightSource === 'explicit') ? 'explicit' : 'product_a',
     components: components.map(c => ({
-      productId: c.productId, code: c.productCode ?? '', name: c.productName ?? `商品 #${c.productId}`,
+      productId: c.productId, code: c.productCode ?? '', name: c.productName ?? `商品 #${c.productId}`, spec: c.spec, color: c.color, articleNumber: c.articleNumber,
       unit: c.unit ?? '—', allowDecimal: c.allowDecimal, active: c.productActive, quantity: String(c.baseQty),
       // 派生权重可达六位，只有原显式四位输入可回填编辑框。
       weight: c.weightSource === 'explicit' ? String(Number(c.amountWeight)) : '',

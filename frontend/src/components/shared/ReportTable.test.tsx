@@ -51,28 +51,30 @@ test('保留表格说明在列定义之前，不重复说明或丢失原行标�
   expect(host.querySelectorAll('caption')).toHaveLength(1)
   expect(host.querySelector('tbody th[scope="row"]')?.textContent).toBe('需求')
 })
-test('局部紧凑商品身份保留五列及原列宽记忆，未定制时才使用紧凑默认值', () => {
+test('商品一列在切换紧凑布局后保留用户列宽与完整身份', () => {
   const render = (density?: 'compact') => <ReportTable><thead><tr><ProductIdentityHeaders density={density} /></tr></thead><tbody><tr><ProductIdentityCells density={density} product={{ productCode: 'T05-001', articleNumber: '供应商型号', spec: '型号', productName: '长商品名称', color: '蓝色' }} /></tr></tbody></ReportTable>
   act(() => root.render(render()))
-  const headers = () => [...host.querySelectorAll('thead th')].map(cell => cell.textContent)
-  const originalHeaders = headers()
-  const originalWidth = host.querySelector('table')!.style.minWidth
-  const handle = host.querySelector<HTMLButtonElement>('button[aria-label="调整编码列宽"]')!
+  const handle = host.querySelector<HTMLButtonElement>('button[aria-label="调整商品列宽"]')!
   act(() => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
-  const storedKey = localStorage.key(0)!
-  const savedLayout = localStorage.getItem(storedKey)
-  const customizedWidth = host.querySelector('table')!.style.minWidth
+  const key = localStorage.key(0)!, saved = localStorage.getItem(key), width = host.querySelector('table')!.style.minWidth
   act(() => root.render(render('compact')))
-  expect(headers()).toEqual(originalHeaders)
-  expect(host.querySelectorAll('tbody td')).toHaveLength(5)
-  expect(host.querySelector('table')!.style.minWidth).toBe(customizedWidth)
-  expect(localStorage.key(0)).toBe(storedKey)
-  expect(localStorage.getItem(storedKey)).toBe(savedLayout)
-  act(() => root.unmount())
-  localStorage.clear()
-  root = createRoot(host)
-  act(() => root.render(render('compact')))
-  expect(parseFloat(host.querySelector('table')!.style.minWidth)).toBeLessThan(parseFloat(originalWidth))
-  expect(host.querySelectorAll('button[aria-label^="调整"]')).toHaveLength(5)
-  expect(headers()).toEqual(originalHeaders)
+  expect([...host.querySelectorAll('thead th')].map(cell => cell.textContent)).toEqual(['商品'])
+  expect(host.querySelectorAll('tbody td')).toHaveLength(1)
+  expect(host.querySelector('table')!.style.minWidth).toBe(width)
+  expect(localStorage.getItem(key)).toBe(saved)
+  expect(host.textContent).toContain('型号 型号 · 颜色 蓝色 · 供应商型号 供应商型号')
+})
+
+test('商品单列入口宽度与用户调宽仍独立保存，旧五列配置不压缩组合身份', () => {
+  const render = (widthClasses?: readonly [string] | readonly [string, string, string, string, string]) => <ReportTable><thead><tr><ProductIdentityHeaders density="compact" widthClasses={widthClasses} /></tr></thead><tbody><tr><ProductIdentityCells product={{ productCode: 'MODEL-1', articleNumber: 'SUPPLIER-LONG-123', spec: '型号', productName: '完整商品名', color: '蓝色' }} /></tr></tbody></ReportTable>
+  act(() => root.render(render(['min-w-80'])))
+  expect(host.querySelector('col')!.style.width).toBe('320px')
+  const handle = host.querySelector<HTMLButtonElement>('button[aria-label="调整商品列宽"]')!
+  act(() => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+  act(() => root.render(render()))
+  expect(host.querySelector('col')!.style.width).toBe('330px')
+  expect(host.querySelector('tbody td')!.textContent).toContain('SUPPLIER-LONG-123')
+  act(() => root.unmount()); localStorage.clear(); root = createRoot(host)
+  act(() => root.render(render(['min-w-24', 'min-w-28', 'min-w-20', 'min-w-32', 'min-w-16'])))
+  expect(host.querySelector('col')!.style.width).toBe('256px')
 })

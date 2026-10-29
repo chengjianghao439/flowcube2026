@@ -103,3 +103,13 @@ test('聚焦的操作按钮滚出视口仍保留焦点，失焦后不继续挂�
   act(() => host.querySelector('input')!.focus())
   expect(action.isConnected).toBe(false)
 })
+
+
+test('只有盘点中提示填写，已完成和已取消只提供查看且仍可打开详情', async () => {
+  fixture.query.data = { list: rows(3).map((row, index) => ({ ...row, status: index + 1, statusName: ['盘点中', '已完成', '已取消'][index] })), pagination: { total: 3 } }
+  render()
+  const actions = [...host.querySelectorAll<HTMLButtonElement>('tbody button')]
+  expect(actions.map(button => button.textContent)).toEqual(['查看/填写', '查看', '查看'])
+  await act(async () => actions[1].click())
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('详情2')
+})

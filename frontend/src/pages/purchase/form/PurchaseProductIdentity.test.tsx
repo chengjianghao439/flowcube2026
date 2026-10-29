@@ -16,18 +16,12 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks() })
 const item = { productCode: 'P11', productName: '标准商品', spec: '短型号', color: '黑色', articleNumber: '' }
 
-test('长规格默认紧凑且提供原生展开，完整编码名称与规格仍可核对', async () => {
+test('长规格完整换行且无需展开，编码名称仍完整', async () => {
   const spec = '技术参数'.repeat(30)
   await act(async () => root.render(<PurchaseProductIdentity item={{ ...item, spec }} />))
-  const details = host.querySelector('details')!
-  expect(details).not.toBeNull()
-  expect(details.open).toBe(false)
-  expect(host.querySelector<HTMLElement>('.table-text-value')!.style.webkitLineClamp).toBe('1')
-  expect(details.querySelector('summary')!.textContent).toContain('展开或收起商品规格')
+  expect(host.querySelector('details, .table-text-value')).toBeNull()
   expect(host.textContent).toContain('P11标准商品')
   expect(host.textContent).toContain(spec)
-  await act(async () => details.querySelector('summary')!.click())
-  expect(details.open).toBe(true)
 })
 
 test('短规格不增加展开按钮，编辑商品入口和供应商型号保持', async () => {

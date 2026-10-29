@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -26,7 +27,7 @@ export default function StockShortageDialog({ open, onClose, shortages }: Props)
             <tbody className="divide-y">
               {shortages.map((s, index) => (
                 <tr key={`${s.productId}-${index}`}>
-                  <td className="max-w-48 break-words px-3 py-3 font-medium">{s.productName}</td>
+                  <td className="max-w-48 break-words px-3 py-3 font-medium"><ProductIdentitySummary product={s} /></td>
                   <td className="px-3 py-3 text-right tabular-nums">{s.required}</td>
                   <td className="px-3 py-3 text-right font-medium tabular-nums text-destructive-ink">{s.available}</td>
                 </tr>

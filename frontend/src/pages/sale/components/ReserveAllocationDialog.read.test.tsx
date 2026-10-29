@@ -195,3 +195,33 @@ test('占库弹窗卸载时等待真实错误链结算后恢复原会话', async
     try { await cleanup } finally { client.interceptors.response.eject(interceptor) }
   }
 })
+
+
+test('只有实际横向溢出才提示横滚，调整列宽和窗口后更新且保留表格键盘焦点', async () => {
+  const observers: { notify: () => void; disconnect: ReturnType<typeof vi.fn> }[] = []
+  vi.stubGlobal('ResizeObserver', class {
+    disconnect = vi.fn()
+    constructor(notify: () => void) { observers.push({ notify, disconnect: this.disconnect }) }
+    observe() {}
+    unobserve() {}
+  })
+  client.defaults.adapter = (async config => { validateRead(config); return success(config) }) satisfies AxiosAdapter
+  await mount()
+  await until(() => expect(document.querySelector('[role="dialog"] table')).not.toBeNull())
+  const region = document.querySelector<HTMLElement>('[role="region"][aria-label^="占库商品明细"]')!
+  expect(region.tabIndex).toBe(0)
+  expect(document.body.textContent).not.toContain('横向滚动可查看完整库存参考')
+  let width = 1000, tableWidth = 1200
+  Object.defineProperties(region, { clientWidth: { configurable: true, get: () => width }, scrollWidth: { configurable: true, get: () => tableWidth } })
+  act(() => { region.focus(); window.dispatchEvent(new Event('resize')) })
+  expect(document.body.textContent).toContain('横向滚动可查看完整库存参考')
+  expect(document.activeElement).toBe(region)
+  width = 1300
+  act(() => window.dispatchEvent(new Event('resize')))
+  expect(document.body.textContent).not.toContain('横向滚动可查看完整库存参考')
+  tableWidth = 1400
+  act(() => observers.forEach(observer => observer.notify()))
+  expect(document.body.textContent).toContain('横向滚动可查看完整库存参考')
+  await cleanupFixture()
+  expect(observers.every(observer => observer.disconnect.mock.calls.length > 0)).toBe(true)
+})

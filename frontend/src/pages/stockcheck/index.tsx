@@ -50,7 +50,7 @@ export default function StockCheckPage() {
     { key:'operatorName', title:'经办人', width:100 },
     { key:'createdAt', title:'创建时间', width:160, render:(v)=>formatDisplayDateTime(v) },
     { key:'id', title:'操作', width:100, render:(_,row)=>(
-      <Button size="sm" variant="outline" onClick={()=>setDetailId((row as StockCheck).id)}>查看/填写</Button>
+      <Button size="sm" variant="outline" onClick={()=>setDetailId((row as StockCheck).id)}>{(row as StockCheck).status === 1 ? '查看/填写' : '查看'}</Button>
     )}
   ]
 

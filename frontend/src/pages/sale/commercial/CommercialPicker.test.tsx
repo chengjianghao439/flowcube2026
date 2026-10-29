@@ -297,17 +297,17 @@ test('repeated kit double clicks deliver one selected line', async () => {
 })
 
 
-test.each(['ordinary', 'kit'] as const)('%s picker has only eight data columns and confirms by double click', async pickerKind => {
+test.each(['ordinary', 'kit'] as const)('%s picker has one product identity and three business columns and confirms by double click', async pickerKind => {
   kind = pickerKind; await draw(); await ready()
   const table = document.querySelector('table')!
   expect([...table.querySelectorAll('th')].map(cell => cell.textContent)).toEqual([
-    '编码', '供应商型号', '型号', '商品名称', '颜色', '单位',
+    '商品', '单位',
     pickerKind === 'kit' ? '独立现货参考' : '可用库存', '价格 A 参考'
   ])
-  expect(table.querySelectorAll('col')).toHaveLength(8)
-  expect(row().cells).toHaveLength(8)
-  expect(row().cells[0].textContent).toBe(pickerKind === 'kit' ? kit.code : product.code)
-  expect(table.querySelectorAll('thead button[aria-label$="列宽"]')).toHaveLength(8)
+  expect(table.querySelectorAll('col')).toHaveLength(4)
+  expect(row().cells).toHaveLength(4)
+  expect(row().cells[0].textContent).toContain(pickerKind === 'kit' ? kit.code : product.code)
+  expect(table.querySelectorAll('thead button[aria-label$="列宽"]')).toHaveLength(4)
   expect(table.querySelectorAll('tbody button')).toHaveLength(0)
   expect(table.querySelector('[data-selection-column]')).toBeNull()
   expect(document.body.textContent).not.toContain('双击')

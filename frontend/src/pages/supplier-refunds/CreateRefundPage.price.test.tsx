@@ -91,7 +91,7 @@ async function renderPrice(price: unknown) {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   const section = host.querySelector('[aria-label="准确退款来源"]')
   expect(section).not.toBeNull()
-  return section!.querySelector('tbody tr')!.querySelectorAll('td')[3]
+  return section!.querySelector('tbody tr')!.querySelectorAll('td')[2]
 }
 
 async function fill(label: string, value: string) {

@@ -179,7 +179,7 @@ export default function PdaShipPage() {
 
   const mergedItems = (() => {
     if (!info) return []
-    const map: Record<string, { productCode: string; productName: string; unit: string; qty: number }> = {}
+    const map: Record<string, { productCode: string; productName: string; unit: string; qty: number; spec?: string | null; color?: string | null; articleNumber?: string | null }> = {}
     info.packages.forEach(pkg => pkg.items.forEach(item => {
       if (map[item.productCode]) map[item.productCode].qty += item.qty
       else map[item.productCode] = { ...item }
@@ -303,7 +303,7 @@ export default function PdaShipPage() {
                   : mergedItems.map(item => (
                       <div key={item.productCode} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
                         <div className="min-w-0">
-                          <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
+                          <PdaProductIdentity product={item} code={item.productCode} name={item.productName} view="detail" />
                         </div>
                         <p className="font-bold text-primary shrink-0 ml-3">{item.qty}<span className="text-xs font-normal text-muted-foreground ml-0.5">{item.unit}</span></p>
                       </div>

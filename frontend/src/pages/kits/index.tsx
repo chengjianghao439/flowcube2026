@@ -1,3 +1,4 @@
+import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -41,11 +42,9 @@ export default function KitsPage() {
     navigate(`/kits${values.size ? `?${values}` : ''}`)
   }
   const columns = useMemo<TableColumn<KitDefinition>[]>(() => [
-    { key: 'code', title: '编码', width: 130 }, { key: 'name', title: '配件名称', width: 220 },
+    ...productIdentityColumns({ code: 'code', name: 'name' }),
     { key: 'categoryName', title: '分类', width: 140 }, { key: 'supplierName', title: '供应商', width: 180 },
     { key: 'unit', title: '单位', width: 80, render: (_, row) => row.unit || '套' },
-    { key: 'spec', title: '型号', width: 140 }, { key: 'color', title: '颜色', width: 100 },
-    { key: 'articleNumber', title: '供应商型号', width: 150 },
     { key: 'costPrice', title: '进价', width: 120, align: 'right', render: (_, row) => row.costPrice != null ? <span title={`¥${row.costPrice.toFixed(4)}`}>{money(row.costPrice)}</span> : '—' },
     ...(['A', 'B', 'C', 'D'] as const).map(level => ({ key: `salePrice${level}`, title: `价格${level}`, width: 120, align: 'right' as const, render: (_: unknown, row: KitDefinition) => {
       const price = row[`salePrice${level}`] ?? row.version?.[`salePrice${level}`] ?? row.salePriceA ?? row.version?.salePriceA ?? row.version?.referenceUnitPrice

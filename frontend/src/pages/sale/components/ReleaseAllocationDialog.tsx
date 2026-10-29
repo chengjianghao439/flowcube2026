@@ -90,7 +90,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
 
         <OrdinarySaleRecoveryNotice recovery={release.recovery} onConfirmed={onClose} />
         <div className="min-h-0 overflow-auto rounded-lg border border-border">
-          <ReportTable className="w-full min-w-[1560px] text-sm">
+          <ReportTable className="w-full min-w-[760px] text-sm">
             <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr>
                 <th className="w-10 px-3 py-2">
@@ -143,7 +143,7 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
                 )
               })}
               {!reservedItems.length && (
-                <tr><td colSpan={10} className="px-2 py-6 text-center text-muted-foreground">没有已占库存的明细</td></tr>
+                <tr><td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">没有已占库存的明细</td></tr>
               )}
             </tbody>
           </ReportTable>

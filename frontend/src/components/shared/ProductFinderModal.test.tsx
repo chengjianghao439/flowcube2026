@@ -25,9 +25,9 @@ it('完整商品列表无翻页，筛选变化清空选择，默认不显示价�
   const { host, root } = await mount()
   const next = Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('下一页'))!
   expect(next).toBeUndefined()
-  expect(host.querySelector('thead th')?.textContent).toBe('编码')
+  expect(host.querySelector('thead th')?.textContent).toBe('商品')
   expect(host.querySelector('tbody td')?.textContent).toContain('P001')
-  expect(host.querySelectorAll('thead button[aria-label$="列宽"]')).toHaveLength(7)
+  expect(host.querySelectorAll('thead button[aria-label$="列宽"]')).toHaveLength(3)
   const confirm = Array.from(host.querySelectorAll('button')).find(b => b.textContent === '确认选择')!
   await act(async () => host.querySelector<HTMLTableRowElement>('tbody tr')!.click())
   expect(confirm.disabled).toBe(false)

@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qty } from '@/lib/format'
 import { qtyStep } from '@/lib/qtyStep'
@@ -19,7 +20,7 @@ import { getPurchasePolicyApi, savePurchasePolicyApi, prepareProcurementTransfer
 
 export default function ProcurementSupplyDetails({ supply, supplierId, snapshot, mode = 'plan' }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId?: number | null; mode?: 'plan' | 'replenishment' }) {
   const [open, setOpen] = useState(false)
-  return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>需求与覆盖</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl"><DialogHeader description={<>{<>按本次读取的数据核对需求、已有供给与交期，查看包装规则。</>}</>}><DialogTitle>{supply.productName} · {supply.warehouseName}</DialogTitle></DialogHeader>{open && <SupplyBody snapshot={snapshot} supply={supply} supplierId={supplierId ?? supply.supplierId} mode={mode} onNavigate={() => setOpen(false)} />}</DialogContent></Dialog></>
+  return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>需求与覆盖</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl"><DialogHeader description={<>{<>按本次读取的数据核对需求、已有供给与交期，查看包装规则。</>}</>}><DialogTitle>需求与覆盖 · {supply.warehouseName}</DialogTitle><ProductIdentitySummary product={supply} /></DialogHeader>{open && <SupplyBody snapshot={snapshot} supply={supply} supplierId={supplierId ?? supply.supplierId} mode={mode} onNavigate={() => setOpen(false)} />}</DialogContent></Dialog></>
 }
 function SupplyBody({ supply: r, supplierId, snapshot, mode, onNavigate }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId: number | null; mode: 'plan' | 'replenishment'; onNavigate: () => void }) {
   const navigate = useNavigate()

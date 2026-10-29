@@ -2,7 +2,7 @@ import { ReportTable } from '@/components/shared/ReportTable'
 import OrdinarySaleRecoveryNotice from './OrdinarySaleRecoveryNotice'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { money } from '@/lib/format'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,29 @@ interface Props {
 }
 
 type RowState = { checked: boolean; warehouseId: number; warehouseName: string; qty: number }
+const identityWidths = ['min-w-80'] as const
+
+/** 表格和容器各自变化都复核溢出；不移动员工当前的表格焦点。 */
+function AllocationTableRegion({ children }: { children: ReactNode }) {
+  const regionRef = useRef<HTMLDivElement>(null)
+  const [overflows, setOverflows] = useState(false)
+  useEffect(() => {
+    const region = regionRef.current
+    if (!region) return
+    const measure = () => setOverflows(region.clientWidth > 0 && region.scrollWidth > region.clientWidth + 1)
+    measure()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    observer?.observe(region)
+    const table = region.querySelector('table')
+    if (table) observer?.observe(table)
+    window.addEventListener('resize', measure)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', measure) }
+  }, [])
+  return <>
+    <p className="mb-2 text-xs text-muted-foreground">{overflows && '横向滚动可查看完整库存参考；'}可拖动表头分隔线调整列宽。</p>
+    <div ref={regionRef} role="region" aria-label={overflows ? '占库商品明细，可横向滚动' : '占库商品明细'} tabIndex={0} className="overflow-x-auto rounded-xl border border-border">{children}</div>
+  </>
+}
 
 
 /**
@@ -141,7 +164,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
-      <DialogContent aria-busy={reserve.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="flex max-h-[88vh] w-[min(96vw,1180px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+      <DialogContent aria-busy={reserve.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="flex max-h-[88vh] w-[min(96vw,1240px)] max-w-none flex-col gap-0 overflow-hidden p-0">
         <DialogHeader description={<>
           {!readUnavailable && credit?.willExceed && <span className="text-warning-ink">
             客户授信将超额：额度 {money(credit.creditLimit)}，已用 {money(credit.used)}，本单 {money(credit.thisOrder)}，超出约 {money(credit.overAmount)}。
@@ -179,20 +202,18 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
           {isError && <QueryErrorState error={error} onRetry={() => { void refetch() }} description="没能加载占库预览，请重试后核对商品和仓库" />}
 
           {!readUnavailable && (
-            <>
-            <p className="mb-2 text-xs text-muted-foreground">横向滚动可查看完整库存参考；可拖动表头分隔线调整列宽。</p>
-            <div role="region" aria-label="占库商品明细，可横向滚动" tabIndex={0} className="overflow-x-auto rounded-xl border border-border">
+            <AllocationTableRegion>
               <ReportTable className="w-full text-sm">
                 <thead data-selection-column className="sticky top-0 z-[1] data-table-header text-xs text-muted-foreground">
                   <tr>
-                    <th className="w-12 px-4 py-3">
+                    <th className="w-10 px-3 py-3">
                       <input type="checkbox" checked={allChecked} disabled={frozen} onChange={e => toggleAll(e.target.checked)} aria-label="全选可占商品" />
                     </th>
-                    <ProductIdentityHeaders density="compact" /><th className="min-w-16 px-3 py-3 text-left">单位</th>
+                    <ProductIdentityHeaders density="compact" widthClasses={identityWidths} /><th className="min-w-16 px-3 py-3 text-left">单位</th>
                     <th className="w-32 px-3 py-3 text-left">订购情况</th>
                     <th className="w-40 px-3 py-3 text-left">发货仓库</th>
-                    <th className="w-32 px-3 py-3 text-left">本次占库</th>
-                    <th className="w-40 px-4 py-3 text-right">库存参考</th>
+                    <th className="w-28 px-3 py-3 text-left">本次占库</th>
+                    <th className="w-48 px-4 py-3 text-right">库存参考</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -208,10 +229,10 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                     const warehouseLocked = frozen || !st.checked || Number(item.remainToReserve) < Number(item.quantity)
                     return (
                       <tr key={item.itemId} className={cn('border-t align-top transition-colors hover:bg-muted/15', !st.checked && 'bg-muted/[0.08]', fullyReserved && 'opacity-60')}>
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-3 py-4 text-center">
                           <input type="checkbox" checked={!!st.checked} disabled={frozen || fullyReserved} onChange={e => setRow(item.itemId, { checked: e.target.checked })} aria-label={`选择 ${item.productName} ${item.spec || ''} ${item.color || ''}`} />
                         </td>
-                        <ProductIdentityCells product={item} density="compact" /><td className="px-3 py-3">{item.unit || '—'}</td>
+                        <ProductIdentityCells product={item} density="compact" widthClasses={identityWidths} /><td className="px-3 py-3">{item.unit || '—'}</td>
                         <td className="px-3 py-4">
                           <div className="grid grid-cols-3 gap-2 text-center">
                             <div><div className="text-[11px] text-muted-foreground">需求</div><div className="mt-1 font-semibold tabular-nums">{item.quantity}</div></div>
@@ -253,12 +274,11 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
                     )
                   })}
                   {!items.length && (
-                    <tr><td colSpan={11} className="px-4 py-16 text-center text-muted-foreground"><PackageSearch className="mx-auto mb-2 h-8 w-8 opacity-35" />没有可占用库存的商品明细</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-16 text-center text-muted-foreground"><PackageSearch className="mx-auto mb-2 h-8 w-8 opacity-35" />没有可占用库存的商品明细</td></tr>
                   )}
                 </tbody>
               </ReportTable>
-            </div>
-            </>
+            </AllocationTableRegion>
           )}
         </div>
 

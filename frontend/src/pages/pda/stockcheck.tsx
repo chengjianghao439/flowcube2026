@@ -170,7 +170,7 @@ function CheckWork({ checkId }: { checkId: number }) {
         <div className="max-w-md mx-auto flex-1 space-y-3 overflow-y-auto p-3 w-full">
           {recoveryNotice}
           <PdaCard>
-            <div className="mb-3"><PdaProductIdentity code={activeItem.productCode} name={activeItem.productName} view="detail" /></div>
+            <div className="mb-3"><PdaProductIdentity product={activeItem} code={activeItem.productCode} name={activeItem.productName} view="detail" /></div>
             <p className="text-sm">
               扫描<b>在架的每一个库存条码</b>：已扫 <b className="tabular-nums text-primary">{scanned.length}</b> 个 · 实盘 <b className="tabular-nums text-primary">{totalCounted}</b>
               {diffPreview !== null && diffPreview !== 0 && (
@@ -248,7 +248,7 @@ function CheckWork({ checkId }: { checkId: number }) {
               <PdaCard>
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 text-left">
-                    <PdaProductIdentity code={it.productCode} name={it.productName} view="overview" />
+                    <PdaProductIdentity product={it} code={it.productCode} name={it.productName} view="overview" />
                     <p className="text-xs text-muted-foreground">账面 {it.bookQty} {it.unit} · {it.bookContainerCount} 个在库条码</p>
                   </div>
                   <div className="shrink-0 text-right text-sm">

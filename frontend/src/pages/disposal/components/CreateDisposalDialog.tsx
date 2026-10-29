@@ -165,7 +165,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
 
           {/* 建议列表 */}
           <div className="border rounded-lg max-h-56 overflow-auto">
-            <ReportTable className="w-full min-w-[1480px] text-sm"><thead className="sticky top-0 z-10"><tr>
+            <ReportTable className="w-full min-w-[760px] text-sm"><thead className="sticky top-0 z-10"><tr>
               <th className="w-14 text-center">选择</th>
               <ProductIdentityHeaders />
               <th className="w-40">ACTIVE在库／参考量</th>
@@ -195,7 +195,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
               )
             })}
             {!suggestions?.list?.length && (
-              <tr><td colSpan={10} className="text-center py-6 text-sm text-muted-foreground">
+              <tr><td colSpan={6} className="text-center py-6 text-sm text-muted-foreground">
                 {whId ? '没有符合筛选的滞销商品' : '请先选择仓库'}
               </td></tr>
             )}
@@ -213,7 +213,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
             <div className="space-y-2">
               <Label>处置明细（{rows.length} 项）</Label>
               <div className="border rounded-lg overflow-x-auto">
-                <ReportTable className="w-full min-w-[1500px] text-sm"><thead><tr>
+                <ReportTable className="w-full min-w-[760px] text-sm"><thead><tr>
                   <ProductIdentityHeaders />
                   <th className="w-36">处置数量</th>
                   <th className="w-40">处置方式</th>

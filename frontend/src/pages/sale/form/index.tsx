@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ExistingSaleEditor } from '../commercial/ExistingSaleEditor'
 import { getSaleListWorkspacePath } from '@/lib/saleListNavigation'
 import { readHandlingSourceId, mayHandle } from '@/lib/disposalHandlingRecovery'
@@ -500,10 +501,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                   virtualized
                   columns={[
                     { key: 'productName', title: '商品', width: 440, render: (_, item) => (
-                      <div className="space-y-1 whitespace-normal [overflow-wrap:anywhere]">
-                        <div className="font-medium"><span className="mr-2 font-mono text-xs text-muted-foreground">{item.productCode}</span>{item.productName}</div>
-                        {(item.spec || item.color || item.articleNumber) && <div className="text-xs text-muted-foreground">{[item.spec && `型号 ${item.spec}`, item.color && `颜色 ${item.color}`, item.articleNumber && `供应商型号 ${item.articleNumber}`].filter(Boolean).join(' · ')}</div>}
-                      </div>
+                      <ProductIdentitySummary product={item} />
                     ) },
                     { key: 'unit', title: '单位', width: 70, render: (_, item) => <span className="text-center">{(item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : item.unit}</span> },
                     // 分仓订单：展示每行的发货仓库

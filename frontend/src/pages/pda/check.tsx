@@ -106,7 +106,7 @@ function CheckItemRow({ item }: { item: CheckItem }) {
     }`}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
-          <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
+          <PdaProductIdentity product={item} code={item.productCode} name={item.productName} view="detail" />
         </div>
         {done
           ? <SoftStatusLabel label="✓ 已核齐" tone="success" className="ml-2 shrink-0" />

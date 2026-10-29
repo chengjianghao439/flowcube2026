@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import PdaOverviewText from '@/components/pda/PdaOverviewText'
 import PdaHandoffSummary from '@/components/pda/PdaHandoffSummary'
 /**
@@ -230,7 +231,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
           ...i.packageVoids.filter(v => v.status === 2).map(v => ({id:`void-${v.id}`,kind:'package_void' as const,barcode:v.barcode,qty:null,confirmedBy:v.confirmedBy || null,confirmedAt:v.confirmedAt || null})),
           ...i.containerReturns.filter(r => r.status === 2).map(r => ({id:`return-${r.id}`,kind:'container_return' as const,barcode:r.barcode,qty:r.qty,confirmedBy:r.confirmedBy || null,confirmedAt:r.confirmedAt || null})),
         ])}>
-          <ul className="space-y-1">{detail.items.map(i => <li key={i.id} className="whitespace-normal break-words">{i.productCode} {i.productName} · 原应发 {i.oldRequiredQty.toFixed(2)} → 本次应发 {i.newRequiredQty.toFixed(2)}</li>)}</ul>
+          <ul className="space-y-1">{detail.items.map(i => <li key={i.id} className="whitespace-normal break-words"><ProductIdentitySummary product={i} />原应发 {i.oldRequiredQty.toFixed(2)} → 本次应发 {i.newRequiredQty.toFixed(2)}</li>)}</ul>
         </PdaHandoffSummary>
         <PdaCriticalActionNotice
           blockedReason={returnAction.blockedReason}
@@ -329,7 +330,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
                   </div>
                   {v.otherProductsSnapshot.length > 0 && (
                     <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere] mt-1">
-                      {v.otherProductsSnapshot.map(i => `${i.productName}×${i.qty}`).join('、')}
+                      {v.otherProductsSnapshot.map((i, index) => <span key={index} className="block"><ProductIdentitySummary product={i} />×{i.qty}</span>)}
                     </p>
                   )}
                 </div>

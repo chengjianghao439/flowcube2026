@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useContext, useId, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { TabPathContext } from '@/components/layout/TabPathContext';
@@ -78,8 +79,7 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
         </dl>
         <p className="text-sm leading-6 text-muted-foreground">这三项是不同口径，最终可退款由系统逐笔核对。无原单、手工应付、预付无分配或历史身份不完整请人工核对。</p>
         <DataTable data={displaySource.items} rowKey="id" columns={[
-          { key: 'productId', title: '商品编码', width: 160, render: (_, item) => displaySource?.itemLabels?.find(l => l.id === item.id)?.productCode || '历史编码未记录' },
-          { key: 'id', title: '商品名称与规格', render: (_, item) => { const label = displaySource?.itemLabels?.find(l => l.id === item.id); return <div className="space-y-1"><p>{label?.productName || '历史商品名称未记录，请人工核对'}</p>{(label?.articleNumber || label?.spec || label?.color) && <p className="text-xs text-muted-foreground">{[label.articleNumber && `供应商型号 ${label.articleNumber}`, label.spec && `型号 ${label.spec}`, label.color && `颜色 ${label.color}`].filter(Boolean).join(' · ')}</p>}<p className="text-xs text-muted-foreground">原退货行 {item.id} / 原采购行 {item.purchaseItemId}</p></div> } },
+          { key: 'id', title: '商品', width: 360, render: (_, item) => { const label = displaySource?.itemLabels?.find(l => l.id === item.id); return <div className="space-y-1"><ProductIdentitySummary product={label || { productName: '历史商品名称未记录，请人工核对' }} /><p className="text-xs text-muted-foreground">原退货行 {item.id} / 原采购行 {item.purchaseItemId}</p></div> } },
           { key: 'quantity', title: '基本量', width: 120, align: 'right', render: (_, item) => <span className="tabular-nums">{item.quantity} {item.unit}</span> },
           { key: 'unitPrice', title: '原成交单价', width: 140, align: 'right', render: value => <span className="tabular-nums">{sourceUnitPriceLabel(value)}</span> },
         ]} />

@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { approvalSource, approvalNavigationPath, pendingApprovalRowKey, pendingApprovalProgress, pendingApprovalTime, pendingApprovalAmountLabel, pendingApprovalAmount } from '@/lib/approvalBusiness'
 import { usePermission } from '@/hooks/usePermission'
 import { FulfillmentTodos } from '@/components/shared/FulfillmentTodos'
@@ -32,8 +33,7 @@ export function ListLowStock() {
           {data.map((item, index) => (
             <div key={`${item.id}-${item.warehouseName}-${index}`} className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-1 py-3 text-sm">
               <div className="min-w-0 flex-1">
-                <span className="font-medium text-foreground">{item.name}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">{item.code}</span>
+                <ProductIdentitySummary product={item} />
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <span className="text-xs text-muted-foreground">{item.warehouseName}</span>

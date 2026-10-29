@@ -275,7 +275,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-xs text-muted-foreground">商品</p>
-                  <PdaProductIdentity code={target.barcode} name={target.productName} view="detail" />
+                  <p className="font-mono text-xs">{target.barcode}</p><PdaProductIdentity product={target} code={undefined} name={target.productName} view="detail" />
                 </div>
                 <div className="shrink-0 text-right">
                   {target.quantitySource === 'active_pick' ? <><p className="font-bold text-primary">本任务应归还 {target.taskReturnQty}</p><p className="text-xs text-muted-foreground">条码账面 {target.remainingQty}</p></> : <><p className="text-xs text-muted-foreground">数量</p><p className="font-bold text-primary">{target.qty}</p></>}
@@ -297,7 +297,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
             {detail.containers.map(c => (
               <div key={c.containerId} className="rounded-xl border border-border bg-card p-3 flex items-center justify-between">
                 <div className="min-w-0">
-                  <PdaProductIdentity code={c.barcode} name={c.productName} view="detail" />
+                  <p className="font-mono text-xs">{c.barcode}</p><PdaProductIdentity product={c} code={undefined} name={c.productName} view="detail" />
                 </div>
                 <div className="shrink-0 ml-2 text-right">{c.quantitySource === 'active_pick' ? <><p className="text-sm font-bold text-primary">本任务应归还 {c.taskReturnQty}</p><p className="text-xs text-muted-foreground">条码账面 {c.remainingQty}</p></> : <p className="text-sm font-bold text-primary">{c.qty}</p>}</div>
               </div>
@@ -317,7 +317,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
                     <span className="text-xs text-muted-foreground">{p.items.length} 种商品</span>
                   </div>
                   <p className="text-xs text-muted-foreground min-w-0 whitespace-normal [overflow-wrap:anywhere] mt-1">
-                    {p.items.map(i => `${i.productName ?? '—'} × ${i.qty}${i.unit ? ` ${i.unit}` : ''}`).join('、') || '（箱内无商品记录）'}
+                    {p.items.length ? p.items.map((i, index) => <span key={index} className="block"><PdaProductIdentity product={i} />× {i.qty} {i.unit}</span>) : '（箱内无商品记录）'}
                   </p>
                 </div>
               ))}

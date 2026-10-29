@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ChartContainer } from '@/components/shared/ChartContainer'
 import { MonthlyAmountChart } from '@/components/shared/MonthlyAmountChart'
 import { ChartTooltipContent } from '@/components/shared/ChartPresentation'
@@ -46,8 +47,7 @@ const turnoverColumns: TableColumn<{
   rank: number
 }>[] = [
   { key: 'rank', title: '排名', width: 70, render: v => <span className="text-muted-foreground">#{v as number}</span> },
-  { key: 'code', title: '编码', width: 120, render: v => <span className="text-muted-foreground">{String(v)}</span> },
-  { key: 'name', title: '名称', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
+  ...productIdentityColumns({ code: 'code', name: 'name' }),
   { key: 'unit', title: '单位', width: 70 },
   { key: 'inboundQty', title: '入库量', width: 95, render: v => <span className="text-green-600">+{String(v)}</span> },
   { key: 'outboundQty', title: '出库量', width: 95, render: v => <span className="text-red-500">-{String(v)}</span> },
@@ -71,7 +71,7 @@ export default function ReportsPage() {
   const [endDate, setEndDate] = useState('')
   const [applied, setApplied] = useState({ startDate: todayYmd(), endDate: todayYmd() })
   const [pickerOpen, setPickerOpen] = useState(false)
-  const [priceProduct, setPriceProduct] = useState<{ id: number; name: string } | null>(null)
+  const [priceProduct, setPriceProduct] = useState<{ id: number; name: string; code?: string; spec?: string | null; color?: string | null; articleNumber?: string | null } | null>(null)
 
   const summaryTabs: { key: SummaryTab; label: string }[] = [
     { key: 'purchase', label: '采购统计' },
@@ -218,8 +218,8 @@ export default function ReportsPage() {
                         按商品查看已收齐采购单的月度均价（当前日期范围），便于观察进价波动
                       </p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
-                      {priceProduct ? `切换商品：${priceProduct.name}` : '选择商品'}
+                    <Button variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal py-2 text-left" onClick={() => setPickerOpen(true)}>
+                      {priceProduct ? <ProductIdentitySummary product={priceProduct} /> : '选择商品'}
                     </Button>
                   </div>
                   {priceTrendQ.isError && !priceTrendQ.data && (
@@ -313,7 +313,7 @@ export default function ReportsPage() {
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onConfirm={(product) => {
-          setPriceProduct({ id: product.id, name: product.name })
+          setPriceProduct({ id: product.id, name: product.name, code: product.code, spec: product.spec, color: product.color, articleNumber: product.articleNumber })
           setPickerOpen(false)
         }}
       />

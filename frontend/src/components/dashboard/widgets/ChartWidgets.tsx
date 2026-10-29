@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ChartContainer } from '@/components/shared/ChartContainer'
 import { ChartTooltipContent, ChartLegendContent } from '@/components/shared/ChartPresentation'
 import { useState } from 'react'
@@ -58,7 +59,7 @@ export function ChartIoTrend() {
 export function ChartTopStock() {
   const { data, isLoading, error, refetch } = useTopStock()
   const rows = (data ?? []).slice(0, 10).map(d => ({
-    name: d.name, fullName: d.name,
+    name: d.name, fullName: d.name, identity: d,
     价值: Math.round(d.value),
   }))
   return (
@@ -69,7 +70,7 @@ export function ChartTopStock() {
             <CartesianGrid {...chartGrid} vertical horizontal={false} />
             <XAxis axisLine={false} tickLine={false} type="number" tick={axisTick} tickFormatter={wan} />
             <YAxis axisLine={false} tickLine={false} type="category" dataKey="name" tick={<WrappedCategoryTick />} width={112} interval={0} />
-            <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.fullName || label} formatter={(v) => [money(Number(v ?? 0)), '库存价值']} content={<ChartTooltipContent />} cursor={chartBarCursor} />
+            <Tooltip labelFormatter={(label, payload) => payload?.[0]?.payload?.identity ? <ProductIdentitySummary product={payload[0].payload.identity} /> : label} formatter={(v) => [money(Number(v ?? 0)), '库存价值']} content={<ChartTooltipContent />} cursor={chartBarCursor} />
             <Bar isAnimationActive={false} dataKey="价值" fill="hsl(var(--primary))" radius={[0, 5, 5, 0]} maxBarSize={24} />
           </BarChart>
         </ChartContainer></div>

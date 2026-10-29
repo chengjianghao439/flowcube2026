@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 /**
  * PdaOverReceiveDialog — 超收确认弹窗（强制选原因码）
  *
@@ -22,6 +23,7 @@ export type OverReceiveReasonCode = typeof OVER_RECEIVE_REASONS[number]['code']
 
 interface Props {
   productName: string
+  product?: import('@/components/shared/ProductIdentitySummary').ProductIdentitySummaryValue
   unit: string
   orderedQty: number
   receivedQty: number
@@ -34,14 +36,14 @@ interface Props {
 }
 
 export default function PdaOverReceiveDialog({
-  productName, unit, orderedQty, receivedQty, thisQty, overQty, overAmount,
+  productName, product, unit, orderedQty, receivedQty, thisQty, overQty, overAmount,
   onCancel, onConfirm,
 }: Props) {
   const reasonLabelId = useId()
   const [reason, setReason] = useState<OverReceiveReasonCode | null>(null)
 
   return (
-    <PdaDialog title="确认超收" description={productName} titleClassName="text-destructive-ink" onDismiss={onCancel} footer={
+    <PdaDialog title="确认超收" description="核对商品与本次超收数量" titleClassName="text-destructive-ink" onDismiss={onCancel} footer={
         <div className="flex gap-2">
           <button
             type="button"
@@ -60,6 +62,7 @@ export default function PdaOverReceiveDialog({
           </button>
         </div>
     }>
+        <ProductIdentitySummary product={product ?? { productName }} />
         <div className="mt-3 rounded-xl bg-muted/50 p-3 text-sm space-y-1">
           <div className="flex justify-between"><span className="text-muted-foreground">应到</span><span className="tabular-nums">{orderedQty} {unit}</span></div>
           <div className="flex justify-between"><span className="text-muted-foreground">已收</span><span className="tabular-nums">{receivedQty} {unit}</span></div>

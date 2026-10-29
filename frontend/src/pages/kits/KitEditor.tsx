@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -140,7 +141,7 @@ function KitEditorContent({ initial, readOwner, onClose }: { initial?: KitDefini
     if (locked || !writable) return
     try { assertSelectionRead() } catch { return }
     if (draft.components.some(c => c.productId === product.id)) { setLocalError('组成不能重复选择同一个商品'); return }
-    change({ ...draft, components: [...draft.components, { productId: product.id, code: product.code, name: product.name, unit: product.unit, allowDecimal: product.allowDecimalQty !== false, active: true, quantity: '1', weight: '' }] })
+    change({ ...draft, components: [...draft.components, { productId: product.id, code: product.code, name: product.name, spec: product.spec, color: product.color, articleNumber: product.articleNumber, unit: product.unit, allowDecimal: product.allowDecimalQty !== false, active: true, quantity: '1', weight: '' }] })
   }
   function acceptProfileSelection(kind: 'category' | 'supplier', result: { id: number; name: string }) {
     if (locked || !writable) return
@@ -195,16 +196,16 @@ function KitEditorContent({ initial, readOwner, onClose }: { initial?: KitDefini
           </fieldset>
           <p className="max-w-4xl text-xs leading-5 text-muted-foreground">{draft.mode === 'product_a' ? '默认按组成保存时的组件 A 价 × 每套基本量分摊。以后商品改价不追改原参考；只改套报价、名称或启停也沿用原参考。' : '为全部组件填写非负比例，例如 80 与 20 或 4 与 1；最多4位小数，个别可为零，合计须大于零。不会自动把原 A 价参考转换成手工比例。'}</p>
           {changed && baseline && <p className="text-xs text-warning-ink">组成、每套量或分摊比例已修改：保存时提交全部组成并生成新版本；默认模式将重新取商品当时 A 价。</p>}
-          <div className="overflow-x-auto rounded-md border"><ReportTable className="w-full min-w-[820px] text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="p-3">组件商品</th><th className="p-3">基本单位</th><th className="w-32 p-3">每套基本量</th><th className="p-3">原版本 A 价</th><th className="p-3">原分摊参考 / 来源</th>{draft.mode === 'explicit' && <th className="w-36 p-3">分摊比例</th>}{writable && <th className="w-20 p-3">操作</th>}</tr></thead>
+          <div className="overflow-x-auto rounded-md border"><ReportTable className="w-full min-w-[820px] text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="p-3">商品</th><th className="p-3">基本单位</th><th className="w-32 p-3">每套基本量</th><th className="p-3">原版本 A 价</th><th className="p-3">原分摊参考 / 来源</th>{draft.mode === 'explicit' && <th className="w-36 p-3">分摊比例</th>}{writable && <th className="w-20 p-3">操作</th>}</tr></thead>
             <tbody className="divide-y">{draft.components.map((c, index) => {
               const original = originalVersion?.components.find(old => old.productId === c.productId)
-              return <tr key={c.productId} className="align-top"><td className="p-3"><div>{c.name}</div><div className="text-xs text-muted-foreground">{c.code}{!c.active && ' · 商品已停用或删除'}</div></td><td className="p-3">{c.unit}{!c.allowDecimal && <span className="block text-xs text-warning-ink">只能整数</span>}</td>
+              return <tr key={c.productId} className="align-top"><td className="p-3"><ProductIdentitySummary product={c} />{!c.active && <p className="text-xs text-muted-foreground">商品已停用或删除</p>}</td><td className="p-3">{c.unit}{!c.allowDecimal && <span className="block text-xs text-warning-ink">只能整数</span>}</td>
                 <td className="p-2"><Input quantity type="number" min={c.allowDecimal ? 0.01 : 1} step={qtyStep(c.allowDecimal)} aria-label={`${c.name}每套基本量`} inputMode="decimal" disabled={!writable || locked} value={c.quantity} onChange={e => change({ ...draft, components: draft.components.map((row, i) => i === index ? { ...row, quantity: e.target.value } : row) })} /></td>
                 <td className="p-3 tabular-nums">{original ? String(original.referencePrice) : '保存时采样'}</td><td className="p-3 tabular-nums"><span>{original?.amountWeight ?? '保存时生成'}</span><span className="block text-xs text-muted-foreground">{original ? original.weightSource === 'product_a' ? '当时 A 价 × 基本量' : '原显式比例' : '新组件'}</span></td>
                 {draft.mode === 'explicit' && <td className="p-2"><Input aria-label={`${c.name}分摊比例`} inputMode="decimal" placeholder="主动填写" disabled={!writable || locked} value={c.weight} onChange={e => change({ ...draft, components: draft.components.map((row, i) => i === index ? { ...row, weight: e.target.value } : row) })} /></td>}
                 {writable && <td className="p-2"><Button size="sm" variant="ghost" disabled={locked} aria-label={`移除${c.name}`} onClick={() => change({ ...draft, components: draft.components.filter((_, i) => i !== index) })}>移除</Button></td>}
               </tr>
-            })}{!draft.components.length && <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">添加真实商品，填写每套使用的基本量。</td></tr>}</tbody></ReportTable></div>
+            })}{!draft.components.length && <tr><td colSpan={5 + (draft.mode === 'explicit' ? 1 : 0) + (writable ? 1 : 0)} className="p-8 text-center text-muted-foreground">添加真实商品，填写每套使用的基本量。</td></tr>}</tbody></ReportTable></div>
         </section>
       </div>
     </AppDialog>

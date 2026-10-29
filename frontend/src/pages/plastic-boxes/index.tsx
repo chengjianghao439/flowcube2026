@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useRef, useState, type ReactNode } from 'react'
@@ -283,7 +284,7 @@ function DetailDialog({
         <div className="fc-order-activity-body min-h-0 min-w-0 space-y-4 overflow-y-auto pt-4">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm text-muted-foreground">
-              {box?.productName ? `绑定商品：${box.productName} (${box.productCode})` : '未绑定商品'}
+              {box?.productName ? <ProductIdentitySummary product={box} /> : '未绑定商品'}
               {box?.warehouseName ? ` · ${box.warehouseName}` : ''}
               {` · 当前数量 ${box?.remainingQty ?? 0}`}
             </div>

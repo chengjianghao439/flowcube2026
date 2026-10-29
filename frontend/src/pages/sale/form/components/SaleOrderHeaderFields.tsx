@@ -132,11 +132,11 @@ export function SaleOrderHeaderFields({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label htmlFor={`${fieldId}-receiver`}>收货人</Label>
-          <LimitedInput id={`${fieldId}-receiver`} maxLength={30} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverName(e.target.value))} placeholder="请输入收货人或部门" disabled={headerReadOnly} className="h-9" />
+          <LimitedInput id={`${fieldId}-receiver`} maxLength={30} value={receiverName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverName(e.target.value))} placeholder="收货人/部门" disabled={headerReadOnly} className="h-9" />
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label htmlFor={`${fieldId}-phone`}>联系电话</Label>
-          <LimitedInput id={`${fieldId}-phone`} data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverPhone(e.target.value))} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
+          <LimitedInput id={`${fieldId}-phone`} data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverPhone(e.target.value))} placeholder="手机/座机号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
           {phoneError && <p role="alert" className="text-xs text-destructive-ink">{phoneError}</p>}
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-5">

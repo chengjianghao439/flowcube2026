@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { WorkspaceListReturnButton } from '@/components/shared/WorkspaceListReturnButton'
@@ -601,7 +602,7 @@ function TaskProgressCard({ task }: { task: SaleReturn['task'] }) {
           <p className="font-medium">质检发现不合格 {task.rejectedQty} 件，已隔离为待报废库存（不计入可用库存）</p>
           {(task.rejectedContainers || []).map(c => (
             <p key={c.id} className="text-muted-foreground">
-              {c.barcode} · {c.productName} · {c.qty} 件
+              <span className="font-mono">{c.barcode}</span><ProductIdentitySummary product={c} />{c.qty} 件
             </p>
           ))}
         </div>
@@ -666,7 +667,7 @@ function ReverseTaskCard({ reverse }: { reverse: SaleReturnReverseTask }) {
           </p>
           {reverse.containers.map(c => (
             <p key={c.id} className="text-muted-foreground">
-              {c.barcode} · {c.productName} · {c.qty} 件
+              <span className="font-mono">{c.barcode}</span><ProductIdentitySummary product={c} />{c.qty} 件
             </p>
           ))}
         </div>

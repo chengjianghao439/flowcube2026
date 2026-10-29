@@ -52,7 +52,7 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
             </div>
             <div className="min-w-0">
               <SheetTitle className="break-words text-base">
-                {item?.productName ?? '—'}
+                库存条码
               </SheetTitle>
               <SheetDescription>{item?.warehouseName || '库存条码'}</SheetDescription>
               {item && <div className="mt-4"><ProductIdentityDetails product={item} /></div>}

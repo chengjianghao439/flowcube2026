@@ -22,7 +22,7 @@ export default function PdaSaleReturnReceivePage() {
   const taskId = Number(id)
   const nav = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
-  const [selectedProduct, setSelectedProduct] = useState<{ id: number; code: string; name: string; unit: string; remaining: number } | null>(null)
+  const [selectedProduct, setSelectedProduct] = useState<{ id: number; code: string; name: string; unit: string; remaining: number; spec?: string | null; color?: string | null; articleNumber?: string | null } | null>(null)
   // 「只能整数」的商品把收货/质检数量框的 step 切成 1（迁移 254）
   const allowDecimalOf = useProductQtyPolicies([selectedProduct?.id])
   const [boxes, setBoxes] = useState<number[]>([0])
@@ -121,7 +121,7 @@ export default function PdaSaleReturnReceivePage() {
     setSelectedProduct({
       id: product.productId,
       code: product.productCode,
-      name: product.productName,
+      name: product.productName, spec: product.spec, color: product.color, articleNumber: product.articleNumber,
       unit: product.unit,
       remaining: product.totalExpected - product.totalReceived,
     })
@@ -178,14 +178,14 @@ export default function PdaSaleReturnReceivePage() {
         {/* 产品列表 */}
         {step === 'select' && productList.map(p => (
           <PdaCard key={p.productId} className="w-full" active={p.totalExpected > p.totalReceived} onClick={() => {
-            setSelectedProduct({ id: p.productId, code: p.productCode, name: p.productName, unit: p.unit, remaining: p.totalExpected - p.totalReceived })
+            setSelectedProduct({ id: p.productId, code: p.productCode, name: p.productName, spec: p.spec, color: p.color, articleNumber: p.articleNumber, unit: p.unit, remaining: p.totalExpected - p.totalReceived })
             setBoxes([0])
             setRejectedQty(0)
             setStep(task.status === 3 ? 'check' : 'qty')
           }}>
             <div className="flex justify-between items-center">
               <div className="min-w-0 flex-1 text-left">
-                <PdaProductIdentity code={p.productCode} name={p.productName} view="overview" />
+                <PdaProductIdentity product={p} code={p.productCode} name={p.productName} view="overview" />
               </div>
               <div className="shrink-0 ml-2 text-right text-sm text-muted-foreground">
                 应退 {p.totalExpected} / 已收 {p.totalReceived}
@@ -202,7 +202,7 @@ export default function PdaSaleReturnReceivePage() {
         {/* 数量录入 */}
         {step === 'qty' && selectedProduct && (
           <PdaCard>
-            <div className="mb-3"><PdaProductIdentity code={selectedProduct.code} name={selectedProduct.name} view="detail" /></div>
+            <div className="mb-3"><PdaProductIdentity product={selectedProduct} code={selectedProduct.code} name={selectedProduct.name} view="detail" /></div>
             <div className="text-sm text-muted-foreground mb-3">可收数量：{selectedProduct.remaining} {selectedProduct.unit}</div>
             {boxes.map((qty, i) => (
               <div key={i} className="flex items-center gap-2 mb-2">
@@ -228,7 +228,7 @@ export default function PdaSaleReturnReceivePage() {
         {/* 质检确认 */}
         {step === 'check' && selectedProduct && (
           <PdaCard>
-            <div className="mb-3"><PdaProductIdentity code={selectedProduct.code} name={selectedProduct.name} view="detail" /></div>
+            <div className="mb-3"><PdaProductIdentity product={selectedProduct} code={selectedProduct.code} name={selectedProduct.name} view="detail" /></div>
             <div className="text-sm text-muted-foreground mb-3">已收货：{selectedProduct.remaining + (task?.items?.reduce((s, i) => i.productId === selectedProduct.id ? s + i.receivedQty : s, 0) || 0)} {selectedProduct.unit}</div>
             <div className="mb-3">
               <span className="text-sm">质检通过数量：</span>
@@ -295,6 +295,6 @@ function ReturnLabelReceiptView({ receipt }: { receipt: Partial<ReturnTaskAction
 
 // Helper type
 interface ReturnTaskItem {
-  id: number; productId: number; productCode: string; productName: string; unit: string
+  id: number; productId: number; productCode: string; productName: string; unit: string; spec?: string | null; color?: string | null; articleNumber?: string | null
   expectedQty: number; receivedQty: number; checkedQty: number; rejectedQty: number; putawayQty: number
 }

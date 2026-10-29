@@ -11,9 +11,9 @@
  * - 脏状态标签右上角显示橙色小圆点
  */
 
-import { useRef, useState, useEffect, useId } from 'react'
+import { useRef, useState, useEffect, useId, useCallback } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { X, ChevronDown } from 'lucide-react'
+import { X, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -37,14 +37,47 @@ export function WorkspaceTabs() {
   const menuFocusIndex = useRef(0)
   const menuId = useId()
   const tabRefs = useRef(new Map<string, HTMLButtonElement>())
+  const viewportRef = useRef<HTMLDivElement>(null)
+  const [scrollEdges, setScrollEdges] = useState({ overflow: false, left: false, right: false })
+  const activeMounted = tabs.some(tab => tab.key === activeKey)
+  const measureScroll = useCallback(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const maxScroll = Math.max(0, viewport.scrollWidth - viewport.clientWidth)
+    const next = { overflow: maxScroll > 1, left: viewport.scrollLeft > 1, right: viewport.scrollLeft < maxScroll - 1 }
+    setScrollEdges(previous => previous.overflow === next.overflow && previous.left === next.left && previous.right === next.right ? previous : next)
+  }, [])
+  const revealActiveTab = useCallback(() => {
+    // 包括独立关闭按钮；焦点仍只在员工键盘导航时交给标签按钮。
+    tabRefs.current.get(activeKey)?.parentElement?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+  }, [activeKey])
   const focusAfterClose = useRef(false)
   const guardedFocus = useRef<{ confirm: NonNullable<typeof pendingConfirm>; target: HTMLElement | null } | null>(null)
   const tabId = (key: string) => `${menuId}-tab-${encodeURIComponent(key)}`
 
-  // 激活标签变化时自动滚入视图
+  // 路由先变化、KeepAlive 随后登记时，等待实际标签挂载再滚动。
   useEffect(() => {
-    tabRefs.current.get(activeKey)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
-  }, [activeKey])
+    if (activeMounted) revealActiveTab()
+  }, [activeMounted, revealActiveTab])
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    const resized = () => { revealActiveTab(); measureScroll() }
+    measureScroll()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(resized)
+    observer?.observe(viewport)
+    for (const element of tabRefs.current.values()) {
+      if (element.parentElement) observer?.observe(element.parentElement)
+    }
+    window.addEventListener('resize', resized)
+    return () => { observer?.disconnect(); window.removeEventListener('resize', resized) }
+  }, [tabs, revealActiveTab, measureScroll])
+
+  const scrollTabs = (direction: -1 | 1) => {
+    const viewport = viewportRef.current
+    if (viewport) viewport.scrollBy({ left: direction * Math.max(120, viewport.clientWidth * 0.75), behavior: 'smooth' })
+  }
 
   useEffect(() => {
     if (!focusAfterClose.current) return
@@ -211,8 +244,14 @@ export function WorkspaceTabs() {
 
   return (
     <div className="flex w-full min-w-0 items-center gap-0">
-      {/* 可横向滚动的标签列表 */}
+      {scrollEdges.overflow && <button type="button" aria-label="向左滚动标签" title="向左滚动标签" disabled={!scrollEdges.left} onClick={() => scrollTabs(-1)}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30">
+        <ChevronLeft className="h-4 w-4" aria-hidden />
+      </button>}
+      {/* 两端导航在溢出时始终占位，边界只禁用，不改变滚动区宽度。 */}
       <div
+        ref={viewportRef}
+        onScroll={measureScroll}
         className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-1"
         style={{ scrollbarWidth: 'none' }}
       >
@@ -275,6 +314,11 @@ export function WorkspaceTabs() {
           )
         })}
       </div>
+
+      {scrollEdges.overflow && <button type="button" aria-label="向右滚动标签" title="向右滚动标签" disabled={!scrollEdges.right} onClick={() => scrollTabs(1)}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30">
+        <ChevronRight className="h-4 w-4" aria-hidden />
+      </button>}
 
       {/* 操作下拉菜单 */}
       <div className="relative shrink-0" ref={menuRef}>

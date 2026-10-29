@@ -37,12 +37,12 @@ const rawLine = { productId: 1, productName: '合成商品', unit: '个', ordere
 test.each([null, undefined, NaN, Infinity])('完整原明细%s不被聚合为0；未知摘要显示—且已知其他量保持', async invalid => {
   const raw = { ...rawLine, receivedQty: invalid } as unknown as Parameters<typeof groupInboundQuantities>[0][number]
   const host = await render({ groups: groupInboundQuantities([raw, rawLine]), field: 'receivedQty', label: '已收', collapseZero: true })
-  expect(host.querySelector('[aria-label="已收"]')?.textContent).toContain('合成商品：—')
+  expect(host.querySelector('[aria-label="已收"]')?.textContent).toContain('合成商品—')
   expect(host.querySelector('[aria-label="已收"]')?.textContent).not.toBe('0')
 })
 test('完整明细同组+1/-1只保留分组净量，不能声明全零', async () => {
   const host = await render({ groups: groupInboundQuantities([{ ...rawLine, receivedQty: 1 }, { ...rawLine, receivedQty: -1 }]), field: 'receivedQty', label: '已收', collapseZero: true })
-  expect(host.querySelector('[aria-label="已收"]')?.textContent).toBe('合成商品：0 个')
+  expect(host.querySelector('[aria-label="已收"]')?.textContent).toBe('合成商品0 个')
 })
 test('多个同组抵消仍有分组入口，正常逐行严格零仍无按钮', async () => {
   const rows = Array.from({ length: 4 }, (_, id) => [{ ...rawLine, productId: id + 1, receivedQty: 1 }, { ...rawLine, productId: id + 1, receivedQty: -1 }]).flat()

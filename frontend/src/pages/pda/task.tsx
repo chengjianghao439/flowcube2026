@@ -87,12 +87,7 @@ function ProductCard({ item, onScan, scanning }: {
       <div className="space-y-2">
         <div className="flex items-start justify-between">
           <div className="min-w-0 flex-1">
-            <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
-            {(item.articleNumber || item.spec || item.color) && (
-              <p className="text-xs text-muted-foreground whitespace-normal break-words">
-                {[item.articleNumber, item.spec, item.color].filter(Boolean).join(' / ')}
-              </p>
-            )}
+            <PdaProductIdentity product={item} code={item.productCode} name={item.productName} view="detail" />
           </div>
           {done
             ? <SoftStatusLabel label="✓ 完成" tone="success" className="shrink-0 ml-2" />

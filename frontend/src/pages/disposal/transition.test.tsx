@@ -77,8 +77,8 @@ it('VIEW建议经真实API展示单位参考价、零参考量不圈选；正常
   await act(async () => add[0].click()); expect(document.body.textContent).toContain('处置明细（1 项）'); expect(document.body.textContent).toContain('选中数量参考估值：¥90.00')
   const tables = document.querySelectorAll('[role="dialog"] table')
   expect(tables).toHaveLength(2)
-  expect(tables[0].querySelectorAll('thead th')).toHaveLength(10)
-  expect(tables[1].querySelectorAll('thead th')).toHaveLength(9)
+  expect(tables[0].querySelectorAll('thead th')).toHaveLength(6)
+  expect(tables[1].querySelectorAll('thead th')).toHaveLength(5)
   const qty = tables[1].querySelector<HTMLInputElement>('input[title*="原参考量"]')!
   const handle = tables[1].querySelector<HTMLButtonElement>('button[aria-label="调整处置数量列宽"]')!
   await act(async () => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))

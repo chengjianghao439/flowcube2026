@@ -165,7 +165,7 @@ export default function PdaTransferOutPage() {
             <PdaCard key={item.id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <PdaProductIdentity code={item.productCode} name={item.productName} view="detail" />
+                  <PdaProductIdentity product={item} code={item.productCode} name={item.productName} view="detail" />
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs text-muted-foreground">计划 {item.quantity}</p>

@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Command } from 'cmdk'
@@ -122,11 +123,11 @@ export default function GlobalSearch() {
               {items.map(result => <Command.Item key={resultValue(result)} value={resultValue(result)} onSelect={() => go(result)}
                 onMouseDown={event => event.preventDefault()} className="fc-global-search-result flex cursor-pointer items-start gap-3 rounded-md px-3 py-2.5 text-left outline-none">
                 <div className="min-w-0 flex-1">
-                  <p className="break-words text-sm font-medium leading-5">{result.title}</p>
+                  {result.type === 'product' ? <ProductIdentitySummary product={{ name: result.title, code: result.subtitle, spec: result.details?.find(d => d.label === '型号')?.value, color: result.details?.find(d => d.label === '颜色')?.value, articleNumber: result.details?.find(d => d.label === '供应商型号')?.value }} /> : <p className="break-words text-sm font-medium leading-5">{result.title}</p>}
                   {result.type === 'product' && query.trim() && result.searchMatch && <p className="break-words text-xs leading-5 text-muted-foreground">命中：{result.searchMatch}</p>}
-                  {result.subtitle && result.subtitle !== result.title && <p className="break-words text-xs leading-5 text-muted-foreground">{result.subtitle}</p>}
+                  {result.type !== 'product' && result.subtitle && result.subtitle !== result.title && <p className="break-words text-xs leading-5 text-muted-foreground">{result.subtitle}</p>}
                   {!!result.details?.length && <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                    {result.details.map(detail => <span key={detail.label} className="min-w-0 max-w-full break-words leading-5">{detail.label}：{detail.value}</span>)}
+                    {result.details.filter(detail => result.type !== 'product' || !['型号', '颜色', '供应商型号'].includes(detail.label)).map(detail => <span key={detail.label} className="min-w-0 max-w-full break-words leading-5">{detail.label}：{detail.value}</span>)}
                   </div>}
                 </div>
                 <ArrowRight aria-hidden="true" className="mt-1 size-3.5 shrink-0 text-muted-foreground" />

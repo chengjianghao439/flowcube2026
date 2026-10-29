@@ -256,7 +256,7 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
           className="shrink-0"
         />
 
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+        <div className="flex shrink-0 items-center gap-0.5">
           {can(PERMISSIONS.CATEGORY_CREATE) && cat.level < 4 && (
             <Button
               size="sm" variant="ghost"
@@ -269,11 +269,11 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
           )}
           {can(PERMISSIONS.CATEGORY_UPDATE) && <Button
             size="sm" variant="ghost"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+            className="h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
             title="编辑"
             onClick={() => onEdit(cat)}
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil className="h-3.5 w-3.5" aria-hidden />编辑
           </Button>}
           {can(PERMISSIONS.CATEGORY_UPDATE) && <Button
             size="sm" variant="ghost"

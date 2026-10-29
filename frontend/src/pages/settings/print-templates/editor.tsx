@@ -80,7 +80,7 @@ function labelText(el: TemplateElement, data: Record<string, string>): string {
 
 const MM_PX = 5.0 // 1mm → px，编辑器显示比例
 
-const EDITOR_ZOOM_MIN = 0.35
+const EDITOR_ZOOM_MIN = 0.1
 const EDITOR_ZOOM_MAX = 3
 const EDITOR_ZOOM_STEP = 0.1
 
@@ -1072,8 +1072,9 @@ export default function PrintTemplateEditor() {
   const [preview,    setPreview]    = useState(false)
   /** 画布仅影响显示与拖拽换算，不改变存库的 mm 坐标 */
   const [editorZoom, setEditorZoom] = useState(1)
-  /** 用户手动缩放后暂停自适应（fit 由「适应画布」按钮/初始化触发；手动调回可再触发） */
+  /** 用户手动缩放后暂停自适应，显式选择适应宽度或整页后恢复 */
   const manualZoomRef = useRef(false)
+  const fitModeRef = useRef<'width' | 'page'>('width')
   /** 拖动时的对齐参考线（mm 坐标），松手清空 */
   const [guides, setGuides] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] })
   /** 框选（marquee，评审 P2）：空白处拖动选择多个元素 */
@@ -1257,8 +1258,9 @@ export default function PrintTemplateEditor() {
 
   // ── Drag state refs ──────────────────────────────────────────
   const canvasRef      = useRef<HTMLDivElement>(null)
-  /** 画布滚动列（ResizeObserver 自动 fit 用；修复「属性面板挡住画布」——窄视口下自动缩小整图可见） */
+  /** 画布独立滚动列；自动适应只改变屏幕比例。 */
   const canvasColRef   = useRef<HTMLDivElement>(null)
+  const canvasStatusRef = useRef<HTMLDivElement>(null)
   const draggingField  = useRef<PrintFieldDef | null>(null)   // palette → canvas drag
   const draggingElId   = useRef<string | null>(null)      // element move drag
   const dragStartMouse = useRef({ x: 0, y: 0 })
@@ -1315,36 +1317,38 @@ export default function PrintTemplateEditor() {
 
   // 旧模板加载/水合期间没有画布 DOM；同纸宽加载完也必须重新附着观察器。
   const canvasReady = isNew || (!isLoading && hydrated !== null)
-  /** 自动适应（修复「属性面板挡住画布」）：画布列变窄（窗口/面板变化）时，未手动缩放则把图纸缩到整图可见 */
+  const fitCanvas = useCallback(() => {
+    const col = canvasColRef.current
+    if (!col || manualZoomRef.current) return
+    const availW = col.clientWidth - 48 // p-4 两侧内距，另留滚动条和纸张阴影空间。
+    if (availW <= 0) return // KeepAlive 隐藏期间不重置比例。
+    let fitZoom = Math.min(1, availW / (paper.w * MM_PX))
+    if (fitModeRef.current === 'page') {
+      const availH = col.clientHeight - 32 - (canvasStatusRef.current?.offsetHeight ?? 0) - 12
+      if (availH <= 0) return
+      fitZoom = Math.min(fitZoom, availH / (paper.h * MM_PX))
+    }
+    // 向下取整避免整页的底边因为四舍五入溢出；10% 下限仅限制显示缩放。
+    setEditorZoom(Math.max(EDITOR_ZOOM_MIN, Math.floor(fitZoom * 100) / 100))
+  }, [paper.w, paper.h])
+
   useEffect(() => {
     if (!canvasReady) return
     const col = canvasColRef.current
     if (!col) return
-    const fit = () => {
-      if (manualZoomRef.current) return
-      const availW = col.clientWidth - 48 // 两侧 p-6 各 24px
-      if (availW <= 0) return
-      const fullW = paper.w * MM_PX
-      if (fullW <= availW) {
-        // 装得下：若当前小于 100%（之前被压小过），恢复 100% 避免长期模糊
-        setEditorZoom(z => (z < 1 ? 1 : z))
-        return
-      }
-      const fitZoom = Math.max(EDITOR_ZOOM_MIN, Math.min(1, availW / fullW))
-      // 双向 fit：超出 → 缩到 fitZoom；小于（窗口变大）→ 升到 fitZoom，跟随列宽
-      setEditorZoom(z => {
-        const r = Math.round(fitZoom * 100) / 100
-        if (z > r || z < r - 0.02) return r
-        return z
-      })
-    }
-    fit()
-    const ro = new ResizeObserver(fit)
+    fitCanvas()
+    const ro = new ResizeObserver(fitCanvas)
     ro.observe(col)
-    // 窗口 resize 兜底（ResizeObserver 对 flex 布局列宽变化可能滞后/不触发）
-    window.addEventListener('resize', fit)
-    return () => { ro.disconnect(); window.removeEventListener('resize', fit) }
-  }, [paper.w, canvasReady])
+    if (canvasStatusRef.current) ro.observe(canvasStatusRef.current)
+    window.addEventListener('resize', fitCanvas)
+    return () => { ro.disconnect(); window.removeEventListener('resize', fitCanvas) }
+  }, [canvasReady, fitCanvas])
+
+  const selectFitMode = (mode: 'width' | 'page') => {
+    manualZoomRef.current = false
+    fitModeRef.current = mode
+    fitCanvas()
+  }
   // 单据类型（1-4）只用 A 系纸；热敏纸归标签类型（用 mm 输入），不在此下拉出现
   const paperSelectEntries = Object.entries(PAPER_SIZES).filter(([k]) => !k.startsWith('thermal'))
 
@@ -2077,23 +2081,20 @@ export default function PrintTemplateEditor() {
                 size="sm"
                 variant="ghost"
                 className="h-7 px-1.5 text-xs"
-                onClick={() => {
-                  // 「适应画布」：重新触发自动 fit（面板变窄后可一键恢复整图可见）
-                  manualZoomRef.current = false
-                  const col = canvasColRef.current
-                  if (col) {
-                    const availW = col.clientWidth - 48
-                    const fullW = paper.w * MM_PX
-                    if (fullW > availW && availW > 0) {
-                      setEditorZoom(Math.max(EDITOR_ZOOM_MIN, Math.min(1, Math.round((availW / fullW) * 100) / 100)))
-                    } else {
-                      setEditorZoom(1)
-                    }
-                  }
-                }}
-                title="适应画布" aria-label="适应画布"
+                onClick={() => selectFitMode('width')}
+                title="适应宽度" aria-label="适应宽度"
               >
-                适应
+                适应宽度
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-1.5 text-xs"
+                onClick={() => selectFitMode('page')}
+                title="适应整页的宽度和高度（最低10%）"
+              >
+                整页
               </Button>
             </div>
 
@@ -2150,7 +2151,7 @@ export default function PrintTemplateEditor() {
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-auto bg-muted/30 p-4 gap-3"
             ref={canvasColRef}
           >
-            <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground" role="status">
+            <div ref={canvasStatusRef} className="mx-auto flex max-w-full shrink-0 flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground" role="status">
               {realPreview.source && <span className="max-w-full break-words">真实数据：{realPreview.source.sourceLabel}</span>}
               {realPreview.isError ? <>
                   <span>{(realPreview.error as { status?: number }).status === 403 ? '暂无可用业务数据（无查看权限）' : '真实数据加载失败，保留当前模板'}</span>

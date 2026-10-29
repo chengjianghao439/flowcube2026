@@ -5,7 +5,7 @@ const knownQuantity = (value: unknown): value is number => typeof value === 'num
 
 /** 收货数量为基本单位事实；不同商品/身份规格或未知单位不做包装换算。 */
 export function groupInboundQuantities(rows: readonly {
-  productId: number; productName: string; unit: string | null; spec?: string | null; color?: string | null; articleNumber?: string | null
+  productId: number; productName: string; productCode?: string | null; unit: string | null; spec?: string | null; color?: string | null; articleNumber?: string | null
   orderedQty: number | null | undefined; receivedQty: number | null | undefined; putawayQty: number | null | undefined
 }[]): InboundQuantityGroup[] {
   const groups = new Map<string, InboundQuantityGroup>()

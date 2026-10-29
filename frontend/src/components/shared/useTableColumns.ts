@@ -26,6 +26,11 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
   }, [columnStorageKey, currentKeys, pageKey])
 
   useEffect(() => {
+    const identityKeys = new Set(['code', 'productCode', 'name', 'productName', 'articleNumber', 'spec', 'color'])
+    // 组合商品列替换旧身份组的首个位置；保留其余业务列顺序和宽度。
+    const migrateOrder = (order: unknown[]) => currentKeys.includes('productIdentity') && !order.includes('productIdentity')
+      ? [...new Set(order.map(key => typeof key === 'string' && identityKeys.has(key) ? 'productIdentity' : key))]
+      : order
     if (!resolvedStorageKey || typeof window === 'undefined') return
     setWidthUnit(fluid ? 'percent' : 'px')
     try {
@@ -37,9 +42,10 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
       }
       const saved = JSON.parse(raw)
       if (Array.isArray(saved)) {
+        const previousOrder = migrateOrder(saved)
         const merged = [
-          ...saved.filter((key): key is string => typeof key === 'string' && currentKeys.includes(key)),
-          ...currentKeys.filter(key => !saved.includes(key)),
+          ...previousOrder.filter((key): key is string => typeof key === 'string' && currentKeys.includes(key)),
+          ...currentKeys.filter(key => !previousOrder.includes(key)),
         ]
         setColumnOrder([...new Set(merged)])
         setColumnWidths({})
@@ -50,7 +56,7 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
         setColumnWidths({})
         return
       }
-      const savedOrder = Array.isArray(saved.order) ? saved.order : []
+      const savedOrder = migrateOrder(Array.isArray(saved.order) ? saved.order : [])
       const merged = [
         ...savedOrder.filter((key: unknown): key is string => typeof key === 'string' && currentKeys.includes(key)),
         ...currentKeys.filter(key => !savedOrder.includes(key)),

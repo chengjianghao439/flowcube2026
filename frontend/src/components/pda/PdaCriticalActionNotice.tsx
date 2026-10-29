@@ -1,3 +1,4 @@
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import PdaCard from './PdaCard'
 import { Button } from '@/components/ui/button'
 import type { PendingRequestRecord } from '@/hooks/usePendingRequests'
@@ -72,8 +73,8 @@ export default function PdaCriticalActionNotice({
         {pendingRecord ? (
           <p className="text-xs text-warning-ink">记录号:{pendingRecord.requestKey.slice(0, 8)}（报修时提供）</p>
         ) : null}
-        {originalPackages && <p className="text-xs leading-5">原收货：{String(pendingRecord?.metadata?.productName || `商品 #${original?.productId}`)} · {originalPackages.length} 箱 · 每箱数量 {originalPackages.map(p => p.qty).join('、')}</p>}
-        {originalScans && <p className="text-xs leading-5 [overflow-wrap:anywhere]">原盘点：{String(pendingRecord?.metadata?.productName || '')} · {originalScans.map(s => `${s.barcode} ×${s.countedQty ?? 1}`).join('；')}</p>}
+        {originalPackages && <p className="text-xs leading-5">原收货：<ProductIdentitySummary product={{ productName: String(pendingRecord?.metadata?.productName || `商品 #${original?.productId}`) }} /> {originalPackages.length} 箱 · 每箱数量 {originalPackages.map(p => p.qty).join('、')}</p>}
+        {originalScans && <p className="text-xs leading-5 [overflow-wrap:anywhere]">原盘点：<ProductIdentitySummary product={{ productName: String(pendingRecord?.metadata?.productName || '') }} /> {originalScans.map(s => `${s.barcode} ×${s.countedQty ?? 1}`).join('；')}</p>}
       </div>
       {pendingRecord ? (
         <div className="flex flex-wrap gap-2">
