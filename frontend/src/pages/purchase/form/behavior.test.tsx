@@ -121,7 +121,7 @@ test('四位采购报价回显不由已取分的金额反推', async () => {
 test('未知辅助换算保留原量与原金额参考，不猜价并阻止保存', async () => {
   state.order = { ...order(), items: [{ ...order().items![0], quantity: 24, entryQty: 2, entryUnit: '箱', conversionRate: undefined, amount: 6.91, unitPrice: 0.28805833 }] }
   await render('/purchase/12'); await click('编辑')
-  expect(numbers()[0].value).toBe('2'); expect(numbers()[1].value).toBe(''); expect(host.textContent).toContain('换算待确认'); expect(host.textContent).toContain('原行金额 ¥6.91')
+  expect(numbers()[0].value).toBe('2'); expect(numbers()[1].value).toBe(''); expect(host.textContent).toContain('基本量待核对'); expect(host.textContent).toContain('原行金额 ¥6.91')
   await click('保存修改'); expect(state.write).not.toHaveBeenCalled()
 })
 
@@ -163,4 +163,17 @@ test('空采购明细仍显示整单0行与原总额，金额口径不由明细�
   expect(summary.textContent).toContain('0 行')
   expect(summary.textContent).toContain('¥17.89')
   expect(host.textContent).toContain('暂无商品明细')
+})
+
+
+test('旧辅助单位草稿不能直接保存，重新选品后须重新填写基本数量', async () => {
+  state.order = order()
+  state.order.items = [{ ...state.order.items![0], quantity: 12, unitPrice: 10, amount: 120, entryUnit: '箱', entryQty: 2, conversionRate: 6 }]
+  await render('/purchase/12'); await click('编辑')
+  expect(numbers()[0].value).toBe('2')
+  expect(host.querySelector('select[aria-label="标准商品录入单位"]')).toBeNull()
+  await click('保存修改'); expect(state.write).not.toHaveBeenCalled()
+  await click('标准商品'); await click('选择标准商品')
+  expect(numbers()[0].value).toBe('0')
+  await click('保存修改'); expect(state.write).not.toHaveBeenCalled()
 })

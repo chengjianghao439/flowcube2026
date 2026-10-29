@@ -29,7 +29,7 @@ function createIssueReader(pool) {
       if (scoped) { values.push(user.warehouseIds); if (type === 'transfer' || type === 'sale') values.push(user.warehouseIds) }
     }
     if (!conditions.length) return { list: [], summary: { open: 0, mine: 0, overdue: 0, unassigned: 0 }, pagination: { page, pageSize, total: 0 } }
-    let where = `(${conditions.join(' OR ')})`
+    let where = `(${conditions.join(' OR ')}) AND (i.document_type<>'sale' OR (i.source='auto' AND i.source_key REGEXP '^(adjust|return|credit):[1-9][0-9]*$'))`
     const [[summary]] = await pool.query(`SELECT
       COALESCE(SUM(i.status<>'resolved'),0) AS open,
       COALESCE(SUM(i.status<>'resolved' AND i.owner_id=?),0) AS mine,

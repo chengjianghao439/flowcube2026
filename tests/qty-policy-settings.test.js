@@ -33,7 +33,7 @@ function load(rel, mocks, tail = '') {
   return module_.exports
 }
 
-function context({ allowDecimal = true, rate = 1 } = {}) {
+function context({ allowDecimal = true, rate = 1, legacyPolicy = null } = {}) {
   const writes = []
   const conn = {
     beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: noop,
@@ -42,7 +42,7 @@ function context({ allowDecimal = true, rate = 1 } = {}) {
       if (sql.includes('allow_decimal_qty')) return [[{ id: 7, name: '数量策略商品', allow_decimal_qty: allowDecimal ? 1 : 0 }]]
       if (sql.includes('supply_suppliers')) return [[{ id: 8 }]]
       if (sql.includes('FROM product_items')) return [[{ id: 7, unit: '个', is_active: 1 }]]
-      if (sql.includes('supplier_product_purchase_policies')) return [[]]
+      if (sql.includes('supplier_product_purchase_policies')) return [[...(writes.length ? [] : legacyPolicy ? [legacyPolicy] : [])]]
       if (sql.includes('FROM product_units')) return [[{ unit_name: '箱', conversion_rate: rate, unitName: '箱', conversionRate: rate }]]
       if (sql.includes('FROM procurement_plan_items')) return [[{ id: 9, product_id: 7, warehouse_id: 1, status: 1, adjusted_qty: 0 }]]
       throw new Error(`Unexpected query: ${sql}`)
@@ -68,17 +68,17 @@ test('purchase policy rejects each raw overprecision field without writes', asyn
     assert.equal(ctx.writes.length, 0)
   }
 })
-test('purchase policy rejects overprecision base quantity before rounding', async () => {
+test('purchase policy rejects retired auxiliary units before conversion', async () => {
   const ctx = context({ rate: 1.1 })
-  await assert.rejects(() => policyService(ctx).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.01 }), decimalsError)
+  await assert.rejects(() => policyService(ctx).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.01 }), { code: 'PRODUCT_MULTI_UNIT_REMOVED' })
   assert.equal(ctx.writes.length, 0)
 })
-test('purchase policy rejects fractional input even when conversion would yield an integer base', async () => {
+test('purchase policy cannot restore auxiliary entry even when conversion would yield an integer base', async () => {
   const invalid = context({ allowDecimal: false, rate: 3 })
-  await assert.rejects(() => policyService(invalid).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.5 }), integerError)
+  await assert.rejects(() => policyService(invalid).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.5 }), { code: 'PRODUCT_MULTI_UNIT_REMOVED' })
   assert.equal(invalid.writes.length, 0)
   const valid = context({ allowDecimal: false, rate: 2 })
-  await assert.rejects(() => policyService(valid).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.5, minimumOrderQty: 1 }), integerError)
+  await assert.rejects(() => policyService(valid).savePolicy({ ...policyInput, entryUnit: '箱', packMultiple: 0.5, minimumOrderQty: 1 }), { code: 'PRODUCT_MULTI_UNIT_REMOVED' })
   assert.equal(valid.writes.length, 0)
 })
 test('purchase policy preserves valid decimals and unrestricted zero', async () => {
@@ -193,4 +193,35 @@ test('warehouse stock policies retain decimals, target zero and default fallback
   assert.equal(ctx.writes[0].params[4], 3.75)
   assert.equal(ctx.writes[1].params[4], 0)
   assert.match(ctx.writes[2].sql, /^DELETE/)
+})
+
+test('fixed-unit purchase policy still rejects fractional input for integer products', async () => {
+  const ctx = context({ allowDecimal: false })
+  await assert.rejects(() => policyService(ctx).savePolicy({ ...policyInput, packMultiple: 0.5 }), integerError)
+  assert.equal(ctx.writes.length, 0)
+})
+
+
+test('旧采购包装规则只读投影为基本量，重新保存只写固定单位', async () => {
+  const ctx = context({ rate: 12, legacyPolicy: { entry_unit: '箱', pack_multiple: 2, minimum_order_qty: 3 } })
+  const service = policyService(ctx)
+  const current = await service.getPolicy(7, 8)
+  assert.equal(current.entryUnit, '个')
+  assert.equal(current.conversionRate, 1)
+  assert.equal(current.packMultiple, 24)
+  assert.equal(current.minimumOrderQty, 36)
+  assert.equal(ctx.writes.length, 0)
+  await service.savePolicy({ ...policyInput, packMultiple: 24, minimumOrderQty: 36 })
+  assert.deepEqual(Array.from(ctx.writes[0].params), [7, 8, '个', 24, 36])
+})
+test('缺失旧换算率时明确拒绝展示，用户仍可重新配置固定单位规则', async () => {
+  const ctx = context({ rate: 0, legacyPolicy: { entry_unit: '箱', pack_multiple: 2 } })
+  const service = policyService(ctx)
+  await assert.rejects(service.getPolicy(7, 8), { code: 'PURCHASE_POLICY_UNIT_INVALID' })
+  await service.savePolicy({ ...policyInput, packMultiple: 24 })
+  assert.equal(ctx.writes[0].params[2], '个')
+})
+test('新建商品不再接受辅助单位配置，且不访问数据库', async () => {
+  const service = load('backend/src/modules/products/products.service.js', {})
+  await assert.rejects(service.create({ unit: '个', units: [{ unitName: '箱', conversionRate: 12 }] }), { code: 'PRODUCT_MULTI_UNIT_REMOVED' })
 })

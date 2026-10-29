@@ -673,8 +673,10 @@ async function main() {
 
     const auxProduct=await insert("INSERT INTO product_items(code,name,unit,sale_price_a,cost_price,allow_decimal_qty) VALUES (?,?,'个',80,10,0)",[ref+'-2',ref+'-包装组件']);fixture.products.push(auxProduct)
     await q("INSERT INTO product_units(product_id,unit_name,conversion_rate) VALUES (?,'箱',3)",[auxProduct])
+    // 存量辅助单位配置不再允许新采购按箱录入；原历史单据执行证据单独保留。
+    await assert.rejects(http('/purchase',{supplierId:fixture.supplierId,supplierName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:[{productId:auxProduct,productCode:ref+'-2',productName:ref,unit:'个',entryUnit:'箱',quantity:1,unitPrice:30,priceSource:'manual'}]},{expect:201}), { status: 400, code: 'PRODUCT_MULTI_UNIT_REMOVED' })
     async function supplyAux(){
-      const po=await http('/purchase',{supplierId:fixture.supplierId,supplierName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:[{productId:auxProduct,productCode:ref+'-2',productName:ref,unit:'个',entryUnit:'箱',quantity:1,unitPrice:30,priceSource:'manual'}]},{expect:201});fixture.purchases.push(po.id)
+      const po=await http('/purchase',{supplierId:fixture.supplierId,supplierName:ref,warehouseId:fixture.warehouseId,warehouseName:ref,items:[{productId:auxProduct,productCode:ref+'-2',productName:ref,unit:'个',entryUnit:'个',quantity:3,unitPrice:10,priceSource:'manual'}]},{expect:201});fixture.purchases.push(po.id)
       const purchased=await http(`/purchase/${po.id}`,undefined,{method:'GET'});assert.equal(purchased.items[0].quantity,3);assert.equal(purchased.items[0].amount,30);assert.equal(purchased.items[0].unitPrice,10)
       await http(`/purchase/${po.id}/confirm`,{})
       const inbound=await http('/inbound-tasks',{poId:po.id},{expect:201});await http(`/inbound-tasks/${inbound.taskId}/submit`,{})

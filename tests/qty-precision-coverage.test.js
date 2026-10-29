@@ -273,17 +273,17 @@ test('真实折算入口拒绝原量、未取整换算量和整数商品的小�
   const conn = { query: async sql => {
     if (sql.includes('FROM product_units')) return [[{ product_id: 1, unit_name: '箱', conversion_rate: 0.5 }]]
     assert.match(sql, /FROM product_items/)
-    return [[{ id: 1, name: '整数商品', allow_decimal_qty: 0 }]]
+    return [[{ id: 1, unit: '件', name: '整数商品', allow_decimal_qty: 0 }]]
   } }
   const item = { productId: 1, unit: '件', quantity: 1, unitPrice: 1.2345 }
   for (const fold of [foldEntryItem, foldEntryItems, foldEntryItemsBatch]) {
     const input = row => fold === foldEntryItem ? row : [row]
     await assert.rejects(() => fold(conn, input({ ...item, quantity: 1.005 })), { code: 'QTY_DECIMALS_EXCEEDED' })
-    await assert.rejects(() => fold(conn, input({ ...item, quantity: 0.01, entryUnit: '箱' })), { code: fold === foldEntryItem ? 'QTY_DECIMALS_EXCEEDED' : 'QTY_INTEGER_REQUIRED' })
+    await assert.rejects(() => fold(conn, input({ ...item, quantity: 0.01, entryUnit: '箱' })), { code: fold === foldEntryItem ? 'PRODUCT_MULTI_UNIT_REMOVED' : 'QTY_INTEGER_REQUIRED' })
     const result = await fold(conn, input(item))
     assert.equal((fold === foldEntryItem ? result : result[0]).unitPrice, 1.2345)
     if (fold !== foldEntryItem) {
-      await assert.rejects(() => fold(conn, input({ ...item, entryUnit: '箱' })), { code: 'QTY_INTEGER_REQUIRED' })
+      await assert.rejects(() => fold(conn, input({ ...item, entryUnit: '箱' })), { code: 'PRODUCT_MULTI_UNIT_REMOVED' })
     }
   }
 })
