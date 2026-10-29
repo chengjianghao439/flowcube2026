@@ -29,7 +29,7 @@ export function useOpenWorkspacePath() {
 // 只呈现强调、文字列表，以及回复里显式给出的站内菜单。其他 HTML、链接与脚本保留为普通文本。
 function inline(text: string, open: (path: string) => void) {
   const nodes: ReactNode[] = []
-  const pattern = /\[\[([^\[\]|]{1,20})\|(\/[a-z0-9\-/]+)\]\]/g
+  const pattern = /\[\[([^[\]|]{1,20})\|(\/[a-z0-9\-/]+)\]\]/g
   let last = 0
   for (const match of text.matchAll(pattern)) {
     const index = match.index ?? 0
