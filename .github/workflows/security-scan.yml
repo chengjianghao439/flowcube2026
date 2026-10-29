@@ -3,6 +3,8 @@ name: Security Scan
   push:
     branches:
       - main
+      # 与 test.yml 相同：冲突中的审计 PR 无法走 pull_request，改由本分支 push 触发。
+      - codex/ui-audit-remediation-20261027
   pull_request:
     branches:
       - main

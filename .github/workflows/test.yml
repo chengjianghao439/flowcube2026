@@ -1,7 +1,9 @@
 # ============================================================
 # 极序 Flow — 自动化测试门禁
 #
-# 触发：push 到 main、对 main 的 PR、手动触发
+# 触发：push 到 main、对 main 的 PR、手动触发。
+# PR #103 与 main 冲突时无法生成 merge ref，pull_request 不会启动；
+# 因此本审计分支的 push 直接跑同一套门禁，不触发部署或安装包工作流。
 #
 # 作用：在独立 MySQL 测试库上跑回归测试，作为发布前门禁。
 #   绝不连接任何生产数据库（仅使用 service 容器里的临时库）。
@@ -27,7 +29,9 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - codex/ui-audit-remediation-20261027
   pull_request:
     branches: [main]
   workflow_dispatch:
