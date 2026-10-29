@@ -1,7 +1,7 @@
 {
-  "version": "0.14.0",
-  "versionCode": 160,
+  "version": "0.14.1",
+  "versionCode": 161,
   "filename": "app-release.apk",
-  "releaseNote": "- 新增「小满」工作区，提供极序业务查询、使用帮助和已支持操作的预览确认；业务结果仍以系统接口为准。",
-  "publishedAt": "2026-10-26T11:54:05.487Z"
+  "releaseNote": "- 小满不再闲聊：新消息不进入开放讨论，页面设计、排错闲聊和使用讨论会直接拒绝。",
+  "publishedAt": "2026-10-29T10:23:54.073Z"
 }
