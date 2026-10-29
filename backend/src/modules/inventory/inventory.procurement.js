@@ -81,10 +81,8 @@ async function getSupplyRows(options = {}, conn = pool) {
     LEFT JOIN (SELECT i.product_id,COALESCE(i.warehouse_id,h.warehouse_id) AS warehouse_id,
        SUM(GREATEST(0,i.quantity-i.shipped_qty)) AS confirmed_demand,
        SUM(CASE WHEN h.status=1 THEN GREATEST(0,i.quantity-i.shipped_qty) ELSE 0 END) AS draft_demand,
-       MIN(COALESCE(dl.promised_date,dh.promised_date)) AS earliest_demand_date
+       NULL AS earliest_demand_date
        FROM sale_order_items i JOIN sale_orders h ON h.id=i.order_id
-       LEFT JOIN order_delivery_commitments dl ON dl.document_type='sale' AND dl.document_id=h.id AND dl.item_id=i.id
-       LEFT JOIN order_delivery_commitments dh ON dh.document_type='sale' AND dh.document_id=h.id AND dh.item_id=0
        WHERE h.deleted_at IS NULL AND h.status IN (1,2,3,6)
        GROUP BY i.product_id,COALESCE(i.warehouse_id,h.warehouse_id)) demand ON demand.product_id=d.product_id AND demand.warehouse_id=d.warehouse_id
     LEFT JOIN (SELECT i.product_id,h.warehouse_id,SUM(i.picked_qty) AS total_sold,SUM(CASE WHEN h.shipped_at>=DATE_SUB(CURDATE(),INTERVAL ? DAY) THEN i.picked_qty ELSE 0 END) AS recent_sold

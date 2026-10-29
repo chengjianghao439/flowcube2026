@@ -8,7 +8,7 @@ const { getRequestId } = require('../../utils/requestContext')
 const { beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = require('./returns.helpers')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
-const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
+const { foldEntryItems } = require('../../utils/unitConversion')
 const { normalizePagination } = require('../../utils/pagination')
 const { assertNoPendingRefund } = require('../refunds/supplier-refunds.pr-gate')
 const { peekPurchaseReturn, lockPurchaseReturn, provePurchaseReturnCash } = require('./returns.purchase-lock')
@@ -123,6 +123,7 @@ async function validatePurchaseReturnItems(conn, purchaseOrderId, items, expecte
       throw new AppError(`退货商品与原采购明细不一致`, 400)
     }
     if (expectedUnit !== null && source.unit !== expectedUnit) throw new AppError('原采购明细基本单位与处理来源不一致', 409, 'DISPOSAL_HANDLING_UNIT_CHANGED')
+    if (item.unit !== source.unit) throw new AppError('退货单位与原采购明细基本单位不一致', 409, 'RETURN_SOURCE_UNIT_MISMATCH')
     // 单价以原采购明细为准，不信任客户端传入值：前端"添加商品"手动追加行时默认填的是
     // 商品当前成本价，可能与下单时的采购单价不同（成本价后续会被调整），若不在此处强制
     // 覆盖，冲减应付时算出的金额会和 recomputePurchasePayable 用原始 unit_price 重算出的
@@ -225,10 +226,8 @@ async function createPR({ supplierId, supplierName, warehouseId, warehouseName, 
         throw new AppError('采购退货仓库必须与原采购单一致', 400)
       }
     }
-    // 多单位折算（文档03 Phase4a）：入参 quantity/unitPrice 恒为录入单位口径，折算成基本单位后
-    // 再校验/落库。有源退货只允许编辑原行本次基本量，单位/原价只读；
-    // validatePurchaseReturnItems 用 folded（quantity 已是基本单位）比对剩余可退量、并强制覆盖 unitPrice 为源单价。
-    const folded = await foldEntryItems(conn, items)
+    // 新退货只录入基本量；有源退货继续由原单验证历史单位、数量额度和原价。
+    const folded = await foldEntryItems(conn, items, { sourceUnits: !!resolvedPurchaseOrderId })
     if (!resolvedPurchaseOrderId && folded.some(item => item.sourceItemId != null)) throw new AppError('来源明细缺少准确原采购单，请先核对', 409, 'PURCHASE_RETURN_SOURCE_INVALID')
     if (handling && (!resolvedPurchaseOrderId || folded.length !== 1 || !folded[0].sourceItemId)) throw new AppError('关联退货须绑定准确原采购单及明细', 409, 'PURCHASE_RETURN_SOURCE_INVALID')
     const sourceItems = await validatePurchaseReturnItems(conn, resolvedPurchaseOrderId, folded, handlingContext?.source.unit ?? null)

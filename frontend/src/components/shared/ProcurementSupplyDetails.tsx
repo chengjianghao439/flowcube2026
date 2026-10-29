@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -38,11 +37,10 @@ function PolicyEditor({ productId, supplierId }: { productId: number; supplierId
 function PolicyForm({ policy }: { policy: PurchasePolicy }) {
   const allowDecimalOf = useProductQtyPolicies([policy.productId])
   const qc = useQueryClient()
-  const [unit, setUnit] = useState(policy.entryUnit)
+  const unit = policy.baseUnit
   const [pack, setPack] = useState(String(policy.packMultiple))
   const [minimum, setMinimum] = useState(String(policy.minimumOrderQty))
-  const rate = policy.units.find(u => u.unitName === unit)?.conversionRate || 1
   const mutation = useMutation({ mutationFn: () => savePurchasePolicyApi({ productId: policy.productId, supplierId: policy.supplierId, entryUnit: unit, packMultiple: Number(pack), minimumOrderQty: Number(minimum) }), onSuccess: () => { toast.success('包装与起订规则已保存；已有计划数量请按最新建议核对'); for (const key of ['purchase-policy', 'procurement-plan', 'replenishment']) void qc.invalidateQueries({ queryKey: [key] }) }, onError: (e: Error) => toast.error(e.message) })
   const invalid = [pack, minimum].some(v => v.trim() === '' || !Number.isFinite(Number(v)) || Number(v) < 0)
-  return <div className="space-y-3 border-t pt-4"><h3 className="font-medium">采购包装与起订规则</h3><div className="grid grid-cols-3 gap-3"><div className="space-y-1"><Label htmlFor="purchase-policy-unit">采购单位</Label><Select value={unit} onValueChange={setUnit}><SelectTrigger id="purchase-policy-unit"><SelectValue /></SelectTrigger><SelectContent>{policy.units.map(u => <SelectItem key={u.unitName} value={u.unitName}>{u.unitName}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1"><Label htmlFor="purchase-policy-pack">整包装倍数</Label><Input quantity id="purchase-policy-pack" type="number" min="0" step={qtyStep(allowDecimalOf(policy.productId))} value={pack} onChange={e => setPack(e.target.value)} /></div><div className="space-y-1"><Label htmlFor="purchase-policy-min">最低起订量</Label><Input quantity id="purchase-policy-min" type="number" min="0" step={qtyStep(allowDecimalOf(policy.productId))} value={minimum} onChange={e => setMinimum(e.target.value)} /></div></div><div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">1 {unit} = {rate} {policy.baseUnit}；0 表示不限。数量按商品现有单位换算。</p><Button size="sm" disabled={invalid || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? '保存中…' : '保存规则'}</Button></div></div>
+  return <div className="space-y-3 border-t pt-4"><h3 className="font-medium">采购包装与起订规则</h3><div className="grid grid-cols-3 gap-3"><div className="space-y-1"><Label htmlFor="purchase-policy-unit">采购单位</Label><p id="purchase-policy-unit" className="py-2 text-sm">{unit}</p></div><div className="space-y-1"><Label htmlFor="purchase-policy-pack">整包装倍数</Label><Input quantity id="purchase-policy-pack" type="number" min="0" step={qtyStep(allowDecimalOf(policy.productId))} value={pack} onChange={e => setPack(e.target.value)} /></div><div className="space-y-1"><Label htmlFor="purchase-policy-min">最低起订量</Label><Input quantity id="purchase-policy-min" type="number" min="0" step={qtyStep(allowDecimalOf(policy.productId))} value={minimum} onChange={e => setMinimum(e.target.value)} /></div></div><div className="flex items-center justify-between gap-3"><p className="text-xs text-muted-foreground">数量按 {unit} 录入；0 表示不限。</p><Button size="sm" disabled={invalid || mutation.isPending} onClick={() => mutation.mutate()}>{mutation.isPending ? '保存中…' : '保存规则'}</Button></div></div>
 }

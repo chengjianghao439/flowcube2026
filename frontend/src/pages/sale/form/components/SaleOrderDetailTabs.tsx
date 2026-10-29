@@ -1,11 +1,10 @@
-import { Activity, CalendarClock, ClipboardList, History, PackageCheck, ScanLine } from 'lucide-react'
+import { Activity, ClipboardList, History, PackageCheck, ScanLine } from 'lucide-react'
 import { DetailViewTabsList, DetailViewTabsTrigger } from '@/components/shared/DetailViewTabs'
 
-export type SaleDetailTab = 'info' | 'fulfillment' | 'progress' | 'scan' | 'pack' | 'log'
+export type SaleDetailTab = 'info' | 'progress' | 'scan' | 'pack' | 'log'
 
 const tabs = [
   ['info', '订单信息', ClipboardList],
-  ['fulfillment', '发货安排', CalendarClock],
   ['progress', '作业进度', Activity],
   ['scan', '拣货明细', ScanLine],
   ['pack', '装箱进度', PackageCheck],

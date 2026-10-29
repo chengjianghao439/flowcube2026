@@ -155,20 +155,3 @@ export type CommercialSaleOrder = SaleOrder & {
   commercialGroups: CommercialGroup[]
 }
 export type CommercialPrintItem = PrintItem
-
-export interface CommercialDeliveryGroup {
-  groupId: number
-  lineKey: string
-  kind: 'kit' | 'ordinary'
-  remainingQty: number
-  readyDate: string | null
-  readyDateExplanation: string
-  components: {
-    saleItemId: number
-    requiredQty: number
-    physical: number
-    shortage: number
-    allDate: string | null
-    sources: { orderId: number | null; orderNo: string; quantity: number; date: string | null }[]
-  }[]
-}

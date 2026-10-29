@@ -84,9 +84,6 @@ const fmtItem = r => ({
   putawayQty: Number(r.putaway_qty),
   // 行备注：inbound_task_items 无此快照列，只在联表查询时从来源采购明细现查；无来源/手动建单为 null
   remark: r.purchase_item_remark || null,
-  // 多单位（文档03 Phase4b）：主辅助单位 + 率，供 PDA 收货按箱快捷录入；未配辅助单位为 null
-  boxUnit: r.box_unit || null,
-  boxRate: r.box_rate != null ? Number(r.box_rate) : null,
   // 价格不落在 inbound_task_items 上，只在联表查询里现查（跟结算时 recomputePurchasePayable
   // 的取价方式一致，避免出现"页面显示的价格"和"实际结算价格"两个数据源）；
   // 没联表查询的调用方（如 receive() 里刷新明细）这里就是 null，不当成 0 处理。

@@ -200,7 +200,7 @@ test('已保存订单保持原价格解释，不请求今天的客户价格；�
   const order = { customerId: 1, warehouseId: 1,
     items: [{ productId: 10, productCode: 'P10', productName: '商品10', unit: '个', entryUnit: '箱', entryQty: 2, quantity: 24, unitPrice: 10, amount: 240 }],
   } as NonNullable<Parameters<typeof useSaleOrderForm>[1]>
-  vi.mocked(getProductApi).mockResolvedValue({ units: [{ unitName: '箱', conversionRate: 12 }] } as Awaited<ReturnType<typeof getProductApi>>)
+  vi.mocked(getProductApi).mockResolvedValue({ unit: '个' } as Awaited<ReturnType<typeof getProductApi>>)
   function SavedHarness() { form = useSaleOrderForm('/sale/1', order); return null }
   await act(async () => root.render(<StrictMode><SavedHarness /></StrictMode>))
   expect(form.items[0].priceExplanation).toEqual({ kind: 'saved' })
@@ -216,7 +216,7 @@ test('已保存订单保持原价格解释，不请求今天的客户价格；�
 
 
 test('切换录入单位沿用现有量价政策，基本数量只用于说明', async () => {
-  vi.mocked(getProductApi).mockResolvedValue({ units: [{ unitName: '个', conversionRate: 1, isBase: true }, { unitName: '箱', conversionRate: 12, isBase: false }] } as Awaited<ReturnType<typeof getProductApi>>)
+  vi.mocked(getProductApi).mockResolvedValue({ unit: '个' } as Awaited<ReturnType<typeof getProductApi>>)
   const key = await selectProduct(10)
   act(() => form.updateItem(key, 'quantity', 2))
   act(() => form.updateItem(key, 'entryUnit', '箱'))

@@ -91,7 +91,7 @@
 - 备份导入前只把触发器残留分号移出可执行注释 → `node --test tests/restore-trigger-normalize.test.js`
 - 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`
 - 前端命名与呈现结构：菜单名 = 工作区标签 = 页面标题、标签 ≤7 汉字、带日期的查询弹窗必须能重置回本页默认口径、纯图标按钮必须有可读名称 → `npm run test:frontend-conventions`
-- 商品级 `allow_decimal_qty` 是全数量规则，界面“允许小数数量”、新建默认关闭；所有数量录入、换算结果、库存写入和任务执行都验证当前商品策略，价格/成本/金额保持自身精度。原快照不作豁免；关闭前检查小数库存/在途/未完成业务/可退额度，拒绝不安全切换，不取整或改历史账（`docs/sale-shipping-quantity-policy.md`）。新销售固定唯一单位并走 `normalizeFixedSaleItems()`，采购/必要旧退货保留 `foldEntryItems()`；守卫 → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
+- 商品级 `allow_decimal_qty` 是全数量规则，界面“允许小数数量”、新建默认关闭；所有数量录入、换算结果、库存写入和任务执行都验证当前商品策略，价格/成本/金额保持自身精度。原快照不作豁免；关闭前检查小数库存/在途/未完成业务/可退额度，拒绝不安全切换，不取整或改历史账（`docs/sale-shipping-quantity-policy.md`）。新业务固定唯一单位；销售走 `normalizeFixedSaleItems()`，采购/退货走 `foldEntryItems()`；有源退货核对原单基本单位，历史快照不重算；守卫 → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
 - 应用部署保留既有健康且认证 TCP SQL 通过的 MySQL，切换应用须 `--no-deps`；未知实例状态提前拒绝；288–292 迁移窗口后旧后端须同时具备数量/退货/资金写入契约，否则失败保持停写、向前恢复，不能仅凭240契约恢复写入 → `node --test tests/audit-deployment.test.js`
 - 组合页发布验收须核可见组标题与当前子视图链接；电话旧形状真实迁移回归须专属实例归属证明 → `npm run test:browser-smoke`、`npm run test:party-profile`、`npm run test:go-live-runner`
 - 本地实例脚本 `start` 只启动实例（不改库结构）、迁移必须由显式 `dev:mysql8:migrate` 触发且目标固定、凭据只由 `start` 生成 → `npm run test:mysql8-dev-script`

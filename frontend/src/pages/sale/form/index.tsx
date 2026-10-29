@@ -28,7 +28,6 @@ import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
 import { collectOrderIssues } from '@/lib/orderEntry'
 import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
-import { OrderFulfillmentPanel } from '@/components/shared/OrderFulfillmentPanel'
 import { DocumentActivityPanel } from '@/components/shared/DocumentActivityPanel'
 import SaleCancelDialog from '../components/SaleCancelDialog'
 import OrdinarySaleRecoveryNotice from '../components/OrdinarySaleRecoveryNotice'
@@ -561,9 +560,6 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
           </SectionCard>
         </></KeepAliveSection>
 
-      <KeepAliveSection active={detailTab === 'fulfillment'} className="space-y-3">
-        <OrderFulfillmentPanel key={order.id} type="sale" id={order.id} />
-      </KeepAliveSection>
 
       <KeepAliveSection active={detailTab === 'progress'} className="space-y-3"><div className="card-base space-y-4 p-4">
           {!handoffReady || isError ? <div className="space-y-2 text-sm" role={isError ? 'alert' : 'status'}><p>{isError ? '原单读取失败，无法核对最新任务；请重新读取后交接。' : isPaused ? '网络已暂停，等待恢复后重新读取原单任务。' : '正在重新读取原单任务…'}</p>{isError && <Button variant="outline" onClick={() => { setCheckedPath(''); void refetch().then(result => { if (!result.isError) setCheckedPath(tabPath) }) }}>重新读取原单</Button>}</div> : (

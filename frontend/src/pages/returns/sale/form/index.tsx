@@ -51,8 +51,7 @@ import type { SaleReturn, SaleReturnSourceOrder, ReturnItem, SaleReturnReverseTa
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import type { FinderResult } from '@/types/finder'
-import type { ProductFinderResult, ProductUnit } from '@/types/products'
-import { getProductApi } from '@/api/products'
+import type { ProductFinderResult } from '@/types/products'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { captureKitReadOwner, assertKitReadOwner, useKitBackup } from '@/hooks/useKits'
 import { useSourceReturnFacts } from '@/hooks/useSourceReturnFacts'
@@ -75,8 +74,7 @@ interface DraftItem {
   spec?: string | null
   color?: string | null
   unit: string
-  entryUnit?: string        // 录入单位（多单位，文档03 Phase4a；无源手工退货可按箱录入）
-  units?: ProductUnit[]     // UI-only：该商品多计量单位（供单位下拉），提交前 strip，不发后端
+  entryUnit?: string        // 新退货固定使用基本单位
   quantity: number
   unitPrice: number
   originalQty?: number
@@ -179,7 +177,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
   function addItem() {
     const key = counter
     setCounter(c => c + 1)
-    setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0 }])
+    setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', quantity: 1, unitPrice: 0 }])
     setFinderItemKey(key)
     setFinderOpen(true)
   }
@@ -197,13 +195,9 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
     if (finderItemKey === null || locked) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], unitPrice: product.salePrice ?? 0 }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, unitPrice: product.salePrice ?? 0 }
       : i,
     ))
-    // 拉多计量单位供单位下拉（无辅助单位则下拉不出现、按基本单位录入）
-    getProductApi(product.id)
-      .then(full => { const units = full?.units ?? []; setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i))) })
-      .catch(() => { /* 拉取失败：按基本单位录入 */ })
     setInvalidItemKeys(prev => {
       if (!prev.has(k)) return prev
       const next = new Set(prev)
@@ -330,7 +324,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
         saleOrderId: boundSource ? boundSource.id : undefined,
         saleOrderNo: boundSource?.orderNo || orderNo.trim() || undefined,
         remark: remark.trim() || undefined,
-        items: items.map(({ _key, originalQty, returnedQty, remainingQty, units, source, ...r }) => isKit ? ({ sourceItemId: r.sourceItemId, dispatchComponentId: r.dispatchComponentId, commercialComponentId: r.commercialComponentId, productId: r.productId, productCode: r.productCode, productName: r.productName, articleNumber: r.articleNumber, spec: r.spec, color: r.color, quantity: r.quantity, unit: r.unit, unitPrice: r.unitPrice }) : r),
+        items: items.map(({ _key, originalQty, returnedQty, remainingQty, source, ...r }) => isKit ? ({ sourceItemId: r.sourceItemId, dispatchComponentId: r.dispatchComponentId, commercialComponentId: r.commercialComponentId, productId: r.productId, productCode: r.productCode, productName: r.productName, articleNumber: r.articleNumber, spec: r.spec, color: r.color, quantity: r.quantity, unit: r.unit, unitPrice: r.unitPrice }) : r),
         ...(isKit ? { commercialModel: 'kit-v1', expectedRevision: boundSource!.commercialRevision } : {})
       }
       if (isKit) {
@@ -460,16 +454,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
                             : <span className="text-muted-foreground">点击选择商品…</span>}
                         </button>} />
                       <td className="py-2.5 text-center text-muted-body">
-                        {(!boundSource && item.units && item.units.filter(u => !u.isBase).length > 0) ? (
-                          <select
-                            aria-label="退货商品单位"
-                            value={item.entryUnit || item.unit}
-                            onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
-                            className="h-8 rounded-md border border-border bg-background px-1 text-sm"
-                          >
-                            {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
-                          </select>
-                        ) : ((item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : (item.unit || '—'))}
+                        {item.unit || '—'}
                       </td>
                       <td className="py-2.5 pr-2">
                         <Input quantity
@@ -480,10 +465,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
                           className="text-right text-sm"
                         />
-                        {item.entryUnit && item.entryUnit !== item.unit && (() => {
-                          const rate = Number((item.units || []).find(u => u.unitName === item.entryUnit)?.conversionRate ?? 1)
-                          return <p className="mt-1 text-right text-xs text-muted-foreground">= {(item.quantity * rate).toLocaleString()} {item.unit}</p>
-                        })()}
+
                       </td>
                       <td className="py-2.5">
                         <Input

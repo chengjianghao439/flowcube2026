@@ -1,6 +1,6 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
-const { foldEntryItem } = require('../backend/src/utils/unitConversion')
+const { foldEntryItemWithRate } = require('../backend/src/utils/unitConversion')
 
 const {
   createSaleSchema,
@@ -97,12 +97,9 @@ test('数量契约拒绝超过两位小数，避免数据库舍入成零', () =>
   assert.equal(shipSaleSchema.parse({ items: [{ id: 3, qty: 9999999999.99 }] }).items[0].qty, 9999999999.99)
 })
 
-test('单位折算后不足最小库存精度时拒绝落库', async () => {
-  const conn = {
-    query: async () => [[{ unit_name: '盒', conversion_rate: 0.01 }]],
-  }
-  await assert.rejects(
-    foldEntryItem(conn, { productId: 7, unit: '件', entryUnit: '盒', quantity: 0.01, unitPrice: 10 }),
+test('历史单位折算仍拒绝超过最小库存精度的数量', () => {
+  assert.throws(
+    () => foldEntryItemWithRate({ productId: 7, unit: '件', entryUnit: '盒', quantity: 0.01, unitPrice: 10 }, 0.01),
     /最多保留 2 位小数/,
   )
 })
