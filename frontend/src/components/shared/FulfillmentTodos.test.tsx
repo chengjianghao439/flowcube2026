@@ -15,9 +15,12 @@ let root: ReturnType<typeof createRoot>, qc: QueryClient
 async function render(active = true) { await act(async () => { root.render(<QueryClientProvider client={qc}><MemoryRouter><SectionVisibilityContext.Provider value={active}><FulfillmentTodos /></SectionVisibilityContext.Provider></MemoryRouter></QueryClientProvider>) }); await act(async () => { await new Promise(r => setTimeout(r, 10)) }) }
 function setup() { root = createRoot(host); qc = new QueryClient({defaultOptions:{queries:{retry:false}}}); state.requests.mockClear(); state.userId = 7 }
 afterEach(() => { act(() => root.unmount()); qc.clear(); localStorage.clear() })
-test('待办显示业务单号、往来方、仓库，跟进仍指向原单履约区域', async () => {
+test('待办显示业务单号、往来方、仓库，销售跟进回到原销售订单', async () => {
   setup(); await render(); expect(host.textContent).toContain('XS-20260912-001'); expect(host.textContent).toContain('示例客户'); expect(host.textContent).toContain('北京主仓')
-  expect(host.querySelector('a[href="#/sale/123?focus=fulfillment"]')).not.toBeNull()
+  const links = [...host.querySelectorAll('a')].map(a => ({ href: a.getAttribute('href'), text: a.textContent }))
+  expect(links).toContainEqual({ href: '#/sale/123', text: 'XS-20260912-001' })
+  expect(links).toContainEqual({ href: '#/sale/123', text: '查看销售订单' })
+  expect(host.querySelector('a[href*="focus=fulfillment"]')).toBeNull()
 })
 test('类型和状态按用户记住，关键词提交查询，切换用户不沿用他人的筛选', async () => {
   setup(); await render()

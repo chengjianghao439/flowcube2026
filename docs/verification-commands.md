@@ -1155,6 +1155,7 @@ PR #99 月结直付与打印绑定续修：`npm run test:accounting` 已包含 `
 - `npm run test:fulfillment` 覆盖销售安排接口 410、销售只检测实际仓库交接/授信事项；采购日期、事项规则继续保留。`tests/fulfillment.smoke.test.js` 已更新真实库场景，销售历史安排事项不再进入待办；`tests/sale-commercial-lifecycle.smoke.test.js` 更新新采购固定单位并保留库存、成本和历史销售事实断言。这两个数据库 smoke 本轮未执行，待发版前在独立测试实例验证。
 - `npm run smoke:procurement-planning` 的到货日期用例改为断言：残留销售承诺日期不再进入 `earliestDemandDate`，`lateSupplyQty` 为 0，采购预计到货日与日期待确认数量仍保留。2026-10-30 在本机独立库 `flowcube_procurement_test` 上 3 项通过。
 - 前端定向组件回归覆盖普通/成套销售五标签、旧链接兼容、采购到货日期编辑、只读/迟到响应、采购和退货固定单位、商品版本冲突及 PDA 收货。这些为组件/API mocks 证据，不等同于真实业务库。
+- `FulfillmentTodos.test.tsx` 与 `FulfillmentTodos.actions.test.tsx`：销售待办的关联单据和「查看销售订单」都回到 `#/sale/<id>`，不再链到已删除的 `focus=fulfillment`。2026-10-30 本机这两个文件 18 项通过。
 - 浏览器通过临时合成数据页面挂载真实组件，实际查看销售五标签、商品编辑单一单位、采购编辑固定单位、采购到货日期编辑表单。截图在本工作树忽略目录 `output/remove-shipping-multi-units/`；初始夹具的仓库列表形状错误已订正，最终截图不含该夹具错误。预览未执行任何写请求；临时页面及 Vite 已清理，命名浏览器会话已关闭且列表复核为空。
 - 尚待发版前统一验证：完整构建/全量套件、上述真实 MySQL 联调与 smoke、认证页面全流程；PDA 真机及实体箱收货未验。本轮没有迁移、改写历史数据或生产操作。
 
