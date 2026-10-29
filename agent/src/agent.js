@@ -5,12 +5,12 @@ import { validateQty, toCents, diffPreview, amountCents } from './guards.js';
 import { FlowError } from './flow.js';
 import { config } from './config.js';
 import { collectList } from './pagination.js';
-import { parseIntentLLM, chatCompletion } from './llm.js';
+import { parseIntentLLM } from './llm.js';
 import { hasPerm, PermissionDeniedError, denialReply } from './perms.js';
-import { assertTaskAccess, ownsTask, rememberOutput, isCurrentDiscussion } from './task-access.js';
+import { assertTaskAccess, ownsTask, rememberOutput } from './task-access.js';
 import { briefingReply, stuckReply } from './reports.js';
-import { CHAT_GRAPH, FLOW_CHAT_SCOPE, smallTalkReply, knownConceptReply, buildChatMessages, unverifiedChatReply } from './persona.js';
-import { classifyMessage, ruleGraphFor, activeTopicText } from './routing.js';
+import { smallTalkReply, knownConceptReply } from './persona.js';
+import { classifyMessage, ruleGraphFor, activeTopicText, DISCUSSION_CLOSED_REPLY } from './routing.js';
 import { assertReceiptAmountCents, assertReceiptPreviewAmount, parseReceiptAmount } from './receipt-amount.js';
 
 // 工具调用统一入口：先验发起人权限（与后端 requirePermission 同码），无权零调用、明确拒绝。
@@ -1298,10 +1298,15 @@ async function reviseSalePreview(store, client, actor, task, text) {
 async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
   const t = activeTopicText(text);
   if (opts.taskId) return continueTask(store, client, actor, t, opts);
-  if (smallTalkReply(t)) return chatGraph(store, actor, t, opts);
+  const greeting = smallTalkReply(t);
+  if (greeting) return { task: null, reply: greeting };
   const routing = classifyMessage(t);
   if (['blocked', 'outside', 'clarify'].includes(routing.kind)) return { task: null, reply: routing.reply };
-  if (routing.kind === 'discussion') return chatGraph(store, actor, t, opts);
+  if (routing.kind === 'discussion') {
+    const local = knownConceptReply(t);
+    if (local) return { task: null, reply: local };
+    return { task: null, reply: DISCUSSION_CLOSED_REPLY };
+  }
   const parseIntent = opts.parseIntent || (config.model.apiKey ? parseIntentLLM : null);
   if (parseIntent) {
     try {
@@ -1322,37 +1327,5 @@ async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
     case 'D-ledger': return graphLedger(store, client, actor, t);
     case 'A-inventory': return graphInventory(store, client, actor, t);
     default: return REFUSAL;
-  }
-}
-
-async function chatGraph(store, actor, text, opts) {
-  const task = store.create({ graph: CHAT_GRAPH, userText: text, actor });
-  task.discussionScope = FLOW_CHAT_SCOPE;
-  task.transition('DRY_RUNNING');
-  const discussionText = activeTopicText(text);
-  const identityReply = smallTalkReply(discussionText);
-  const localReply = identityReply || knownConceptReply(discussionText);
-  task.discussionKind = identityReply ? 'identity' : 'product';
-  if (localReply) { task.transition('DONE'); return { task, reply: localReply }; }
-  const history = [...store.tasks.values()]
-    .filter(previous => previous.id !== task.id && previous.graph === CHAT_GRAPH && isCurrentDiscussion(previous) && previous.discussionKind === 'product'
-      && previous.state === 'DONE' && previous.reply && ownsTask(previous, actor))
-    .sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))
-    .slice(-6).flatMap(previous => [{ role: 'user', content: activeTopicText(previous.userText) }, { role: 'assistant', content: previous.reply }]);
-  try {
-    const reply = await (opts.chatModel || chatCompletion)({ messages: buildChatMessages(history, discussionText) });
-    if (reply == null) {
-      task.error = '极序交流服务尚未连接'; task.transition('FAILED_FINAL');
-      return { task, reply: '极序交流服务还没接上，暂时无法讨论这个问题。问候和已有的业务查询仍然可以用。' };
-    }
-    if (typeof reply !== 'string' || !reply.trim() || unverifiedChatReply(reply)) {
-      task.error = '交流内容含无法核实的系统事实'; task.transition('FAILED_FINAL');
-      return { task, reply: '这条回复里有无法核实的系统事实，我没有把它当作结果。本轮没有执行任何业务操作。' };
-    }
-    task.transition('DONE');
-    return { task, reply: reply.trim().slice(0, 4000) };
-  } catch {
-    task.error = '极序交流服务暂时无法连接'; task.transition('FAILED_FINAL');
-    return { task, reply: '小满暂时连不上交流服务。刚才没有执行任何业务操作，稍后可以再试。' };
   }
 }

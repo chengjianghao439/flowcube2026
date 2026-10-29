@@ -65,6 +65,8 @@ test('大页面直接展示小满与输入框，无须打开抽屉', async () =>
   expect(getByRole(host, 'heading', { name: '小满', level: 1 })).toBeTruthy()
   expect(getByRole(host, 'textbox', { name: '告诉小满要做什么' })).toBeTruthy()
   expect(queryByRole(host, 'dialog')).toBeNull()
+  expect(host.textContent).toContain('闲聊和使用讨论先不做')
+  expect(host.textContent).not.toContain('聊聊极序')
 })
 test('刷新后从当前用户任务列表恢复原预览，确认携带原任务与版本', async () => {
   tasks = [task()]; await render()
@@ -176,10 +178,10 @@ test('占库预览只显示商品数量，不显示无意义零金额', async ()
   expect(host.textContent).toContain('×4')
   expect(host.textContent).not.toContain('¥0.00')
 })
-test('极序说明的重点与列表可读，模型文本不会作为HTML执行', async () => {
+test('业务回复的重点与列表可读，模型文本不会作为HTML执行', async () => {
   await render()
-  chat = { reply: '先看**关键信息**。\n\n1. 统一标题\n2. 保留当前草稿\n\n<script>synthetic()</script>', task: { id: 'discuss-1', graph: 'G-chat', state: 'DONE' } }
-  await send('极序页面设计怎样更清楚？')
+  chat = { reply: '先看**关键信息**。\n\n1. 统一标题\n2. 保留当前草稿\n\n<script>synthetic()</script>', task: { id: 'brief-1', graph: 'F-briefing', state: 'DONE' } }
+  await send('给我一份经营简报')
   expect(host.querySelector('.xiaoman-message-text strong')?.textContent).toBe('关键信息')
   expect(getByRole(host, 'list').querySelectorAll('li')).toHaveLength(2)
   expect(host.querySelector('script')).toBeNull()

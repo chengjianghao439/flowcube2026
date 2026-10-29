@@ -1,6 +1,5 @@
 import { hasPerm } from './perms.js';
-import { CHAT_GRAPH, FLOW_CHAT_SCOPE, smallTalkReply } from './persona.js';
-import { classifyMessage, activeTopicText } from './routing.js';
+import { CHAT_GRAPH } from './persona.js';
 
 const READ_PERMISSIONS = {
   'A-inventory': ['inventory.view', 'dashboard.view', 'product.view', 'warehouse.view'],
@@ -12,7 +11,6 @@ const READ_PERMISSIONS = {
   'D-receipt': ['payment.view', 'finance.account.view', 'customer.view', 'dashboard.view'],
   'D-settle': ['payment.view', 'finance.account.view', 'customer.view', 'dashboard.view'],
   'F-briefing': ['dashboard.view'],
-  'G-chat': [],
 };
 const WAREHOUSE_GRAPHS = new Set(['A-inventory', 'B-sale-draft', 'B2-reserve', 'C-replenishment', 'C-purchase-draft', 'E-stuck', 'F-briefing']);
 const fail = (message, code = 'TASK_ACCESS_DENIED') => Object.assign(new Error(message), { status: 403, code });
@@ -22,11 +20,6 @@ export function ownsTask(task, actor) {
   if (owner?.id != null && actor?.id != null) return Number(owner.id) === Number(actor.id);
   const name = typeof owner === 'string' ? owner : owner?.username;
   return Boolean(name && actor?.username && name === actor.username);
-}
-
-export function isCurrentDiscussion(task) {
-  return task.discussionScope === FLOW_CHAT_SCOPE
-    && (smallTalkReply(activeTopicText(task.userText)) != null || classifyMessage(task.userText).kind === 'discussion');
 }
 
 function warehouseIdsIn(value, into = new Set()) {
@@ -43,7 +36,7 @@ function warehouseIdsIn(value, into = new Set()) {
 export function assertTaskAccess(task, actor) {
   if (!task) throw Object.assign(new Error('任务不存在'), { status: 404 });
   if (!ownsTask(task, actor)) throw fail('只能查看或处理本人发起的任务');
-  if (task.graph === CHAT_GRAPH && !isCurrentDiscussion(task)) throw fail('旧闲聊记录不再作为极序交流恢复，请重新说明极序相关的问题');
+  if (task.graph === CHAT_GRAPH) throw fail('闲聊记录不再恢复。请直接说明要查的库存、单据或账款。');
   const required = READ_PERMISSIONS[task.graph];
   if (!required && task.graph !== 'E-stuck') throw fail('小满无法核对该任务的当前授权，请到原页面核查');
   const missing = required?.find(code => !hasPerm(actor, code));

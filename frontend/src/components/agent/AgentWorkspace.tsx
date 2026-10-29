@@ -42,7 +42,7 @@ function Conversation() {
         <button className="xiaoman-new" type="button" disabled={busy || loading} onClick={() => { followEnd.current = true; state.newTask(); input.current?.focus() }}><Plus size={16} aria-hidden="true" />新对话</button>
         <div className="xiaoman-history-heading"><h2>最近记录</h2><button type="button" aria-label="刷新最近记录" disabled={busy || loading} onClick={() => void state.loadTasks()}><RefreshCw size={14} aria-hidden="true" /></button></div>
         <div className="xiaoman-history">
-          {loading ? <p className="xiaoman-sidebar-hint" role="status">正在找回最近记录…</p> : state.historyError ? <div className="xiaoman-history-error" role="alert"><p>{state.historyError}</p><button type="button" onClick={() => void state.loadTasks()}>重试读取任务</button></div> : state.tasks.length === 0 ? <p className="xiaoman-sidebar-hint">聊过的事会留在这里，方便回来继续。</p> : state.tasks.map(task => <button
+          {loading ? <p className="xiaoman-sidebar-hint" role="status">正在找回最近记录…</p> : state.historyError ? <div className="xiaoman-history-error" role="alert"><p>{state.historyError}</p><button type="button" onClick={() => void state.loadTasks()}>重试读取任务</button></div> : state.tasks.length === 0 ? <p className="xiaoman-sidebar-hint">办过的事会留在这里，方便回来继续。</p> : state.tasks.map(task => <button
             key={task.id} type="button" disabled={busy} aria-label={`打开记录：${GRAPH_LABELS[task.graph] || '业务'}，${task.userText || '最近记录'}`}
             aria-current={selected?.id === task.id ? 'true' : undefined} className={`xiaoman-history-item ${selected?.id === task.id ? 'is-selected' : ''}`}
             onClick={() => { followEnd.current = true; void state.selectTask(task.id) }}>
@@ -56,8 +56,8 @@ function Conversation() {
         <div className="xiaoman-thread" ref={log} onScroll={() => { if (log.current) followEnd.current = log.current.scrollHeight - log.current.scrollTop - log.current.clientHeight < 80 }}>
           <div className="xiaoman-thread-content">
             {state.messages.length === 0 ? <div className="xiaoman-welcome">
-              <span className="xiaoman-mark" aria-hidden="true">满</span><h2>在呢，今天想先做点什么？</h2>
-              <p>查业务、理流程，或聊聊极序的使用和设计。</p>
+              <span className="xiaoman-mark" aria-hidden="true">满</span><h2>今天想先办哪件事？</h2>
+              <p>可以查库存、开销售草稿、看补货或经营简报。闲聊和使用讨论先不做。</p>
               <div className="xiaoman-prompts">{PROMPTS.map(({ label, hint, text, Icon }) => <button type="button" key={label} disabled={busy || loading} onClick={() => fill(text)}><Icon size={19} aria-hidden="true" /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</div>
             </div> : <div role="log" aria-live="polite" aria-label="小满对话" className="xiaoman-messages">{state.messages.map(message => <div key={message.id} className={`xiaoman-message is-${message.role}`}>
               {message.role === 'assistant' && <span className="xiaoman-avatar" aria-hidden="true">满</span>}<div className="xiaoman-message-text">{message.role === 'assistant' ? <MessageText text={message.text} /> : message.text}</div>

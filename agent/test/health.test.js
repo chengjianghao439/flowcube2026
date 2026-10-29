@@ -4,7 +4,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildHealth, plannerMode, realGraphs } from '../src/health.js';
 import { GRAPHS } from '../src/llm.js';
-import { CHAT_GRAPH } from '../src/persona.js';
 import { config } from '../src/config.js';
 
 test('health 字段齐全且 graphs 为实图清单（不含 none）', () => {
@@ -14,8 +13,9 @@ test('health 字段齐全且 graphs 为实图清单（不含 none）', () => {
   }
   assert.equal(h.ok, true);
   assert.equal(h.service, 'jixu-agent');
-  assert.deepEqual(h.graphs, [...GRAPHS.filter((g) => g !== 'none'), CHAT_GRAPH]);
-  assert.equal(h.graphs.length, GRAPHS.length);
+  assert.deepEqual(h.graphs, GRAPHS.filter((g) => g !== 'none'));
+  assert.equal(h.graphs.length, GRAPHS.length - 1);
+  assert.equal(h.graphs.includes('G-chat'), false);
   assert.ok(!h.graphs.includes('none'));
   assert.deepEqual(realGraphs(), h.graphs);
 });

@@ -11,6 +11,7 @@ const RULE_ROUTES = [
   ['A-inventory', /还剩|库存|有多少/],
 ];
 export const OUTSIDE_FLOW_REPLY = '这边只聊极序相关的事。你想看哪块业务？';
+export const DISCUSSION_CLOSED_REPLY = '小满不做开放讨论。请直接说要查的库存、销售草稿、占库、补货、采购草稿、台账、收款、仓库卡点或经营简报。';
 export const CLARIFY_BUSINESS_REPLY = '请说明要查询的对象：单据请给出类型和完整单号，账款请给出客户全称，库存请给出商品和仓库。我不会把“这张单”或“那笔款”猜成某一条记录。';
 
 export function ruleGraphFor(text) { return RULE_ROUTES.find(([, pattern]) => pattern.test(text))?.[0] || null; }

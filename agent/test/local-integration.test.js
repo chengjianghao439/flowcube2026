@@ -177,17 +177,17 @@ test('HTTP候选选择原任务接续，越过原候选集合返回400', async (
   assert.equal(restored.reply, output.reply);
   assert.equal(restored.result.productId, 2);
 });
-test('HTTP小满身份交流可刷新恢复，切换用户不能读取或续接原对话', async () => {
+test('HTTP身份问候只在本地短回，不创建可恢复的闲聊任务', async () => {
   const response = await request('/chat', 'owner', { method: 'POST', body: JSON.stringify({ message: '你叫什么名字' }) });
   assert.equal(response.status, 200);
   const output = await response.json();
-  assert.equal(output.task.graph, 'G-chat');
+  assert.equal(output.task, null);
   assert.match(output.reply, /小满/);
-  const restored = await (await request(`/tasks/${output.task.id}`)).json();
-  assert.equal(restored.task.userText, '你叫什么名字');
-  assert.equal(restored.task.reply, output.reply);
-  assert.equal((await request(`/tasks/${output.task.id}`, 'other')).status, 403);
-  assert.equal((await request('/chat', 'other', { method: 'POST', body: JSON.stringify({ message: '继续', taskId: output.task.id }) })).status, 403);
+  assert.doesNotMatch(output.reply, /助手|Agent/);
+  const tasks = (await (await request('/tasks')).json()).tasks;
+  assert.equal(tasks.some(task => task.graph === 'G-chat' || task.userText === '你叫什么名字'), false);
+  const persisted = JSON.parse(await readFile(join(directory, 'data/tasks.json'), 'utf8'));
+  assert.equal(persisted.some(task => task.userText === '你叫什么名字' || (task.graph === 'G-chat' && task.userText !== '聊聊阅读习惯')), false);
 });
 test('每次请求重新验证当前登录身份，不使用旧权限缓存', async () => {
   const start = meCalls;

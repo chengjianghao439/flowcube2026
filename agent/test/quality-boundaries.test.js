@@ -4,7 +4,8 @@ import { spawnSync } from 'node:child_process';
 import { TOOLS } from '../src/tools.js';
 import { TaskStore } from '../src/tasks.js';
 import { handleMessage, confirmTask, tryAccountSelection, buildReceiptPreview } from '../src/agent.js';
-import { unverifiedChatReply, FLOW_CHAT_SCOPE } from '../src/persona.js';
+import { unverifiedChatReply } from '../src/persona.js';
+import { DISCUSSION_CLOSED_REPLY } from '../src/routing.js';
 import { listTaskViews } from '../src/task-access.js';
 
 const actor = { id: 37, username: 'quality-owner', isSuper: true, warehouseIds: null };
@@ -59,8 +60,11 @@ for (const reply of ['当前库存：**100** 件。', '该客户的应收余额�
   test(`交流模型不能以常见排版声称业务事实：${reply}`, async () => {
     assert.equal(unverifiedChatReply(reply), true);
     const noFlow = { get: () => assert.fail('讨论不能查业务'), post: () => assert.fail('讨论不能写业务') };
-    const out = await handleMessage(new TaskStore(null), noFlow, actor, '极序的页面设计怎样更清楚？', { ...rules, chatModel: async () => reply });
-    assert.equal(out.task.state, 'FAILED_FINAL');
+    let calls = 0;
+    const out = await handleMessage(new TaskStore(null), noFlow, actor, '极序的页面设计怎样更清楚？', { ...rules, chatModel: async () => { calls++; return reply; } });
+    assert.equal(calls, 0);
+    assert.equal(out.task, null);
+    assert.equal(out.reply, DISCUSSION_CLOSED_REPLY);
     assert.notEqual(out.reply, reply);
   });
 }
@@ -88,25 +92,30 @@ for (const message of ['极序的页面先不谈，换个话题聊聊苹果公�
     assert.equal(store.tasks.size, 0);
   });
 }
-test('换话题后的明确极序审批或流程仍可说明，模型只收到当前相关目标', async () => {
+test('换话题后的极序审批只走本地说明，发货流程讨论不进模型', async () => {
   for (const topic of ['极序里的审批是什么意思', '极序发货流程怎么走']) {
-    let messages;
+    let calls = 0;
     const store = new TaskStore(null);
     const noFlow = () => assert.fail('概念或流程讨论不能调用业务工具');
-    const out = await handleMessage(store, { get: noFlow, post: noFlow }, actor, `苹果公司的设计先不谈，换个话题聊聊${topic}`, { ...rules, chatModel: async input => { messages = input.messages; return '发货应在原系统按有权人员确认的作业流程办理，我没有读取具体订单和当前配置。'; } });
-    assert.equal(out.task?.state, 'DONE');
-    if (messages) assert.doesNotMatch(JSON.stringify(messages), /苹果公司/);
+    const out = await handleMessage(store, { get: noFlow, post: noFlow }, actor, `苹果公司的设计先不谈，换个话题聊聊${topic}`, { ...rules, chatModel: async () => { calls++; return '不该调用模型'; } });
+    assert.equal(calls, 0);
+    assert.equal(out.task, null);
+    assert.doesNotMatch(out.reply, /苹果公司/);
+    if (topic.includes('审批')) assert.match(out.reply, /有权人员/);
+    else assert.equal(out.reply, DISCUSSION_CLOSED_REPLY);
   }
 });
-test('旧范围标记也不能恢复或再传已被排除的无关交流', async () => {
+test('带旧范围标记的闲聊也不能恢复，新的设计问题不进讨论模型', async () => {
   const store = new TaskStore(null);
   const legacy = store.create({ graph: 'G-chat', userText: '在极序里聊聊苹果公司的产品设计', actor });
-  Object.assign(legacy, { state: 'DONE', discussionScope: FLOW_CHAT_SCOPE, discussionKind: 'product', reply: 'SYNTHETIC_UNRELATED_DESIGN' });
+  Object.assign(legacy, { state: 'DONE', discussionScope: 'flow-product-v1', discussionKind: 'product', reply: 'SYNTHETIC_UNRELATED_DESIGN' });
   assert.equal(listTaskViews(store, actor).length, 0);
-  let messages;
-  const out = await handleMessage(store, {}, actor, '极序的页面设计怎么更清楚？', { ...rules, chatModel: async input => { messages = input.messages; return '建议把极序单据的主要操作集中展示。'; } });
-  assert.equal(out.task.state, 'DONE');
-  assert.doesNotMatch(JSON.stringify(messages), /SYNTHETIC_UNRELATED_DESIGN|苹果公司/);
+  let calls = 0;
+  const out = await handleMessage(store, {}, actor, '极序的页面设计怎么更清楚？', { ...rules, chatModel: async () => { calls++; return '建议把极序单据的主要操作集中展示。'; } });
+  assert.equal(calls, 0);
+  assert.equal(out.task, null);
+  assert.equal(out.reply, DISCUSSION_CLOSED_REPLY);
+  assert.equal(store.get(legacy.id).reply, 'SYNTHETIC_UNRELATED_DESIGN');
 });
 
 function receiptContext() {

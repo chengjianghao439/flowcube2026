@@ -1,5 +1,6 @@
 // LLM 意图解析层：模型只做一件事——把用户的话解析成结构化意图（选哪张任务图 + 参数）。
-// 模型不调工具、不生成数字、不执行写操作；执行永远走 agent.js 的确定性任务图与守卫。
+// 模型不调工具、不生成数字、不执行写操作，也不再提供开放讨论。执行永远走 agent.js 的确定性任务图与守卫。
+// 模型名只取 config.model.name，即环境变量 AGENT_MODEL_NAME；代码不写死名称。
 // 输出经严格校验（图枚举、参数类型与上限），不合格一律返回 null → 回退规则规划器。
 import { config } from './config.js';
 
@@ -96,23 +97,4 @@ export async function parseIntentLLM(text, { baseUrl, apiKey, model, fetchImpl }
   let parsed;
   try { parsed = JSON.parse(content); } catch { return null; }
   return validateIntent(parsed);
-}
-
-// 极序交流与业务意图解析分离。此函数只接收纯文本消息，没有 FlowClient、工具或业务快照参数。
-export async function chatCompletion({ messages }, { baseUrl, apiKey, model, fetchImpl } = {}) {
-  const endpoint = baseUrl ?? config.model.baseUrl;
-  const key = apiKey ?? config.model.apiKey;
-  const name = model ?? config.model.name;
-  if (!endpoint || !key || !name) return null;
-  const response = await (fetchImpl || fetch)(`${endpoint.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST', signal: AbortSignal.timeout(20000),
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-    body: JSON.stringify({ model: name, messages: messages.map(({ role, content }) => ({ role, content })), temperature: 0.6, max_tokens: 700 }),
-  });
-  if (!response.ok) throw new Error('聊天服务暂不可用');
-  const data = await response.json();
-  if (data?.choices?.[0]?.message?.tool_calls?.length) throw new Error('聊天返回了不支持的工具调用');
-  const reply = data?.choices?.[0]?.message?.content;
-  if (typeof reply !== 'string' || !reply.trim()) throw new Error('聊天服务未返回文本');
-  return reply.trim().slice(0, 4000);
 }

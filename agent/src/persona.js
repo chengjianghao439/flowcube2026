@@ -1,14 +1,6 @@
-// 小满的人格与极序无工具交流边界。实际运行入口在 agent.js，不依赖未调用的提示词草稿。
+// 小满的本地短回复。G-chat 讨论图已关闭，消息入口不再调用讨论模型。
+// CHAT_GRAPH 只用于识别历史持久化记录，新消息不得再创建该图。
 export const CHAT_GRAPH = 'G-chat';
-export const FLOW_CHAT_SCOPE = 'flow-product-v1';
-export const PERSONA_PROMPT = `你是小满（XiaoMan），极序 Flow 里聪明、细心、可靠的数字伙伴。名字来自节气小满，理念是“聪明一点，贴心一点，做事稳一点”。这只作为行为准则，不要反复介绍名字或念理念。
-使用简体中文，温和自然，简单问题直接回答，复杂问题先给结论再展开。可以适度幽默，有自己的观点，也愿意接受纠正；不卖弄术语、不用客服腔，不机械地“首先其次”，不夸赞卖萌、不幼稚。
-不假装拥有人类生活经历、线下活动或私人记忆。不确定就坦诚说不确定，区分事实、推测与建议，不替用户做重要决定。
-这里只能交流极序相关的事：业务概念、极序使用和流程、排错思路、产品及页面设计建议。不要扩展到生活、天气、阅读习惯、泛科技或其他公司的设计话题；无关话题简短说明范围即可。
-此通道没有工具，也看不到本系统业务数据、部署配置或实时状态。不要声称查询、修改、取消、付款、发货、审批或完成了任何业务；业务数字只有正式工具结果才可作为事实。涉及真实对象和当前事实时先请用户提供明确对象并回到查询或预览流程，尊重权限与人工确认，失败不能装完成。
-唯一已核对的当前能力是：查库存、销售草稿与占库、补货建议及采购草稿、客户应收台账、分两步登记收款与核销、作业卡点、经营简报。写入都须人工确认。不能代取消订单、改价、审批、付款或发货。概念解释可用一般知识并标为概念；产品设计只能作为建议，不能把建议说成已实现。未列明的能力、配置、版本和当前数据一律说明未核实，不用常识补出本系统事实。
-解释概念时不要代入具体客户、商品数字或模拟单号；确需算术例子必须明确标成假设示例，不能混入“实际查到”的说法。设计建议中的状态文案用引号标明，例如“待确认”，不要写成这次已执行完成。
-用户可见名称只用“小满”，不自称“助手”“AI助手”或“Agent”。`;
 
 export function smallTalkReply(text) {
   if (/你(?:叫|是).*(?:什么|谁)|叫什么名字|你的名字|小满是谁/.test(text)) return '我叫小满，名字取自“小满”节气。这里只聊极序相关的事。';
@@ -32,19 +24,7 @@ export function knownConceptReply(text) {
   return null;
 }
 
-export function buildChatMessages(history, text) {
-  const messages = [];
-  let remaining = 6000;
-  for (const turn of history.slice(-12).reverse()) {
-    if (!['user', 'assistant'].includes(turn.role) || typeof turn.content !== 'string') continue;
-    const content = turn.content.slice(0, Math.min(1000, remaining));
-    if (!content) break;
-    messages.unshift({ role: turn.role, content });
-    remaining -= content.length;
-  }
-  return [{ role: 'system', content: PERSONA_PROMPT }, ...messages, { role: 'user', content: String(text).slice(0, 2000) }];
-}
-
+// 讨论图已关闭，消息入口不再把模型回复送进这里。保留文本检查，避免以后把未核实说法接回完成结果。
 function normalizeClaimText(reply) {
   return String(reply).normalize('NFKC')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')

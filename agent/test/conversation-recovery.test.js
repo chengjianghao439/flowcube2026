@@ -198,8 +198,8 @@ test('待确认销售卡前输入问候可自然接话，旧预览和请求键�
   const sale = await handleMessage(store, client, FULL, saleText, rule);
   const key = sale.task.requestKey, revision = sale.task.revision;
   const chat = await handleMessage(store, client, FULL, '小满在吗', { ...rule, taskId: sale.task.id });
-  assert.equal(chat.task.graph, 'G-chat');
-  assert.equal(chat.task.state, 'DONE');
+  assert.equal(chat.task, null);
+  assert.match(chat.reply, /在/);
   assert.equal(sale.task.state, 'AWAITING_CONFIRM');
   assert.equal(sale.task.requestKey, key);
   assert.equal(sale.task.revision, revision);

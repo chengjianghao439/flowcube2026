@@ -71,5 +71,5 @@ export const TASK_STATE_LABELS: Record<string, string> = {
 export const GRAPH_LABELS: Record<string, string> = {
   'A-inventory': '库存查询', 'B-sale-draft': '销售草稿', 'B2-reserve': '销售占库',
   'C-replenishment': '补货建议', 'C-purchase-draft': '采购草稿', 'D-ledger': '客户往来',
-  'D-receipt': '登记收款', 'D-settle': '核销分配', 'E-stuck': '作业卡点', 'F-briefing': '经营简报', 'G-chat': '极序交流',
+  'D-receipt': '登记收款', 'D-settle': '核销分配', 'E-stuck': '作业卡点', 'F-briefing': '经营简报',
 }

@@ -151,14 +151,19 @@ test('缺Content-Length的分块正文仍限32KiB，非JSON和压缩正文不能
   assert.equal(f.loads(), 0);
 }));
 test('正文伪造actor、token、权限和scope无效，持久化不含凭据', () => usingFixture(async f => {
-  const out = await f.request('/chat', { method: 'POST', body: { message: '小满在吗', actor: { id: 12, roleId: 1, isSuper: true, permissions: full, warehouseIds: null }, token: 'SYNTHETIC-BODY-TOKEN' } });
+  const greet = await f.request('/chat', { method: 'POST', body: { message: '小满在吗', actor: { id: 12, roleId: 1, isSuper: true, permissions: full, warehouseIds: null }, token: 'SYNTHETIC-BODY-TOKEN' } });
+  assert.equal(greet.status, 200);
+  assert.equal(greet.body.data.task, null);
+  assert.match(greet.body.data.reply, /在/);
+  const out = await f.request('/chat', { method: 'POST', body: { message: '二仓合成铰链库存', actor: { id: 12, roleId: 1, isSuper: true, permissions: full, warehouseIds: null }, token: 'SYNTHETIC-BODY-TOKEN' } });
   assert.equal(out.status, 200);
-  assert.equal(out.body.data.task.graph, 'G-chat');
+  assert.notEqual(out.body.data.task.graph, 'G-chat');
   const id = out.body.data.task.id;
   assert.equal((await f.request(`/tasks/${id}`, { id: 12 })).status, 403);
   assert.equal((await f.request('/tasks', { id: 12 })).body.data.tasks.length, 0);
   assert.equal((await f.request('/tasks')).body.data.tasks[0].id, id);
   const persisted = await readFile(join(f.directory, 'tasks.json'), 'utf8');
+  assert.equal(JSON.parse(persisted).some(task => task.graph === 'G-chat'), false);
   assert.equal(JSON.parse(persisted)[0].actor.id, 11);
   assert.doesNotMatch(persisted, /SYNTHETIC-BODY-TOKEN|Authorization|synthetic-assistant-jwt|familyId/);
 }));
@@ -185,7 +190,7 @@ test('停用账号与失效访问令牌不能恢复旧任务', () => usingFixtur
   assert.equal((await f.request('/tasks')).status, 401);
 }));
 test('并行首次请求只建立一个运行实例，各用户任务不会互相覆盖', () => usingFixture(async f => {
-  const results = await Promise.all([11, 12].map(id => f.request('/chat', { id, method: 'POST', body: { message: '小满在吗' } })));
+  const results = await Promise.all([11, 12].map(id => f.request('/chat', { id, method: 'POST', body: { message: '二仓合成铰链库存' } })));
   assert.ok(results.every(out => out.status === 200));
   assert.equal(f.loads(), 1);
   for (const id of [11, 12]) assert.equal((await f.request('/tasks', { id })).body.data.tasks.length, 1);
@@ -251,7 +256,9 @@ test('固定lazy入口不打开第二监听，合成模型密钥与内部异常�
   } finally { await rm(directory, { recursive: true, force: true }); }
   await usingFixture(async f => {
     const out = await f.request('/chat', { method: 'POST', body: { message: '极序的页面设计怎么更清楚' } });
-    assert.equal(out.body.data.task.state, 'FAILED_FINAL');
+    assert.equal(out.status, 200);
+    assert.equal(out.body.data.task, null);
+    assert.match(out.body.data.reply, /不做开放讨论/);
     assert.doesNotMatch(JSON.stringify(out.body), /synthetic-private-model-detail/);
   });
 });
