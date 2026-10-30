@@ -31,6 +31,7 @@ const {
 } = require('./helpers/smokeTestKit')
 const periodSvc = require('../backend/src/modules/accounting/accounting.period.service')
 const engine = require('../backend/src/modules/accounting/voucher-engine')
+const { syncStockFromContainers } = require('../backend/src/engine/containerEngine')
 const { SOURCE_TYPES } = require('../backend/src/constants/voucherSource')
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -190,6 +191,20 @@ async function main() {
        VALUES (?, ?, ?, 5, 5, 0, 1, ?)`,
       [randomRef('C-QTY').slice(0, 40), product.id, ctx.warehouse.id, ctx.location.id],
     )
+
+    // Shared smoke SKU facts persist across suites. Publish these two fixture
+    // containers through the sole cache writer before another suite receives stock.
+    await syncStockFromContainers(conn, product.id, ctx.warehouse.id)
+    const [[{ activeQty }]] = await conn.query(
+      'SELECT COALESCE(SUM(remaining_qty),0) AS activeQty FROM inventory_containers WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL',
+      [product.id, ctx.warehouse.id],
+    )
+    const [[stock]] = await conn.query(
+      'SELECT quantity FROM inventory_stock WHERE product_id=? AND warehouse_id=?',
+      [product.id, ctx.warehouse.id],
+    )
+    log.assert('扫码盘点夹具库存缓存与 ACTIVE 容器事实一致',
+      Number(stock?.quantity) === Number(activeQty), `cache=${stock?.quantity}, facts=${activeQty}`)
 
     // 建盘点单与明细
     const [ck] = await conn.query(
