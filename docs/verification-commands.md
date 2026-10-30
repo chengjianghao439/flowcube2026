@@ -1,5 +1,11 @@
 # 开发与验证命令（全量）
 
+## Compose 2.27.0 发布预检兼容
+
+`npm run test:compose-preflight-compat` 校验并临时使用官方 2.27.0 CLI，执行 `server-update.sh` 原预检函数和独立合成 Node 容器。Tests CI 独立 job 必须实际执行，不能跳过。覆盖缓存候选、只读根目录/node 用户、禁止应用入口/依赖启动、缺镜像不拉取不构建、预检拒绝保留非零退出，以及恢复旧 `run --pull` 必然失败的反例。Mac 可用 `FLOWCUBE_COMPAT_DOCKER_CONTEXT=colima-flowcube`；测试基础镜像须提前本地准备，可用 `FLOWCUBE_COMPAT_NODE_IMAGE` 指定现有合成 Node 镜像。只清理本批临时镜像标签、容器、网络、卷和夹具；不连接生产、不安装全局 CLI。
+
+发票日期组件回归 `src/pages/accounting/invoices/index.date.test.tsx` 等待菜单清理后的表单回填与 DatePicker effect 精确显示原业务日，再检查或提交；不能只以 dialog 存在作为就绪信号。原 ISO/纯日期、金额/revision 与禁止额外写入断言保留，不通过固定“今天”或放宽日期断言消除时序失败。
+
 ## 2026-10-29 采购申请退役验证
 
 实库库存断言使用收货前后的精确增量，并核对本任务的ACTIVE容器及入库流水；同时覆盖零基线和共享夹具已有库存，不能假定整个商品仓库总量为本次收货量。
