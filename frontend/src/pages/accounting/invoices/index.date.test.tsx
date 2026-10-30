@@ -41,13 +41,16 @@ async function mount(raw: string) {
   await act(async () => root.render(<QueryClientProvider client={client}><InvoicesPage /></QueryClientProvider>))
   await vi.waitFor(() => expect(host.textContent).toContain('OFFLINE-INV-7'))
 }
-async function openEditor() {
+async function openEditor(expectedDate: string) {
   await vi.waitFor(() => expect(host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]')).not.toBeNull())
   await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
   const editItem = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent?.trim() === '编辑')
   await vi.waitFor(() => expect(editItem()?.hasAttribute('data-disabled')).toBe(false))
   await act(async () => editItem()!.click())
   await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull())
+  // afterMenuClose 延后挂载；表单回填与 DatePicker 文本各有一次 effect。
+  // 弹窗存在不代表回填已结束，必须等原业务日精确显示后才能检查/提交。
+  await vi.waitFor(() => expect(dateInput().value).toBe(expectedDate))
 }
 function dateInput() {
   const label = [...document.querySelectorAll('label')].find(l => l.textContent === '开票日期 *')!
@@ -62,7 +65,7 @@ it.each(dateCases)('发票列表%s显示北京日期，金额不变', async (_na
   expect(mockAxios.put).not.toHaveBeenCalled()
 })
 it.each(dateCases)('编辑%s回填原北京业务日', async (_name, raw, expected) => {
-  await mount(raw); await openEditor()
+  await mount(raw); await openEditor(expected)
   expect(dateInput().value).toBe(expected)
   expect(invoiceDate).toBe(raw)
   expect(mockAxios.put).not.toHaveBeenCalled()
@@ -73,7 +76,7 @@ it.each(dateCases)('不改%s日期直接保存，正文保持原业务日及revi
     if (url === '/accounting/invoices/7') return undefined
     mockAxios.unknown.push(`put ${url}`); throw Error('禁止其它离线PUT')
   })
-  await mount(raw); await openEditor()
+  await mount(raw); await openEditor(expected)
   const save = [...document.querySelectorAll('button')].find(b => b.textContent === '保存修改')!
   await act(async () => save.click())
   await vi.waitFor(() => expect(mockAxios.put).toHaveBeenCalledTimes(1))
