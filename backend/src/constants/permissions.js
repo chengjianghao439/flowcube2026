@@ -62,14 +62,8 @@ const PERMISSIONS = {
   PURCHASE_ORDER_CONFIRM: 'purchase.order.confirm',
   PURCHASE_ORDER_CANCEL: 'purchase.order.cancel',
   // 采购审批（审计 4.7）：金额超阈值单提交后需审批通过才能建收货。
-  // 内控点，刻意不 seed 给角色（同 PURCHASE_REQUISITION_APPROVE），由管理员按需授予。
   PURCHASE_ORDER_APPROVE: 'purchase.order.approve',
 
-  // 采购请购单（PR → 审批 → 转采购单）。APPROVE 是内控点，刻意不 seed（见 153 迁移）。
-  PURCHASE_REQUISITION_VIEW: 'purchase.requisition.view',
-  PURCHASE_REQUISITION_CREATE: 'purchase.requisition.create',
-  PURCHASE_REQUISITION_APPROVE: 'purchase.requisition.approve',
-  PURCHASE_REQUISITION_CONVERT: 'purchase.requisition.convert',
 
   INBOUND_ORDER_VIEW: 'inbound.order.view',
   INBOUND_ORDER_CREATE: 'inbound.order.create',
@@ -230,7 +224,7 @@ const PERMISSIONS = {
   USER_DELETE: 'user.delete',
 
   // 部门组织 + 多级审批流引擎（P2-7）。部门 CRUD 与审批流配置都是系统级管理能力，
-  // 不 seed 给普通角色（同 purchase.requisition.approve 内控先例），由管理员手动授。
+  // 不 seed 给普通角色，由管理员手动授。
   DEPARTMENT_VIEW: 'department.view',
   DEPARTMENT_CREATE: 'department.create',
   DEPARTMENT_UPDATE: 'department.update',

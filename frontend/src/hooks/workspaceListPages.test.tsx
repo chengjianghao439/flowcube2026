@@ -5,7 +5,6 @@ import { MemoryRouter, useLocation, useNavigate, type NavigateFunction } from 'r
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import TransferPage from '@/pages/transfer'
-import RequisitionsPage from '@/pages/purchase-requisitions'
 import ReturnsPage from '@/pages/returns'
 import OpLogsPage from '@/pages/oplogs'
 import PickingWavesPage from '@/pages/picking-waves'
@@ -14,9 +13,8 @@ import { HOME_TAB, useWorkspaceStore } from '@/store/workspaceStore'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { disposeWorkspaceHistoryGuard } from '@/router/workspaceHistoryGuard'
 import type { WaveQueryValues } from '@/pages/picking-waves/WaveQueryDialog'
-const api=vi.hoisted(()=>({transfer:vi.fn(),requisitions:vi.fn(),purchaseReturns:vi.fn(),saleReturns:vi.fn(),logs:vi.fn(),waves:vi.fn(),wave:vi.fn()}))
+const api=vi.hoisted(()=>({transfer:vi.fn(),purchaseReturns:vi.fn(),saleReturns:vi.fn(),logs:vi.fn(),waves:vi.fn(),wave:vi.fn()}))
 vi.mock('@/api/transfer',async original=>({...await original<typeof import('@/api/transfer')>(),getTransferListApi:api.transfer}))
-vi.mock('@/api/purchase-requisitions',async original=>({...await original<typeof import('@/api/purchase-requisitions')>(),listRequisitionsApi:api.requisitions}))
 vi.mock('@/api/returns',async original=>({...await original<typeof import('@/api/returns')>(),getPurchaseReturnsApi:api.purchaseReturns,getSaleReturnsApi:api.saleReturns}))
 vi.mock('@/api/oplogs',async original=>({...await original<typeof import('@/api/oplogs')>(),getAllOpLogsApi:api.logs}))
 vi.mock('@/api/picking-waves',async original=>({...await original<typeof import('@/api/picking-waves')>(),getWavesApi:api.waves,getWaveByIdApi:api.wave}))
@@ -27,7 +25,7 @@ vi.mock('@/components/finder',()=>({CustomerFinder:()=>null,SupplierFinder:()=>n
 vi.mock('@/components/print/OrderPrintOverlay',()=>({OrderPrintOverlay:()=>null}))
 vi.mock('@/components/shared/OrderDetailSections',()=>({OrderDetailSections:({children}:{children:React.ReactNode})=><>{children}</>}))
 vi.mock('@/pages/picking-waves/WaveQueryDialog',()=>({default:({open,onApply}:{open:boolean;onApply:(v:WaveQueryValues)=>void})=>open?<button onClick={()=>onApply({keyword:'WAVE',status:'1',warehouseId:10,warehouseName:'仓10',startDate:'2026-10-08',endDate:'2026-10-08'})}>应用合成批次查询</button>:null}))
-vi.mock('@/router/routeRegistry',async original=>({...await original<typeof import('@/router/routeRegistry')>(),resolveRouteComponent:(path:string)=>({ '/transfer':TransferPage,'/purchase-requisitions':RequisitionsPage,'/returns/purchase':ReturnsPage,'/returns/sale':ReturnsPage,'/oplogs':OpLogsPage,'/picking-waves':PickingWavesPage })[path as '/transfer']||null}))
+vi.mock('@/router/routeRegistry',async original=>({...await original<typeof import('@/router/routeRegistry')>(),resolveRouteComponent:(path:string)=>({ '/transfer':TransferPage,'/returns/purchase':ReturnsPage,'/returns/sale':ReturnsPage,'/oplogs':OpLogsPage,'/picking-waves':PickingWavesPage })[path as '/transfer']||null}))
 let host:HTMLDivElement,root:Root,cache:QueryClient,navigate:NavigateFunction
 const query={keyword:'CUSTOM',status:'1',warehouseId:'10',warehouseName:'仓10',startDate:'2026-10-08',endDate:'2026-10-08',applicantId:'7',partyId:'9'}
 const path=(page:string)=>page+'?'+new URLSearchParams(query)
@@ -43,7 +41,7 @@ beforeEach(()=>{
  cache=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});host=document.createElement('div');document.body.append(host);root=createRoot(host)
 })
 afterEach(async()=>{await act(async()=>root.unmount());cache.clear();host.remove();disposeWorkspaceHistoryGuard();vi.unstubAllGlobals();useWorkspaceStore.setState({tabs:[HOME_TAB],activeKey:HOME_TAB.key})})
-test.each([{page:'/transfer',spy:'transfer'},{page:'/purchase-requisitions',spy:'requisitions'},{page:'/returns/purchase',spy:'purchaseReturns'},{page:'/returns/sale',spy:'saleReturns'},{page:'/oplogs',spy:'logs'}] as const)('真实列表 $page 隐藏/再返回不读取别的标签条件',async({page,spy})=>{
+test.each([{page:'/transfer',spy:'transfer'},{page:'/returns/purchase',spy:'purchaseReturns'},{page:'/returns/sale',spy:'saleReturns'},{page:'/oplogs',spy:'logs'}] as const)('真实列表 $page 隐藏/再返回不读取别的标签条件',async({page,spy})=>{
  await render(path(page));const applied=expect.objectContaining({keyword:query.keyword,startDate:query.startDate,endDate:query.endDate});if(spy==='logs')expect(api[spy]).toHaveBeenLastCalledWith(applied,expect.any(AbortSignal));else expect(api[spy]).toHaveBeenLastCalledWith(applied);api[spy].mockClear();await go('/settings?keyword=OTHER')
  expect(api[spy].mock.calls.every(([p])=>p.keyword===query.keyword&&p.startDate===query.startDate)).toBe(true)
  await go(getWorkspaceListPath(page));expect(new URLSearchParams(host.querySelector('[data-location]')!.textContent!.split('?')[1]).get('keyword')).toBe(query.keyword)

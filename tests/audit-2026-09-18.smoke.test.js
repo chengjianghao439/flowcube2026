@@ -1011,7 +1011,7 @@ async function main() {
 
   test('★P3 创建类幂等：同一请求键换内容不得回放上一单的创建结果', async () => {
     // 修复前：sale.create / purchase.create / payment.receipt.create / carrier.createAccount /
-    // 请购 / 采购计划 / 退货建单 都只有常量 action，而创建类动作在 begin 时刻没有单据 ID 可绑，
+    // 采购计划 / 退货建单 都只有常量 action，而创建类动作在 begin 时刻没有单据 ID 可绑，
     // 于是同一个请求键被误用到**另一次内容不同**的创建上时，会直接回放第一次的成功回执（返回
     // 别单的 ID），调用方以为建成功了。现在 action 带**请求载荷指纹**：内容不同 → 不同作用域。
     const { pool } = require('../backend/src/config/db')   // 已被本文件的 harness 映射到 SAVEPOINT 连接

@@ -1,22 +1,16 @@
 import { qty } from '@/lib/format'
 import ListSummary from '@/components/shared/ListSummary'
 import { ProcurementArrivalStatus } from '@/components/shared/ProcurementSupplyExplanation'
-import { createRequestKey, withRequestKeyHeaders } from '@/lib/requestKey'
 import ProcurementSupplyDetails from '@/components/shared/ProcurementSupplyDetails'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { ReportTable } from '@/components/shared/ReportTable'
-import { useMemo, useState, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { getReplenishmentApi, saveStockPoliciesApi, type ReplenishmentItem } from '@/api/inventory'
-import { createRequisitionApi } from '@/api/purchase-requisitions'
 import { usePermission } from '@/hooks/usePermission'
 import { useCategoryTree } from '@/hooks/useCategories'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -30,12 +24,8 @@ import type { Category } from '@/types/categories'
 const fmtQty = (v: unknown) => qty(v as number | null | undefined)
 
 export default function ReplenishmentPage() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
-  const requestKey = useRef(createRequestKey('replenishment'))
-  const selectionKeys = useRef(new Map<string, number>())
   const { can } = usePermission()
-  const canCreateRequisition = can(PERMISSIONS.PURCHASE_REQUISITION_CREATE)
   const canAdjustInventory = can(PERMISSIONS.INVENTORY_ADJUST)
 
   // 采纳「建议补货点」：把该行的建议补货点写回补货策略（仅更新 reorder_point，不覆盖 safety/target）
@@ -53,8 +43,6 @@ export default function ReplenishmentPage() {
   const [warehouseId, setWarehouseId] = useState<number | null>(null)
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [applied, setApplied] = useState<{ keyword: string; warehouseId: number | null; categoryId: number | null }>({ keyword: '', warehouseId: null, categoryId: null })
-  const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [confirmOpen, setConfirmOpen] = useState(false)
   const { data: categoryTree = [] } = useCategoryTree()
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -68,33 +56,15 @@ export default function ReplenishmentPage() {
     }),
   })
 
-  const { mutate: createRequisition, isPending: creating } = useMutation({
-    mutationFn: (data: Parameters<typeof createRequisitionApi>[0]) => createRequisitionApi(data, { headers: withRequestKeyHeaders(requestKey.current) }),
-    onSuccess: (r) => {
-      requestKey.current = createRequestKey('replenishment')
-      qc.invalidateQueries({ queryKey: ['replenishment'] })
-      setConfirmOpen(false)
-      setSelected(new Set())
-      toast.success(`已生成采购申请单草稿 ${r.requisitionNo}，请核对后提交审批`)
-      navigate(`/purchase-requisitions/${r.id}`)
-    },
-    onError: (e: Error) => toast.error(e.message),
-  })
-
-  const list = useMemo(() => (data?.list ?? []).map(row => {
-    if (!selectionKeys.current.has(row.id)) selectionKeys.current.set(row.id, selectionKeys.current.size + 1)
-    return { ...row, selectionId: selectionKeys.current.get(row.id)! }
-  }), [data])
+  const list = data?.list ?? []
   const total = data?.pagination?.total ?? 0
-
-  const selectedRows = useMemo(() => list.filter(row => selected.has(row.selectionId)), [list, selected])
 
   const columns: TableColumn<ReplenishmentItem>[] = [
     ...productIdentityColumns(),
     { key: 'warehouseName', title: '仓库', width: 110 },
     { key: 'confirmedDemand', title: '未发销售', width: 100, align: 'right', render: v => fmtQty(v) },
     { key: 'netRequirement', title: '净需求', width: 90, align: 'right', render: v => fmtQty(v) },
-    { key: 'provisionalCoverage', title: '计划/申请/草稿覆盖', width: 150, align: 'right', render: v => fmtQty(v) },
+    { key: 'provisionalCoverage', title: '计划/草稿覆盖', width: 150, align: 'right', render: v => fmtQty(v) },
     { key: 'available', title: '可用', width: 90, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'inTransit', title: '在途采购', width: 100, align: 'right', render: v => Number(v) > 0
         ? <span className="tabular-nums text-blue-600">{fmtQty(v)}</span>
@@ -129,13 +99,11 @@ export default function ReplenishmentPage() {
     setWarehouseId(v.warehouseId)
     setCategoryId(v.categoryId)
     setApplied({ keyword: v.keyword, warehouseId: v.warehouseId, categoryId: v.categoryId })
-    setSelected(new Set())
     setQueryOpen(false)
   }
   function reset() {
     setKeyword(''); setWarehouseId(null); setCategoryId(null)
     setApplied({ keyword: '', warehouseId: null, categoryId: null })
-    setSelected(new Set())
   }
 
   function findCatName(nodes: Category[], id: number): string | null {
@@ -156,45 +124,15 @@ export default function ReplenishmentPage() {
     applied.categoryId && { key: 'category', label: `分类：${findCatName(categoryTree, applied.categoryId) ?? applied.categoryId}`, onRemove: () => { setCategoryId(null); setApplied(a => ({ ...a, categoryId: null })) } },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
-  function openConfirm() {
-    if (selectedRows.length === 0) return toast.warning('请先勾选要补货的商品')
-    // 采购申请单是单仓单据：勾选跨仓商品时提示分仓生成（采购申请头只能一个期望入库仓）
-    const warehouses = new Set(selectedRows.map(r => r.warehouseId))
-    if (warehouses.size > 1) {
-      return toast.warning('勾选商品分属多个仓库，请按仓库分别生成采购申请单')
-    }
-    setConfirmOpen(true)
-  }
-  function handleConfirm() {
-    // 按勾选行生成采购申请草稿：同一仓库一组，source='replenishment'
-    const items = selectedRows.map(r => ({
-      productId: Number(r.productId),
-      quantity: Number(r.suggestQty),
-      suggestedSupplierId: r.supplierId,
-      remark: `补货建议：可用 ${fmtQty(r.available)} / 补货点 ${fmtQty(r.reorderPoint)}`,
-    }))
-    createRequisition({
-      title: '补货建议生成',
-      warehouseId: selectedRows[0].warehouseId,
-      source: 'replenishment',
-      items,
-      remark: `由补货建议勾选生成（${selectedRows.length} 项）`,
-    })
-  }
-
   return (
     <div className="space-y-4">
       <PageHeader
         title="补货建议"
-        description="按未发销售、实物与预计采购计算缺口；已有计划、采购申请和采购草稿分别覆盖。起订与整包装规则决定最终采购量。"
+        description="按未发销售、实物与预计采购计算缺口；已有计划和采购草稿分别覆盖。起订与整包装规则决定最终采购量。"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            {canCreateRequisition && (
-              <Button onClick={openConfirm} disabled={creating || selected.size === 0}>
-                {creating ? '生成中…' : `生成采购申请单${selected.size > 0 ? `（${selected.size} 项）` : ''}`}
-              </Button>
-            )}
+
             <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
           </div>
         }
@@ -228,52 +166,13 @@ export default function ReplenishmentPage() {
           columns={columns}
           data={list}
           loading={isLoading}
-          rowKey="selectionId"
-          selectable
-          selectableCheck={row => row.netRequirement > 0}
-          selectedIds={selected}
-          onSelectChange={setSelected}
+          rowKey="id"
           emptyText="暂无待补货商品（所有商品的可用 + 在途都在补货点之上，或已有单据覆盖需求）"
         />
       )}
 
       {!isError && !isLoading && data && <ListSummary total={total} unit="项待补货" />}
 
-      <Dialog open={confirmOpen} onOpenChange={v => !v && setConfirmOpen(false)}>
-        <DialogContent className="grid-cols-1 sm:max-w-3xl">
-          <DialogHeader description={<>{<>
-              将勾选的 <span className="font-semibold text-foreground">{selectedRows.length}</span> 项补货建议生成一张采购申请单（仓库「
-              {selectedRows[0]?.warehouseName ?? '—'}」），保存为草稿，核对后提交审批。创建时重新校验需求和覆盖；建议数量已满足包装与起订规则。
-            </>}</>}>
-            <DialogTitle>生成采购申请单</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 py-2">
-
-            <div className="max-h-56 overflow-auto rounded-md border">
-              <ReportTable className="w-full min-w-[1500px] text-sm">
-                <thead className="sticky top-0">
-                  <tr className="text-left text-muted-foreground">
-                    <ProductIdentityHeaders />
-                    <th className="px-4 py-3 text-right font-medium">建议采购量</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedRows.map(r => (
-                    <tr key={r.id} className="border-t">
-                      <ProductIdentityCells product={r} />
-                      <td className="px-4 py-3 text-right tabular-nums">{fmtQty(r.suggestQty)} {r.unit}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </ReportTable>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={creating}>取消</Button>
-            <Button onClick={handleConfirm} disabled={creating}>生成采购申请单</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       <ReplenishmentQueryDialog
         open={queryOpen}

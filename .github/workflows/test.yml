@@ -534,6 +534,9 @@ jobs:
       - name: 单元测试 — 前后端权限码一致性（纯静态，无需 DB）
         run: npm run test:permissions
 
+      - name: 采购申请退役守卫
+        run: npm run test:purchase-requisition-removal
+
       - name: QA 回归 — 分类资源参数与税务期间（无需 DB）
         run: npm run test:qa-remediation
 
@@ -855,6 +858,9 @@ jobs:
 
       - name: 冒烟测试 — 采购审批环节（审计 4.7）
         run: npm run smoke:purchase-approval
+
+      - name: 采购申请旧入口与历史来源兼容
+        run: npm run smoke:purchase-requisition-removal
 
       - name: 冒烟测试 — 多级审批流引擎（部门+审批流配置，P2-7）
         run: npm run smoke:approval-flow

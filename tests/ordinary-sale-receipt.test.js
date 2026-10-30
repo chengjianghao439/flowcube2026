@@ -63,6 +63,7 @@ test('派发只核原tasks结构和remaining自洽，不套当前任务状态或
 test('宽查询命中普通原action仍核scope；控制器只调用本人tuple不加VIEW', async () => {
   for (const scope of [[8], [9]]) {
     const f = fixture(), sent = [], deps = {
+      '../../utils/AppError': AppError,
       '../../utils/response': { successResponse(_res, data) { sent.push(data) } },
       '../../utils/operationRequest': { async getScopedOperationRequestStatus(input) { assert.equal(input.userId, 7); assert.equal(input.requestKey, 'original'); input.receiptContext.matchedAction = 'sale.ship:21'; return receipt('ship') } },
       '../packages/packages.receipt-guard': { assertPrintLabelReceiptConsistent() {} }, '../../utils/logger': {},

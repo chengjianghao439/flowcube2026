@@ -15,7 +15,7 @@ const INFO_LABEL: Partial<Record<DocumentType, string>> = {
   sale: '订单信息', purchase: '订单信息',
   inbound: '收货信息', transfer: '调拨信息', wave: '批次信息', stockcheck: '盘点信息',
   'purchase-return': '退货信息', 'sale-return': '退货信息',
-  requisition: '申请信息', credit: '申请信息', price: '申请信息', plan: '计划信息',
+  credit: '申请信息', price: '申请信息', plan: '计划信息',
   expense: '报销信息', refund: '退款信息', disposal: '处置信息', logistics: '运单信息',
 }
 function receiveView(type: DocumentType, id: number, path: string): 'progress' | undefined {
@@ -46,7 +46,7 @@ function DetailSections({ type, id, children, progress, printProgress, initialVi
     return () => window.removeEventListener('hashchange', focus)
   }, [type, id, scoped, tabPath])
   const progressLabel = type === 'purchase' || type === 'inbound' ? '收货进度'
-    : ['requisition', 'credit', 'price', 'expense'].includes(type) ? '审批进度'
+    : ['credit', 'price', 'expense'].includes(type) ? '审批进度'
     : type === 'logistics' ? '物流进度'
     : type === 'wave' ? '拣货进度'
     : type === 'stockcheck' ? '盘点进度'

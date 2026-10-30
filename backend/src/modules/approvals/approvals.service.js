@@ -18,7 +18,6 @@ const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
  */
 
 const BIZ_TYPES = [
-  { value: 'purchase_requisition', label: '采购请购单' },
   { value: 'sale_credit_override', label: '超额放行申请' },
   { value: 'expense_claim', label: '费用报销' },
   { value: 'purchase_order', label: '采购单' },
@@ -34,7 +33,6 @@ const APPROVER_TYPE_LABEL = { 1: '指定角色', 2: '部门负责人', 3: '指�
  * warehouseCol 为 null 的是公司级单据（财务报销、客户授信、价格申请），没有仓库维度。
  */
 const BIZ_DOC_META = {
-  purchase_requisition: { table: 'purchase_requisitions', permission: P.PURCHASE_REQUISITION_VIEW, warehouseCol: 'warehouse_id', name: '采购请购单', noCol: 'requisition_no', titleCol: 'title', softDelete: true },
   sale_credit_override: { table: 'sale_credit_overrides', permission: P.SALE_CREDIT_OVERRIDE_VIEW, warehouseCol: null, name: '超额放行申请', noCol: 'override_no', titleCol: 'reason', softDelete: true },
   expense_claim: { table: 'expense_claims', permission: P.FINANCE_EXPENSE_VIEW, warehouseCol: null, name: '费用报销', authorize: authorizeExpenseApproval, noCol: 'claim_no', titleCol: 'title', softDelete: true },
   purchase_order: { table: 'purchase_orders', permission: P.PURCHASE_ORDER_VIEW, warehouseCol: 'warehouse_id', name: '采购单', noCol: 'order_no', titleCol: 'remark', softDelete: true },
@@ -69,8 +67,8 @@ function fmtFlow(r) {
 }
 
 async function listFlows({ bizType = '' } = {}) {
-  const conds = ['1=1']
-  const params = []
+  const conds = ['f.biz_type IN (?)']
+  const params = [BIZ_TYPES.map(type => type.value)]
   if (bizType) { conds.push('f.biz_type=?'); params.push(bizType) }
   const [rows] = await pool.query(
     `SELECT f.*, (SELECT COUNT(*) FROM approval_flow_steps s WHERE s.flow_id=f.id) AS step_count
@@ -83,6 +81,7 @@ async function listFlows({ bizType = '' } = {}) {
 async function getFlow(id) {
   const [[f]] = await pool.query('SELECT * FROM approval_flows WHERE id=?', [Number(id)])
   if (!f) throw new AppError('审批流不存在', 404)
+  if (!BIZ_TYPES.some(type => type.value === f.biz_type)) throw new AppError('该业务功能已移除', 410)
   const [steps] = await pool.query('SELECT * FROM approval_flow_steps WHERE flow_id=? ORDER BY step_order ASC', [Number(id)])
   return {
     ...fmtFlow(f),
@@ -170,6 +169,7 @@ async function updateFlow(id, { name, minAmount, maxAmount, isActive, remark, st
     await conn.beginTransaction()
     const [[f]] = await conn.query('SELECT * FROM approval_flows WHERE id=? FOR UPDATE', [Number(id)])
     if (!f) throw new AppError('审批流不存在', 404)
+    if (!BIZ_TYPES.some(type => type.value === f.biz_type)) throw new AppError('该业务功能已移除', 410)
     // 金额区间/节点可改：运行中的实例已是快照，不受改配影响；历史实例的归属由实例自身字段记录。
     // 仅改名的流程不影响任何历史（区间是选流依据，但已建实例不重新选流）。
     const n = String(name || '').trim()
@@ -204,6 +204,9 @@ async function updateFlow(id, { name, minAmount, maxAmount, isActive, remark, st
 
 /** 删除流程：有运行中实例或历史实例时禁止删除（审批留痕不可断链）。 */
 async function removeFlow(id) {
+  const [[f]] = await pool.query('SELECT biz_type FROM approval_flows WHERE id=?', [Number(id)])
+  if (!f) throw new AppError('审批流不存在', 404)
+  if (!BIZ_TYPES.some(type => type.value === f.biz_type)) throw new AppError('该业务功能已移除', 410)
   const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM approval_instances WHERE flow_id=?', [Number(id)])
   if (Number(n) > 0) throw new AppError('该审批流已被使用（存在审批实例），不能删除；请停用', 409)
   await pool.query('DELETE FROM approval_flows WHERE id=?', [Number(id)])
@@ -267,7 +270,7 @@ async function listPending({ page = 1, pageSize = 20 }, user) {
         branchParams.push(...filter.params)
       }
       if (bizType === 'expense_claim' && !can(P.FINANCE_EXPENSE_VIEW_ALL)) { conds.push('d.applicant_id=?'); branchParams.push(userId) }
-      // 六类只关联当前本人快照；新单级审核菜单权不能放宽此集合。
+      // 支持的业务类型只关联当前本人快照；新单级审核菜单权不能放宽此集合。
       parts.push(`SELECT 'engine' AS source_kind,i.id AS instance_id,t.id AS task_id,i.biz_type,i.biz_id,
         i.applicant_id,i.applicant_name,i.amount,i.current_step,i.flow_id,i.created_at,
         i.created_at AS submitted_at,'submitted' AS time_kind,i.created_at AS pending_at,

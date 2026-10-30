@@ -20,7 +20,7 @@ function calculateSupply(input = {}) {
   // Reservations are already represented by sales. Preserve any larger reservation floor
   // (e.g. physical return pending after a sales reduction), never add them to demand twice.
   const grossDemand = Math.max(confirmedDemand + residualForecast, nonnegative(input.reserved))
-  const provisionalCoverage = nonnegative(input.planCoverage) + nonnegative(input.requisitionCoverage) + nonnegative(input.draftCoverage)
+  const provisionalCoverage = nonnegative(input.planCoverage) + nonnegative(input.draftCoverage)
   const physicalNet = Math.max(0, grossDemand + nonnegative(input.safetyStock) - nonnegative(input.onHand) - nonnegative(input.inTransit))
   const netRequirement = roundQty(Math.max(0, physicalNet - provisionalCoverage))
   const suggestedQty = roundPurchase(netRequirement, input.packMultiple || 0, input.minimumOrderQty || 0)
@@ -31,7 +31,7 @@ function transferSurplus(input = {}) {
   return roundQty(Math.max(0, nonnegative(input.onHand) - Math.max(nonnegative(input.confirmedDemand), nonnegative(input.forecastDemand), nonnegative(input.reserved)) - nonnegative(input.safetyStock)))
 }
 
-/** All plan/requisition mutations take this first, before document locks. No inventory is reserved. */
+/** All plan mutations take this first, before document locks. No inventory is reserved. */
 async function lockPlanning(conn) {
   await conn.query('SELECT id FROM procurement_planning_lock WHERE id=1 FOR UPDATE')
 }

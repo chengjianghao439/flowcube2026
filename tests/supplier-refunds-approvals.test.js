@@ -23,7 +23,7 @@ function branch(sql){return sql.split("'document' AS source_kind").find(p=>p.inc
 test('RF1独立document metadata进入同一RR/count/limit，六引擎不扩、金额四位与confirm identity',async()=>{
  const f=pending({rows:[rfRow]}),r=await f.run(),queries=f.calls.filter(c=>c.sql.includes('FROM ('))
  assert.ok(branch(queries[0].sql),'supplier refund document must join unified pending read')
- assert.equal((queries[0].sql.match(/WHERE a.user_id=\?/g)||[]).length,6)
+ assert.equal((queries[0].sql.match(/WHERE a.user_id=\?/g)||[]).length,5)
  assert.equal(r.list[0].entryKey,'document:supplier_refund:61:confirm');assert.equal(r.list[0].amount,0.0049)
  for(const k of ['taskId','instanceId','flowId','currentStep'])assert.equal(r.list[0][k],null)
  const from=s=>s.slice(s.indexOf('FROM (')).split('\n      ORDER BY')[0];assert.equal(from(queries[0].sql),from(queries[1].sql))

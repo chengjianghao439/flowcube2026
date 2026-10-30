@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Command } from 'cmdk'
-import { Package, Factory, User, ShoppingCart, Truck, ClipboardList, ArrowLeftRight, Undo2, Inbox, Receipt, Archive, Banknote, ShieldCheck, ListChecks, FileText, Search, ArrowRight, Loader2, X } from 'lucide-react'
+import { Package, Factory, User, ShoppingCart, Truck, ArrowLeftRight, Undo2, Inbox, Receipt, Archive, Banknote, ShieldCheck, ListChecks, FileText, Search, ArrowRight, Loader2, X } from 'lucide-react'
 import { searchGlobalApi, type GlobalSearchItem } from '@/api/search'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { EmptyState } from './EmptyState'
@@ -10,11 +10,11 @@ import { IconButton } from './IconButton'
 type SearchResult = GlobalSearchItem
 const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   product: Package, supplier: Factory, customer: User, purchase: ShoppingCart, sale: Truck,
-  requisition: ClipboardList, transfer: ArrowLeftRight, purchaseReturn: Undo2, saleReturn: Undo2,
+  transfer: ArrowLeftRight, purchaseReturn: Undo2, saleReturn: Undo2,
   inbound: Inbox, expense: Receipt, disposal: Archive, refund: Banknote,
   creditOverride: ShieldCheck, stockcheck: ListChecks, invoice: FileText,
 }
-const TYPE_ORDER = ['product', 'supplier', 'customer', 'purchase', 'sale', 'requisition', 'transfer', 'purchaseReturn', 'saleReturn', 'inbound', 'expense', 'disposal', 'refund', 'creditOverride', 'stockcheck', 'invoice']
+const TYPE_ORDER = ['product', 'supplier', 'customer', 'purchase', 'sale', 'transfer', 'purchaseReturn', 'saleReturn', 'inbound', 'expense', 'disposal', 'refund', 'creditOverride', 'stockcheck', 'invoice']
 const resultValue = (result: SearchResult) => JSON.stringify([result.type, result.id, result.path])
 
 export default function GlobalSearch() {

@@ -122,7 +122,7 @@ async function runMigrations({ checkGapsOnly = false, through, connection } = {}
       if (Number(flags.binlog) && !Number(flags.trusted)) {
         const [grants] = await conn.query('SHOW GRANTS')
         const allowed = grants.some(row => /GRANT (?:ALL PRIVILEGES ON \*\.\*|[^\n]*\bSUPER\b)/i.test(String(Object.values(row)[0])))
-        if (!allowed) throw new Error('往来明细迁移需要触发器创建权限：请停写后使用迁移管理员，或通过正式部署脚本的临时权限窗口执行；未写入结转数据')
+        if (!allowed) throw new Error('往来明细迁移需要已有的触发器创建条件：当前授权或数据库条件不足，请由管理员核实；部署脚本不会修改全局参数；未写入结转数据')
       }
     }
 

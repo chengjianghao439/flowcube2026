@@ -136,12 +136,12 @@ test('服务器只读诊断 workflow 必须保持只读，且真的在采集现�
   }
 })
 
-test('部署总超时穿透内层等待，清理和回退必须在强杀前执行', () => {
+test('部署总超时穿透内层等待，停写清理必须在强杀前执行', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-nested-timeout-'))
   const log = path.join(dir, 'events'), pids = path.join(dir, 'pids')
   fs.writeFileSync(path.join(dir, 'docker'), `#!${process.execPath}\nrequire('node:fs').writeFileSync(process.env.PROBE_PIDS, JSON.stringify([process.pid,process.ppid]));setInterval(()=>{},1000);\n`, { mode: 0o755 })
   fs.writeFileSync(path.join(dir, 'gate.sh'), `set -euo pipefail\ntrap 'echo cleanup >> "$PROBE_LOG"' EXIT\ntrap 'exit 143' TERM\n. scripts/lib/runtime-guards.sh\nDOCKER_COMMAND_TIMEOUT=20 docker run\n`)
-  fs.writeFileSync(path.join(dir, 'deploy.sh'), `set -Eeuo pipefail\ntrap 'echo rollback >> "$PROBE_LOG"; exit 1' TERM ERR\nbash "$PROBE_DIR/gate.sh"\n`)
+  fs.writeFileSync(path.join(dir, 'deploy.sh'), `set -Eeuo pipefail\ntrap 'echo stop_cleanup >> "$PROBE_LOG"; exit 1' TERM ERR\nbash "$PROBE_DIR/gate.sh"\n`)
   let failure, failed = false
   try {
     const r = spawnSync('bash', ['-c', 't=$(type -P timeout || type -P gtimeout); exec "$t" -k 2 1 bash "$PROBE_DIR/deploy.sh"'], {
@@ -151,7 +151,7 @@ test('部署总超时穿透内层等待，清理和回退必须在强杀前执�
     assert.equal(r.status, 124)
     const events = fs.readFileSync(log, 'utf8')
     assert.match(events, /cleanup/)
-    assert.match(events, /rollback/)
+    assert.match(events, /stop_cleanup/)
     const [pid] = JSON.parse(fs.readFileSync(pids, 'utf8'))
     assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' })
   } catch (error) {

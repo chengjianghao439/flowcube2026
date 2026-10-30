@@ -48,7 +48,7 @@ function fmtItem(r) {
 
 /**
  * 生成采购计划（文档 11 单据化）。复用 MVP 只读计算 getProcurementPlan 得出建议行，整批快照落库为单据。
- * 同事务规划锁后读取共享净需求；活跃计划、请购与采购草稿参与覆盖，跨请求键也不重复生成。
+ * 同事务规划锁后读取共享净需求；活跃计划与采购草稿参与覆盖，跨请求键也不重复生成。
  */
 async function generatePlan({ window = 30, horizon = 30, warehouseId = null, name = null, defaultLeadTime = 7, forecastMethod = 'sma', remark = null, operator, requestKey, scopeWarehouseIds = null }) {
   // 目标仓若指定，须在数据权限内
@@ -61,7 +61,7 @@ async function generatePlan({ window = 30, horizon = 30, warehouseId = null, nam
     if (requestState.replay) { await conn.rollback(); return requestState.responseData }
 
     const { list, params } = await getProcurementPlan({ window, horizon, warehouseId, defaultLeadTime, scopeWarehouseIds, forecastMethod, includeCovered: false }, conn)
-    if (!list.length) throw new AppError('当前需求已由库存、在途采购或已有计划/请购覆盖，无需重复生成', 409)
+    if (!list.length) throw new AppError('当前需求已由库存、在途采购或已有计划覆盖，无需重复生成', 409)
 
     await assertQtyPrecision(conn, list.map(item => ({productId:item.productId,qty:item.suggestedQty,label:'计算后的采购计划数量'})))
     const code = await generateMasterCode(conn, 'PLAN', 'procurement_plans')
@@ -194,7 +194,7 @@ async function updatePlanItem(planId, itemId, { adjustedQty, supplierId, ignore 
  * 绝不自动提交采购单。事务内：锁计划头 → 逐行校验(待处理/在scope/已选供应商) → 建草稿 → CAS 回写行 → 收口计划状态。
  */
 async function convert(planId, { itemIds, target = 'purchase', operator, requestKey, scopeWarehouseIds = null }) {
-  if (target !== 'purchase') throw new AppError('暂只支持转采购单草稿（请购单待文档02落地）', 400)
+  if (target !== 'purchase') throw new AppError('只支持转采购单草稿', 400)
   const ids = [...new Set((itemIds || []).map(Number).filter(n => n > 0))]
   if (!ids.length) throw new AppError('请至少勾选一行转采购', 400)
 

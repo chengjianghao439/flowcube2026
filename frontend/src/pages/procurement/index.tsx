@@ -89,7 +89,7 @@ export default function ProcurementPlanListPage() {
 
       <Dialog open={genOpen} onOpenChange={setGenOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader description="只统计在库现货与在途采购；未发销售（含未占库订单）会优先消耗预测需求；已有计划、申请和采购草稿会先行抵扣，避免重复采购。"><DialogTitle>生成采购计划</DialogTitle></DialogHeader>
+          <DialogHeader description="只统计在库现货与在途采购；未发销售（含未占库订单）会优先消耗预测需求；已有计划和采购草稿会先行抵扣，避免重复采购。"><DialogTitle>生成采购计划</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">

@@ -63,10 +63,6 @@ export const PERMISSIONS = {
   PURCHASE_ORDER_CANCEL: 'purchase.order.cancel',
   PURCHASE_ORDER_APPROVE: 'purchase.order.approve',
 
-  PURCHASE_REQUISITION_VIEW: 'purchase.requisition.view',
-  PURCHASE_REQUISITION_CREATE: 'purchase.requisition.create',
-  PURCHASE_REQUISITION_APPROVE: 'purchase.requisition.approve',
-  PURCHASE_REQUISITION_CONVERT: 'purchase.requisition.convert',
 
   INBOUND_ORDER_VIEW: 'inbound.order.view',
   INBOUND_ORDER_CREATE: 'inbound.order.create',
@@ -310,10 +306,6 @@ export const PERMISSION_GROUPS: Array<{ group: string; items: Array<{ code: Perm
       { code: PERMISSIONS.PURCHASE_ORDER_CONFIRM, label: '确认采购单' },
       { code: PERMISSIONS.PURCHASE_ORDER_CANCEL, label: '取消采购单' },
       { code: PERMISSIONS.PURCHASE_ORDER_APPROVE, label: '审批采购单' },
-      { code: PERMISSIONS.PURCHASE_REQUISITION_VIEW, label: '查看采购申请单' },
-      { code: PERMISSIONS.PURCHASE_REQUISITION_CREATE, label: '发起/编辑采购申请单' },
-      { code: PERMISSIONS.PURCHASE_REQUISITION_APPROVE, label: '审批采购申请单' },
-      { code: PERMISSIONS.PURCHASE_REQUISITION_CONVERT, label: '采购申请转采购单' },
       { code: PERMISSIONS.PROCUREMENT_PLAN_VIEW, label: '查看采购计划' },
       { code: PERMISSIONS.PROCUREMENT_PLAN_MANAGE, label: '生成/编辑/转采购计划' },
       { code: PERMISSIONS.INBOUND_ORDER_VIEW, label: '查看收货单' },

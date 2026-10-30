@@ -186,7 +186,7 @@ function category(route) {
   if (/^\/(approvals|dashboard)|^\/reports\/role-workbench/.test(route)) return '审批待办'
   if (/^\/(logistics|carriers|carrier-accounts)|^\/settings\/(barcode-print-query|print-templates|printers)/.test(route)) return '打印物流'
   if (/^\/(payments|finance|accounting|refunds|supplier-refunds|portal)|^\/reports\/(reconciliation|profit-analysis|kpi|avg-cost-reconciliation)/.test(route) || route === '/reports') return '财务会计'
-  if (/^\/(purchase|purchase-requisitions|procurement)|^\/returns\/purchase|^\/reports\/replenishment/.test(route)) return '采购'
+  if (/^\/(purchase|procurement)|^\/returns\/purchase|^\/reports\/replenishment/.test(route)) return '采购'
   if (/^\/(sale|credit-overrides)|^\/returns\/sale/.test(route)) return '销售'
   if (/^\/(inventory|plastic-boxes|stockcheck|disposals|transfer|inbound-tasks|picking-waves|warehouses|locations|racks|sorting-bins)|^\/reports\/(inventory-aging|warehouse-ops|wave-performance|pda-anomaly)/.test(route)) return '库存仓储'
   return '系统设置'

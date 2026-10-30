@@ -12,7 +12,7 @@ export function pendingApprovalTime(row: PendingApproval) {
 }
 export function pendingApprovalAmountLabel(row: PendingApproval) {
   if (row.sourceKind === 'document') return row.bizType === 'inventory_disposal' ? '参考估值' : '单据总额'
-  return row.bizType === 'product_price' ? '新单价' : row.bizType === 'sale_credit_override' ? '超额金额' : row.bizType === 'purchase_requisition' ? '估算金额' : '原审批金额'
+  return row.bizType === 'product_price' ? '新单价' : row.bizType === 'sale_credit_override' ? '超额金额' : '原审批金额'
 }
 
 /** 静态业务身份与既有原单入口；不能从标题或服务端URL猜测业务类型。 */
@@ -20,7 +20,6 @@ export function pendingApprovalAmount(row: Pick<PendingApproval, 'bizType'|'amou
 
 export const APPROVAL_BUSINESS: Record<string, { label: string; permission: PermissionCode; path: (id: number) => string }> = {
   supplier_refund: { label: '供应商退款', permission: P.SUPPLIER_REFUND_VIEW, path: id => `/supplier-refunds?detailId=${id}` },
-  purchase_requisition: { label: '采购申请单', permission: P.PURCHASE_REQUISITION_VIEW, path: id => `/purchase-requisitions/${id}` },
   purchase_order: { label: '采购单', permission: P.PURCHASE_ORDER_VIEW, path: id => `/purchase/${id}` },
   sale_credit_override: { label: '超额放行', permission: P.SALE_CREDIT_OVERRIDE_VIEW, path: id => `/credit-overrides?detailId=${id}` },
   product_price: { label: '商品改价', permission: P.PRODUCT_VIEW, path: id => `/price-change?detailId=${id}` },

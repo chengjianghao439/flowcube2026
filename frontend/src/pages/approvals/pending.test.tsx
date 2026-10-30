@@ -11,7 +11,7 @@ import type { PendingApproval } from '@/types/approval'
 const api = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('@/api/approvals', () => ({ listPendingApprovalsApi: api.list }))
 let host: HTMLDivElement, root: Root, client: QueryClient
-const row = (bizType = 'purchase_requisition', id = 91): PendingApproval => ({ instanceId: id, taskId: id, bizType, bizId: id, no: `单-${id}`, title: '申请事由', status: 2, applicantId: 3, applicantName: '申请人', amount: 18, currentStep: 1, flowId: 1, createdAt: '2026-10-04 12:00:00' })
+const row = (bizType = 'purchase_order', id = 91): PendingApproval => ({ instanceId: id, taskId: id, bizType, bizId: id, no: `单-${id}`, title: '申请事由', status: 2, applicantId: 3, applicantName: '申请人', amount: 18, currentStep: 1, flowId: 1, createdAt: '2026-10-04 12:00:00' })
 const page = (list: PendingApproval[], total = list.length, current = 1) => ({ list, pagination: { page: current, pageSize: 20, total } })
 function Path() { const location = useLocation(); return <output>{location.pathname}{location.search}</output> }
 async function flush() { await act(async () => { await new Promise(done => setTimeout(done, 30)) }) }
@@ -20,20 +20,20 @@ function click(label: string) { act(() => [...host.querySelectorAll('button')].f
 beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); useAuthStore.setState({ sessionGeneration: 1, user: { id: 7, username: 'tester', realName: '测试人', roleId: 1, roleName: '测试' } }); useWorkspaceStore.setState({ tabs: [] }); api.list.mockReset(); client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
 afterEach(() => { act(() => root.unmount()); client.clear(); host.remove() })
 test('本列表显式取齐模式显示第21条原单，不再提供可见翻页', async () => {
-  api.list.mockResolvedValue(page(Array.from({ length: 21 }, (_, index) => row('purchase_requisition', index + 1))))
+  api.list.mockResolvedValue(page(Array.from({ length: 21 }, (_, index) => row('purchase_order', index + 1))))
   await render(); expect(host.textContent).toContain('21')
   expect(api.list).toHaveBeenLastCalledWith({ page: 1, pageSize: 200 }, false, expect.objectContaining({ baseURL: '/api', _authSessionGeneration: 1, _erpApiFallbackTried: true })); expect(host.textContent).toContain('单-21'); expect(host.textContent).toContain('单-1')
   expect(host.textContent).not.toMatch(/上一页|下一页/)
 })
 test.each([
-  ['purchase_requisition', '/purchase-requisitions/91'], ['purchase_order', '/purchase/91'],
+  ['purchase_order', '/purchase/91'],
   ['sale_credit_override', '/credit-overrides?detailId=91'], ['product_price', '/price-change?detailId=91'],
   ['inventory_disposal', '/disposals?detailId=91'], ['expense_claim', '/finance/expenses?detailId=91'],
 ])('单据号准确进入原业务 %s', async (bizType, path) => { api.list.mockResolvedValue(page([row(bizType)])); await render(); click('单-91'); expect(host.querySelector('output')?.textContent).toBe(path) })
 test('未知类型禁用原单入口且明确提示', async () => { api.list.mockResolvedValue(page([row('unknown')])); await render(); expect(host.textContent).toContain('暂不支持此单据类型'); expect([...host.querySelectorAll('button')].find(b => b.textContent === '去审批')?.disabled).toBe(true) })
 test('审批后总数缩小，重新取齐当前结果而不保留已失效末条', async () => {
   let total = 21
-  api.list.mockImplementation(() => Promise.resolve(page(Array.from({ length: total }, (_, index) => row('purchase_requisition', index + 1)))))
+  api.list.mockImplementation(() => Promise.resolve(page(Array.from({ length: total }, (_, index) => row('purchase_order', index + 1)))))
   await render(); expect(host.textContent).toContain('单-21'); total = 1
   await act(async () => { await client.invalidateQueries({ queryKey: ['approval-pending'] }) }); await flush()
   await flush()

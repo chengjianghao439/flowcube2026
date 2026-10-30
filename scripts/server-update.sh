@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 服务器只加载 CI 镜像、迁移和切换；不安全的数据库回退保持停写。
+# 服务器只加载 CI 镜像、迁移和切换；失败停止并保留证据，不自动回退或改数据库全局参数。
 set -Eeuo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -24,13 +24,12 @@ APPLICATION_SWITCHED=0
 PREVIOUS_BACKEND_IMAGE=''
 PREVIOUS_FRONTEND_IMAGE=''
 MIGRATION_CONTAINER=''
-MIGRATION_TRUST_PREVIOUS=''
 MIGRATION_STARTED=0
 MIGRATION_COMPLETED=0
-LEDGER_COMPATIBILITY_CHANGED=0
-WRITE_COMPATIBILITY_CHANGED=0
-ROLLBACK_COMPATIBILITY_VERIFIED=1
-ROLLBACK_RESULT='应用容器未切换'
+DEPLOY_PHASE='前置检查'
+backup_run_dir=''
+PREFLIGHT_OVERRIDE=''
+PREFLIGHT_CONTAINER=''
 
 wait_for_health() {
   local attempts="${HEALTH_CHECK_ATTEMPTS:-30}" delay="${HEALTH_CHECK_DELAY:-2}" i endpoint="${1:-/api/ready}"
@@ -91,81 +90,47 @@ ensure_mysql_ready() {
   fail_deploy '首次启动 MySQL 未通过健康与 TCP 认证 SQL，须维护窗口核对；不自动恢复或重建'
 }
 
-# 创建触发器需要管理员提供短暂的迁移窗口；不授予应用 SUPER，不永久放宽配置。
-mysql_admin_sql() {
-  docker compose exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot --database="$MYSQL_DATABASE" --batch --skip-column-names -e "$1"' sh "$1"
-}
-restore_migration_permissions() {
-  [ -n "$MIGRATION_TRUST_PREVIOUS" ] || return 0
-  mysql_admin_sql "SET GLOBAL log_bin_trust_function_creators=$MIGRATION_TRUST_PREVIOUS" || return 1
-  MIGRATION_TRUST_PREVIOUS=''
-}
-
-rollback_deployment() {
-  [ "$DOCKER_DEPLOY" = '1' ] || return 0
-  local failed=0 services=() legacy_manifest
-  # 首次回退可能仍是只认识 version.json 的旧镜像；该旧 API 已支持 filename。
-  # published 指向实际已发布的不可变包，不能让 Git 目标版本配上旧固定 APK。
-  if [ -f backend/apk/published-version.json ]; then
-    legacy_manifest=$(mktemp backend/apk/.publish-pda-XXXXXX) || failed=1
-    if [ -n "${legacy_manifest:-}" ]; then
-      if cp backend/apk/published-version.json "$legacy_manifest" && chmod 644 "$legacy_manifest" && mv "$legacy_manifest" backend/apk/version.json; then :
-      else failed=1; rm -f "$legacy_manifest"; fi
-    fi
-  fi
-  if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then
-    docker tag "$PREVIOUS_BACKEND_IMAGE" flowcube-backend:latest || failed=1
-    services+=(backend)
-  elif [ "$APPLICATION_SWITCHED" = '1' ]; then
-    docker compose rm -s -f backend || failed=1
-  fi
-  if [ -n "$PREVIOUS_FRONTEND_IMAGE" ]; then
-    docker tag "$PREVIOUS_FRONTEND_IMAGE" flowcube-frontend:latest || failed=1
-    services+=(frontend)
-  elif [ "$APPLICATION_SWITCHED" = '1' ]; then
-    docker compose rm -s -f frontend || failed=1
-  fi
-  if [ "${#services[@]}" -gt 0 ]; then
-    if [ "$APPLICATION_SWITCHED" = '1' ]; then
-      docker compose up -d --no-build --no-deps --force-recreate "${services[@]}" || failed=1
-    fi
-    # 旧镜像可能尚无ready接口；仅回退验证允许使用原有存活检查。
-    if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then wait_for_health /api/health || failed=1; fi
-    if [ -n "$PREVIOUS_FRONTEND_IMAGE" ]; then wait_for_frontend || failed=1; fi
-    ROLLBACK_RESULT='已恢复部署前应用镜像并检查健康；数据库迁移未回滚'
-  else
-    ROLLBACK_RESULT='首次部署没有旧应用镜像；本次应用容器已停止或尚未启动'
-  fi
-  if [ "$failed" != '0' ]; then
-    ROLLBACK_RESULT='应用回退或回退后健康检查失败，需要人工恢复；数据库迁移未回滚'
-    return 1
-  fi
+# 仅查询现有配置；发布脚本不修改数据库全局参数或权限。
+assert_migration_conditions() {
+  PREFLIGHT_OVERRIDE=$(mktemp "$ROOT/.migration-preflight-XXXXXXXX.yml") || fail_deploy '无法创建迁移条件预检配置'
+  printf 'services:\n  backend:\n    image: flowcube-backend:%s\n    read_only: true\n' "$expected" > "$PREFLIGHT_OVERRIDE"
+  PREFLIGHT_CONTAINER="flowcube-preflight-$$-$(date +%s)"
+  DOCKER_COMMAND_TIMEOUT=60 docker compose -f "$ROOT/docker-compose.yml" -f "$PREFLIGHT_OVERRIDE" run --rm --no-deps --pull never --name "$PREFLIGHT_CONTAINER" --user node --entrypoint node backend scripts/migration-preflight.js \
+    || fail_deploy '数据库迁移条件只读预检失败；保持原应用，不修改全局参数'
+  PREFLIGHT_CONTAINER=''
+  rm -f "$PREFLIGHT_OVERRIDE"
+  PREFLIGHT_OVERRIDE=''
 }
 
 fail_deploy() {
   local reason="$1"
   trap - ERR INT TERM HUP
+  if [ -n "$PREFLIGHT_CONTAINER" ]; then
+    DOCKER_COMMAND_TIMEOUT=20 docker rm -f "$PREFLIGHT_CONTAINER" >/dev/null 2>&1 \
+      || echo '!! 只读预检容器清理失败，需人工核对状态' >&2
+  fi
+  if [ -n "$PREFLIGHT_OVERRIDE" ]; then rm -f "$PREFLIGHT_OVERRIDE"; fi
   if [ -n "$MIGRATION_CONTAINER" ]; then
     DOCKER_COMMAND_TIMEOUT=20 docker rm -f "$MIGRATION_CONTAINER" >/dev/null 2>&1 \
       || echo '!! 迁移容器清理失败，需人工核对其状态与迁移记录' >&2
   fi
-  if ! restore_migration_permissions; then
-    echo '!! 迁移权限恢复失败，旧应用保持停写，需恢复 MySQL log_bin_trust_function_creators 后人工恢复服务' >&2
-    exit 1
-  fi
-  if [ "$ROLLBACK_COMPATIBILITY_VERIFIED" != '1' ] || { [ "$MIGRATION_STARTED" = '1' ] && [ "$MIGRATION_COMPLETED" != '1' ]; }; then
-    DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend \
-      || echo '!! 后端停止失败，须立即人工阻断写入' >&2
-    ROLLBACK_RESULT='保持业务停写：须完成并核实迁移后启动兼容的新后端，禁止恢复不兼容旧镜像；数据库未回滚'
+  if [ "$APPLICATION_SWITCHED" = '1' ]; then
+    if DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend frontend; then
+      FAILURE_RESULT='保持业务停写，需要人工核查并向前修复；不自动恢复旧应用'
+    else
+      echo '!! 应用停止失败，须立即人工阻断写入并核实实际容器状态' >&2
+      FAILURE_RESULT='应用停写未确认，须人工阻断写入；不自动恢复旧应用'
+    fi
   else
-    rollback_deployment || true
+    FAILURE_RESULT='前置失败，保持原应用状态；不自动恢复或切换应用'
   fi
-  echo "!! 部署失败：${reason}；${ROLLBACK_RESULT}" >&2
+  echo "!! 部署失败：${reason}；${FAILURE_RESULT}" >&2
+  echo "!! 部署证据：SHA=${expected:-未知}；阶段=${DEPLOY_PHASE}；迁移开始=${MIGRATION_STARTED}；迁移完成=${MIGRATION_COMPLETED}；备份=${backup_run_dir:-未创建}；原后端镜像=${PREVIOUS_BACKEND_IMAGE:-无}；原前端镜像=${PREVIOUS_FRONTEND_IMAGE:-无}" >&2
   # 告警发送结果**不得改变本脚本的退出码**：这里是 set -e，而 dingtalk_send 在未配置 webhook
   # 或发送失败时会返回非 0（2026-09-18 审计修复）。不显式吞掉的话，调用失败会在下面 exit 1
   # 之前中断，把「部署失败」的退出码从 1 变成 2（CI 的 audit-deployment 用例就按 1 断言）。
   # 告警失败本身已由 dingtalk_send 写 stderr，运维在部署日志里看得到。
-  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" "🔴 FlowCube 部署失败（$(ts)）：${reason}；${ROLLBACK_RESULT}" || true
+  dingtalk_send "$(read_dingtalk_webhook "$PROJECT_DIR")" "🔴 FlowCube 部署失败（$(ts)）：${reason}；${FAILURE_RESULT}" || true
   exit 1
 }
 trap 'fail_deploy "第 ${LINENO} 行执行失败（exit=$?）"' ERR
@@ -212,7 +177,7 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   # docker load 要解压全部层：首次加载一个新镜像时在慢盘上可能超过 10 分钟。
   # 2026-09-16 发 v0.9.17 时就卡在这里——600 秒整被 bounded 强杀（exit code 124，
   # 日志停在"加载并验证 CI 应用镜像"之后、没有任何 docker 输出），重跑时层已存在所以只要 9 秒。
-  # 放宽到 1800 秒：外层部署 timeout 为 2700 秒（另留 -k 600 回退），含独立 300 秒备份窗口。
+  # 放宽到 1800 秒：外层部署 timeout 为 2700 秒（另留 -k 600 停写清理），含独立 300 秒备份窗口。
   DOCKER_COMMAND_TIMEOUT=1800 docker load -i "$archive"
   for service in backend frontend; do
     image_ref="flowcube-${service}:${expected}"
@@ -225,38 +190,15 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
     docker image inspect "${PLAYWRIGHT_IMAGE:-mcr.microsoft.com/playwright:v1.55.0-noble}" >/dev/null \
       || fail_deploy '缺少预装的浏览器门禁镜像，请在维护窗口准备；部署期间禁止拉取大型浏览器镜像'
   fi
-  for service in backend frontend; do docker tag "flowcube-${service}:${expected}" "flowcube-${service}:latest"; done
   assert_expected_commit
   ensure_mysql_ready
-  # 迁移 238 的历史结转需要一致的停写边界；backend 内含 scheduler/worker。
-  # 迁移前失败可以恢复旧服务；部分 DDL 或首次引入新记账契约后禁止旧后端恢复写入。
+  assert_migration_conditions
+  for service in backend frontend; do docker tag "flowcube-${service}:${expected}" "flowcube-${service}:latest"; done
+  # 停写标记先于停止请求；请求结果未知也不得自动恢复写入。
   APPLICATION_SWITCHED=1
-  ROLLBACK_COMPATIBILITY_VERIFIED=0
+  DEPLOY_PHASE='暂停写入'
   echo '==> 暂停业务写入，建立数据库迁移窗口...'
   DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend
-  migration_table_exists=$(mysql_admin_sql "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='db_migrations'")
-  [[ "$migration_table_exists" =~ ^[01]$ ]] || fail_deploy '无法核实数据库迁移记录'
-  ledger_compatible=0
-  if [ "$migration_table_exists" = '1' ]; then
-    ledger_compatible=$(mysql_admin_sql "SELECT COUNT(*) FROM db_migrations WHERE filename='240_party_ledger_explicit_identity.sql'")
-  fi
-  [[ "$ledger_compatible" =~ ^[01]$ ]] || fail_deploy '无法核实往来明细兼容状态'
-  if [ "$ledger_compatible" = '0' ]; then LEDGER_COMPATIBILITY_CHANGED=1; fi
-  # 上次迁移成功而页面门禁失败时，数据库已升级但停着的仍可能是旧镜像。
-  # 以实际回退镜像的契约标签复核，不能只看迁移记录就允许下一次回退。
-  if [ -n "$PREVIOUS_BACKEND_IMAGE" ]; then
-    previous_ledger_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.party-ledger-contract"}}' "$PREVIOUS_BACKEND_IMAGE")
-    if [ "$previous_ledger_contract" != '1' ]; then LEDGER_COMPATIBILITY_CHANGED=1; fi
-    # 0.13.4 does not enforce current quantity policy or preserve the new return
-    # and cash execution proofs. Nullable DDL and migration 240 are insufficient.
-    # Keep this gate on retries even when migrations 288–292 already exist.
-    previous_write_contract=$(docker image inspect -f '{{index .Config.Labels "io.flowcube.quantity-return-cash-contract"}}' "$PREVIOUS_BACKEND_IMAGE")
-    if [ "$previous_write_contract" != '1' ]; then
-      WRITE_COMPATIBILITY_CHANGED=1
-      echo '==> 旧后端不具备迁移 288–292 写入契约：本次迁移窗口后失败将保持停写，须向前恢复'
-    fi
-  fi
-  if [ "$LEDGER_COMPATIBILITY_CHANGED" = '0' ] && [ "$WRITE_COMPATIBILITY_CHANGED" = '0' ]; then ROLLBACK_COMPATIBILITY_VERIFIED=1; fi
   # 本次全新目录及回执绑定候选 SHA、实际 MySQL 和迁移前记录；不借用 cron 旧备份。
   backup_dir="${BACKUP_DIR:-$ROOT/backups}"
   mkdir -p "$backup_dir" || fail_deploy '无法创建迁移前备份目录；不得继续迁移'
@@ -269,19 +211,16 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
       sh "$SCRIPT_DIR/lib/pre-migrate-backup.js" "$expected" "$backup_mysql_id" "$backup_run_dir"; then
     fail_deploy '本次迁移前备份或备份回执失败；旧备份不能替代，不执行迁移；未证明可恢复'
   fi
-  migration_trust_candidate=$(mysql_admin_sql 'SELECT @@GLOBAL.log_bin_trust_function_creators')
-  [[ "$migration_trust_candidate" =~ ^[01]$ ]] || fail_deploy '无法核实 MySQL 迁移权限状态'
-  MIGRATION_TRUST_PREVIOUS=$migration_trust_candidate
-  mysql_admin_sql 'SET GLOBAL log_bin_trust_function_creators=1'
   echo '==> 用新镜像的一次性容器执行迁移...'
   MIGRATION_CONTAINER="flowcube-migrate-$$-$(date +%s)"
   MIGRATION_STARTED=1
+  DEPLOY_PHASE='数据库迁移'
   DOCKER_COMMAND_TIMEOUT=300 docker compose run --rm --no-deps --name "$MIGRATION_CONTAINER" backend npm run migrate
   MIGRATION_COMPLETED=1
   MIGRATION_CONTAINER=''
-  restore_migration_permissions
   assert_expected_commit
 
+  DEPLOY_PHASE='应用切换与验收'
   echo '==> 切换 backend / frontend...'
   APPLICATION_SWITCHED=1
   DOCKER_COMMAND_TIMEOUT=120 docker compose up -d --no-build --no-deps backend frontend
@@ -293,7 +232,7 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
     PRESERVE_DEPLOY_IMAGES=1 bash scripts/release-gate.sh
   fi
 
-  # 公网证书/页面检查也在部署事务内，失败走同一回退路径。
+  # 公网证书/页面检查也在部署事务内，失败停止应用并保留证据。
   if [ -n "${DEPLOY_PUBLIC_ORIGIN:-}" ]; then
     [[ "$DEPLOY_PUBLIC_ORIGIN" == https://* ]] || fail_deploy '公网部署地址必须使用 HTTPS'
     curl -fsS --max-time 20 "${DEPLOY_PUBLIC_ORIGIN%/}/api/ready" >/dev/null

@@ -6,7 +6,7 @@ import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import { ListPendingApprovals } from './ListWidgets'
 import { useAuthStore } from '@/store/authStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
-const state = vi.hoisted(() => ({ bizType: 'purchase_requisition' }))
+const state = vi.hoisted(() => ({ bizType: 'purchase_order' }))
 vi.mock('@/hooks/useDashboard', () => ({ usePendingApprovalsBrief: () => ({ data: { list: [{ instanceId: 1, taskId: 1, bizType: state.bizType, bizId: 91, no: '待批原单', amount: 3, currentStep: 1 }], pagination: { total: 1 } } }) }))
 let host: HTMLDivElement, root: Root
 function Path() { const location = useLocation(); return <output>{location.pathname}{location.search}</output> }
@@ -14,7 +14,7 @@ beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 afterEach(() => { act(() => root.unmount()); host.remove() })
 function render() { act(() => root.render(<MemoryRouter initialEntries={['/dashboard']}><ListPendingApprovals /><Path /></MemoryRouter>)) }
 test.each([
-  ['purchase_requisition', '/purchase-requisitions/91'], ['purchase_order', '/purchase/91'],
+  ['purchase_order', '/purchase/91'],
   ['sale_credit_override', '/credit-overrides?detailId=91'], ['product_price', '/price-change?detailId=91'],
   ['inventory_disposal', '/disposals?detailId=91'], ['expense_claim', '/finance/expenses?detailId=91'],
 ])('首页审批摘要准确进入%s原单', (bizType, path) => { state.bizType = bizType; render(); act(() => host.querySelector('button')!.click()); expect(host.querySelector('output')?.textContent).toBe(path) })

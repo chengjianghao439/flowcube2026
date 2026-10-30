@@ -42,7 +42,7 @@ test('view-all expense and superadmin retain permitted company-wide visibility',
   await h.svc.searchGlobal('报销', [2], { type: 'expense', user: { roleId: 2, userId: 8, permissions: [P.FINANCE_EXPENSE_VIEW, P.FINANCE_EXPENSE_VIEW_ALL] } })
   assert.doesNotMatch(h.calls[0].sql, /applicant_id =/)
   await h.svc.searchGlobal('单', null, { user: { roleId: 1, userId: 1 }, companyId: 2 })
-  assert.equal(h.calls.length, 17)
+  assert.equal(h.calls.length, 16)
   assert.match(h.calls.find(c => c.sql.includes('FROM fin_invoices')).sql, /company_id = \?/)
 })
 test('sale, refund and credit search respect full linked order warehouse scope; empty scope fails closed', async () => {

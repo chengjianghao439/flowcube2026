@@ -6,7 +6,7 @@
  *   node tests/purchase-approval.smoke.test.js
  *
  * 金额超阈值采购单提交后须审批通过才能建收货订单（内控）。
- * 复用请购单审批范式：审批人不能是制单人；approve 需要 purchase.order.approve 权限
+ * 采购单审批内控：审批人不能是制单人；approve 需要 purchase.order.approve 权限
  * （默认只有超管/被授予的角色有）。
  *
  *   1. 超阈值单确认 → 待审批(5) + need_approval=1

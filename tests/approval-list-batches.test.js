@@ -10,6 +10,7 @@ test('审批列表以真实总数读取超过 100 条待办，批次稳定且按
   const calls=[]
   const db={query:async(sql,params)=>{calls.push({sql,params});return sql.includes('COUNT(*)')?[[{total:205}]]:[[]]}}
   assert.equal(await engine.countPendingTasks(db,{userId:7}),205)
+  assert.match(calls[0].sql, /i\.biz_type<>'purchase_requisition'/)
   await engine.listPendingTasks(db,{userId:7,page:3,pageSize:100})
   assert.match(calls[1].sql,/ORDER BY i.created_at DESC, i.id DESC, t.id DESC/)
   assert.deepEqual(Array.from(calls[1].params),[7,100,200])
@@ -52,7 +53,7 @@ function pendingFixture({ permissions = Object.values(require('../backend/src/co
   const pool = { getConnection: async () => { events.push('connect'); return conn }, query: () => { throw new Error('读取必须使用同一个只读快照连接') } }
   return { calls, events, service: loadService(pool), user: { userId: 7, roleId: 5, warehouseIds: [8] } }
 }
-const engineRow = (biz_type = 'purchase_requisition', id = 21) => ({ source_kind: 'engine', instance_id: 1, task_id: 11, biz_type, biz_id: id, no: `原单${id}`, title: '原因', status: 2, amount: '12.3456', applicant_id: 2, applicant_name: '申请人', flow_id: 1, current_step: 2, created_at: '2026-10-04 10:00:00', submitted_at: '2026-10-04 10:00:00', time_kind: 'submitted' })
+const engineRow = (biz_type = 'purchase_order', id = 21) => ({ source_kind: 'engine', instance_id: 1, task_id: 11, biz_type, biz_id: id, no: `原单${id}`, title: '原因', status: 2, amount: '12.3456', applicant_id: 2, applicant_name: '申请人', flow_id: 1, current_step: 2, created_at: '2026-10-04 10:00:00', submitted_at: '2026-10-04 10:00:00', time_kind: 'submitted' })
 const documentRow = (biz_type, id) => ({ ...engineRow(biz_type, id), source_kind: 'document', instance_id: null, task_id: null, flow_id: null, current_step: null, status: biz_type === 'purchase_order' ? 5 : 2, time_kind: biz_type === 'expense_claim' ? 'submitted' : 'created', submitted_at: biz_type === 'expense_claim' ? '2026-10-04 11:00:00' : null })
 const pendingQueries = f => f.calls.filter(c => c.sql.includes('FROM ('))
 test('混合引擎与原单级来源保持真实身份金额/时间，同一显式RR只读快照count/page并批量授权', async () => {
@@ -73,8 +74,8 @@ test('混合引擎与原单级来源保持真实身份金额/时间，同一显�
   const from = sql => sql.slice(sql.indexOf('FROM (')).split('\n      ORDER BY')[0]
   assert.equal(from(count.sql), from(page.sql)); assert.deepEqual(page.params.slice(-2), [20, 20])
   assert.match(page.sql, /ORDER BY pending.pending_at DESC/)
-  assert.equal((page.sql.match(/WHERE a.user_id=\?/g) || []).length, 6)
-  assert.equal((page.sql.match(/JOIN [a-z_]+ d ON d.id=i.biz_id/g) || []).length, 6)
+  assert.equal((page.sql.match(/WHERE a.user_id=\?/g) || []).length, 5)
+  assert.equal((page.sql.match(/JOIN [a-z_]+ d ON d.id=i.biz_id/g) || []).length, 5)
 })
 test('原单待审状态/原查看动作权/自批/完整范围及活动引擎排重在count和LIMIT之前', async () => {
   const f = pendingFixture()
@@ -96,7 +97,7 @@ test('仅单级审核权限不能借新菜单看到engine；缺原VIEW或动作�
   const f = pendingFixture({ permissions: ['purchase.order.view', 'purchase.order.approve'] })
   await f.service.listPending({}, { ...f.user, permissions: ['*'] })
   const sql = pendingQueries(f)[0].sql
-  assert.equal((sql.match(/WHERE a.user_id=\?.*1=0/g) || []).length, 6)
+  assert.equal((sql.match(/WHERE a.user_id=\?.*1=0/g) || []).length, 5)
   const docs = sql.split("'document' AS source_kind").slice(1)
   assert.ok(!docs[0].split('UNION ALL')[0].includes('1=0'))
   assert.ok(docs[1].split('UNION ALL')[0].includes('1=0') && docs[2].includes('1=0'))

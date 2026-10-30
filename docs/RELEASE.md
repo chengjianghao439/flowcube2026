@@ -1,5 +1,7 @@
 # 极序 Flow 发布与桌面打包规范
 
+> **现行发布约束（2026-10-30，用户明确要求）**：发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。迁移前以固定完整 SHA 的候选镜像、Compose 实际迁移账户运行独立只读 helper（覆盖配置只指定 image/read_only，以 node 用户和 node entrypoint 执行，不启动应用或迁移器）。读取候选 SQL 和 db_migrations 求待执行集合；没有待执行触发器/函数时，不因 trust=0 拒绝。有相关待执行 SQL（含动态字符串及 ALTER FUNCTION）时，先核实际迁移数据库的 TRIGGER、CREATE ROUTINE 或 ALTER ROUTINE 权限，再核已有 log_bin=0、trust=1 或迁移账户全局 SUPER/ALL 之一；未知或查询失败在应用标签改变、停写和迁移之前拒绝。显式 DEFINER 身份未证明时拒绝；binlog 开启且 trust 关闭时，无法可靠证明函数声明的 CREATE/ALTER FUNCTION 保守拒绝。发布脚本不执行任何 SET GLOBAL，不修改或恢复数据库全局参数和权限；原 schema 权限与迁移器完整检查继续生效。同 SHA 的镜像、实例归属、全新备份 create/verify、迁移及安全/健康门禁保持。下文历史回退记录不构成当前自动恢复授权。
+
 ## 原则
 
 - **GitHub `main` 分支为唯一事实源**；未推送的本地提交不得作为正式发布构建依据。
@@ -83,7 +85,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 - 触发：`push` 到 `main`，或手动 `workflow_dispatch`
 - 前置门禁：等待实际待发布 SHA 的 Tests 与 Security Scan 全部成功，失败、取消或超时均不部署。
 - 目标：服务器获得部署锁后同步至该 SHA，再执行 `scripts/server-update.sh`；不得跳过发布门禁。
-- 结果：GitHub runner 构建 SHA 标记的镜像，通过 SSH 传输并核验归档摘要和镜像 revision；生产保存运行中镜像，只加载 CI 产物，等待 MySQL 健康，暂停业务写入并执行迁移，再切换应用并验证接口、页面和公网入口。数据库兼容时失败恢复旧镜像；迁移未完成或旧镜像不支持 240 记账契约时保持停写，核实后恢复兼容新后端，DDL 不回滚。
+- 结果：GitHub runner 构建 SHA 标记的镜像，通过 SSH 传输并核验归档摘要和镜像 revision；生产保存运行中镜像，只加载 CI 产物，等待 MySQL 健康，暂停业务写入并执行迁移，再切换应用并验证接口、页面和公网入口。发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。
 - PDA 首次迁移时先保存旧 APK 的已发布清单；新 APK 经独立构建校验、同 SHA 浏览器部署成功后，才由 `scripts/publish-pda.sh` 原子发布。
 - `Build PDA APK` 构建前有 `preflight` 前置门：先校验 `backend/apk/version.json` 与 `build.gradle` 一致（不一致直接失败，不白构建），再比对线上 `/api/pda/version`——目标版本号 + versionCode 都已发布时整条构建跳过并记为成功。`publish-pda.sh` 不允许「同一 versionCode 换成不同字节的安装包」（客户端不会因此更新），所以发版后再改 `frontend/**` 触发的构建会被跳过而不是白跑 4 分钟再失败；**要发新包必须先提升版本号**。手动补跑用 `gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<发布提交 SHA>`。
 

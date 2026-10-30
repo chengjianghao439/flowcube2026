@@ -25,7 +25,7 @@ const updateItemSchema = z.object({
 })
 const convertSchema = z.object({
   itemIds: z.array(z.number().int().positive()).min(1, '请至少勾选一行'),
-  target: z.enum(['purchase', 'requisition']).optional(),
+  target: z.literal('purchase').optional(),
 })
 
 router.use(authMiddleware)

@@ -486,7 +486,7 @@ async function withdrawConfirm(id, operator, scopeWarehouseIds = null) {
 
 /**
  * 采购审批通过（审计 4.7）：待审批(5) → 已提交(2)，可建收货订单。
- * 审批人不能是制单人（一级审批唯一内控，同请购单/报销单）；需 purchase.order.approve 权限。
+ * 审批人不能是制单人（一级审批唯一内控，同报销单）；需 purchase.order.approve 权限。
  */
 async function approve(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()

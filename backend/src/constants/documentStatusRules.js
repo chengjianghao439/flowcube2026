@@ -11,7 +11,7 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       // 撤回确认仅用于"确认早了"这种还没进入收货流程的场景；一旦有收货订单（哪怕未收货）
       // 就必须先处理/取消收货订单，不能让收货订单指向一张倒回草稿态的采购单。
       withdrawConfirm: { from: [2, 5], to: 1, message: '只有已确认/待审批的采购单可以撤回' },
-      // 审批通过：待审批(5) → 已提交(2)，审批人不能是制单人（同请购单/报销单内控）。
+      // 审批通过：待审批(5) → 已提交(2)，审批人不能是制单人（同报销单内控）。
       // 审批是内控点，需 purchase.order.approve 权限；审批人不自动 seed，由管理员授予。
       approve: {
         from: [5], to: 2, message: '只有待审批的采购单可以审批通过',
@@ -162,32 +162,6 @@ const DOCUMENT_STATUS_RULES = Object.freeze({
       cancel: {
         from: [1, 2], to: 4, message: '当前状态的退款单不能取消',
         blocked: { 3: '已完成退款的退款单不能取消' },
-      },
-    },
-  },
-
-  // 采购请购单：一线/采购发起需求 → 一级审批 → 转生成采购单。审批范式照 expenseClaim。
-  // convert 不改单头状态（部分转单仍停在已批准3），全部明细转完才由 complete 推到终态 6。
-  purchaseRequisition: {
-    entityName: '请购单',
-    actions: {
-      edit: { from: [1], message: '只有草稿状态的请购单可以修改明细' },
-      submit: { from: [1], to: 2, message: '只有草稿状态的请购单可以提交审批' },
-      // 提交后发现填错，本人可撤回改单——比走一遍驳回顺手
-      withdraw: { from: [2], to: 1, message: '只有待审批的请购单可以撤回' },
-      approve: {
-        from: [2], to: 3, message: '只有待审批的请购单可以审批',
-        blocked: { 1: '请购单尚未提交', 3: '该请购单已批准', 4: '该请购单已驳回', 6: '该请购单已转采购' },
-      },
-      reject: { from: [2], to: 4, message: '只有待审批的请购单可以驳回' },
-      convert: {
-        from: [3], message: '只有已批准的请购单可以转采购单',
-        blocked: { 1: '请购单尚未提交', 2: '请购单尚在审批中', 4: '已驳回的请购单不能转采购', 5: '已取消的请购单不能转采购', 6: '该请购单已全部转采购' },
-      },
-      complete: { from: [3], to: 6, message: '只有已批准的请购单可以结案' },
-      cancel: {
-        from: [1, 2, 4], to: 5, message: '当前状态的请购单不能取消',
-        blocked: { 3: '已批准的请购单需先处理转采购或驳回后再取消', 6: '已转采购的请购单不能取消' },
       },
     },
   },

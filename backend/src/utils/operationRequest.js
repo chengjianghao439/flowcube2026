@@ -233,7 +233,7 @@ function creationFingerprint(payload) {
  * **创建类**动作的幂等（2026-09-18 审计 [6] 的收尾）。
  *
  * 收货/出库/付款这类资源级动作能绑「既有单据 ID」，但 `purchase.create`、`sale.create`、
- * `payment.receipt.create`、`carrier.createAccount`、请购/采购计划/退货建单这些动作在 begin
+ * `payment.receipt.create`、`carrier.createAccount`、采购计划/退货建单这些动作在 begin
  * 时刻**还没有单据 ID**，只能沿用常量 action。后果：同一个请求键被误用到**另一次内容不同**的
  * 创建上时，第二次会直接回放第一次的成功回执（返回别单的 ID），调用方以为建成功了。
  *
