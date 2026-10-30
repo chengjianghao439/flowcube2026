@@ -96,7 +96,6 @@ app.use('/api/customer-addresses', require('./modules/customer-addresses/custome
 app.use('/api/carriers',   require('./modules/carriers/carriers.routes'))
 app.use('/api/logistics',  require('./modules/logistics/logistics.routes'))
 app.use('/api/purchase',   require('./modules/purchase/purchase.routes'))
-app.use('/api/purchase-requisitions', require('./modules/purchase-requisitions/purchase-requisitions.routes'))
 app.use('/api/procurement', require('./modules/procurement/procurement.routes'))
 app.use('/api/sale',       require('./modules/sale/sale.routes'))
 app.use('/api/stockcheck', require('./modules/stockcheck/stockcheck.routes'))

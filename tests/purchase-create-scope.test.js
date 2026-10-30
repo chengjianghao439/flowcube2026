@@ -172,6 +172,7 @@ test('计划转采购显式把同一已授权scope和事务传入复用创建核
 test('真实system控制器使用实际匹配action/本人userId/当前scope核采购回执，撤仓不返回ACK', async () => {
   for (const warehouseIds of [[8], [9]]) {
     const f = receiptFixture(), sent = [], controller = load('modules/system/system.controller.js', {
+      '../../utils/AppError': AppError,
       '../../utils/response': { successResponse(_res, data) { sent.push(data) } }, '../../utils/operationRequest': { async getScopedOperationRequestStatus(input) { assert.equal(input.userId, 7); input.receiptContext.matchedAction = 'purchase.create.1234567890abcdef'; return successReceipt } },
       '../packages/packages.receipt-guard': { assertPrintLabelReceiptConsistent() {} }, '../../utils/logger': {},
       '../inbound-tasks/inbound-tasks.create-receipt': { async ensureInboundCreateReceiptView() {}, async assertInboundCreateReceipt() {} },

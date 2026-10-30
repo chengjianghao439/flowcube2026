@@ -6,7 +6,7 @@ const path = require('node:path')
 
 const unknownImports = []
 afterEach(() => assert.deepEqual(unknownImports, []))
-const TABLES = new Set(['product_items','supply_suppliers','sale_customers','purchase_orders','sale_orders','purchase_requisitions','transfer_orders','purchase_returns','sale_returns','inbound_tasks','expense_claims','inventory_disposal_orders','refund_orders','sale_credit_overrides','inventory_checks','fin_invoices'])
+const TABLES = new Set(['product_items','supply_suppliers','sale_customers','purchase_orders','sale_orders','transfer_orders','purchase_returns','sale_returns','inbound_tasks','expense_claims','inventory_disposal_orders','refund_orders','sale_credit_overrides','inventory_checks','fin_invoices'])
 const unknownQueries = []
 afterEach(() => assert.deepEqual(unknownQueries, []))
 function checkedQuery(query) { return async (sql, params) => {

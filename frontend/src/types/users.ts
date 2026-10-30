@@ -5,7 +5,7 @@ export interface SysUser {
   roleId: number
   roleName: string
   isActive: boolean
-  /** 允许自行审批：本人可审批自己提交的单据（报销/采购单/采购申请/授信放行/审批流），仅超管可设置 */
+  /** 允许自行审批：本人可审批自己提交的单据（报销/采购单/授信放行/审批流），仅超管可设置 */
   allowSelfApprove: boolean
   departmentId: number | null
   departmentName: string | null

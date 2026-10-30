@@ -27,7 +27,6 @@ import type { ApprovalFlow } from '@/types/approval'
 import type { TableColumn } from '@/types'
 
 const BIZ_TYPES = [
-  { value: 'purchase_requisition', label: '采购申请单' },
   { value: 'sale_credit_override', label: '超额放行申请' },
   { value: 'expense_claim', label: '费用报销' },
   { value: 'purchase_order', label: '采购单' },
@@ -53,7 +52,7 @@ interface FlowDraft {
   }>
 }
 const emptyStep = (stepOrder: number) => ({ stepOrder, approverType: APPROVER_TYPE.ROLE, roleId: '', departmentId: '', userId: '' })
-const emptyFlow = (): FlowDraft => ({ bizType: 'purchase_requisition', name: '', minAmount: '', maxAmount: '', isActive: true, remark: '', steps: [emptyStep(1)] })
+const emptyFlow = (): FlowDraft => ({ bizType: 'purchase_order', name: '', minAmount: '', maxAmount: '', isActive: true, remark: '', steps: [emptyStep(1)] })
 const NO_CHOICE = '__none__'
 
 export default function ApprovalFlowsPage() {
@@ -226,7 +225,7 @@ export default function ApprovalFlowsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor={`${inputId}-name`}>流程名称</Label>
-                <Input id={`${inputId}-name`} value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购申请多级审批" />
+                <Input id={`${inputId}-name`} value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, name: e.target.value })} placeholder="如：采购单多级审批" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-x-5 gap-y-4">

@@ -44,16 +44,14 @@ const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
   requests.push(url)
   return respond(url)
 })
-function row(id: number, plan: boolean) {
-  return plan
-    ? { id, code: `PLAN-SYN-${id}`, name: `合成计划${id}`, forecastWindow: 30, horizonDays: 30, itemCount: 1, status: 1, statusName: '草稿', operatorName: '合成生成人', createdAt: '2026-10-14 08:00:00' }
-    : { id, requisitionNo: `PR-SYN-${id}`, title: `合成请购${id}`, warehouseId: 8, warehouseName: '合成仓', applicantId: 7, applicantName: '合成申请人', estimatedAmount: 10, itemCount: 1, status: 1, statusName: '草稿', statusTone: 'draft', createdAt: '2026-10-14 08:00:00' }
+function row(id: number) {
+  return { id, code: `PLAN-SYN-${id}`, name: `合成计划${id}`, forecastWindow: 30, horizonDays: 30, itemCount: 1, status: 1, statusName: '草稿', operatorName: '合成生成人', createdAt: '2026-10-14 08:00:00' }
 }
 function batch(url: URL, total: number) {
   const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 200)
   const from = (page - 1) * pageSize
   return new Response(JSON.stringify({ success: true, data: {
-    list: Array.from({ length: Math.max(0, Math.min(pageSize, total - from)) }, (_, index) => row(from + index + 1, url.pathname === '/api/procurement/plans')),
+    list: Array.from({ length: Math.max(0, Math.min(pageSize, total - from)) }, (_, index) => row(from + index + 1)),
     pagination: { page, pageSize, total },
   } }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 }
@@ -88,7 +86,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   localStorage.clear(); requests.length = 0; unexpected.length = 0; transport.mockClear()
   useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
-  setApiClientBaseURL('http://plan-requisition.fixture.invalid/api')
+  setApiClientBaseURL('http://plan.fixture.invalid/api')
   apiClient.defaults.adapter = 'fetch'; apiClient.defaults.env = { ...oldEnv, fetch: transport }
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.matches('[data-workspace-scroll]') ? 480 : this.tagName === 'TR' ? 48 : 0 })
@@ -173,7 +171,7 @@ for (const spec of specs) {
     respond = () => new Promise(resolve => { release = resolve }); await mount(spec)
     await wait(() => expect(release).toBeTypeOf('function'))
     await click(spec.id === 'PLAN' ? '+ 生成计划' : '查询')
-    expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('已有计划、申请和采购草稿会先行抵扣')
+    expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('已有计划和采购草稿会先行抵扣')
     const selector = spec.id === 'PLAN' ? 'input[placeholder="默认按生成时间"]' : 'input[placeholder="请输入关键字…"]'
     const input = document.querySelector<HTMLInputElement>(`[role="dialog"] ${selector}`)!
     await act(async () => input.focus())

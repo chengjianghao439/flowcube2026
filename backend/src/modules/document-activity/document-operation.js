@@ -4,7 +4,7 @@ const DOCUMENT_PATHS = Object.freeze({
   sale: '/api/sale', purchase: '/api/purchase', inbound: '/api/inbound-tasks',
   'purchase-return': '/api/returns/purchase', 'sale-return': '/api/returns/sale',
   transfer: '/api/transfer', stockcheck: '/api/stockcheck', disposal: '/api/disposals',
-  requisition: '/api/purchase-requisitions', refund: '/api/refunds',
+  refund: '/api/refunds',
   expense: '/api/finance/expense-claims', credit: '/api/credit-overrides',
   price: '/api/price-change', plan: '/api/procurement/plans',
   wave: '/api/picking-waves', logistics: '/api/logistics',

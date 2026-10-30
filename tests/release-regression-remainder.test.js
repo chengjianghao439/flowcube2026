@@ -4,8 +4,8 @@ const assert = require('node:assert/strict')
 const { runRegressions } = require('./helpers/changeRecordsRegressions')
 const { commands, originalRemainder, commandArgs } = require('./helpers/releaseRegressionRemainder')
 
-test('all 48 remaining original CI commands and slice environments are preserved, unknown commands rejected', () => {
-  assert.equal(originalRemainder().length, 48)
+test('all 49 remaining original CI commands and slice environments are preserved, unknown commands rejected', () => {
+  assert.equal(originalRemainder().length, 49)
   for (const command of commands) assert.ok(commandArgs(command).args.length > 0)
   assert.throws(() => commandArgs('npm run unknown'), /Only original CI/)
   const source = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../.github/workflows/test.yml'), 'utf8')

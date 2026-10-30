@@ -49,6 +49,7 @@ const commands = Object.freeze([
   "npm run smoke:warehouse-ops",
   "npm run smoke:credit-outbound",
   "npm run smoke:purchase-approval",
+  "npm run smoke:purchase-requisition-removal",
   "npm run smoke:approval-flow",
   "npm run smoke:credit-override",
   "npm run test:integration"

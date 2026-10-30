@@ -359,7 +359,6 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { an
 .desktop-workspace .desktop-field-wide { grid-column:1 / -1; }
 .desktop-workspace .desktop-transfer-fields { grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,2fr); }
 .desktop-workspace .desktop-transfer-fields > .desktop-field-wide { grid-column:auto; }
-.desktop-workspace .desktop-requisition-fields { grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr)); }
 .desktop-workspace .desktop-document-facts { gap:16px 28px; font-size:13px; line-height:1.7; }
 .desktop-workspace .desktop-document-facts dt { margin-bottom:4px; font-size:12px; }
 .desktop-workspace .desktop-document-facts dd { overflow-wrap:anywhere; font-weight:500; }
@@ -370,14 +369,6 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { an
 .desktop-workspace .desktop-entry-summary .text-right { margin-left:auto; }
 .desktop-workspace .desktop-document-form .data-table-header ~ tbody > tr > td:not([colspan]) { padding-block:10px; font-size:13px; }
 
-/* Requisition sample: keep the original fields and full-width entry table, with less framing. */
-.desktop-workspace .desktop-requisition-form { gap:16px; }
-.desktop-workspace .desktop-requisition-form > .desktop-action-bar { margin-bottom:0; }
-.desktop-workspace .desktop-requisition-form .desktop-form-fields label { font-size:13px; font-weight:500; }
-.desktop-workspace .desktop-requisition-form .desktop-section-heading { padding:12px 16px; }
-.desktop-workspace .desktop-requisition-items > .desktop-section-body { padding:0; }
-.desktop-workspace .desktop-requisition-items { overflow:hidden; }
-.desktop-workspace .desktop-requisition-items .desktop-requisition-empty { padding:28px 16px; font-size:13px; }
 .desktop-workspace :has(> .desktop-action-bar) { row-gap:20px; }
 
 @media (max-width:900px) {

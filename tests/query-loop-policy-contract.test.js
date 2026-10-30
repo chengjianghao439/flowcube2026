@@ -6,13 +6,13 @@ const { ALLOWLIST, findReadOnlyLoopQueries } = require('./query-loop-contract.te
 const prefix = 'backend/src/modules/products/products.quantity-policy.js::'
 
 test('quantity policy dependency checks have a fixed single-product query budget', async () => {
-  assert.equal(CHECKS.length, 22)
+  assert.equal(CHECKS.length, 21)
   const seen = []
   await assertCanDisableDecimals({ async query(sql, params) {
     seen.push({ sql, params })
     return [[]]
   } }, 419)
-  assert.equal(seen.length, 23) // 22 dependencies and one stock-policy read.
+  assert.equal(seen.length, 22) // 21 dependencies and one stock-policy read.
   for (const { sql, params } of seen) {
     assert.deepEqual(params, [419])
     assert.match(sql, /\bproduct_id\s*=\s*\?/)

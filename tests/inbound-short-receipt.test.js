@@ -70,6 +70,7 @@ for (const d of domains) {
     for(const [requested,matched,status] of [[d.action+'.21',undefined,'not_found'],[d.action+'.21',d.action+'.21','pending'],[d.action.split('.')[0],d.action+'.21','success'],[d.action,d.action,'success']]) for(const ids of [[8],[9]]) {
       const sent=[],boundary=db(d), data=status==='success'?receipt(d):{status}
       const controller=load('modules/system/system.controller.js',{
+        '../../utils/AppError':AppError,
         '../../utils/response':{successResponse(_r,p){sent.push(p)}},'../../utils/logger':{},'../packages/packages.receipt-guard':{assertPrintLabelReceiptConsistent(){}},
         '../../utils/operationRequest':{async getScopedOperationRequestStatus(input){assert.equal(input.userId,7);input.receiptContext.matchedAction=matched;return data}},
         '../../config/db':{pool:boundary},'../purchase/purchase.close-receipt':purchase,'../inbound-tasks/inbound-tasks.short-receipt':short,

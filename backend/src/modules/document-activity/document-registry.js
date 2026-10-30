@@ -9,7 +9,6 @@ const definitions = {
   transfer: [P.TRANSFER_ORDER_VIEW, '../transfer/transfer.service', 'findById'],
   stockcheck: [P.STOCKCHECK_VIEW, '../stockcheck/stockcheck.service', 'findById'],
   disposal: [P.INVENTORY_DISPOSAL_VIEW, '../disposal/disposal.service', 'findById'],
-  requisition: [P.PURCHASE_REQUISITION_VIEW, '../purchase-requisitions/purchase-requisitions.service', 'findById'],
   refund: [P.REFUND_ORDER_VIEW, '../refunds/refund-orders.service', 'findById'],
   expense: [P.FINANCE_EXPENSE_VIEW, '../finance/expense-claims.service', 'findById'],
   credit: [P.SALE_CREDIT_OVERRIDE_VIEW, '../credit-overrides/credit-overrides.service', 'findById'],

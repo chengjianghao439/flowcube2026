@@ -12,9 +12,8 @@ const { createProcurementSnapshots, restart } = require('./procurement.snapshots
 const snapshots = createProcurementSnapshots()
 lifecycle.startTask('procurement-snapshots', () => snapshots.prune(), 30000)
 
-// Every source contributes once: converted plan lines disappear; only unconverted PR
-// remainder remains; converted quantities are represented by live draft/expected POs.
-async function getCoverage(conn, pairs, { excludePlanItemIds = [], excludeRequisitionId = 0 } = {}) {
+// Converted plans are covered by their live purchase drafts or expected supply.
+async function getCoverage(conn, pairs, { excludePlanItemIds = [] } = {}) {
   if (!pairs.length) return new Map()
   const tuple = pairs.map(() => '(?,?)').join(',')
   const values = pairs.flatMap(p => [p.productId, p.warehouseId])
@@ -25,19 +24,14 @@ async function getCoverage(conn, pairs, { excludePlanItemIds = [], excludeRequis
     WHERE h.deleted_at IS NULL AND h.status IN (1,2) AND i.status=1
       AND (i.product_id,i.warehouse_id) IN (${tuple})${exclusions}
     UNION ALL
-    SELECT i.product_id,h.warehouse_id,'requisition',GREATEST(0,i.quantity-i.converted_qty)
-    FROM purchase_requisition_items i JOIN purchase_requisitions h ON h.id=i.requisition_id
-    WHERE h.deleted_at IS NULL AND h.status IN (1,2,3) AND h.id<>?
-      AND (i.product_id,h.warehouse_id) IN (${tuple})
-    UNION ALL
     SELECT i.product_id,h.warehouse_id,'draft',i.quantity
     FROM purchase_order_items i JOIN purchase_orders h ON h.id=i.order_id
     WHERE h.deleted_at IS NULL AND h.status=1 AND (i.product_id,h.warehouse_id) IN (${tuple})
-  ) coverage GROUP BY product_id,warehouse_id,kind`, [...values, ...excludePlanItemIds, excludeRequisitionId, ...values, ...values])
+  ) coverage GROUP BY product_id,warehouse_id,kind`, [...values, ...excludePlanItemIds, ...values])
   const out = new Map()
   for (const r of rows) {
     const key = `${Number(r.product_id)}:${Number(r.warehouse_id)}`
-    const value = out.get(key) || { planCoverage: 0, requisitionCoverage: 0, draftCoverage: 0 }
+    const value = out.get(key) || { planCoverage: 0, draftCoverage: 0 }
     value[`${r.kind}Coverage`] = Number(r.quantity)
     out.set(key, value)
   }

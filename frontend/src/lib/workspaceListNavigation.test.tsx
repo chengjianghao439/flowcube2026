@@ -43,7 +43,7 @@ test.each(menuCases)('真实菜单 $path 恢复当前列表路径（共享组件
  expect(button).toBeDefined(); await act(async () => button.click()); expect(current()).toBe(item.path === '/settings/barcode-print-query' ? item.path : item.path + suffix)
 })
 const patternCases = routePatterns.filter(route => route.listPath).flatMap(route => {
- const paths = ['logistics/42','products/new','products/42','sale/new','sale/42','purchase/new','purchase/42','procurement/42','purchase-requisitions/new','purchase-requisitions/42','transfer/new','transfer/42','returns/purchase/new','returns/purchase/42','returns/sale/new','returns/sale/42','inbound-tasks/new','inbound-tasks/42/edit','inbound-tasks/42','settings/print-templates/new','settings/print-templates/42']
+ const paths = ['logistics/42','products/new','products/42','sale/new','sale/42','purchase/new','purchase/42','procurement/42','transfer/new','transfer/42','returns/purchase/new','returns/purchase/42','returns/sale/new','returns/sale/42','inbound-tasks/new','inbound-tasks/42/edit','inbound-tasks/42','settings/print-templates/new','settings/print-templates/42']
  return paths.filter(p => route.pattern.test('/'+p)).map(p => ({path:'/'+p,list:route.listPath!,title:route.title('/'+p)}))
 })
 test.each(patternCases.flatMap(item => [item, { ...item, path: item.path + '?focus=readOnly&keyword=detail' }]))('关闭 $path 返回其 $list 完整筛选（共享组件层）', async item => {

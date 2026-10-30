@@ -59,10 +59,10 @@ test('document headers use the same description and retain inline state and acti
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host), save = vi.fn()
   try {
-    act(() => root.render(<ActionBar title="新建采购申请单" description="核对申请仓库、到货日期与商品。"
+    act(() => root.render(<ActionBar title="新建采购单" description="核对采购仓库、到货日期与商品。"
       subtitle={<span>未保存</span>} rightActions={<button onClick={save}>保存</button>} />))
-    expect(host.querySelector('.desktop-page-description')?.textContent).toBe('核对申请仓库、到货日期与商品。')
-    expect(getByRole(host, 'heading', { name: '新建采购申请单' }).parentElement?.textContent).toContain('未保存')
+    expect(host.querySelector('.desktop-page-description')?.textContent).toBe('核对采购仓库、到货日期与商品。')
+    expect(getByRole(host, 'heading', { name: '新建采购单' }).parentElement?.textContent).toContain('未保存')
     act(() => getByRole(host, 'button', { name: '保存' }).click())
     expect(save).toHaveBeenCalledTimes(1)
   } finally { act(() => root.unmount()); host.remove() }

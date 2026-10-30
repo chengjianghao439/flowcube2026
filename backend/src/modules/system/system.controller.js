@@ -1,3 +1,4 @@
+const AppError = require('../../utils/AppError')
 const { successResponse } = require('../../utils/response')
 const { getScopedOperationRequestStatus } = require('../../utils/operationRequest')
 const { assertPrintLabelReceiptConsistent } = require('../packages/packages.receipt-guard')
@@ -21,6 +22,7 @@ const logger = require('../../utils/logger')
  */
 const requestStatus = async (req, res, next) => {
   try {
+    if (String(req.query.action ?? '').startsWith('purchase.requisition.')) throw new AppError('采购申请功能已移除', 410)
     const receiptContext = { requestedAction: req.query.action, requestedWarehouseId: req.query.warehouseId, requestedFingerprint: req.query.requestFingerprint, requestedKey: req.params.key, requestedUserId: req.user?.userId ?? null }
     await require('../inbound-tasks/inbound-tasks.create-receipt').ensureInboundCreateReceiptView(req, res, receiptContext)
     await require('../inbound-tasks/inbound-tasks.edit-receipt').ensureInboundEditReceiptView(req, res, receiptContext)
@@ -44,9 +46,7 @@ const requestStatus = async (req, res, next) => {
     if (/^procurement\.plan\.convert(?:\.[1-9]\d*)?$/.test(String(receiptContext.matchedAction ?? ''))) {
       await require('../procurement/procurement.convert-receipt').assertConvertReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     }
-    if (/^purchase\.requisition\.create(?:\.[a-f0-9]{16})?$/.test(String(receiptContext.matchedAction ?? ''))) {
-      await require('../purchase-requisitions/purchase-requisitions.create-receipt').assertRequisitionCreateReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
-    }
+    if (String(receiptContext.matchedAction ?? '').startsWith('purchase.requisition.')) throw new AppError('采购申请功能已移除', 410)
     if (/^refund\.execute(?:\.[1-9]\d*)?$/.test(String(receiptContext.matchedAction ?? ''))) {
       await require('../refunds/refund-orders.scope').assertRefundReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     }

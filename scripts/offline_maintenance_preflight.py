@@ -104,6 +104,7 @@ STRICT_ADDS = {('preset_finance_specialist', 'approval.task.view'),
                ('preset_warehouse_operator', 'warehouse.task.ship')}
 PROTECTED_ROLE_CODES = {'sales', 'warehouse', 'purchaser', 'viewer'}
 
+# Retired requisitions remain in this read-only historical schema inventory.
 TABLES = ['approval_flow_steps', 'approval_flows', 'approval_instance_task_approvers', 'approval_instance_tasks', 'approval_instances', 'expense_claims', 'finance_period_backfills', 'inventory_check_item_containers', 'inventory_check_items', 'inventory_checks', 'inventory_containers', 'inventory_count_coverage', 'inventory_cycle_rules', 'inventory_disposal_conversions', 'inventory_disposal_items', 'inventory_disposal_orders', 'inventory_import_batches', 'inventory_logs', 'inventory_stock', 'inventory_warehouses', 'price_change_requests', 'purchase_orders', 'purchase_requisitions', 'sale_credit_overrides', 'sale_order_expected_bindings', 'sale_order_items', 'sale_orders', 'stock_reservations']
 
 SAFE_KEYS = set(('environment services image name restart command entrypoint working_dir user '

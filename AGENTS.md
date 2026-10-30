@@ -52,7 +52,7 @@
 - **源码文本契约测试先去注释**：只剔整行注释（按 `//` 全剔会把 `http://127.0.0.1` 这类字面量的后半行一起砍掉，2026-09-18 实测导致守卫自我误报）；锁顺序按「上一个 `FOR UPDATE` 之后」归属；`INSERT` 列数必须与 `?` 一致
 - **`printers.service.update` 的 `status` 只允许 0/1（路由 + service 双重）**，写语句同事务行锁，缺失字段沿用现值
 - **资源级幂等 action 必须绑定单据 ID**（`action.<resourceId>`）；创建类用载荷指纹；回执查询剥尾部 `.<ID>` 取 base；调拨必须是 `transfer.scanOut.<id>` / `transfer.scanIn.<id>`（`utils/operationRequest.js`）
-- 请购create固定领域base action+原validated正文64摘要；plan.convert绑定原selection，回放先原仓scope后正文证明，unknown/cold仅查原键；沿七日TTL不承诺永久证明 → `npm run test:security-scan-remediation`（详见 `docs/backend-api-sql-conventions.md`、`docs/frontend-pda-conventions.md`）。
+- plan.convert绑定原selection，回放先原仓scope后正文证明，unknown/cold仅查原键；沿七日TTL不承诺永久证明 → `npm run test:security-scan-remediation`（详见 `docs/backend-api-sql-conventions.md`、`docs/frontend-pda-conventions.md`）。
 - **`track_status` 含义只在 `logistics.service.js` 定义一处、导出列名「签收状态」**；运费账单匹配用 `tracking_no = ? OR JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?))`
 - **共享夹具必须自洁**：`prepareSmokeContext` 把 Smoke 客户 `credit_limit` 置 NULL；`round2-transfer.smoke.test.js` 的 `after()` 清理本轮角色/权限/用户/设备
 - **前端容器必须删 `/docker-entrypoint.d/10-listen-on-ipv6-by-default.sh`**
@@ -86,7 +86,7 @@
 - 写路由必须挂 `requirePermission`（例外须登记理由且可验证）→ `npm run test:route-permission-contract`
 - 发版必须同步三端 + PDA 版本、本版说明与官网 `landing/updates.ts` → `npm run test:landing-updates`
 - `backend/downloads/` 已废弃，只允许 `.gitignore`/`README.md`（须在 CI 静态 job 真跑）→ `npm run release:check-downloads`
-- `smoke:*`/`test:*` 脚本必须 CI 可达；smoke 测试服务须 `app.listen(0, '127.0.0.1')`；部署预算须覆盖上传/合并/等锁/回退，PDA 等待不得提前超时；PDA 工作流「等部署」与「持组」不同 job；桌面发布清理服务器中转目录（`EXIT` trap）；部署磁盘预检失败必须打印余量；SSH `known_hosts` 必须使用独立核对的可信公钥，禁止在线盲信扫描；只读诊断 workflow 必须只读 → `node --test tests/deployment-resources.test.js`
+- `smoke:*`/`test:*` 脚本必须 CI 可达；smoke 测试服务须 `app.listen(0, '127.0.0.1')`；部署预算须覆盖上传/合并/等锁/故障停写，PDA 等待不得提前超时；PDA 工作流「等部署」与「持组」不同 job；桌面发布清理服务器中转目录（`EXIT` trap）；部署磁盘预检失败必须打印余量；SSH `known_hosts` 必须使用独立核对的可信公钥，禁止在线盲信扫描；只读诊断 workflow 必须只读 → `node --test tests/deployment-resources.test.js`
 - 恢复演练临时卷必须具名 + 启动前幂等清理；`dingtalk_send` 失败必须非 0 → `node --test tests/ops-monitor-restore.test.js`
 - 备份导入前只把触发器残留分号移出可执行注释 → `node --test tests/restore-trigger-normalize.test.js`
 - 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`
@@ -110,6 +110,7 @@
 - 中文沟通（用户可见文案中文、标识符英文）；先说要做什么，过程报关键发现，最后给结果与验证依据。
 - **动手前先看 `git status --short --branch` 与相关 diff**，保留用户与其他任务的改动；禁止用 `reset`/`checkout`/`clean` 清除不属于本任务的内容。
 - **提交范围必须明确**：先列出拟提交文件与用途，只暂存已核对的路径，不用 `git add .`/`--all`。业务代码与其说明文档同批提交；技能迁移、环境整理、版本发布分别组织。
+- **发布失败停止并保留现场，不自动回滚应用；禁止自动修改数据库全局参数，迁移前只读核验必要条件，缺条件即停**（`scripts/server-update.sh`、`tests/audit-deployment.test.js`）。
 - **未经明确要求，不执行** `git push`、打 tag、发版、重启生产服务、会删数据的 SQL。**已授权的同一操作不重复询问**；需要新授权时先停手问清楚。
 - 分支默认 `codex/` 前缀；需要隔离时用工作树，但不要假定新工作树已装依赖或具备本地环境配置。
 - 发布工作树收尾：确认工作区干净后切回 `codex/release-*` 或停在已发布提交，释放 `main`；用 `git worktree list` 核验。

@@ -11,8 +11,6 @@ import { useConfirmPurchase, useWithdrawConfirmPurchase, useCancelPurchase } fro
 import { useDisposalMutation } from './useDisposal'
 import ExpensesPage from '@/pages/finance/expenses'
 import PriceChangePage from '@/pages/price-change'
-import RequisitionFormPage from '@/pages/purchase-requisitions/form'
-import { TabPathContext } from '@/components/layout/TabPathContext'
 import { GlobalConfirmDialog } from '@/components/shared/GlobalConfirmDialog'
 import { useSubmitCreditOverride, useCancelCreditOverride, useApproveCreditOverride, useRejectCreditOverride } from './useCreditOverrides'
 vi.mock('@/lib/pdaRuntime', () => ({ syncPdaLabelPrinterBinding: vi.fn(async () => null) }))
@@ -21,11 +19,11 @@ vi.mock('@/lib/apiOrigin', () => ({ applyErpApiBaseFromStorage: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('@/components/shared/TableActionsMenu', () => ({ default: ({ items }: { items: Array<{ label: string; onClick: () => void }> }) => <div>{items.map(item => <button key={item.label} onClick={item.onClick}>{item.label}</button>)}</div> }))
 const originalAdapter = api.defaults.adapter
-let qc: QueryClient, root: Root, host: HTMLDivElement, fail: boolean | 'unknown', requisitionStatus: number
+let qc: QueryClient, root: Root, host: HTMLDivElement, fail: boolean | 'unknown'
 const keys = ['approval-pending', 'dash-pending-approvals']
 function resetQueues() { for (const key of keys) qc.setQueryData([key, 'owner'], { list: [], pagination: { total: 1 } }) }
 beforeEach(() => {
-  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); fail = false; requisitionStatus = 2
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); fail = false
   vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('离线边界，禁止真实服务器探测') }))
   useAuthStore.setState({ user: { id: 7, username: 'fixture', realName: '测试', roleId: 1, roleName: '测试' } })
   qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }); resetQueues(); qc.setQueryData(['products'], { id: 11 }); host = document.createElement('div'); document.body.append(host); root = createRoot(host)
@@ -34,7 +32,6 @@ beforeEach(() => {
     if (fail && config.method === 'post') throw new AxiosError('rejected', 'ERR_BAD_REQUEST', config, undefined, { config, status: 409, statusText: 'Conflict', headers: {}, data: { success: false, message: '拒绝' } })
     const data = config.url === '/finance/expense-claims' ? { list: [{ id: 11, claimNo: 'EXP11', title: '费用', applicantName: '员工', status: 2, totalAmount: 2 }], pagination: { page: 1, pageSize: 200, total: 1 }, summary: {} }
       : config.url === '/price-change' ? { list: [{ id: 11, requestNo: 'PRICE11', productName: '商品', status: 1, newPrice: 2, priceType: 'sale' }], pagination: { page: 1, pageSize: 200, total: 1 } }
-      : config.url === '/purchase-requisitions/11' && config.method === 'get' ? { id: 11, requisitionNo: 'PR11', title: '请购', status: requisitionStatus, statusName: '待审', statusTone: 'warning', warehouseId: 1, warehouseName: '测试仓', items: [] }
       : config.method === 'get' ? [] : config.url?.endsWith('/approve') ? { id: 11, finished: false } : null
     return { config, status: 200, statusText: 'OK', headers: {}, data: { success: true, data } }
   }
@@ -91,17 +88,4 @@ test.each(['提交', '通过', '驳回', '取消'])('改价真实页面%s成功�
     else await click(action)
   }, 'price-change')
   expect(qc.getQueryState(['products'])?.isInvalidated).toBe(false)
-})
-test.each(['提交审批', '撤回', '批准', '驳回', '取消'])('请购真实页面%s成功刷新统一待办，拒绝/未知仍不刷新', async action => {
-  requisitionStatus = action === '提交审批' ? 1 : 2
-  render(<TabPathContext.Provider value="/purchase-requisitions/11"><RequisitionFormPage /></TabPathContext.Provider>); await flush(); await flush()
-  await expectSuccessOnly(async () => {
-    if (action === '驳回') {
-      await click(action)
-      const input = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="驳回原因"]')!
-      act(() => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, '保留原原因'); input.dispatchEvent(new Event('input', { bubbles: true })) }); await flush()
-      await click('确认驳回', document)
-    } else if (action === '取消') { await click(action); await click('确认执行', document) }
-    else await click(action)
-  })
 })

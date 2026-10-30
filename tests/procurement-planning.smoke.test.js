@@ -5,7 +5,6 @@ const { pool } = require('../backend/src/config/db')
 // This domain regression does not run background print dispatch or retention deletion.
 require('../backend/src/modules/print-jobs/print-jobs.dispatch').startPrintJobSweeper = () => {}
 const plan = require('../backend/src/modules/procurement/procurement.service')
-const requests = require('../backend/src/modules/purchase-requisitions/purchase-requisitions.service')
 const policies = require('../backend/src/modules/procurement/procurement.policies')
 const { getSupplyRows } = require('../backend/src/modules/inventory/inventory.procurement')
 const containers = require('../backend/src/engine/containerEngine')
@@ -13,7 +12,7 @@ const purchase = require('../backend/src/modules/purchase/purchase.service')
 const insert = async (sql, params) => (await pool.query(sql, params))[0].insertId
 
 test.after(() => pool.end())
-test('real DB: concurrent plan generation, PR coverage, conversion and cancellation preserve one supply commitment', async () => {
+test('real DB: concurrent plan generation, conversion and cancellation preserve one supply commitment', async () => {
   const suffix = 'PP' + crypto.randomBytes(5).toString('hex')
   const warehouseId = await insert('INSERT INTO inventory_warehouses(code,name) VALUES(?,?)', [suffix, suffix])
   const supplierId = await insert('INSERT INTO supply_suppliers(code,name) VALUES(?,?)', [suffix, suffix])
@@ -30,18 +29,13 @@ test('real DB: concurrent plan generation, PR coverage, conversion and cancellat
     assert.equal(race.filter(r => r.status === 'fulfilled').length, 1)
     assert.equal(race.find(r => r.status === 'rejected').reason.statusCode, 409)
     const generated = race.find(r => r.status === 'fulfilled').value
-    const reqBody = { warehouseId, source: 'replenishment', items: [{ productId, quantity: 108, suggestedSupplierId: supplierId }] }
-    await assert.rejects(requests.create({ ...reqBody, requestKey: suffix + '-pr0' }, operator), e => e.statusCode === 409)
     await plan.cancel(generated.id, [warehouseId])
-    const req = await requests.create({ ...reqBody, requestKey: suffix + '-pr1' }, operator)
-    await assert.rejects(plan.generatePlan({ ...options, requestKey: suffix + '-3' }), e => e.statusCode === 409)
-    await requests.cancel(req.id, operator)
     const next = await plan.generatePlan({ ...options, requestKey: suffix + '-4' })
     const detail = await plan.getPlan(next.id, [warehouseId])
     assert.equal(detail.items[0].expectedArrival, detail.items[0].supplySnapshot.expectedArrival)
     const converted = await plan.convert(next.id, { itemIds: detail.items.map(i => i.id), operator, scopeWarehouseIds: [warehouseId], requestKey: suffix + '-convert' })
     const row = (await getSupplyRows(options)).list.find(i => i.productId === productId)
-    assert.equal(row.planCoverage || 0, 0); assert.equal(row.requisitionCoverage || 0, 0); assert.equal(row.draftCoverage, 108)
+    assert.equal(row.planCoverage || 0, 0); assert.equal(row.draftCoverage, 108)
     await assert.rejects(plan.generatePlan({ ...options, requestKey: suffix + '-5' }), e => e.statusCode === 409)
     await purchase.cancel(converted.createdOrders[0].purchaseOrderId, operator, [warehouseId])
     const final = await plan.generatePlan({ ...options, requestKey: suffix + '-6' })
@@ -54,14 +48,6 @@ test('real DB: concurrent plan generation, PR coverage, conversion and cancellat
     const remainder = (await getSupplyRows(options)).list.find(i => i.productId === productId)
     assert.equal(remainder.netRequirement, 13); assert.equal(remainder.suggestedQty, 24)
     await plan.cancel(reducePlan.id, [warehouseId])
-    const approved = await requests.create({ ...reqBody, items: [{ productId, quantity: 84, suggestedSupplierId: supplierId }], requestKey: suffix + '-approved' }, operator)
-    // This test isolates conversion; approval state-machine regression lives in existing PR tests.
-    await pool.query('UPDATE purchase_requisitions SET status=3 WHERE id=?', [approved.id])
-    const [[requestItem]] = await pool.query('SELECT id FROM purchase_requisition_items WHERE requisition_id=?', [approved.id])
-    const approvedConversion = await requests.convert(approved.id, { lines: [{ requisitionItemId: requestItem.id, quantity: 84, supplierId, unitPrice: 1 }], requestKey: suffix + '-pr-convert' }, operator)
-    const afterPR = (await getSupplyRows(options)).list.find(i => i.productId === productId)
-    assert.equal(afterPR.requisitionCoverage || 0, 0); assert.equal(afterPR.draftCoverage, 84)
-    await purchase.cancel(approvedConversion.createdOrders[0].id, operator, [warehouseId])
   } finally {
     // Keep source documents as inspectable evidence in this dedicated disposable test DB.
     await pool.query('UPDATE sale_orders SET deleted_at=NOW() WHERE id=?', [salesId])

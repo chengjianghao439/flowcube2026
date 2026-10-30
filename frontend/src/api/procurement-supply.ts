@@ -7,7 +7,7 @@ export interface ProcurementSupply {
   warehouseId: number; warehouseName: string; supplierId: number | null; supplierName: string | null
   onHand: number; reserved: number; confirmedDemand: number; draftSalesDemand: number; forecastDemand: number; residualForecast: number; grossDemand: number
   safetyStock: number; targetStock: number; inTransit: number; expectedBound: number
-  planCoverage?: number; requisitionCoverage?: number; draftCoverage?: number; provisionalCoverage: number
+  planCoverage?: number; draftCoverage?: number; provisionalCoverage: number
   netRequirement: number; suggestedQty: number; excessQty: number; packMultiple: number; minimumOrderQty: number
   entryUnit: string; conversionRate: number; transferCandidates: TransferCandidate[]
   earliestDemandDate?: string | null; arrivalUnconfirmedQty?: number; lateSupplyQty?: number

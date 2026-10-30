@@ -79,7 +79,7 @@ export const capabilityGroups = [
   {
     title: "采购与补货",
     description:
-      "补货建议、销售趋势预测、采购申请与计划，衔接订单、收货和供应商结算。",
+      "补货建议、销售趋势预测、采购计划，衔接订单、收货和供应商结算。",
     route: "#/procurement",
     link: "采购计划",
   },

@@ -1,5 +1,7 @@
 # 极序 Flow 生产部署固定配置
 
+> **现行发布约束（2026-10-30，用户明确要求）**：发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。迁移前以固定完整 SHA 的候选镜像、Compose 实际迁移账户运行独立只读 helper（覆盖配置只指定 image/read_only，以 node 用户和 node entrypoint 执行，不启动应用或迁移器）。读取候选 SQL 和 db_migrations 求待执行集合；没有待执行触发器/函数时，不因 trust=0 拒绝。有相关待执行 SQL（含动态字符串及 ALTER FUNCTION）时，先核实际迁移数据库的 TRIGGER、CREATE ROUTINE 或 ALTER ROUTINE 权限，再核已有 log_bin=0、trust=1 或迁移账户全局 SUPER/ALL 之一；未知或查询失败在应用标签改变、停写和迁移之前拒绝。显式 DEFINER 身份未证明时拒绝；binlog 开启且 trust 关闭时，无法可靠证明函数声明的 CREATE/ALTER FUNCTION 保守拒绝。发布脚本不执行任何 SET GLOBAL，不修改或恢复数据库全局参数和权限；原 schema 权限与迁移器完整检查继续生效。同 SHA 的镜像、实例归属、全新备份 create/verify、迁移及安全/健康门禁保持。下文历史回退记录不构成当前自动恢复授权。
+
 这份文档的目标只有一个：以后有人说“发布新版本”，执行链路不再依赖口头记忆。
 
 > 📌 换服务器 / 改服务器地址对桌面端的影响、平稳迁移步骤，见：[换服务器与桌面端自动更新说明](换服务器与桌面端自动更新说明.md)。
@@ -18,7 +20,7 @@
 
 ### 小满的部署接入（2026-10-26，代码接入不代表已上线）
 
-小满正式请求为现有 `/api/assistant/*`。前端与 Electron 安装包跟随当前 ERP API 地址，经现有 Nginx `/api/` 代理进入原后端，不开放8932或新增生产服务。`Dockerfile.backend` 复制 `agent/package.json` 与 `agent/src/` 至 `/opt/flowcube-agent`；`scripts/build-deploy-images.sh` 仍只构建、打同 SHA revision 并归档原 backend/frontend 两个镜像，`server-update.sh` 原健康/权限门禁与应用回退不变。业务规则仍走原 Flow API，任务运行时不会在迁移或发布辅助命令中启动第二监听进程。
+小满正式请求为现有 `/api/assistant/*`。前端与 Electron 安装包跟随当前 ERP API 地址，经现有 Nginx `/api/` 代理进入原后端，不开放8932或新增生产服务。`Dockerfile.backend` 复制 `agent/package.json` 与 `agent/src/` 至 `/opt/flowcube-agent`；`scripts/build-deploy-images.sh` 仍只构建、打同 SHA revision 并归档原 backend/frontend 两个镜像，`server-update.sh` 原健康/权限门禁与失败停止与证据保留遵循本页现行约束。业务规则仍走原 Flow API，任务运行时不会在迁移或发布辅助命令中启动第二监听进程。
 
 Compose 只向 backend 注入以下模型变量，不能传给 Vite 构建或写进交付物：
 
@@ -29,7 +31,7 @@ Compose 只向 backend 注入以下模型变量，不能传给 Vite 构建或写
 | `AGENT_MODEL_API_KEY` | 启用模型时必须，沿受保护的生产进程环境注入，禁止回显 |
 | `AGENT_DATA_DIR` | Compose 固定为 `/var/lib/flowcube/assistant`，挂载 `assistant_data` 命名卷 |
 
-未配置模型时只提供规则可识别业务与稳定概念解释，不可宣称已启用模型。后端入口仅正常服务启动准备私有任务目录；显式迁移/发布命令不创建目录或加载运行时。应用回退保留任务卷，不使用 `down -v`。历史文件若损坏返回明确503并保持原文件，须核对修复，不自动清空。生产配置和启动由统一发布任务在同 SHA 门禁通过后执行；本地隔离构建页面不能代替生产模型配置、Windows 安装包或上线验收。
+未配置模型时只提供规则可识别业务与稳定概念解释，不可宣称已启用模型。后端入口仅正常服务启动准备私有任务目录；显式迁移/发布命令不创建目录或加载运行时。发布失败保留任务卷，不使用 `down -v`。历史文件若损坏返回明确503并保持原文件，须核对修复，不自动清空。生产配置和启动由统一发布任务在同 SHA 门禁通过后执行；本地隔离构建页面不能代替生产模型配置、Windows 安装包或上线验收。
 
 生产不直接用容器端口对外。宿主机 Caddy 独占 80+443，前端容器（nginx）回环暴露 8080：
 
@@ -78,7 +80,7 @@ npm run release:prod
    - 等待同一 SHA、main 可信事件的 `Tests` 与 `Security Scan` 最新运行成功，失败/取消/超时不得部署
    - GitHub Actions 解析部署配置后 SSH 到服务器，在重置代码前获取部署锁，固定实际 SHA
    - GitHub runner 通过 `scripts/build-deploy-images.sh` 构建 Linux amd64 镜像、写 OCI revision 标签并打包；优先让服务器 HTTPS 拉取临时 artifact，失败明确回退并行 SCP；`server-update.sh` 保存旧运行镜像 ID，验证归档 SHA-256 / 镜像 revision，加载镜像、等 MySQL 健康、一次性容器迁移，再切换应用并执行本地/公网健康与页面门禁。生产不再编译
-   - 迁移前失败或数据库兼容的应用失败恢复旧镜像；迁移未完整成功、首次引入 240 记账契约后的本次失败均保持后端停写，核实迁移并启动兼容新后端。DDL 不自动回滚。
+   - 发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。
 
 2. 同 SHA 浏览器和 PDA 工作流均已成功后，`npm run release:tag-desktop`
    - 自动读取 `desktop/package.json` 的 `version`
@@ -194,7 +196,7 @@ ssh flowcube-prod 'cd /opt/flowcube && git rev-parse --short HEAD'
 | `APP_PUBLIC_URL` | `NODE_ENV=production` 时必填且非空；从既有部署配置注入正式公开入口 |
 | `TRUST_PROXY` | `NODE_ENV=production` 时必须为 `1`，遵守现有后端反向代理配置要求 |
 
-生产模式下 `DB_PASSWORD` 还必须非空；不通过切换运行模式绕过配置检查。其它正常后端运行配置按部署环境提供，不使用应用运行账号的默认值猜测目标库。迁移账号须能在 `information_schema` 看到目标库全部对象，并具备目标 schema 的 `SELECT`、`INSERT`、`UPDATE`、`DELETE`、`CREATE`、`ALTER`、`DROP`、`INDEX`、`REFERENCES`、`CREATE TEMPORARY TABLES` 和 `TRIGGER` 权限；其中 `TRIGGER` 用于既有往来明细触发器迁移。若服务启用二进制日志且 `log_bin_trust_function_creators=0`，还须由数据库管理员提供迁移所需的触发器创建权限窗口（现行迁移前置检查接受 `SUPER` 或全局管理员）；不要临时扩大应用运行账号权限来跳过检查。
+生产模式下 `DB_PASSWORD` 还必须非空；不通过切换运行模式绕过配置检查。其它正常后端运行配置按部署环境提供，不使用应用运行账号的默认值猜测目标库。迁移账号须能在 `information_schema` 看到目标库全部对象，并具备目标 schema 的 `SELECT`、`INSERT`、`UPDATE`、`DELETE`、`CREATE`、`ALTER`、`DROP`、`INDEX`、`REFERENCES`、`CREATE TEMPORARY TABLES` 和 `TRIGGER` 权限；其中 `TRIGGER` 用于既有往来明细触发器迁移。若服务启用二进制日志且 `log_bin_trust_function_creators=0`，还须由数据库管理员独立核实迁移账户权限；发布脚本不建立权限窗口，参数条件不足时在停写前拒绝；不要临时扩大应用运行账号权限来跳过检查。
 
 配置完成后在仓库根执行：
 
@@ -226,9 +228,9 @@ DEPLOY_IMAGE_SHA256=<该CI归档的SHA256> bash scripts/server-update.sh
 
 推荐使用 Actions 的 Deploy Browser App → Run workflow，自动完成 CI 构建与传输。手动入口也必须提供同 SHA 的 CI 镜像归档，不允许降级为生产编译。脚本人工入口会重新查询同 SHA 的 Tests/Security；缺少凭据或检查失败会终止。不要默认设置 SKIP_RELEASE_GATE。仅更新服务器应用，不构建桌面安装包。
 
-## 回滚
+## 发布失败与人工恢复
 
-正常 Docker 部署的失败回退由 server-update.sh 统一执行。迁移在停止 backend（含 scheduler/worker）后运行；临时开放的 MySQL 触发器创建权限在成功、失败和中断时恢复，恢复失败保持停写。迁移开始但未完整成功时不能恢复业务写入。首次应用 240 后，本次门禁失败也不得启动不传汇款单位 ID 的旧后端；停止写入后兼容性尚未核实的失败同样保持停写。实际旧镜像必须有 `io.flowcube.party-ledger-contract=1` 标签，重试不能仅凭数据库已有迁移记录放行；完成迁移核查后使用兼容新后端恢复，详见 `party-ledger-2026-09-08.md`。旧镜像 ID 来自实际容器，不能以已被新构建覆盖的 latest 标签代替；门禁低磁盘时保留旧镜像并失败，不运行 image prune。恢复失败会明确要求人工处理；首次部署无旧镜像时只停止本次应用。旧镜像启动前，将 version.json 原子恢复为已发布清单以兼容旧 PDA API（因此失败回退后该文件可与 Git 目标版本不同）。数据库迁移不回滚，也不能仅通过恢复旧镜像撤销数据变更。
+发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。迁移前以固定完整 SHA 的候选镜像、Compose 实际迁移账户运行独立只读 helper（覆盖配置只指定 image/read_only，以 node 用户和 node entrypoint 执行，不启动应用或迁移器）。读取候选 SQL 和 db_migrations 求待执行集合；没有待执行触发器/函数时，不因 trust=0 拒绝。有相关待执行 SQL（含动态字符串及 ALTER FUNCTION）时，先核实际迁移数据库的 TRIGGER、CREATE ROUTINE 或 ALTER ROUTINE 权限，再核已有 log_bin=0、trust=1 或迁移账户全局 SUPER/ALL 之一；未知或查询失败在应用标签改变、停写和迁移之前拒绝。显式 DEFINER 身份未证明时拒绝；binlog 开启且 trust 关闭时，无法可靠证明函数声明的 CREATE/ALTER FUNCTION 保守拒绝。发布脚本不执行任何 SET GLOBAL，不修改或恢复数据库全局参数和权限；原 schema 权限与迁移器完整检查继续生效。现有备份/归属、镜像 revision、目标写入契约、迁移器、健康及页面门禁保持；不自动 image prune。
 
 应急恢复先核实迁移记录、触发器完整性及目标镜像的数据库契约。优先通过新提交修复并重新运行正式发布流程；不得只恢复旧提交后启动不兼容代码，也不得在生产重新编译。0.13.5的288–292数量/退货/资金证明要求实际旧后端具备 `io.flowcube.quantity-return-cash-contract=1` 及原240契约；0.13.4缺新标签，进入迁移窗口后失败保持停写并向前恢复，重试不凭已有迁移记录自动放行。新增可空字段不构成语义兼容证明，详见 `docs/print-deploy-ops.md`。
 
@@ -247,13 +249,13 @@ DEPLOY_IMAGE_SHA256=<该CI归档的SHA256> bash scripts/server-update.sh
 
 此前把 npm 安装、Vite 编译和浏览器验收全部放在生产机；现在编译在 GitHub runner 完成。归档上传前至少需要 6144 MB 可用空间，加载前和门禁前至少需要 4096 MB；不足时失败，不删除镜像、缓存或数据卷。镜像归档必须与期望 SHA 对应，摘要和 OCI revision 均核对后才能迁移。
 
-浏览器门禁镜像须预先在维护窗口准备；切换前检查存在，验收使用 `--pull never`，防止发布途中临时下载/解压大型浏览器镜像。浏览器验收仍访问已切换的应用，保留失败回退机制。辅助容器最多 1 CPU、1 GiB 内存、256 进程，memory-swap 与 memory 相同（不允许额外交换），两个验收依次执行；每轮容器内 840 秒、客户端 900 秒，EXIT 清理本次验收容器。Docker 管理请求默认 30 秒；加载 600 秒、迁移 300 秒、MySQL 就绪 150 秒、切换 120 秒。CI 远程部署总时限 2400 秒，另留 600 秒回退清理。超时不等于 Docker daemon 内部操作必然立即结束，必须检查回退结果，不能把客户端退出当作恢复证明。
+浏览器门禁镜像须预先在维护窗口准备；切换前检查存在，验收使用 `--pull never`，防止发布途中临时下载/解压大型浏览器镜像。浏览器验收访问已切换的应用；失败停止应用并保留证据，保持停写。辅助容器最多 1 CPU、1 GiB 内存、256 进程，memory-swap 与 memory 相同（不允许额外交换），两个验收依次执行；每轮容器内 840 秒、客户端 900 秒，EXIT 清理本次验收容器。Docker 管理请求默认 30 秒；加载 600 秒、迁移 300 秒、MySQL 就绪 150 秒、切换 120 秒。CI 远程部署总时限 2400 秒，另留 600 秒停写清理。超时不等于 Docker daemon 内部操作必然立即结束，必须核实应用停写及守护进程实际状态，不能把客户端退出当作停止证明。
 
 监控用 STATE_FILE 对应的独占锁，上一轮未结束时不重复启动；Docker 请求 5 秒、TLS 握手 10 秒，证书探针失败/超时进入异常状态。探针按目标查询，不扫描 Docker 占用总量。GNU timeout 和 flock 是生产依赖；Mac 隔离测试使用模拟命令，生产实际资源限制需上线后确认。
 
 实现验证和事故时间线见 `docs/production-environment-check-2026-09-04.md`。本地变更未发布时，线上不会自动获得这些保护。
 
-嵌套超时信号：CI 外层设置 `FLOWCUBE_DEPLOY_TIMEOUT_GROUP=1`，内层命令使用 GNU timeout `--foreground`，使总超时的 TERM 同时到达等待中的客户端并让 Bash 执行清理/回退 trap。独立监控不启用此模式。默认 600 秒回退宽限覆盖两轮健康等待、Docker 管理/清理及通知；扩大 HEALTH_CHECK_ATTEMPTS/DELAY 时须同步计算宽限和 CI job 时限。真实进程回归覆盖外层超时后清理与回退都必须执行，见 `tests/deployment-resources.test.js`。
+嵌套超时信号：CI 外层设置 `FLOWCUBE_DEPLOY_TIMEOUT_GROUP=1`，内层命令使用 GNU timeout `--foreground`，使总超时的 TERM 同时到达等待中的客户端并让 Bash 执行停写清理 trap。独立监控不启用此模式。默认 600 秒失败收尾宽限覆盖停止应用、Docker 管理/清理及通知；扩大 HEALTH_CHECK_ATTEMPTS/DELAY 时须同步计算宽限和 CI job 时限。真实进程回归覆盖外层超时后停写与清理都必须执行，见 `tests/deployment-resources.test.js`。
 
 ## Compose 覆盖配置与运行时环境（2026-09-05）
 
@@ -270,7 +272,7 @@ Compose 透传 `JWT_ACCESS_EXPIRES_IN`（默认 2h）、`JWT_REFRESH_EXPIRES_IN`
 
 ## 第二轮修复的运行时验收
 
-`/health` 和 `/api/health` 只证明进程存活，PDA 沿用其网络检查协议。新 `/api/ready` 使用应用连接池做只读查询，整个探针最多 2 秒、结果缓存 1 秒，并合并并发探测；数据库不可用或排队超时返回 503，成功返回 200，公开响应不暴露连接信息。部署等待、部署后公网检查、服务监控、日报和 prod Compose 健康检查改用 ready；回滚到尚无该接口的旧镜像时，脚本显式回退原存活检查。
+`/health` 和 `/api/health` 只证明进程存活，PDA 沿用其网络检查协议。新 `/api/ready` 使用应用连接池做只读查询，整个探针最多 2 秒、结果缓存 1 秒，并合并并发探测；数据库不可用或排队超时返回 503，成功返回 200，公开响应不暴露连接信息。部署等待、部署后公网检查、服务监控、日报和 prod Compose 健康检查改用 ready；发布失败不自动启动旧镜像。
 
 连接池对 `query`、`execute` 和 `getConnection` 都限制获取等待；超过 `DB_ACQUIRE_TIMEOUT_MS` 后不再派发该排队 SQL，迟到连接立即归还，队列上限与获取超时分别返回明确 503。该时限不取消已经开始执行的 SQL 或事务；运行中写操作仍依赖原事务、锁等待和幂等规则。
 
@@ -299,7 +301,7 @@ node backend/scripts/check-error-tracking.js --send-test # 显式发送无业务
 
 ## 2026-10-17 · 迁移前本次备份门禁（A37，源码实现未发布）
 
-本节更新前文的资源预算：`server-update.sh` 外层由 2400 秒增加为 2700 秒，仍保留 600 秒回退清理；新增备份创建与回执复核合用独立 300 秒窗口，内部 create/verify 分别 240/20 秒截止。部署步骤 165 分钟，job 224 分钟；PDA 脚本 225 分钟、等待步骤 230 分钟保持长于浏览器 job。加载 1800 秒和既有迁移/回退预算未缩短。这些是将来发布的配置，不能作为当前生产已生效的证明。
+本节更新前文的资源预算：`server-update.sh` 外层由 2400 秒增加为 2700 秒，仍保留 600 秒停写清理；新增备份创建与回执复核合用独立 300 秒窗口，内部 create/verify 分别 240/20 秒截止。部署步骤 165 分钟，job 224 分钟；PDA 脚本 225 分钟、等待步骤 230 分钟保持长于浏览器 job。加载 1800 秒和既有迁移/回退预算未缩短。这些是将来发布的配置，不能作为当前生产已生效的证明。
 
 Docker 部署沿用部署锁与停写边界，在核旧后端兼容性后、任何迁移授权或 `MIGRATION_STARTED` 之前，创建 `backups/pre-migrate-<候选完整SHA>-<本次随机值>/`（或现有 `BACKUP_DIR` 内同名目录）。目录必须新建、为空且 0700；压缩转储和回执均为当前用户的 0600 普通文件。每次部署产生独立目录，不从旧文件中选择“最新备份”，也不执行 cron 备份脚本的历史删除。
 
@@ -307,7 +309,7 @@ Docker 部署沿用部署锁与停写边界，在核旧后端兼容性后、任�
 
 容量预检须有至少 4096 MB 可用空间；这不是对真实转储大小的估算，写入过程中 ENOSPC、权限失败、客户端失败、源变化、中断或总超时仍必须失败。只清本次未完成的 `.part` 及本次流程未完成时的 `receipt.json`，保留历史与已落盘转储取证文件。超时/信号不会证明 Docker daemon 内的操作已终止，失败后应核现场；本次结果不完整时不会用旧备份补成成功。
 
-回执固定 `migrationStarted=false`、`restorationVerified=false`，仅证明执行过当前快照校验，**不代表恢复演练通过**。备份失败阻断后仍按原兼容性证明决定能否恢复旧应用；无证明或半迁移继续停写。迁移后切旧应用不撤销 DDL，不自动用备份覆盖现库，也不绕过 288–292 写契约。保留目录/镜像/卷的后续清理仍按既有精确清单、低 IO 与确认规则执行，本批没有新增删除策略。
+回执固定 `migrationStarted=false`、`restorationVerified=false`，仅证明执行过当前快照校验，**不代表恢复演练通过**。备份失败阻断后保持停写，不自动恢复旧应用。人工恢复也不撤销 DDL，不自动用备份覆盖现库，也不绕过 288–292 写契约。保留目录/镜像/卷的后续清理仍按既有精确清单、低 IO 与确认规则执行，本批没有新增删除策略。
 
 离线回归执行真实 shell/Node helper，以专属临时文件及假 Docker/SQL/容量/故障输出验证顺序和失败；`node --test tests/audit-deployment.test.js tests/deployment-resources.test.js` 已在既有 CI 入口可达。测试不证明真实 MySQL 快照一致性、生产磁盘性能、实际权限、信号后 daemon 状态或恢复成功；真实备份与恢复需另行授权验收，本轮未连接数据库或执行部署。
 

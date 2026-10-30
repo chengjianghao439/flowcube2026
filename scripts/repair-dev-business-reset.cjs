@@ -29,6 +29,7 @@ const TABLES = [
   'return_order_events', 'return_task_items', 'return_tasks',
   'inbound_task_events', 'inbound_task_items', 'inbound_tasks',
   'purchase_order_items', 'purchase_orders',
+  // Retired requisition tables remain in the historical offline reset inventory.
   'purchase_requisition_conversations', 'purchase_requisition_items', 'purchase_requisitions',
   'transfer_order_events', 'transfer_order_items', 'transfer_orders',
   'inventory_disposal_items', 'inventory_disposal_orders',

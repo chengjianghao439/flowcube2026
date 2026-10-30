@@ -1,4 +1,5 @@
 ---
+
 name: release-flowcube
 description: >-
   极序 Flow（flowcube）的正式发版流程：三端版本号同步递增、填写本版更新内容、推送 main 触发浏览器部署、
@@ -7,6 +8,8 @@ description: >-
   自动更新不弹 / 打 tag / release / 版本号要不要升 / 写更新内容 / changelog / release notes / latest.json」
   等任意场景时使用本技能——即便用户只是 push 了 main、以为这样桌面端就会更新（这正是最常见的坑）。
 ---
+
+> **现行发布约束（2026-10-30，用户明确要求）**：发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。迁移前以固定完整 SHA 的候选镜像、Compose 实际迁移账户运行独立只读 helper（覆盖配置只指定 image/read_only，以 node 用户和 node entrypoint 执行，不启动应用或迁移器）。读取候选 SQL 和 db_migrations 求待执行集合；没有待执行触发器/函数时，不因 trust=0 拒绝。有相关待执行 SQL（含动态字符串及 ALTER FUNCTION）时，先核实际迁移数据库的 TRIGGER、CREATE ROUTINE 或 ALTER ROUTINE 权限，再核已有 log_bin=0、trust=1 或迁移账户全局 SUPER/ALL 之一；未知或查询失败在应用标签改变、停写和迁移之前拒绝。显式 DEFINER 身份未证明时拒绝；binlog 开启且 trust 关闭时，无法可靠证明函数声明的 CREATE/ALTER FUNCTION 保守拒绝。发布脚本不执行任何 SET GLOBAL，不修改或恢复数据库全局参数和权限；原 schema 权限与迁移器完整检查继续生效。同 SHA 的镜像、实例归属、全新备份 create/verify、迁移及安全/健康门禁保持。下文历史回退记录不构成当前自动恢复授权。
 
 # 极序 Flow 发版流程
 
@@ -108,7 +111,7 @@ git diff --cached --stat
 git diff --cached --check
 git commit -m "release: 发布 v<version> — <一句话主题>"
 ```
-下一步的唯一入口负责 push main。`Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；健康或页面门禁失败统一回退旧应用镜像，数据库迁移不回滚。
+下一步的唯一入口负责 push main。`Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。
 
 ### 5. 等待浏览器和 PDA 完成，再打 tag（桌面发布）
 
@@ -118,7 +121,7 @@ npm run release:prod
 ```
 入口在 push 前强制预检 CI SSH 可信主机键、本机代理和 `flowcube-prod` SSH 别名，启动自动中转并保持 Mac 在线；预检失败就停止，不悄悄改走已多次超时的服务器直连。它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag、等待桌面正式发布并核对线上三端。中转下载 GitHub 原 artifact ZIP；大分段连续失败后仅把该分段缩为 256 KiB 子区间，保留其他已成功分段，最后检查归档摘要与唯一文件。SSH 交付后由服务器再次核对 runner 的原包大小/SHA-256；CI 的 HTTPS/SCP 仅作有界故障回退。代码修复本身不构成推送/发版授权。
 
-Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcube-prod`。只有本机配置变化时才更新本机环境或 `FLOWCUBE_RELAY_SSH_TARGET` / `FLOWCUBE_RELAY_PROXY`，先做预检再发布。入口负责中转进程、SSH 控制连接与临时文件的收尾。保留完整门禁和回退窗口，不设固定 15 分钟目标。
+Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcube-prod`。只有本机配置变化时才更新本机环境或 `FLOWCUBE_RELAY_SSH_TARGET` / `FLOWCUBE_RELAY_PROXY`，先做预检再发布。入口负责中转进程、SSH 控制连接与临时文件的收尾。保留完整门禁和停写收尾窗口，不设固定 15 分钟目标。
 
 ### 6. 验证
 - CI：按完整发布 SHA 查询并按需翻页，确认 `Deploy Browser App`、`Tests`、`Security Scan`、`Build PDA APK` 都 success；另查 **对应版本 tag** 的 `Build Desktop Installer`，main 上的桌面验证构建不能代替 tag 发布。不要从最近几条运行的绿灯推断本次成功；补发布成功须关联原失败运行并单独报告。
@@ -136,7 +139,7 @@ Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcub
 
 - 将完整应用 SHA、tag、PDA versionCode、各工作流 run ID、线上镜像 revision、清单及安装包摘要核验写入本版结果文档。工具修复提交与应用发布提交分别记录。
 - 分开报告「正常一次成功」「失败后恢复完成」「尚未完成」。原失败运行不删除、不当成成功；CI/线上下载验收与 Windows/PDA 真机安装、更新弹窗验收分别说明。
-- 用户已取消固定 15 分钟目标，旧记录中的该目标仅表示历史要求。记录首次启动到最终验收的总耗时；发生修复重试时另列最终应用提交到完成的耗时，包含排队、传输、门禁和恢复，不能通过换起点隐藏失败时间。不得为提速跳过门禁或压缩迁移、回退安全窗口。
+- 用户已取消固定 15 分钟目标，旧记录中的该目标仅表示历史要求。记录首次启动到最终验收的总耗时；发生修复重试时另列最终应用提交到完成的耗时，包含排队、传输、门禁和恢复，不能通过换起点隐藏失败时间。不得为提速跳过门禁或压缩迁移、失败收尾安全窗口。
 - 若使用操作端代理，明确记录该依赖；自动本地中转可证明本机在线期间无需人工搬运，不能算脱离个人电脑的托管链路验收。人工中转仍单列恢复措施。架构优化咨询按 `docs/release-pipeline-optimization-2026-09-22.md` 比较方案；其中待实施项目不是现行发布能力。
 
 #### push main 后 `Deploy Browser App` 长时间 pending（2026-09-18 已结构性修复）
@@ -224,7 +227,7 @@ v0.10.8 的原始桌面 tag 运行中，服务器 HTTPS 接收约 150 秒后失�
 
 ## 回滚
 
-发完发现这一版有问题、要把桌面更新指回上一版：
+以下仅供用户另行明确批准的人工桌面指针恢复；本次发布失败不可自动执行，先核对历史客户端与当前 API 的兼容性并保留证据：
 ```bash
 # 在服务器上（容器内），把 latest/current 指针重写回某个历史版本
 node scripts/release-desktop.js <旧version> --rollback

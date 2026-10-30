@@ -282,7 +282,7 @@ async function getLatestInstanceByBiz(conn, { bizType, bizId }) {
 const PENDING_TASKS_FROM = `FROM approval_instance_task_approvers a
        JOIN approval_instance_tasks t ON t.id=a.task_id
        JOIN approval_instances i ON i.id=a.instance_id AND i.status=1
-      WHERE a.user_id=? AND t.status=1 AND t.step_order=i.current_step`
+      WHERE a.user_id=? AND t.status=1 AND t.step_order=i.current_step AND i.biz_type<>'purchase_requisition'`
 
 async function countPendingTasks(pool, { userId }) {
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total ${PENDING_TASKS_FROM}`, [Number(userId)])

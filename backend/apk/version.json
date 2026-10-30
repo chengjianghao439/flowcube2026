@@ -1,7 +1,7 @@
 {
-  "version": "0.14.1",
-  "versionCode": 161,
+  "version": "0.14.2",
+  "versionCode": 162,
   "filename": "app-release.apk",
-  "releaseNote": "- 小满不再闲聊：新消息不进入开放讨论，页面设计、排错闲聊和使用讨论会直接拒绝。",
-  "publishedAt": "2026-10-29T10:23:54.073Z"
+  "releaseNote": "- 移除采购申请功能及相关审批、转换入口；采购订单可直接创建，采购计划仍可生成采购草稿。",
+  "publishedAt": "2026-10-30T13:55:13.560Z"
 }

@@ -34,7 +34,7 @@ export function ProcurementSupplyExplanation({ supply: r, snapshot, mode = 'plan
   const bufferLabel = mode === 'replenishment' ? '目标库存（已含安全库存）' : '安全库存'
   const comparison: [string, keyof ProcurementSupply][] = [
     ['未发销售', 'confirmedDemand'], ['预测需求', 'forecastDemand'], ['实物库存', 'onHand'], ['在途采购', 'inTransit'],
-    ['其他采购计划', 'planCoverage'], ['未转采购的申请', 'requisitionCoverage'], ['采购单草稿', 'draftCoverage'],
+    ['其他采购计划', 'planCoverage'], ['采购单草稿', 'draftCoverage'],
     [bufferLabel, mode === 'replenishment' ? 'targetStock' : 'safetyStock'],
     ['包装倍数', 'packMultiple'], ['最低起订', 'minimumOrderQty'], ['净需求', 'netRequirement'], ['建议采购', 'suggestedQty'],
   ]
@@ -47,7 +47,7 @@ export function ProcurementSupplyExplanation({ supply: r, snapshot, mode = 'plan
     <section aria-label="到货条件" className="space-y-2">
       <h3 className="font-medium">到货条件</h3>
       <ProcurementArrivalStatus supply={r} />
-      <p className="text-xs leading-5 text-muted-foreground">总量覆盖不代表按期到货。先核对销售交期、催货或调拨；计划和申请尚未成为供应商承诺。</p>
+      <p className="text-xs leading-5 text-muted-foreground">总量覆盖不代表按期到货。先核对销售交期、催货或调拨；计划尚未成为供应商承诺。</p>
       {!!r.expectedArrivals?.length && <details className="text-xs"><summary className="cursor-pointer py-1 font-medium">查看预计到货批次（{r.expectedArrivals.length}）</summary><ul className="mt-2 space-y-1">{r.expectedArrivals.map((arrival, index) => <li key={index}>{arrival.expectedDate || '日期待确认'}：{qty(arrival.quantity, r.unit)}</li>)}</ul></details>}
     </section>
     {snapshot === null && <p className="text-xs text-muted-foreground">该计划没有保存生成时的需求数据，无法对照历史覆盖情况。</p>}
@@ -60,9 +60,9 @@ export function ProcurementSupplyExplanation({ supply: r, snapshot, mode = 'plan
         ['实物库存（含已预占）',r.onHand],['在途采购（已提交 / 待审批，未上架）',r.inTransit],['其中销售预计绑定（不重复扣除）',r.expectedBound],
       ]} /></section>
       <section className="space-y-3"><h3 className="font-medium">尚未转为正式采购的覆盖</h3><Values unit={r.unit} rows={[
-        ['其他待处理采购计划',r.planCoverage],['未转采购的申请（草稿 / 审批中 / 已批准）',r.requisitionCoverage],['采购单草稿',r.draftCoverage],['待处理覆盖合计',r.provisionalCoverage],
+        ['其他待处理采购计划',r.planCoverage],['采购单草稿',r.draftCoverage],['待处理覆盖合计',r.provisionalCoverage],
       ]} /></section>
-      <p className="text-xs leading-5 text-muted-foreground">净需求 = max（0，需求基数 + {mode === 'replenishment' ? '目标库存' : '安全库存'} − 实物 − 在途采购 − 待处理覆盖）。计划、申请只计未转换部分；取消或减量后释放覆盖。{mode === 'plan' ? '当前计划待处理行不计入其他计划。' : ''}生成和转换时由后端重新核对。</p>
+      <p className="text-xs leading-5 text-muted-foreground">净需求 = max（0，需求基数 + {mode === 'replenishment' ? '目标库存' : '安全库存'} − 实物 − 在途采购 − 待处理覆盖）。计划只计未转换部分；取消或减量后释放覆盖。{mode === 'plan' ? '当前计划待处理行不计入其他计划。' : ''}生成和转换时由后端重新核对。</p>
     </div></details>
   </div>
 }

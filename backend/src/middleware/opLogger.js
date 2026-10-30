@@ -55,7 +55,6 @@ const MODULE_MAP = {
   '/api/hr': 'hr', '/api/approvals': 'approvals',
   '/api/credit-overrides': 'credit-overrides', '/api/disposals': 'disposal',
   '/api/departments': 'departments', '/api/customer-addresses': 'customer-addresses',
-  '/api/purchase-requisitions': 'purchase-requisitions',
   '/api/procurement': 'procurement', '/api/logistics': 'logistics',
   '/api/plastic-boxes': 'plastic-boxes', '/api/pda-devices': 'pda-devices',
   '/api/system': 'system',

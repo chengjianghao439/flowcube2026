@@ -45,3 +45,8 @@ test('当前商品策略按稳定ID当前共享读；历史快照和调用选项
   assert.doesNotThrow(()=>assertQtyPrecisionWith({allowDecimal:true},-.3,'调整数量'))
   assert.throws(()=>assertQtyPrecisionWith({allowDecimal:true},-.005,'调整数量'),{code:'QTY_DECIMALS_EXCEEDED'})
 })
+
+test('retired requisition quantities cannot block current product decimal policy', () => {
+  assert.ok(CHECKS.length > 0)
+  for (const [, sql] of CHECKS) assert.doesNotMatch(sql, /purchase_requisition/)
+})

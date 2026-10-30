@@ -384,7 +384,7 @@ async function approve(id, operator, scopeWarehouseIds = null) {
     assertInScope(scopeWarehouseIds, row.warehouse_id, '处置单')
     // 自行审批闸门（2026-09-18 审计 P2）：approve 是库存注销的唯一闸门，原先只做状态流转，
     // 持 create+approve+execute 的账号可单人完成「建单→提交→批准→执行」全流程，内控形同虚设。
-    // 与采购请购单同范式，走统一 selfApprove（超管或显式开启 allow_self_approve 的账号可自批）。
+    // 走统一 selfApprove（超管或显式开启 allow_self_approve 的账号可自批）。
     await assertNotSelfApproval(row.operator_id, operator?.userId, '不能审批自己提交的处置单，请由他人审批')
     const rule = assertStatusAction('inventoryDisposal', 'approve', row.status)
     await lockScrapItems(conn, id)

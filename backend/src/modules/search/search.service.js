@@ -6,7 +6,7 @@ const { PRODUCT_SEARCH_FIELDS, productSearch } = require('../products/productSea
 /**
  * 全局搜索（跨单据 + 基础资料）。
  *
- * 覆盖 16 类：商品/供应商/客户/采购单/销售单/采购请购/调拨/采购退货/销售退货/
+ * 覆盖 15 类：商品/供应商/客户/采购单/销售单/调拨/采购退货/销售退货/
  * 收货订单/费用报销/呆滞处置/退款单/超额放行申请/盘点单/发票。
  * 搜索全部历史记录，不按创建日期过滤。每类按 20 条游标分页，可继续加载全部匹配结果，按类型分组返回；path 指向具体单据详情。
  *
@@ -23,7 +23,6 @@ const ENTITIES = [
   { type: 'customer', permission: P.CUSTOMER_VIEW,     label: '客户',       pathBase: '/customers',            table: 'sale_customers',            noField: 'code',      subtitleField: 'code',       searchFields: ['name'] },
   { type: 'purchase', permission: P.PURCHASE_ORDER_VIEW,     label: '采购单',     pathBase: '/purchase',             table: 'purchase_orders',           noField: 'order_no',  subtitleField: 'supplier_name', searchFields: ['order_no'], warehouseColumn: 'warehouse_id' },
   { type: 'sale', permission: P.SALE_ORDER_VIEW,         label: '销售单',     pathBase: '/sale',                 table: 'sale_orders',               noField: 'order_no',  subtitleField: 'customer_name', searchFields: ['order_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'requisition', permission: P.PURCHASE_REQUISITION_VIEW,  label: '采购申请',   pathBase: '/purchase-requisitions', table: 'purchase_requisitions',    noField: 'requisition_no', subtitleField: 'applicant_name', searchFields: ['requisition_no', 'title'], warehouseColumn: 'warehouse_id' },
   { type: 'transfer', permission: P.TRANSFER_ORDER_VIEW,     label: '调拨单',     pathBase: '/transfer',             table: 'transfer_orders',           noField: 'order_no',  subtitleField: 'from_warehouse_name', searchFields: ['order_no'], warehouseColumn: 'from_warehouse_id', warehouseColumnOr: 'to_warehouse_id' },
   { type: 'purchaseReturn', permission: P.RETURN_ORDER_VIEW, label: '采购退货', pathBase: '/returns/purchase',      table: 'purchase_returns',          noField: 'return_no', subtitleField: 'supplier_name', searchFields: ['return_no'], warehouseColumn: 'warehouse_id' },
   { type: 'saleReturn', permission: P.RETURN_ORDER_VIEW,   label: '销售退货',   pathBase: '/returns/sale',          table: 'sale_returns',              noField: 'return_no', subtitleField: 'customer_name', searchFields: ['return_no'], warehouseColumn: 'warehouse_id' },
@@ -43,7 +42,6 @@ const DETAIL_FIELDS = {
   customer: [['contact', '联系人'], ['phone', '电话'], ['address', '地址']],
   purchase: [['warehouse_name', '仓库'], ['operator_name', '经办人']],
   sale: [['warehouse_name', '仓库'], ['operator_name', '经办人']],
-  requisition: [['title', '申请标题'], ['warehouse_name', '仓库']],
   transfer: [['to_warehouse_name', '调入仓'], ['operator_name', '经办人']],
   purchaseReturn: [['purchase_order_no', '原采购单'], ['warehouse_name', '仓库']],
   saleReturn: [['sale_order_no', '原销售单'], ['warehouse_name', '仓库']],

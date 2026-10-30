@@ -152,8 +152,7 @@ async function buildProgress(type, id, doc, user) {
   }
   if (type === 'disposal') sections.push(section('progress', '处置执行', [...identity, ['quantity', '计划处置数量'], ['disposeTypeName', '处置方式'], ['state', '执行状态'], ['disposedAt', '处置时间']], items.map(i => ({ ...i, state: doc.statusName, disposedAt: doc.disposedAt }))))
   if (type === 'plan') sections.push(section('progress', '采购转单进度', [...identity, ['warehouseName', '仓库'], ['adjustedQty', '采购数量'], ['statusName', '转单状态'], ['purchaseOrderId', '关联采购单 ID']], items))
-  if (type === 'requisition') sections.push(section('progress', '申请采购执行', [...identity, ['quantity', '申请数量'], ['convertedQty', '已转采购数量']], items))
-  const bizType = { requisition: 'purchase_requisition', credit: 'sale_credit_override', price: 'product_price' }[type]
+  const bizType = { credit: 'sale_credit_override', price: 'product_price' }[type]
   if (bizType) {
     const [tasks] = await pool.query(
       `SELECT t.id,t.step_order AS stepOrder,t.status,t.approver_name AS approverName,t.action_at AS actionAt,t.comment,

@@ -56,7 +56,7 @@ fs.writeFileSync = function(file, data, ...args) {
 };
 `)
   fs.copyFileSync(path.join(root, 'docker-compose.yml'), path.join(dir, 'docker-compose.yml'))
-  fs.writeFileSync(path.join(dir, 'scripts/release-gate.sh'), '#!/bin/bash\n[[ "$DEPLOY_TEST_SCENARIO" != gate && "$DEPLOY_TEST_SCENARIO" != ledger_gate && "$DEPLOY_TEST_SCENARIO" != ledger_retry && "$DEPLOY_TEST_SCENARIO" != write_contract_gate && "$DEPLOY_TEST_SCENARIO" != rollback_failure && "$DEPLOY_TEST_SCENARIO" != first_deploy && "$DEPLOY_TEST_SCENARIO" != legacy ]]\n')
+  fs.writeFileSync(path.join(dir, 'scripts/release-gate.sh'), '#!/bin/bash\n[[ "$DEPLOY_TEST_SCENARIO" != gate && "$DEPLOY_TEST_SCENARIO" != ledger_gate && "$DEPLOY_TEST_SCENARIO" != ledger_retry && "$DEPLOY_TEST_SCENARIO" != write_contract_gate && "$DEPLOY_TEST_SCENARIO" != stop_failure && "$DEPLOY_TEST_SCENARIO" != first_deploy && "$DEPLOY_TEST_SCENARIO" != legacy ]]\n')
   if (scenario === 'legacy') {
     fs.mkdirSync(path.join(dir, 'backend/apk'), { recursive: true })
     fs.writeFileSync(path.join(dir, 'backend/apk/version.json'), JSON.stringify({ version: '2.0.0', versionCode: 2 }))
@@ -131,10 +131,14 @@ if(cmd==='docker') {
    fs.writeFileSync(mysqlStarted,'yes');process.exit(0);
  }
  if(a.startsWith('compose up')&&a.endsWith('backend frontend')&&!args.includes('--no-deps')) {fs.appendFileSync(log,JSON.stringify(['implicit-mysql-reconcile'])+'\\n');process.exit(1);}
- if(a.includes('SELECT @@GLOBAL.log_bin_trust_function_creators')) {if(['ledger_retry_pre_migration','write_contract_retry_pre_migration'].includes(s))process.exit(1);console.log('0');}
+ if(a.includes('scripts/migration-preflight.js')) {
+  const override=args[args.lastIndexOf('-f')+1];
+  if(!fs.readFileSync(override,'utf8').includes('image: flowcube-backend:'+'a'.repeat(40))||!fs.readFileSync(override,'utf8').includes('read_only: true')||!args.includes('--no-deps')||args[args.indexOf('--pull')+1]!=='never'||args[args.indexOf('--entrypoint')+1]!=='node'||args[args.indexOf('--user')+1]!=='node')process.exit(2);
+  process.exit(s.startsWith('migration_condition_')?1:0);
+ }
  if(a.includes("table_name='db_migrations'"))console.log('1');
  if(a.includes("filename='240_party_ledger_explicit_identity.sql'"))console.log(s==='ledger_gate'?'0':'1');
- if(s==='restore_permission'&&a.includes('SET GLOBAL log_bin_trust_function_creators=0'))process.exit(1);
+
  if(args[0]==='image'&&args[1]==='inspect') {
    if(a.includes('io.flowcube.quantity-return-cash-contract'))console.log(s==='write_contract_missing_target'||(s.startsWith('write_contract')&&args.at(-1).startsWith('sha256:'))?'':'1');
    else console.log(a.includes('io.flowcube.party-ledger-contract')?(s.startsWith('ledger_retry')?'':'1'):(s==='wrong-image'?'b':'a').repeat(40));
@@ -143,7 +147,7 @@ if(cmd==='docker') {
  if(a.startsWith('compose ps')&&s!=='first_deploy')console.log(args.at(-1)==='backend'?'old-backend-container':'old-frontend-container');
  if(args[0]==='inspect')console.log(args.at(-1).includes('backend')?'sha256:'+'1'.repeat(64):'sha256:'+'2'.repeat(64));
  if(args[0]==='tag'&&args[1].startsWith('sha256:'))fs.writeFileSync(rolled,'yes');
- if(s==='rollback_failure'&&args[0]==='tag')process.exit(1);
+ if(s==='stop_failure'&&a==='compose stop -t 60 backend frontend')process.exit(1);
  if(s==='legacy'&&a.includes('--force-recreate')) {const meta=JSON.parse(fs.readFileSync('backend/apk/version.json'));if(meta.versionCode!==1||meta.filename!=='FlowCubePDA-1-fixture.apk')process.exit(1);}
  if(s==='build'&&(a.startsWith('compose build')||a.includes('--build')))process.exit(1);
  if(s==='migration'&&(a.includes('npm run migrate')))process.exit(1);
@@ -179,29 +183,23 @@ process.exit(0);
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
 }
 
-for (const scenario of ['load', 'mysql', 'start', 'health', 'gate', 'public', 'lowdisk']) {
-  test(`部署 ${scenario} 失败必须退出并恢复实际旧镜像`, () => {
-    const result = deployment(scenario)
-    assert.equal(result.status, 1, result.stderr)
-    for (const [digit, name] of [['1', 'backend'], ['2', 'frontend']]) {
-      assert.ok(result.commands.some(c => c[0] === 'docker' && c[1] === 'tag' && c[2] === 'sha256:' + digit.repeat(64) && c[3] === `flowcube-${name}:latest`), result.stdout + result.stderr)
-    }
-    if (['start', 'health', 'gate'].includes(scenario)) assert.ok(result.commands.some(c => c.includes('--force-recreate')))
-    if (scenario === 'lowdisk') assert.ok(!result.commands.some(c => c[0] === 'docker' && c.includes('prune')))
-    if (scenario === 'mysql') assert.ok(!result.commands.some(c => c.join(' ').includes('npm run migrate') || c.includes('--force-recreate')))
-  })
+function assertNoRecovery(result) {
+  assert.ok(!result.commands.some(c => /SET GLOBAL/i.test(c.join(' '))), '发布不得修改或恢复全局参数')
+  assert.ok(!result.commands.some(c => c[0] === 'docker' && c[1] === 'tag' && c[2].startsWith('sha256:')), '不得tag旧镜像')
+  assert.ok(!result.commands.some(c => c.includes('--force-recreate') || c.join(' ').startsWith('docker compose rm')), '不得重建/移除旧应用')
 }
-
-for (const scenario of ['migration','ledger_gate','ledger_retry','ledger_retry_pre_migration','restore_permission']) {
-  test(`${scenario} 失败必须保持停写，不能重启不兼容或半迁移的后端`, () => {
+for (const scenario of ['load', 'mysql', 'start', 'health', 'gate', 'public', 'lowdisk', 'migration', 'ledger_gate', 'ledger_retry', 'write_contract_gate']) {
+  test(`部署 ${scenario} 失败停止并保留证据，不自动回退`, () => {
     const result = deployment(scenario)
-    assert.equal(result.status,1,result.stderr)
-    assert.match(result.stderr,/保持.*停写/)
-    if (scenario !== 'ledger_retry_pre_migration') assert.ok(result.commands.some(c => c.join(' ').includes('SET GLOBAL log_bin_trust_function_creators=0')))
-    assert.ok(!result.commands.some(c => c.includes('--force-recreate')))
-    const migration = result.commands.findIndex(c => c.join(' ').includes('backend npm run migrate'))
-    if (scenario === 'migration') assert.ok(!result.commands.slice(migration+1).some(c => c.join(' ').includes('compose up')))
-    if (scenario === 'ledger_gate') assert.ok(result.commands.filter(c => c.join(' ').includes('compose stop -t 60 backend')).length>=2)
+    assert.equal(result.status, 1, result.stdout + result.stderr)
+    assertNoRecovery(result)
+    assert.match(result.stderr, /部署证据：SHA=/)
+    const paused = result.commands.some(c => c.join(' ').includes('compose stop -t 60 backend'))
+    if (paused) {
+      assert.match(result.stderr, /保持业务停写/)
+      assert.ok(result.commands.some(c => c.join(' ') === 'docker compose stop -t 60 backend frontend'))
+    } else assert.match(result.stderr, /保持原应用状态/)
+    assert.ok(!result.commands.some(c => c.includes('prune')))
   })
 }
 
@@ -211,8 +209,9 @@ test('成功部署先迁移后替换应用，并通过门禁后结束', () => {
   const migrate = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'compose run' && c.join(' ').includes('backend npm run migrate'))
   const replace = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'compose up' && c.includes('--no-build') && c.includes('--no-deps') && c.slice(-2).join(' ') === 'backend frontend')
   const pause = result.commands.findIndex(c => c.join(' ').includes('compose stop -t 60 backend'))
-  const restore = result.commands.findIndex(c => c.join(' ').includes('SET GLOBAL log_bin_trust_function_creators=0'))
-  assert.ok(pause >= 0 && pause < migrate && restore > migrate && restore < replace, JSON.stringify(result.commands))
+  const condition = result.commands.findIndex(c => c.join(' ').includes('scripts/migration-preflight.js'))
+  assert.ok(condition >= 0 && condition < pause && pause < migrate, JSON.stringify(result.commands))
+  assertNoRecovery(result)
   assert.ok(migrate >= 0 && replace > migrate, JSON.stringify(result.commands))
   assert.ok(!result.commands.some(c => c.includes('--force-recreate')))
   assert.ok(!result.commands.some(c => c[0] === 'docker' && c.includes('build')), '生产不得编译')
@@ -221,17 +220,6 @@ test('成功部署先迁移后替换应用，并通过门禁后结束', () => {
   const verify = result.commands.findIndex(c => c[0] === 'docker' && c.slice(1, 3).join(' ') === 'image inspect')
   assert.ok(load >= 0 && verify > load && migrate > verify, '先加载并验证 CI 镜像，再执行迁移')
 })
-
-for (const scenario of ['write_contract_gate', 'write_contract_retry_pre_migration']) {
-  test(`${scenario}: 240契约不能授权0.13.4在288–292事实后恢复写入`, () => {
-    const result = deployment(scenario)
-    assert.equal(result.status, 1, result.stdout + result.stderr)
-    assert.match(result.stderr, /保持.*停写/)
-    assert.ok(!result.commands.some(c => c.includes('--force-recreate')))
-    assert.ok(!result.commands.some(c => c[0] === 'docker' && c[1] === 'tag' && c[2].startsWith('sha256:')))
-    assert.ok(result.commands.filter(c => c.join(' ').includes('compose stop -t 60 backend')).length >= 2)
-  })
-}
 
 test('缺少新写入契约的目标镜像在停写和迁移前拒绝', () => {
   const result = deployment('write_contract_missing_target')
@@ -246,15 +234,14 @@ test('旧镜像不兼容仍可完成新后端向前发布', () => {
   assert.ok(result.commands.some(c => c.join(' ').includes('compose up -d --no-build --no-deps backend frontend')))
 })
 
-test('撤掉新写入回退门会恢复不兼容旧镜像，实际shell反证', () => {
-  const result = deployment('write_contract_gate', source => {
-    const changed = source.replace(' && [ "$WRITE_COMPATIBILITY_CHANGED" = \'0\' ]', '')
+test('撤掉迁移条件门会在条件不足时错误停写迁移，实际shell反证', () => {
+  const r = deployment('migration_condition_missing', source => {
+    const changed = source.replace('  assert_migration_conditions\n', '  : # removed condition gate\n')
     assert.notEqual(changed, source)
     return changed
   })
-  assert.equal(result.status, 1, result.stdout + result.stderr)
-  assert.ok(result.commands.some(c => c.includes('--force-recreate')))
-  assert.match(result.stderr, /已恢复部署前应用镜像/)
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  assert.ok(r.commands.some(c => c.join(' ').includes('npm run migrate')))
 })
 
 test('撤掉目标契约门会让未声明兼容镜像迁移，实际shell反证', () => {
@@ -288,27 +275,43 @@ test('人工部署检查失败时不能拉取或构建', () => {
   assert.ok(!result.commands.some(c => c[0] === 'docker' || (c[0] === 'git' && c[1] === 'pull')))
 })
 
-test('首次部署失败清除新应用，不伪称恢复旧版本', () => {
-  const result = deployment('first_deploy')
-  assert.equal(result.status, 1, result.stderr)
-  assert.match(result.stderr, /首次部署没有旧应用镜像/)
-  for (const name of ['backend', 'frontend']) assert.ok(result.commands.some(c => c.join(' ') === `docker compose rm -s -f ${name}`))
+test('首次部署失败保留候选与证据，停止应用不尝试恢复旧版本', () => {
+  const r = deployment('first_deploy')
+  assert.equal(r.status, 1, r.stdout + r.stderr)
+  assertNoRecovery(r)
+  assert.match(r.stderr, /保持业务停写/)
+  assert.ok(r.commands.some(c => c.join(' ') === 'docker compose stop -t 60 backend frontend'))
 })
-
-test('回退自身失败保留失败状态并明确要求人工恢复', () => {
-  const result = deployment('rollback_failure')
-  assert.equal(result.status, 1)
-  assert.match(result.stderr, /需要人工恢复/)
+test('失败收尾停止应用失败必须要求人工阻断写入，不能恢复旧应用', () => {
+  const r = deployment('stop_failure')
+  assert.equal(r.status, 1, r.stdout + r.stderr)
+  assertNoRecovery(r)
+  assert.match(r.stderr, /应用停止失败.*人工阻断写入/)
+  assert.match(r.stderr, /应用停写未确认/)
 })
-
-test('首发回退旧后端前恢复与实际APK匹配的兼容版本清单', () => {
-  const result = deployment('legacy')
-  assert.equal(result.status, 1)
-  assert.equal(result.legacyMeta.versionCode, 1)
-  assert.equal(result.legacyMeta.filename, 'FlowCubePDA-1-fixture.apk')
-  assert.match(result.stderr, /已恢复部署前应用镜像/)
-  assert.doesNotMatch(result.stderr, /需要人工恢复/)
+test('失败不改写PDA兼容清单', () => {
+  const r = deployment('legacy')
+  assert.equal(r.status, 1, r.stdout + r.stderr)
+  assertNoRecovery(r)
+  assert.equal(r.legacyMeta.versionCode, 2)
+  assert.match(r.stderr, /保持业务停写/)
 })
+for (const phase of ['前置检查', '暂停写入', '数据库迁移', '迁移完成', '应用切换与验收']) {
+  test(`${phase} 收到信号仍失败退出，停写后不恢复写入`, () => {
+    const r = deployment('success', source => {
+      const marker = phase === '前置检查' ? "if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then" : phase === '暂停写入' ? '  DOCKER_COMMAND_TIMEOUT=90 docker compose stop -t 60 backend\n' : phase === '数据库迁移' ? "  DEPLOY_PHASE='数据库迁移'\n" : phase === '迁移完成' ? "  MIGRATION_COMPLETED=1\n" : "  wait_for_health\n"
+      assert.ok(source.includes(marker))
+      return phase === '前置检查' ? source.replace(marker, () => 'kill -TERM $$\n' + marker) : source.replace(marker, () => marker + '  kill -TERM $$\n')
+    })
+    assert.equal(r.status, 1, r.stdout + r.stderr)
+    assertNoRecovery(r)
+    assert.match(r.stderr, /部署收到中断/)
+    if (phase === '数据库迁移') assert.match(r.stderr, /迁移开始=1；迁移完成=0/)
+    if (phase === '迁移完成') assert.match(r.stderr, /迁移开始=1；迁移完成=1/)
+    if (phase === '前置检查') assert.ok(!r.commands.some(c => c.join(' ').includes('compose stop')))
+    else assert.ok(r.commands.some(c => c.join(' ') === 'docker compose stop -t 60 backend frontend'))
+  })
+}
 
 test('常规部署保留现有健康 MySQL，只核同容器 TCP 认证，应用切换不重建依赖', () => {
   const result = deployment('mysql_ready')
@@ -373,7 +376,8 @@ test('A37 本次新备份及回执验证必须先于迁移授权，绑定候选�
   assert.ok(at('compose stop -t 60 backend') < at('pre-migrate-backup.js create'))
   assert.ok(at('pre-migrate-backup.js create') >= 0, '缺少本次独立备份')
   assert.ok(at('pre-migrate-backup.js verify') > at('pre-migrate-backup.js create'))
-  assert.ok(at('SET GLOBAL log_bin_trust_function_creators=1') > at('pre-migrate-backup.js verify'))
+  assertNoRecovery(r)
+  assert.ok(at('scripts/migration-preflight.js') < at('compose stop -t 60 backend'))
   assert.ok(at('backend npm run migrate') > at('pre-migrate-backup.js verify'))
   assert.equal(r.backupReceipts.length, 1)
   const receipt = r.backupReceipts[0]
@@ -435,3 +439,16 @@ test('A37 转储只用MySQL8支持的参数并固定完整注释格式，时限�
   assert.match(command, / -- "\$MYSQL_DATABASE"$/)
   for (const option of ['--single-transaction', '--routines', '--triggers', '--events', '--comments', '--dump-date', '--set-gtid-purged=OFF']) assert.ok(command.includes(option), option)
 })
+
+test('发布不得写数据库全局参数或自动恢复旧应用', () => {
+  const source = fs.readFileSync(path.join(root, 'scripts/server-update.sh'), 'utf8')
+  assert.doesNotMatch(source, /SET GLOBAL|restore_migration_permissions|rollback_deployment/)
+})
+for (const scenario of ['migration_condition_missing','migration_condition_unknown','migration_condition_denied']) {
+  test(`${scenario} 在应用标签、停写和迁移之前失败且不修数据库参数`, () => {
+    const r = deployment(scenario)
+    assert.equal(r.status, 1, r.stdout + r.stderr)
+    assert.ok(!r.commands.some(c => c[0] === 'docker' && (c[1] === 'tag' || c.join(' ').includes('compose stop') || c.join(' ').includes('npm run migrate'))))
+    assert.match(r.stderr, /迁移条件/)
+  })
+}

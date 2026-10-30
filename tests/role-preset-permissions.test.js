@@ -9,7 +9,11 @@ test('job role presets only grant known permissions and keep reserved powers una
   const grants = [...sql.matchAll(/SELECT '[^']+' AS code, '([^']+)' AS permission/g)].map(match => match[1])
   assert.ok(grants.length > 0, 'migration must contain preset grants')
   const known = new Set(Object.values(PERMISSIONS))
-  assert.deepEqual(grants.filter(permission => !known.has(permission)), [], 'unknown permission')
+  // Migration 257 is immutable history. Its retired grants remain stored but
+  // cannot identify any current permission or open an application route.
+  const retired = new Set(['purchase.requisition.view', 'purchase.requisition.approve', 'purchase.requisition.convert'])
+  for (const permission of retired) assert.equal(known.has(permission), false, 'retired permission must stay absent at runtime')
+  assert.deepEqual(grants.filter(permission => !known.has(permission) && !retired.has(permission)), [], 'unknown permission')
 
   const reserved = new Set([
     PERMISSIONS.PAYMENT_CONFIRM,

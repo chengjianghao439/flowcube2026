@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 生产验收按顺序执行；限制辅助容器，失败由 server-update 回退应用。
+# 生产验收按顺序执行；限制辅助容器，失败由 server-update 停写并保留现场。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

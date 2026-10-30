@@ -22,7 +22,6 @@ const CHECKS = [
   ['盘点', `SELECT 1 FROM inventory_check_items i JOIN inventory_checks c ON c.id=i.check_id WHERE i.product_id=? AND c.deleted_at IS NULL AND c.status=1 AND (${fraction('i.book_qty','i.actual_qty','i.diff_qty')}) LIMIT 1`],
   ['盘点条码', `SELECT 1 FROM inventory_check_item_containers s JOIN inventory_check_items i ON i.id=s.check_item_id JOIN inventory_checks c ON c.id=i.check_id WHERE i.product_id=? AND c.deleted_at IS NULL AND c.status=1 AND (${fraction('s.counted_qty')}) LIMIT 1`],
   ['处置', `SELECT 1 FROM inventory_disposal_items i JOIN inventory_disposal_orders o ON o.id=i.disposal_id WHERE i.product_id=? AND o.deleted_at IS NULL AND o.status NOT IN (4,6) AND (${fraction('i.quantity')}) LIMIT 1`],
-  ['请购', `SELECT 1 FROM purchase_requisition_items i JOIN purchase_requisitions r ON r.id=i.requisition_id WHERE i.product_id=? AND r.deleted_at IS NULL AND r.status IN (1,2,3) AND (${fraction('i.quantity','i.converted_qty')}) LIMIT 1`],
   ['采购计划', `SELECT 1 FROM procurement_plan_items i JOIN procurement_plans p ON p.id=i.plan_id WHERE i.product_id=? AND p.deleted_at IS NULL AND p.status IN (1,2) AND i.status=1 AND (${fraction('i.adjusted_qty')}) LIMIT 1`],
   ['采购包装策略', `SELECT 1 FROM supplier_product_purchase_policies WHERE product_id=? AND (${fraction('pack_multiple','minimum_order_qty')}) LIMIT 1`],
   ['当前套件组成', `SELECT 1 FROM kit_definition_components c JOIN kit_definitions k ON k.current_version_id=c.version_id WHERE c.product_id=? AND k.deleted_at IS NULL AND k.is_active=1 AND (${fraction('c.base_qty')}) LIMIT 1`],

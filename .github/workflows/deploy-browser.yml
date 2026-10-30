@@ -12,7 +12,7 @@ permissions:
 
 # 并发保护（2026-08-11 生产事故修复）：main 上连续多次 push 会触发多个 Deploy 并发在服务器
 # 跑 docker compose up --build 互相抢容器。concurrency 让同一时间只跑一个 Deploy——
-# 已开始的部署必须完成或走回退，不在应用切换中途取消；待运行队列保留最新提交。
+# 已开始的部署必须完成或故障停写，不在应用切换中途取消；待运行队列保留最新提交。
 concurrency:
   # 与 build-desktop / build-pda-apk 共用同一个 group：三者都要 SSH 到同一台服务器操作
   # （服务器端还有 flock 兜底，但那把锁只等 5 分钟，等不到就会被外层 timeout 强杀——
@@ -160,8 +160,8 @@ jobs:
         run: bash scripts/setup-ci-ssh-trust.sh
 
       - name: Deploy backend and frontend on server
-        # 故障预算：HTTPS/中转尝试 1145s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/回退 3300s + 预检等 300s。
-        # 总计 9855s（约 165 分钟）；新增迁移前备份独占 300s，不挤占原部署或回退预算。
+        # 故障预算：HTTPS/中转尝试 1145s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/故障清理 3300s + 预检等 300s。
+        # 总计 9855s（约 165 分钟）；新增迁移前备份独占 300s，不挤占原部署或故障清理预算。
         timeout-minutes: 165
         shell: bash
         env:
