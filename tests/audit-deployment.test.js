@@ -133,7 +133,8 @@ if(cmd==='docker') {
  if(a.startsWith('compose up')&&a.endsWith('backend frontend')&&!args.includes('--no-deps')) {fs.appendFileSync(log,JSON.stringify(['implicit-mysql-reconcile'])+'\\n');process.exit(1);}
  if(a.includes('scripts/migration-preflight.js')) {
   const override=args[args.lastIndexOf('-f')+1];
-  if(!fs.readFileSync(override,'utf8').includes('image: flowcube-backend:'+'a'.repeat(40))||!fs.readFileSync(override,'utf8').includes('read_only: true')||!args.includes('--no-deps')||args[args.indexOf('--pull')+1]!=='never'||args[args.indexOf('--entrypoint')+1]!=='node'||args[args.indexOf('--user')+1]!=='node')process.exit(2);
+  const config=fs.readFileSync(override,'utf8');
+  if(!config.includes('image: flowcube-backend:'+'a'.repeat(40))||!config.includes('read_only: true')||!config.includes('pull_policy: never')||!config.includes('build: !reset null')||!args.includes('--no-deps')||args.includes('--pull')||args[args.indexOf('--entrypoint')+1]!=='node'||args[args.indexOf('--user')+1]!=='node')process.exit(2);
   process.exit(s.startsWith('migration_condition_')?1:0);
  }
  if(a.includes("table_name='db_migrations'"))console.log('1');

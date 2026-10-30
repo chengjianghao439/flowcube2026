@@ -39,6 +39,20 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  compose-227-preflight:
+    name: 发布预检兼容（真实 Compose 2.27.0）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: 准备合成测试基础镜像（不连接生产）
+        run: docker pull node:22-alpine
+      - name: 官方旧 CLI 校验与只读预检正反例（不许跳过）
+        run: npm run test:compose-preflight-compat
+
   pda-audit-log-api-owned:
     name: PDA日志接口（归属专属实例）
     runs-on: ubuntu-latest

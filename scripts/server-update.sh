@@ -93,9 +93,11 @@ ensure_mysql_ready() {
 # 仅查询现有配置；发布脚本不修改数据库全局参数或权限。
 assert_migration_conditions() {
   PREFLIGHT_OVERRIDE=$(mktemp "$ROOT/.migration-preflight-XXXXXXXX.yml") || fail_deploy '无法创建迁移条件预检配置'
-  printf 'services:\n  backend:\n    image: flowcube-backend:%s\n    read_only: true\n' "$expected" > "$PREFLIGHT_OVERRIDE"
+  # Compose 2.27.0 的 run 没有 --pull；在服务层禁止拉取并移除继承的 build。
+  # 候选镜像已在前面加载并按 SHA 验证；缺失时只能失败，不能改为联网拉取/宿主构建。
+  printf 'services:\n  backend:\n    image: flowcube-backend:%s\n    pull_policy: never\n    build: !reset null\n    read_only: true\n' "$expected" > "$PREFLIGHT_OVERRIDE"
   PREFLIGHT_CONTAINER="flowcube-preflight-$$-$(date +%s)"
-  DOCKER_COMMAND_TIMEOUT=60 docker compose -f "$ROOT/docker-compose.yml" -f "$PREFLIGHT_OVERRIDE" run --rm --no-deps --pull never --name "$PREFLIGHT_CONTAINER" --user node --entrypoint node backend scripts/migration-preflight.js \
+  DOCKER_COMMAND_TIMEOUT=60 docker compose -f "$ROOT/docker-compose.yml" -f "$PREFLIGHT_OVERRIDE" run --rm --no-deps --name "$PREFLIGHT_CONTAINER" --user node --entrypoint node backend scripts/migration-preflight.js \
     || fail_deploy '数据库迁移条件只读预检失败；保持原应用，不修改全局参数'
   PREFLIGHT_CONTAINER=''
   rm -f "$PREFLIGHT_OVERRIDE"

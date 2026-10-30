@@ -98,6 +98,7 @@
     "test:accounting": "node --test tests/accounting-cash-flow.test.js tests/accounting-detail-ledger.test.js tests/accounting-voucher-mapping.test.js tests/accounting-sale-money.test.js tests/settlement-due-date.test.js tests/accounting-close-completeness.test.js tests/fixed-assets-tail.test.js tests/payment-input-precision.test.js tests/payment-tail-allocation.test.js tests/accounting-period-purchase-scope.test.js tests/sale-ordinary-return-money.test.js tests/cash-money.test.js tests/cash-history-boundaries.test.js tests/accounting-cash-policy.test.js tests/accounting-purchase-cash.test.js tests/purchase-cash-money.test.js tests/purchase-cash-execution-scope.test.js tests/purchase-cash-execution.test.js tests/sale-ordinary-cash.test.js tests/accounting-statement-balances.test.js",
     "test:sale-revenue-discount": "node tests/sale-revenue-discount.test.js",
     "test:audit-tooling": "node --test tests/audit-tooling.test.js tests/audit-deployment.test.js tests/smoke-credentials.test.js tests/browser-smoke-runtime.test.js tests/deploy-artifact.test.js tests/release-orchestration.test.js tests/migration-preflight.test.js",
+    "test:compose-preflight-compat": "bash scripts/test-compose-227-compat.sh",
     "smoke:qa-followup-browser": "node scripts/browser-smoke/qa-followup.cjs",
     "smoke:login-supplier-browser": "node scripts/browser-smoke/login-supplier.cjs",
     "test:browser-smoke": "node --test tests/browser-smoke-live.test.js",
