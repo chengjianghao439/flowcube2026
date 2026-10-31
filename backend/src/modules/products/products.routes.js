@@ -57,7 +57,7 @@ const productBase = z.object({
   shelfLifeDays:  z.number().int().min(1,'保质期天数必须大于 0').max(3650).nullable().optional(),
   safetyStock:    z.number().nonnegative('安全库存不能为负').refine(value => !hasTooManyDecimals(value), '安全库存最多保留 2 位小数').nullable().optional(),
   reorderPoint:   z.number().nonnegative('补货点不能为负').refine(value => !hasTooManyDecimals(value), '补货点最多保留 2 位小数').nullable().optional(),
-  // 辅助计量单位（文档 03，基本单位即 unit 字段）；换算率>1整数等细校验在 service.validateUnits
+  // 仅兼容旧请求回执正文；新写入由 service 明确拒绝辅助单位，不静默丢字段。
   units:          z.array(z.object({ unitName: z.string().min(1).max(20), conversionRate: z.number() })).max(10).optional(),
 })
 

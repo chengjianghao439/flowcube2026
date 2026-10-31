@@ -61,48 +61,11 @@ async function upsertDefaultStockPolicy(db, productId, { safetyStock, reorderPoi
   )
 }
 
-/**
- * 校验并归一化商品计量单位（文档 03）。纯函数、不碰 DB。baseUnitName 即 product_items.unit（基本单位，率恒 1）；
- * auxUnits 为辅助单位数组 [{unitName, conversionRate}]。返回完整单位列表（基本单位在前）供落库。
- * 硬约束：辅助单位名非空且≠基本单位、彼此不重；换算率为 >1 的正整数（Phase 1 默认只允许整数率，见文档 §11-3）。
- */
-function validateUnits(baseUnitName, auxUnits) {
-  const base = String(baseUnitName || '').trim()
-  if (!base) throw new AppError('基本单位不能为空', 400)
-  const out = [{ unitName: base, conversionRate: 1, isBase: 1, sortOrder: 0 }]
-  const seen = new Set([base])
-  const list = Array.isArray(auxUnits) ? auxUnits : []
-  list.forEach((u, i) => {
-    const name = String(u?.unitName || '').trim()
-    const rate = Number(u?.conversionRate)
-    if (!name) throw new AppError('辅助单位名不能为空', 400)
-    if (name === base) throw new AppError(`辅助单位「${name}」不能与基本单位同名`, 400)
-    if (seen.has(name)) throw new AppError(`辅助单位「${name}」重复`, 400)
-    if (!Number.isInteger(rate) || rate <= 1) throw new AppError(`辅助单位「${name}」的换算率必须是大于 1 的整数`, 400)
-    seen.add(name)
-    out.push({ unitName: name, conversionRate: rate, isBase: 0, sortOrder: i + 1 })
-  })
-  return out
-}
-
-/** 整仓覆盖式写入某商品的单位列表（先删后插；单位配置是可重算数据，文档单据自带 conversion_rate 快照不受影响）。db 传事务连接。 */
-async function replaceProductUnits(db, productId, normalizedUnits) {
-  await db.query('DELETE FROM product_units WHERE product_id=?', [productId])
-  for (const u of normalizedUnits) {
-    await db.query(
-      'INSERT INTO product_units (product_id, unit_name, conversion_rate, is_base, sort_order) VALUES (?,?,?,?,?)',
-      [productId, u.unitName, u.conversionRate, u.isBase, u.sortOrder],
-    )
+function assertSingleUnit(unit, units) {
+  if (!String(unit || '').trim()) throw new AppError('单位不能为空', 400)
+  if (units != null && (!Array.isArray(units) || units.length > 0)) {
+    throw new AppError('商品多单位功能已删除，请移除辅助单位后重试', 400, 'PRODUCT_MULTI_UNIT_REMOVED')
   }
-}
-
-/** 读某商品的单位列表（基本单位在前），供 findById 回显与前端换算 */
-async function loadProductUnits(productId) {
-  const [rows] = await pool.query(
-    'SELECT unit_name, conversion_rate, is_base FROM product_units WHERE product_id=? ORDER BY is_base DESC, sort_order ASC, id ASC',
-    [productId],
-  )
-  return rows.map(r => ({ unitName: r.unit_name, conversionRate: Number(r.conversion_rate), isBase: Number(r.is_base) === 1 }))
 }
 
 async function validateProductPayload({ name, categoryId, barcode, costPrice, currentId = null }) {
@@ -325,18 +288,6 @@ async function findAll({ page=1, pageSize=20, keyword='', categoryId=null, statu
     params,
   )
   const list = rows.map(row => ({ ...fmtProduct(row), ...(search.keyword ? { searchMatch: row.search_match || '' } : {}) }))
-  // 批量带出计量单位（文档03 Phase1 只读展示），一次查询避免 N+1
-  if (list.length) {
-    const ids = list.map(p => p.id)
-    const [uRows] = await pool.query(
-      `SELECT product_id, unit_name, conversion_rate, is_base FROM product_units
-       WHERE product_id IN (${ids.map(() => '?').join(',')}) ORDER BY is_base DESC, sort_order ASC, id ASC`,
-      ids,
-    )
-    const byProduct = {}
-    for (const u of uRows) (byProduct[u.product_id] ||= []).push({ unitName: u.unit_name, conversionRate: Number(u.conversion_rate), isBase: Number(u.is_base) === 1 })
-    list.forEach(p => { p.units = byProduct[p.id] || [] })
-  }
   return { list, pagination: { page, pageSize, total } }
 }
 
@@ -365,14 +316,13 @@ async function findById(id) {
   // **普通商品编辑不再写它**（见 update 的方案三止血），**改价审批**（price-change 的 `sale` 类型）
   // 可把它调整成与 A 不同的值。仅详情返回，列表/Finder 契约不变；**不提供任何写入入口**。
   product.labelSalePrice = rows[0].sale_price != null ? Number(rows[0].sale_price) : null
-  product.units = await loadProductUnits(id)   // 计量单位列表（基本单位在前），供表单回显与前端换算展示
   return product
 }
 
 async function create({ name, categoryId, supplierId, unit, spec, color, barcode, costPrice, remark, skuCode, articleNumber, salePriceA, salePriceB, salePriceC, salePriceD, batchManaged, shelfLifeDays, safetyStock, reorderPoint, units, allowDecimalQty }, { scopeWarehouseIds } = {}) {
   assertDefaultStockPolicyWriteScope({ safetyStock, reorderPoint }, scopeWarehouseIds)
+  assertSingleUnit(unit, units)
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice })
-  const normalizedUnits = validateUnits(unit, units)   // 纯校验，任何非法输入在建单前就抛错
   const generatedArticle = articleNumber || null   // 供应商型号（供应商给的型号，人工填；缺失即 NULL，不再随机生成）
   const rates = await loadPriceRates(pool)
   const auto = computeTierPrices(normalizedCost, rates)
@@ -409,7 +359,6 @@ async function create({ name, categoryId, supplierId, unit, spec, color, barcode
         if (e.code !== 'ER_DUP_ENTRY' || attempt > 0) throw e
       }
     }
-    await replaceProductUnits(conn, insertId, normalizedUnits)
     await upsertDefaultStockPolicy(conn, insertId, { safetyStock, reorderPoint }, scopeWarehouseIds)
     await conn.commit()
     return { id: insertId, code, skuCode: generatedSku, articleNumber: generatedArticle }
@@ -422,7 +371,6 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
   const intent = arguments[1]
   // 事务外的校验与派生（不依赖商品当前行的价格快照，放在事务外以缩短持锁时间）
   const { normalizedBarcode, normalizedCost } = await validateProductPayload({ name, categoryId, barcode, costPrice, currentId: id })
-  const normalizedUnits = validateUnits(unit, units)
   const rates = await loadPriceRates(pool)
   const auto = computeTierPrices(normalizedCost, rates)
   const spA = salePriceA != null ? Number(salePriceA) : auto.salePriceA
@@ -455,6 +403,7 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
     const requestState = await beginOperationRequest(conn, { requestKey, action, userId: operator?.userId })
     await bindChangeRequest(conn, requestState, requestFingerprint)
     if (requestState.replay) { if (operator) operator.changeAuditHandled = true; await conn.rollback(); return requestState.responseData }
+    assertSingleUnit(unit, units)
     // **乐观锁**（2026-09-27，迁移 264）：编辑页必须回传它读取时看到的 `revision`。
     // 此前本函数无差别写 `cost_price` 与 `sale_price_a/b/c/d`，而表单**全量回传**打开时的旧值 ⇒
     // 别处刚生效的价格变更（含改价审批 cost/a/b/c/d）会被一次普通编辑**静默回退**（隔离库实测：
@@ -491,7 +440,6 @@ async function update(id, { name, categoryId, supplierId, unit, spec, color, bar
     if (upd.affectedRows !== 1) {
       throw new AppError('该商品已被他人修改，请刷新后重新编辑', 409, 'PRODUCT_VERSION_CONFLICT')
     }
-    await replaceProductUnits(conn, id, normalizedUnits)
     await upsertDefaultStockPolicy(conn, id, { safetyStock, reorderPoint }, scopeWarehouseIds)
     // 价格变更历史（2026-08-22 功能：价格体系落地）——凡有价格列变化的写历史，可追溯。
     // 旧价一律取上面**锁内**读到的当前值，保证同一 price_type 的历史是连贯的（old = 上一条 new）。

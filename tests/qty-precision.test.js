@@ -134,13 +134,14 @@ test('超过两位在读取商品策略前拒绝，不能先四舍五入', async
   await assert.rejects(assertQtyPrecision(conn, [{ productId: 2, qty: 0.005 }]), { code: 'QTY_DECIMALS_EXCEEDED' })
 })
 test('录入和折算后的原始数量都不得被静默取整', async () => {
-  const { foldEntryItem, foldEntryItems } = require('../backend/src/utils/unitConversion')
+  const { foldEntryItem, foldEntryItems, foldEntryItemWithRate } = require('../backend/src/utils/unitConversion')
   const conn = { async query(sql) {
     if (sql.includes('product_units')) return [[{ unit_name: '箱', conversion_rate: 0.5 }]]
-    return [[{ id: 2, allow_decimal_qty: 1 }]]
+    return [[{ id: 2, unit: '件', allow_decimal_qty: 1 }]]
   } }
   await assert.rejects(foldEntryItem(conn, { productId: 2, unit: '件', quantity: 1.005, unitPrice: 1.2345 }), { code: 'QTY_DECIMALS_EXCEEDED' })
-  await assert.rejects(foldEntryItem(conn, { productId: 2, unit: '件', entryUnit: '箱', quantity: 0.01 }), { code: 'QTY_DECIMALS_EXCEEDED' })
+  await assert.rejects(foldEntryItem(conn, { productId: 2, unit: '件', entryUnit: '箱', quantity: 0.01 }), { code: 'PRODUCT_MULTI_UNIT_REMOVED' })
+  assert.throws(() => foldEntryItemWithRate({ unit: '件', quantity: 0.01 }, 0.5), { code: 'QTY_DECIMALS_EXCEEDED' })
   const [item] = await foldEntryItems(conn, [{ productId: 2, unit: '件', quantity: 1.23, unitPrice: 1.2345 }])
   assert.equal(item.quantity, 1.23)
   assert.equal(item.unitPrice, 1.2345, '单价不能随数量收窄精度')

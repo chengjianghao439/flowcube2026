@@ -30,15 +30,6 @@ interface ProductSummary {
   receivedQty: number
   remainingQty: number
   purchaseRefs: string[]
-  /** 多单位（文档03 Phase4b）：主辅助单位名 + 率，配了才有值。按箱快捷录入用，率由系统给定不可改 */
-  boxUnit: string | null
-  boxRate: number | null
-}
-
-/** 该商品「按箱收货」的每箱预填件数：仅当配了整数率 > 1 的辅助单位；否则空串（逐件录入） */
-function boxFill(product: ProductSummary | null): string {
-  const r = product?.boxRate
-  return r && r > 1 && Number.isInteger(r) ? String(r) : ''
 }
 
 function groupProducts(task: InboundTask): ProductSummary[] {
@@ -62,8 +53,6 @@ function groupProducts(task: InboundTask): ProductSummary[] {
       receivedQty: item.receivedQty,
       remainingQty: Math.max(0, item.orderedQty - item.receivedQty),
       purchaseRefs: [purchaseRef],
-      boxUnit: item.boxUnit ?? null,
-      boxRate: item.boxRate ?? null,
     })
   }
   return [...map.values()]
@@ -141,11 +130,6 @@ function ReceiveEditor({
           <span>剩余 {product.remainingQty}</span>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">来源采购单：{product.purchaseRefs.join('、')}</p>
-        {product.boxRate && product.boxRate > 1 && (
-          <div className="mt-2 rounded-md bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
-            按{product.boxUnit}收货：1 {product.boxUnit} = {product.boxRate} {product.unit}；每箱已预填 {product.boxRate}，实收不足可改本箱件数（箱规由系统设定，现场不可改）
-          </div>
-        )}
       </div>
 
       <div className="space-y-2">
@@ -191,11 +175,6 @@ function ReceiveEditor({
           <span className="text-muted-foreground">本次收货数量</span>
           <span className="font-semibold text-foreground">
             {totalQty}{product.unit ? ` ${product.unit}` : ''}
-            {product.boxRate && product.boxRate > 1 && totalQty > 0 && (
-              <span className="ml-1 text-xs font-normal text-muted-foreground">
-                （{totalQty % product.boxRate === 0 ? `${totalQty / product.boxRate} ${product.boxUnit}` : `≈${(totalQty / product.boxRate).toFixed(2)} ${product.boxUnit}`}）
-              </span>
-            )}
           </span>
         </div>
         <div className="mt-1 flex items-center justify-between">
@@ -223,7 +202,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
   const products = useMemo(() => groupProducts(task), [task])
   const selectableProducts = useMemo(() => products.filter(product => product.remainingQty > 0), [products])
   const [selectedProductId, setSelectedProductId] = useState<number | null>(selectableProducts[0]?.productId ?? null)
-  const [boxes, setBoxes] = useState<string[]>([boxFill(selectableProducts[0] ?? null)])
+  const [boxes, setBoxes] = useState<string[]>([''])
   const [submitting, setSubmitting] = useState(false)
   // 超收确认：后端闸门触发后弹独立确认框（带准确数量/金额，强制选原因码），
   // 确认后把这里暂存的这一次提交原样重发。不再用「再点一次同一个按钮」——
@@ -290,8 +269,8 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
 
   function selectProduct(productId: number) {
     setSelectedProductId(productId)
-    // 按箱收货：切到配了辅助单位的商品时，第一箱预填箱规（每箱件数），率由系统给定不可改（文档03 Phase4b）
-    resetBoxes(1, boxFill(selectableProducts.find(x => x.productId === productId) ?? null))
+    // 每箱由现场录入实际基本数量，不再从辅助单位预填。
+    resetBoxes(1, '')
     // 切换商品即重置批次录入
     setBatchNo(''); setMfgDate(''); setExpDate(''); setBatchOpen(false)
   }
@@ -360,7 +339,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
       setOverReceivePrompt(null)
       if (result.kind === 'success') {
         if ((product.remainingQty - totalQty) > 0) {
-          resetBoxes(1, boxFill(product))   // 继续收同商品：预填箱规（文档03 Phase4b）
+          resetBoxes(1, '')
         } else {
           // 本商品收完：收货页已无扫码框，自动切到下一个还没收完的商品，免去现场再点一次卡片。
           // 用 selectableProducts 的旧快照挑选，必须排除刚收完的这个（它的 remainingQty 还没刷新）；
@@ -369,7 +348,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
             item => item.productId !== product.productId && item.remainingQty > 0,
           ) ?? null
           setSelectedProductId(next?.productId ?? null)
-          resetBoxes(1, boxFill(next))
+          resetBoxes(1, '')
         }
       } else {
         // 原输入与原请求一起冻结，不清空或换键。
@@ -528,11 +507,11 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
             onChangeBox={(index, value) => {
               setBoxes(prev => prev.map((item, idx) => idx === index ? value : item))
             }}
-            onAddBox={() => setBoxes(prev => [...prev, boxFill(activeProduct)])}
+            onAddBox={() => setBoxes(prev => [...prev, ''])}
             onRemoveBox={(index) => {
               setBoxes(prev => prev.filter((_, idx) => idx !== index))
             }}
-            onReset={() => resetBoxes(1, boxFill(activeProduct))}
+            onReset={() => resetBoxes(1, '')}
             onSubmit={submitReceive}
           />
         ) : (

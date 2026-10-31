@@ -1,37 +1,17 @@
 const AppError = require('./AppError')
 const { assertQtyPrecision, assertQtyScale } = require('./qtyPrecision')  // 商品级数量精度开关（迁移 254）
 
-/**
- * 多计量单位折算（文档03 · 方案A）——采购及必要历史退货落库前把「录入单位口径」折算成「基本单位口径」。
- * 单一权威口径：库存事实层永远只用基本单位记数，换算只发生在这一步（进入库存/账款链路之前）。
- * 铁律：entry_* 三列（entry_unit/entry_qty/conversion_rate）只用于回显/打印/审计，**绝不参与库存/账款计算**。
- *
- * **数量的权威精度是两位小数（0.01）**：数量列统一 DECIMAL(*,2)，折算结果按 roundQty 取两位。
- * 曾经是四位（0.0001），2026-09-20 按用户要求收到两位——按重量/长度计量的商品两位足够，
- * 而四位精度会让「0.0001 件」这种数量在界面上根本读不出来。
- */
+/** 新业务只使用商品固定单位；entry_* 保留为历史单据回显和审计快照。 */
 
 const round2 = n => Math.round((Number(n) || 0) * 100) / 100
 /** 数量取整：系统最小库存精度 0.01（与数量列 DECIMAL(*,2) 一致） */
 const roundQty = round2
 const round8 = n => Math.round((Number(n) || 0) * 1e8) / 1e8
 
-/**
- * 取 (商品, 录入单位) 的权威换算率：录入单位缺省/等于基本单位 → 1（不查表）；辅助单位查 product_units；
- * 非法单位报错。前端传的率只作呈现，不采信（守 docs/claude-md-archive-2026-09-04.md 第13/17节前端不复制后端业务规则）。
- */
+/** 不再读取商品辅助单位配置。旧客户端提交非固定单位时明确拒绝。 */
 async function resolveConversionRate(conn, productId, entryUnit, baseUnit) {
   if (!entryUnit || (baseUnit && entryUnit === baseUnit)) return 1
-  const [rows] = await conn.query('SELECT unit_name, conversion_rate FROM product_units WHERE product_id = ?', [productId])
-  if (!rows.length) {
-    if (baseUnit && entryUnit && entryUnit !== baseUnit) throw new AppError(`商品未配置多计量单位，无法按「${entryUnit}」录入`, 400, 'UNIT_NOT_CONFIGURED')
-    return 1
-  }
-  const match = rows.find(r => r.unit_name === entryUnit)
-  if (!match) throw new AppError(`「${entryUnit}」不是该商品的有效计量单位`, 400, 'UNIT_INVALID')
-  const rate = Number(match.conversion_rate)
-  if (!(rate > 0)) throw new AppError(`商品单位「${entryUnit}」换算率非法`, 400, 'UNIT_RATE_INVALID')
-  return rate
+  throw new AppError('商品多单位功能已删除，请按商品固定单位重新录入', 400, 'PRODUCT_MULTI_UNIT_REMOVED')
 }
 
 /**
@@ -69,35 +49,38 @@ async function foldEntryItem(conn, item) {
   return foldEntryItemWithRate(item, rate)
 }
 
-/** Batch unit metadata; same fold rule as the ordinary single-item entry. */
+/** 新业务的基本单位来自主档；有源退货的单位随后由原单校验器核对。 */
+async function assertFixedProductUnits(conn, items, sourceUnits = false) {
+  for (const item of items) {
+    if (item.entryUnit && item.entryUnit !== item.unit) throw new AppError('商品多单位功能已删除，请按商品固定单位重新录入', 400, 'PRODUCT_MULTI_UNIT_REMOVED')
+  }
+  if (sourceUnits) return
+  const ids = [...new Set(items.map(item => Number(item.productId)))].sort((a, b) => a - b)
+  const [products] = ids.length ? await conn.query('SELECT id,unit FROM product_items WHERE id IN (?) AND deleted_at IS NULL ORDER BY id FOR SHARE', [ids]) : [[]]
+  const byId = new Map(products.map(product => [Number(product.id), product]))
+  for (const item of items) {
+    const product = byId.get(Number(item.productId))
+    if (!product) throw new AppError('商品不存在或已删除', 400)
+    if (item.unit !== product.unit) throw new AppError('商品单位已变化，请重新选择商品并核对数量和单价', 409, 'PRODUCT_UNIT_MISMATCH')
+  }
+}
+
 async function foldEntryItemsBatch(conn, items) {
   await assertQtyPrecision(conn, items.map((item, n) => ({ productId: item.productId, qty: item.quantity, label: `第 ${n + 1} 行录入数量` })))
-  const ids = [...new Set(items.filter(i => i.entryUnit && i.entryUnit !== i.unit).map(i => Number(i.productId)))]
-  const [units] = ids.length ? await conn.query('SELECT product_id,unit_name,conversion_rate FROM product_units WHERE product_id IN (?)', [ids]) : [[]]
+  await assertFixedProductUnits(conn, items)
   const out = items.map(item => {
-    let rate = 1
-    if (item.entryUnit && item.entryUnit !== item.unit) {
-      const configured = units.filter(u => Number(u.product_id) === Number(item.productId))
-      if (!configured.length) throw new AppError(`商品未配置多计量单位，无法按「${item.entryUnit}」录入`, 400, 'UNIT_NOT_CONFIGURED')
-      const match = configured.find(u => u.unit_name === item.entryUnit)
-      if (!match) throw new AppError(`「${item.entryUnit}」不是该商品的有效计量单位`, 400, 'UNIT_INVALID')
-      rate = Number(match.conversion_rate)
-      if (!(rate > 0)) throw new AppError(`商品单位「${item.entryUnit}」换算率非法`, 400, 'UNIT_RATE_INVALID')
-    }
+    const rate = 1
     return foldEntryItemWithRate(item, rate)
   })
-  await assertQtyPrecision(conn, out.map((i, n) => ({ productId: i.productId, qty: i.quantity, label: `第 ${n + 1} 行数量` })))
+  await assertQtyPrecision(conn, out.map((item, n) => ({ productId: item.productId, qty: item.quantity, label: `第 ${n + 1} 行数量` })))
   return out
 }
 
-/** 便捷：批量折算一组明细（顺序 await，含 product_units 查询）。 */
-async function foldEntryItems(conn, items) {
+async function foldEntryItems(conn, items, { sourceUnits = false } = {}) {
   await assertQtyPrecision(conn, items.map((item, n) => ({ productId: item.productId, qty: item.quantity, label: `第 ${n + 1} 行录入数量` })))
+  await assertFixedProductUnits(conn, items, sourceUnits)
   const out = []
   for (const item of items) out.push(await foldEntryItem(conn, item))
-  // 折算完成后按商品开关校验数量精度（迁移 254）：「只允许整数」的商品，折算到基本单位
-  // 的结果必须是整数。放在这一层而不是各模块里，是为了让采购和退货均验证当前商品的录入量及基础量，
-  // 退货另按原出库事实额度校验；新销售已经没有单位折算路径——漏掉任何一条都会让用户绕过开关。
   await assertQtyPrecision(conn, out.map((item, index) => ({
     productId: item.productId,
     qty: item.quantity,

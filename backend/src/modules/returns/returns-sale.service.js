@@ -13,7 +13,7 @@ const { getRequestId } = require('../../utils/requestContext')
 const { beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = require('./returns.helpers')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
-const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
+const { foldEntryItems } = require('../../utils/unitConversion')
 const { normalizePagination } = require('../../utils/pagination')
 
 // 同 returns-purchase：3 的显示名统一为「已执行」（documentStatusRules / 迁移 146 / 前端筛选项一致）
@@ -100,7 +100,7 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
   // 过期的"已出库-已退"余量快照而合计超退。
   await conn.query('SELECT id FROM sale_order_items WHERE order_id = ? FOR UPDATE', [saleOrderId])
   const [rows] = await conn.query(
-    `SELECT soi.id, soi.product_id, soi.quantity, soi.unit_price,
+    `SELECT soi.id, soi.product_id, soi.quantity, soi.unit_price, soi.unit,
             COALESCE((
               SELECT SUM(wti.picked_qty)
               FROM warehouse_task_items wti
@@ -141,6 +141,7 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
     if (Number(source.product_id) !== Number(item.productId)) {
       throw new AppError(`退货商品与原销售明细不一致`, 400)
     }
+    if (item.unit !== source.unit) throw new AppError('退货单位与原销售明细基本单位不一致', 409, 'RETURN_SOURCE_UNIT_MISMATCH')
     // 单价以原销售明细为准，不信任客户端传入值，理由同 validatePurchaseReturnItems。
     item.unitPrice = Number(source.unit_price)
     requestedQtyBySource.set(
@@ -305,11 +306,9 @@ async function createSR({ customerId, customerName, warehouseId, warehouseName, 
         throw new AppError('销售退货仓库必须与原销售单一致', 400)
       }
     }
-    // 多单位折算（文档03 Phase4a）：入参 quantity/unitPrice 恒为录入单位口径，折算成基本单位后
-    // 再校验/落库。有源退货前端锁死数量/单价（entryUnit=基本单位→rate 1，等价旧行为）；
-    // validateSaleReturnItems 用 folded（quantity 已是基本单位）比对剩余可退量、并强制覆盖 unitPrice 为源单价。
+    // 新退货只录入基本量；有源退货继续由原单验证历史单位、数量额度和原价。
     const commercial = modelOrder?.commercial_model === 'kit-v1'
-    const folded = commercial ? await commercialReturns.validate(conn,modelOrder,warehouseId,items,scopeWarehouseIds) : await foldEntryItems(conn,items)
+    const folded = commercial ? await commercialReturns.validate(conn,modelOrder,warehouseId,items,scopeWarehouseIds) : await foldEntryItems(conn,items, { sourceUnits: !!resolvedSaleOrderId })
     if (!commercial) await validateSaleReturnItems(conn,resolvedSaleOrderId,folded)
     const netReturn = commercial ? null : await ordinaryReturnMoney.prepareCreate(conn,modelOrder,folded)
     if(netReturn)folded.forEach((item,index)=>{item.amount=netReturn.items[index].amount})

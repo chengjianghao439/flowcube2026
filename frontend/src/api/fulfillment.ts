@@ -1,6 +1,5 @@
 import type { KitReadOwner } from './kits'
 import { commercialReadConfig } from './sale-commercial'
-import type { CommercialDeliveryGroup } from '@/types/sale-commercial'
 import { payloadClient as client } from './client'
 import type { PaginatedData } from '@/types'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
@@ -12,17 +11,11 @@ export interface FulfillmentIssue {
   status: 'open' | 'processing' | 'resolved'; due_at: string | null; result: string | null; version: number
   overdue: number; dueSoon: number; conditionActive?: boolean
 }
-export interface DeliverySource { quantity: number; date: string | null; orderId: number | null; orderNo: string; bound: boolean; stage: string }
-export interface DeliveryItem {
-  id: number; productId: number; productCode: string; productName: string; articleNumber: string | null; spec: string | null; color: string | null; unit: string
-  warehouseId: number; warehouseName: string; actualShipDate: string | null; deliveryOutcome: string; remaining: number; physical: number; boundQty: number; shortage: number
-  promisedDate: string | null; processingDays: number | null; firstDate: string | null; allDate: string | null; delayed: boolean; state: string; sources: DeliverySource[]
-}
 export interface Commitment { itemId: number; promisedDate: string | null; originalDate: string | null; processingDays: number | null }
 export interface FulfillmentDocument {
   type: FulfillmentType; id: number; canManage: boolean; issues: FulfillmentIssue[]; owners: { id: number; name: string }[]
   commitments: Commitment[]; expectedDate: string | null; detectedCount: number
-  delivery: { commercialGroups?: CommercialDeliveryGroup[]; items: DeliveryItem[]; firstDate: string | null; allDate: string | null } | null
+  delivery: null
   impacts: { saleId: number; orderNo: string; itemId: number; productCode: string; productName: string; unit: string; quantity: number; promisedDate: string | null; expectedDate: string | null }[]
 }
 export interface FulfillmentList extends PaginatedData<FulfillmentIssue> { summary: { open: number; mine: number; overdue: number; unassigned: number } }

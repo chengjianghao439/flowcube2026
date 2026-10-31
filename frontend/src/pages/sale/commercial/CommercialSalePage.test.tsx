@@ -10,16 +10,11 @@ import type { CommercialGroup } from '@/types/sale-commercial'
 import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useWorkspaceStore, HOME_TAB } from '@/store/workspaceStore'
-import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), get: vi.fn(), activity: vi.fn(), defaults: { baseURL: '/a' } }))
 vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults }, getApiClientBaseURL: () => mocks.defaults.baseURL, subscribeApiClientBaseURL: () => () => {} }))
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: mocks.query }))
 vi.mock('@/api/document-activity', () => ({ getDocumentActivityApi: mocks.activity }))
 vi.mock('@/api/sale-commercial', () => ({ executeCommercialSaleApi: mocks.execute, getCommercialSaleApi: mocks.get }))
-vi.mock('./CommercialFulfillmentSummary', () => ({ default: function ArrangementFixture() {
-  const active = useSectionActive()
-  return <div data-arrangement-active={String(active)}>真实供货分配<input aria-label="未保存的发货安排" /></div>
-} }))
 vi.mock('../form/components/SaleOrderOverview', () => ({ SaleOrderOverview: () => <p>原销售概览</p> }))
 vi.mock('../form/components/FulfillmentProgressCard', () => ({ FulfillmentProgressCard: () => <p>原任务归还入口</p> }))
 vi.mock('@/components/print/SaleOrderPrintTemplate', () => ({ PrintPreviewOverlay: () => <p>客户预览</p> }))
@@ -156,14 +151,14 @@ test('商单执行中仍有未占物料时补占原量，已全部承诺则隐�
     expect([...host.querySelectorAll('button')].some(b => b.textContent === '补占库存')).toBe(false)
   }, { ...order, hasUnreservedItems: false })
 })
-test('混合详情沿普通订单六标签与基础信息布局，成交量价独立于仓库组件合计', async () => {
+test('混合详情沿普通订单五标签与基础信息布局，成交量价独立于仓库组件合计', async () => {
   const ordinary = { ...group, id: 9, kind: 'ordinary', kitCode: null, kitName: null,
     targetQty: 1.25, originalQty: 2, amount: 28.75, originalAmount: 46, unitPrice: 23,
     metadata: { input: { kind: 'ordinary', productId: 3, remark: '按长度分装' }, entry: { entryUnit: '米', entryQty: 2, conversionRate: 1, entryUnitPrice: 23 } },
     components: [{ productId: 3, productCode: 'P-LONG', productName: '长商品名称完整值', spec: '完整规格', color: '本色', articleNumber: '供应商型号', unit: '米', baseQty: 1, quantity: 1.25, amount: 28.75, allocatedAmount: 46 }]
   } as unknown as CommercialGroup
   await mount(async host => {
-    expect([...host.querySelectorAll('button[aria-pressed]')].map(button => button.textContent)).toEqual(['订单信息', '发货安排', '作业进度', '拣货明细', '装箱进度', '操作记录'])
+    expect([...host.querySelectorAll('button[aria-pressed]')].map(button => button.textContent)).toEqual(['订单信息', '作业进度', '拣货明细', '装箱进度', '操作记录'])
     expect(host.textContent).toContain('基础信息')
     expect([...host.querySelectorAll('button')].some(b => b.textContent === '读取最新订单' || b.textContent === '刷新订单')).toBe(false)
     expect(host.textContent).toContain('收货人：验收收货人')
@@ -182,21 +177,17 @@ test('混合详情沿普通订单六标签与基础信息布局，成交量价�
   }, { ...order, commercialGroups: [group, ordinary], totalAmount: 228.75, discountAmount: 5,
     receiverName: '验收收货人', remark: '保留原备注', items: [{ id: 1, productName: '仓库组件', amount: 999 }] } as SaleOrder)
 })
-test('混合详情标签按需挂载、隐藏暂停，返回保留安排输入与原发货记录', async () => {
+test('混合详情标签按需挂载、隐藏暂停，返回保留原发货记录', async () => {
   await mount(async host => {
-    await click('发货安排')
-    const input = host.querySelector<HTMLInputElement>('input[aria-label="未保存的发货安排"]')!
-    input.value = '保留客户约定'
+    expect(host.textContent).not.toContain('发货安排')
     await click('作业进度')
-    expect(input.closest('[hidden]')).not.toBeNull()
-    expect(input.parentElement?.getAttribute('data-arrangement-active')).toBe('false')
     const rows = [...host.querySelectorAll('[data-sale-batches] tbody tr')]
     for (const text of ['WT-A', '套A', '1套', '仓一', '已出库', '已确认实发']) expect(rows[0].textContent).toContain(text)
     expect(rows[0].textContent).not.toContain('未确认')
     for (const text of ['WT-OLD', '原成交行 #7', '仓一', '已出库', '原批次（未确认）', '已撤销批次']) expect(rows[1].textContent).toContain(text)
-    await click('发货安排')
-    expect(input.value).toBe('保留客户约定')
-    expect(input.closest('[hidden]')).toBeNull()
+    await click('订单信息')
+    await click('作业进度')
+    expect(host.querySelector('[data-sale-batches]')).not.toBeNull()
     expect(mocks.execute).not.toHaveBeenCalled()
   })
 })
@@ -332,7 +323,7 @@ test('混合详情交接进入对应标签，非法交接回订单信息且不�
   await pagePaths(async (setPath, host) => {
     expect(host.querySelector('button[aria-pressed="true"]')?.textContent).toBe('作业进度')
     await setPath('/sale/80?focus=fulfillment')
-    expect(host.querySelector('button[aria-pressed="true"]')?.textContent).toBe('发货安排')
+    expect(host.querySelector('button[aria-pressed="true"]')?.textContent).toBe('订单信息')
     await setPath('/sale/80?focus=progress&taskId=90&taskId=')
     expect(host.querySelector('button[aria-pressed="true"]')?.textContent).toBe('订单信息')
     expect(host.textContent).toContain('交接参数无效')

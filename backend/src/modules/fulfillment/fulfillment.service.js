@@ -6,23 +6,28 @@ const { event, events } = require('./fulfillment.events')
 const { createIssueReader } = require('./fulfillment.query')
 const listIssues = createIssueReader(pool)
 const { definition, authorize, eligibleOwners, can } = require('./fulfillment.access')
-const { commitments, saleDelivery, purchaseImpacts } = require('./fulfillment.delivery')
+const { commitments, purchaseImpacts } = require('./fulfillment.delivery')
 const { detect } = require('./fulfillment.detect')
 const { dateOnly, assertIssueAction } = require('./fulfillment.rules')
 
+function assertArrangementAvailable(type) {
+  if (type === 'sale') throw new AppError('销售发货安排功能已删除，请在销售订单查看实际作业进度', 410, 'SALE_ARRANGEMENT_REMOVED')
+}
+
 async function getDocument(type, id, user) {
+  assertArrangementAvailable(type)
   const row = await authorize(pool, type, id, user)
   const [issues] = await pool.query(`SELECT i.*,u.real_name AS ownerName,(i.status<>'resolved' AND i.due_at<NOW()) AS overdue,
     (i.status<>'resolved' AND i.due_at BETWEEN NOW() AND DATE_ADD(NOW(),INTERVAL 24 HOUR)) AS dueSoon
     FROM order_fulfillment_issues i LEFT JOIN sys_users u ON u.id=i.owner_id WHERE i.document_type=? AND i.document_id=? ORDER BY i.status='resolved',i.due_at,i.id`, [type, id])
   const active = await detect(pool, type, row)
-  const delivery = type === 'sale' ? await saleDelivery(pool, row, user) : null
   return { type, id, canManage: can(user, definition(type).write), issues: issues.map(i => ({ ...i, conditionActive: active.some(a => a.key === i.source_key) })),
-    owners: await eligibleOwners(pool, type, row), commitments: delivery?.commitments || await commitments(pool, type, id), delivery,
+    owners: await eligibleOwners(pool, type, row), commitments: await commitments(pool, type, id), delivery: null,
     expectedDate: type === 'purchase' ? dateOnly(row.expected_date) : null,
     impacts: type === 'purchase' ? await purchaseImpacts(pool, id, user) : [], detectedCount: active.length }
 }
 async function transact(type, id, user, key, action, fn) {
+  assertArrangementAvailable(type)
   if (!key || key.length > 80) throw new AppError('需要不超过 80 字符的请求键', 400)
   const conn = await pool.getConnection()
   try {
@@ -37,24 +42,21 @@ async function transact(type, id, user, key, action, fn) {
   } catch (error) { await conn.rollback(); throw error } finally { conn.release() }
 }
 async function setDates(type, id, body, user, key) {
-  if (!['sale', 'purchase'].includes(type)) throw new AppError('此单据不支持交期维护', 400)
+  assertArrangementAvailable(type)
+  if (type !== 'purchase') throw new AppError('此单据不支持交期维护', 400)
   return transact(type, id, user, key, 'dates', async (conn, row) => {
-    if ((type === 'sale' && [4, 5].includes(Number(row.status))) || (type === 'purchase' && [3, 4, 6].includes(Number(row.status)))) throw new AppError('已结束单据不能修改交期', 409)
+    if ([3, 4, 6].includes(Number(row.status))) throw new AppError('已结束单据不能修改交期', 409)
     const itemId = body.itemId || 0
     if (type === 'purchase' && itemId) throw new AppError('采购按整单维护交期', 400)
-    if (itemId) {
-      const [[item]] = await conn.query('SELECT id FROM sale_order_items WHERE id=? AND order_id=?', [itemId, id])
-      if (!item) throw new AppError('明细不属于该销售单', 400)
-    }
     const date = dateOnly(body.date)
     const [[previous]] = await conn.query('SELECT promised_date,original_date,processing_days FROM order_delivery_commitments WHERE document_type=? AND document_id=? AND item_id=? FOR UPDATE', [type, id, itemId])
-    const before = type === 'purchase' ? dateOnly(row.expected_date) : dateOnly(previous?.promised_date)
+    const before = dateOnly(row.expected_date)
     const original = dateOnly(previous?.original_date) || before || date
     await conn.query(`INSERT INTO order_delivery_commitments(document_type,document_id,item_id,promised_date,original_date,processing_days) VALUES(?,?,?,?,?,?)
       ON DUPLICATE KEY UPDATE promised_date=VALUES(promised_date),original_date=COALESCE(original_date,VALUES(original_date)),processing_days=VALUES(processing_days)`,
     [type, id, itemId, date, original, body.processingDays ?? null])
-    if (type === 'purchase') await conn.query('UPDATE purchase_orders SET expected_date=? WHERE id=?', [date, id])
-    await event(conn, type, id, type === 'sale' ? '调整承诺发货日期' : '更新采购预计到货日期', `${itemId ? `明细 #${itemId}` : '整单'}：${before || '未设置'} → ${date || '未设置'}；处理时效 ${body.processingDays ?? '待确认'} 天；${body.reason}`, user)
+    await conn.query('UPDATE purchase_orders SET expected_date=? WHERE id=?', [date, id])
+    await event(conn, type, id, '更新采购预计到货日期', `${itemId ? `明细 #${itemId}` : '整单'}：${before || '未设置'} → ${date || '未设置'}；处理时效 ${body.processingDays ?? '待确认'} 天；${body.reason}`, user)
     return { id, itemId }
   })
 }
@@ -93,6 +95,7 @@ async function changeIssue(type, id, issueId, body, user, key) {
   })
 }
 async function syncDocument(type, id, user) {
+  assertArrangementAvailable(type)
   await authorize(pool, type, id, user, true)
   await require('./fulfillment.worker').syncDocument(type, id)
   return { refreshed: true }

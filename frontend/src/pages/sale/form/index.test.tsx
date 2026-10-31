@@ -55,41 +55,19 @@ test('普通详情合并商品身份列，保留换算、分仓、已发进度�
   expect(host.textContent).not.toContain('订单汇总')
 })
 
-test('发货安排独立于作业进度，切换后保留输入并暂停隐藏区块', () => {
+test('销售详情删除发货安排并保留实际仓库作业进度', () => {
   render()
-  expect(tab('发货安排')).toBeTruthy()
+  expect(tab('发货安排')).toBeUndefined()
   act(() => tab('作业进度').click())
   expect(host.textContent).toContain('尚未创建仓库任务')
   expect(host.querySelector('[data-testid="arrangements"]')).toBeNull()
-  act(() => tab('发货安排').click())
-  const input = host.querySelector<HTMLInputElement>('input[aria-label="待保存的安排"]')!
-  input.value = '等待客户确认'
-  expect(input.closest('[hidden]')).toBeNull()
-  act(() => tab('作业进度').click())
-  expect(input.closest('[hidden]')).not.toBeNull()
-  expect(host.querySelector('[data-testid="arrangements"]')!.getAttribute('data-active')).toBe('false')
-  act(() => tab('发货安排').click())
-  expect(input.value).toBe('等待客户确认')
-  expect(input.closest('[hidden]')).toBeNull()
 })
 
-test('首次从待办进入打开本单发货安排', () => {
-  window.history.replaceState({}, '', '/#/sale/12?focus=fulfillment')
+test('旧发货安排链接回到订单信息，不挂载已删除功能', () => {
   render(buildWorkspaceTabRegistration('/sale/12', '?focus=fulfillment').path)
-  expect(tab('发货安排')?.getAttribute('aria-pressed')).toBe('true')
-  expect(host.querySelector('[data-testid="arrangements"]')).not.toBeNull()
-})
-
-test('已打开订单从待办返回定位发货安排，其他订单的链接不影响本单', () => {
-  window.history.replaceState({}, '', '/#/sale/13?focus=fulfillment')
-  render()
-  expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
-  navigate(13)
-  expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
-  navigate(12)
-  expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
-  render(buildWorkspaceTabRegistration('/sale/12', '?focus=fulfillment').path)
-  expect(tab('发货安排')?.getAttribute('aria-pressed')).toBe('true')
+  expect(tab('订单信息')?.getAttribute('aria-pressed')).toBe('true')
+  expect(tab('发货安排')).toBeUndefined()
+  expect(host.querySelector('[data-testid="arrangements"]')).toBeNull()
 })
 
 test('隐藏另一单的全局hash不改变本标签已经选择的区域', () => {

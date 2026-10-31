@@ -15,7 +15,7 @@ export interface ProcurementSupply {
 }
 export interface PurchasePolicy {
   productId: number; supplierId: number | null; baseUnit: string; entryUnit: string; conversionRate: number
-  packMultiple: number; minimumOrderQty: number; units: { unitName: string; conversionRate: number }[]
+  packMultiple: number; minimumOrderQty: number;
 }
 export const getPurchasePolicyApi = (productId: number, supplierId: number) => payloadClient.get<PurchasePolicy>('/procurement/purchase-policy', { params: { productId, supplierId } })
 export const savePurchasePolicyApi = (data: Pick<PurchasePolicy, 'productId' | 'supplierId' | 'entryUnit' | 'packMultiple' | 'minimumOrderQty'>) => payloadClient.put<PurchasePolicy>('/procurement/purchase-policy', data)

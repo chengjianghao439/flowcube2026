@@ -57,8 +57,7 @@ import {
 } from '@/api/returns'
 import type { PurchaseReturn, PurchaseReturnSourceOrder, ReturnItem } from '@/api/returns'
 import type { FinderResult } from '@/types/finder'
-import type { ProductFinderResult, ProductUnit } from '@/types/products'
-import { getProductApi } from '@/api/products'
+import type { ProductFinderResult } from '@/types/products'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { captureKitReadOwner, assertKitReadOwner } from '@/hooks/useKits'
 import { commercialReadConfig } from '@/api/sale-commercial'
@@ -77,8 +76,7 @@ interface DraftItem {
   spec?: string | null
   color?: string | null
   unit: string
-  entryUnit?: string        // 录入单位（多单位，文档03 Phase4a；无源手工退货可按箱录入）
-  units?: ProductUnit[]     // UI-only：该商品多计量单位（供单位下拉），提交前 strip，不发后端
+  entryUnit?: string        // 新退货固定使用基本单位
   quantity: number
   unitPrice: number
   originalQty?: number
@@ -189,7 +187,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
     if (handling) return
     const key = counter
     setCounter(c => c + 1)
-    setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0 }])
+    setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', quantity: 1, unitPrice: 0 }])
     setFinderItemKey(key)
     setFinderOpen(true)
   }
@@ -210,13 +208,9 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
     if (finderItemKey === null) return
     const k = finderItemKey
     setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], unitPrice: product.costPrice ?? 0 }
+      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, unitPrice: product.costPrice ?? 0 }
       : i,
     ))
-    // 拉多计量单位供单位下拉（无辅助单位则下拉不出现、按基本单位录入）
-    getProductApi(product.id)
-      .then(full => { const units = full?.units ?? []; setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i))) })
-      .catch(() => { /* 拉取失败：按基本单位录入 */ })
     setInvalidItemKeys(prev => {
       if (!prev.has(k)) return prev
       const next = new Set(prev)
@@ -331,7 +325,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
         purchaseOrderId: boundSource ? boundSource.id : undefined,
         purchaseOrderNo: boundSource?.orderNo || orderNo.trim() || undefined,
         remark: remark.trim() || undefined,
-        items: selectedItems.map(({ _key, originalQty, returnedQty, remainingQty, units, ...r }) => r),
+        items: selectedItems.map(({ _key, originalQty, returnedQty, remainingQty, ...r }) => r),
         ...(handling?.source.data ? { disposalSource: { sourceId: handling.source.data.source.id, expectedRevision: handling.source.data.source.revision, operationUuid: handling.operationUuid } } : {}),
       }
       const res = handling?.source.data
@@ -367,7 +361,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
       {handling && <>{handling.source.error && <p role="alert">{handling.source.error}</p>}<HandlingOperationPanel write={handling.write} />
       {boundSource && handling.source.data && <section aria-label="选择原采购行"><p>匹配来源的原采购行（同商品多行须明确选择）</p>{boundSource.items.filter(i => i.productId === handling.source.data!.source.productId && i.unit === handling.source.data!.source.unit && i.remainingQty > 0).map((i,index) => <Button key={i.sourceItemId} variant="outline" disabled={locked || submitting} onClick={() => {
         if (!handlingCurrent() || remark || items.length) { toast.warning('已有输入，未覆盖；请保留并核对'); return }
-        setItems([{ _key: 1, sourceItemId: i.sourceItemId, productId: i.productId, productCode: i.productCode, productName: i.productName, articleNumber: i.articleNumber, spec: i.spec, color: i.color, unit: i.unit, quantity: 0, unitPrice: i.unitPrice, entryUnit: i.unit, units: [], originalQty: i.quantity, returnedQty: i.returnedQty, remainingQty: i.remainingQty }]); setCounter(2)
+        setItems([{ _key: 1, sourceItemId: i.sourceItemId, productId: i.productId, productCode: i.productCode, productName: i.productName, articleNumber: i.articleNumber, spec: i.spec, color: i.color, unit: i.unit, quantity: 0, unitPrice: i.unitPrice, entryUnit: i.unit, originalQty: i.quantity, returnedQty: i.returnedQty, remainingQty: i.remainingQty }]); setCounter(2)
       }}>选择原采购第 {index + 1} 行（剩余 {i.remainingQty} {i.unit}，原价 {money(i.unitPrice)}）</Button>)}</section>}
       </>}
       {createdReturn && <div role="status" className="rounded-md border p-3 space-y-2"><p>退货单 {createdReturn.returnNo} 已创建，可查看单据。</p><Button variant="outline" disabled={!ownerCurrent} onClick={() => openCreatedReturn(createdReturn)}>查看已创建退货单</Button></div>}
@@ -464,15 +458,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
                             : <span className="text-muted-foreground">点击选择商品…</span>}
                         </button>} />
                       <td className="py-2.5 text-center text-muted-body">
-                        {(!boundSource && item.units && item.units.filter(u => !u.isBase).length > 0) ? (
-                          <select
-                            value={item.entryUnit || item.unit}
-                            onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
-                            className="h-8 rounded-md border border-border bg-background px-1 text-sm"
-                          >
-                            {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
-                          </select>
-                        ) : ((item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : (item.unit || '—'))}
+                        {item.unit || '—'}
                       </td>
                       <td className="py-2.5 pr-2">
                         <Input quantity
@@ -482,10 +468,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
                           className="text-right text-sm"
                         />
-                        {item.entryUnit && item.entryUnit !== item.unit && (() => {
-                          const rate = Number((item.units || []).find(u => u.unitName === item.entryUnit)?.conversionRate ?? 1)
-                          return <p className="mt-1 text-right text-xs text-muted-foreground">= {(item.quantity * rate).toLocaleString()} {item.unit}</p>
-                        })()}
+
                       </td>
                       <td className="py-2.5">
                         <Input

@@ -27,6 +27,8 @@ async function syncDocument(type, id) {
       }
     }
     for (const issue of existing) {
+      // 下线的安排事项保留历史，不伪记为实际阻塞已解除。
+      if (type === 'sale' && !/^(adjust|return|credit):[1-9]\d*$/.test(issue.source_key)) continue
       if (issue.status === 'resolved' || active.some(a => a.key === issue.source_key)) continue
       await conn.query("UPDATE order_fulfillment_issues SET status='resolved',result='系统检测：阻塞条件已解除',resolved_at=NOW(),version=version+1 WHERE id=?", [issue.id])
       await event(conn, type, id, '阻塞条件已解除', issue.title, null, issue.id)
@@ -39,8 +41,9 @@ const activeStatuses = { sale: '1,2,3,6', purchase: '2,5', inbound: '1,2,3', tra
 async function runFulfillmentSync() {
   // 每轮每类最多 25 单，游标前进，避免一次任务长期占用连接池。GET 保持纯读取。
   for (const [type, def] of Object.entries(definitions)) {
+    const issueFilter = type === 'sale' ? " AND i.source='auto' AND i.source_key REGEXP '^(adjust|return|credit):[1-9][0-9]*$'" : ''
     const [rows] = await pool.query(`SELECT d.id FROM ${def.table} d WHERE d.id>? AND
-      ((d.deleted_at IS NULL AND d.status IN (${activeStatuses[type]})) OR EXISTS(SELECT 1 FROM order_fulfillment_issues i WHERE i.document_type=? AND i.document_id=d.id AND i.status<>'resolved'))
+      ((d.deleted_at IS NULL AND d.status IN (${activeStatuses[type]})) OR EXISTS(SELECT 1 FROM order_fulfillment_issues i WHERE i.document_type=? AND i.document_id=d.id AND i.status<>'resolved'${issueFilter}))
       ORDER BY d.id LIMIT 25`, [cursors[type] || 0, type])
     for (const row of rows) {
       try { await syncDocument(type, row.id) } catch (error) { require('../../utils/logger').error('履约事项同步失败', error, { type, documentId: row.id }, 'Fulfillment') }

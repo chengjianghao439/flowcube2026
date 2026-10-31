@@ -183,8 +183,7 @@ export default function ProductsPage() {
     } : column),
     { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
     { key:'unit', title:'单位', width:140, render:(_,r)=>{
-      const aux=(r.units||[]).filter(u=>!u.isBase)
-      return <div className="flex flex-wrap items-center gap-1"><span>{r.unit}</span>{aux.map(u=><span key={u.unitName} className="rounded bg-muted px-1 text-xs text-muted-foreground tabular-nums">{u.unitName}×{u.conversionRate}</span>)}{
+      return <div className="flex flex-wrap items-center gap-1"><span>{r.unit}</span>{
         // 展示当前出货数量规则；存量商品的设置不因新建默认值改变。
         r.allowDecimalQty === false && <span className="rounded bg-warning/10 px-1 text-xs text-warning-ink">整数数量</span>}</div>
     }},

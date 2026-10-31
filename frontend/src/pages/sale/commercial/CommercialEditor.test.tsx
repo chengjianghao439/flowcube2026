@@ -574,7 +574,6 @@ vi.mock('@/api/sale', async original => ({
   ...await original<typeof import('@/api/sale')>(),
   getSaleDetailApi: async (id: number) => ({ ...order, id, orderNo: 'SO' + id, status: 1, totalAmount: 24.69 })
 }))
-vi.mock('@/pages/sale/commercial/CommercialFulfillmentSummary', () => ({ default: () => null }))
 vi.mock('@/pages/sale/form/components/SaleOrderOverview', () => ({ SaleOrderOverview: () => null }))
 vi.mock('@/pages/sale/form/components/FulfillmentProgressCard', () => ({ FulfillmentProgressCard: () => null }))
 vi.mock('@/components/print/SaleOrderPrintTemplate', () => ({ PrintPreviewOverlay: () => null }))

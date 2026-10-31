@@ -39,7 +39,6 @@ import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
-import { dirtyItems } from '@/lib/editMode'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { ActionBar } from '@/components/shared/ActionBar'
@@ -67,23 +66,19 @@ import {
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import type { PurchaseOrder, PurchaseOrderItem } from '@/types/purchase'
-import type { ProductFinderResult, ProductUnit } from '@/types/products'
+import type { ProductFinderResult } from '@/types/products'
 import type { FinderResult } from '@/types/finder'
 import { INBOUND_STATUS_LABEL, type InboundTaskStatus } from '@/types/inbound-tasks'
-import { getProductApi } from '@/api/products'
 
 interface DraftItem extends Omit<PurchaseOrderItem, 'id' | 'amount'> {
   _key: number
-  units?: ProductUnit[]   // UI-only：该商品多计量单位（供单位下拉），不发后端；后端按 product_units 折算权威
   priceWarning?: string | null
   originalAmount?: number
-  unitReadFailed?: boolean
 }
 
-/** 录入单位下的数量折算成基本单位量（仅前端呈现；权威折算在后端）。 */
+/** 历史行用保存的换算率回显基本量；新录入固定单位。 */
 function baseQtyOf(item: DraftItem): number | null {
-  const u = (item.units || []).find(x => x.unitName === (item.entryUnit || item.unit))
-  const rate = (item.entryUnit || item.unit) === item.unit ? 1 : item.conversionRate ?? (u ? Number(u.conversionRate) : null)
+  const rate = (item.entryUnit || item.unit) === item.unit ? 1 : item.conversionRate ?? null
   if (rate == null || !Number.isFinite(rate) || rate <= 0) return null
   return roundQuantity((Number(item.quantity) || 0) * rate)
 }
@@ -137,7 +132,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   const [items, setItems] = useState<DraftItem[]>(
     (editOrder?.items ?? []).map((it, idx) => ({
       _key: idx, productId: it.productId, productCode: it.productCode, productName: it.productName,
-      unit: it.unit, entryUnit: it.entryUnit ?? it.unit, units: [], conversionRate: it.conversionRate,
+      unit: it.unit, entryUnit: it.entryUnit ?? it.unit, conversionRate: it.conversionRate,
       // 保留历史换算快照与四位录入报价；金额只有两位，不能 amount/entryQty 反推报价。
       quantity: it.entryQty ?? it.quantity,
       unitPrice: restorePurchaseEntryPrice(it).verified ? restorePurchaseEntryPrice(it).entryUnitPrice! : Number.NaN,
@@ -170,30 +165,14 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
 
 
   // 编辑态：初始值本就非空，"是否非空"不能代表"是否改过"；改成与编辑开始时的快照比较
-  // 明细行只比对用户可改字段（units 是多计量单位投影，编辑态由接口异步回填）
-  const dirtyComparable = () => JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items: dirtyItems(items.map(({ priceWarning: _warning, originalAmount: _amount, unitReadFailed: _unitError, ...item }) => item)) })
+  // 明细行只比对用户可改字段。
+  const dirtyComparable = () => JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items: items.map(({ priceWarning: _warning, originalAmount: _amount, ...item }) => item) })
   const editSnapshotRef = useRef(isEdit ? dirtyComparable() : null)
   const isDirty = isEdit
     ? dirtyComparable() !== editSnapshotRef.current
     : !!(supplierId || warehouseId || expectedDate || remark || items.length)
   const dirtyKey = buildWorkspaceTabRegistrationFromPath(tabPath).key
   useDirtyGuard(dirtyKey, isDirty)
-
-  // 编辑态：为每个明细行商品拉多计量单位，供单位下拉回显（新建态在 handleFinderConfirm 里拉）
-  useEffect(() => {
-    const src = editOrder?.items ?? []
-    const productIds = [...new Set(src.filter(i => i.productId > 0).map(i => i.productId))]
-    if (!productIds.length) return
-    let cancelled = false
-    Promise.all(productIds.map(pid =>
-      getProductApi(pid).then(p => [pid, { units: p?.units ?? [], failed: false }] as const).catch(() => [pid, { units: [] as ProductUnit[], failed: true }] as const),
-    )).then(pairs => {
-      if (cancelled) return
-      const map = new Map<number, { units: ProductUnit[]; failed: boolean }>(pairs)
-      setItems(prev => prev.map(i => (map.has(i.productId) ? { ...i, units: map.get(i.productId)!.units, unitReadFailed: map.get(i.productId)!.failed } : i)))
-    })
-    return () => { cancelled = true }
-  }, [editOrder])
 
   function requestLeave(proceed: () => void) {
     confirmDirtyLeave({
@@ -246,7 +225,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
 
   const removeItem = (k: number) => setItems(p => p.filter(i => i._key !== k))
   const updateItem = (k: number, field: string, val: string | number) =>
-    setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val, ...(field === 'unitPrice' ? { priceWarning: null } : {}), ...(field === 'entryUnit' ? { conversionRate: val === i.unit ? 1 : i.units?.find(u => u.unitName === val)?.conversionRate } : {}) } : i)))
+    setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val, ...(field === 'unitPrice' ? { priceWarning: null } : {}) } : i)))
 
   const parsePositiveInteger = (value: string) => {
     if (!value.trim()) return 0
@@ -259,15 +238,16 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
     const k = finderItemKey
     pendingFocus.current = `item-${k}-quantity`
     setItems(prev => {
+      const previous = prev.find(i => i._key === k)
       const replacement = {
-              ...(prev.find(i => i._key === k) ?? { _key: k, quantity: 1, remark: '' }),
+              ...(previous ?? { _key: k, quantity: 1, remark: '' }),
+              quantity: previous?.entryUnit && previous.entryUnit !== previous.unit ? 0 : previous?.quantity ?? 1,
               productId: product.id,
               productCode: product.code,
               productName: product.name,
               unit: product.unit,
-              entryUnit: product.unit,   // 默认按基本单位录入；有辅助单位时可在单位下拉切换
-              conversionRate: 1, priceWarning: null, originalAmount: undefined, unitReadFailed: false,
-              units: [],
+              entryUnit: product.unit,   // 新录入只使用商品固定单位
+              conversionRate: 1, priceWarning: null, originalAmount: undefined,
               unitPrice: product.costPrice ?? 0,
               articleNumber: product.articleNumber,
               spec: product.spec,
@@ -275,13 +255,6 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
             }
       return prev.some(i => i._key === k) ? prev.map(i => i._key === k ? replacement : i) : [...prev, replacement]
     })
-    // 拉该商品多计量单位，供单位下拉（无辅助单位则只保留基本单位、下拉不出现）
-    getProductApi(product.id)
-      .then(full => {
-        const units = full?.units ?? []
-        setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units, unitReadFailed: false } : i)))
-      })
-      .catch(() => { setItems(prev => prev.map(i => i._key === k && i.productId === product.id ? { ...i, unitReadFailed: true } : i)) })
   }
 
   function handleSupplierConfirm(result: FinderResult) {
@@ -299,6 +272,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
     setSupplierError(allIssues.some(i => i.target === 'party'))
     setWarehouseError(allIssues.some(i => i.target === 'warehouse'))
     if (allIssues.length) return
+    if (items.some(item => item.entryUnit && item.entryUnit !== item.unit)) {
+      toast.warning('多单位功能已删除；原换算行保持历史值，请重新选择商品并按固定单位核对数量和单价后保存')
+      return
+    }
     const payload = {
       supplierId: +supplierId,
       supplierName,
@@ -306,7 +283,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
       warehouseName,
       expectedDate: expectedDate || undefined,
       remark: remark || undefined,
-      items: items.map(({ _key, units, priceWarning, originalAmount, unitReadFailed, conversionRate, ...rest }) => rest),
+      items: items.map(({ _key, priceWarning, originalAmount, conversionRate, ...rest }) => rest),
     }
     try {
       setSubmitLocked(true)
@@ -329,8 +306,6 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   const summary = summarizePurchaseDraft(items)
 
   function renderItem(item: DraftItem) {
-    const currentRate = item.units?.find(u => u.unitName === item.entryUnit)?.conversionRate
-    const changedRate = item.entryUnit !== item.unit && item.conversionRate != null && currentRate != null && currentRate !== item.conversionRate
     return <tr key={item._key} className="border-b border-border/40">
       <td><PurchaseProductIdentity item={item} name={<button type="button" data-entry-field={`item-${item._key}-product`}
         onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
@@ -340,19 +315,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
         ref={el => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
         value={item.quantity} onChange={e => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
         className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')} />
-        {item.entryUnit && item.entryUnit !== item.unit && <div className="mt-0.5 text-right text-xs text-muted-foreground tabular-nums">{baseQtyOf(item) == null ? '换算待确认' : `= ${qty(baseQtyOf(item))} ${item.unit}`}</div>}
+        {item.entryUnit && item.entryUnit !== item.unit && <div className="mt-0.5 text-xs text-warning-ink" role="alert">历史换算行：{baseQtyOf(item) == null ? '基本量待核对' : `${qty(baseQtyOf(item))} ${item.unit}`}。保存前请重新选择商品并核对数量、单价。</div>}
       </td>
-      <td>{item.units?.some(u => !u.isBase)
-        ? <select aria-label={`${item.productName}录入单位`} value={item.entryUnit || item.unit} onChange={e => updateItem(item._key, 'entryUnit', e.target.value)} className={cn(EDIT_CELL_CLASS, 'px-1 text-center')}>
-          {!item.units.some(u => u.unitName === (item.entryUnit || item.unit)) && <option value={item.entryUnit || item.unit}>{item.entryUnit || item.unit}</option>}
-          {item.units.map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
-        </select> : <span className="text-muted-body">{item.entryUnit || item.unit}</span>}</td>
+      <td><span className="text-muted-body">{item.entryUnit || item.unit}</span></td>
       <td><Input type="number" min="0" step="0.0001" data-entry-input data-entry-field={`item-${item._key}-price`}
         aria-label={`${item.productName}单价`} aria-invalid={issues.some(i => i.target === `item-${item._key}-price`)}
         value={Number.isFinite(item.unitPrice) ? item.unitPrice : ''} onChange={e => updateItem(item._key, 'unitPrice', e.target.value === '' ? Number.NaN : +e.target.value)} className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')} />
         {item.priceWarning && <p role="alert" className="mt-1 text-xs text-warning-ink">{item.priceWarning}；原行金额 {money(item.originalAmount)}</p>}
-        {changedRate && <p role="alert" className="mt-1 text-xs text-warning-ink">换算已变化：当前 1 {item.entryUnit} = {currentRate} {item.unit}，保存按当前换算。</p>}
-        {item.unitReadFailed && item.entryUnit !== item.unit && <p role="alert" className="mt-1 text-xs text-warning-ink">当前单位资料读取失败，请核对换算后再保存。</p>}
       </td>
       <td className="text-right font-medium tabular-nums">{money(purchaseDraftLineAmount(item.quantity, item.unitPrice))}</td>
       <td className="text-center"><Button type="button" size="sm" variant="ghost" aria-label="删除该行商品" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button></td>

@@ -5,13 +5,13 @@ const paths = { sale: '/sale', purchase: '/purchase', inbound: '/inbound-tasks',
 const safeId = (id: unknown): id is number => typeof id === 'number' && Number.isSafeInteger(id) && id > 0
 export function fulfillmentDocumentPath(issue: Pick<FulfillmentIssue, 'document_type' | 'document_id'>): string | null {
   const path = Object.hasOwn(paths, issue.document_type) ? paths[issue.document_type] : null
-  return path && safeId(issue.document_id) ? `${path}/${issue.document_id}?focus=fulfillment` : null
+  return path && safeId(issue.document_id) ? `${path}/${issue.document_id}${issue.document_type === 'sale' ? '' : '?focus=fulfillment'}` : null
 }
 export type FulfillmentAction = { path: string | null; label: string; note?: string; itemId?: number }
 /** 明确系统键是交接契约；标题、原因与 action_path 仅为历史数据，不能执行。 */
 export function explainFulfillmentAction(issue: FulfillmentIssue, can: (permission: PermissionCode) => boolean): FulfillmentAction {
   const original = fulfillmentDocumentPath(issue)
-  const fallback: FulfillmentAction = { path: original, label: '查看原单事项' }
+  const fallback: FulfillmentAction = { path: original, label: issue.document_type === 'sale' ? '查看销售订单' : '查看原单事项' }
   if (!original || issue.source !== 'auto' || issue.status === 'resolved') return fallback
   const key = issue.source_key
   const ids = (pattern: RegExp) => {
@@ -19,14 +19,6 @@ export function explainFulfillmentAction(issue: FulfillmentIssue, can: (permissi
     return match && match[0] === key && match.slice(1).every(value => safeId(Number(value))) ? match.slice(1).map(Number) : null
   }
   if (issue.document_type === 'sale') {
-    const purchase = ids(/^purchase-delay:([1-9]\d*):([1-9]\d*)$/)
-    if (purchase) return can(PERMISSIONS.PURCHASE_ORDER_VIEW)
-      ? { path: `/purchase/${purchase[1]}?focus=fulfillment`, label: '核对采购到货日期' }
-      : { path: original, label: '查看发货安排', itemId: purchase[0], note: '需有采购查看权限的同事核对到货日期' }
-    const shortage = ids(/^shortage:([1-9]\d*)$/)
-    if (shortage) return { path: original, label: '安排缺少的货源', itemId: shortage[0], note: '查看已有发货安排，核对缺少的货源' }
-    const delay = ids(/^delay:([1-9]\d*)$/)
-    if (delay) return { path: original, label: '核对发货日期', itemId: delay[0] }
     const reverse = ids(/^(?:return|adjust):([1-9]\d*)$/)
     if (reverse) return { path: `/sale/${issue.document_id}?focus=progress&taskId=${reverse[0]}`, label: key.startsWith('return:') ? '查看拣货退回任务' : '查看改单确认任务' }
     if (ids(/^credit:([1-9]\d*)$/)) return can(PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW)

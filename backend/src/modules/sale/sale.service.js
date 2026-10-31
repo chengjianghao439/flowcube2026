@@ -6,7 +6,6 @@ const commercialResolver = require('./sale.commercial-resolver')
 const commercialMoney = require('./sale.commercial-money')
 const { commitFulfillment, captureDimensions } = require('../fulfillment/fulfillment.refresh')
 const { normalizeProduct } = require('../logistics/shipping-products')
-const { snapshotItemCommitments, restoreItemCommitments } = require('../fulfillment/fulfillment.sale-items')
 const { loadSalePresentation } = require('./sale.presentation')
 const { insertSaleItems } = require('./sale.items')
 const { pool } = require('../../config/db')
@@ -928,7 +927,7 @@ async function update(id, { customerId, warehouseId, remark,
     const total = commercial ? commercial.total : cashNumber(sumCashCents(folded.map(i=>i.amount)))
     const discount = Math.max(0, Number(discountAmount) || 0)
     assertDiscountWithinTotal(discount, total)
-    const deliverySnapshot = await snapshotItemCommitments(conn, id)
+
     await conn.query(
       `UPDATE sale_orders SET customer_id=?,customer_name=?,warehouse_id=?,warehouse_name=?,total_amount=?,discount_amount=?,remark=?,carrier_id=?,carrier=?,freight_type=?,receiver_name=?,receiver_phone=?,receiver_address=?,shipping_product=? WHERE id=?`,
       [customerId, customerName, warehouseId, warehouseName, total, discount, remark||null, carrierId||null, carrier||null, freightType||null, receiverName||null, receiverPhone||null, receiverAddress||null, shippingProduct, id]
@@ -938,7 +937,7 @@ async function update(id, { customerId, warehouseId, remark,
       await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
       await insertSaleItems(conn, id, warehouseId, warehouseName, folded)
     }
-    await restoreItemCommitments(conn, id, deliverySnapshot)
+
     const saleEventId = await appendSaleEvent(conn, id, 'updated', '编辑订单', `现有 ${items.length} 条明细`, operator)
     await recordSaleChange(conn, { orderRow, before, operator, changeReason, requestState, requestFingerprint, commercial, saleEventId, phase: 'draft_edit' })
     if (!commercial) await buildPricingEvents(conn, id, folded, operator)
@@ -1083,7 +1082,7 @@ async function requestAdjustment(id, input) {
     const total = commercial ? commercial.total : cashNumber(sumCashCents(folded.map(i=>i.amount)))
     assertDiscountWithinTotal(orderRow.discount_amount, total)
     await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
-    const deliverySnapshot = await snapshotItemCommitments(conn, id)
+
     if (commercial) await commercialStore.save(conn,id,Number(orderRow.commercial_revision)+1,commercial)
     else await conn.query('DELETE FROM sale_order_items WHERE order_id=?', [id])
     // dispatched=1：本分支只在订单已有在跑的仓库任务(orderRow.task_id)时才会走到，
@@ -1113,7 +1112,7 @@ async function requestAdjustment(id, input) {
       await conn.query('UPDATE sale_order_items SET dispatched_qty=quantity,dispatched=(quantity>0) WHERE order_id=?',[id])
       await commercialDispatch.replaceUnconfirmed(conn,id,Number(orderRow.task_id))
     }
-    await restoreItemCommitments(conn, id, deliverySnapshot)
+
 
     // 同样按 product_id 升序处理：applyProductDeltaWithinTransaction 内部会锁容器与
     // inventory_stock，Set 的迭代顺序取决于新旧明细的录入次序，并发改单时顺序不一致同样死锁。
@@ -1311,7 +1310,7 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
   const total = commercial ? commercial.total : cashNumber(sumCashCents(folded.map(i=>i.amount)))
   assertDiscountWithinTotal(orderRow.discount_amount, total)
   await conn.query('UPDATE sale_orders SET total_amount=? WHERE id=?', [total, id])
-  const deliverySnapshot = await snapshotItemCommitments(conn, id)
+
   if (commercial) {
     await commercialStore.save(conn,id,Number(orderRow.commercial_revision)+1,commercial)
     await conn.query('UPDATE sale_order_items SET reserved_qty=LEAST(reserved_qty,quantity) WHERE order_id=?',[id])
@@ -1327,7 +1326,6 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
     )
   }
 
-  await restoreItemCommitments(conn, id, deliverySnapshot)
 
   // 重算状态：所有行 reserved_qty >= quantity → 已占库(2)，否则部分占库(6)
   const [[{ unfilled }]] = await conn.query(

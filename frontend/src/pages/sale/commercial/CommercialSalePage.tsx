@@ -29,7 +29,6 @@ import { Button } from '@/components/ui/button'
 import DataTable from '@/components/shared/DataTable'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import CommercialFulfillmentSummary from './CommercialFulfillmentSummary'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { FulfillmentProgressCard } from '../form/components/FulfillmentProgressCard'
 import { SaleOrderOverview } from '../form/components/SaleOrderOverview'
@@ -309,9 +308,6 @@ export default function CommercialSalePage({
       <KeepAliveSection active={detailTab === 'info'} className="space-y-3">
         <SaleOrderInfoCard order={order} />
         <CommercialOrderItems order={order} />
-      </KeepAliveSection>
-      <KeepAliveSection active={detailTab === 'fulfillment'} className="space-y-3">
-        <CommercialFulfillmentSummary key={order.id} id={order.id} owner={owner} groups={order.commercialGroups ?? []} />
       </KeepAliveSection>
       <KeepAliveSection active={detailTab === 'progress'} className="space-y-3"><div className="card-base space-y-4 p-4">
         {!ownerCurrent ? (
