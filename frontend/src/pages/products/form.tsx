@@ -22,6 +22,7 @@ import { qtyStep } from '@/lib/qtyStep'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { usePermission } from '@/hooks/usePermission'
+import { useWorkspaceTabTitle } from '@/hooks/useWorkspaceTabTitle'
 import { useGlobalPolicyWriteCapability } from '@/hooks/useGlobalPolicyWriteCapability'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { ActionBar } from '@/components/shared/ActionBar'
@@ -29,8 +30,10 @@ import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { useProduct, useCreateProduct, useUpdateProduct } from '@/hooks/useProducts'
 import { LimitedInput } from '@/components/shared/LimitedInput'
 import { getSettingsApi } from '@/api/settings'
+import { ApiClientError } from '@/api/client'
 import { CategoryFinder, SupplierFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
+import { EmptyState } from '@/components/shared/EmptyState'
 import type { FinderResult } from '@/types/finder'
 
 const DEFAULT_RATES = { A: 10, B: 20, C: 30, D: 40 }
@@ -52,27 +55,34 @@ export default function ProductFormPage() {
   const editId = isNew ? null : Number(tabPath.split('/').pop())
   const isEdit = !!editId
   const { can } = usePermission()
+  const canOpen = can(isNew ? PERMISSIONS.PRODUCT_CREATE : PERMISSIONS.PRODUCT_VIEW)
   const canSave = can(isNew ? PERMISSIONS.PRODUCT_CREATE : PERMISSIONS.PRODUCT_UPDATE)
-  const globalPolicy = useGlobalPolicyWriteCapability(can(isNew ? PERMISSIONS.PRODUCT_CREATE : PERMISSIONS.PRODUCT_UPDATE))
+  const canReadPriceRates = canOpen && canSave && can(PERMISSIONS.SETTINGS_VIEW)
+  const globalPolicy = useGlobalPolicyWriteCapability(canOpen && canSave)
 
   const navigate = useNavigate()
   const [submitting, setSubmitting] = useState(false)
+  const fieldsDisabled = submitting || !canSave
   const [changeReason, setChangeReason] = useState('')
   const changeIntent = useRef<{body:string;requestKey:string}|null>(null)
 
   // 编辑页每次真正打开都取一次服务端最新数据（不靠 5min 内的 fresh 缓存，否则关闭重开拿旧 revision）。
   // `isFetchedAfterMount` 用于判断「本次挂载后的取数是否已完成」：在它之前不得用缓存旧值初始化表单。
-  const { data: product, isError, refetch, isFetchedAfterMount } =
-    useProduct(editId || 0, { refetchOnMount: 'always' })
+  const { data: product, error, isError, refetch, isFetchedAfterMount } =
+    useProduct(canOpen ? editId || 0 : 0, { refetchOnMount: 'always' })
+  useWorkspaceTabTitle(canOpen && isFetchedAfterMount && !isError ? product?.code : undefined)
 
   const [categoryFinderOpen, setCategoryFinderOpen] = useState(false)
   const [categoryName, setCategoryName] = useState('')
   const [supplierFinderOpen, setSupplierFinderOpen] = useState(false)
   const [supplierName, setSupplierName] = useState('')
-  const [priceRates, setPriceRates] = useState(DEFAULT_RATES)
+  const [priceRates, setPriceRates] = useState<typeof DEFAULT_RATES | null>(null)
 
   useEffect(() => {
-    getSettingsApi().then(r => {
+    if (!canReadPriceRates) return
+    let current = true
+    getSettingsApi({ skipGlobalError: true }).then(r => {
+      if (!current) return
       const map = r?.map ?? {}
       setPriceRates({
         A: Number(map.price_rate_a?.value ?? DEFAULT_RATES.A),
@@ -81,17 +91,17 @@ export default function ProductFormPage() {
         D: Number(map.price_rate_d?.value ?? DEFAULT_RATES.D),
       })
     }).catch(() => {})
-  }, [])
+    return () => { current = false }
+  }, [canReadPriceRates])
 
   // 表单初始值 =「本次打开（挂载后首次取数**成功**返回）时的服务端数据」快照。
   // 它与提交基线 revision 同源，并且**不随后台 refetch 变化**：
   //  - 后台刷新不会抹掉未保存草稿；
   //  - 也不会把「服务端数据变了」误判成「用户改过」（原缺陷：拿随 product 重算的初始值比较 isDirty）。
   type FormState = typeof EMPTY_FORM
-  const [form, setForm] = useState<FormState>(() => (isEdit ? { ...EMPTY_FORM } : EMPTY_FORM))
+  const [draft, setForm] = useState<FormState>(() => (isEdit ? { ...EMPTY_FORM } : EMPTY_FORM))
   const [baseline, setBaseline] = useState<FormState | null>(isEdit ? null : EMPTY_FORM)
-  const formRef = useRef(form)
-  formRef.current = form
+  const form = !canSave && baseline ? baseline : draft
 
   // 以「商品 id + 本次取数完成」为界初始化一次。后台 refetch（同一 id）不再进入 ⇒ 草稿与 dirty 基线都保住。
   // 编辑页必须等本次新数据返回后才初始化：不能用 fresh 缓存旧值抢先渲染（否则会拿旧 revision 提交）。
@@ -130,7 +140,9 @@ export default function ProductFormPage() {
     initedProductIdRef.current = product.id
   }, [product, isEdit, isError, isFetchedAfterMount])
 
-  const set = (k: string, v: unknown) => setForm(f => ({ ...f, [k]: v }))
+  const set = (k: string, v: unknown) => {
+    if (!fieldsDisabled) setForm(f => ({ ...f, [k]: v }))
+  }
 
   // 辅助计量单位（文档 03）：基本单位即 form.unit（率恒 1），此处维护辅助单位列表
   const addUnit = () => setForm(f => ({ ...f, units: [...f.units, { unitName: '', conversionRate: '' }] }))
@@ -138,11 +150,13 @@ export default function ProductFormPage() {
   const setUnit = (i: number, k: keyof AuxUnit, v: string) => setForm(f => ({ ...f, units: f.units.map((u, idx) => idx === i ? { ...u, [k]: v } : u) }))
 
   function handleCategoryConfirm(cat: { id: number; name: string }) {
+    if (fieldsDisabled) return
     set('categoryId', cat.id)
     setCategoryName(cat.name)
   }
 
   function handleSupplierConfirm(result: FinderResult) {
+    if (fieldsDisabled) return
     set('supplierId', result.id)
     setSupplierName(result.name)
     setSupplierFinderOpen(false)
@@ -159,18 +173,20 @@ export default function ProductFormPage() {
   const formRevisionRef = useRef<number | undefined>(undefined)
 
   // 是否改过：与**本次打开时的快照基线**比较；后台 refetch 不改基线，故不会误报「未保存」
-  const isDirty = baseline ? JSON.stringify(formRef.current) !== JSON.stringify(baseline) : false
-  useDirtyGuard(tabPath, isDirty || !!changeReason.trim())
+  const isDirty = canOpen && canSave && baseline !== null && JSON.stringify(draft) !== JSON.stringify(baseline)
+  useDirtyGuard(tabPath, isDirty || (canOpen && canSave && !!changeReason.trim()))
+
+  const rates = canReadPriceRates ? priceRates : null
 
   const priceLevels = [
-    { key: 'A', field: 'salePriceA' as const, rate: priceRates.A, color: 'text-blue-600' },
-    { key: 'B', field: 'salePriceB' as const, rate: priceRates.B, color: 'text-emerald-600' },
-    { key: 'C', field: 'salePriceC' as const, rate: priceRates.C, color: 'text-orange-600' },
-    { key: 'D', field: 'salePriceD' as const, rate: priceRates.D, color: 'text-rose-600' },
+    { key: 'A', field: 'salePriceA' as const, color: 'text-blue-600' },
+    { key: 'B', field: 'salePriceB' as const, color: 'text-emerald-600' },
+    { key: 'C', field: 'salePriceC' as const, color: 'text-orange-600' },
+    { key: 'D', field: 'salePriceD' as const, color: 'text-rose-600' },
   ] as const
 
   async function handleSubmit() {
-    if (!canSave) return
+    if (!canOpen || fieldsDisabled) return
     if (!form.categoryId) { toast.warning('请选择商品分类'); return }
     if (!form.supplierId) { toast.warning('请选择供应商'); return }
     if (!form.unit.trim()) { toast.warning('请输入单位'); return }
@@ -246,6 +262,10 @@ export default function ProductFormPage() {
     navigate(getWorkspaceListPath('/products'))
   }
 
+  if (!canOpen || (error instanceof ApiClientError && error.status === 403)) {
+    return <EmptyState variant="no-permission" title={isNew ? '无权新增商品' : '无权查看商品'} />
+  }
+
   // 编辑页：**本次取数成功返回前**不渲染表单——不用 fresh 缓存旧值冒充"最新数据"，
   // 否则用户会以为看到的就是最新价，直接保存又反复 409、无从恢复。
   // 注意 `isFetchedAfterMount` 在**失败后也会变 true**，故必须叠加 `isError` 才拦住错误快照初始化；
@@ -276,7 +296,7 @@ export default function ProductFormPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      {conflict && (
+      {canSave && conflict && (
         // 冲突提示：**保留草稿**（不自动刷新详情，否则会抹掉未保存输入）
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
           <p className="font-medium text-destructive-ink">该商品已被他人修改，本次修改未保存</p>
@@ -290,17 +310,17 @@ export default function ProductFormPage() {
         <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
           <p className="font-medium text-destructive-ink">最新数据刷新失败</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            当前填写内容仍在。保存时若提示已被修改，请复制需要保留的内容后关闭重开核对。
+            {canSave ? '当前填写内容仍在。保存时若提示已被修改，请复制需要保留的内容后关闭重开核对。' : '当前显示上次读取的商品资料。'}
           </p>
           <Button variant="outline" size="sm" className="mt-2" onClick={() => { void refetch() }}>重试</Button>
         </div>
       )}
       <ActionBar
-        title={isNew ? '新增商品' : '编辑商品'}
-        description="维护商品规格、单位与价格。"
+        title={isNew ? '新增商品' : canSave ? '编辑商品' : '查看商品'}
+        description={canSave ? '维护商品规格、单位与价格。' : '当前账号只能查看商品资料。'}
         subtitle={isEdit || isDirty ? (
           <>
-            {isEdit && <EditModeBadge />}
+            {isEdit && canSave && <EditModeBadge />}
             {isEdit && product
               ? <span className="text-sm text-muted-foreground">编码：<code className="font-mono">{product.code}</code></span>
               : null}
@@ -322,64 +342,74 @@ export default function ProductFormPage() {
       <Section title="基本信息">
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
           <div className="space-y-1.5">
-            <Label>名称 *</Label>
-            <Input value={form.name} onChange={e => set('name', e.target.value)} disabled={submitting} />
+            <Label>名称{canSave && ' *'}</Label>
+            <Input value={form.name} onChange={e => set('name', e.target.value)} disabled={fieldsDisabled} />
           </div>
           <div className="space-y-1.5">
-            <Label>分类 *</Label>
-            <PickerField
-              value={categoryName}
-              placeholder="点击选择分类…"
-              onOpen={() => setCategoryFinderOpen(true)}
-              onDoubleClick={() => { setCategoryFinderOpen(false); navigate('/categories') }}
-            />
-            <CategoryFinder
-              open={categoryFinderOpen}
-              onClose={() => setCategoryFinderOpen(false)}
-              onConfirm={handleCategoryConfirm}
-              value={form.categoryId}
-              leafOnly
-            />
+            <Label>分类{canSave && ' *'}</Label>
+            {canSave ? (
+              <>
+                <PickerField
+                  value={categoryName}
+                  placeholder="点击选择分类…"
+                  onOpen={() => setCategoryFinderOpen(true)}
+                  onDoubleClick={() => { setCategoryFinderOpen(false); navigate('/categories') }}
+                  disabled={fieldsDisabled}
+                />
+                <CategoryFinder
+                  open={categoryFinderOpen}
+                  onClose={() => setCategoryFinderOpen(false)}
+                  onConfirm={handleCategoryConfirm}
+                  value={form.categoryId}
+                  leafOnly
+                />
+              </>
+            ) : <p className="text-sm">{product?.categoryName || '—'}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>供应商 *</Label>
-            <PickerField
-              value={supplierName}
-              placeholder="点击选择供应商…"
-              onOpen={() => setSupplierFinderOpen(true)}
-              onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }}
-            />
-            <SupplierFinder
-              open={supplierFinderOpen}
-              onClose={() => setSupplierFinderOpen(false)}
-              onConfirm={handleSupplierConfirm}
-            />
+            <Label>供应商{canSave && ' *'}</Label>
+            {canSave ? (
+              <>
+                <PickerField
+                  value={supplierName}
+                  placeholder="点击选择供应商…"
+                  onOpen={() => setSupplierFinderOpen(true)}
+                  onDoubleClick={() => { setSupplierFinderOpen(false); navigate('/suppliers') }}
+                  disabled={fieldsDisabled}
+                />
+                <SupplierFinder
+                  open={supplierFinderOpen}
+                  onClose={() => setSupplierFinderOpen(false)}
+                  onConfirm={handleSupplierConfirm}
+                />
+              </>
+            ) : <p className="text-sm">{product?.supplierName || '—'}</p>}
           </div>
           <div className="space-y-1.5">
-            <Label>单位 *</Label>
-            <Input value={form.unit} onChange={e => set('unit', e.target.value)} disabled={submitting} placeholder="例如：个、箱、kg" />
+            <Label>单位{canSave && ' *'}</Label>
+            <Input value={form.unit} onChange={e => set('unit', e.target.value)} disabled={fieldsDisabled} placeholder={canSave ? '例如：个、箱、kg' : undefined} />
           </div>
           <div className="space-y-1.5">
-            <Label>型号 *</Label>
-            <Input value={form.spec} onChange={e => set('spec', e.target.value)} disabled={submitting} maxLength={100} placeholder="商品型号" />
+            <Label>型号{canSave && ' *'}</Label>
+            <Input value={form.spec} onChange={e => set('spec', e.target.value)} disabled={fieldsDisabled} maxLength={100} placeholder={canSave ? '商品型号' : undefined} />
           </div>
           <div className="space-y-1.5">
-            <Label>颜色 *</Label>
-            <Input value={form.color} onChange={e => set('color', e.target.value)} disabled={submitting} maxLength={30} placeholder="商品颜色" />
+            <Label>颜色{canSave && ' *'}</Label>
+            <Input value={form.color} onChange={e => set('color', e.target.value)} disabled={fieldsDisabled} maxLength={30} placeholder={canSave ? '商品颜色' : undefined} />
           </div>
           <div className="space-y-1.5">
             <Label>供应商型号</Label>
-            <Input value={form.articleNumber} onChange={e => set('articleNumber', e.target.value)} disabled={submitting} maxLength={100} placeholder="供应商给的商品型号（选填）" />
+            <Input value={form.articleNumber} onChange={e => set('articleNumber', e.target.value)} disabled={fieldsDisabled} maxLength={100} placeholder={canSave ? '供应商给的商品型号（选填）' : undefined} />
           </div>
           <div className="space-y-1.5">
-            <Label>进价 *</Label>
-            <Input type="number" step="0.01" min="0.01" value={form.costPrice} onChange={e => set('costPrice', e.target.value)} disabled={submitting} />
+            <Label>进价{canSave && ' *'}</Label>
+            <Input type="number" step="0.01" min="0.01" value={form.costPrice} onChange={e => set('costPrice', e.target.value)} disabled={fieldsDisabled} />
           </div>
           <div className="space-y-1.5">
             <Label>数量规则</Label>
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={form.allowDecimalQty}
-                onChange={e => set('allowDecimalQty', e.target.checked)} disabled={submitting} />
+                onChange={e => set('allowDecimalQty', e.target.checked)} disabled={fieldsDisabled} />
               <span>允许小数数量</span>
             </label>
           </div>
@@ -387,7 +417,7 @@ export default function ProductFormPage() {
             <Label>批次管理</Label>
             <label className="flex h-10 items-center gap-2 text-sm">
               <input type="checkbox" className="h-4 w-4" checked={form.batchManaged}
-                onChange={e => set('batchManaged', e.target.checked)} disabled={submitting} />
+                onChange={e => set('batchManaged', e.target.checked)} disabled={fieldsDisabled} />
               <span className="text-muted-foreground">收货强制录入批次/效期，出库先到期先出</span>
             </label>
           </div>
@@ -395,8 +425,8 @@ export default function ProductFormPage() {
             <div className="space-y-1.5">
               <Label>保质期天数</Label>
               <Input type="number" min="1" max="3650" value={form.shelfLifeDays}
-                onChange={e => set('shelfLifeDays', e.target.value)} disabled={submitting}
-                placeholder="效期=生产日期+保质期，留空则收货须直接录效期" />
+                onChange={e => set('shelfLifeDays', e.target.value)} disabled={fieldsDisabled}
+                placeholder={canSave ? '效期=生产日期+保质期，留空则收货须直接录效期' : undefined} />
             </div>
           )}
         </div>
@@ -411,19 +441,19 @@ export default function ProductFormPage() {
           {form.units.length === 0 && <p className="text-sm text-muted-foreground">未配置辅助单位（默认只按基本单位记数）。</p>}
           {form.units.map((u, i) => (
             <div key={i} className="flex items-center gap-2">
-              <Input value={u.unitName} onChange={e => setUnit(i, 'unitName', e.target.value)} disabled={submitting} maxLength={20} placeholder="单位名，如 箱" className="w-32" />
+              <Input value={u.unitName} onChange={e => setUnit(i, 'unitName', e.target.value)} disabled={fieldsDisabled} maxLength={20} placeholder="单位名，如 箱" className="w-32" />
               <span className="text-sm text-muted-foreground">1 {u.unitName.trim() || '箱'} =</span>
-              <Input type="number" min="2" step="1" value={u.conversionRate} onChange={e => setUnit(i, 'conversionRate', e.target.value)} disabled={submitting} placeholder="12" className="w-24 text-right tabular-nums" />
+              <Input type="number" min="2" step="1" value={u.conversionRate} onChange={e => setUnit(i, 'conversionRate', e.target.value)} disabled={fieldsDisabled} placeholder="12" className="w-24 text-right tabular-nums" />
               <span className="text-sm text-muted-foreground">{form.unit.trim() || '基本单位'}</span>
-              <Button type="button" variant="ghost" size="sm" className="text-destructive-ink" onClick={() => removeUnit(i)} disabled={submitting}>删除</Button>
+              {canSave && <Button type="button" variant="ghost" size="sm" className="text-destructive-ink" onClick={() => removeUnit(i)} disabled={fieldsDisabled}>删除</Button>}
             </div>
           ))}
-          <Button type="button" variant="outline" size="sm" onClick={addUnit} disabled={submitting || !form.unit.trim()}>+ 增加辅助单位</Button>
+          {canSave && <Button type="button" variant="outline" size="sm" onClick={addUnit} disabled={fieldsDisabled || !form.unit.trim()}>+ 增加辅助单位</Button>}
         </div>
       </Section>
 
       <Section title="销售价格">
-        <p className="mb-3 text-xs text-muted-foreground">留空则按系统加价比例自动生成（价格A +{priceRates.A}%  B +{priceRates.B}%  C +{priceRates.C}%  D +{priceRates.D}%）。</p>
+        {canSave && <p className="mb-3 text-xs text-muted-foreground">留空则按系统加价比例自动生成{rates ? `（价格A +${rates.A}%  B +${rates.B}%  C +${rates.C}%  D +${rates.D}%）` : ''}。</p>}
         <div className="grid grid-cols-4 gap-x-6 gap-y-4">
           {priceLevels.map(item => {
             const cost = Number(form.costPrice || 0)
@@ -436,8 +466,8 @@ export default function ProductFormPage() {
                   type="number" step="0.01" min="0.01"
                   value={form[item.field]}
                   onChange={e => set(item.field, e.target.value)}
-                  disabled={submitting}
-                  placeholder={Number.isFinite(cost) ? (cost * (1 + item.rate / 100)).toFixed(2) : '0.00'}
+                  disabled={fieldsDisabled}
+                  placeholder={rates && Number.isFinite(cost) ? (cost * (1 + rates[item.key] / 100)).toFixed(2) : '—'}
                 />
                 {margin != null && (
                   <p className={`text-xs ${margin >= 0 ? 'text-emerald-600' : 'text-destructive-ink'}`}>
@@ -467,20 +497,26 @@ export default function ProductFormPage() {
         )}
       </Section>
 
-      {editId && <><label className="flex flex-wrap items-center gap-2 text-sm"><span className="text-muted-foreground">变更原因（选填）</span><Input value={changeReason} onChange={e => setChangeReason(e.target.value)} maxLength={500} disabled={submitting} className="h-9 min-w-48 flex-1" placeholder="本次改价的说明" /></label><ProductPriceHistory id={editId} /></>}
+      {editId && canSave && (
+        <label className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">变更原因（选填）</span>
+          <Input value={changeReason} onChange={e => setChangeReason(e.target.value)} maxLength={500} disabled={fieldsDisabled} className="h-9 min-w-48 flex-1" placeholder="本次改价的说明" />
+        </label>
+      )}
+      {editId && <ProductPriceHistory id={editId} />}
       <Section title="库存策略">
         <p className="mb-3 text-xs text-muted-foreground">{globalPolicy.allowed ? '全局默认（所有仓库）。留空不启用；按仓覆盖请到「补货建议」。' : '全局默认只读；仅不限仓管理账号可修改。'}</p>
         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
           <div className="space-y-1.5">
             <Label>安全库存</Label>
             <Input quantity type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={globalPolicy.allowed ? form.safetyStock : isEdit ? product?.safetyStock ?? '' : ''}
-              onChange={e => set('safetyStock', e.target.value)} disabled={submitting || !globalPolicy.allowed}
+              onChange={e => set('safetyStock', e.target.value)} disabled={fieldsDisabled || !globalPolicy.allowed}
               placeholder="低于此为紧急缺货风险" />
           </div>
           <div className="space-y-1.5">
             <Label>补货点</Label>
             <Input quantity type="number" step={qtyStep(form.allowDecimalQty)} min="0" value={globalPolicy.allowed ? form.reorderPoint : isEdit ? product?.reorderPoint ?? '' : ''}
-              onChange={e => set('reorderPoint', e.target.value)} disabled={submitting || !globalPolicy.allowed}
+              onChange={e => set('reorderPoint', e.target.value)} disabled={fieldsDisabled || !globalPolicy.allowed}
               placeholder="可用+在途 低于此即出现在补货建议" />
           </div>
         </div>
@@ -489,11 +525,11 @@ export default function ProductFormPage() {
       <Section title="其他">
         <div className="space-y-1.5">
           <Label>备注</Label>
-          <LimitedInput maxLength={30} value={form.remark} onChange={e => set('remark', e.target.value)} disabled={submitting} />
+          {canSave ? <LimitedInput maxLength={30} value={form.remark} onChange={e => set('remark', e.target.value)} disabled={fieldsDisabled} /> : <p className="whitespace-pre-wrap break-words text-sm">{form.remark || '—'}</p>}
         </div>
         {isEdit && (
           <div className="mt-4 flex items-center gap-2">
-            <input type="checkbox" id="pd-active" checked={form.isActive} onChange={e => set('isActive', e.target.checked)} className="accent-primary" />
+            <input type="checkbox" id="pd-active" checked={form.isActive} onChange={e => set('isActive', e.target.checked)} disabled={fieldsDisabled} className="accent-primary" />
             <Label htmlFor="pd-active" className="cursor-pointer">启用</Label>
           </div>
         )}

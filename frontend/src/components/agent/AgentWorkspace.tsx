@@ -43,7 +43,7 @@ function Conversation() {
         <button className="xiaoman-new" type="button" disabled={busy || loading} onClick={() => { followEnd.current = true; state.newTask(); input.current?.focus() }}><Plus size={16} aria-hidden="true" />新对话</button>
         <div className="xiaoman-history-heading"><h2>最近记录</h2><button type="button" aria-label="刷新最近记录" disabled={busy || loading} onClick={() => void state.loadTasks()}><RefreshCw size={14} aria-hidden="true" /></button></div>
         <div className="xiaoman-history">
-          {loading ? <p className="xiaoman-sidebar-hint" role="status">正在找回最近记录…</p> : state.historyError ? <div className="xiaoman-history-error" role="alert"><p>{state.historyError}</p><button type="button" onClick={() => void state.loadTasks()}>重试读取任务</button></div> : state.tasks.length === 0 ? <p className="xiaoman-sidebar-hint">最近记录只留下走过业务的任务。打招呼、本地短回和闲聊不会出现在这里。</p> : state.tasks.map(task => <button
+          {loading ? <p className="xiaoman-sidebar-hint" role="status">正在找回最近记录…</p> : state.historyError ? <div className="xiaoman-history-error" role="alert"><p>{state.historyError}</p><button type="button" onClick={() => void state.loadTasks()}>重试读取任务</button></div> : state.tasks.length === 0 ? <p className="xiaoman-sidebar-hint">最近记录只显示已进入业务流程的任务。</p> : state.tasks.map(task => <button
             key={task.id} type="button" disabled={busy} aria-label={`打开记录：${GRAPH_LABELS[task.graph] || '业务'}，${task.userText || '最近记录'}`}
             aria-current={selected?.id === task.id ? 'true' : undefined} className={`xiaoman-history-item ${selected?.id === task.id ? 'is-selected' : ''}`}
             onClick={() => { followEnd.current = true; void state.selectTask(task.id) }}>
@@ -61,9 +61,8 @@ function Conversation() {
               <div className="xiaoman-scope">
                 <h3>能做</h3>
                 <p>查库存、开销售或采购草稿、看账款和收款、查仓库里卡住的作业、看经营简报。商品名不太准时，会列出你权限内的相近商品让你点选，不会擅自换成某一个。</p>
-                <h3>不能做</h3>
-                <p>取消订单、改价、审批、付款、发货，请走下面的菜单。大额硬拦这轮不做。卡点只看仓库执行，不扩到商务。闲聊不留。</p>
-                <p>最近记录只留下走过业务的任务。打招呼、本地短回和闲聊不进列表，不是聊天记录丢了。</p>
+                <h3>请到业务页面办理</h3>
+                <p>取消订单、改价、审批、付款和发货，请到相应页面办理。请在业务页面核对大额单据和商务处理进度。</p>
               </div>
               <div className="xiaoman-guides">{ASSISTANT_GUIDE_LINKS.map(link => <button type="button" key={link.path} className="xiaoman-guide" disabled={busy || loading} onClick={() => openGuide(link.path)}>{link.label}</button>)}</div>
               <div className="xiaoman-prompts">{PROMPTS.map(({ label, hint, text, Icon }) => <button type="button" key={label} disabled={busy || loading} onClick={() => fill(text)}><Icon size={19} aria-hidden="true" /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</div>

@@ -7,6 +7,7 @@ import { expect, test, vi } from 'vitest'
 import ReturnsPage from './index'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn() }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => permission === 'return.order.view' }) }))
 vi.mock('@/api/returns', () => ({ getSaleReturnsApi: mocks.list, getPurchaseReturnsApi: mocks.list,
   confirmSaleReturnApi: vi.fn(), cancelSaleReturnApi: vi.fn(), confirmPurchaseReturnApi: vi.fn(), cancelPurchaseReturnApi: vi.fn() }))
 vi.mock('./ReturnQueryDialog', () => ({ default: () => null }))
@@ -53,4 +54,12 @@ test('普通销售与采购退货保持原两位金额格式', async () => {
       expect(host.querySelector('[title="本单实际净冲减"]')).toBeNull()
     })
   }
+})
+
+test.each(['/returns/sale', '/returns/purchase'])('退货列表 %s 单号列统一显示创建时间', async path => {
+  await page(path, [{ id: 1, returnNo: 'R1', totalAmount: 0, status: 1, createdAt: '2026-11-12 09:30:00' }], host => {
+    expect(host.querySelector('thead th')?.textContent).toContain('退货单 / 创建时间')
+    expect(host.querySelector('tbody td')?.textContent).toContain('R1')
+    expect(host.querySelector('tbody td')?.textContent).toContain('09:30')
+  })
 })

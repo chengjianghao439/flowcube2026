@@ -11,6 +11,7 @@
 //   ④  fresh 缓存窗口内关闭重开不重新取数 ⇒ 表单仍旧价/旧 revision、重试仍 409。
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import ProductFormPage from './form'
@@ -25,9 +26,8 @@ vi.mock('@/api/products', () => ({
   getProductsForFinderApi: vi.fn(),
 }))
 vi.mock('@/api/settings', () => ({ getSettingsApi: vi.fn(async () => ({ map: {} })) }))
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => ['product.create', 'product.update'].includes(permission) }) }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => ['product.view', 'product.create', 'product.update'].includes(permission) }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }))
 
 // finder 是「选数据」的弹窗外壳，属边界：mock 成一个可点选后回填的按钮。
 vi.mock('@/components/finder', () => ({
@@ -74,9 +74,11 @@ async function renderAt(path: string) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <TabPathContext.Provider value={path}>
-          <ProductFormPage />
-        </TabPathContext.Provider>
+        <MemoryRouter initialEntries={[path]}>
+          <TabPathContext.Provider value={path}>
+            <ProductFormPage />
+          </TabPathContext.Provider>
+        </MemoryRouter>
       </QueryClientProvider>,
     )
   })

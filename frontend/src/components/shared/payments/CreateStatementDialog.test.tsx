@@ -22,6 +22,13 @@ const fixture = vi.hoisted(() => ({
 vi.mock('@/hooks/useActiveWorkspaceTab', () => ({ useActiveWorkspaceTab: () => true }))
 vi.mock('@/components/shared/AppDialog', () => ({ AppDialog: ({ description, children, footer }: { description?: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode }) => <div><div className="fc-dialog-caption">{description}</div>{children}{footer}</div> }))
 vi.mock('@/components/shared/DatePicker', () => ({ DatePicker: () => <div /> }))
+vi.mock('@/hooks/useFinderReadContext', () => ({ useFinderReadContext: () => undefined }))
+vi.mock('@/components/finder/SupplierFinder', () => ({
+  SupplierFinder: ({ onConfirm, onClose }: { onConfirm: (supplier: { id: number; name: string }) => void; onClose: () => void }) => <>
+    <button onClick={() => onConfirm({ id: 99, name: '合成供应商 B' })}>选择合成供应商 B</button>
+    <button onClick={onClose}>取消选择供应商</button>
+  </>,
+}))
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({ enabled, queryKey }: { enabled: boolean; queryKey: unknown[] }) => {
     fixture.queryKeys.push(queryKey)
@@ -104,4 +111,23 @@ it('全选、取消全选及候选刷新后不会提交失效 ID', async () => {
     { id: 21, orderNo: 'PC001', totalAmount: 50, paidAmount: 0, balance: 50, status: 1, createdAt: '2026-09-24' },
     { id: 22, orderNo: 'PC002', totalAmount: 30, paidAmount: 0, balance: 30, status: 1, createdAt: '2026-09-24' },
   ]
+})
+
+it('供应商选择器填入账款匹配名称，并清除另一供应商的候选与勾选', async () => {
+  useAuthStore.setState({ user: { roleId: 5, permissions: ['payment.execute', 'supplier.view'] } as never })
+  const { host, root } = await mount(1)
+  const button = (text: string) => [...host.querySelectorAll('button')].find(b => b.textContent === text)!
+  await act(async () => button('全选').click())
+  await act(async () => button('选择供应商').click())
+  await act(async () => button('取消选择供应商').click())
+  expect(host.textContent).toContain('已选 2 笔')
+  await act(async () => button('选择供应商').click())
+  await act(async () => button('选择合成供应商 B').click())
+  expect(host.querySelector<HTMLInputElement>('input[placeholder="输入供应商名称"]')?.value).toBe('合成供应商 B')
+  expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(0)
+  expect(host.textContent).toContain('按账款记录上的完整名称匹配')
+  await act(async () => button('查待对账账款').click())
+  expect(fixture.queryKeys.at(-1)?.[2]).toMatchObject({ partyName: '合成供应商 B' })
+  expect(host.textContent).toContain('已选 0 笔')
+  await act(async () => root.unmount())
 })

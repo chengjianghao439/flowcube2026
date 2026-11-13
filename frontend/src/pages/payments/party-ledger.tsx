@@ -1,5 +1,6 @@
 import { useState, useContext, useId } from 'react'
 import { money } from '@/lib/format'
+import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -61,7 +62,7 @@ function SourceDetails({ row, type, onClose }: { row: PartyLedgerRow; type: 1 | 
         ]} data={query.data.receipt.settlements} rowKey="entryId" emptyText="尚未核销，款项保留为预收或预付。" />
       </>}
       {query.data?.entries && <DataTable columns={[
-        { key: 'paymentDate', title: '收付款日期', width: 120 },
+        { key: 'paymentDate', title: '收付款日期', width: 120, render: value => formatDisplayDate(value) },
         { key: 'amount', title: '登记金额', width: 120, align: 'right', render: v => money(Number(v)) },
         { key: 'remark', title: '备注', expandableText: true, width: 240 },
       ]} data={query.data.entries} emptyText="该账款尚无收付款记录。" />}
@@ -90,8 +91,8 @@ export default function PartyLedgerPage() {
   })
   const data = query.data
   const columns: TableColumn<PartyLedgerRow>[] = [
-    { key: 'occurredAt', title: '记账时间', width: 175 },
-    { key: 'businessDate', title: '业务日期', width: 120, render: v => String(v || '—') },
+    { key: 'occurredAt', title: '记账时间', width: 175, render: value => formatDisplayDateTime(value) },
+    { key: 'businessDate', title: '业务日期', width: 120, render: value => formatDisplayDate(value) },
     { key: 'eventName', title: '业务类型', width: 165 },
     { key: 'documentNo', title: '关联单号', width: 180 },
     { key: 'increase', title: type === 2 ? '增加应收' : '增加应付', width: 120, align: 'right', render: v => Number(v) ? money(Number(v)) : '—' },
@@ -130,7 +131,7 @@ export default function PartyLedgerPage() {
         ]} />
         <div className="space-y-1 text-sm leading-6 text-muted-foreground">
           <p>正数为{type === 2 ? '客户欠款' : '待付供应商款项'}，负数为{type === 2 ? '预收或应退客户款项' : '预付或待供应商退回款项'}。金额单位：元。</p>
-          <p>完整记账始于 {data.historyStartedAt}。此前账款以当时净余额结转，业务日期仅供追溯，不能据此还原更早的逐笔余额。</p>
+          <p>完整记账始于 {formatDisplayDateTime(data.historyStartedAt)}。此前账款以当时净余额结转，业务日期仅供追溯，不能据此还原更早的逐笔余额。</p>
           {data.historyIncomplete && <p className="text-warning-ink" role="status">查询起日早于记账启用时间，期初及发生额仅包含已有记录，不能作为该历史期间的完整对账依据。</p>}
           {data.unassignedCount > 0 && <p className="text-warning-ink">系统另有 {data.unassignedCount} 条{type === 2 ? '应收' : '应付'}记录尚无明确单位归属，未分配到本明细，请在原账款中核查。</p>}
         </div>

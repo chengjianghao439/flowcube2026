@@ -113,6 +113,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const allowDecimalOf = useProductQtyPolicies(items.map(i => i.productId))
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
+  const [discardOpen, setDiscardOpen] = useState(false)
   const [submitLocked, setSubmitLocked] = useState(false)
   const [fromError, setFromError] = useState(false)
   const [toError, setToError] = useState(false)
@@ -128,16 +129,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
   const createMutate = useMutation({ mutationFn: createTransferApi })
   const updateMutate = useMutation({ mutationFn: (v: { id: number; data: Parameters<typeof updateTransferApi>[1] }) => updateTransferApi(v.id, v.data) })
-  const submitting = createMutate.isPending || updateMutate.isPending
+  const saving = submitLocked || createMutate.isPending || updateMutate.isPending
 
   const addItem = () => {
-    const key = counter
-    setCounter(c => c + 1)
-    setItems(p => [
-      ...p,
-      { _key: key, productId: 0, productCode: '', productName: '', unit: '', articleNumber: null, spec: null, color: null, quantity: 1, remark: '' },
-    ])
-    setFinderItemKey(key)
+    if (saving) return
+    setFinderItemKey(null)
     setFinderOpen(true)
   }
 
@@ -152,24 +148,18 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   }
 
   function handleFinderConfirm(product: ProductFinderResult) {
-    if (finderItemKey === null) return
-    const k = finderItemKey
-    setItems(prev =>
-      prev.map(i =>
-        i._key === k
-          ? {
-              ...i,
-              productId: product.id,
-              productCode: product.code,
-              productName: product.name,
-              unit: product.unit,
-              articleNumber: product.articleNumber,
-              spec: product.spec,
-              color: product.color,
-            }
-          : i,
-      ),
-    )
+    if (!finderOpen || saving || !Number.isSafeInteger(product.id) || product.id <= 0) return
+    const k = finderItemKey ?? counter
+    const fields = {
+      productId: product.id, productCode: product.code, productName: product.name, unit: product.unit,
+      articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null,
+    }
+    if (finderItemKey === null) {
+      setCounter(c => c + 1)
+      setItems(prev => [...prev, { _key: k, quantity: 1, remark: '', ...fields }])
+    } else {
+      setItems(prev => prev.map(item => item._key === k ? { ...item, ...fields } : item))
+    }
     setInvalidItemKeys(prev => {
       if (!prev.has(k)) return prev
       const next = new Set(prev)
@@ -179,7 +169,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   }
 
   async function handleSubmit() {
-    if (submitLocked || submitting) return
+    if (saving) return
     const missingFrom = !fromWarehouseId || !fromWarehouseName
     const missingTo = !toWarehouseId || !toWarehouseName
     setFromError(missingFrom)
@@ -236,7 +226,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
   return (
     <div className="desktop-document-form flex flex-col gap-3">
-      {incomingDraft && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3 text-sm"><p>收到采购调拨建议：{incomingDraft.fromWarehouseName} → {incomingDraft.toWarehouseName}。{isDirty ? '当前有未保存内容，带入将替换当前表单。' : '核对后带入表单。'}</p><div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setAppliedProcurementKey(incomingKey)}>保留当前表单</Button><Button size="sm" onClick={applyProcurementDraft}>带入采购建议</Button></div></div>}
+      {incomingDraft && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3 text-sm"><p>收到采购调拨建议：{incomingDraft.fromWarehouseName} → {incomingDraft.toWarehouseName}。{isDirty ? '当前有未保存内容，带入将替换当前表单。' : '核对后带入表单。'}</p><div className="flex gap-2"><Button size="sm" variant="outline" disabled={saving} onClick={() => setAppliedProcurementKey(incomingKey)}>保留当前表单</Button><Button size="sm" disabled={saving} onClick={applyProcurementDraft}>带入采购建议</Button></div></div>}
       <ActionBar
         title={isEdit ? '编辑调拨单' : '新建调拨单'}
         description="核对调出仓、调入仓与商品明细。"
@@ -244,12 +234,15 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         rightActions={
           <>
             {isEdit && (
-              <Button variant="outline" disabled={submitting || submitLocked} onClick={() => onSaved?.()}>
+              <Button variant="outline" disabled={saving} onClick={() => {
+                if (isDirty) setDiscardOpen(true)
+                else onSaved?.()
+              }}>
                 取消编辑
               </Button>
             )}
-            <Button onClick={handleSubmit} disabled={submitting || submitLocked} className="gap-1.5">
-              {submitting || submitLocked ? (
+            <Button onClick={handleSubmit} disabled={saving} className="gap-1.5">
+              {saving ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />保存中…</>
               ) : (
                 <><Save className="h-4 w-4" />{isEdit ? '保存修改' : '保存草稿'}</>
@@ -265,6 +258,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             <Label htmlFor="transfer-from">调出仓库 *</Label>
             <WarehouseSelect
               id="transfer-from"
+              disabled={saving}
               value={fromWarehouseId ? +fromWarehouseId : null}
               onChange={(id, name) => { setFromWarehouseId(id ? String(id) : ''); setFromWarehouseName(name); setFromError(false) }}
               placeholder="选择调出仓库"
@@ -277,6 +271,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             <Label htmlFor="transfer-to">调入仓库 *</Label>
             <WarehouseSelect
               id="transfer-to"
+              disabled={saving}
               value={toWarehouseId ? +toWarehouseId : null}
               onChange={(id, name) => { setToWarehouseId(id ? String(id) : ''); setToWarehouseName(name); setToError(false) }}
               placeholder="选择调入仓库"
@@ -290,6 +285,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             <Label htmlFor="transfer-remark">备注</Label>
             <Input
               id="transfer-remark"
+              disabled={saving}
               maxLength={200}
               value={remark}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)}
@@ -303,7 +299,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         title="调拨明细"
         compact
         actions={
-          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
+          <Button type="button" size="sm" variant="outline" disabled={saving} onClick={addItem} className="gap-1.5">
             <Plus className="h-4 w-4" />添加商品
           </Button>
         }
@@ -322,6 +318,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                   <tr key={item._key} className="border-b border-border/40">
                     <ProductIdentityCells compact product={item} nameContent={<button
                         type="button"
+                        disabled={saving}
                         onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
                         className={cn(
                           'block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -338,6 +335,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                     <td className="py-2.5">
                       <Input quantity
                         type="number"
+                        disabled={saving}
                         min="0"
                         step={qtyStep(allowDecimalOf(item.productId))}
                         placeholder="数量"
@@ -353,6 +351,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         size="sm"
                         variant="ghost"
                         aria-label="删除该行商品"
+                        disabled={saving}
                         className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink"
                         onClick={() => removeItem(item._key)}
                       >
@@ -378,6 +377,15 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         warehouseId={fromWarehouseId ? +fromWarehouseId : null}
         onConfirm={handleFinderConfirm}
         onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
+      />
+      <ConfirmDialog
+        open={discardOpen && active}
+        title="放弃未保存的修改？"
+        description="当前调拨单尚未保存。放弃后将返回调拨单详情。"
+        cancelText="继续编辑"
+        confirmText="放弃本次修改"
+        onCancel={() => setDiscardOpen(false)}
+        onConfirm={() => { setDiscardOpen(false); onSaved?.() }}
       />
 
       <div className="h-4" />

@@ -31,16 +31,17 @@ const mocks = vi.hoisted(() => ({
   getCustomerPriceApi: vi.fn(),
   getCustomersApi: vi.fn(),
   getProductApi: vi.fn(),
+  getCommercialSaleApi: vi.fn(),
 }))
 
 vi.mock('@/api/sale', () => ({
-  getSaleListApi: vi.fn(), getSaleDetailApi: vi.fn(), getSaleReservePreviewApi: vi.fn(),
+  getSaleListApi: vi.fn(), getSaleDetailApi: async () => client.getQueryData(['sale', 12]), getSaleReservePreviewApi: vi.fn(),
   createSaleApi: vi.fn(), updateSaleApi: mocks.updateSaleApi, adjustSaleApi: mocks.adjustSaleApi,
   reserveSaleApi: vi.fn(), releaseSaleApi: vi.fn(), shipSaleApi: vi.fn(), cancelSaleApi: vi.fn(), deleteSaleApi: vi.fn(),
 }))
 vi.mock('@/api/sale-commercial', async importOriginal => {
   const actual = await importOriginal<typeof import('@/api/sale-commercial')>()
-  return { ...actual, getCommercialSaleApi: async () => client.getQueryData(['sale',12]),
+  return { ...actual, getCommercialSaleApi: mocks.getCommercialSaleApi,
     previewCommercialSaleApi: async (body: Parameters<typeof saleEditorTestPreview>[0]) => saleEditorTestPreview(body),
     executeCommercialSaleApi: async (plan: Parameters<typeof actual.executeCommercialSaleApi>[0]) => {
       if (plan.operation.action === 'adjust') return mocks.adjustSaleApi({ ...plan.operation.body, id: plan.operation.id })
@@ -101,16 +102,32 @@ beforeEach(() => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
   client.setQueryData(['sale', 12], makeOrder(2))
+  mocks.getCommercialSaleApi.mockReset().mockImplementation(async () => client.getQueryData(['sale', 12]))
 })
 afterEach(() => { act(() => root.unmount()); client.clear(); host.remove(); window.history.replaceState({}, '', '/'); useAuthStore.setState(previousAuth) })
 
-function render() {
+function render(path = '/sale/12') {
   act(() => root.render(
-    <MemoryRouter initialEntries={["/sale/12"]}><QueryClientProvider client={client}>
-      <TabPathContext.Provider value="/sale/12"><SaleFormPage /></TabPathContext.Provider>
+    <MemoryRouter initialEntries={[path]}><QueryClientProvider client={client}>
+      <TabPathContext.Provider value={path}><SaleFormPage /></TabPathContext.Provider>
     </QueryClientProvider></MemoryRouter>,
   ))
 }
+test.each([false, true])('列表改单意图以原单资格为准（仓库阻断 %s）', async executionAdjustmentBlocked => {
+  client.setQueryData(['sale', 12], { ...makeOrder(2), executionAdjustmentBlocked })
+  render('/sale/12?edit=adjust')
+  await settleEditor()
+  expect(Boolean(button('提交改单'))).toBe(!executionAdjustmentBlocked)
+  expect(mocks.adjustSaleApi).not.toHaveBeenCalled()
+})
+
+test('编辑视图读取到订单已出库时，不使用列表的旧改单资格', async () => {
+  mocks.getCommercialSaleApi.mockResolvedValue(makeOrder(4))
+  render('/sale/12?edit=adjust')
+  await settleEditor()
+  expect(host.textContent).toContain('当前订单状态已变化')
+  expect(button('提交改单')).toBeUndefined()
+})
 async function settleEditor() {
   for (let step=0;step<3;step++) await act(async () => { await new Promise(resolve => setTimeout(resolve,5)) })
 }

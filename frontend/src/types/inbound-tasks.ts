@@ -43,6 +43,7 @@ export interface InboundPrintSummary {
   success: number
   failed: number
   timeout: number
+  unassigned?: number
 }
 
 export interface InboundPutawaySummary {
@@ -67,7 +68,7 @@ export interface InboundTimelineEvent {
 export interface InboundRecentPrintJob {
   id: number
   status: number
-  statusKey: 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled'
+  statusKey: 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'unassigned' | 'cancelled'
   statusLabel: string
   printerCode: string | null
   printerName: string | null
@@ -88,7 +89,7 @@ export interface InboundPrintBatch {
   title: string
   dispatchReason: string | null
   dispatchReasonLabel: string
-  statusKey: 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'cancelled'
+  statusKey: 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'unassigned' | 'cancelled'
   statusLabel: string
   total: number
   queued: number
@@ -96,6 +97,7 @@ export interface InboundPrintBatch {
   success: number
   failed: number
   timeout: number
+  unassigned?: number
   cancelled: number
   firstCreatedAt: string
   lastUpdatedAt: string
@@ -107,6 +109,7 @@ export interface InboundPrintBatch {
 export interface InboundExceptionFlags {
   failedPrintJobs: number
   timeoutPrintJobs: number
+  unassignedPrintJobs?: number
   overduePutawayContainers: number
   hasException: boolean
 }
@@ -201,6 +204,7 @@ export interface ReceivePackageResult {
   printJobId: number | null
   printJobIds?: number[]
   noPrinterCount?: number
+  printFailedCount?: number
   containers?: Array<{
     containerCode: string
     containerId: number

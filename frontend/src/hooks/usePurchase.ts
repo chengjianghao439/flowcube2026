@@ -2,12 +2,18 @@ import { useRef } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { getPurchaseListApi, getPurchaseDetailApi, createPurchaseApi, updatePurchaseApi, confirmPurchaseApi, withdrawConfirmPurchaseApi, approvePurchaseApi, rejectPurchaseApi, cancelPurchaseApi } from '@/api/purchase'
 import { useInvalidate } from '@/hooks/useInvalidate'
+import { useWarehouseHandoffQuery } from './useWarehouseHandoffQuery'
 import { createRequestKey } from '@/lib/requestKey'
 import type { CreatePurchaseParams } from '@/types/purchase'
 
 export const usePurchaseList   = (params: object) => useQuery({ queryKey: ['purchase', params], queryFn: () => getPurchaseListApi(params) })
-export const usePurchaseDetail = (id: number, options?: { refetchInterval?: number | false }) =>
-  useQuery({ queryKey: ['purchase', id], queryFn: () => getPurchaseDetailApi(id), enabled: !!id, refetchInterval: options?.refetchInterval })
+export const usePurchaseDetail = (id: number, options?: { refetchInterval?: number | false; visible?: boolean }) =>
+  useWarehouseHandoffQuery({
+    queryKey: ['purchase', id],
+    queryFn: ({ signal }) => getPurchaseDetailApi(id, { signal, skipGlobalError: options?.visible !== undefined }),
+    enabled: !!id,
+    refetchInterval: options?.refetchInterval,
+  }, options?.visible)
 
 export const useCreatePurchase = () => {
   const invalidate = useInvalidate()

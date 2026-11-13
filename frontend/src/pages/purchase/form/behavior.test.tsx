@@ -10,10 +10,11 @@ import type { PurchaseOrder } from '@/types/purchase'
 import type { ProductFinderResult } from '@/types/products'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
 
-const state = vi.hoisted(() => ({ order: undefined as PurchaseOrder | undefined, error: null as unknown, allowed: null as Set<string> | null, refetch: vi.fn(), write: vi.fn() }))
+const state = vi.hoisted(() => ({ order: undefined as PurchaseOrder | undefined, error: null as unknown, allowed: null as Set<string> | null, refetch: vi.fn(), write: vi.fn(), update: vi.fn() }))
 vi.mock('@/hooks/usePurchase', () => ({
   usePurchaseDetail: () => ({ data: state.order, isLoading: false, isError: !!state.error, error: state.error, refetch: state.refetch }),
-  ...Object.fromEntries(['useCreatePurchase', 'useUpdatePurchase', 'useConfirmPurchase', 'useWithdrawConfirmPurchase', 'useApprovePurchase', 'useRejectPurchase', 'useCancelPurchase'].map(k => [k, () => ({ mutate: state.write, mutateAsync: state.write, isPending: false })])),
+  useUpdatePurchase: () => ({ mutateAsync: state.update, isPending: false }),
+  ...Object.fromEntries(['useCreatePurchase', 'useConfirmPurchase', 'useWithdrawConfirmPurchase', 'useApprovePurchase', 'useRejectPurchase', 'useCancelPurchase'].map(k => [k, () => ({ mutate: state.write, mutateAsync: state.write, isPending: false })])),
 }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (code: string) => state.allowed == null || state.allowed.has(code) }) }))
 vi.mock('@/hooks/useActiveWorkspaceTab', () => ({ useActiveWorkspaceTab: () => true }))
@@ -118,11 +119,31 @@ test('四位采购报价回显不由已取分的金额反推', async () => {
   await render('/purchase/12'); await click('编辑')
   expect(numbers()[1].value).toBe('1.2345'); expect(host.textContent).toContain('¥3.70')
 })
+test.each(['2026-11-20', '2026-11-19T16:00:00.000Z'])('编辑采购只改单价时，按北京时间日期回显并保存预计到货日 %s', async expectedDate => {
+  state.order = { ...order(), expectedDate }
+  await render('/purchase/12')
+  await click('编辑')
+  const date = host.querySelector<HTMLInputElement>('input[placeholder="yyyy-mm-dd"]')!
+  expect(date.value).toBe('2026-11-20')
+  setValue(numbers()[1], '3.25')
+  await click('保存修改')
+  expect(state.update).toHaveBeenCalledWith({ id: 12, data: expect.objectContaining({
+    expectedDate: '2026-11-20', items: [expect.objectContaining({ unitPrice: 3.25 })],
+  }) })
+})
+test.each(['历史值待核', '2026-02-31'])('无法识别的旧预计到货日提示重新选择且保留原值 %s', async expectedDate => {
+  state.order = { ...order(), expectedDate }
+  await render('/purchase/12')
+  await click('编辑')
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain('请重新选择预计到货日期')
+  await click('保存修改')
+  expect(state.update).not.toHaveBeenCalled()
+})
 test('未知辅助换算保留原量与原金额参考，不猜价并阻止保存', async () => {
   state.order = { ...order(), items: [{ ...order().items![0], quantity: 24, entryQty: 2, entryUnit: '箱', conversionRate: undefined, amount: 6.91, unitPrice: 0.28805833 }] }
   await render('/purchase/12'); await click('编辑')
   expect(numbers()[0].value).toBe('2'); expect(numbers()[1].value).toBe(''); expect(host.textContent).toContain('换算待确认'); expect(host.textContent).toContain('原行金额 ¥6.91')
-  await click('保存修改'); expect(state.write).not.toHaveBeenCalled()
+  await click('保存修改'); expect(state.update).not.toHaveBeenCalled()
 })
 
 

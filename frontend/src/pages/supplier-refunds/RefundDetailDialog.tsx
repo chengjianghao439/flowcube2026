@@ -70,14 +70,15 @@ export default function RefundDetailDialog({ row, ready, error, onRetry, onClose
           <div><dt className="text-xs text-muted-foreground">原采购退货</dt><dd className="mt-1 text-doc-code">{row.purchase_return_no || `#${row.purchase_return_id}`}</dd></div>
           <div><dt className="text-xs text-muted-foreground">原采购</dt><dd className="mt-1 text-doc-code">{row.purchase_order_no || `#${row.purchase_order_id}`}</dd></div>
           <div><dt className="text-xs text-muted-foreground">真实银行回款日</dt><dd className="mt-1">{row.refund_date}</dd></div>
-          <div><dt className="text-xs text-muted-foreground">收入账户</dt><dd className="mt-1">原账户 #{row.income_account_id}</dd></div>
+          <div><dt className="text-xs text-muted-foreground">收入账户</dt><dd className="mt-1">{row.income_account_name || `原账户 #${row.income_account_id}`}</dd></div>
           {row.remark && <div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">退款事由</dt><dd className="mt-1 break-words whitespace-pre-wrap">{row.remark}</dd></div>}
         </dl>
         <section aria-label="原付款分配" className="space-y-2"><h2 className="text-sm font-semibold">原付款分配</h2><DataTable data={row.allocations || []} rowKey="entry_id" columns={[
           { key: 'entry_id', title: '准确原分配', width: 140 },
-          { key: 'receipt_id', title: '原收付款来源', render: v => v === null ? '原独立付款' : `原收付款单 #${v}` },
+          { key: 'receipt_id', title: '原收付款来源', render: (v, allocation) => allocation.source_no || (v === null ? '原独立付款' : `原收付款单 #${v}`) },
           { key: 'amount', title: '退款金额', align: 'right', width: 150, render: v => <span className="tabular-nums">{refundCashLabel(v)}</span> },
         ]} /></section>
+        {ready && row.status === 1 && !row.confirmAllowed && <p role="status" className="text-sm text-muted-foreground">{row.confirmUnavailableReason || '暂不能确认冻结，请核对当前权限和原退款单状态。'}</p>}
         <div className="flex flex-wrap gap-2">{(['confirm', 'receive', 'cancel'] as const).map(kind => <RefundAction key={kind} kind={kind} row={row} scope={scope} ready={ready} />)}</div>
         {row.status === 3 && <section className="space-y-2 border-t border-border pt-4 text-sm"><p>实际回款事实已保存，资金流水 #{row.fund_transaction_id}。</p><p className="leading-6 text-muted-foreground">{Number.isSafeInteger(row.voucher_id) && Number(row.voucher_id) > 0 && !row.voucher_generate_error ? '凭证已生成' : row.voucher_generate_error === '零分投影已核对/无需凭证' ? '零分投影已核对/无需分位凭证' : '回款已登记，凭证待核对'}。现金按分登记；历史不足一分的原值保留待核，凭证状态另行核对。</p>{mayRefund(P.ACCOUNTING_VOUCHER_MANAGE) && <Button variant="outline" disabled={!ready || busy || !scope.current()} onClick={() => void regenerate()}>核对退款凭证</Button>}{voucher && <p role="status">{voucher}</p>}</section>}
       </DialogContent>

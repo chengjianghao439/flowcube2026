@@ -216,7 +216,7 @@ function ContainerTimeline({ containerId }: { containerId: number }) {
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="text-muted-foreground">{formatDisplayDateTime(log.createdAt)}</span>
               <SoftStatusLabel label={log.moveTypeName ?? LOG_TYPE_NAMES[log.type] ?? `类型${log.type}`} tone="info" />
-              <span className="tabular-nums">{log.type === 2 ? `-${log.qty}` : log.qty}</span>
+              <span className="tabular-nums">{log.qty}</span>
               {log.refNo && <span className="font-mono text-muted-foreground">{log.refNo}</span>}
             </div>
             {(log.remark || log.operatorName) && (

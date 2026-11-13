@@ -29,11 +29,19 @@ export function FulfillmentProgressCard({ order, targetTaskId }: { order: SaleOr
     </div>)}
   </>
   const { can } = usePermission()
+  const canViewSortingBin = can(PERMISSIONS.SORTING_BIN_VIEW)
+  const binLabel = (task: NonNullable<SaleOrder['tasks']>[number]) =>
+    canViewSortingBin && task.sortingBinId != null && task.sortingBinCode && task.status >= 2 && task.status <= 5
+      ? <p className="mt-1 text-xs text-muted-foreground">分拣格 <span className="font-mono text-foreground">{task.sortingBinCode}</span></p>
+      : null
   const binHandoff = (task: NonNullable<SaleOrder['tasks']>[number]) => {
     const path = sortingBinHandoffPath(task.taskId, task.warehouseId)
-    return can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN) && path
-      ? <Button type="button" variant="outline" size="sm" className="mt-1" onClick={() => navigate(path)}>去分配分拣格</Button>
-      : <span>，请联系主管在分拣格管理页处理</span>
+    return <div className="mt-1 space-y-1 text-xs">
+      <p className="font-medium text-warning-ink">待分配分拣格</p>
+      {can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN) && path
+        ? <Button type="button" variant="outline" size="sm" onClick={() => navigate(path)}>去分配分拣格</Button>
+        : <p className="text-muted-foreground">请联系主管在分拣格管理页处理</p>}
+    </div>
   }
   const steps = [
     { status: 2, label: '拣货中' },
@@ -72,7 +80,7 @@ export function FulfillmentProgressCard({ order, targetTaskId }: { order: SaleOr
               </div>
               <div className="text-right">
                 <SoftStatusLabel label={t.statusName || `阶段 ${t.status}`} tone={wtTone(t.status)} />
-                {awaitingBin(t) && <p className="mt-1 text-xs text-warning-ink">待分配分拣格{binHandoff(t)}</p>}
+                {awaitingBin(t) ? binHandoff(t) : binLabel(t)}
               </div>
             </div>
           ))}
@@ -90,6 +98,7 @@ export function FulfillmentProgressCard({ order, targetTaskId }: { order: SaleOr
         <div>
           <h3 className="text-sm font-semibold text-foreground">作业进度</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">仓库任务：{order.taskNo}</p>
+          {tasks[0] && binLabel(tasks[0])}
         </div>
         {isCancelled ? (
           <SoftStatusLabel label="已取消" tone="danger" />
@@ -99,9 +108,10 @@ export function FulfillmentProgressCard({ order, targetTaskId }: { order: SaleOr
       </div>
 
       {tasks[0] && awaitingBin(tasks[0]) && (
-        <p className="rounded-md border border-warning/35 bg-warning/[0.07] px-3 py-2 text-sm text-foreground">
-          待分配分拣格{binHandoff(tasks[0])}；分配完成后刷新任务。
-        </p>
+        <div className="rounded-md border border-warning/35 bg-warning/[0.07] px-3 py-2">
+          {binHandoff(tasks[0])}
+          <p className="mt-1 text-xs text-muted-foreground">分配完成后刷新任务。</p>
+        </div>
       )}
 
       {isPicking && !isCancelled && (

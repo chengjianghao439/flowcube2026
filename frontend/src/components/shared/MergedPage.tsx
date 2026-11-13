@@ -47,7 +47,7 @@ function MergedPageViews({ group, ownPath }: { group: MergedPageGroup; ownPath: 
           key={view.path}
           to={paths[view.path] ?? view.path}
           aria-current={pathname === view.path ? 'page' : undefined}
-          className={`border-b-2 px-1 py-2 text-sm font-medium transition-colors ${pathname === view.path ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          className={`border-b-2 px-2.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${pathname === view.path ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-transparent font-medium text-muted-foreground hover:text-foreground'}`}
         >{view.label}</Link>
       ))}
     </nav>
@@ -60,7 +60,9 @@ function MergedPageViews({ group, ownPath }: { group: MergedPageGroup; ownPath: 
       return (
         <KeepAliveSection key={view.path} active={allowed && pathname === view.path && can(view.permission)}>
           <TabPathContext.Provider value={paths[view.path]}>
-            <PageHeaderContext.Provider value={{ title: group.title, navigation }}>
+            <PageHeaderContext.Provider value={group.tabTitle === 'group'
+              ? { title: group.title, navigation }
+              : { title: view.label, parentTitle: group.title, navigation }}>
               <Suspense fallback={<p className="py-12 text-center text-muted-foreground">正在加载{view.label}…</p>}>
                 <Component />
               </Suspense>

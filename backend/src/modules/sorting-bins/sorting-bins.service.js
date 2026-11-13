@@ -129,11 +129,13 @@ async function resolvePickCode(code, scopeWarehouseIds = null) {
  * PDA 扫商品条码 → 查找对应任务的分拣格
  * 逻辑：在备货中（status=2）的任务明细里查找匹配 product_code 的条目
  */
-async function scanProduct(code, scopeWarehouseIds = null) {
+async function scanProduct(code, scopeWarehouseIds = null, handoffTaskId = null) {
   // 取货码优先且**互斥**：命中容器就不会再走下面的商品码匹配
   const pickHit = await resolvePickCode(code, scopeWarehouseIds)
   if (pickHit) return pickHit
   const scope = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
+  const taskSql = handoffTaskId === null ? '' : ' AND wt.id = ?'
+  const taskParams = handoffTaskId === null ? [] : [handoffTaskId]
   // 1. 在备货中（status=2）任务的明细里找匹配商品
   // 不限制 picked_qty，分拣操作面向整个任务，只要商品属于备货中任务即可
   const [items] = await pool.query(
@@ -144,10 +146,10 @@ async function scanProduct(code, scopeWarehouseIds = null) {
      JOIN warehouse_tasks wt ON wt.id = wti.task_id
      WHERE wt.status IN (${WT_STATUS.PICKING},${WT_STATUS.SORTING})
        AND wt.cancel_requested_at IS NULL
-       AND wti.product_code = ?${scope.sql}
+       AND wti.product_code = ?${scope.sql}${taskSql}
      ORDER BY wt.created_at ASC
      LIMIT 10`,
-    [code, ...scope.params],
+    [code, ...scope.params, ...taskParams],
   )
 
   if (!items.length) {
@@ -160,10 +162,10 @@ async function scanProduct(code, scopeWarehouseIds = null) {
        JOIN warehouse_tasks wt ON wt.id = wti.task_id
        WHERE wt.status IN (${WT_STATUS.PICKING},${WT_STATUS.SORTING})
          AND wt.cancel_requested_at IS NULL
-         AND (wti.product_code LIKE ? OR wti.product_name LIKE ?)${scope.sql}
+         AND (wti.product_code LIKE ? OR wti.product_name LIKE ?)${scope.sql}${taskSql}
        ORDER BY wt.created_at ASC
        LIMIT 5`,
-      [`%${code}%`, `%${code}%`, ...scope.params],
+      [`%${code}%`, `%${code}%`, ...scope.params, ...taskParams],
     )
     if (!fuzzy.length) return null
     items.push(...fuzzy)

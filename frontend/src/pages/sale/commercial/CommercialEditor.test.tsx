@@ -514,7 +514,7 @@ test('local return preserves edited draft until explicit discard; continue editi
       await click('继续编辑')
       expect(done).not.toHaveBeenCalled()
       await click('返回订单')
-      await click('放弃并返回')
+      await click('放弃本次修改')
       expect(done).toHaveBeenCalledTimes(1)
     },
     order,
@@ -529,7 +529,7 @@ test('unknown request blocks local discard and new-input submission', async () =
     expect(Array.from(document.querySelectorAll('button')).find((b) => ['返回订单', '取消编辑', '取消'].includes(b.textContent ?? ''))!.disabled).toBe(
       true
     )
-    expect(document.body.textContent).not.toContain('放弃并返回')
+    expect(document.body.textContent).not.toContain('放弃本次修改')
     expect(document.querySelector<HTMLInputElement>('input[aria-label="原包装成交单价"]')!.matches(':disabled')).toBe(
       true
     )

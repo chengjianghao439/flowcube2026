@@ -24,7 +24,33 @@ beforeEach(()=>{Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});Object
 afterEach(async()=>{await act(async()=>root.unmount());host.remove();qc.clear();useAuthStore.getState().logout();localStorage.clear()})
 const btn=(s:string)=>[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()===s)!
 async function render(path:string,component:React.ReactNode){await act(async()=>root.render(<MemoryRouter initialEntries={[path]}><TabPathContext.Provider value={path}><QueryClientProvider client={qc}><Routes><Route path={'/procurement/plans/:id'} element={component}/></Routes></QueryClientProvider></TabPathContext.Provider></MemoryRouter>))}
-test('PROC07生产计划原A未知冻结selection',async()=>{m.convert.mockRejectedValue(new ApiClientError({message:'本轮未知',status:0}));await render('/procurement/plans/7',<Plan/>);await vi.waitFor(()=>expect(host.querySelectorAll('input[type="checkbox"]').length).toBe(3));const a=host.querySelector<HTMLInputElement>('input[aria-label="选择 合成商品1 合成仓"]')!;await act(async()=>a.click());await act(async()=>btn('转采购（1 行）').click());await vi.waitFor(()=>expect(m.convert).toHaveBeenCalledOnce());await vi.waitFor(()=>expect(a.disabled).toBe(true));await vi.waitFor(()=>expect(btn('转采购（1 行）').disabled).toBe(true))})
+test('PROC07生产计划原A未知冻结selection',async()=>{m.convert.mockRejectedValue(new ApiClientError({message:'本轮未知',status:0}));await render('/procurement/plans/7',<Plan/>);await vi.waitFor(()=>expect(host.querySelectorAll('input[type="checkbox"]').length).toBe(3));const a=host.querySelector<HTMLInputElement>('input[aria-label="选择 合成商品1 合成仓"]')!;await act(async()=>a.click());await act(async()=>btn('生成采购草稿（1 行）').click());await vi.waitFor(()=>expect(m.convert).toHaveBeenCalledOnce());await vi.waitFor(()=>expect(a.disabled).toBe(true));await vi.waitFor(()=>expect(btn('生成采购草稿（1 行）').disabled).toBe(true))})
+
+test('所选明细缺供应商时说明原因，回读已保存的供应商后可生成采购草稿', async () => {
+  await render('/procurement/plans/7', <Plan />)
+  await vi.waitFor(() => expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(3))
+  await act(async () => {
+    qc.setQueryData(['procurement-plan', 7], {
+      ...plan,
+      items: plan.items.map(item => item.id === 1 ? { ...item, supplierId: null, supplierName: null } : item),
+    })
+  })
+  const selection = host.querySelector<HTMLInputElement>('input[aria-label="选择 合成商品1 合成仓"]')!
+  const supplier = host.querySelector<HTMLButtonElement>('[aria-label="合成商品1 合成仓供应商"]')!
+  const describedText = () => supplier.getAttribute('aria-describedby')?.split(' ').map(id => document.getElementById(id)?.textContent).join(' ')
+  await act(async () => selection.click())
+  expect(btn('生成采购草稿（1 行）')?.disabled).toBe(true)
+  expect(describedText()).toContain('请先选择供应商')
+  expect(supplier.getAttribute('aria-invalid')).toBe('true')
+  expect(m.convert).not.toHaveBeenCalled()
+
+  await act(async () => { qc.setQueryData(['procurement-plan', 7], plan) })
+  await vi.waitFor(() => expect(btn('生成采购草稿（1 行）')?.disabled).toBe(false))
+  expect(selection.checked).toBe(true)
+  expect(supplier.textContent).toContain('合成供应商')
+  expect(describedText()).toContain('合成供应商')
+  expect(describedText()).not.toContain('请先选择供应商')
+})
 
 test('只读采购计划没有空白选择列，草稿仍保留真实多选', async () => {
   plan.status = 3
@@ -35,8 +61,12 @@ test('只读采购计划没有空白选择列，草稿仍保留真实多选', as
     expect(caption.textContent).toContain('预测窗口 30 天')
     expect(caption.textContent).toContain('转换时仍会重新核对')
     expect(host.textContent?.match(/需求与覆盖读取于/g)).toHaveLength(1)
-    expect(host.querySelector('thead th')?.textContent).toBe('编码')
+    expect([...host.querySelectorAll('thead th')].slice(0, 5).map(cell => cell.textContent)).toEqual([
+      '商品', '仓库', '最新净需求 / 建议量', '采购量', '状态 / 关联采购单',
+    ])
     expect(host.querySelectorAll('input[type="checkbox"]')).toHaveLength(0)
-    expect(host.querySelector('tbody td')?.textContent).toBe('SYNTHETIC1')
+    expect(host.querySelector('tbody td')?.textContent).toContain('SYNTHETIC1')
+    expect(host.querySelector('tbody td')?.textContent).toContain('合成商品1')
+    expect(host.querySelector('tbody tr')?.childElementCount).toBe(host.querySelector('thead tr')?.childElementCount)
   } finally { plan.status = 1 }
 })

@@ -7,10 +7,12 @@ import { FulfillmentProgressCard } from './FulfillmentProgressCard'
 import type { SaleOrder, SaleOrderTask } from '@/types/sale'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
-const auth = vi.hoisted(() => ({ assign: true }))
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (code: string) => code === PERMISSIONS.WAREHOUSE_TASK_ASSIGN && auth.assign }) }))
+const auth = vi.hoisted(() => ({ assign: true, viewBin: false }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (code: string) =>
+  (code === PERMISSIONS.WAREHOUSE_TASK_ASSIGN && auth.assign) || (code === PERMISSIONS.SORTING_BIN_VIEW && auth.viewBin),
+}) }))
 let host: HTMLDivElement, root: Root
-beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); auth.assign = true; host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
+beforeEach(() => { Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); auth.assign = true; auth.viewBin = false; host = document.createElement('div'); document.body.append(host); root = createRoot(host) })
 afterEach(() => { act(() => root.unmount()); host.remove() })
 const task = (taskId: number, warehouseId: number, extra: Partial<SaleOrderTask> = {}): SaleOrderTask => ({ taskId, warehouseId, taskNo: `WT-${taskId}`, warehouseName: `仓库${warehouseId}`, status: 2, statusName: '拣货中', sortingBinId: null, ...extra })
 function Path() { const location = useLocation(); return <output>{location.pathname}{location.search}</output> }
@@ -34,4 +36,12 @@ test('普通员工只提示主管处理，非法身份不生成入口', () => {
   expect(host.querySelector('button')).toBeNull(); expect(host.textContent).toContain('联系主管')
   auth.assign = true; render([task(0, 3), task(22, null as unknown as number)])
   expect(host.querySelector('button')).toBeNull()
+})
+test('仅有分拣格查看权限时显示当前任务的分拣格号', () => {
+  const tasks = [task(11, 3, { sortingBinId: 4, sortingBinCode: 'BIN-04' })]
+  render(tasks)
+  expect(host.textContent).not.toContain('BIN-04')
+  auth.viewBin = true
+  render(tasks)
+  expect(host.textContent).toContain('BIN-04')
 })

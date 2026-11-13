@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, expect, test, vi } from 'vitest'
 import { SaleOrderHeaderFields } from './SaleOrderHeaderFields'
-vi.mock('@/hooks/useWarehouses', () => ({ useWarehousesActive: () => ({ data: [] }) }))
+const state = vi.hoisted(() => ({ warehouses: { data: [] as unknown[] | undefined, isError: false, isLoading: false, refetch: vi.fn() } }))
+vi.mock('@/hooks/useWarehouses', () => ({ useWarehousesActive: () => state.warehouses }))
 vi.mock('@/pages/sale/components/AddressBookDialog', () => ({ default: () => null }))
 let cleanup: (() => Promise<void>) | undefined
 afterEach(async () => { await cleanup?.() })
@@ -31,4 +32,39 @@ test('销售表头的每个可见字段标签对应具体控件，选择器不�
     expect(label, name).toBeDefined(); expect(label.htmlFor, name).not.toBe('')
     expect(host.querySelector(`[id="${label.htmlFor}"]`), name).not.toBeNull()
   }
+})
+
+test('销售表头对加载失败提供重试，成功空列表才显示暂无选项', async () => {
+  const host = document.createElement('div'); document.body.append(host); const root = createRoot(host)
+  const change = vi.fn(), retryCarrier = vi.fn()
+  cleanup = async () => {
+    await act(async () => root.unmount()); host.remove()
+    Object.assign(state.warehouses, { data: [], isError: false })
+  }
+  const render = (carrierLoading: boolean, carrierError: boolean) => act(async () => root.render(
+    <MemoryRouter><SaleOrderHeaderFields customerId="" customerName="" customerError={false}
+      setCustomerFinderOpen={change} warehouseId="" setWarehouseId={change} setWarehouseName={change} warehouseError={false}
+      setWarehouseError={change} carrierId="" setCarrierId={change} carrierOptions={[]} carrierLoading={carrierLoading}
+      carrierError={carrierError} retryCarriers={retryCarrier} shippingProduct="" setShippingProduct={change}
+      freightType="" setFreightType={change} receiverName="" setReceiverName={change} receiverPhone=""
+      setReceiverPhone={change} receiverAddress="" setReceiverAddress={change} remark="" setRemark={change} /></MemoryRouter>,
+  ))
+  Object.assign(state.warehouses, { data: undefined, isLoading: true })
+  await render(true, false)
+  expect(host.textContent).toContain('正在加载仓库')
+  expect(host.textContent).toContain('正在加载承运商')
+  Object.assign(state.warehouses, { isLoading: false, isError: true })
+  await render(false, true)
+  expect(host.textContent).toContain('仓库加载失败')
+  expect(host.textContent).toContain('承运商加载失败')
+  expect(host.textContent).not.toContain('暂无')
+  for (const button of host.querySelectorAll('button')) {
+    if (button.textContent === '重试') await act(async () => button.click())
+  }
+  expect(retryCarrier).toHaveBeenCalledOnce()
+  expect(state.warehouses.refetch).toHaveBeenCalledOnce()
+  Object.assign(state.warehouses, { data: [], isError: false })
+  await render(false, false)
+  expect(host.textContent).toContain('暂无可用仓库')
+  expect(host.textContent).toContain('暂无承运商')
 })

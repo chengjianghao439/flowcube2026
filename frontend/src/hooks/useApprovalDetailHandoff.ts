@@ -5,11 +5,13 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useApprovalReadScope } from '@/hooks/useApprovalReadScope'
 import { usePermission } from '@/hooks/usePermission'
+import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import type { PermissionCode } from '@/lib/permission-codes'
 
 /** 按本标签的原单ID读取，不改筛选，不覆盖任何已打开的新建/编辑/处理草稿。 */
 export function useApprovalDetailHandoff<T extends { id: number }>(
   pathname: string, permission: PermissionCode, read: (id: number) => Promise<T>, blocked = false,
+  consumeOnClose = false,
 ) {
   const tabPath = useContext(TabPathContext)
   const location = useLocation()
@@ -21,6 +23,7 @@ export function useApprovalDetailHandoff<T extends { id: number }>(
   const { can } = usePermission()
   const allowed = can(permission)
   const active = useActiveWorkspaceTab()
+  const [, setParams] = useWorkspaceSearchParams()
   const scope = useApprovalReadScope()
   const identity = `${scope.key}:${pathname}:${values.join(':')}`
   const [dismissed, setDismissed] = useState('')
@@ -63,6 +66,15 @@ export function useApprovalDetailHandoff<T extends { id: number }>(
   return { id, data, open, ready, message,
     canRetry: enabled && query.isError, retry: () => { if (enabled) void query.refetch() },
     canClose: !!currentOpened && !ready,
-    close: () => { setDismissed(currentOpened?.identity ?? identity); setOpened(null) },
+    close: () => {
+      setDismissed(currentOpened?.identity ?? identity)
+      setOpened(null)
+      if (consumeOnClose && active && requested && sameTarget) {
+        setParams(params => {
+          params.delete('detailId')
+          return params
+        }, { replace: true })
+      }
+    },
   }
 }

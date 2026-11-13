@@ -13,6 +13,12 @@ export interface WorkflowStatus {
   detail?: string
 }
 
+export function canStartSaleAdjustment(order: SaleOrder): boolean {
+  return [2, 3, 6].includes(order.status)
+    && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
+    && !order.executionAdjustmentBlocked && !order.isMultiWarehouse && (order.shippedTotalQty ?? 0) === 0
+}
+
 export function getSaleWorkflowStatus(order: SaleOrder): WorkflowStatus {
   // 拣货退回中：销售单业务状态已经是「已取消」，但对应仓库任务的已拣容器还没
   // 逐个扫码归还完（cancelRequestedAt 非空），此时不能简单显示「已取消」，

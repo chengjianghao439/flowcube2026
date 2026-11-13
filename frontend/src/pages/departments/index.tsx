@@ -365,8 +365,8 @@ export default function DepartmentsPage() {
 
           <div className="fc-form-dialog-body grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="department-name">部门名称</Label>
-              <Input id="department-name" value={form.name} aria-invalid={!!errors.name} aria-describedby={errors.name ? 'department-name-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, name: e.target.value }); setErrors(prev => ({ ...prev, name: undefined })) }} placeholder="如：采购部" />
+              <Label htmlFor="department-name">部门名称 <span aria-hidden="true" className="text-destructive-ink">*</span></Label>
+              <Input required id="department-name" value={form.name} aria-invalid={!!errors.name} aria-describedby={errors.name ? 'department-name-error' : undefined} onChange={(e: React.ChangeEvent<HTMLInputElement>) => { setForm({ ...form, name: e.target.value }); setErrors(prev => ({ ...prev, name: undefined })) }} placeholder="如：采购部" />
               {errors.name && <p id="department-name-error" className="text-xs text-destructive-ink">{errors.name}</p>}
             </div>
             <div className="space-y-2">

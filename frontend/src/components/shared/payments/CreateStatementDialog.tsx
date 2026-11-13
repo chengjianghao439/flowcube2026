@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { money } from '@/lib/format'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { useFinderReadContext } from '@/hooks/useFinderReadContext'
 import { AppDialog } from '@/components/shared/AppDialog'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { SupplierFinder } from '@/components/finder/SupplierFinder'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,12 +34,16 @@ interface Props {
  * （2026-09-18 弹窗重构，原先内联在 StatementPanel.tsx 里）。
  */
 export function CreateStatementDialog({ open, onClose, type, onCreated }: Props) {
+  const partyInputId = useId()
   const { can } = usePermission()
   const canExecute = can(PERMISSIONS.PAYMENT_EXECUTE)
+  const canFindSupplier = type === 1 && canExecute && can(PERMISSIONS.SUPPLIER_VIEW)
   const active = useActiveWorkspaceTab()
   const partyLabel = type === 1 ? '供应商' : '客户'
   const recent30d = getRelativeDateRange(30)
   const [partyName, setPartyName] = useState('')
+  const [finderOpen, setFinderOpen] = useState(false)
+  const supplierRead = useFinderReadContext(canFindSupplier, open && active && finderOpen, PERMISSIONS.SUPPLIER_VIEW, 'statement-supplier')
   const [startDate, setStartDate] = useState(recent30d.startDate)
   const [endDate, setEndDate] = useState(recent30d.endDate)
   const [applied, setApplied] = useState<{ partyName:string; startDate:string; endDate:string } | null>(null)
@@ -46,13 +53,14 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
   // 依赖刻意只认 open：recent30d 是 getRelativeDateRange(30) 每次渲染新建的对象，
   // 整体入依赖会在用户选好往来单位/日期后于填写途中被反复重置。
   useEffect(() => {
+    setFinderOpen(false)
     if (!open) return
     setPartyName(''); setStartDate(recent30d.startDate); setEndDate(recent30d.endDate)
     setApplied(null); setPicked(new Set()); setRemark('')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const { data: candidates, isFetching } = useQuery({
+  const { data: candidates, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['statement-candidates', type, applied],
     queryFn: () => getStatementCandidatesApi({ type, partyName: applied!.partyName, startDate: applied!.startDate, endDate: applied!.endDate }),
     enabled: active && open && !!applied,
@@ -82,9 +90,18 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
     onSuccess: (res) => { toast.success(`对账单 ${res.statementNo} 已生成`); onCreated() },
   })
 
+  function updatePartyName(name: string) {
+    if (name.trim() !== partyName.trim()) {
+      setApplied(null)
+      setPicked(new Set())
+    }
+    setPartyName(name)
+  }
+
   return (
+    <>
     <AppDialog descriptionInHeader
-      description={!applied ? <>填写{partyLabel}与期间后点「查待对账账款」</> : isFetching ? <span role="status">加载中…</span> : !list.length ? "该期间内没有未对账的月结账款" : "选择往来方、账期与本次对账的账款。"}
+      description={!applied ? <>填写{partyLabel}与期间后点「查待对账账款」</> : isError ? '请重新读取待对账账款。' : isFetching ? <span role="status">加载中…</span> : !list.length ? '该期间内没有未对账的月结账款' : '选择往来方、账期与本次对账的账款。'}
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
       dialogId="payment-statement-create"
@@ -96,17 +113,22 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          {canExecute && <Button disabled={!validPicked.length || mut.isPending} onClick={() => mut.mutate()}>
+          {canExecute && <Button disabled={!validPicked.length || isError || isFetching || mut.isPending} onClick={() => mut.mutate()}>
             {mut.isPending ? '生成中…' : `生成对账单（${validPicked.length} 笔 / ${money(pickedTotal)}）`}
           </Button>}
         </div>
       }
     >
       <div className="flex h-full flex-col gap-4 p-5">
-        <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-[minmax(0,2fr)_repeat(2,minmax(160px,1fr))]">
+        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-[minmax(0,2fr)_repeat(2,minmax(160px,1fr))]">
           <div className="space-y-1">
-            <Label>{partyLabel} *</Label>
-            <Input value={partyName} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPartyName(e.target.value)} placeholder={`输入${partyLabel}名称`} />
+            <Label htmlFor={partyInputId}>{partyLabel} *</Label>
+            <div className="flex items-center gap-2">
+              <Input id={partyInputId} className="min-w-0 flex-1" aria-describedby={`${partyInputId}-hint`} value={partyName}
+                onChange={e => updatePartyName(e.target.value)} placeholder={`输入${partyLabel}名称`} />
+              {canFindSupplier && <Button type="button" variant="outline" onClick={() => setFinderOpen(true)}>选择供应商</Button>}
+            </div>
+            <p id={`${partyInputId}-hint`} className="text-helper">按账款记录上的完整名称匹配。重名时请逐笔核对单号。</p>
           </div>
           <div className="space-y-1"><Label>期间起</Label><DatePicker value={startDate} onChange={setStartDate} max={endDate} /></div>
           <div className="space-y-1"><Label>期间止</Label><DatePicker value={endDate} onChange={setEndDate} min={startDate} /></div>
@@ -122,20 +144,21 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
 
         <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-border">
           <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-sm">
-            <span className="font-medium">待对账账款{applied ? `（${list.length} 笔）` : ''}</span>
+            <span className="font-medium">待对账账款{applied && !isError && !isFetching ? `（${list.length} 笔）` : ''}</span>
             <div className="flex items-center gap-3 text-xs">
               <span className="text-muted-foreground">已选 {validPicked.length} 笔 · 合计 <span className="tabular-nums font-medium text-foreground">{money(pickedTotal)}</span></span>
-              <Button size="sm" variant="outline" disabled={!list.length}
+              <Button size="sm" variant="outline" disabled={!list.length || isError || isFetching}
                 onClick={() => setPicked(validPicked.length === list.length ? new Set() : new Set(list.map(x => x.id)))}>
                 {validPicked.length === list.length && list.length > 0 ? '取消全选' : '全选'}
               </Button>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {list.map(it => (
+            {isError ? <QueryErrorState error={error} title="候选账款读取失败" compact onRetry={() => void refetch()} /> : list.map(it => (
               <label key={it.id} className="flex cursor-pointer items-center gap-3 border-b px-3 py-2 last:border-b-0 hover:bg-muted/30">
                 <input
                   type="checkbox" className="accent-primary"
+                  disabled={isFetching}
                   checked={picked.has(it.id)}
                   onChange={e => setPicked(prev => {
                     const next = new Set(prev)
@@ -160,5 +183,10 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
         </div>
       </div>
     </AppDialog>
+    {canFindSupplier && open && active && finderOpen && <SupplierFinder open compact context={supplierRead}
+      dialogId="statement-supplier-finder"
+      onClose={() => { supplierRead?.cancel(); setFinderOpen(false) }}
+      onConfirm={supplier => { updatePartyName(supplier.name); setFinderOpen(false) }} />}
+    </>
   )
 }

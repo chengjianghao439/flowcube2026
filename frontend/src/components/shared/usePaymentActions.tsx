@@ -3,7 +3,9 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useState } from 'react'
 import { EmptyState } from './EmptyState'
+import { QueryErrorState } from './QueryErrorState'
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
+import { formatDisplayDate } from '@/lib/dateTime'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -35,7 +37,7 @@ export function usePaymentActions(type: 1 | 2) {
 
   const actionLabel = isPayable ? '登记付款' : '登记收款'
 
-  const { data: entries } = useVisibleQuery({
+  const { data: entries, isPending, isPaused, isError, error, refetch } = useVisibleQuery({
     queryKey: ['payment-entries', selected?.id],
     queryFn: () => getEntriesApi(selected!.id).then(r => r || []),
     enabled: !!selected && entriesOpen,
@@ -88,15 +90,17 @@ export function usePaymentActions(type: 1 | 2) {
       <Dialog open={entriesOpen} onOpenChange={setEntriesOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader description={"核对该笔账款的收付款登记记录。"}><DialogTitle>{isPayable ? '付款流水' : '收款流水'} — <span className="text-doc-code-strong">{selected?.orderNo}</span></DialogTitle></DialogHeader>
-          {!entries?.length && <EmptyState variant="no-data" title="暂无流水记录" compact />}
+          {isError ? <QueryErrorState error={error} title="流水读取失败" compact onRetry={() => void refetch()} /> :
+            isPending ? <p role="status" className="text-sm text-muted-foreground">{isPaused ? '等待网络连接…' : '正在加载流水…'}</p> :
+            !entries?.length ? <EmptyState variant="no-data" title="暂无流水记录" compact /> :
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {entries?.map((e: PaymentEntry) => (
               <div key={e.id} className="flex justify-between items-center border-b pb-2 text-sm">
-                <div><p className="font-medium">{money(e.amount)}</p><p className="text-xs text-muted-foreground">{e.paymentDate} · {e.method} · {e.operatorName}</p></div>
+                <div><p className="font-medium">{money(e.amount)}</p><p className="text-xs text-muted-foreground">{formatDisplayDate(e.paymentDate)}{e.method && ` · ${e.method}`}{e.operatorName && ` · ${e.operatorName}`}</p></div>
                 {e.remark && <p className="text-xs text-muted-foreground max-w-32 text-left">{e.remark}</p>}
               </div>
             ))}
-          </div>
+          </div>}
           <DialogFooter><Button variant="outline" onClick={() => setEntriesOpen(false)}>关闭</Button></DialogFooter>
         </DialogContent>
       </Dialog>

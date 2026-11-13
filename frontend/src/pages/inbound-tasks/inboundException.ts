@@ -6,6 +6,7 @@ export function inboundExceptionReason(flags?: InboundExceptionFlags): string {
   return [
     flags.failedPrintJobs > 0 ? `打印失败 ${flags.failedPrintJobs} 项` : '',
     flags.timeoutPrintJobs > 0 ? `打印超时 ${flags.timeoutPrintJobs} 项` : '',
+    (flags.unassignedPrintJobs ?? 0) > 0 ? `未配置打印机 ${flags.unassignedPrintJobs} 项` : '',
     flags.overduePutawayContainers > 0 ? `上架逾期 ${flags.overduePutawayContainers} 条库存条码` : '',
   ].filter(Boolean).join('；')
 }

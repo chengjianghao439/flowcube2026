@@ -1,4 +1,4 @@
-import { useCallback, useMemo, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTableColumns, isAction } from './useTableColumns'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from './VirtualTableBody'
 import { Inbox } from 'lucide-react'
@@ -41,6 +41,8 @@ interface DataTableProps<T extends object> {
    * 没有已保存宽度时使用 col.width 的默认布局。
    */
   fluid?: boolean
+  /** 可聚焦的横向滚动区名称。 */
+  scrollLabel?: string
 }
 
 export default function DataTable<T extends object>({
@@ -50,10 +52,25 @@ export default function DataTable<T extends object>({
   onRowDoubleClick,
   columnStorageKey,
   sortKey, sortDirection, onSortChange,
-  fluid = false,
+  fluid = false, scrollLabel,
 }: DataTableProps<T>) {
   const isSelectEnabled = !!(selectable || selectionMode)
   const { orderedColumns, usesPercent, getColumnWidth, getPercentColumnWidth, percentMinWidth, colgroupRef, tableRef, tableWidth, hasCustomWidths, setDraggingKey, draggingKey, moveColumn, startResize, fitColumn, resizeCleanupRef, measureWidths, savePixelWidths } = useTableColumns({ columns, fluid, columnStorageKey, isSelectEnabled, fitData: virtualized ? data : undefined })
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollHintId = useId()
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false)
+  useEffect(() => {
+    const scroll = scrollRef.current
+    const table = tableRef.current
+    if (!scrollLabel || !scroll || !table) return
+    const measure = () => setHasHorizontalOverflow(scroll.scrollWidth > scroll.clientWidth + 1)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(scroll)
+    observer.observe(table)
+    return () => observer.disconnect()
+  }, [scrollLabel, tableRef, percentMinWidth, tableWidth])
 
   const enabledIds = useMemo(() => data.filter(row => !selectableCheck || selectableCheck(row))
     .map(row => Number((row as Record<string, unknown>)[String(rowKey)])), [data, rowKey, selectableCheck])
@@ -129,7 +146,7 @@ export default function DataTable<T extends object>({
               // 极窄操作列在格内滚动，保留所有按钮的可达性，避免越界覆盖相邻列。
               ? <div className={`min-w-0 overflow-x-auto ${alignClass}`}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</div>
               : (
-                <div className={`min-w-0 whitespace-normal [overflow-wrap:anywhere] ${alignClass}`} title={textValue}>
+                <div className={`min-w-0 ${col.noWrap ? 'overflow-x-auto whitespace-nowrap tabular-nums' : 'whitespace-normal [overflow-wrap:anywhere]'} ${alignClass}`} title={textValue}>
                   {col.expandableText && typeof rawValue === 'string' && rawValue.trim().length > 0 ? (
                     <TableTextPreview title={col.title} value={textValue}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</TableTextPreview>
                   ) : col.render ? (col.render(rawValue, row) as ReactNode) : textValue}
@@ -146,7 +163,16 @@ export default function DataTable<T extends object>({
   const getRowKey = useCallback((row: T) => String(row[rowKey]), [rowKey])
   return (
     <div className="desktop-table min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden">
-      <div className="overflow-x-auto" data-table-scroll>
+      {scrollLabel && hasHorizontalOverflow && (
+        <p id={scrollHintId} className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+          可横向滚动查看其余列。聚焦表格后也可按左右方向键。
+        </p>
+      )}
+      <div ref={scrollRef} className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" data-table-scroll
+        style={{ containerType: 'inline-size' }}
+        role={scrollLabel ? 'region' : undefined} aria-label={scrollLabel}
+        tabIndex={scrollLabel && hasHorizontalOverflow ? 0 : undefined}
+        aria-describedby={scrollLabel && hasHorizontalOverflow ? scrollHintId : undefined}>
         <table aria-rowcount={renderVirtual ? data.length + 1 : undefined} ref={tableRef} aria-busy={loading} className="table-fixed text-sm" style={usesPercent ? { width: '100%', minWidth: percentMinWidth } : { width: tableWidth, minWidth: hasCustomWidths ? 0 : '100%' }}>
           <colgroup ref={colgroupRef}>
             {isSelectEnabled && <col style={{ width: 56 }} />}
@@ -218,11 +244,13 @@ export default function DataTable<T extends object>({
               ))
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={colCount} className={emptyState ? 'px-4 text-center' : 'px-4 py-16 text-center'}>
-                  {emptyState ?? <div className="fc-table-empty flex flex-col items-center gap-2 text-muted-foreground">
-                    <Inbox className="h-8 w-8 opacity-40" />
-                    <span className="text-sm">{emptyText}</span>
-                  </div>}
+                <td colSpan={colCount}>
+                  <div className={`sticky left-0 max-w-full px-4 text-center ${emptyState ? '' : 'py-16'}`} style={{ width: '100cqw' }}>
+                    {emptyState ?? <div className="fc-table-empty flex flex-col items-center gap-2 text-muted-foreground">
+                      <Inbox className="h-8 w-8 opacity-40" />
+                      <span className="text-sm">{emptyText}</span>
+                    </div>}
+                  </div>
                 </td>
               </tr>
             ) : (

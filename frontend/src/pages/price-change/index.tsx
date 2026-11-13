@@ -3,7 +3,7 @@ import { useApprovalReadScope } from '@/hooks/useApprovalReadScope'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { money } from '@/lib/format'
+import { unitPrice } from '@/lib/format'
 import { invalidateAfterPriceChange } from '@/hooks/useProducts'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
@@ -24,16 +24,26 @@ import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import ProductFinderModal from '@/components/shared/ProductFinderModal'
 import { payloadClient } from '@/api/client'
+import { getProductApi } from '@/api/products'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { readNullableIntParam } from '@/lib/urlSearchParams'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
+import type { Product } from '@/types/products'
 
 const STATUS_TONE: Record<number, 'warning' | 'success' | 'danger' | 'info'> = { 1: 'warning', 2: 'success', 3: 'danger', 4: 'info' }
-const STATUS_LABEL: Record<number, string> = { 1: '待审批', 2: '已批准', 3: '已驳回', 4: '已取消' }
-const PRICE_TYPE_LABEL: Record<string, string> = { sale: '销售价', cost: '成本价', a: '等级A', b: '等级B', c: '等级C', d: '等级D' }
+const PRICE_TYPES = {
+  sale: { label: '标签销售价', field: 'labelSalePrice' },
+  cost: { label: '成本价', field: 'costPrice' },
+  a: { label: '等级A', field: 'salePriceA' },
+  b: { label: '等级B', field: 'salePriceB' },
+  c: { label: '等级C', field: 'salePriceC' },
+  d: { label: '等级D', field: 'salePriceD' },
+} satisfies Record<string, { label: string; field: keyof Product }>
+type PriceType = keyof typeof PRICE_TYPES
+const priceTypeLabel = (type: string) => Object.hasOwn(PRICE_TYPES, type) ? PRICE_TYPES[type as PriceType].label : '价格类型待核'
 
 interface PriceChangeRequest {
   id: number
@@ -49,6 +59,7 @@ interface PriceChangeRequest {
   reason: string | null
   status: number
   statusName: string
+  approvalId: number | null
   applicantName: string | null
   createdAt: string
 }
@@ -82,7 +93,7 @@ export default function PriceChangePage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [product, setProduct] = useState<{ id: number; code: string; name: string } | null>(null)
   const [productFinderOpen, setProductFinderOpen] = useState(false)
-  const [priceType, setPriceType] = useState('sale')
+  const [priceType, setPriceType] = useState<PriceType>('sale')
   const [newPrice, setNewPrice] = useState('')
   const [reason, setReason] = useState('')
   const [rejectTarget, setRejectTarget] = useState<PriceChangeRequest | null>(null)
@@ -95,6 +106,32 @@ export default function PriceChangePage() {
   const handoff = useApprovalDetailHandoff('/price-change', 'product.view', readPriceChange, createOpen || productFinderOpen || !!rejectTarget || !!cancelTarget || manualDetailOpen)
   const scope = useApprovalReadScope()
   const active = useActiveWorkspaceTab()
+  const canReadReference = can(PERMISSIONS.PRODUCT_VIEW)
+  const productId = product?.id
+  const priceReference = useQuery({
+    queryKey: ['products', productId, 'price-change-reference', scope.key],
+    enabled: active && createOpen && canUpdate && canReadReference && productId != null,
+    staleTime: 0,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const detail = await getProductApi(productId!, {
+        signal, baseURL: scope.server, _authSessionGeneration: scope.generation,
+        _erpApiFallbackTried: true, automaticReplay: false, skipGlobalError: true,
+      })
+      if (detail?.id !== productId || !scope.isCurrent()) throw new Error('当前商品价格无法核对')
+      return detail
+    },
+  })
+  const reference = priceReference.data
+  const referenceValue = reference?.[PRICE_TYPES[priceType].field]
+  const referenceKnown = typeof referenceValue === 'number' && Number.isFinite(referenceValue)
+  // 商品详情对历史空等级 A 可能返回标签价。相同值时仅显示资料参考，不用它推算差额。
+  const gradeAFallbackPossible = priceType === 'a'
+    && (reference?.labelSalePrice === undefined || referenceValue === reference.labelSalePrice)
+  const targetPrice = Number(newPrice)
+  const difference = referenceKnown && !gradeAFallbackPossible && newPrice.trim() !== ''
+    && Number.isFinite(targetPrice) && targetPrice >= 0 && Number(targetPrice.toFixed(4)) === targetPrice
+    ? targetPrice - referenceValue : null
 
   // 商品列表「申请改价」跳转（?productId=）时预填商品并打开申请弹窗
   const preselectProductId = readNullableIntParam(searchParams, 'productId')
@@ -186,22 +223,22 @@ export default function PriceChangePage() {
   const columns: TableColumn<PriceChangeRequest>[] = [
     { key: 'requestNo', title: '申请单号', width: 150 },
     ...productIdentityColumns(),
-    { key: 'priceType', title: '价格类型', width: 90, render: (v) => PRICE_TYPE_LABEL[String(v)] ?? String(v) },
-    { key: 'oldPrice', title: '现价', width: 90, align: 'right', render: (v) => v != null ? money(Number(v)) : '—' },
-    { key: 'newPrice', title: '新价', width: 90, align: 'right', render: (v) => money(Number(v)) },
-    { key: 'status', title: '状态', width: 96, minWidth: 96, render: (v) => <SoftStatusLabel label={STATUS_LABEL[Number(v)] ?? String(v)} tone={STATUS_TONE[Number(v)] ?? 'info'} /> },
+    { key: 'priceType', title: '价格类型', width: 112, render: v => priceTypeLabel(String(v)) },
+    { key: 'oldPrice', title: '申请时原价', width: 112, align: 'right', render: v => v != null ? unitPrice(Number(v)) : '—' },
+    { key: 'newPrice', title: '申请新价', width: 104, align: 'right', render: v => unitPrice(Number(v)) },
+    { key: 'status', title: '状态', width: 96, minWidth: 96, render: (v, row) => <SoftStatusLabel label={row.statusName ?? String(v)} tone={row.status === 1 && row.approvalId === null ? 'draft' : STATUS_TONE[Number(v)] ?? 'info'} /> },
     { key: 'applicantName', title: '申请人', width: 100 },
     { key: 'createdAt', title: '申请时间', width: 160, render: v => formatDisplayDateTime(v) },
     { key: 'id', title: '操作', width: 200, render: (_, row) => (
       <div className="flex gap-1">
         <OrderActivityDialog onOpenChange={setManualDetailOpen} type="price" id={row.id} title={row.requestNo} fields={[
-          ['商品', row.productName], ['价格类型', PRICE_TYPE_LABEL[row.priceType]], ['原价格', row.oldPrice], ['申请价格', row.newPrice], ['状态', STATUS_LABEL[row.status]], ['申请人', row.applicantName], ['申请原因', row.reason],
+          ['商品', row.productName], ['价格类型', priceTypeLabel(row.priceType)], ['原价格', row.oldPrice], ['申请价格', row.newPrice], ['状态', row.statusName], ['申请人', row.applicantName], ['申请原因', row.reason],
         ]} />
         {row.status === 1 && (
           <>
-            {canUpdate && <Button size="sm" variant="outline" onClick={() => submitMut.mutate(row.id)} disabled={submitMut.isPending}>提交</Button>}
-            {canApprove && <Button size="sm" onClick={() => approveMut.mutate(row.id)} disabled={approveMut.isPending}>通过</Button>}
-            {canApprove && <Button size="sm" variant="outline" className="text-destructive-ink" onClick={() => { setRejectTarget(row); setRejectReason('') }}>驳回</Button>}
+            {canUpdate && row.approvalId === null && <Button size="sm" variant="outline" onClick={() => submitMut.mutate(row.id)} disabled={submitMut.isPending}>提交</Button>}
+            {canApprove && row.approvalId != null && <Button size="sm" onClick={() => approveMut.mutate(row.id)} disabled={approveMut.isPending}>通过</Button>}
+            {canApprove && row.approvalId != null && <Button size="sm" variant="outline" className="text-destructive-ink" onClick={() => { setRejectTarget(row); setRejectReason('') }}>驳回</Button>}
             {canUpdate && <Button size="sm" variant="ghost" onClick={() => setCancelTarget(row)}>取消</Button>}
           </>
         )}
@@ -226,7 +263,7 @@ export default function PriceChangePage() {
 
       <ApprovalHandoffNotice {...handoff} />
       {handoff.data && <OrderActivityDialog type="price" id={handoff.data.id} title={handoff.data.requestNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
-        ['商品', handoff.data.productName], ['价格类型', PRICE_TYPE_LABEL[handoff.data.priceType]], ['原价格', handoff.data.oldPrice], ['申请价格', handoff.data.newPrice], ['状态', handoff.data.statusName], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason],
+        ['商品', handoff.data.productName], ['价格类型', priceTypeLabel(handoff.data.priceType)], ['原价格', handoff.data.oldPrice], ['申请价格', handoff.data.newPrice], ['状态', handoff.data.statusName], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason],
       ]} />}
       {/* 新建改价申请 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -241,16 +278,26 @@ export default function PriceChangePage() {
             </div>
             <div>
               <p className="mb-1 text-sm font-medium">价格类型</p>
-              <Select value={priceType} onValueChange={setPriceType}>
+              <Select value={priceType} onValueChange={value => { if (Object.hasOwn(PRICE_TYPES, value)) setPriceType(value as PriceType) }}>
                 <SelectTrigger aria-label="价格类型" className="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {Object.entries(PRICE_TYPE_LABEL).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                  {Object.entries(PRICE_TYPES).map(([key, { label }]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div>
               <p className="mb-1 text-sm font-medium">新价格</p>
               <Input aria-label="新价格" type="number" min="0" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="输入新价格" />
+              {product && canUpdate && canReadReference && active && scope.isCurrent() && <div role="status" className="mt-2 text-sm text-muted-foreground">
+                {priceReference.isPaused ? '等待网络连接，价格参考暂不可用。'
+                  : priceReference.isFetching || priceReference.isPending ? '正在加载当前价格…'
+                    : priceReference.isError ? <>当前价格读取失败。 <Button type="button" size="sm" variant="outline" onClick={() => void priceReference.refetch()}>重试价格读取</Button></>
+                      : referenceKnown ? <>
+                        {gradeAFallbackPossible ? '商品资料参考价' : '当前价格'} <span className="font-medium tabular-nums text-foreground">{unitPrice(referenceValue)}</span>
+                        {gradeAFallbackPossible && <span> · 等级 A 请在商品资料中核对。</span>}
+                        {difference != null && <span className="tabular-nums"> · 变化 {difference > 0 ? '+' : ''}{unitPrice(difference)}</span>}
+                      </> : '商品资料未提供此价格。'}
+              </div>}
             </div>
             <div>
               <p className="mb-1 text-sm font-medium">申请理由</p>

@@ -9,7 +9,7 @@ const { scopeFilter } = require('../../utils/warehouseScope')
  *
  * 库龄 = NOW() − 容器 created_at（本仓落库起算；调拨/拆分新建容器会从头计，页面注明）。
  * 金额 = remaining_qty × COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), sale_price, 0)（估值展示，不作账）。
- * 呆滞 = 某商品×某仓 仍有在库 且 最后一次出库距今 > staleDays（inventory_logs type=2 按 product+warehouse 聚合）。
+ * 呆滞 = 某商品×某仓仍有在库，且从未出库或最近出库距今超过 staleDays 个业务日历日。
  */
 
 // remaining_qty × 持有成本（avg_cost 优先，回落 cost_price / sale_price）
@@ -73,7 +73,8 @@ async function getInventoryAging({ page = 1, pageSize = 20, keyword = '', wareho
             ROUND(SUM(c.remaining_qty * ${AGE_EXPR}) / NULLIF(SUM(c.remaining_qty),0), 1)   AS avg_age_days,
             MAX(${AGE_EXPR})                                                                AS max_age_days,
             SUM(${VALUE_EXPR})                                                              AS total_value,
-            lo.last_outbound_at
+            lo.last_outbound_at,
+            DATEDIFF(NOW(), lo.last_outbound_at) AS days_since_outbound
      FROM inventory_containers c
      JOIN product_items p        ON p.id = c.product_id AND p.deleted_at IS NULL
      JOIN inventory_warehouses w ON w.id = c.warehouse_id AND w.deleted_at IS NULL
@@ -93,10 +94,8 @@ async function getInventoryAging({ page = 1, pageSize = 20, keyword = '', wareho
     whereParams,
   )
 
-  const now = Date.now()
   const list = rows.map(r => {
-    const lastOut = r.last_outbound_at ? new Date(r.last_outbound_at).getTime() : null
-    const daysSinceOutbound = lastOut != null ? Math.floor((now - lastOut) / 86400000) : null
+    const daysSinceOutbound = r.days_since_outbound == null ? null : Number(r.days_since_outbound)
     const isStale = daysSinceOutbound == null || daysSinceOutbound > Number(staleDays)
     return {
       id: `${r.product_id}-${r.warehouse_id}`,

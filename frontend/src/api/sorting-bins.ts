@@ -39,8 +39,8 @@ export interface SortScanResult {
   qty?: number
 }
 
-export const scanProductForSortApi = (code: string) =>
-  client.get<SortScanResult | null>('/sorting-bins/scan', { params: { code }, skipGlobalError: true })
+export const scanProductForSortApi = (code: string, taskId?: number) =>
+  client.get<SortScanResult | null>('/sorting-bins/scan', { params: { code, taskId }, skipGlobalError: true })
 
 export const getSortingBinsApi = (params?: { keyword?: string; status?: number; warehouseId?: number }) =>
   client.get<SortingBin[]>('/sorting-bins', { params })

@@ -113,6 +113,7 @@ function handlingPermissions(req) {
   const { hasPermission } = require('../../middleware/auth')
   const { PERMISSIONS } = require('../../constants/permissions')
   return {
+    canReadScrapValuation: hasPermission(req, PERMISSIONS.PRODUCT_VIEW) && hasPermission(req, PERMISSIONS.WAREHOUSE_VIEW),
     targetViews: { sale_order: hasPermission(req, PERMISSIONS.SALE_ORDER_VIEW), purchase_return: hasPermission(req, PERMISSIONS.RETURN_ORDER_VIEW), inventory_disposal: hasPermission(req, PERMISSIONS.INVENTORY_DISPOSAL_VIEW) },
     authorization: { view: hasPermission(req, PERMISSIONS.INVENTORY_DISPOSAL_VIEW), create: hasPermission(req, PERMISSIONS.INVENTORY_DISPOSAL_CREATE), approve: hasPermission(req, PERMISSIONS.INVENTORY_DISPOSAL_APPROVE) },
   }
@@ -135,8 +136,14 @@ async function handlingSources(req, res, next) {
   } catch (error) { next(error) }
 }
 async function handlingSource(req, res, next) {
-  try { return successResponse(res, await handling.getSource(req.params.id, req.user?.warehouseIds ?? null, handlingPermissions(req).targetViews), '查询成功') }
-  catch (error) { next(error) }
+  try {
+    const { targetViews, canReadScrapValuation } = handlingPermissions(req)
+    const source = await handling.getSource(req.params.id, req.user?.warehouseIds ?? null, targetViews)
+    const result = source.handlingType === 3 && canReadScrapValuation
+      ? { ...source, scrapValuation: await svc.getScrapValuation(source.productId) }
+      : source
+    return successResponse(res, result, '查询成功')
+  } catch (error) { next(error) }
 }
 async function createHandlingSource(req, res, next) {
   try {

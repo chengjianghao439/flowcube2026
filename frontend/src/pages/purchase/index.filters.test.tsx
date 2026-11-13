@@ -96,6 +96,16 @@ test('从默认列表实际应用自定义日期后再开详情并关闭，显�
   await click('查询'); expect(dates().map(el => el.value)).toEqual([dateRange.startDate, dateRange.endDate])
 })
 
+test('采购单边日期只传对应边界，清除日期保留单号条件', async () => {
+  await render('/purchase?keyword=PO&endDate=2026-10-08')
+  expect(host.textContent).toContain('截至 2026-10-08')
+  expect(request()).toMatchObject({ keyword: 'PO', startDate: undefined, endDate: '2026-10-08' })
+  await click('清除日期限制')
+  expect(Object.fromEntries(current())).toEqual({ keyword: 'PO', range: 'all', page: '1' })
+  expect(request()).toMatchObject({ keyword: 'PO', startDate: undefined, endDate: undefined })
+  expect(host.textContent).toContain('未限日期')
+})
+
 test('实际采购URL前进后退与反复详情返回使用该次历史筛选',async()=>{
  await render();await go('/purchase?keyword=NEXT&startDate=2026-10-09&endDate=2026-10-09');expect(current().get('keyword')).toBe('NEXT')
  await go(-1);expect(Object.fromEntries(current())).toMatchObject({ ...dateRange, ...extra });expect(host.textContent).toContain('自定义日期结果');await go(1);expect(current().get('keyword')).toBe('NEXT');expect(request()).toMatchObject({keyword:'NEXT',startDate:'2026-10-09'})

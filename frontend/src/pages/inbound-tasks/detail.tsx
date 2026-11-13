@@ -53,7 +53,7 @@ const AUDIT_TONE: Record<string, StatusTone> = {
   approved: 'success', cancelled: 'danger', not_ready: 'draft',
 }
 const PRINT_TONE: Record<string, StatusTone> = {
-  success: 'success', queued: 'active', printing: 'active', failed: 'danger', timeout: 'danger', cancelled: 'draft', not_started: 'draft',
+  success: 'success', queued: 'active', printing: 'active', failed: 'danger', timeout: 'danger', unassigned: 'active', cancelled: 'draft', not_started: 'draft',
 }
 
 /** 沿用销售摘要区的间距与图标，保留上架、结算和条码打印各自状态。 */
@@ -115,6 +115,7 @@ export default function InboundTaskDetailPage() {
   const printDetail = printSummary
     ? [
         printSummary.timeout > 0 ? `${printSummary.timeout} 条超时待确认` : null,
+        (printSummary.unassigned ?? 0) > 0 ? `${printSummary.unassigned} 条未配置打印机` : null,
         printSummary.failed > 0 ? `${printSummary.failed} 条失败` : null,
         printSummary.queued + printSummary.printing > 0 ? `${printSummary.queued + printSummary.printing} 条待打印` : null,
       ].filter(Boolean).join(' · ') || `${printSummary.success} / ${printSummary.total} 已成功`
@@ -125,6 +126,7 @@ export default function InboundTaskDetailPage() {
   const canCancel = !error && can(PERMISSIONS.INBOUND_ORDER_CANCEL) && task?.status === 1
   const canVoidReceipt = !error && can(PERMISSIONS.INBOUND_ORDER_CANCEL) && (task?.status === 2 || task?.status === 3 || task?.status === 4)
   const canCloseReceiving = !error && can(PERMISSIONS.INBOUND_ORDER_CANCEL) && task?.status === 2
+  const canPrint = can(PERMISSIONS.PRINT_TEMPLATE_VIEW)
   const statusTone = receiptStatus?.key === 'audited'
     ? 'success'
     : receiptStatus?.key === 'exception'
@@ -196,7 +198,7 @@ export default function InboundTaskDetailPage() {
                 结束本次收货
               </Button>
             )}
-            <Button variant="outline" size="sm" disabled={!!error} onClick={() => setPrintOpen(true)}><Printer className="mr-1 h-4 w-4" />打印</Button>
+            {canPrint && <Button variant="outline" size="sm" disabled={!!error} onClick={() => setPrintOpen(true)}><Printer className="mr-1 h-4 w-4" />打印</Button>}
             <Button variant="outline" size="sm" onClick={closeTab}><ArrowLeft className="mr-1 h-4 w-4" />返回列表</Button>
             {canSubmit && (
               <Button
@@ -260,6 +262,7 @@ export default function InboundTaskDetailPage() {
           <div><span className="text-muted-foreground">采购单：</span>{task.purchaseOrderId && can(PERMISSIONS.PURCHASE_ORDER_VIEW) ? <button className="text-primary underline underline-offset-2" onClick={() => { const path = `/purchase/${task.purchaseOrderId}`; useWorkspaceStore.getState().addTab({ key: path, path, title: task.purchaseOrderNo ?? '采购详情' }); navigate(path) }}>{task.purchaseOrderNo}</button> : <span>{task.purchaseOrderNo ?? '混合采购'}</span>}</div>
           <div><span className="text-muted-foreground">时间：</span>{formatDisplayDateTime(task.createdAt)}</div>
           <div><span className="text-muted-foreground">经办人：</span>{task.operatorName ?? '—'}</div>
+          {task.submittedAt && <div><span className="text-muted-foreground">提交人：</span>{task.submittedByName?.trim() || '未记录'}</div>}
           <div><span className="text-muted-foreground">运费方式：</span>{task.freightType != null ? INBOUND_FREIGHT_LABEL[task.freightType] ?? '—' : '—'}</div>
           <div><span className="text-muted-foreground">运费金额：</span>{task.freightAmount != null ? money(task.freightAmount) : '—'}</div>
           <div className="sm:col-span-2 xl:col-span-3"><span className="text-muted-foreground">备注：</span>{task.remark || '—'}</div>
@@ -371,7 +374,7 @@ export default function InboundTaskDetailPage() {
       <CloseReceivingDialog taskId={closeReceivingConfirmOpen ? validId : null}
         onClose={() => setCloseReceivingConfirmOpen(false)} />
 
-      {printOpen && task && (
+      {canPrint && printOpen && task && (
         <OrderPrintOverlay
           templateType={2}
           title={task.taskNo}

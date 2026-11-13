@@ -25,12 +25,12 @@ test('真实处置页有独立处理意图入口与来源分页，不取目标�
 
 const intentUuid='11111111-1111-4111-8111-111111111111'
 const source={id:11,intentUuid,productId:3,productCode:'P3',productName:'意图商品',warehouseId:8,warehouseName:'原仓',warehouseCode:'W8',unit:'个',handlingType:1,quantity:10,revision:1,originKind:'ordinary',budget:{intentionQuantity:10,allocatedQuantity:6,releasedQuantity:4,availableQuantity:8,actualExecutedQuantity:2,progress:'部分执行'},links:[{linkId:7,state:'TERMINATED',allocatedQuantity:6,releasedQuantity:0,executedQuantity:6,terminal:true,returnClosed:true,pendingReason:null}]}
-const product={id:3,code:'P3',name:'当前商品',unit:'个',isActive:true,allowDecimalQty:true,costPrice:2}
+const product={id:3,code:'P3',name:'当前商品',unit:'个',isActive:true,allowDecimalQty:true,costPrice:2,articleNumber:'源型号',spec:'源规格',color:'源色号'}
 const snapshot={version:1,head:{id:19,disposal_no:'DP19',warehouse_id:8,warehouse_name:'历史仓',status:3,total_value:'15.1234',remark:'历史备注',operator_id:2,operator_name:'历史制单人',approved_by:6,approved_by_name:'历史批准人',approved_at:'2026-10-04T04:00:00.000Z',reject_reason:null,disposed_at:null,created_at:'2026-10-04T03:00:00.000Z',updated_at:'2026-10-04T04:00:00.000Z',deleted_at:null,disposal_handling_link_id:null},items:[1,2,3].map(type=>({id:20+type,disposal_id:19,product_id:3,product_code:'OLD'+type,product_name:'历史商品'+type,unit:'历史单位',quantity:'2.00',unit_value:'3.1234',dispose_type:type,remark:'历史行'+type,created_at:'2026-10-04T03:00:00.000Z'})),approval:{approved_by:6,approved_by_name:'历史批准人',approved_at:'2026-10-04T04:00:00.000Z'}}
 const posts: Array<{path:string;body:Record<string,unknown>;baseURL:string|undefined}> = []
 const configs: import('axios').InternalAxiosRequestConfig[]=[]
 function reply(c:import('axios').InternalAxiosRequestConfig,data:unknown){return{config:c,status:200,statusText:'OK',headers:{},data:{success:true,data}}}
-function actualAdapter(options:{page2?:boolean;history?:boolean;scrap?:boolean;release?:boolean;signError?:boolean;historical?:typeof snapshot}={}){
+function actualAdapter(options:{page2?:boolean;history?:boolean;scrap?:boolean;noScrapPrice?:boolean;release?:boolean;signError?:boolean;historical?:typeof snapshot}={}){
  const fallback=client.defaults.adapter;if(typeof fallback!=='function')throw Error('exact adapter required')
  client.defaults.adapter=async c=>{
   configs.push(c)
@@ -42,7 +42,7 @@ function actualAdapter(options:{page2?:boolean;history?:boolean;scrap?:boolean;r
    const list=options.page2?Array.from({length:21},(_,index)=>index===0?current:{...source,id:11+index,intentUuid:`00000000-0000-4000-8000-${String(11+index).padStart(12,'0')}`,links:[],budget:{intentionQuantity:10,allocatedQuantity:0,releasedQuantity:0,availableQuantity:10,actualExecutedQuantity:0,progress:'待关联'}}):[current]
    return reply(c,{list:list.slice((page-1)*pageSize,page*pageSize),pagination:{page,pageSize,total:list.length}})
   }
-  if(c.method==='get'&&c.url==='/disposals/handling-sources/11')return reply(c,{...source,handlingType:options.scrap?3:1})
+  if(c.method==='get'&&c.url==='/disposals/handling-sources/11')return reply(c,{...source,handlingType:options.scrap?3:1,...(options.scrap?{scrapValuation:options.noScrapPrice ? {unitValue:0,basis:'none'} : {unitValue:10,basis:'avg_cost'}}:{})})
   if(c.method==='get'&&c.url==='/disposals')return reply(c,{list:options.history?[{id:19,disposalNo:'DP19',status:3,statusName:'已批准',warehouseName:'历史仓',totalValue:15.1234,operatorName:'历史制单人',createdAt:'2026-10-04 12:00:00'}]:[],pagination:{page:1,pageSize:20,total:options.history?1:0}})
   if(c.method==='get'&&c.url==='/disposals/19/conversion-snapshot')return reply(c,{snapshot:options.historical??snapshot,snapshotFingerprint:'a'.repeat(64),conversion:null})
   if(c.method==='post'&&['/disposals/handling-sources','/disposals','/disposals/19/sign-conversion','/disposals/handling-sources/11/links/7/release'].includes(c.url!)){
@@ -102,8 +102,9 @@ test('完整mixed旧单签认展示所有历史行与批准；漂移保原previe
 test('来源报废实际原CreateDisposalDialog仅原商品/仓，员工量创建新草稿而非旧批准执行',async()=>{
  posts.length=0;actualAdapter({scrap:true})
  await leaf(HandlingScrapPage,'/disposals/new?handlingSourceId=11',async()=>{
-  await click('载入来源商品');const quantity=document.querySelector<HTMLInputElement>('input[title*="原参考量"]')!;await input(quantity,'2')
-  await click('创建报废草稿');expect(posts).toHaveLength(1);expect(posts[0].path).toBe('/disposals');expect(posts[0].body).toMatchObject({warehouseId:8,items:[{productId:3,quantity:2,disposeType:3}],disposalSource:{sourceId:11,expectedRevision:1}})
+  await click('载入来源商品');const quantity=document.querySelector<HTMLInputElement>('input[title*="平均成本"]')!;expect(quantity).not.toBeNull();await input(quantity,'1')
+  expect(document.body.textContent).toContain('源型号');expect(document.body.textContent).toContain('源色号');expect(document.body.textContent).toContain('¥10.00')
+  await click('创建报废草稿');expect(posts).toHaveLength(1);expect(posts[0].path).toBe('/disposals');expect(posts[0].body).toMatchObject({warehouseId:8,items:[{productId:3,quantity:1,disposeType:3}],disposalSource:{sourceId:11,expectedRevision:1}})
   expect(posts.some(p=>p.path.includes('/dispose'))).toBe(false)
  })
 })
@@ -187,5 +188,16 @@ test('处理意图首次打开捕获当前server，未访问空Dialog不预先�
     await act(async () => setApiClientBaseURL('/b'))
     await click('保存处理意图')
     expect(document.querySelector('[aria-label="意图基本量"]')).not.toBeNull()
+  })
+})
+
+test('来源商品无参考价时显示缺价，数量留空且不伪装成可用库存', async () => {
+  actualAdapter({ scrap: true, noScrapPrice: true })
+  await leaf(HandlingScrapPage, '/disposals/new?handlingSourceId=11', async () => {
+    await click('载入来源商品')
+    const quantity = document.querySelector<HTMLInputElement>('input[title="暂无参考价"]')
+    expect(quantity?.value).toBe('')
+    expect(document.body.textContent).toContain('暂无参考价')
+    expect(document.body.textContent).not.toContain('¥0.00')
   })
 })

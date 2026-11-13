@@ -27,6 +27,23 @@ test('通知不查询或展示已取消的系统巡检提醒', async () => {
   assert.ok(!result.items.some(item => item.code === 'SYSTEM_HEALTH_ANOMALY'))
 })
 
+test('滞销提醒按仓说明从未出库或超过阈值，沿原范围与计数', async (t) => {
+  const pool = require(dbPath).pool
+  const scope = [11]
+  t.mock.method(pool, 'query', async (sql, params) => {
+    if (!/COUNT\(\*\) AS staleCount/.test(sql)) return [[{ count: 0 }]]
+    assert.match(sql, /c\.warehouse_id IN \(\?\)/)
+    assert.match(sql, /HAVING MAX\(lo\.last_out\) IS NULL OR DATEDIFF\(NOW\(\), MAX\(lo\.last_out\)\) > \?/)
+    assert.deepEqual(params[0], scope)
+    return [[{ staleCount: 3 }]]
+  })
+  const result = await buildNotifications(scope, null)
+  const notification = result.items.find(item => item.code === 'STALE_STOCK')
+  assert.equal(result.counts.staleCount, 3)
+  assert.equal(notification?.path, '/reports/inventory-aging')
+  assert.equal(notification?.text, `3 项在库商品从未出库，或距最近一次出库超过 ${Number(process.env.STALE_WARNING_DAYS || 90)} 天（按仓计数）`)
+})
+
 // 只替换数据库边界，运行真实通知服务与仓库过滤工具；不创建连接或启动应用。
 // transfer_orders 没有 warehouse_id，且调拨列表允许源/目标任一端在范围内。
 test('调拨通知按任一端授权计数，空范围不泄漏，不限仓保留原计数', async (t) => {

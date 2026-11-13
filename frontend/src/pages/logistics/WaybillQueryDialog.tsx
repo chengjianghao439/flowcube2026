@@ -1,11 +1,10 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
-import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useId, useState } from 'react'
+import { isReversedDateRange } from '@/lib/dateRange'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DatePicker } from '@/components/shared/DatePicker'
-import { getCarriersActiveApi } from '@/api/carriers'
 
 /** 物流运单查询弹窗对外的筛选值 */
 export interface WaybillQueryValues {
@@ -26,21 +25,19 @@ const EMPTY: WaybillQueryValues = {
 interface Props {
   open: boolean
   initial: WaybillQueryValues
+  carriers?: readonly { id: number; name: string }[]
   /** 「重置」回到的值；页面用它把日期重置回该页面的默认窗口（不传则用弹窗空值） */
   resetValues?: Partial<WaybillQueryValues>
   onClose: () => void
   onApply: (values: WaybillQueryValues) => void
 }
 
-export default function WaybillQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
+export default function WaybillQueryDialog({ open, initial, carriers, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<WaybillQueryValues>(EMPTY)
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
-
-  const { data: carriers } = useQuery({
-    queryKey: ['carriers-active'],
-    queryFn: getCarriersActiveApi,
-    enabled: open,
-  })
+  const rangeErrorId = useId()
+  const rangeInvalid = isReversedDateRange(draft.startDate, draft.endDate)
+  const apply = () => { if (!rangeInvalid) onApply(draft) }
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -56,7 +53,8 @@ export default function WaybillQueryDialog({ open, initial, resetValues, onClose
       width={640}
       onClose={onClose}
       onReset={() => setDraft(resetDraft())}
-      onApply={() => onApply(draft)}
+      onApply={apply}
+      applyDisabled={rangeInvalid}
     >
       <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
@@ -65,7 +63,7 @@ export default function WaybillQueryDialog({ open, initial, resetValues, onClose
             placeholder="请输入关键字…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
             className="h-9"
           />
         </label>
@@ -81,29 +79,30 @@ export default function WaybillQueryDialog({ open, initial, resetValues, onClose
           </Select>
         </label>
 
-        <label className="flex flex-col gap-1">
+        {carriers && <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">承运商</span>
           <Select value={draft.carrierId ? String(draft.carrierId) : '__all__'} onValueChange={v => set('carrierId', v === '__all__' ? null : Number(v))}>
             <SelectTrigger className="h-9"><SelectValue placeholder="全部承运商" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部承运商</SelectItem>
-              {(carriers ?? []).map((c: { id: number; name: string }) => (
+              {carriers.map(c => (
                 <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
-        </label>
+        </label>}
 
         <label className="fc-query-date-start flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
-          <DatePicker aria-label="创建日期（起）" value={draft.startDate} max={draft.endDate || undefined}
+          <DatePicker aria-label="创建日期（起）" aria-invalid={rangeInvalid || undefined} aria-describedby={rangeInvalid ? rangeErrorId : undefined} value={draft.startDate} max={draft.endDate || undefined}
             onChange={v => set('startDate', v)} className="h-9" />
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
-          <DatePicker aria-label="创建日期（止）" value={draft.endDate} min={draft.startDate || undefined}
+          <DatePicker aria-label="创建日期（止）" aria-invalid={rangeInvalid || undefined} aria-describedby={rangeInvalid ? rangeErrorId : undefined} value={draft.endDate} min={draft.startDate || undefined}
             onChange={v => set('endDate', v)} className="h-9" />
         </label>
+        {rangeInvalid && <p id={rangeErrorId} role="alert" className="col-span-full text-sm text-destructive-ink">起始日期不能晚于结束日期。</p>}
       </QueryFormLayout>
     </QueryDialog>
   )

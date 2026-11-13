@@ -39,7 +39,7 @@ beforeEach(() => {
   useAuthStore.getState().login('offline', null, { id: owner, roleId: 5, username: 'offline', permissions: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_CONTAINER_SPLIT] } as User)
   api.defaults.adapter = async config => {
     requests.push(config); let data: unknown
-    if (config.url?.startsWith('/inventory/containers/barcode/')) { const box = config.url.endsWith('B12'); data = { containerId: box ? 12 : 11, barcode: box ? 'B12' : 'I11', containerKind: box ? 'plastic_box' : 'inventory', containerStatus: 'stored', productId: 3, warehouseId: 8, productName: '离线商品', productCode: 'P3', remainingQty: 10 } }
+    if (config.url?.startsWith('/inventory/containers/barcode/')) { const box = config.url.endsWith('B12'); const individual = config.url.endsWith('I13'); data = { containerId: box ? 12 : individual ? 13 : 11, barcode: box ? 'B12' : individual ? 'I13' : 'I11', individual, containerKind: box ? 'plastic_box' : 'inventory', containerStatus: 'stored', productId: 3, warehouseId: 8, productName: '离线商品', productCode: 'P3', remainingQty: individual ? 1 : 10 } }
     else if (config.url?.startsWith('/system/request-status/')) data = { status: 'not_found', data: null }
     else if (config.method === 'post') data = postResult ? await postResult() : { ...body }
     else throw new Error(`禁止未stub网络端点 ${config.url}`)
@@ -72,6 +72,15 @@ test('放入盒保留整件全量与expectedQty；未完成的来源输入切换
   await act(async () => { await vi.waitFor(() => expect(requests.some(r => r.method === 'post')).toBe(true)) })
   const submitted = requests.find(r => r.method === 'post')!
   expect(submitted.url).toBe('/plastic-boxes/12/fill'); expect(JSON.parse(submitted.data)).toEqual({ sourceContainerId: 11, expectedSourceQty: 10 })
+})
+test('扫描一件一码在来源步骤被拒，仍可继续扫描合法整件', async () => {
+  await draw(<PdaFillPage />)
+  await scan('I13')
+  expect(host.textContent).toContain('一件一码不可放入塑料盒')
+  expect(host.textContent).toContain('① 扫整件来源')
+  expect(requests.some(r => r.method === 'post')).toBe(false)
+  await scan('I11')
+  expect(host.textContent).toContain('② 扫目标塑料盒')
 })
 test('旧fill深链无需外部render即隔离A→B→A后的原来源，不能沿旧输入提交', async () => {
   await draw(<PdaFillPage />); await scan('I11')

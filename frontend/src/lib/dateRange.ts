@@ -24,3 +24,8 @@ export function getMonthDateRange(date: Date = new Date()): { startDate: string;
   const endDate = beijingYmd(date)
   return { startDate: `${endDate.slice(0, 7)}-01`, endDate }
 }
+
+/** 起止值来自 DatePicker，格式为 yyyy-mm-dd；单边条件有效。 */
+export function isReversedDateRange(startDate?: string, endDate?: string): boolean {
+  return Boolean(startDate && endDate && startDate > endDate)
+}

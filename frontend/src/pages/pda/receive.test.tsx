@@ -17,7 +17,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { AxiosAdapter } from 'axios'
-import apiClient from '@/api/client'
+import apiClient, { ApiClientError } from '@/api/client'
 import Page from './receive'
 import { useAuthStore } from '@/store/authStore'
 import type { User } from '@/types'
@@ -81,6 +81,7 @@ let client: QueryClient | null = null
 let previousAdapter: typeof apiClient.defaults.adapter
 const unexpectedRequests: string[] = []
 const quantityPolicyIds: string[] = []
+let allowDecimal = false
 
 function setInputValue(input: HTMLInputElement, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -129,7 +130,8 @@ beforeEach(() => {
   previousAdapter = apiClient.defaults.adapter
   unexpectedRequests.length = 0
   quantityPolicyIds.length = 0
-  // 保留真实数量策略 hook/API，仅返回本夹具两个商品的整数策略。
+  allowDecimal = false
+  // 保留真实数量策略 hook/API，仅为本夹具的商品返回数量策略。
   apiClient.defaults.adapter = (async config => {
     const ids = config.params?.ids
     if (config.method !== 'get' || config.url !== '/products/qty-policies'
@@ -141,7 +143,7 @@ beforeEach(() => {
     quantityPolicyIds.push(ids)
     return {
       status: 200, statusText: 'OK', headers: {}, config,
-      data: { success: true, data: [{ id: Number(ids), allowDecimal: false }] },
+      data: { success: true, data: [{ id: Number(ids), allowDecimal }] },
     }
   }) satisfies AxiosAdapter
 })
@@ -174,6 +176,53 @@ test('点选商品后点一次「打印并登记」即提交，不再要求二�
   expect(payload.productId).toBe(169)
   expect(payload.packages).toEqual([{ qty: 4 }])
   expect(payload.scannedBarcode).toBeUndefined()
+})
+
+test('应收 1 件填 2 件时显示正数超收，原因必选且取消后保留未登记的输入', async () => {
+  api.receive.mockRejectedValueOnce(new ApiClientError({
+    status: 409, code: 'OVER_RECEIVE_CONFIRM_REQUIRED', message: '请确认本次超收',
+    data: { orderedQty: 1, receivedQty: 0, overQty: 1 },
+  }))
+  await mountPage({ ...TASK, items: [{ ...TASK.items[0], orderedQty: 1, unit: '件' }] })
+  const input = host.querySelector<HTMLInputElement>('input[type="number"]')!
+  await act(async () => setInputValue(input, '2'))
+  const summary = [...host.querySelectorAll('span')].find(span => span.textContent === '超收')
+  expect(summary?.parentElement?.textContent ?? '').toMatch(/^超收\s*1 件$/)
+
+  await act(async () => { buttonByText('打印并登记').click() })
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')?.textContent).toContain('超收原因（必选）'))
+  const dialogButtons = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')]
+  expect(dialogButtons.find(button => button.textContent === '确认超收登记')?.disabled).toBe(true)
+  await act(async () => { dialogButtons.find(button => button.textContent === '取消')!.click() })
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  expect(host.textContent).toContain('已收 0')
+  expect(input.value).toBe('2')
+  expect(api.receive).toHaveBeenCalledTimes(1)
+  expect(api.receive.mock.calls[0][1].confirmOverReceive).toBeUndefined()
+  expect(api.warn).toHaveBeenCalledWith('已取消本次超收登记，请核对实物数量后重新录入')
+})
+
+test('小数数量恰好收满时显示剩余 0，不显示超收', async () => {
+  allowDecimal = true
+  await mountPage({ ...TASK, items: [{ ...TASK.items[0], orderedQty: 1.2, receivedQty: 1 }] })
+  const input = host.querySelector<HTMLInputElement>('input[type="number"]')!
+  await act(async () => setInputValue(input, '0.2'))
+  const summary = [...host.querySelectorAll('span')].find(span => span.textContent === '提交后剩余')
+  expect(summary?.parentElement?.textContent).toMatch(/^提交后剩余\s*0$/)
+  expect(host.textContent).not.toContain('超收')
+})
+
+test('收货回执分别说明无可用打印机与打印准备失败，收货继续成功', async () => {
+  api.receive.mockResolvedValue({ containers: [{ containerId: 108 }], printJobIds: [], noPrinterCount: 1, printFailedCount: 1 })
+  await mountPage()
+  const input = host.querySelector<HTMLInputElement>('input[type="number"]')!
+  await act(async () => setInputValue(input, '4'))
+  await act(async () => buttonByText('打印并登记').click())
+  await vi.waitFor(async () => {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) })
+    expect(api.warn).toHaveBeenCalledWith('1 个条码无可用打印机，1 个条码打印准备失败，请到「打印记录」补打')
+  })
+  expect(api.receive).toHaveBeenCalledOnce()
 })
 
 test('一个商品收完后自动切到下一个未收完的商品', async () => {

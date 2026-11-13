@@ -7,8 +7,10 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
+const { lockAccountingCompany } = require('./accounting.period-lock')
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
+const optionalText = (value) => String(value ?? '').trim() || null
 
 // 发票日期序列化：DB 读出的 Date 对象 → 'YYYY-MM-DD'（String(Date) 会得到 'Sun Aug 09 2026...'，
 // 直接 slice 出非法日期）；前端传的字符串原样返回
@@ -284,6 +286,8 @@ function validatePayload(d) {
 async function createInvoice(d, operator, companyId = 1) {
   const v = validatePayload(d)
   const cid = Number(companyId) || 1
+  const code = optionalText(d.invoiceCode)
+  const taxNo = optionalText(d.partyTaxNo)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -293,6 +297,10 @@ async function createInvoice(d, operator, companyId = 1) {
     // 先挡「显式 sourceType 与发票类型不符」——纯输入错误，须在配额校验之前报出，
     // 否则会被「超配额」抢先掩盖成另一个原因（见 assertExplicitTypeMatches 注释）。
     assertExplicitTypeMatches(v.type, d.sourceType ?? null)
+    if (v.type === 1) {
+      await lockAccountingCompany(conn, cid)
+      await assertNoCodeLessInputDuplicate(conn, cid, code, v.no, v.party, taxNo, d.invoiceDate)
+    }
     const quota = await assertInvoiceQuota({ ...d, invoiceType: v.type, amountWithTax: v.withTax }, null, conn)
     const source = resolveSource(v.type, {
       quota,
@@ -309,7 +317,7 @@ async function createInvoice(d, operator, companyId = 1) {
           amount_no_tax, tax_rate, tax_amount, amount_with_tax, invoice_date, status,
           source_type, source_id, source_no, remark, operator_id, operator_name, company_id)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)`,
-      [v.type, d.invoiceCode || null, v.no, v.party, d.partyTaxNo || null,
+      [v.type, code, v.no, v.party, taxNo,
        v.noTax, round2(d.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate),
        source.sourceType, source.sourceId, source.sourceNo, d.remark || null,
        operator?.userId || null, operator?.username || null, cid])
@@ -325,14 +333,34 @@ async function createInvoice(d, operator, companyId = 1) {
   }
 }
 
+// NULL 代码不受原唯一索引保护。进项写入先锁账套，再用事务内首次一致性读
+// 检查同一票号和日期：双方均有税号时以税号为准，缺税号时用供应商名称。
+async function assertNoCodeLessInputDuplicate(conn, cid, code, no, party, taxNo, date, excludeId = 0) {
+  if (code) return
+  const [[duplicate]] = await conn.query(
+    `SELECT id FROM fin_invoices
+      WHERE company_id = ? AND invoice_type = 1 AND invoice_no = ? AND invoice_date = ?
+        AND (invoice_code IS NULL OR TRIM(invoice_code) = '') AND deleted_at IS NULL AND id <> ?
+        AND CASE WHEN ? IS NOT NULL AND NULLIF(TRIM(party_tax_no), '') IS NOT NULL
+                 THEN TRIM(party_tax_no) = ? ELSE TRIM(party_name) = ? END
+      LIMIT 1`,
+    [cid, no, fmtDate(date), excludeId, taxNo, taxNo, party],
+  )
+  if (duplicate) throw new AppError('同一供应商、开票日期和票号的无代码进项发票已存在，请核对原票', 400, 'INVOICE_DUP')
+}
+
 async function updateInvoice(id, d, operator, companyId = 1) {
   const cid = Number(companyId) || 1
   // 事务外读只用于「未提供字段」的合并与载荷校验；**状态与版本一律以锁内读到的为准**（见下）。
   const cur = await getInvoice(id, cid)
   const v = validatePayload({ ...cur, ...d })
+  const code = optionalText(d.invoiceCode === undefined ? cur.invoiceCode : d.invoiceCode)
+  const taxNo = optionalText(d.partyTaxNo === undefined ? cur.partyTaxNo : d.partyTaxNo)
+  const date = fmtDate(d.invoiceDate ?? cur.invoiceDate)
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    if (cur.invoiceType === 1) await lockAccountingCompany(conn, cid)
     // **锁内**读当前行，拿权威的 `status` 与 `revision`，用于判定。
     // 说明（避免夸大）：事务外的 `cur` **仍然**参与「未提供字段」的合并与载荷校验，它**不**承担
     // 并发安全——**真正的安全前提是「客户端回传的 revision 与锁内 revision 相等」**，
@@ -364,6 +392,9 @@ async function updateInvoice(id, d, operator, companyId = 1) {
     // 而单据上的 invoice_type 仍是原值——正是最难查的那类错账。
     if (d.invoiceType != null && Number(d.invoiceType) !== Number(cur.invoiceType)) {
       throw new AppError('发票类型不可修改', 400, 'INVOICE_TYPE_IMMUTABLE')
+    }
+    if (cur.invoiceType === 1) {
+      await assertNoCodeLessInputDuplicate(conn, cid, code, v.no, v.party, taxNo, date, Number(id))
     }
     // 关联语义（2026-09-27）：source_type/source_id 是**派生值**，权威输入只有两种——
     // 本次的「关联单号」或本次的「显式关联 id」。
@@ -409,8 +440,8 @@ async function updateInvoice(id, d, operator, companyId = 1) {
          amount_no_tax=?, tax_rate=?, tax_amount=?, amount_with_tax=?, invoice_date=?,
          source_type=?, source_id=?, source_no=?, remark=?, revision = revision + 1
        WHERE id=? AND status=1 AND revision=? AND company_id=? AND deleted_at IS NULL`,
-      [d.invoiceCode ?? cur.invoiceCode, v.no, v.party, d.partyTaxNo ?? cur.partyTaxNo,
-       v.noTax, round2(d.taxRate ?? cur.taxRate), v.tax, v.withTax, fmtDate(d.invoiceDate ?? cur.invoiceDate),
+      [code, v.no, v.party, taxNo,
+       v.noTax, round2(d.taxRate ?? cur.taxRate), v.tax, v.withTax, date,
        source.sourceType, source.sourceId, source.sourceNo, d.remark ?? cur.remark,
        Number(id), clientRev, cid])
     if (r.affectedRows !== 1) {
@@ -431,15 +462,35 @@ async function updateInvoice(id, d, operator, companyId = 1) {
 
 async function changeStatus(id, action, operator, companyId = 1) {
   const cid = Number(companyId) || 1
-  const cur = await getInvoice(id, cid)
-  const rule = TRANSITIONS[cur.invoiceType] && TRANSITIONS[cur.invoiceType][action]
-  if (!rule) throw new AppError('该发票不支持此操作', 400, 'INVOICE_ACTION_INVALID')
-  const [from, to] = rule
-  if (cur.status !== from) throw new AppError(`当前状态「${cur.statusName}」不可执行此操作`, 400, 'INVOICE_STATUS_INVALID')
-  const [r] = await pool.query('UPDATE fin_invoices SET status=? WHERE id=? AND status=? AND company_id=? AND deleted_at IS NULL', [to, Number(id), from, cid])
-  if (r.affectedRows !== 1) throw new AppError('状态已变化，请刷新重试', 409)
-  logger.info(`发票 ${cur.invoiceNo} ${action} ${from}→${to}`, { operatorId: operator?.userId }, 'accounting')
-  return { status: to }
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    if (action === 'certify' || action === 'deduct') await lockAccountingCompany(conn, cid)
+    const [[row]] = await conn.query(
+      'SELECT * FROM fin_invoices WHERE id = ? AND company_id = ? AND deleted_at IS NULL FOR UPDATE',
+      [Number(id), cid],
+    )
+    if (!row) throw new AppError('发票不存在', 404)
+    const cur = fmt(row)
+    const rule = TRANSITIONS[cur.invoiceType]?.[action]
+    if (!Array.isArray(rule)) throw new AppError('该发票不支持此操作', 400, 'INVOICE_ACTION_INVALID')
+    const [from, to] = rule
+    if (cur.status !== from) throw new AppError(`当前状态「${cur.statusName}」不可执行此操作`, 400, 'INVOICE_STATUS_INVALID')
+    if (cur.invoiceType === 1) {
+      await assertNoCodeLessInputDuplicate(conn, cid, optionalText(cur.invoiceCode), cur.invoiceNo,
+        cur.partyName, optionalText(cur.partyTaxNo), cur.invoiceDate, Number(id))
+    }
+    const [r] = await conn.query('UPDATE fin_invoices SET status=? WHERE id=? AND status=? AND company_id=? AND deleted_at IS NULL', [to, Number(id), from, cid])
+    if (r.affectedRows !== 1) throw new AppError('状态已变化，请刷新重试', 409)
+    await conn.commit()
+    logger.info(`发票 ${cur.invoiceNo} ${action} ${from}→${to}`, { operatorId: operator?.userId }, 'accounting')
+    return { status: to }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 async function removeInvoice(id, operator, companyId = 1) {

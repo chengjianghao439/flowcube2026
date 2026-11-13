@@ -28,6 +28,24 @@ afterEach(() => {
 function render(cols = columns, selectable = false) {
   act(() => root!.render(<DataTable columns={cols} data={[{ id: 1, name: '商品', code: 'P001' }]} selectable={selectable} columnStorageKey="resize-test" />))
 }
+
+test('空态保留表格语义，自定义操作可用，加载和有数据时不显示空态', () => {
+  const onQuery = vi.fn()
+  const emptyState = <button onClick={onQuery}>查询</button>
+  act(() => root!.render(<DataTable columns={columns} data={[]} emptyState={emptyState} />))
+  const scroll = host.querySelector<HTMLElement>('[data-table-scroll]')!
+  const cell = host.querySelector<HTMLTableCellElement>('tbody td')!
+  expect(scroll.style.containerType).toBe('inline-size')
+  expect(cell.colSpan).toBe(columns.length)
+  expect(cell.firstElementChild?.classList.contains('sticky')).toBe(true)
+  act(() => (host.querySelector('tbody button') as HTMLButtonElement).click())
+  expect(onQuery).toHaveBeenCalledTimes(1)
+  act(() => root!.render(<DataTable columns={columns} data={[]} loading emptyState={emptyState} />))
+  expect(host.querySelector('tbody button')).toBeNull()
+  act(() => root!.render(<DataTable columns={columns} data={[{ id: 1, name: '商品', code: 'P001' }]} emptyState={emptyState} />))
+  expect(host.querySelector('tbody button')).toBeNull()
+  expect(host.querySelector('tbody')!.textContent).toContain('商品')
+})
 // jsdom 不排版：只替代浏览器测量结果，拖拽仍调用真实组件事件处理。
 function measure(widths: number[]) {
   host.querySelectorAll('col').forEach((col, i) => vi.spyOn(col, 'getBoundingClientRect').mockReturnValue({ width: widths[i] } as DOMRect))

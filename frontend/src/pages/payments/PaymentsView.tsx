@@ -142,7 +142,9 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
     <div className="space-y-4">
       <PageHeader
         title={copy.title}
-        description={copy.description}
+        description={tab === 'receipts'
+          ? `${isPayable ? '付款' : '收款'}单涵盖现结与月结。${can(PERMISSIONS.PAYMENT_EXECUTE) ? `此处可核销现结应${isPayable ? '付' : '收'}，月结请通过对账单核销。` : ''}`
+          : copy.description}
         actions={tab === 'records' ? (
           // 按单登记：新建手工应付 + 查询 + 导出（导出参数键为 orderNo，与本 tab 列表一致）
           <div className="flex gap-2">

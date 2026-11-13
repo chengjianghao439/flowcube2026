@@ -15,6 +15,7 @@ function fixture({ changedOrder = false, missingSource = false, executed = false
     if (/SELECT \* FROM purchase_order_items/.test(sql)) return [[{ id: 31, order_id: changedOrder ? 4 : 3 }, { id: 32, order_id: 2 }]]
     if (/FROM inbound_task_items/.test(sql)) return [[{ task_id: 1, line_count: 2, ordered_qty: 5, received_qty: 0, putaway_qty: 0, execution_line_count: executed ? 2 : 0 }]]
     if (/edit_container_count/.test(sql)) return [[{ task_id: 1, edit_container_count: legacy ? 1 : 0 }]]
+    if (/AS unassigned_jobs/.test(sql)) return [[{ task_id: 1, unassigned_jobs: 2, timeout_jobs: 0 }]]
     if (/FROM inventory_containers/.test(sql)) return [[]]
     if (/FROM purchase_order_items/.test(sql)) return [[{ purchase_item_id: 31, remaining_qty: 7, total_count: 201 }]]
     throw new Error(sql)
@@ -24,7 +25,7 @@ function fixture({ changedOrder = false, missingSource = false, executed = false
   const stubs = {
     '../../config/db': { pool: conn }, '../../utils/logger': {}, '../../engine/containerEngine': { CONTAINER_STATUS: { PENDING_PUTAWAY: 0, ACTIVE: 1 } },
     '../../utils/inboundThresholds': {}, '../../utils/warehouseScope': { scopeFilter: (scope, column) => ({ sql: Array.isArray(scope) ? ` AND ${column} IN (?)` : '', params: Array.isArray(scope) ? [scope] : [] }) },
-    './inbound-tasks.status': status, '../print-jobs/print-jobs.service': { EXPIRE_MESSAGE: 'timeout' },
+    './inbound-tasks.status': status, '../print-jobs/print-jobs.status': { EXPIRE_MESSAGE: 'no printer available', CLIENT_OFFLINE_MESSAGE: 'print client went offline' },
     './inbound-tasks.helpers': { fmtPurchasableItem: row => ({ purchaseItemId: row.purchase_item_id, remainingQty: row.remaining_qty }) },
   }
   vm.runInNewContext(fs.readFileSync(filename, 'utf8'), { module: module_, require: id => Object.hasOwn(stubs, id) ? stubs[id] : local(id) }, { filename })
@@ -65,4 +66,15 @@ test('closure批量统计逐条执行和legacy容器，不因正负执行抵消�
     assert.doesNotMatch(edit.sql, /is_legacy/)
     assert.match(edit.sql, /deleted_at IS NULL/)
   }
+})
+test('收货汇总保留无打印机的独立分类，真正超时另计', async () => {
+  const f = fixture()
+  const map = await f.query.loadInboundTaskClosureSummary([1])
+  const task = f.query.buildTaskWithClosure({ id: 1, status: 2 }, [], map.get(1))
+  assert.equal(task.printSummary.unassigned, 2)
+  assert.equal(task.printSummary.timeout, 0)
+  const print = f.calls.find(c => /AS unassigned_jobs/.test(c.sql))
+  assert.match(print.sql, /latest\.printer_id IS NULL/)
+  assert.match(print.sql, /TIMESTAMPDIFF\(MINUTE, latest\.updated_at, NOW\(\)\) >= \?/)
+  assert.ok(print.params.includes('print client went offline'))
 })

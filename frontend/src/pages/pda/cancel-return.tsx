@@ -84,7 +84,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
   const [step, setStep] = useState<Step>('scan-container')
   const [target, setTarget] = useState<CancelReturnContainer | null>(null)
   const [scanning, setScanning] = useState(false)
-  const { flash, ok, err, warn } = usePdaFeedback()
+  const { flash, ok, err } = usePdaFeedback()
 
   const [owner] = useState(captureKitReadOwner)
   const { data: detail, isLoading, isError, refetch } = usePdaCancelReturnDetail(taskId, owner)
@@ -141,10 +141,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         { taskId, packageId: found.packageId, barcode: found.barcode },
         { action: `scan-log.cancel-return-box.${taskId}`, kind: 'cancel-return-box', resourceType: 'warehouse_task', resourceId: taskId, context: { taskId, packageId: found.packageId } },
       )
-      if (!submitted) {
-        warn('拆箱提交未确认，请查看原操作提示，暂勿重复扫码。')
-        return
-      }
+      if (!submitted) return
       if (!boxAction.canApply(submitted)) return
       const result = submitted.data
       if (result.finalized) {
@@ -186,10 +183,7 @@ function CancelReturnDetailPage({ taskId }: { taskId: number }) {
         { taskId, containerId: originalTarget.containerId, barcode: originalTarget.barcode, locationId: loc.id },
         { action: `scan-log.cancel-return.${taskId}`, kind: 'cancel-return-row', resourceType: 'warehouse_task', resourceId: taskId, context: { taskId, containerId: originalTarget.containerId, locationId: loc.id } },
       )
-      if (!submitted) {
-        warn('归还提交未确认，请查看原操作提示，暂勿重复扫码。')
-        return
-      }
+      if (!submitted) return
       if (!returnAction.canApply(submitted)) return
       const result = submitted.data
       if (result.finalized) {

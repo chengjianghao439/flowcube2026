@@ -6,10 +6,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { expect, test, vi } from 'vitest'
 import RefundsPage from './index'
 import FinanceAccountsPage from '../finance/accounts'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
+const access = vi.hoisted(() => ({ createAccount: true }))
 vi.mock('@/api/refund', async original => ({ ...await original<typeof import('@/api/refund')>(), getRefundListApi: async () => ({ list: [], pagination: { total: 0 } }) }))
 vi.mock('@/api/finance', async original => ({ ...await original<typeof import('@/api/finance')>(), getActiveAccountsApi: async () => [], getAccountsApi: async () => ({ list: [], pagination: { total: 0 } }) }))
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => permission !== PERMISSIONS.FINANCE_ACCOUNT_CREATE || access.createAccount }) }))
 
 test.each([
   { Component: RefundsPage, action: '+ 新建退款单', labels: ['销售单号 *', '退款金额 *', '退款账户', '退款日期', '备注'] },
@@ -32,4 +34,21 @@ test.each([
       expect(document.getElementById(label.htmlFor)?.matches('input,button,textarea'), text).toBe(true)
     }
   } finally { await act(async () => root.unmount()); cache.clear(); host.remove() }
+})
+
+test('无创建权限的财务账号仍可查询账户，但没有新建入口', async () => {
+  access.createAccount = false
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host), cache = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  try {
+    await act(async () => root.render(<QueryClientProvider client={cache}><MemoryRouter><FinanceAccountsPage /></MemoryRouter></QueryClientProvider>))
+    const buttons = [...host.querySelectorAll('button')].map(button => button.textContent)
+    expect(buttons).toContain('查询')
+    expect(buttons).not.toContain('新建账户')
+  } finally {
+    await act(async () => root.unmount())
+    cache.clear()
+    host.remove()
+    access.createAccount = true
+  }
 })

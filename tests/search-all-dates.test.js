@@ -53,6 +53,12 @@ function loadService(query) {
   return sandbox.module.exports
 }
 
+test('报销搜索结果打开现有费用报销工作区并定位单据', async () => {
+  const service = loadService(async () => [[{ id: 17, no_val: 'EX-SYNTHETIC-17' }]])
+  const result = await service.searchGlobal('EX-SYNTHETIC-17', null, { type: 'expense', user: { userId: 1, roleId: 1 } })
+  assert.equal(result.data[0].path, '/finance/expenses?detailId=17')
+})
+
 test('客户显示名称与联系资料，并能通过游标读完超过五条的结果', async () => {
   const queries = []
   const service = loadService(async (sql, params) => {

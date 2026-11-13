@@ -33,7 +33,6 @@ import type { StatusTone } from '@/lib/statusTone'
 import type { TableColumn } from '@/types'
 
 const ABC_TONE: Record<string, StatusTone> = { A: 'warning', B: 'info', C: 'draft' }
-const ABC_HINT: Record<string, string> = { A: '卖得快 · 盘得勤', B: '卖得中等', C: '卖得慢 · 盘得少' }
 
 function sameRules(a: CycleRule[], b: CycleRule[]) {
   return a.length === b.length && a.every((r, i) => {
@@ -150,7 +149,7 @@ export default function AbcClassPage() {
   ]
 
   const abcColumns: TableColumn<AbcClassRow>[] = [
-    { key: 'abcClass', title: '类别', width: 130, render: (_, r) => <SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} /> },
+    { key: 'abcClass', title: '类别', width: 130, render: (_, r) => <SoftStatusLabel label={`${r.abcClass} 类`} tone={ABC_TONE[r.abcClass] ?? 'info'} /> },
     ...productIdentityColumns(),
     { key: 'metricValue', title: metricType === 'stock_value' ? '库存占用金额' : '出库消耗金额', width: 150, align: 'right', render: (v) => <span className="tabular-nums">{amount(Number(v))}</span> },
     { key: 'cumulativePct', title: '累计占比', width: 110, align: 'right', render: (v) => <span className="tabular-nums">{(Number(v) * 100).toFixed(2)}%</span> },
@@ -184,7 +183,7 @@ export default function AbcClassPage() {
         description={tab === 'rules' ? rulesEditing && canEditRules
           ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）' : '编辑全局默认规则（适用于未单独设置的所有仓库）')
           : (warehouseId > 0 ? '查看本仓覆盖规则。' : canEditRules ? '查看全局默认规则；点「编辑规则」后可修改。' : '全局默认只读；仅不限仓管理账号可修改。')
-          : '按出库消耗金额分档（A 卖得多盘得频繁 / B 中等 / C 卖得少盘得少）；分批盘点规则决定各档位多久盘一次、单次盘多少。'}
+          : '各仓按所选金额从高到低排列，累计占比不超过 80% 为 A，超过 80% 且不超过 95% 为 B，其余为 C。单一商品占比 100% 时归 C 档。'}
         actions={<Button variant="outline" onClick={() => downloadExport('/export/abc').catch(e => toast.error((e as Error).message))}>导出</Button>}
       />
 
@@ -235,7 +234,7 @@ export default function AbcClassPage() {
               <tbody>
                 {draft.map(r => (
                   <tr key={r.abcClass} className="border-t border-border">
-                    <td className="px-4 py-3"><SoftStatusLabel label={`${r.abcClass} 类 · ${ABC_HINT[r.abcClass]}`} tone={ABC_TONE[r.abcClass] ?? 'info'} /></td>
+                    <td className="px-4 py-3"><SoftStatusLabel label={`${r.abcClass} 类`} tone={ABC_TONE[r.abcClass] ?? 'info'} /></td>
                     <td className="px-4 py-2 text-right">
                       {rulesEditing && canEditRules
                         ? <Input aria-label={`${r.abcClass} 类盘点周期（天）`} type="number" value={r.intervalDays} onChange={(e) => patchDraft(r.abcClass, { intervalDays: Number(e.target.value) || 0 })} className="ml-auto h-9 w-28 text-right tabular-nums" />

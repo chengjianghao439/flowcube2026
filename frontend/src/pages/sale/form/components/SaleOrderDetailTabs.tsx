@@ -13,7 +13,7 @@ const tabs = [
 ] as const
 
 export function SaleOrderDetailTabs({ value, onChange }: { value: SaleDetailTab; onChange: (tab: SaleDetailTab) => void }) {
-  return <DetailViewTabsList className="fc-detail-view-tabs-wide">
+  return <DetailViewTabsList className="fc-detail-view-tabs-wide flex-wrap" role="group" aria-label="销售订单详情视图">
     {tabs.map(([key, label, Icon]) => <DetailViewTabsTrigger key={key} aria-pressed={value === key} onClick={() => onChange(key)}>
       <Icon className="h-4 w-4" aria-hidden />{label}
     </DetailViewTabsTrigger>)}

@@ -16,6 +16,7 @@ interface WarehouseSelectProps {
   clearLabel?: string
   className?: string
   disabled?: boolean
+  showReadStatus?: boolean
 }
 
 /** 统一仓库下拉选择：仓库数量有限，下拉比弹窗式 Finder 更快捷 */
@@ -29,34 +30,53 @@ export function WarehouseSelect({
   clearLabel = '全部仓库',
   className,
   disabled,
+  showReadStatus = false,
 }: WarehouseSelectProps) {
-  const { data: warehouses } = useWarehousesActive(readOwner)
+  const { data: warehouses, isLoading, isError, isPaused, refetch } = useWarehousesActive(readOwner)
+  const loadFailed = showReadStatus && (isError || isPaused)
+  const loading = showReadStatus && isLoading
+  const prompt = loadFailed ? '仓库加载失败' : loading ? '正在加载仓库…'
+    : showReadStatus && warehouses?.length === 0 ? '暂无可用仓库' : placeholder
 
   return (
-    <Select
-      value={value != null ? String(value) : allowClear ? '__all__' : ''}
-      onValueChange={v => {
-        if (disabled) return
-        if (readOwner) {
-          try { assertKitReadOwner(readOwner) }
-          catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
-        }
-        if (v === '__all__') { onChange(null, ''); return }
-        const id = Number(v)
-        const name = warehouses?.find(w => w.id === id)?.name || ''
-        onChange(id, name)
-      }}
-      disabled={disabled}
-    >
-      <SelectTrigger id={id} className={cn('h-10 w-full', className)}>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent>
-        {allowClear && <SelectItem value="__all__">{clearLabel}</SelectItem>}
-        {warehouses?.map(w => (
-          <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <>
+      <Select
+        value={value != null ? String(value) : allowClear ? '__all__' : ''}
+        onValueChange={v => {
+          if (disabled) return
+          if (readOwner) {
+            try { assertKitReadOwner(readOwner) }
+            catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
+          }
+          if (v === '__all__') { onChange(null, ''); return }
+          const id = Number(v)
+          const name = warehouses?.find(w => w.id === id)?.name || ''
+          onChange(id, name)
+        }}
+        disabled={disabled || (!warehouses?.length && (loadFailed || loading))}
+      >
+        <SelectTrigger id={id} className={cn('h-10 w-full', className)}>
+          <SelectValue placeholder={prompt} />
+        </SelectTrigger>
+        <SelectContent>
+          {allowClear && <SelectItem value="__all__">{clearLabel}</SelectItem>}
+          {warehouses?.map(w => (
+            <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {loadFailed && !disabled && (
+        <div className="flex items-center gap-2 text-xs">
+          {value != null && <span role="status">仓库加载失败</span>}
+          <button type="button" aria-label="重试加载仓库" className="font-medium text-primary hover:underline" onClick={() => {
+            if (readOwner) {
+              try { assertKitReadOwner(readOwner) }
+              catch (error) { toast.error(error instanceof Error ? error.message : '读取来源已变化'); return }
+            }
+            void refetch()
+          }}>重试</button>
+        </div>
+      )}
+    </>
   )
 }

@@ -175,8 +175,14 @@ export default function ConsolidationPage() {
         <DialogContent className="sm:max-w-xl">
           <DialogHeader description={<>{<>填写账套编码和名称，创建期间请等待操作完成。</>} {<>新账套会自动复制主账套的预置会计科目；后续可在会计科目页维护其独立科目。</>}</>}><DialogTitle>新建账套</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
-            <label className="space-y-2 text-sm">账套编码<Input disabled={createMutation.isPending} placeholder="如 SUB5" value={newCode} onChange={e => setNewCode(e.target.value)} /></label>
-            <label className="space-y-2 text-sm">账套名称<Input disabled={createMutation.isPending} placeholder="账套名称" value={newName} onChange={e => setNewName(e.target.value)} /></label>
+            <label className="space-y-2 text-sm">
+              <span className="block">账套编码 <span aria-hidden="true" className="text-destructive-ink">*</span></span>
+              <Input required disabled={createMutation.isPending} placeholder="如 SUB5" value={newCode} onChange={e => setNewCode(e.target.value)} />
+            </label>
+            <label className="space-y-2 text-sm">
+              <span className="block">账套名称 <span aria-hidden="true" className="text-destructive-ink">*</span></span>
+              <Input required disabled={createMutation.isPending} placeholder="账套名称" value={newName} onChange={e => setNewName(e.target.value)} />
+            </label>
           </div>
 
           <DialogFooter><Button variant="outline" disabled={createMutation.isPending} onClick={() => { if (!createInFlight.current) setCreateOpen(false) }}>取消</Button><Button disabled={createMutation.isPending} onClick={createCompany}>{createMutation.isPending ? '创建中…' : '创建'}</Button></DialogFooter>

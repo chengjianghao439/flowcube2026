@@ -1055,16 +1055,16 @@ async function main() {
     const repNo = `REP-${tag}`
     const childNo = `CHILD-${tag}`
     const wbId = await insert(
-      `INSERT INTO logistics_waybills (waybill_no, sale_order_id, tracking_no, tracking_numbers, status)
-       VALUES (?, ?, ?, ?, 3)`,
-      [tag, saleId, repNo, JSON.stringify([repNo, childNo])])
+      `INSERT INTO logistics_waybills (waybill_no, sale_order_id, carrier_id, tracking_no, tracking_numbers, status)
+       VALUES (?, ?, ?, ?, ?, 3)`,
+      [tag, saleId, carrierId, repNo, JSON.stringify([repNo, childNo])])
 
     // 用**子单号**导入账单（承运商月结文件给的是各箱单号）
     await freightSvc.createFreightBill({ carrierId, trackingNo: childNo, actualFreight: 12.5 })
     const [[row]] = await conn.query(
       'SELECT waybill_id FROM logistics_freight_bills WHERE carrier_id=? AND tracking_no=?', [carrierId, childNo])
     assert.equal(Number(row.waybill_id), wbId,
-      '子单号必须匹配到运单；否则 waybill_id 落 NULL，会被 generateSettlement 当成我方成本并入结算')
+      '同承运商的子单号必须匹配到运单；无运单证据的账单不能计入应付')
 
     // 代表号仍要能匹配（不能为了修子单号而弄坏原路径）
     await freightSvc.createFreightBill({ carrierId, trackingNo: repNo, actualFreight: 8 })

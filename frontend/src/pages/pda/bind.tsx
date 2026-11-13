@@ -168,7 +168,9 @@ export default function PdaBindPage() {
                     ? session.warehouseName
                     : session?.warehouseId
                       ? `#${session.warehouseId}`
-                      : '未绑定仓库（可跨仓作业）'}
+                      : session
+                        ? '设备不限仓，按账号权限作业'
+                        : '重新登录后查看'}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -195,7 +197,7 @@ export default function PdaBindPage() {
             aria-controls={`${fieldId}-manual`}
             onClick={() => setManualOpen(v => !v)}
           >
-            {manualOpen ? '▲ 收起手动输入' : '▼ 扫码失败？可手动输入设备码和密钥'}
+            {manualOpen ? '收起设备码与密钥' : '输入设备码与密钥'}
           </button>
           {manualOpen && (
             <div id={`${fieldId}-manual`} className="space-y-2">
@@ -228,7 +230,7 @@ export default function PdaBindPage() {
       <PdaBottomBar>
         <div className="flex items-stretch gap-2">
           <div className="flex-1">
-            <PdaScanner onScan={handleScan} placeholder="扫描绑定二维码" disabled={binding} />
+            <PdaScanner onScan={handleScan} placeholder="扫描绑定二维码" manualEntryLabel="输入二维码内容" disabled={binding} />
           </div>
           {Capacitor.isNativePlatform() && (
             <button

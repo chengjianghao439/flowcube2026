@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getInboundTaskByIdApi, receiveInboundApi } from '@/api/inbound-tasks'
-import type { InboundTask, ReceiveParams } from '@/types/inbound-tasks'
+import type { InboundTask, ReceivePackageResult, ReceiveParams } from '@/types/inbound-tasks'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaFlash from '@/components/pda/PdaFlash'
@@ -16,7 +16,8 @@ import { Input } from '@/components/ui/input'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
-import { qtyStep } from '@/lib/qtyStep'
+import { qty } from '@/lib/format'
+import { qtyStep, roundQuantity } from '@/lib/qtyStep'
 
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import PdaOverReceiveDialog, { type OverReceiveReasonCode } from '@/components/pda/PdaOverReceiveDialog'
@@ -129,7 +130,8 @@ function ReceiveEditor({
   const allowDecimalOf = useProductQtyPolicies([product.productId])
   const parsedBoxes = boxes.map(parseQty).filter(qty => Number.isFinite(qty) && qty > 0)
   const totalQty = parsedBoxes.reduce((sum, qty) => sum + qty, 0)
-  const remainingAfter = product.remainingQty - totalQty
+  const remainingAfter = roundQuantity(product.remainingQty - totalQty)
+  const overReceived = remainingAfter < 0
 
   return (
     <PdaCard active className="space-y-4">
@@ -199,8 +201,10 @@ function ReceiveEditor({
           </span>
         </div>
         <div className="mt-1 flex items-center justify-between">
-          <span className="text-muted-foreground">提交后剩余</span>
-          <span className={`font-semibold ${remainingAfter < 0 ? 'text-destructive-ink' : 'text-foreground'}`}>{remainingAfter}</span>
+          <span className="text-muted-foreground">{overReceived ? '超收' : '提交后剩余'}</span>
+          <span className={`font-semibold ${overReceived ? 'text-destructive-ink' : 'text-foreground'}`}>
+            {qty(Math.abs(remainingAfter))}{overReceived ? ` ${product.unit || '件'}` : ''}
+          </span>
         </div>
       </div>
 
@@ -247,11 +251,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
   const [batchNo, setBatchNo] = useState('')
   const [mfgDate, setMfgDate] = useState('')
   const [expDate, setExpDate] = useState('')
-  const receiveAction = useCriticalPdaAction<{
-    containers?: Array<{ containerId: number }>
-    printJobIds?: number[]
-    noPrinterCount?: number
-  }>({
+  const receiveAction = useCriticalPdaAction<ReceivePackageResult>({
     action: `inbound.receive.${task.id}`,
     label: `收货单 ${task.taskNo}`,
     onConfirmed: async (data, ctx) => {
@@ -268,12 +268,11 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
       const count = data.containers?.length ?? 0
       const printCount = data.printJobIds?.length ?? 0
       ok(`已生成 ${count} 个条码${printCount > 0 ? `，${printCount} 条已提交打印` : ''}`)
-      if (data.noPrinterCount) {
-        // 收货本身已成功记录，只是暂无可用打印机——不是失败，但要提醒现场后续记得补打。
-        // 2026-09-14 起没有可用打印机也会留一条打印记录，所以这些容器会出现在「打印记录」页，
-        // 绑定打印机后从那里补打即可（系统内唯一补打入口）。
-        warn(`${data.noPrinterCount} 个条码未打印，请到「打印记录」补打`)
-      }
+      const printIssues = [
+        data.noPrinterCount ? `${data.noPrinterCount} 个条码${data.printFailedCount === undefined ? '未打印' : '无可用打印机'}` : '',
+        data.printFailedCount ? `${data.printFailedCount} 个条码打印准备失败` : '',
+      ].filter(Boolean)
+      if (printIssues.length > 0) warn(`${printIssues.join('，')}，请到「打印记录」补打`)
     },
     retryExecutor: (record, requestKey, config) => {
       const body = record.metadata?.requestBody as ReceiveParams | undefined
@@ -629,7 +628,7 @@ export default function PdaReceivePage() {
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
         <p className="text-muted-foreground">
           {task.status === 3
-            ? '本单已全部收货，请前往「扫码上架」扫描库存条码与货架条码。'
+            ? '本单已全部收货。扫码上架时，先扫库存条码，再扫本仓库位条码或输入库位编码。'
             : task.status === 4
               ? '该收货订单已完成。'
               : '该收货订单已取消。'}

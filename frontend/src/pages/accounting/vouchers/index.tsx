@@ -46,6 +46,8 @@ import VoucherQueryDialog, { type VoucherQueryValues } from './VoucherQueryDialo
 
 const PAGE_SIZE = 20
 const fmtDate = (v: string) => formatDisplayDate(v, '')
+const voucherSourceLabel = ({ sourceType, sourceTypeName }: Pick<Voucher, 'sourceType' | 'sourceTypeName'>) =>
+  (sourceTypeName && sourceTypeName !== sourceType ? sourceTypeName : VOUCHER_SOURCE_OPTIONS.find(o => o.value === sourceType)?.label) || '来源待核'
 const statusTone = (s: number) => (s === 3 ? 'danger' : s === 2 ? 'active' : 'success')
 
 // ─── 勾稽对账卡片 ─────────────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ function ReconciliationCard() {
       </div>
       {data?.supplierRefunds && <div className="mt-3 card-base p-3 text-sm space-y-1">
         <div className="font-medium">供应商退款</div>
-        <div className="tabular-nums">实际回款 {data.supplierRefunds.cashAmount4} / 分位投影 {data.supplierRefunds.projectedAmount2} / 舍入差 {data.supplierRefunds.roundingDifference4}</div>
+        <div className="tabular-nums">实际回款 {data.supplierRefunds.cashAmount4} / 按分计算的凭证金额 {data.supplierRefunds.projectedAmount2} / 舍入差 {data.supplierRefunds.roundingDifference4}</div>
         <div className="tabular-nums">净已付 {data.supplierRefunds.netPaid4} / 账款已付 {data.supplierRefunds.currentPaid4} / 差 {data.supplierRefunds.paidDifference4}</div>
         <div className="text-muted-foreground">净已付为原正付款减已收到供应商退款；采购总额仍沿原毛额口径。{!data.supplierRefunds.matched && `有 ${data.supplierRefunds.mismatchedPaymentCount ?? '部分'} 笔账款不一致，请逐笔财务核对。`}</div>
       </div>}
@@ -198,7 +200,7 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
               <div><span className="text-muted-foreground">日期：</span>{fmtDate(v.voucherDate)}</div>
-              <div><span className="text-muted-foreground">来源：</span>{v.sourceTypeName}</div>
+              <div title={v.sourceType}><span className="text-muted-foreground">来源：</span>{voucherSourceLabel(v)}</div>
               <div className="col-span-2"><span className="text-muted-foreground">来源单号：</span>{v.sourceNo || '—'}</div>
               <div className="col-span-2 sm:col-span-4"><span className="text-muted-foreground">摘要：</span>{v.summary || '—'}</div>
             </div>
@@ -384,7 +386,7 @@ export default function VouchersPage() {
   const columns: TableColumn<Voucher>[] = [
     { key: 'voucherNo', title: '凭证号', width: 150, render: (_v, r) => <span className="font-mono text-doc-code-muted">{r.voucherNo}</span> },
     { key: 'voucherDate', title: '日期', width: 110, render: (_v, r) => fmtDate(r.voucherDate) },
-    { key: 'sourceTypeName', title: '来源', width: 100, render: (_v, r) => <SoftStatusLabel label={r.sourceTypeName} tone={r.sourceType === 'manual' ? 'draft' : 'info'} /> },
+    { key: 'sourceTypeName', title: '来源', width: 120, render: (_v, r) => <SoftStatusLabel label={voucherSourceLabel(r)} tone={r.sourceType === 'manual' ? 'draft' : 'info'} /> },
     { key: 'summary', title: '摘要', render: (_v, r) => <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{r.summary || '—'}</span> },
     { key: 'totalDebit', title: '借方', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums">{amount(r.totalDebit)}</span> },
     { key: 'totalCredit', title: '贷方', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums">{amount(r.totalCredit)}</span> },

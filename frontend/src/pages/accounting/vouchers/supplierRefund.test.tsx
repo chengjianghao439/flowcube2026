@@ -32,5 +32,6 @@ it('actual reconciliation consumer shows real four-place cash, separate projecte
   await act(async()=>{await new Promise(r=>setTimeout(r,25))})
   expect(document.body.textContent).toContain('供应商退款')
   expect(document.body.textContent).toContain('0.0120');expect(document.body.textContent).toContain('-0.0120')
-  expect(document.body.textContent).toContain('99.9880');expect(document.body.textContent).toContain('分位投影')
+  expect(document.body.textContent).toContain('99.9880')
+  expect(document.body.textContent).toContain('按分计算的凭证金额 0.00')
 })

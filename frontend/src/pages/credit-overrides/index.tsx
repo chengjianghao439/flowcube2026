@@ -4,9 +4,12 @@ import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice
 import { getCreditOverrideApi } from '@/api/credit-overrides'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { UnsavedBadge } from '@/components/shared/EditModeBadge'
+import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useContext, useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
@@ -43,8 +46,11 @@ function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onC
   const [sales, setSales] = useState<Array<{ id: number; orderNo: string; customerName: string; totalAmount: number }>>([])
   const [picked, setPicked] = useState<number | null>(null)
   const [reason, setReason] = useState('')
+  const searchSerial = useRef(0)
 
   const { mutate: create, isPending } = useCreateCreditOverride()
+  const dirty = kw !== (source?.saleOrderNo || '') || picked !== (source?.saleOrderId || null) || reason !== ''
+  const draft = useDialogDraftGuard({ open, identity: source?.id ?? 'new', dirty, pending: isPending, onClose })
   useEffect(() => {
     if (!open) return
     setKw(source?.saleOrderNo || '')
@@ -55,25 +61,54 @@ function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onC
 
   const search = async (e: React.FormEvent) => {
     e.preventDefault()
-    const r = await getSaleListApi({ page: 1, pageSize: 10, keyword: kw })
-    setSales(r.list.filter(s=>[1,2,3,6].includes(s.status)))
-    setPicked(null)
+    if (!draft.canEdit()) return
+    const serial = ++searchSerial.current
+    try {
+      const r = await getSaleListApi({ page: 1, pageSize: 10, keyword: kw })
+      if (serial !== searchSerial.current || !draft.canEdit()) return
+      setSales(r.list.filter(s=>[1,2,3,6].includes(s.status)))
+      setPicked(null)
+    } catch {
+      // 接口拦截器已提示读取失败，保留表单和上次结果供用户重试。
+    }
   }
 
   const pickedSale = sales.find(s => s.id === picked)
 
+  function submit() {
+    if (!picked || !reason.trim()) return
+    const submission = draft.beginSubmit()
+    if (!submission) return
+    searchSerial.current++
+    create({ saleOrderId: picked, reason: reason.trim() }, {
+      onSuccess: (r) => {
+        const active = submission.finish()
+        onClose()
+        if (active) onCreated(r.overrideNo)
+        toast.success(`已创建申请单 ${r.overrideNo}，请提交审批`)
+      },
+      onError: (e: Error) => { submission.finish(); toast.error(e.message) },
+    })
+  }
+
   return (
-    <Dialog open={open} onOpenChange={v => !v && onClose()}>
-      <DialogContent className="fc-form-dialog flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl flex-col">
+    <>
+    <Dialog open={open} onOpenChange={value => { if (!value) draft.requestClose() }}>
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-2xl flex-col">
         <DialogHeader description={pickedSale ? <>
           选中 <span className="font-medium">{pickedSale.orderNo}</span>（{pickedSale.customerName}，{money(pickedSale.totalAmount)}）。
           提交后系统会校验该客户授信是否超限，并保存当时的额度、已用额度与超出金额。
           {source ? ' 旧申请与审批记录保留。新申请按当前销售单重新核对，创建后仍须提交审批。' : ' 创建后在列表中提交审批。'}
-        </> : source ? '旧申请与审批记录保留。新申请按当前销售单重新核对，创建后仍须提交审批。' : '选择销售单并说明超额原因，创建后在列表中提交审批。'}><DialogTitle>{source ? '重新申请超额放行' : '发起超额放行申请'}</DialogTitle></DialogHeader>
+        </> : source ? '旧申请与审批记录保留。新申请按当前销售单重新核对，创建后仍须提交审批。' : '选择销售单并说明超额原因，创建后在列表中提交审批。'}>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
+            {source ? '重新申请超额放行' : '发起超额放行申请'}
+            <UnsavedBadge show={dirty} />
+          </DialogTitle>
+        </DialogHeader>
         <div className="fc-form-dialog-body min-w-0 space-y-4">
           <form onSubmit={search} className="flex items-center gap-2">
-            <Input aria-label="搜索销售单号或客户" placeholder="销售单号 / 客户名" value={kw} onChange={e => setKw(e.target.value)} className="flex-1" />
-            <Button type="submit" size="sm" variant="outline">搜索</Button>
+            <Input aria-label="搜索销售单号或客户" placeholder="销售单号 / 客户名" value={kw} disabled={draft.locked} onChange={e => { searchSerial.current++; setKw(e.target.value) }} className="flex-1" />
+            <Button type="submit" size="sm" variant="outline" disabled={draft.locked}>搜索</Button>
           </form>
           {sales.length > 0 && (
             <div className="max-h-48 overflow-auto rounded-md border">
@@ -88,9 +123,9 @@ function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onC
                 </thead>
                 <tbody>
                   {sales.map(s => (
-                    <tr key={s.id} className={`cursor-pointer border-t hover:bg-accent/50 ${picked === s.id ? 'bg-accent/60' : ''}`} onClick={() => setPicked(s.id)}>
+                    <tr key={s.id} className={`cursor-pointer border-t hover:bg-accent/50 ${picked === s.id ? 'bg-accent/60' : ''}`} onClick={() => { if (draft.canEdit()) setPicked(s.id) }}>
                       <td className="px-3 py-1.5">
-                        <input type="radio" aria-label={`选择 ${s.orderNo}`} checked={picked === s.id} onChange={() => setPicked(s.id)} className="accent-primary" />
+                        <input type="radio" aria-label={`选择 ${s.orderNo}`} checked={picked === s.id} disabled={draft.locked} onChange={() => setPicked(s.id)} className="accent-primary" />
                       </td>
                       <td className="px-3 py-1.5 text-doc-code">{s.orderNo}</td>
                       <td className="px-3 py-1.5">{s.customerName}</td>
@@ -106,22 +141,18 @@ function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onC
           )}
           <div className="space-y-2">
             <Label htmlFor="credit-reason">超额原因 <span className="text-destructive-ink">*</span></Label>
-            <textarea id="credit-reason" value={reason} onChange={e => setReason(e.target.value)} placeholder="说明业务背景、预计回款安排，供审批人参考" maxLength={500} rows={3} className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+            <textarea id="credit-reason" value={reason} disabled={draft.locked} onChange={e => setReason(e.target.value)} placeholder="说明业务背景、预计回款安排，供审批人参考" maxLength={500} rows={3} className="w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" />
             <p className="text-right text-xs tabular-nums text-muted-foreground">{reason.length} / 500</p>
           </div>
         </div>
         <DialogFooter className="gap-2 sm:space-x-0">
-          <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-          <Button
-            disabled={!picked || !reason.trim() || isPending}
-            onClick={() => create({ saleOrderId: picked!, reason: reason.trim() }, {
-              onSuccess: (r) => { onCreated(r.overrideNo); onClose(); toast.success(`已创建申请单 ${r.overrideNo}，请提交审批`) },
-              onError: (e: Error) => toast.error(e.message),
-            })}
-          >创建申请</Button>
+          <Button variant="outline" onClick={draft.requestClose} disabled={draft.locked}>取消</Button>
+          <Button disabled={!picked || !reason.trim() || draft.locked} onClick={submit}>{draft.locked ? '创建中…' : '创建申请'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog {...draft.discardProps} confirmText="放弃本次修改" />
+    </>
   )
 }
 

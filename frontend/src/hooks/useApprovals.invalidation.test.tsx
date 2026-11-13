@@ -30,8 +30,11 @@ beforeEach(() => {
   api.defaults.adapter = async config => {
     if (fail === 'unknown' && config.method === 'post') throw new AxiosError('response lost', 'ERR_NETWORK', config)
     if (fail && config.method === 'post') throw new AxiosError('rejected', 'ERR_BAD_REQUEST', config, undefined, { config, status: 409, statusText: 'Conflict', headers: {}, data: { success: false, message: '拒绝' } })
-    const data = config.url === '/finance/expense-claims' ? { list: [{ id: 11, claimNo: 'EXP11', title: '费用', applicantName: '员工', status: 2, totalAmount: 2 }], pagination: { page: 1, pageSize: 200, total: 1 }, summary: {} }
-      : config.url === '/price-change' ? { list: [{ id: 11, requestNo: 'PRICE11', productName: '商品', status: 1, newPrice: 2, priceType: 'sale' }], pagination: { page: 1, pageSize: 200, total: 1 } }
+    const data = config.url === '/finance/expense-claims' ? { list: [{ id: 11, claimNo: 'EXP11', title: '费用', applicantName: '员工', status: 2, approvalAllowed: true, totalAmount: 2 }], pagination: { page: 1, pageSize: 200, total: 1 }, summary: {} }
+      : config.url === '/price-change' ? { list: [
+        { id: 11, requestNo: 'PRICE11', productName: '商品', status: 1, statusName: '草稿', approvalId: null, newPrice: 2, priceType: 'sale' },
+        { id: 12, requestNo: 'PRICE12', productName: '商品', status: 1, statusName: '待审批', approvalId: 20, newPrice: 2, priceType: 'sale' },
+      ], pagination: { page: 1, pageSize: 200, total: 2 } }
       : config.method === 'get' ? [] : config.url?.endsWith('/approve') ? { id: 11, finished: false } : null
     return { config, status: 200, statusText: 'OK', headers: {}, data: { success: true, data } }
   }

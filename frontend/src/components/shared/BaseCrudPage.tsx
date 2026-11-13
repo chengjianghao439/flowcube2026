@@ -83,6 +83,8 @@ interface Props<T extends RowLike> {
   renderToolbar?: ReactNode
   /** 列表空态文案 */
   emptyText?: string
+  /** 根据当前查询展示专用空态 */
+  emptyState?: ReactNode
   /** 是否显示操作列（默认 true） */
   showActions?: boolean
   /** 记录总数单位 */
@@ -94,7 +96,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
     title, description, notice, columns: dataColumns, queryKey, listQuery, deleteApi, deleteMessage,
     renderForm, submitForm, saveSuccessMessage, formTitle, formWidthClass = 'max-w-md',
     renderRowExtra, renderActions, createLabel = '新建', canCreate = true, canEdit = true, canDelete = true, canSubmit, headerActions, renderToolbar,
-    formIdentity, emptyText, showActions = true, recordUnit,
+    formIdentity, emptyText, emptyState, showActions = true, recordUnit,
   } = props
 
   const qc = useQueryClient()
@@ -204,7 +206,11 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
 
       {renderToolbar}
 
-      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title={`${title}加载失败`} compact /> : <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyState={<EmptyState variant="no-data" title={emptyText ?? `暂无${title.replace(/管理$/, '')}`} description={emptyText ? undefined : renderToolbar ? '当前列表没有匹配记录，可使用上方查询核对筛选范围。' : canCreate ? `使用右上角「${createLabel}」添加记录。` : '当前没有可查看的记录。'} />} />}
+      {error instanceof ApiClientError && error.status === 403 ? (
+        <EmptyState variant="no-permission" description={`当前账号无权查看${title.replace(/管理$/, '')}。`} />
+      ) : isError ? (
+        <QueryErrorState error={error} onRetry={() => void refetch()} title={`${title}加载失败`} compact />
+      ) : <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyState={emptyState ?? <EmptyState variant="no-data" title={emptyText ?? `暂无${title.replace(/管理$/, '')}`} description={emptyText ? undefined : renderToolbar ? '当前列表没有匹配记录，可使用上方查询核对筛选范围。' : canCreate ? `使用右上角「${createLabel}」添加记录。` : '当前没有可查看的记录。'} />} />}
       {!isError && !isLoading && <ListSummary total={(data as { pagination?: { total?: number } } | undefined)?.pagination?.total ?? list.length} unit={recordUnit} />}
 
       <Dialog open={formOpen} onOpenChange={v => !v && closeDialog()}>

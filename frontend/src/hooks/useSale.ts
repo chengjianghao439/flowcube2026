@@ -1,4 +1,5 @@
 import { useVisibleQuery } from './useVisibleQuery'
+import { useWarehouseHandoffQuery } from './useWarehouseHandoffQuery'
 import { useId, useRef, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { getSaleListApi, getSaleDetailApi, getSaleReservePreviewApi, createSaleApi, updateSaleApi, adjustSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
@@ -17,7 +18,7 @@ import { hasPermission } from '@/lib/permissions'
 import { useOrdinarySaleOperation, type OrdinarySaleBody, type OrdinarySaleKind } from './useOrdinarySaleOperation'
 
 export const useSaleList   = (params: object, summary = false) => useVisibleQuery({ queryKey: ['sale', params, summary], queryFn: ({ signal }) => getSaleListApi(params, summary, signal) })
-export const useSaleDetail = (id: number)     => useQuery({ queryKey: ['sale', id],     queryFn: () => getSaleDetailApi(id), enabled: !!id })
+export const useSaleDetail = (id: number, visible = true) => useWarehouseHandoffQuery({ queryKey: ['sale', id], queryFn: () => getSaleDetailApi(id), enabled: !!id }, visible)
 // 占库分仓弹窗打开时才拉取，避免为每个草稿行都请求一次
 export const useSaleReservePreview = (id: number, enabled: boolean) =>
   useQuery({ queryKey: ['sale-reserve-preview', id], queryFn: () => getSaleReservePreviewApi(id), enabled: enabled && !!id })

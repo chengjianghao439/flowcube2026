@@ -12,7 +12,7 @@ import { PickerField } from '@/components/shared/PickerField'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { CustomerFinder } from '@/components/finder/CustomerFinder'
 import { getPortalStatementsApi, type PortalStatementRow } from '@/api/portal'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 
 const PAGE_SIZE = 20
@@ -33,8 +33,8 @@ export default function PortalStatementsPage() {
     { key: 'statementNo', title: '对账单号', width: 150, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'period', title: '对账期间', width: 180, render: (_, row) => {
       const r = row as PortalStatementRow
-      const start = r.periodStart ? String(r.periodStart).slice(0, 10) : '—'
-      const end = r.periodEnd ? String(r.periodEnd).slice(0, 10) : '—'
+      const start = formatDisplayDate(r.periodStart)
+      const end = formatDisplayDate(r.periodEnd)
       return `${start} ~ ${end}`
     } },
     { key: 'itemCount', title: '笔数', width: 60 },

@@ -12,6 +12,7 @@ interface QueryDialogProps {
   onClose: () => void
   onReset: () => void
   onApply: () => void
+  applyDisabled?: boolean
   resetLabel?: string
   onOpenAutoFocus?: (event: Event) => void
   onCloseAutoFocus?: (event: Event) => void
@@ -19,7 +20,7 @@ interface QueryDialogProps {
 
 /** 查询只管理外壳：字段、草稿、默认口径和应用时机由原调用方负责。 */
 export function QueryDialog({ open, dialogId, title, description, width = 520, children, onClose, onReset, onApply,
-  resetLabel = '重置', onOpenAutoFocus, onCloseAutoFocus }: QueryDialogProps) {
+  applyDisabled = false, resetLabel = '重置', onOpenAutoFocus, onCloseAutoFocus }: QueryDialogProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
   function focusCondition(event: Event) {
     onOpenAutoFocus?.(event)
@@ -42,7 +43,7 @@ export function QueryDialog({ open, dialogId, title, description, width = 520, c
         <Button variant="ghost" onClick={onReset}>{resetLabel}</Button>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={onApply}>查询</Button>
+          <Button onClick={onApply} disabled={applyDisabled}>查询</Button>
         </div>
       </div>}
     >

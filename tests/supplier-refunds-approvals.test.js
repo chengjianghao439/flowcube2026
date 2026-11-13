@@ -61,3 +61,21 @@ test('detail confirmAllowed由同事务当前flag与CONFIRM推导，role1自己f
   const r=await svc.findById(61,reader);assert.equal(r.confirmAllowed,(role===1||permission)&&(!own||flag===1));assert.equal(r.refund_no,f.data.supplier_refund_orders[0].refund_no);assert.equal(r.amount,'4.0000');assert.equal(r.allocations[0].entry_id,21)
  }
 })
+
+test('退款详情只对有账户查看权限的当前读者显示收入账户名，原付款来源使用已核对单号', async () => {
+  const f = ownedFixture()
+  const svc = f.module('service')
+  await svc.create(require('./helpers/supplier-refunds-fixture').input(), f.options)
+  f.data.finance_accounts.find(account => account.id === 42).name = '合成收入账户'
+  f.data.sys_users.find(user => user.id === 9).allow_self_approve = 0
+  const original = await svc.findById(61, 9)
+  assert.equal(original.allocations[0].source_no, 'PO10')
+  f.data.sys_role_permissions = f.data.sys_role_permissions.filter(row => row.permission !== P.FINANCE_ACCOUNT_VIEW)
+  assert.equal((await svc.findById(61, 9)).income_account_name, undefined)
+  const role = f.data.sys_users[0].role_id
+  f.data.sys_role_permissions.push({ role_id: role, permission: P.FINANCE_ACCOUNT_VIEW })
+  const visible = await svc.findById(61, 9)
+  assert.equal(visible.income_account_name, '合成收入账户')
+  assert.equal(visible.confirmAllowed, false)
+  assert.match(visible.confirmUnavailableReason, /同事确认冻结/)
+})

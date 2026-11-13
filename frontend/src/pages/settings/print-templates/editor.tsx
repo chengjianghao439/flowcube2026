@@ -9,7 +9,7 @@ import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
  *   - 画布内移动：mouse events
  */
 
-import { useState, useRef, useEffect, useCallback, useContext, useId } from 'react'
+import { useState, useRef, useEffect, useCallback, useContext, useId, type ComponentProps } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -93,16 +93,56 @@ function clampVal(v: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, v))
 }
 
-/**
- * 属性数字输入的安全读取（评审 P1 修复）：
- * 空字符串/非法字符 → 返回 ''（不写 NaN 进 state，NaN 会让元素永久不可点选）；
- * 合法数值 → 钳制到 [min, max] 后写回。
- */
-function numInputValue(raw: string, min: number, max: number): string {
-  if (raw.trim() === '') return ''
-  const n = Number(raw)
-  if (!Number.isFinite(n)) return ''
-  return String(clampVal(n, min, max))
+type LayoutNumberInputProps = Omit<ComponentProps<typeof Input>, 'type' | 'value' | 'min' | 'max' | 'onChange' | 'onBlur' | 'onKeyDown'> & {
+  value: number | undefined
+  min: number
+  max?: number
+  roundOnBlur?: boolean
+  onValueChange: (value: number) => void
+  onClear?: () => void
+  onComplete: () => void
+}
+
+function LayoutNumberInput({ value, min, max, roundOnBlur = false, onValueChange, onClear, onComplete, ...props }: LayoutNumberInputProps) {
+  const [draft, setDraft] = useState<string | null>(null)
+
+  function apply(raw: string, round: boolean) {
+    if (raw === '') {
+      if (value !== undefined) onClear?.()
+      return
+    }
+    const parsed = Number(raw)
+    if (!Number.isFinite(parsed)) return
+    if (onClear && parsed <= 0) {
+      if (value !== undefined) onClear()
+      return
+    }
+    const next = clampVal(round ? Math.round(parsed) : parsed, min, max ?? Infinity)
+    if (next !== value) onValueChange(next)
+  }
+
+  return <Input
+    {...props}
+    type="number" min={min} max={max}
+    value={draft ?? value ?? ''}
+    onFocus={onComplete}
+    onChange={event => {
+      const raw = event.currentTarget.value
+      setDraft(raw)
+      if (!event.currentTarget.validity.badInput) apply(raw, false)
+    }}
+    onBlur={event => {
+      if (draft != null && !event.currentTarget.validity.badInput) apply(draft, roundOnBlur)
+      setDraft(null)
+      onComplete()
+    }}
+    onKeyDown={event => {
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        event.currentTarget.blur()
+      }
+    }}
+  />
 }
 
 const PAPER_SIZES: Record<PaperSize, { w: number; h: number; label: string }> = {
@@ -499,7 +539,14 @@ function ElementNode({ el, selected, preview, previewData, previewItems, useReal
                       return parts.length ? `${raw} [${parts.join('] [')}]` : raw
                     })()
                   : raw
-                return <td key={k} style={{ ...cellStyle, width: `${widthMmOf(k) * scale}px` }}>{cell}</td>
+                const previewCode = preview && k === 'code'
+                return <td key={k} title={previewCode ? cell : undefined} style={{
+                  ...cellStyle,
+                  width: `${widthMmOf(k) * scale}px`,
+                  ...(previewCode && { wordBreak: 'normal', overflowWrap: wrap ? 'anywhere' : undefined }),
+                }}>
+                  {previewCode && !wrap ? <span className="block overflow-x-auto">{cell}</span> : cell}
+                </td>
               })}
             </tr>
           ))}
@@ -562,11 +609,10 @@ interface PropertiesPanelProps {
   /** 画布尺寸（mm）：单据=纸张宽高；标签=画布宽高。位置/尺寸输入的上界据此钳制 */
   canvasW: number
   canvasH: number
-  onChange: (id: string, patch: Partial<TemplateElement>) => void
+  onChange: (id: string, patch: Partial<TemplateElement>, inputKey?: string) => void
   /** 切换类字段（showIndex/tableRowWrap）函数式更新：连点不卡死（Bug 修复） */
   onToggle: (id: string, key: 'showIndex' | 'tableRowWrap') => void
-  /** 文本输入结束回调（onBlur）：一次文本编辑合并为一个 undo 条目（评审次要项） */
-  onEndTextEdit: (id: string) => void
+  onEndInputEdit: () => void
   onDelete: (id: string) => void
   /** 多选删除整组 */
   onDeleteMulti: () => void
@@ -574,7 +620,7 @@ interface PropertiesPanelProps {
   onDistribute: (dir: 'horizontal' | 'vertical') => void
 }
 
-function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, onToggle, onEndTextEdit, onDelete, onDeleteMulti, onAlign, onDistribute }: PropertiesPanelProps) {
+function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, onToggle, onEndInputEdit, onDelete, onDeleteMulti, onAlign, onDistribute }: PropertiesPanelProps) {
   const [customColKey, setCustomColKey] = useState('')
   const controlId = useId()
   if (!el) {
@@ -639,9 +685,6 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
     )
   }
 
-  // 属性面板数字输入的钳制范围（评审 P1 修复）——位置/尺寸必须落在画布内
-  const num = (v: unknown) => typeof v === 'number' ? v : 0
-  // 位置/尺寸输入的钳制范围见 numInputValue 调用处（A 系纸 210×297；标签长纸另有画布尺寸输入）
   // 不在 TABLE_COLUMN_OPTIONS 里的列 key 视为自定义列
   const customCols = (el.tableColumns ?? []).filter(k => !TABLE_COLUMN_OPTIONS.some(c => c.key === k))
 
@@ -661,8 +704,9 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
           <label className="text-xs font-medium text-muted-foreground">显示标签</label>
           <Input
             value={el.label}
-            onChange={e => onChange(el.id, { label: e.target.value })}
-            onBlur={() => onEndTextEdit(el.id)}
+            onFocus={onEndInputEdit}
+            onChange={e => onChange(el.id, { label: e.target.value }, 'label')}
+            onBlur={onEndInputEdit}
             className="h-7 text-xs"
           />
           {el.type === 'image' && (
@@ -676,19 +720,14 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
         <div className="space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">位置与尺寸 (mm)</label>
           <div className="grid grid-cols-2 gap-1.5">
-            {([['x', 'X', 0, canvasW], ['y', 'Y', 0, canvasH], ['width', '宽', 3, canvasW], ['height', '高', 3, canvasH]] as [keyof TemplateElement, string, number, number][]).map(([k, lbl, min, max]) => (
+            {([['x', 'X', 0, canvasW], ['y', 'Y', 0, canvasH], ['width', '宽', 3, canvasW], ['height', '高', 3, canvasH]] as const).map(([k, lbl, min, max]) => (
               <div key={k} className="flex items-center gap-1">
                 <span className="w-5 shrink-0 text-xs text-muted-foreground">{lbl}</span>
-                <Input
-                  type="number" min={min} max={max} step="1"
-                  value={num(el[k])}
-                  onChange={e => {
-                    // 评审 P1 修复：空/非法输入不写 NaN；越界钳制到画布范围。
-                    // 此前无任何防护，输 -20 → 元素飞出画布、9999 → 原样保存、NaN → 永久不可点选。
-                    const v = numInputValue(e.target.value, min, max)
-                    if (v === '') return // 留空不写（用户正在输入）
-                    onChange(el.id, { [k]: +v })
-                  }}
+                <LayoutNumberInput
+                  min={min} max={max} step="1" aria-label={lbl}
+                  value={el[k]}
+                  onValueChange={value => onChange(el.id, { [k]: value }, k)}
+                  onComplete={onEndInputEdit}
                   className="h-7 text-xs"
                 />
               </div>
@@ -745,14 +784,11 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
           isLabel ? (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">字高 (mm)</label>
-              <Input
-                type="number" min="1" max="30" step="0.5"
+              <LayoutNumberInput
+                min={1} max={30} step="0.5" aria-label="字高"
                 value={labelFontMm(el)}
-                onChange={e => {
-                  const v = numInputValue(e.target.value, 1, 30)
-                  if (v === '') return
-                  onChange(el.id, { fontHeightMm: +v })
-                }}
+                onValueChange={value => onChange(el.id, { fontHeightMm: value }, 'fontHeightMm')}
+                onComplete={onEndInputEdit}
                 className="h-7 w-20 text-xs"
               />
             </div>
@@ -762,14 +798,11 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1">
                   <span className="text-xs text-muted-foreground">大小</span>
-                  <Input
-                    type="number" min="6" max="72" step="1"
+                  <LayoutNumberInput
+                    min={6} max={72} step="1" aria-label="字体大小"
                     value={el.fontSize}
-                    onChange={e => {
-                      const v = numInputValue(e.target.value, 6, 72)
-                      if (v === '') return
-                      onChange(el.id, { fontSize: +v })
-                    }}
+                    onValueChange={value => onChange(el.id, { fontSize: value }, 'fontSize')}
+                    onComplete={onEndInputEdit}
                     className="h-7 w-14 text-xs"
                   />
                 </div>
@@ -869,6 +902,12 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
               {(el.tableColumns ?? []).map((key, idx) => {
                 const def = TABLE_COLUMN_OPTIONS.find(c => c.key === key) ?? { key, label: key, align: 'left' as const }
                 const colW = (el.tableColumnWidths ?? {})[key]
+                const setColumnWidth = (value?: number) => {
+                  const widths = { ...(el.tableColumnWidths ?? {}) }
+                  if (value === undefined) delete widths[key]
+                  else widths[key] = value
+                  onChange(el.id, { tableColumnWidths: widths }, `width:${key}`)
+                }
                 return (
                   <div key={key} className="flex items-center gap-1.5 text-xs">
                     <button
@@ -915,17 +954,13 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
                       />
                       <span className="min-w-0 flex-1 whitespace-normal [overflow-wrap:anywhere]">{def.label}</span>
                     </label>
-                    <Input
-                      type="number" min="0" step="1"
+                    <LayoutNumberInput
+                      min={0} step="1" aria-label={`${def.label}列宽`}
                       placeholder="均分"
-                      value={colW ?? ''}
-                      onChange={e => {
-                        const v = e.target.value === '' ? undefined : +e.target.value
-                        const widths = { ...(el.tableColumnWidths ?? {}) }
-                        if (v != null && Number.isFinite(v) && v > 0) widths[key] = v
-                        else delete widths[key]
-                        onChange(el.id, { tableColumnWidths: widths })
-                      }}
+                      value={colW}
+                      onValueChange={setColumnWidth}
+                      onClear={setColumnWidth}
+                      onComplete={onEndInputEdit}
                       className="h-6 w-14 text-xs"
                     />
                   </div>
@@ -1000,16 +1035,13 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
               </p>
               <div className="flex items-center gap-2">
                 <span className="shrink-0 text-xs text-muted-foreground">最小行高</span>
-                <Input
-                  type="number" min="0" step="0.5"
+                <LayoutNumberInput
+                  min={0} step="0.5" aria-label="最小行高"
                   placeholder="自适应"
-                  value={el.tableMinRowHeightMm ?? ''}
-                  onChange={e => {
-                    const v = e.target.value === '' ? undefined : +e.target.value
-                    onChange(el.id, {
-                      tableMinRowHeightMm: v != null && Number.isFinite(v) && v > 0 ? v : undefined,
-                    })
-                  }}
+                  value={el.tableMinRowHeightMm}
+                  onValueChange={value => onChange(el.id, { tableMinRowHeightMm: value }, 'tableMinRowHeightMm')}
+                  onClear={() => onChange(el.id, { tableMinRowHeightMm: undefined }, 'tableMinRowHeightMm')}
+                  onComplete={onEndInputEdit}
                   className="h-7 flex-1 text-xs"
                 />
                 <span className="shrink-0 text-xs text-muted-foreground">mm</span>
@@ -1106,7 +1138,9 @@ export default function PrintTemplateEditor() {
   snapshotRefs.current = { type, paperSize, canvasWidthMm, canvasHeightMm, dpi, margins }
 
   /** 未保存检测基准：水合完成时快照（评审 P1 修复） */
-  const cleanSnapshotRef = useRef<CleanSnapshot | null>(null)
+  const cleanSnapshotRef = useRef<CleanSnapshot | null>(isNew ? {
+    name, type, paperSize, canvasWidthMm, canvasHeightMm, dpi, margins, elements,
+  } : null)
 
   // 保存成功后基准前移（视作已保存）：水合时也调用重置基准
   const markClean = useCallback(() => {
@@ -1262,9 +1296,8 @@ export default function PrintTemplateEditor() {
   const draggingField  = useRef<PrintFieldDef | null>(null)   // palette → canvas drag
   const draggingElId   = useRef<string | null>(null)      // element move drag
   const dragStartMouse = useRef({ x: 0, y: 0 })
-  /** 文本输入合并 undo（评审次要项）：label 输入首次击键 snapshot 一次，结束（onBlur）即标记完成——
-   * 一次文本编辑 = 一个 undo 条目，而非每字符一条 */
-  const textEditingRef = useRef<{ id: string; active: boolean }>({ id: '', active: false })
+  const editingInput = useRef<string | undefined>(undefined)
+  const endInputEdit = useCallback(() => { editingInput.current = undefined }, [])
 
   // ── Save mutations ───────────────────────────────────────────
   const createMut = useMutation({
@@ -1419,7 +1452,9 @@ export default function PrintTemplateEditor() {
   }, [])
 
   /** 在改动「之前」调用：压入当前快照、清空 redo 栈 */
-  const snapshot = useCallback(() => {
+  const snapshot = useCallback((inputKey?: string) => {
+    if (inputKey !== undefined && editingInput.current === inputKey) return
+    editingInput.current = inputKey
     editedPreviewLayouts.current.add(`${tabPath}:${snapshotRefs.current.type}`)
     historyPast.current.push(currentSnapshot())
     if (historyPast.current.length > 100) historyPast.current.shift()
@@ -1434,21 +1469,27 @@ export default function PrintTemplateEditor() {
     // 只给初始空布局补默认字段；后续手工清空、编辑及撤销不会被异步数据覆盖。
     if (elementsRef.current.length === 0 && !editedPreviewLayouts.current.has(key)) {
       snapshot()
-      setElements(defaultPreviewElements(type, paper.w, paper.h))
+      const defaults = defaultPreviewElements(type, paper.w, paper.h)
+      if (isNew && cleanSnapshotRef.current && !isDirty) {
+        cleanSnapshotRef.current = { ...cleanSnapshotRef.current, elements: defaults }
+      }
+      setElements(defaults)
     }
-  }, [realPreview.source, isNew, hydrated, id, tabPath, type, paper.w, paper.h, snapshot])
+  }, [realPreview.source, isNew, isDirty, hydrated, id, tabPath, type, paper.w, paper.h, snapshot])
   const undo = useCallback(() => {
+    endInputEdit()
     if (!historyPast.current.length) return
     historyFuture.current.push(currentSnapshot())
     restoreSnapshot(historyPast.current.pop()!)
     bumpHist(v => v + 1)
-  }, [currentSnapshot, restoreSnapshot])
+  }, [currentSnapshot, endInputEdit, restoreSnapshot])
   const redo = useCallback(() => {
+    endInputEdit()
     if (!historyFuture.current.length) return
     historyPast.current.push(currentSnapshot())
     restoreSnapshot(historyFuture.current.pop()!)
     bumpHist(v => v + 1)
-  }, [currentSnapshot, restoreSnapshot])
+  }, [currentSnapshot, endInputEdit, restoreSnapshot])
 
   const clampEl = useCallback((el: TemplateElement): TemplateElement => {
     return {
@@ -1458,18 +1499,8 @@ export default function PrintTemplateEditor() {
     }
   }, [paper.w, paper.h])
 
-  function patchElement(id: string, patch: Partial<TemplateElement>) {
-    // 评审次要项：文本类（label）输入合并 undo——首次击键快照一次，同一元素连续输入不再快照，
-    // onBlur（endTextEdit）重置标记。其余属性照旧每次快照。
-    const isTextOnly = Object.keys(patch).length === 1 && 'label' in patch
-    if (!isTextOnly || textEditingRef.current.id !== id || !textEditingRef.current.active) {
-      if (isTextOnly) {
-        textEditingRef.current = { id, active: true }
-        snapshot()
-      } else {
-        snapshot()
-      }
-    }
+  function patchElement(id: string, patch: Partial<TemplateElement>, inputKey?: string) {
+    snapshot(inputKey === undefined ? undefined : JSON.stringify([id, inputKey]))
     setElements(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
   }
 
@@ -1487,11 +1518,6 @@ export default function PrintTemplateEditor() {
       return { ...e, [key]: next } as TemplateElement
     }))
   }
-
-  /** 文本输入结束（Input onBlur）：标记完成，下一次输入再次快照 */
-  const endTextEdit = useCallback((id: string) => {
-    if (textEditingRef.current.id === id) textEditingRef.current.active = false
-  }, [])
 
   const deleteElement = useCallback((id: string) => {
     snapshot()
@@ -1906,32 +1932,26 @@ export default function PrintTemplateEditor() {
           {isZplLabelType(type) ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted-foreground shrink-0">纸张 (mm)</span>
-              <Input
-                type="number"
+              <LayoutNumberInput
                 min={30}
                 max={120}
                 step={1}
                 value={canvasWidthMm}
-                onChange={e => {
-                  const v = numInputValue(e.target.value, 30, 120)
-                  if (v !== '') setCanvasWidthMm(+v)
-                }}
-                onBlur={() => setCanvasWidthMm(w => Math.min(120, Math.max(30, Math.round(Number(w) || 80))))}
+                roundOnBlur
+                onValueChange={value => { snapshot('paper-width'); setCanvasWidthMm(value) }}
+                onComplete={endInputEdit}
                 className="h-9 w-[4.25rem] text-sm"
                 title="宽度 mm"
               />
               <span className="text-muted-foreground">×</span>
-              <Input
-                type="number"
+              <LayoutNumberInput
                 min={40}
                 max={500}
                 step={1}
                 value={canvasHeightMm}
-                onChange={e => {
-                  const v = numInputValue(e.target.value, 40, 500)
-                  if (v !== '') setCanvasHeightMm(+v)
-                }}
-                onBlur={() => setCanvasHeightMm(h => Math.min(500, Math.max(40, Math.round(Number(h) || 200))))}
+                roundOnBlur
+                onValueChange={value => { snapshot('paper-height'); setCanvasHeightMm(value) }}
+                onComplete={endInputEdit}
                 className="h-9 w-[4.25rem] text-sm"
                 title="高度 mm"
               />
@@ -1995,17 +2015,14 @@ export default function PrintTemplateEditor() {
               {([['上', 'top'], ['下', 'bottom'], ['左', 'left'], ['右', 'right']] as const).map(([zh, k]) => (
                 <div key={k} className="flex items-center gap-0.5">
                   <span className="text-xs text-muted-foreground">{zh}</span>
-                  <Input
-                    type="number"
+                  <LayoutNumberInput
                     min={0}
                     max={40}
                     step={1}
                     value={margins[k]}
-                    onChange={e => {
-                      const v = numInputValue(e.target.value, 0, 40)
-                      if (v !== '') setMargins(m => ({ ...m, [k]: +v }))
-                    }}
-                    onBlur={() => setMargins(m => ({ ...m, [k]: Math.min(40, Math.max(0, Math.round(Number(m[k]) || 0))) }))}
+                    roundOnBlur
+                    onValueChange={value => { snapshot(`page-margin-${k}`); setMargins(m => ({ ...m, [k]: value })) }}
+                    onComplete={endInputEdit}
                     className="h-9 w-[3rem] text-sm"
                     title={`页面${zh}边距 mm`}
                   />
@@ -2315,6 +2332,7 @@ export default function PrintTemplateEditor() {
 
           {!preview && (
             <PropertiesPanel
+              key={selected?.id}
               el={selected}
               multiCount={selectedIds.length}
               isLabel={isZplLabelType(type)}
@@ -2322,7 +2340,7 @@ export default function PrintTemplateEditor() {
               canvasH={paper.h}
               onChange={patchElement}
               onToggle={toggleElementField}
-              onEndTextEdit={endTextEdit}
+              onEndInputEdit={endInputEdit}
               onDelete={deleteElement}
               onDeleteMulti={deleteSelectedGroup}
               onAlign={alignSelectedToCanvas}

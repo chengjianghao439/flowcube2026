@@ -13,7 +13,7 @@ import ExpensePage from '@/pages/finance/expenses'
 import clientApi from '@/api/client'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
-const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), credit: vi.fn(), creditList: vi.fn(), disposal: vi.fn(), expense: vi.fn(), expenseList: vi.fn() }))
+const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), credit: vi.fn(), creditList: vi.fn(), disposal: vi.fn(), expense: vi.fn(), expenseList: vi.fn(), expenseApprove: vi.fn() }))
 vi.mock('@/api/client', () => {
   const defaults = { baseURL: '/api' }
   return { default: { defaults }, getApiClientBaseURL: () => defaults.baseURL, subscribeApiClientBaseURL: () => () => {}, payloadClient: { get: api.get, post: api.post } }
@@ -23,10 +23,14 @@ vi.mock('@/hooks/useCreditOverrides', () => ({ useCreditOverrides: api.creditLis
 vi.mock('@/hooks/useDisposal', () => ({ useDisposalList: () => ({ data: { list: [], pagination: { total: 0 } } }), useDisposalDetail: () => ({ data: undefined }), useDisposalMutation: () => Object.fromEntries(['create', 'submit', 'approve', 'reject', 'dispose', 'cancel'].map(k => [k, { mutateAsync: vi.fn() }])) }))
 vi.mock('@/api/disposal', () => ({ getDisposalDetailApi: api.disposal }))
 vi.mock('@/hooks/useWarehouses', () => ({ useWarehousesActive: () => ({ data: [] }) }))
-vi.mock('@/api/finance', () => ({ getExpenseClaimsApi: api.expenseList, getExpenseClaimApi: api.expense, getExpenseCategoriesApi: async () => [], getActiveAccountsApi: async () => [] }))
+vi.mock('@/api/finance', () => ({ getExpenseClaimsApi: api.expenseList, getExpenseClaimApi: api.expense, approveExpenseClaimApi: api.expenseApprove, getExpenseCategoriesApi: async () => [], getActiveAccountsApi: async () => [] }))
 vi.mock('@/components/shared/ProductFinderModal', () => ({ default: () => null }))
 vi.mock('@/pages/disposal/components/CreateDisposalDialog', () => ({ default: () => null }))
 vi.mock('@/components/shared/OrderDetailSections', () => ({ OrderDetailSections: ({ children, id }: { children: React.ReactNode; id: number }) => <div data-detail-id={id}>{children}</div> }))
+vi.mock('@/components/shared/AppDialog', () => ({
+  AppDialog: ({ open, title, children, footer }: { open: boolean; title: React.ReactNode; children: React.ReactNode; footer: React.ReactNode }) =>
+    open ? <div role="dialog">{title}{children}{footer}</div> : null,
+}))
 vi.mock('@/components/ui/dialog', async importOriginal => ({ ...await importOriginal<typeof import('@/components/ui/dialog')>(), Dialog: ({ open, children, onOpenChange }: { open: boolean; children: React.ReactNode; onOpenChange?: (open: boolean) => void }) => open ? <div role="dialog">{children}<button aria-label="关闭详情弹窗" onClick={() => onOpenChange?.(false)}>关闭详情弹窗</button></div> : null, ...Object.fromEntries(['Content', 'Header', 'Title', 'Footer', 'Description'].map(k => [`Dialog${k}`, ({ children }: { children: React.ReactNode }) => <div>{children}</div>])) }))
 let host: HTMLDivElement, root: Root, client: QueryClient
 const cases = [
@@ -106,6 +110,24 @@ test('旧productId入口创建成功后不自动重开同一申请', async () =>
   expect(api.post).toHaveBeenCalledTimes(1); expect(host.querySelector('input[placeholder="输入新价格"]')).toBeNull()
 })
 
+test('改价参考取同一商品的标签原价和四位差额，换权限后隐藏旧价格', async () => {
+  api.get.mockImplementation((url: string) => Promise.resolve(url === '/products/41'
+    ? { id: 41, code: 'P41', name: '旧URL商品', labelSalePrice: 10.1234, salePrice: 7, salePriceA: 7 }
+    : { list: [], pagination: { total: 0 } }))
+  await render('/price-change?productId=41', PricePage)
+  expect(host.textContent).toContain('当前价格 ¥10.1234')
+  expect(host.textContent).not.toContain('当前价格 ¥7.00')
+  const input = host.querySelector<HTMLInputElement>('input[placeholder="输入新价格"]')!
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '11.1235')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  expect(host.textContent).toContain('变化 +¥1.0001')
+  act(() => useAuthStore.setState({ user: { ...useAuthStore.getState().user!, roleId: 5, permissions: ['product.update'] } }))
+  expect(host.textContent).not.toContain('¥10.1234')
+  expect(host.querySelector<HTMLInputElement>('input[placeholder="输入新价格"]')?.value).toBe('11.1235')
+})
+
 test('关闭审批费用原单后，手动打开另一单展示其自身明细', async () => {
   api.expenseList.mockResolvedValue({ list: [{ id: 92, claimNo: 'EC-B', status: 3 }], pagination: { total: 1 } })
   api.expense.mockImplementation((id: number) => Promise.resolve({ id, claimNo: `EC-${id}`, items: [{ description: `明细-${id}` }] }))
@@ -115,6 +137,65 @@ test('关闭审批费用原单后，手动打开另一单展示其自身明细',
   await act(async () => { await new Promise(done => setTimeout(done, 40)) })
   const detail = host.querySelector('[data-detail-id="92"]')!
   expect(detail).not.toBeNull(); expect(detail.textContent).toContain('明细-92'); expect(detail.textContent).not.toContain('明细-91')
+})
+
+test('关闭报销搜索结果保留其他参数，同一结果可重新读取', async () => {
+  const base = '/finance/expenses?source=test'
+  const result = base + '&detailId=91'
+  const claim = { id: 91, claimNo: 'EC-91', status: 3, items: [] }
+  api.expense.mockResolvedValueOnce(claim).mockResolvedValueOnce({ ...claim, items: [{ description: '第二次读取' }] })
+  function ExpenseWorkspace() {
+    const { pathname, search } = useLocation()
+    const navigate = useNavigate()
+    return <TabPathContext.Provider value={pathname + search}>
+      <output>{search}</output><button onClick={() => navigate(result)}>搜索命中</button><ExpensePage />
+    </TabPathContext.Provider>
+  }
+  await render(result, ExpenseWorkspace)
+  expect(host.querySelector('[data-detail-id="91"]')).not.toBeNull()
+  await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === '关闭')!.click())
+  expect(host.querySelector('output')?.textContent).toBe('?source=test')
+  expect(host.querySelector('[data-detail-id="91"]')).toBeNull()
+  await act(async () => [...host.querySelectorAll('button')].find(b => b.textContent === '搜索命中')!.click())
+  await vi.waitFor(() => expect(host.querySelector('[data-detail-id="91"]')?.textContent).toContain('第二次读取'))
+  expect(api.expense).toHaveBeenCalledTimes(2)
+})
+
+test('可在交接详情审批指定报销单，关闭后刷新当前列表', async () => {
+  const pending = { id: 91, claimNo: 'EC-A', status: 2, statusName: '待审批', approvalAllowed: true, items: [] }
+  api.expense.mockResolvedValue(pending)
+  api.expenseApprove.mockReset().mockResolvedValue(undefined)
+  await render('/finance/expenses', ExpensePage)
+  api.expenseList.mockResolvedValue({ list: [pending], pagination: { total: 1 } })
+  await render('/finance/expenses?detailId=91', ExpensePage)
+  const approve = [...host.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === '批准') as HTMLButtonElement | undefined
+  expect(approve).toBeDefined()
+  await act(async () => approve!.click())
+  await vi.waitFor(() => expect(api.expenseApprove).toHaveBeenCalledWith(91))
+  await vi.waitFor(() => expect(host.querySelector('[role="dialog"]')).toBeNull())
+  await vi.waitFor(() => expect(host.querySelector('tbody')?.textContent).toContain('EC-A'))
+})
+
+test('报销查询保留逆序金额草稿，相等区间可正常提交', async () => {
+  await render('/finance/expenses', ExpensePage)
+  const button = (scope: ParentNode) => [...scope.querySelectorAll('button')].find(b => b.textContent === '查询') as HTMLButtonElement
+  await act(async () => button(host).click())
+  const dialog = host.querySelector('[role="dialog"]')!
+  const [minimum, maximum] = dialog.querySelectorAll<HTMLInputElement>('input[type="number"][placeholder="不限"]')
+  const fill = (input: HTMLInputElement, value: string) => act(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  fill(minimum, '5')
+  fill(maximum, '1')
+  expect(button(dialog).disabled).toBe(true)
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('最小金额不能大于最大金额')
+  expect([minimum.value, maximum.value]).toEqual(['5', '1'])
+  fill(minimum, '3')
+  fill(maximum, '3')
+  expect(button(dialog).disabled).toBe(false)
+  await act(async () => button(dialog).click())
+  expect(api.expenseList).toHaveBeenLastCalledWith(expect.objectContaining({ minAmount: '3', maxAmount: '3' }))
 })
 
 test('已打开审批费用换账号后重新读取，禁止保留旧账号明细或阻塞新账号定位', async () => {
@@ -219,4 +300,19 @@ test('KeepAlive离开后重回同审批链接时，新建草稿仍阻挡交接�
   expect(host.querySelector<HTMLTextAreaElement>('#credit-reason')).toBe(textarea)
   expect(textarea.value).toBe('保留新建原因'); expect(api.credit).toHaveBeenCalledTimes(1)
   expect(host.querySelector('[data-detail-id="91"]')).toBeNull(); expect(host.textContent).toContain('先关闭当前弹窗')
+})
+
+test('改价申请根据审批实例区分草稿和待审批，避免显示错误操作', async () => {
+  const rows = [
+    { id: 92, requestNo: 'PCR-草稿', status: 1, statusName: '草稿', approvalId: null },
+    { id: 93, requestNo: 'PCR-已提交', status: 1, statusName: '待审批', approvalId: 31 },
+  ]
+  api.get.mockImplementation((url: string) => Promise.resolve(url === '/price-change' ? { list: rows, pagination: { total: 2 } } : {}))
+  await render('/price-change', PricePage)
+  const [draft, pending] = [...host.querySelectorAll('tbody tr')]
+  expect(draft.textContent).toContain('草稿')
+  expect([...draft.querySelectorAll('button')].map(b => b.textContent)).toContain('提交')
+  expect([...draft.querySelectorAll('button')].map(b => b.textContent)).not.toContain('通过')
+  expect(pending.textContent).toContain('待审批')
+  expect([...pending.querySelectorAll('button')].map(b => b.textContent)).not.toContain('提交')
 })

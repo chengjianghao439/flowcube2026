@@ -24,6 +24,7 @@ const api = vi.hoisted(() => ({
   ok: vi.fn(),
   err: vi.fn(),
   warn: vi.fn(),
+  readyConfirmed: null as null | (() => Promise<void>),
 }))
 
 vi.mock('@/api/warehouse-tasks', () => ({
@@ -40,7 +41,9 @@ vi.mock('@/hooks/usePdaFeedback', () => ({
 }))
 // 真实 hook 依赖 localStorage 待确认记录；本测试只关心输入模式与提交载荷。
 vi.mock('@/hooks/useCriticalPdaAction', () => ({
-  useCriticalPdaAction: () => ({
+  useCriticalPdaAction: ({ action, onConfirmed }: { action: string; onConfirmed: (data: unknown, ctx: { recovered: boolean }) => Promise<void> }) => {
+    if (action.startsWith('warehouse.ready.')) api.readyConfirmed = () => onConfirmed({ taskId: 42 }, { recovered: false })
+    return ({
     run: async (execute: (key: string) => Promise<unknown>) => ({ kind: 'success', data: await execute('stable-key') }),
     submitBlocked: false,
     phase: 'idle',
@@ -50,7 +53,8 @@ vi.mock('@/hooks/useCriticalPdaAction', () => ({
     confirmPending: vi.fn(),
     clearPending: vi.fn(),
     clearError: vi.fn(),
-  }),
+    })
+  },
 }))
 
 const TASK = {
@@ -199,6 +203,14 @@ test('没有输入框时扫码枪键盘事件照样能提交，扫完不重新�
   expect(api.ok).toHaveBeenCalledWith('✓ 已拣 CLIP top BLUMOTION 铰链 ×3')
   expect(host.querySelector('input')).toBeNull()
   expect(document.activeElement?.tagName ?? '').not.toBe('INPUT')
+})
+
+test('采购退货拣货完成后按服务端状态显示待出库', async () => {
+  api.task.mockResolvedValue({ ...TASK, status: 6, statusName: '待出库' })
+  await act(async () => { await api.readyConfirmed!() })
+  await settle()
+  expect(host.textContent).toContain('已进入「待出库」')
+  expect(host.textContent).not.toContain('待分拣')
 })
 
 test('推荐库位行点击仍可拣货（扫码之外的人工兜底没有被打断）', async () => {

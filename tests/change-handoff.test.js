@@ -37,6 +37,32 @@ function load(relative, pool, transform = source => source) {
   return read(path.join(root,relative))
 }
 
+test('分拣交接的普通商品查询只在当前仓库范围及交接任务内匹配', async () => {
+  const matched = [
+    { task_id: 1, task_no: 'WT001', warehouse_id: 2, picked_qty: 2 },
+    { task_id: 7, task_no: 'WT007', warehouse_id: 2, picked_qty: 1 },
+    { task_id: 8, task_no: 'WT008', warehouse_id: 3, picked_qty: 1 },
+  ]
+  const pool = { async query(sql, params) {
+    if (sql.includes('FROM inventory_containers')) return [[]]
+    if (sql.includes('AS itemCount')) return [[{ itemCount: 1 }]]
+    if (sql.includes('AS labelTotal')) return [[{ labelTotal: 0 }]]
+    assert.match(sql, /wt\.warehouse_id IN \(\?\)/)
+    const fuzzy = sql.includes('wti.product_code LIKE')
+    const [code, warehouseIds, taskId] = fuzzy ? params.slice(1) : params
+    assert.deepEqual(Array.from(warehouseIds), [2])
+    if (taskId !== undefined) assert.match(sql, /wt\.id = \?/)
+    if (!fuzzy && code === 'prefix-P001') return [[]]
+    return [matched.filter(row => warehouseIds.includes(row.warehouse_id)
+      && (taskId === undefined || row.task_id === taskId))]
+  } }
+  const svc = load('backend/src/modules/sorting-bins/sorting-bins.service.js', pool)
+  assert.equal((await svc.scanProduct('P001', [2])).taskId, 1)
+  assert.equal((await svc.scanProduct('P001', [2], 7)).taskId, 7)
+  assert.equal((await svc.scanProduct('prefix-P001', [2], 7)).taskId, 7)
+  assert.equal(await svc.scanProduct('P001', [2], 8), null)
+})
+
 test('递归VM夹具保留真实生命周期能力且各次加载独立', async () => {
   const operationFile = path.join(root, 'backend/src/utils/operationRequest.js')
   const expose = (source, file) => file === operationFile ? `${source}\nmodule.exports.fixtureLifecycle = lifecycle` : source

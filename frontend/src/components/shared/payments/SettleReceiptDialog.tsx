@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { money } from '@/lib/format'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AppDialog } from '@/components/shared/AppDialog'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { CustomerFinder } from '@/components/finder/CustomerFinder'
 import { SupplierFinder } from '@/components/finder/SupplierFinder'
 import { usePermission } from '@/hooks/usePermission'
@@ -111,7 +112,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
     setPartyId(receipt?.partyId ?? null)
     setFinderOpen(false)
     setAmount(receipt ? String(receipt.balance) : '')
-    setPayDate(receipt?.paymentDate?.slice(0, 10) ?? todayYmd())
+    setPayDate(formatDisplayDate(receipt?.paymentDate, todayYmd()))
     setMethod(receipt?.method || '转账')
     setAccountId(receipt?.accountId ? String(receipt.accountId) : '')
     setRemark('')
@@ -120,7 +121,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
   }, [open, receipt, isUncertain])
 
   // 往来方确定后才拉候选；status!==3 由前端过滤（接口的 status 只能传单值）
-  const { data, isFetching } = useQuery({
+  const { data, isFetching, isPending, isPaused, isError, error, refetch } = useQuery({
     queryKey: ['payments', 'settleable', { type, partyId, partyName, settlementTypes, target }],
     // 两个分支返回的 list 元素类型不同，显式收敛成联合类型交给下面的 candidates 归一
     queryFn: async (): Promise<{ list: (PaymentRecord | ReconciliationStatement)[] }> => byStatement
@@ -130,11 +131,14 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
   })
 
   // 收付款必须落到具体账户上，否则账户余额永远不准
-  const { data: accounts } = useQuery({
+  const accountsQuery = useQuery({
     queryKey: ['finance-accounts', 'active'],
-    queryFn: () => getActiveAccountsApi(),
+    queryFn: () => getActiveAccountsApi({ skipGlobalError: true }),
     enabled: active && open && !isContinue,
   })
+  const accounts = accountsQuery.data ?? []
+  const canViewAccounts = can(PERMISSIONS.FINANCE_ACCOUNT_VIEW)
+  const accountAvailable = !accountsQuery.isError && accounts.some(a => String(a.id) === accountId)
 
   /** 统一成 {key, label, balance, sub} 结构，下方列表不必区分两种目标 */
   const candidates = useMemo(() => {
@@ -144,7 +148,8 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
         // 只有已确认(2)的对账单能核销；草稿还能改明细，核了会对不上账
         .filter(s => (partyId != null || s.partyName === partyName.trim()) && s.status === 2 && s.balance > 0)
         .map(s => ({ key: s.id, label: s.statementNo, balance: s.balance, total: s.totalAmount,
-                     sub: `${s.itemCount ?? 0} 笔明细`, statusName: s.statusName, tone: 'active' as const }))
+                     sub: `${s.itemCount ?? 0} 笔明细`, statusName: s.statusName, tone: 'active' as const,
+                     hasPendingPayableConfirmation: s.hasPendingPayableConfirmation }))
     }
     return (raw as PaymentRecord[])
       .filter(r => (partyId != null || r.partyName === partyName.trim()) && r.status !== 3)
@@ -153,12 +158,15 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
       .sort((a, b) => String(a.dueDate ?? '').localeCompare(String(b.dueDate ?? '')))
       .map(r => ({ key: r.id, label: r.orderNo, balance: r.balance, total: r.totalAmount,
                    sub: r.dueDate ? `到期 ${formatDisplayDate(r.dueDate)}` : '', statusName: r.statusName,
-                   tone: (r.status === 2 ? 'active' : 'draft') as 'active' | 'draft' }))
+                   tone: (r.status === 2 ? 'active' : 'draft') as 'active' | 'draft',
+                   hasPendingPayableConfirmation: false }))
   }, [data, partyId, partyName, type, byStatement])
 
   const totalUnits = cashCents(amount)
   const totalAmount = Number(amount) || 0
   const allocatedUnits = Object.values(alloc).reduce<bigint>((sum, value) => sum + (cashCents(value) ?? 0n), 0n)
+  const candidatesReady = !isError && !isPending && !isFetching
+  const canUseAllocations = guard.uncertain || allocatedUnits === 0n || candidatesReady
   const candidateBalances = useMemo(() => new Map(candidates.map(c => [c.key, cashCents(c.balance)])), [candidates])
   const validAllocations = Object.entries(alloc).every(([id, value]) => {
     const units = cashCents(value)
@@ -195,6 +203,8 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
   const mut = useMutation({
     mutationFn: async ({ backfillReason }: { backfillReason?: string } = {}) => {
       if (!permissionRef.current) throw new Error('没有登记核销权限')
+      if (!isContinue && !guard.uncertain && !accountAvailable) throw Object.assign(new Error('请选择启用的资金账户'), { status: 400 })
+      if (!canUseAllocations) throw Object.assign(new Error('请先重新读取待核销明细'), { status: 400 })
       if (totalUnits == null || totalUnits <= 0n || !validAllocations || unallocatedUnits < 0n) throw Object.assign(Error('金额与核销金额须按分填写且不能超过余额'), { status: 400 })
       // 继续核销：把本次的 receiptId 绑进查询 action（并在提示条上带单号，便于区分同名的两张单）
       const settleTargetId = isContinue && receipt ? receipt.id : null
@@ -260,7 +270,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
   })
 
   const canSubmit = partyName.trim() && totalUnits != null && totalUnits > 0n && validAllocations && unallocatedUnits >= 0n && !mut.isPending
-    && (isContinue || !!accountId)
+    && canUseAllocations && (isContinue || (guard.uncertain ? !!accountId : accountAvailable))
 
   return (
     <>
@@ -281,7 +291,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
             <Button variant="outline" onClick={onClose}>取消</Button>
             {canExecute && <Button disabled={!canSubmit} onClick={() => {
               // 应付付款(新建收付款单，从账户出账)透支前二次确认；继续核销(isContinue)不动账户、无需确认
-              const acc = (accounts || []).find(a => String(a.id) === accountId)
+              const acc = accounts.find(a => String(a.id) === accountId)
               if (!isContinue && isPayableType(type) && acc && totalAmount > acc.currentBalance + 1e-6) {
                 confirmAction({
                   title: '账户余额不足',
@@ -363,16 +373,24 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
               </div>
               <div className="space-y-1">
                 <Label>{isPayableType(type) ? '付款账户' : '收款账户'} *</Label>
-                <Select value={accountId} onValueChange={setAccountId}>
+                <Select value={accountId} onValueChange={setAccountId} disabled={accountsQuery.isError || !accounts.length}>
                   <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择账户" /></SelectTrigger>
                   <SelectContent>
-                    {(accounts ?? []).map(a => (
+                    {accounts.map(a => (
                       <SelectItem key={a.id} value={String(a.id)}>
                         {a.name}（余额 {money(a.currentBalance)}）
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {accountsQuery.isError ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p role="alert" className="text-helper">{canViewAccounts ? '账户读取失败，请重试。' : '当前账号无账户查看权限，请联系管理员。'}</p>
+                    {canViewAccounts && <Button type="button" size="sm" variant="outline" onClick={() => void accountsQuery.refetch()}>重读账户</Button>}
+                  </div>
+                ) : accountsQuery.isPending ? <p role="status" className="text-helper">正在加载资金账户…</p>
+                  : !accounts.length ? <p role="status" className="text-helper">暂无启用的资金账户，请在「资金工作区 → 账户管理」启用账户，或联系有权限的同事处理。</p>
+                  : accountId && !accountAvailable ? <p role="alert" className="text-helper">原选账户已不可用，请重新选择。</p> : null}
               </div>
               <div className="space-y-1 col-span-2">
                 <Label>备注</Label>
@@ -386,14 +404,14 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
             <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/40 px-4 py-3">
               <span className="text-sm font-medium">
                 {byStatement ? '待核销对账单' : `待核销${isPayableType(type) ? '应付' : '应收'}`}
-                {partyName.trim() ? `（${candidates.length} 笔）` : ''}
+                {partyName.trim() && candidatesReady ? `（${candidates.length} 笔）` : ''}
               </span>
               <div className="flex items-center gap-3 text-xs">
                 <span className="text-muted-foreground">已分配 <span className="tabular-nums font-medium text-foreground">{money(allocatedTotal)}</span></span>
                 <span className={unallocatedUnits < 0n ? 'font-semibold text-destructive-ink' : 'text-muted-foreground'}>
                   {unallocatedUnits < 0n ? `超出 ${money(-unallocated)}` : `未分配 ${money(unallocated)}`}
                 </span>
-                <Button size="sm" variant="outline" onClick={autoAllocate} disabled={!candidates.length || totalUnits == null || totalUnits <= 0n}>
+                <Button size="sm" variant="outline" onClick={autoAllocate} disabled={!candidatesReady || !candidates.length || totalUnits == null || totalUnits <= 0n}>
                   自动分配
                 </Button>
               </div>
@@ -401,18 +419,24 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
 
             <div className="min-h-0 flex-1 overflow-y-auto">
               {!partyName.trim() && <p className="px-3 py-6 text-center text-sm text-muted-foreground">请先填写{partyLabel}名称</p>}
-              {partyName.trim() && isFetching && <p className="px-3 py-6 text-center text-sm text-muted-foreground">加载中…</p>}
-              {partyName.trim() && !isFetching && !candidates.length && (
+              {partyName.trim() && isError && <QueryErrorState error={error} title="待核销明细读取失败" compact onRetry={() => void refetch()} />}
+              {partyName.trim() && !isError && (isPending || isFetching) && <p role="status" className="px-3 py-6 text-center text-sm text-muted-foreground">{isPaused ? '等待网络连接…' : '正在加载待核销明细…'}</p>}
+              {partyName.trim() && candidatesReady && !candidates.length && (
                 <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  该{partyLabel}没有{byStatement ? '已确认待核销的对账单' : '待核销账款'}
+                  {byStatement
+                    ? '当前没有可核销的月结对账单。对账单确认后，未核销的余额可在这里处理。'
+                    : isPayableType(type)
+                      ? '当前没有符合条件的现结应付。待确认账款请先确认结算，月结账款请通过对账单核销。'
+                      : '当前没有符合条件的现结应收。月结账款请通过对账单核销。'}
                 </p>
               )}
-              {candidates.map(c => (
+              {candidatesReady && candidates.map(c => (
                 <div key={c.key} className="flex items-center gap-4 border-b px-4 py-3 last:border-b-0">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-doc-code">{c.label}</span>
                       <SoftStatusLabel label={c.statusName} tone={c.tone} />
+                      {c.hasPendingPayableConfirmation && <SoftStatusLabel label="含待确认应付" tone="warning" />}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {byStatement ? '汇总' : `应${isPayableType(type) ? '付' : '收'}`} {balanceLabel(c.total)}
@@ -420,6 +444,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
                       {c.sub ? ` · ${c.sub}` : ''}
                       {cashCents(c.balance) == null && <span className="ml-2 text-warning-ink">历史余额含不足一分的尾差，请先核对</span>}
                     </p>
+                    {c.hasPendingPayableConfirmation && <p className="text-helper">若本次核销涉及待确认的应付，请先到「月结供应商对账 → 全部账款」确认结算。</p>}
                   </div>
                   <Input
                     type="number" min="0" step="0.01" max={c.balance}

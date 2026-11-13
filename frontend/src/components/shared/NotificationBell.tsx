@@ -7,6 +7,10 @@ import { Bell, AlertTriangle, AlertCircle, Info, CheckCircle2, ChevronRight } fr
 import { getNotificationsApi } from '@/api/notifications'
 import { getNotificationCategoryLabel, normalizeNotifications, type NotificationEntry } from '@/lib/notifications'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { Button } from '@/components/ui/button'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { resolveRoutePermission } from '@/router/routeDefinitions'
 
 /** 按 type 映射 lucide 图标（后端 icon 字段是 emoji，前端统一改用图标） */
 const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -24,14 +28,24 @@ const TYPE_STYLE: Record<string, { icon: string; row: string }> = {
 export default function NotificationBell() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
+  const { can } = usePermission()
+  const canView = can(PERMISSIONS.DASHBOARD_VIEW)
 
-  const { data } = useQuery({
+  const { data, isError, isPending, refetch } = useQuery({
     queryKey: ['notifications'],
     queryFn: getNotificationsApi,
+    enabled: canView,
     refetchInterval: 60000, // 每分钟刷新
   })
 
+  if (!canView) return null
+
   const items = normalizeNotifications(data?.items ?? [])
+    .map(item => item.path === '/approvals' ? { ...item, path: '/approvals/pending' } : item)
+    .filter(item => {
+      const required = resolveRoutePermission(item.path.split('?')[0])
+      return required !== undefined && can(required)
+    })
   const total = items.length
   // 按优先级分组：危险（type=danger）优先展示，其次 warning，最后 info
   const sorted = [...items].sort((a, b) => {
@@ -94,11 +108,18 @@ export default function NotificationBell() {
             </div>
 
             {/* 内容 */}
-            {sorted.length === 0 ? (
+            {isError && sorted.length === 0 ? (
+              <div className="space-y-2 py-8 text-center">
+                <p className="text-sm">通知读取失败</p>
+                <Button variant="outline" size="sm" onClick={() => void refetch()}>重试</Button>
+              </div>
+            ) : isPending ? (
+              <p className="py-8 text-center text-sm text-muted-foreground" role="status">正在加载通知…</p>
+            ) : sorted.length === 0 ? (
               <div className="py-12 text-center">
                 <CheckCircle2 className="mx-auto size-8 text-success-ink mb-2" />
                 <p className="text-sm font-medium text-foreground">暂无待处理事项</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">有新逾期、库存预警或待办事项时，将在此提醒</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">此处仅显示你有权限查看的事项。</p>
               </div>
             ) : (
               <div className="max-h-[60vh] divide-y divide-border/60 overflow-y-auto">

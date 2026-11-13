@@ -8,7 +8,7 @@ const { beijingTodayYmd } = require('../../utils/backendTime')
 const { generateDailyCode, generateMasterCode } = require('../../utils/codeGenerator')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
-const { assertNotSelfApproval } = require('../../utils/selfApprove')
+const { assertNotSelfApproval, canSelfApprove } = require('../../utils/selfApprove')
 const { beginResourceOperationRequest, completeOperationRequest, stableStringify } = require('../../utils/operationRequest')
 const { assertFinancePeriodOpen, tryRecordBackfillApplication } = require('../accounting/finance-period.guard')
 const accountSvc = require('./finance-accounts.service')
@@ -375,7 +375,12 @@ async function pay(id, { accountId, happenedAt, remark }, operator, requestKey =
   }
 }
 
-async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', applicantId = '', startDate = '', endDate = '', minAmount = '', maxAmount = '' } = {}) {
+function mayDecide(row, approverId, allowSelfApprove) {
+  return approverId != null && Number(row.status) === STATUS.PENDING &&
+    (Number(row.applicant_id) !== Number(approverId) || allowSelfApprove)
+}
+
+async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', applicantId = '', startDate = '', endDate = '', minAmount = '', maxAmount = '' } = {}, { approverId = null } = {}) {
   if (![page, pageSize].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) throw new AppError('分页参数无效', 400)
   const pagination = normalizePagination({ page, pageSize })
   if (!Number.isSafeInteger(pagination.offset)) throw new AppError('分页参数无效', 400)
@@ -411,8 +416,10 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', app
        FROM expense_claims c ${where}`,
     params,
   )
+  const hasOwnPending = approverId != null && rows.some(row => Number(row.status) === STATUS.PENDING && Number(row.applicant_id) === Number(approverId))
+  const allowSelfApprove = hasOwnPending && await canSelfApprove(approverId)
   return {
-    list: rows.map(fmtClaim),
+    list: rows.map(row => ({ ...fmtClaim(row), approvalAllowed: mayDecide(row, approverId, allowSelfApprove) })),
     summary: {
       totalAmount: Number(summary.totalAmount),
       pendingAmount: Number(summary.pendingAmount),
@@ -422,7 +429,7 @@ async function findAll({ page = 1, pageSize = 20, status = '', keyword = '', app
   }
 }
 
-async function findById(id, { applicantId = null, allowAll = false } = {}) {
+async function findById(id, { applicantId = null, allowAll = false, approverId = null } = {}) {
   const [[row]] = await pool.query(
     `SELECT c.*, a.name AS paid_account_name FROM expense_claims c
        LEFT JOIN finance_accounts a ON a.id = c.paid_account_id
@@ -436,8 +443,10 @@ async function findById(id, { applicantId = null, allowAll = false } = {}) {
   const [items] = await pool.query(
     'SELECT * FROM expense_claim_items WHERE claim_id=? ORDER BY happened_at ASC, id ASC', [id],
   )
+  const ownPending = approverId != null && Number(row.status) === STATUS.PENDING && Number(row.applicant_id) === Number(approverId)
   return {
     ...fmtClaim(row),
+    approvalAllowed: mayDecide(row, approverId, ownPending && await canSelfApprove(approverId)),
     items: items.map(i => ({
       id: Number(i.id),
       categoryId: Number(i.category_id),

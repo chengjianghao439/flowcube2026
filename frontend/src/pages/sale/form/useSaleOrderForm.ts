@@ -42,7 +42,9 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
   const quantityRefs  = useRef<Map<number, HTMLInputElement>>(new Map())
   const mkEmpty = (): DraftItem => ({ _key: ++counterRef.current, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0, remark: '', priceSource: 'default', priceExplanation: { kind: 'default' }, resolvedPrice: null, resolvedPriceLevel: null, costPrice: null })
 
-  const { data: carrierOptions = [] } = useCarriersActive(readOwner, ownedRead ? () => isReadCurrent() && (!handlingMode || mayHandle(P.CARRIER_VIEW)) : undefined)
+  const canReadCarriers = () => isReadCurrent() && (!handlingMode || mayHandle(P.CARRIER_VIEW))
+  const carrierQuery = useCarriersActive(readOwner, ownedRead ? canReadCarriers : undefined)
+  const carrierOptions = carrierQuery.data ?? []
 
   const [items, commitItems] = useState<DraftItem[]>(() =>
     (order?.items ?? []).map((item, i) => ({
@@ -262,6 +264,9 @@ export function useSaleOrderForm(tabPath: string, order?: NonNullable<ReturnType
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, setDiscountAmount, total, discount, discountedTotal,
     quantityRefs, carrierOptions,
+    carrierLoading: carrierQuery.isLoading,
+    carrierError: carrierQuery.isError || carrierQuery.isPaused,
+    retryCarriers: () => { if (!ownedRead || canReadCarriers()) void carrierQuery.refetch() },
     items, priceLoading, priceErrors,
     finderOpen, setFinderOpen, finderItemKey, setFinderItemKey,
     customerFinderOpen, setCustomerFinderOpen,

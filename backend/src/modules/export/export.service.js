@@ -48,7 +48,7 @@ function buildExportPayload({ filenamePrefix, sheetName, columns, rows }) {
 }
 
 async function getPurchaseExportPayload(query) {
-  const { startDate, endDate, status, productId, keyword, supplierId, warehouseId, remark, operator, scopeWarehouseIds } = query
+  const { startDate, endDate, status, productId, keyword, supplierId, warehouseId, remark, operator, operatorId, overdueOnly, scopeWarehouseIds } = query
   let sql = `SELECT o.order_no,o.supplier_name,o.warehouse_name,
     CASE o.status WHEN 1 THEN '草稿' WHEN 2 THEN '已确认' WHEN 3 THEN '已收货' WHEN 4 THEN '已取消' END AS status_name,
     o.total_amount,o.expected_date,o.operator_name,DATE_FORMAT(o.created_at,'%Y-%m-%d %H:%i') AS created_at,o.remark
@@ -62,7 +62,8 @@ async function getPurchaseExportPayload(query) {
     params.push(`%${keyword}%`)
   }
   if (remark) { sql += ' AND o.remark LIKE ?'; params.push(`%${remark}%`) }
-  if (operator) { sql += ' AND o.operator_name LIKE ?'; params.push(`%${operator}%`) }
+  if (Number(operatorId)) { sql += ' AND o.operator_id = ?'; params.push(Number(operatorId)) }
+  else if (operator) { sql += ' AND o.operator_name LIKE ?'; params.push(`%${operator}%`) }
   if (status) { sql += ' AND o.status=?'; params.push(+status) }
   if (productId) {
     sql += ' AND EXISTS (SELECT 1 FROM purchase_order_items poi WHERE poi.order_id = o.id AND poi.product_id = ?)'
@@ -70,6 +71,9 @@ async function getPurchaseExportPayload(query) {
   }
   if (supplierId) { sql += ' AND o.supplier_id=?'; params.push(+supplierId) }
   if (warehouseId) { sql += ' AND o.warehouse_id=?'; params.push(+warehouseId) }
+  if (overdueOnly === 'true') {
+    sql += ' AND o.status IN (1,2) AND o.expected_date IS NOT NULL AND o.expected_date < CURDATE()'
+  }
   if (startDate) { sql += ' AND o.created_at >= ?'; params.push(`${startDate} 00:00:00`) }
   if (endDate) { sql += ' AND o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY o.created_at DESC LIMIT 10001'
@@ -286,7 +290,7 @@ async function getStockExportPayload(scopeWarehouseIds = null) {
 }
 
 async function getInventoryLogsExportPayload(query) {
-  const { startDate, endDate, scopeWarehouseIds } = query
+  const { startDate, endDate, type, productId, warehouseId, scopeWarehouseIds } = query
   let sql = `SELECT DATE_FORMAT(l.created_at,'%Y-%m-%d %H:%i') AS time,
     CASE l.type WHEN 1 THEN '入库' WHEN 2 THEN '出库' WHEN 3 THEN '盘点调整' ELSE '其他' END AS type_name,
     p.code AS product_code,p.name AS product_name,w.name AS warehouse_name,
@@ -299,6 +303,9 @@ async function getInventoryLogsExportPayload(query) {
   const sc = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
   sql += sc.sql
   params.push(...sc.params)
+  if (Number(type)) { sql += ' AND l.type = ?'; params.push(Number(type)) }
+  if (Number(productId)) { sql += ' AND l.product_id = ?'; params.push(Number(productId)) }
+  if (Number(warehouseId)) { sql += ' AND l.warehouse_id = ?'; params.push(Number(warehouseId)) }
   if (startDate) { sql += ' AND l.created_at >= ?'; params.push(`${startDate} 00:00:00`) }
   if (endDate) { sql += ' AND l.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; params.push(endDate) }
   sql += ' ORDER BY l.created_at DESC, l.id DESC LIMIT 10001'
@@ -964,6 +971,8 @@ async function getExpenseClaimsExportPayload(query = {}) {
     applicantId: query.applicantId || '',
     startDate: query.startDate || '',
     endDate: query.endDate || '',
+    minAmount: query.minAmount ?? '',
+    maxAmount: query.maxAmount ?? '',
   })
   const rows = list.map(c => ({
     claim_no: c.claimNo,

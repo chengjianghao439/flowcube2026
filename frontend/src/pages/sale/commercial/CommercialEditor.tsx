@@ -645,9 +645,9 @@ export default function CommercialEditor({
       )}
       <ConfirmDialog
         open={discardOpen}
-        title="放弃当前草稿"
-        description="当前修改尚未保存。返回后这些输入会丢失，请确认是否放弃。"
-        confirmText="放弃并返回"
+        title="放弃未保存的修改？"
+        description={order ? '返回后会保留已保存的订单，本次输入会丢失。' : '返回后本次填写的销售单草稿会丢失。'}
+        confirmText="放弃本次修改"
         cancelText="继续编辑"
         loading={locked}
         onCancel={() => {

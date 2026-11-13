@@ -16,6 +16,7 @@ export default function PageHeader({ title, description, status, actions }: Page
     <div className="desktop-page-heading mb-5 min-w-0 shrink-0">
       <div className="desktop-page-header flex min-h-9 min-w-0 flex-col flex-wrap items-start justify-between gap-3 sm:flex-row">
         <div className="desktop-page-heading-main min-w-0 flex-1">
+          {group?.parentTitle && <p className="mb-1 text-xs text-muted-foreground" data-page-group>{group.parentTitle}</p>}
           <div className="desktop-page-identity flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
             <h1 className="min-w-0 max-w-full break-words text-xl font-semibold leading-7 text-foreground">{group?.title ?? title}</h1>
             {status && (

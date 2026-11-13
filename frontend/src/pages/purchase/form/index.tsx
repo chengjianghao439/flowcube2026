@@ -132,7 +132,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   const [supplierName, setSupplierName] = useState(editOrder?.supplierName ?? '')
   const [warehouseId, setWarehouseId] = useState(editOrder ? String(editOrder.warehouseId) : '')
   const [warehouseName, setWarehouseName] = useState(editOrder?.warehouseName ?? '')
-  const [expectedDate, setExpectedDate] = useState(editOrder?.expectedDate ?? '')
+  const [expectedDate, setExpectedDate] = useState(() => {
+    const storedDate = editOrder?.expectedDate ?? ''
+    return /^\d{4}-\d{2}-\d{2}$/.test(storedDate) ? storedDate : formatDisplayDate(storedDate, storedDate)
+  })
   const [remark, setRemark] = useState(editOrder?.remark ?? '')
   const [items, setItems] = useState<DraftItem[]>(
     (editOrder?.items ?? []).map((it, idx) => ({
@@ -290,6 +293,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
     setSupplierError(false)
   }
 
+  const invalidExpectedDate = expectedDate !== '' && formatDisplayDate(expectedDate, '') !== expectedDate
   const allIssues = collectOrderIssues({ kind: 'purchase', partyId: supplierId, partyName: supplierName, warehouseId, warehouseName, items })
   const issues = validationAttempted ? allIssues : []
 
@@ -299,6 +303,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
     setSupplierError(allIssues.some(i => i.target === 'party'))
     setWarehouseError(allIssues.some(i => i.target === 'warehouse'))
     if (allIssues.length) return
+    if (invalidExpectedDate) {
+      focusField('expected-date')
+      return
+    }
     const payload = {
       supplierId: +supplierId,
       supplierName,
@@ -420,7 +428,11 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
 
           <div className="space-y-1.5">
             <Label htmlFor={fieldId('expected-date')}>预计到货日期</Label>
-            <DatePicker id={fieldId('expected-date')} value={expectedDate} onChange={setExpectedDate} />
+            <div data-entry-field="expected-date">
+              <DatePicker id={fieldId('expected-date')} value={expectedDate} onChange={setExpectedDate}
+                aria-invalid={invalidExpectedDate} aria-describedby={invalidExpectedDate ? fieldId('expected-date-error') : undefined} />
+            </div>
+            {invalidExpectedDate && <p id={fieldId('expected-date-error')} role="alert" className="text-xs text-destructive-ink">请重新选择预计到货日期，或清空此选填项。</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -489,8 +501,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
 function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; closeTab: (targetPath?: string) => void; tabPath: string }) {
   const navigate = useNavigate()
   const isActiveTab = useActiveWorkspaceTab()
-  // 采购/收货是 PDA 现场高频变化的单据，标签页常驻挂载时若不轮询容易看到陈旧的收货进度
-  const { data: order, isLoading, isFetching, error, refetch } = usePurchaseDetail(purchaseId, { refetchInterval: isActiveTab ? 20_000 : false })
+  const { data: order, isLoading, isFetching, error, refetch } = usePurchaseDetail(purchaseId, {
+    visible: isActiveTab,
+    refetchInterval: isActiveTab ? 20_000 : false,
+  })
   useWorkspaceTabTitle(order?.orderNo)
   const confirmMutate = useConfirmPurchase()
   const withdrawConfirmMutate = useWithdrawConfirmPurchase()

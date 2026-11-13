@@ -20,7 +20,7 @@ async function containerSections(condition, params, taskStatus) {
   const states = { 1: '在库', 2: '已用尽', 3: '已作废', 4: '待上架', 5: '待质检', 6: '不合格隔离' }
   const thresholds = await getInboundClosureThresholds()
   const [prints] = await pool.query(
-    `SELECT j.id,c.barcode,j.status AS print_status,j.updated_at AS print_updated_at,j.error_message,
+    `SELECT j.id,c.barcode,j.status AS print_status,j.updated_at AS print_updated_at,j.error_message,j.printer_id,
       pr.name AS printerName,j.created_at AS createdAt,j.updated_at AS updatedAt,j.dispatch_reason AS reason
      FROM inventory_containers c LEFT JOIN print_jobs j ON j.ref_type='inventory_container' AND j.ref_id=c.id
      LEFT JOIN printers pr ON pr.id=j.printer_id WHERE ${condition} ORDER BY c.id,j.id DESC`, params)
@@ -132,8 +132,20 @@ async function buildProgress(type, id, doc, user) {
     events.push(...taskData.events)
     if (type !== 'purchase-return') sections.push(...await packageSections(taskIds))
   }
-  if (type === 'transfer') sections.push(section('progress', '调出 → 在途 → 调入', [...identity, ['quantity', '计划数量'], ['deductedQty', '已调出'], ['inTransitQty', '在途数量'], ['receivedQty', '已调入']], items.map(i => ({ ...i, inTransitQty: Math.max(0, difference(i.deductedQty, i.receivedQty)) }))))
   if (type === 'transfer') {
+    const forceClosed = doc.closedReason === 'force_close'
+    const columns = [...identity, ['quantity', '计划数量'], ['deductedQty', '已调出'], ['inTransitQty', '在途数量'], ['receivedQty', '已调入']]
+    if (forceClosed) columns.push(['transportLossQty', '运输损耗'])
+    const progressRows = items.map(item => {
+      const notReceived = Math.max(0, difference(item.deductedQty, item.receivedQty))
+      return {
+        ...item,
+        inTransitQty: Number(doc.status) === 3 && !forceClosed ? notReceived : 0,
+        transportLossQty: forceClosed ? notReceived : 0,
+      }
+    })
+    sections.push(section('progress', '调出 → 在途 → 调入', columns, progressRows,
+      forceClosed ? '该调拨单已异常了结，未调入的货物已按运输损耗核销。' : undefined))
     const [scans] = await pool.query("SELECT id,title,payload_json,created_by_name AS operatorName,created_at AS scannedAt FROM transfer_order_events WHERE transfer_order_id=? AND event_type IN ('TRANSFER_SCAN_OUT','TRANSFER_SCAN_IN') ORDER BY id DESC", [id])
     sections.push(section('scan', '调出与调入扫码记录', [['title', '操作'], ['barcode', '容器条码'], ['qty', '数量'], ['locationId', '调入库位 ID'], ['operatorName', '操作人'], ['scannedAt', '时间']], scans.map(r => {
       let payload = r.payload_json

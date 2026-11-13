@@ -72,8 +72,10 @@ export default function InventoryAgingPage() {
     { key: 'totalQty', title: '合计', width: 80, align: 'right', render: v => <span className="tabular-nums font-medium">{fmtQty(v)}</span> },
     { key: 'avgAgeDays', title: '平均存放时长', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
     { key: 'totalValue', title: '金额', width: 110, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
-    { key: 'lastOutboundAt', title: '最后出库', width: 150, render: v => v ? formatDisplayDateTime(String(v)) : <span className="text-muted-foreground">从未出库</span> },
-    { key: 'isStale', title: '滞销', width: 96, render: (_, r) => r.isStale ? <SoftStatusLabel label={`滞销${r.daysSinceOutbound != null ? ` ${r.daysSinceOutbound}天` : ''}`} tone="danger" /> : <span className="text-xs text-muted-foreground">正常</span> },
+    { key: 'lastOutboundAt', title: '最后出库', width: 150, render: v => formatDisplayDateTime(v) },
+    { key: 'isStale', title: '滞销情况', width: 122, render: (_, r) => r.isStale
+      ? <SoftStatusLabel label={r.daysSinceOutbound == null ? '从未出库' : `${r.daysSinceOutbound} 天未出库`} tone="danger" />
+      : <span className="text-xs text-muted-foreground">正常</span> },
   ]
 
   const expiryCols: TableColumn<ExpiryAlert>[] = [
@@ -90,7 +92,7 @@ export default function InventoryAgingPage() {
     <div className="space-y-4">
       <PageHeader
         title="存放时长与滞销"
-        description="存放时长自入库本仓起算（调拨、拆分会重置）；金额按移动加权平均成本估值，仅供参考、不作账。滞销：仍有库存且超过设定天数没有出库。"
+        description={`存放时长自入库本仓起算（调拨、拆分会重置）。库存金额按平均成本、成本参考价、销售参考价的顺序估算。从未出库的库存纳入滞销，有出库记录时按本仓最近出库是否超过 ${staleDays} 天判断。`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -118,7 +120,7 @@ export default function InventoryAgingPage() {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {buckets.map(b => (
           <div key={b.bucket} className="card-base p-4">
-            <p className="text-xs text-muted-foreground">{b.bucket} 天{b.bucket === '90+' ? '（积压）' : ''}</p>
+            <p className="text-xs text-muted-foreground">存放 {b.bucket} 天</p>
             <p className={`mt-1 text-2xl font-bold ${b.bucket === '90+' ? 'text-amber-600' : 'text-foreground'}`}>{money(b.totalValue)}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">{b.skuCount} SKU · {fmtQty(b.totalQty)} 件</p>
           </div>

@@ -20,7 +20,8 @@ import { Label }   from '@/components/ui/label'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { EditModeBadge } from '@/components/shared/EditModeBadge'
+import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
+import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
 import PageHeader  from '@/components/shared/PageHeader'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import {
@@ -47,28 +48,26 @@ interface FormDialogProps {
   parentCat?: Category | null   // 新建子分类时的父节点
   editCat?: Category | null     // 编辑时的目标节点
   onClose: () => void
+  onCreated: (parentId: number | null) => void
 }
 
-function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDialogProps) {
+function CategoryFormDialog({ open, mode, parentCat, editCat, onClose, onCreated }: FormDialogProps) {
   const { can } = usePermission()
   const canSave = can(mode === 'create' ? PERMISSIONS.CATEGORY_CREATE : PERMISSIONS.CATEGORY_UPDATE)
   const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM)
+  const [baseline, setBaseline] = useState(EMPTY_FORM)
   const { mutate: create, isPending: creating } = useCreateCategory()
   const { mutate: update, isPending: updating } = useUpdateCategory()
-  const isPending = creating || updating
+  const dirty = JSON.stringify(form) !== JSON.stringify(baseline)
+  const draft = useDialogDraftGuard({ open, identity: `${mode}:${editCat?.id ?? parentCat?.id ?? 'root'}`, dirty, pending: creating || updating, onClose })
+  const isPending = draft.locked
 
   function reset() {
-    if (mode === 'edit' && editCat) {
-      setForm({
-        name:      editCat.name,
-        parentId:  editCat.parentId,
-        sortOrder: editCat.sortOrder,
-        remark:    editCat.remark ?? '',
-        status:    editCat.status === 1,
-      })
-    } else {
-      setForm({ ...EMPTY_FORM, parentId: parentCat?.id ?? null })
-    }
+    const next = mode === 'edit' && editCat
+      ? { name: editCat.name, parentId: editCat.parentId, sortOrder: editCat.sortOrder, remark: editCat.remark ?? '', status: editCat.status === 1 }
+      : { ...EMPTY_FORM, parentId: parentCat?.id ?? null }
+    setBaseline(next)
+    setForm(next)
   }
 
   // 依赖刻意写成 parentCat?.id / editCat?.id 而不是对象本身，也刻意不把 reset 列进去：
@@ -79,18 +78,15 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mode, parentCat?.id, editCat?.id])
 
-  // 弹窗打开时初始化
-  function handleOpenChange(v: boolean) {
-    if (!v) onClose()
-  }
-
   function set(k: string, v: unknown) {
     setForm(f => ({ ...f, [k]: v }))
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!canSave) return
+    if (!canSave || !form.name || (mode === 'edit' && !editCat)) return
+    const submission = draft.beginSubmit()
+    if (!submission) return
     if (mode === 'create') {
       const d: CreateCategoryParams = {
         name:      form.name!,
@@ -98,16 +94,21 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
         sortOrder: Number(form.sortOrder ?? 0),
         remark:    form.remark || null,
       }
-      create(d, { onSuccess: onClose })
-    } else {
-      if (!editCat) return
+      create(d, {
+        onSuccess: () => { submission.finish(); onCreated(d.parentId ?? null); onClose() },
+        onError: submission.finish,
+      })
+    } else if (editCat) {
       const d: UpdateCategoryParams = {
         name:      form.name!,
         sortOrder: Number(form.sortOrder ?? 0),
         status:    form.status,
         remark:    form.remark || null,
       }
-      update({ id: editCat.id, d }, { onSuccess: onClose })
+      update({ id: editCat.id, d }, {
+        onSuccess: () => { submission.finish(); onClose() },
+        onError: submission.finish,
+      })
     }
   }
 
@@ -116,8 +117,9 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
     : (editCat?.level ?? 1)
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+    <>
+    <Dialog open={open} onOpenChange={value => { if (!value) draft.requestClose() }}>
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="sm:max-w-2xl">
         <DialogHeader description={mode === 'edit' && editCat ? <>
               正在编辑：<span className="font-medium text-foreground">{editCat.code ? `${editCat.code} · ` : ''}{editCat.name}</span>
             </> : ("填写分类名称、上级与排序。")}>
@@ -127,6 +129,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
               ? `新增${LEVEL_LABEL[targetLevel] ?? ''}分类${parentCat ? ` · 父级：${parentCat.name}` : ''}`
               : `编辑${LEVEL_LABEL[editCat?.level ?? 1] ?? ''}分类`}
             {mode === 'edit' && <EditModeBadge />}
+            <UnsavedBadge show={dirty} />
           </DialogTitle>
 
         </DialogHeader>
@@ -182,12 +185,14 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose }: FormDia
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
+            <Button type="button" variant="outline" onClick={draft.requestClose} disabled={isPending}>取消</Button>
             {canSave && <Button type="submit" disabled={isPending || !form.name}>{isPending ? '保存中…' : (mode === 'edit' ? '保存修改' : '保存')}</Button>}
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog {...draft.discardProps} confirmText="放弃本次修改" />
+    </>
   )
 }
 
@@ -232,8 +237,10 @@ function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expan
         <button
           type="button"
           className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-muted-foreground"
-          onClick={() => hasChildren && onToggle(cat)}
-          tabIndex={-1}
+          onClick={() => onToggle(cat)}
+          disabled={!hasChildren}
+          aria-label={`${expanded ? '收起' : '展开'}${cat.name}`}
+          aria-expanded={hasChildren ? expanded : undefined}
         >
           {hasChildren
             ? expanded
@@ -440,11 +447,7 @@ export default function CategoriesPage() {
                 expandedIds={expandedIds}
                 onToggle={(target) => {
                   const path = findPathToCategory(tree, target.id)?.map(item => item.id) ?? [target.id]
-                  setExpandedPath(prev =>
-                    prev.length === path.length && prev.every((item, index) => item === path[index])
-                      ? prev.slice(0, -1)
-                      : path,
-                  )
+                  setExpandedPath(prev => prev.includes(target.id) ? path.slice(0, -1) : path)
                 }}
               />
             ))}
@@ -458,6 +461,11 @@ export default function CategoriesPage() {
         mode={formMode}
         parentCat={parentCat}
         editCat={editCat}
+        onCreated={parentId => {
+          if (parentId == null) return
+          const path = findPathToCategory(tree, parentId)?.map(item => item.id)
+          if (path) setExpandedPath(prev => prev.includes(parentId) ? prev : path)
+        }}
         onClose={() => setFormOpen(false)}
       />
 

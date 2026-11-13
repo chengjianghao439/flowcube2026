@@ -1,4 +1,5 @@
 import { money } from '@/lib/format'
+import { formatDisplayDate } from '@/lib/dateTime'
 import { Building2, CircleDollarSign, PackageOpen, Warehouse } from 'lucide-react'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getReceivableStatus } from '@/lib/receivableStatus'
@@ -19,7 +20,7 @@ export function SaleOrderOverview({ order }: { order: SaleOrder }) {
   return (
     <OrderOverviewStrip cells={cells}>
           <div><p className="text-[11px] text-muted-foreground">回款状态</p><div className="mt-1"><SoftStatusLabel label={receivable.label} tone={receivable.tone} className="whitespace-nowrap" /></div></div>
-          {receivable.dueDate && <span className="text-[11px] text-muted-foreground">至 {receivable.dueDate.slice(0, 10)}</span>}
+          {receivable.dueDate && <span className="text-[11px] text-muted-foreground">至 {formatDisplayDate(receivable.dueDate)}</span>}
     </OrderOverviewStrip>
   )
 }

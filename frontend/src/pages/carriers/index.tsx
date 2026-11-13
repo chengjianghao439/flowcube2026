@@ -121,7 +121,11 @@ export default function CarriersPage() {
       renderForm={(editing, _open, locked) => (
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 py-2">
           <h3 className="col-span-2 text-sm font-medium">基本资料</h3>
-          <div><Label htmlFor="carrier-name">名称</Label><Input className="mt-1" placeholder="承运商名称" id="carrier-name" value={form.name} onChange={e => set('name', e.target.value)} /></div>
+          <div className="space-y-1">
+            <Label htmlFor="carrier-name">名称 <span aria-hidden="true" className="text-destructive-ink">*</span></Label>
+            <Input required aria-describedby="carrier-name-hint" placeholder="承运商名称" id="carrier-name" value={form.name} onChange={e => set('name', e.target.value)} />
+            <p id="carrier-name-hint" className="text-xs text-muted-foreground">填写承运商名称后可{editing ? '保存' : '创建'}。</p>
+          </div>
           <div>
             <Label>类型</Label>
             <Select disabled={locked} value={form.type} onValueChange={v => !locked && set('type', v)}>

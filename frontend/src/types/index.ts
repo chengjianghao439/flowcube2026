@@ -68,6 +68,8 @@ export interface TableColumn<T extends object> {
   align?: 'left' | 'right' | 'center'
   /** 长备注等辅助文字默认两行，可鼠标或键盘就地展开；商品身份字段保持完整换行。 */
   expandableText?: boolean
+  /** 日期、单号和紧凑数值整段显示，空间不足时省略并保留悬停文字。 */
+  noWrap?: boolean
 }
 
 // ─── 通用查询参数 ───────────────────────────────────────────────────────────────

@@ -59,7 +59,7 @@ export default function BarcodePrintQueryDialog({ open, initial, onClose, onAppl
         </label>
 
         <label className="flex flex-col gap-1 col-span-2">
-          <span className="text-xs font-medium text-muted-foreground">打印状态</span>
+            <span className="text-xs font-medium text-muted-foreground">记录状态</span>
           <Select value={draft.status} onValueChange={v => set('status', v)}>
             <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>

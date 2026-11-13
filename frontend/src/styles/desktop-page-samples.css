@@ -90,6 +90,8 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) .fc-button.bg-pri
   --desktop-row-surface:color-mix(in srgb,hsl(var(--primary)) 7%,hsl(var(--card)));
 }
 .desktop-workspace .desktop-table .fc-button { height:30px; min-height:30px; font-size:12px; }
+.desktop-workspace .desktop-table [role="region"][data-table-scroll] td:not([colspan]),
+.desktop-workspace .desktop-table [role="region"][data-table-scroll] th { padding-inline:12px; }
 
 /* 全局搜索沿成熟的命令菜单交互，选中行和分组使用现有中性色。 */
 body:has(.desktop-shell-sample) .fc-global-search-results { border-radius:16px; box-shadow:var(--desktop-shadow-lg); }

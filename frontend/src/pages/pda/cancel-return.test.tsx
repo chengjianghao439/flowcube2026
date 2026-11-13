@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   detailGet: vi.fn(),
   ok: vi.fn(),
+  warn: vi.fn(),
   defaults: { baseURL: '/a' },
   onScan: null as null | ((s: string) => void)
 }))
@@ -70,7 +71,7 @@ vi.mock('@/hooks/usePdaFeedback', () => ({
     flash: null,
     ok: mocks.ok,
     err: vi.fn(),
-    warn: vi.fn()
+    warn: mocks.warn
   })
 }))
 beforeEach(() => {
@@ -129,6 +130,17 @@ test('kit cancel-return shows task share1 separately from physical barcode balan
   await mount(async (host) => {
     expect(host.textContent).toContain('本任务应归还 1')
     expect(host.textContent).toContain('条码账面 10')
+  })
+})
+test('明确拒绝错仓归还时不发未确认提示，可换正确库位重试', async () => {
+  mocks.scan.mockRejectedValueOnce({ status: 400, message: '库位与任务所属仓库不一致' })
+  await mount(async host => {
+    await act(async () => mocks.onScan!('I30'))
+    await act(async () => mocks.onScan!('LOC6'))
+    expect(host.textContent).toContain('库位与任务所属仓库不一致')
+    expect(host.textContent).not.toContain('归还结果待确认')
+    expect(mocks.warn).not.toHaveBeenCalled()
+    expect(mocks.query).not.toHaveBeenCalled()
   })
 })
 test('unknown row scan stores original task/container/location and queries real scoped receipt; scanlog id is not container id', async () => {

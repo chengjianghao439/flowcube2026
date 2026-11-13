@@ -103,31 +103,33 @@ export function usePdaFlow<C extends Record<string, unknown>>(
 
   // ── 推进步骤 ────────────────────────────────────────────────────────────
   const scan = useCallback(async (barcode: string) => {
-    if (scanning || done) return
+    if (scanning || done) return 'ignored'
     const b = barcode.trim()
-    if (!b) return
+    if (!b) return 'ignored'
     setScanning(true)
     try {
       const result = await currentStep.handle(b, context)
       if (result.context) {
         setContext(prev => ({ ...prev, ...result.context }))
       }
-      if (result.ok) {
-        ok(result.message)
-        if (result.nextStep === '__done__') {
-          setDone(true)
-          if (storageKey) removeFlowDraft(storageKey)
-          onCompleteRef.current?.(result.context ? { ...context, ...result.context } : context)
-        } else if (result.nextStep) {
-          setStepId(result.nextStep)
-        }
-      } else {
+      if (!result.ok) {
         err(result.message)
+        return 'rejected'
       }
+      ok(result.message)
+      if (result.nextStep === '__done__') {
+        setDone(true)
+        if (storageKey) removeFlowDraft(storageKey)
+        onCompleteRef.current?.(result.context ? { ...context, ...result.context } : context)
+      } else if (result.nextStep) {
+        setStepId(result.nextStep)
+      }
+      return 'accepted'
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message
         ?? (e instanceof Error ? e.message : '操作失败，请重试')
       err(msg)
+      return 'rejected'
     } finally {
       setScanning(false)
     }

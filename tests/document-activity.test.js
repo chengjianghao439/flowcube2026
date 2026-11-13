@@ -58,6 +58,34 @@ test('业务创建事件存在时不重复展示通用创建记录', async () =>
   assert.equal(activity.events[0].source, '业务事件')
 })
 
+test('销售历史按同单成功请求区分配件预览和发起出库，保留原留存操作人', async () => {
+  const request = (id, title, requestPath, requestStatusCode = 200) => ({
+    id, title, createdByName: id === 1 ? '留存操作人' : null, createdAt: '2026-11-13 10:00:00',
+    requestMethod: 'POST', requestPath, requestStatusCode,
+  })
+  const rows = [
+    request(1, '处理单据', '/api/sale/12/commercial-preview'),
+    request(2, '确认出库', '/api/sale/12/ship'),
+    request(3, '处理单据', '/api/sale/123/commercial-preview'),
+    request(4, '处理单据', null),
+    request(5, '处理单据', '/api/sale/12/commercial-preview', 409),
+  ]
+  const service = load('backend/src/modules/document-activity/document-activity.service.js', {
+    '../../config/db': { pool: { query: async sql => [sql.includes('FROM document_operation_events') ? rows : []] } },
+    './document-operation': require('../backend/src/modules/document-activity/document-operation'),
+    './document-registry': {},
+    './document-change-audit': { parsePayload: () => null },
+    './document-progress': {},
+    '../fulfillment/fulfillment.service': { events: async () => [] },
+  })
+  const operations = await service.loadOperations('sale', 12)
+  assert.deepEqual(Array.from(operations, event => event.title), ['预览套内配件需求', '发起出库',
+    '请求操作（具体动作未记录）', '请求操作（具体动作未记录）', '请求操作（具体动作未记录）'])
+  assert.equal(operations[0].createdByName, '留存操作人')
+  assert.equal(operations[1].createdByName, null)
+  assert.equal(Object.hasOwn(operations[0], 'requestPath'), false)
+})
+
 test('关联仓库任务活动按批读取，查询次数不随任务数增长', async () => {
   const queries = []
   const service = load('backend/src/modules/document-activity/document-activity.service.js', {
@@ -70,6 +98,26 @@ test('关联仓库任务活动按批读取，查询次数不随任务数增长',
   })
   await service.getActivity('sale', 1, {})
   assert.equal(queries.length, 5)
+})
+
+test('销售详情关联仓库任务的分拣格动作取自该任务真实请求', async () => {
+  const service = load('backend/src/modules/document-activity/document-activity.service.js', {
+    '../../config/db': { pool: { query: async (sql, params) => {
+      if (sql.includes('FROM warehouse_tasks')) return [[{ id: 7, sale_order_id: 1, warehouse_id: 1 }]]
+      if (params[0] === 'warehouse-task' && sql.includes('LEFT JOIN operation_logs')) return [[{
+        id: 8, document_type: 'warehouse-task', document_id: 7, title: '处理单据',
+        requestMethod: 'POST', requestPath: '/api/warehouse-tasks/7/assign-sorting-bin', requestStatusCode: 200,
+      }]]
+      return [[]]
+    } } },
+    './document-registry': { loadDocument: async () => ({ timeline: [], tasks: [{ taskId: 7 }] }) },
+    './document-operation': require('../backend/src/modules/document-activity/document-operation'),
+    './document-change-audit': { parsePayload: () => null },
+    './document-progress': { buildProgress: async () => ({ sections: [], events: [], taskIds: [7] }) },
+    '../fulfillment/fulfillment.service': { events: async () => [] },
+  })
+  const activity = await service.getActivity('sale', 1, {})
+  assert.ok(activity.events.some(event => event.title === '分配分拣格'))
 })
 
 test('订单事件独立保存，只存动作和原因，不复制请求正文', async () => {

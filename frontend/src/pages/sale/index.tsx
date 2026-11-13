@@ -9,6 +9,7 @@ import { downloadExport } from '@/lib/exportDownload'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -24,7 +25,7 @@ import { getSaleDetailApi } from '@/api/sale'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
-import { formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
+import { formatDisplayDate, formatDisplayDateTime, defaultRangeYmds } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import { getReceivableStatus } from '@/lib/receivableStatus'
@@ -89,8 +90,9 @@ export default function SalePage() {
   // range=all 是「清空」写下的显式意图（看全部），不再套默认。
   const rangeAll = searchParams.get('range') === 'all'
   const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
-  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
-  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
+  const useDefaultDates = !startDate && !endDate && !rangeAll
+  const effectiveStartDate = useDefaultDates ? defaultRange.start : startDate
+  const effectiveEndDate = useDefaultDates ? defaultRange.end : endDate
 
   const { can } = usePermission()
   const [queryOpen, setQueryOpen] = useState(false)
@@ -143,7 +145,7 @@ export default function SalePage() {
 
   function goToDetail(order: SaleOrder, edit = false) {
     const key = `/sale/${order.id}`
-    const path = edit ? `${key}?edit=1` : key
+    const path = edit ? `${key}?edit=${order.status === 1 ? '1' : 'adjust'}` : key
     addTab({ key, title: order.orderNo, path })
     navigate(path)
   }
@@ -208,15 +210,12 @@ export default function SalePage() {
     setQueryOpen(false)
   }
 
-  function clearAll() {
+  function clearOtherFilters() {
     updateParams({
       focus:null, keyword: null, remark: null, operatorId: null, operatorName: null, status: null,
       productId: null, productCode: null, productName: null,
       customerId: null, customerName: null,
       warehouseId: null, warehouseName: null,
-      startDate: null, endDate: null,
-      // 显式声明「看全部」：否则「没有日期」会被默认窗口接管，清空之后又只剩最近一周
-      range: 'all',
       page: 1,
     })
   }
@@ -231,21 +230,23 @@ export default function SalePage() {
     customerId && { key: 'customer', label: `客户：${customerName || customerId}`, onRemove: () => updateParams({ customerId: null, customerName: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
     productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
-    // 日期筛选在查询弹窗中呈现
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   // ── 列定义 ───────────────────────────────────────────────────────────────
   const columns: TableColumn<SaleOrder>[] = [
-    { key: 'orderNo', title: '销售单号', width: 14, render: v => <span className="whitespace-nowrap">{String(v ?? '')}</span> },
-    { key: 'customerName', title: '客户', width: 14 },
-    { key: 'warehouseName', title: '仓库', width: 8 },
-    { key: 'totalAmount', title: '折后金额', width: 10, align: 'right', render: (_, r) => <span className="font-medium tabular-nums whitespace-nowrap">{money(Math.max(0, r.totalAmount - (r.discountAmount ?? 0)))}</span> },
-    { key: 'remark', title: '备注', expandableText: true, width: 15, render: v => (v as string) || '—' },
-    { key: 'status', title: '状态', width: 8, minWidth:112, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
-    { key: 'receivableStatus', title: '回款状态', width: 8, minWidth:112, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className="whitespace-nowrap" title={rs.dueDate ? `账期至 ${rs.dueDate.slice(0, 10)}` : undefined} /> } },
-    { key: 'operatorName', title: '经办人', width: 9, minWidth:112 },
-    { key: 'createdAt', title: '创建时间', width: 10, render: v => formatDisplayDateTime(v) },
-    { key:'id', title:'操作', width:10, render:(_,r) => <SaleRowActions row={r} anyPending={cancel.isPending || deleteMutate.isPending || !!cancel.recovery?.blocked}
+    { key: 'orderNo', title: '销售单号', width: 142, minWidth: 142, noWrap: true, render: (_, r) => (
+      <button type="button" className="max-w-full whitespace-normal [overflow-wrap:anywhere] rounded text-left font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-ring"
+        onClick={() => goToDetail(r)}>{r.orderNo}</button>
+    ) },
+    { key: 'customerName', title: '客户', width: 124, minWidth: 112 },
+    { key: 'status', title: '状态', width: 104, minWidth: 104, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
+    { key: 'totalAmount', title: '折后金额', width: 108, minWidth: 108, noWrap: true, align: 'right', render: (_, r) => <span className="font-medium">{money(Math.max(0, r.totalAmount - (r.discountAmount ?? 0)))}</span> },
+    { key: 'receivableStatus', title: '回款状态', width: 100, minWidth: 100, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className="whitespace-nowrap" title={rs.dueDate ? `账期至 ${formatDisplayDate(rs.dueDate)}` : undefined} /> } },
+    { key: 'warehouseName', title: '仓库', width: 80, minWidth: 80 },
+    { key: 'operatorName', title: '经办人', width: 90, minWidth: 90, noWrap: true },
+    { key: 'createdAt', title: '创建时间', width: 150, minWidth: 150, noWrap: true, render: v => formatDisplayDateTime(v) },
+    { key: 'remark', title: '备注', expandableText: true, width: 92, minWidth: 80, render: v => (v as string) || '—' },
+    { key:'id', title:'操作', width:144, minWidth:144, render:(_,r) => <SaleRowActions row={r} anyPending={cancel.isPending || deleteMutate.isPending || !!cancel.recovery?.blocked}
         onAsk={(title,desc,cb)=>openConfirm(title,desc,()=>{closeConfirm();cb()})}
         onReserveSale={setReserveDialogOrderId} onCancelSale={()=>setCancelOrder(r)} onDeleteSale={id=>deleteMutate.mutate(id)}
         onViewTask={()=>goToDetail(r)} onDetail={()=>goToDetail(r)} onEdit={()=>goToDetail(r, true)} onPrint={()=>handlePrint(r.id)} /> },
@@ -275,8 +276,9 @@ export default function SalePage() {
         options={QUICK_STATUSES}
         onChange={status => updateParams({status: status || null, page: 1})} /></div>
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={effectiveStartDate} endDate={effectiveEndDate}
+            onClear={() => updateParams({ startDate: null, endDate: null, range: 'all', page: 1 })} />
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
@@ -285,9 +287,8 @@ export default function SalePage() {
               </button>
             </span>
           ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          {chips.length > 0 && <Button size="sm" variant="ghost" onClick={clearOtherFilters}>清空其他条件</Button>}
         </div>
-      )}
 
       <section className="min-w-0" aria-label="销售订单列表">
       {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} /> : <DataTable virtualized
@@ -296,6 +297,7 @@ export default function SalePage() {
         loading={isLoading}
         onRowDoubleClick={goToDetail}
         fluid
+        scrollLabel="销售订单表格"
         columnStorageKey="sale:classic-v5"
       />}
 

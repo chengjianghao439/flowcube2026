@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider, onlineManager } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
+import { getByRole } from '@testing-library/dom'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -54,8 +55,12 @@ test('既有工作台入口使用别名规范化后的工作区标题', async ()
 test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])('非法批次ID %s不生成来源导航', async waveId => {
   vi.mocked(getBarcodePrintRecordsApi).mockResolvedValue({ list: [record('outbound', { waveId })], pagination: { total: 1 } } as never); await render('outbound'); expect(button('打开批次详情')).toBeUndefined(); expect(button('返回批次详情')).toBeUndefined()
 })
-test.each([['success', '客户端已回报成功，请现场核对标签纸张'], ['queued', '打印结果尚待确认'], ['printing', '打印结果尚待确认'], ['failed', '先核对工作站、打印机和纸张'], ['timeout', '先核对工作站、打印机和纸张']] as const)('最近任务%s解释不冒称物理出纸', async (statusKey, text) => {
-  vi.mocked(getBarcodePrintRecordsApi).mockResolvedValue({ list: [record('logistics', { latestJob: { statusKey, printStateLabel: statusKey } as never })], pagination: { total: 1 } } as never); await render('logistics'); expect(host.textContent).toContain(text); expect(reprintBarcodeRecordApi).not.toHaveBeenCalled()
+test.each([['success', '客户端已回报成功，请现场核对标签纸张'], ['queued', '打印结果尚待确认'], ['printing', '打印结果尚待确认'], ['failed', '先核对工作站、打印机和纸张'], ['timeout', '先核对工作站、打印机和纸张'], ['unassigned', '绑定打印机后到打印记录补打']] as const)('最近任务%s在打印记录中提供操作提示', async (statusKey, text) => {
+  vi.mocked(getBarcodePrintRecordsApi).mockResolvedValue({ list: [record('logistics', { latestJob: { id: 31, statusKey, printStateLabel: statusKey } as never })], pagination: { total: 1 } } as never)
+  await render('logistics')
+  await act(async () => getByRole(host, 'button', { name: '查看打印记录 LABEL-119' }).click())
+  expect(getByRole(document.body, 'dialog', { name: '打印记录' }).textContent).toContain(text)
+  expect(reprintBarcodeRecordApi).not.toHaveBeenCalled()
 })
 
 test('查询弹窗未应用的草稿不被后台读取重置，也不提前改变已应用筛选', async () => {

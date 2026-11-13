@@ -27,7 +27,7 @@ const ENTITIES = [
   { type: 'purchaseReturn', permission: P.RETURN_ORDER_VIEW, label: '采购退货', pathBase: '/returns/purchase',      table: 'purchase_returns',          noField: 'return_no', subtitleField: 'supplier_name', searchFields: ['return_no'], warehouseColumn: 'warehouse_id' },
   { type: 'saleReturn', permission: P.RETURN_ORDER_VIEW,   label: '销售退货',   pathBase: '/returns/sale',          table: 'sale_returns',              noField: 'return_no', subtitleField: 'customer_name', searchFields: ['return_no'], warehouseColumn: 'warehouse_id' },
   { type: 'inbound', permission: P.INBOUND_ORDER_VIEW,      label: '收货订单',   pathBase: '/inbound-tasks',        table: 'inbound_tasks',             noField: 'task_no',   subtitleField: 'supplier_name', searchFields: ['task_no'], warehouseColumn: 'warehouse_id' },
-  { type: 'expense', permission: P.FINANCE_EXPENSE_VIEW,      label: '费用报销',   pathBase: '/expenses',              table: 'expense_claims',            noField: 'claim_no',  subtitleField: 'applicant_name', searchFields: ['claim_no', 'title'] },
+  { type: 'expense', permission: P.FINANCE_EXPENSE_VIEW,      label: '费用报销',   pathBase: '/finance/expenses',      table: 'expense_claims',            noField: 'claim_no',  subtitleField: 'applicant_name', searchFields: ['claim_no', 'title'] },
   { type: 'disposal', permission: P.INVENTORY_DISPOSAL_VIEW,     label: '呆滞处置',   pathBase: '/disposals',             table: 'inventory_disposal_orders', noField: 'disposal_no', subtitleField: 'warehouse_name', searchFields: ['disposal_no'], warehouseColumn: 'warehouse_id' },
   { type: 'refund', permission: P.REFUND_ORDER_VIEW,       label: '退款单',     pathBase: '/refunds',               table: 'refund_orders',             noField: 'refund_no', subtitleField: 'customer_name', searchFields: ['refund_no'] },
   { type: 'creditOverride', permission: P.SALE_CREDIT_OVERRIDE_VIEW, label: '超额放行', pathBase: '/credit-overrides',      table: 'sale_credit_overrides',     noField: 'override_no', subtitleField: 'customer_name', searchFields: ['override_no'] },
@@ -126,7 +126,7 @@ async function searchGlobal(rawQuery, scopeWarehouseIds = null, options = {}) {
         ...(search ? { searchMatch: r.search_match || '', searchRank: Number(r.search_rank) } : {}),
         details: fields.filter(([field]) => r[field] != null && String(r[field]).trim())
           .map(([field, label]) => ({ label, value: String(r[field]) })),
-        path: master ? ent.pathBase : `${ent.pathBase}/${Number(r.id)}`,
+        path: master ? ent.pathBase : `${ent.pathBase}${ent.type === 'expense' ? '?detailId=' : '/'}${Number(r.id)}`,
       })),
     }
   }))

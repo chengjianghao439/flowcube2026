@@ -160,6 +160,25 @@ test('WAYBILL-Q07 回车应用当前全部草稿，不改变原筛选合同', as
   await wait(() => expect(listRequests().at(-1)?.searchParams.get('keyword')).toBe(draft.keyword))
   expect(document.querySelector('[role="dialog"]')).toBeNull(); expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: draft.keyword, status: '3', carrierId: '9', startDate: draft.startDate, endDate: draft.endDate, page: '1', pageSize: '200' })
 })
+test('倒置日期挡住按钮和回车，合法单边可以应用并单独清除', async () => {
+  await ready(); await openQuery()
+  await type(keyword(), draft.keyword)
+  await date(dates()[0], '2026-10-13'); await date(dates()[1], '2026-10-02')
+  const before = listRequests().length
+  expect(button('查询', dialog()).disabled).toBe(true)
+  expect(dates().every(input => input.getAttribute('aria-invalid') === 'true')).toBe(true)
+  await act(async () => keyword().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(listRequests()).toHaveLength(before)
+  await date(dates()[1], ''); await click('查询', dialog())
+  await wait(() => expect(listRequests().at(-1)?.searchParams.get('keyword')).toBe(draft.keyword))
+  expect(listRequests().at(-1)?.searchParams.get('startDate')).toBe('2026-10-13')
+  expect(listRequests().at(-1)?.searchParams.has('endDate')).toBe(false)
+  const clearDate = host.querySelector<HTMLButtonElement>('button[aria-label="清除日期限制"]')!
+  await act(async () => clearDate.click())
+  await wait(() => expect(listRequests().at(-1)?.searchParams.has('startDate')).toBe(false))
+  expect(listRequests().at(-1)?.searchParams.get('keyword')).toBe(draft.keyword)
+  expect(host.textContent).toContain('未限日期')
+})
 test('WAYBILL-Q08 无显式日期的首次查询与重置保持原页面默认', async () => {
   await draw(0, ''); await wait(() => expect(cache()?.state.status).toBe('success'))
   expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual(defaultRequest())

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { qty as formatQty } from '@/lib/format'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import PdaHeader from '@/components/pda/PdaHeader'
@@ -106,7 +107,28 @@ export default function PdaSaleReturnPutawayPage() {
   if (isError) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
   if (isLoading) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><PdaLoading /></div>
   if (!task) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">任务不存在</div></div>
-  if (task.status === 5) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-success-ink font-semibold">退货入仓已完成</div></div>
+
+  const totals = (task.items ?? []).reduce((sum, item) => ({
+    expected: sum.expected + Number(item.expectedQty),
+    putaway: sum.putaway + Number(item.putawayQty),
+    rejected: sum.rejected + Number(item.rejectedQty),
+    remaining: sum.remaining + Math.max(0, Number(item.checkedQty) - Number(item.rejectedQty) - Number(item.putawayQty)),
+  }), { expected: 0, putaway: 0, rejected: 0, remaining: 0 })
+  const quantities = (
+    <div className="text-sm text-muted-foreground">
+      <p>已上架 {formatQty(totals.putaway)} · 合格待上架 {formatQty(totals.remaining)}</p>
+      <p>应收 {formatQty(totals.expected)} · 拒收 {formatQty(totals.rejected)}</p>
+    </div>
+  )
+  if (task.status === 5) return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <PdaHeader title="退货上架" subtitle={task.taskNo} onBack={() => nav('/pda/sale-return')} />
+      <div className="space-y-2 p-4 text-center">
+        <p className="font-semibold text-success-ink">退货入仓已完成</p>
+        {quantities}
+      </div>
+    </div>
+  )
   if (task.status !== 4) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">当前任务不在待上架状态，请先核对质检进度与任务状态。</div></div>
 
   return (
@@ -146,13 +168,7 @@ export default function PdaSaleReturnPutawayPage() {
           </section>
         )}
 
-        <div className="text-sm text-muted-foreground mt-4">
-          已上架 / 待上架：{
-            task.items?.reduce((s, i) => s + i.putawayQty, 0) || 0
-          } / {
-            task.items?.reduce((s, i) => s + i.checkedQty, 0) || 0
-          }
-        </div>
+        {quantities}
       </div>
 
       <PdaBottomBar>

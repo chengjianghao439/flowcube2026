@@ -33,7 +33,8 @@ interface Props { open: boolean; onClose: () => void; mode?: 'create' | 'suggest
 
 /** 待选行：建议 + 用户调整的数量与处置方式 */
 interface PendingRow {
-  suggestion: DisposalSuggestion
+  suggestion: Pick<DisposalSuggestion, 'productId' | 'productCode' | 'productName' | 'articleNumber' | 'spec' | 'color' | 'unit' | 'valuationBasis'>
+    & { unitValue: number | null; totalQty: number | null }
   quantity: string
   disposeType: 3
   remark?: string
@@ -82,7 +83,9 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
     setRows(prev => prev.filter(r => Number(r.suggestion.productId) !== Number(productId)))
   }
 
-  const totalValue = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0) * r.suggestion.unitValue, 0)
+  const hasValuation = !handling || rows.every(r => r.suggestion.unitValue != null && r.suggestion.valuationBasis !== 'none')
+  const hasQuantity = !handling || rows.every(r => handlingQty(Number(r.quantity)))
+  const totalValue = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0) * (r.suggestion.unitValue ?? 0), 0)
 
   async function handleCreate() {
     if (!current() || !canCreate) return
@@ -132,7 +135,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
   return (
     <Dialog open={open && (!handling || (handling.source.current && handling.source.active))} onOpenChange={(next) => { if (!next) onClose() }}>
       <DialogContent className="fc-form-dialog grid-cols-1 max-w-6xl max-h-[90vh]">
-        <DialogHeader description={!disposalOwnerCurrent(owner) ? <span role="alert">账号、权限或服务器已变化。原圈选保留，不转入当前上下文；请关闭本页后重新查看最新建议。</span> : '有效库存条码余量是当前实物在库。参考量沿原口径扣除账面预占，可能为零或负数；它不是新的出库预算。参考价依平均成本→成本参考价→销售参考价兜底，全部在库与圈选数量分别估值，不是成交价。'}><DialogTitle>{mode === 'create' ? '新建报废单' : '滞销建议'}</DialogTitle></DialogHeader>
+        <DialogHeader description={!disposalOwnerCurrent(owner) ? <span role="alert">账号、权限或服务器已变化。原圈选保留，不转入当前上下文；请关闭本页后重新查看最新建议。</span> : handling ? '按本来源的商品基本单位填写数量。草稿使用当前参考价估值，实际执行按当时的实物、预占和权限核定。' : '选择仓库和商品，再核对本次处理数量。'}><DialogTitle>{mode === 'create' ? '新建报废单' : '滞销建议'}</DialogTitle></DialogHeader>
         {!disposalOwnerCurrent(owner) ? null : <div className="fc-form-dialog-body space-y-4 py-2">
           {!handling && <><div className="flex gap-2 flex-wrap">
             {can(PERMISSIONS.SALE_ORDER_CREATE) && <Button variant="outline" onClick={() => openNormal('/sale/new')}>正常销售</Button>}
@@ -151,7 +154,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                   {warehouses?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">建议按「90 天无出库」识别滞销商品</p>
+              <p className="text-xs text-muted-foreground">建议包含本仓从未出库的商品，以及最近一次出库距今超过 90 天的商品</p>
             </div>
             <div className="space-y-1 col-span-2">
               <Label>筛选建议</Label>
@@ -163,12 +166,20 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
             </div>
           </div>
 
+          <details className="text-xs text-muted-foreground">
+            <summary className="w-fit cursor-pointer rounded font-medium text-foreground focus-visible:outline focus-visible:outline-ring">参考量与估值说明</summary>
+            <div className="mt-2 space-y-1">
+              <p>有效在库为本仓有效库存条码的剩余数量。参考量为有效在库减去账面预占，可能为零或负数。可出库数量须在实际办理时核对。</p>
+              <p>参考价依次取平均成本、成本参考价、销售参考价。全部在库和已选数量分别估值，供处理时参考。</p>
+            </div>
+          </details>
+
           {/* 建议列表 */}
           <div className="border rounded-lg max-h-56 overflow-auto">
             <ReportTable className="w-full min-w-[1480px] text-sm"><thead className="sticky top-0 z-10"><tr>
               <th className="w-14 text-center">选择</th>
               <ProductIdentityHeaders />
-              <th className="w-40">ACTIVE在库／参考量</th>
+              <th className="w-40">有效在库／参考量</th>
               <th className="w-40">全部在库参考估值</th>
               <th className="w-44">最后出库</th>
               <th className="w-24">操作</th>
@@ -205,8 +216,17 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
           {handling && <><p>来源商品与原仓固定，可关联基本量 {handling.source.data?.source.budget.availableQuantity ?? '—'}；不会继承旧批准。</p><Button disabled={!current() || !handling.source.data || rows.length > 0} onClick={() => {
             const data = handling.source.data
             if (!data || !current() || rows.length || whId || remark || keyword) { toast.warning('已有输入，来源未覆盖草稿'); return }
-            const source = data.source, product = data.product
-            setWhId(String(source.warehouseId)); setRows([{ suggestion: { productId: product.id, productCode: product.code, productName: product.name, unit: source.unit, articleNumber: null, spec: null, color: null, avgCost: 0, warehouseId: source.warehouseId, warehouseName: source.warehouseName, totalQty: 0, onHandQty: 0, reservedQty: 0, unitValue: 0, totalValue: 0, valuationBasis: 'none', lastOutboundAt: null }, quantity: '', disposeType: 3 }])
+            const { source, product } = data
+            setWhId(String(source.warehouseId))
+            setRows([{
+              suggestion: {
+                productId: product.id, productCode: product.code, productName: product.name, unit: source.unit,
+                articleNumber: product.articleNumber, spec: product.spec, color: product.color,
+                totalQty: null, unitValue: source.scrapValuation?.unitValue ?? null,
+                valuationBasis: source.scrapValuation?.basis ?? 'none',
+              },
+              quantity: '', disposeType: 3,
+            }])
           }}>载入来源商品</Button><HandlingOperationPanel write={handling.write} /></>}
           {/* 已选明细：数量 + 处置方式 */}
           {rows.length > 0 && (
@@ -227,7 +247,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                       <div className="flex items-center gap-1">
                         <Input quantity
                           type="number" min="0" step={qtyStep(allowDecimalOf(r.suggestion.productId))} className="h-8 text-sm"
-                          title={`原参考量 ${r.suggestion.totalQty} ${r.suggestion.unit}，${basis[r.suggestion.valuationBasis]} ¥${r.suggestion.unitValue}`}
+                          title={`${r.suggestion.totalQty == null ? '' : `原参考量 ${r.suggestion.totalQty} ${r.suggestion.unit}，`}${basis[r.suggestion.valuationBasis]}${r.suggestion.valuationBasis === 'none' ? '' : ` ¥${r.suggestion.unitValue}`}`}
                           value={r.quantity}
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateRow(r.suggestion.productId, { quantity: e.target.value })}
                         />
@@ -248,7 +268,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                 ))}
               </tbody></ReportTable></div>
               <p className="text-sm text-muted-foreground">
-                选中数量参考估值：<span className="text-doc-code-strong tabular-nums">{money(totalValue)}</span>
+                选中数量参考估值：<span className="text-doc-code-strong tabular-nums">{!hasValuation ? '暂无参考价' : hasQuantity ? money(totalValue) : '待填写数量'}</span>
                 <span className="text-xs ml-2">（历史单保留当时的参考价；实际报废以执行时核对的库存为准，不采用旧建议量上限）</span>
               </p>
             </div>

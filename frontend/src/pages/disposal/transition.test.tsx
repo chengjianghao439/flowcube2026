@@ -73,6 +73,12 @@ it('VIEW建议经真实API展示单位参考价、零参考量不圈选；正常
   await act(async () => [...document.querySelectorAll('[role="option"]')].find(node => node.textContent === 'fixture')!.dispatchEvent(new MouseEvent('click', { bubbles: true })))
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 15)) })
   expect(requests).toContain('/disposals/suggestions'); expect(document.body.textContent).toContain('30个／18个'); expect(document.body.textContent).toContain('平均成本 ¥5.00')
+  expect(document.body.textContent).toContain('有效在库／参考量')
+  expect(document.body.textContent).not.toContain('ACTIVE在库')
+  const valuationGuide = document.querySelector<HTMLDetailsElement>('details')!
+  expect(valuationGuide.querySelector('summary')?.textContent).toBe('参考量与估值说明')
+  expect(valuationGuide.open).toBe(false)
+  expect(valuationGuide.textContent).toContain('有效在库减去账面预占')
   const add = [...document.querySelectorAll('button')].filter(button => button.textContent === '加入'); expect(add).toHaveLength(2); expect(add[1].disabled).toBe(true)
   await act(async () => add[0].click()); expect(document.body.textContent).toContain('处置明细（1 项）'); expect(document.body.textContent).toContain('选中数量参考估值：¥90.00')
   const tables = document.querySelectorAll('[role="dialog"] table')

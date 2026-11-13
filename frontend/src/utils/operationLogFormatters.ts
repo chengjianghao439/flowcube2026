@@ -225,6 +225,7 @@ export function formatApiPath(path: unknown, method?: unknown, statusCode?: unkn
   if (lower === '/api/print-jobs/claim-client' || lower.includes('/print-jobs/claim-client')) return '打印客户端领取打印任务'
   if (lower === '/api/scan-logs' || lower.startsWith('/api/scan-logs?')) return 'PDA 扫码作业'
   if (lower === '/api/scan-logs/check' || lower.startsWith('/api/scan-logs/check?')) return 'PDA 复核扫码'
+  if (/^\/api\/sale\/[^/]+\/ship(?:\?|$)/.test(lower)) return '销售单 · 发起出库'
   if (/\/api\/warehouse-tasks\/[^/]+\/ship(?:\?|$)/.test(lower)) return '仓库任务出库'
   if (/\/api\/warehouse-tasks\/[^/]+\/pack-done(?:\?|$)/.test(lower)) return '仓库任务完成打包'
   if (/\/api\/warehouse-tasks\/[^/]+\/check-done(?:\?|$)/.test(lower)) return '仓库任务完成复核'

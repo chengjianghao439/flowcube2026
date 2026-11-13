@@ -153,7 +153,11 @@ test('SALE-Q06 应用后 URL 和网络保持原合同，返回及清空仍有效
   const original = path(), before = listRequests().length
   await click('切到旁页'); await click('返回原列表'); expect(path()).toBe(original); expect(listRequests()).toHaveLength(before)
   await click('查询'); await wait(() => expect(fields()).toEqual(draft)); await click('取消', dialog())
-  await click('清空'); await wait(() => expect(params()).toEqual({ range: 'all', page: '1' }))
+  await click('清空其他条件')
+  await wait(() => expect(params()).toEqual({ startDate: draft.startDate, endDate: draft.endDate, page: '1' }))
+  expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: '', startDate: draft.startDate, endDate: draft.endDate, page: '1', pageSize: '200' })
+  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="清除日期限制"]')!.click())
+  await wait(() => expect(params()).toEqual({ range: 'all', page: '1' }))
   expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: '', page: '1', pageSize: '200' })
 })
 test('SALE-Q07 回车应用当前全部草稿，不改变原筛选合同', async () => {

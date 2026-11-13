@@ -146,3 +146,21 @@ test('AGING-Q08 切换效期预警再返回保留已应用查询与原阈值', a
   expect(Object.fromEntries(expiry.searchParams)).toEqual({ warehouseId: '9', warnDays: '30' })
   await click('存放明细'); await click('查询'); await wait(() => expect(fields()).toEqual(draft))
 })
+
+test('明确从未出库的记录也进入滞销口径，库龄单独从本仓起算', async () => {
+  const list = [
+    { ...row(1), isStale: true },
+    { ...row(2), isStale: true, lastOutboundAt: '2026-08-10T16:00:00.000Z', daysSinceOutbound: 91 },
+    { ...row(3), isStale: false, lastOutboundAt: '2026-08-11T16:00:00.000Z', daysSinceOutbound: 90 },
+  ]
+  respondList = () => response({ success: true, data: {
+    list, pagination: { page: 1, pageSize: 200, total: 3 },
+    buckets: [{ bucket: '90+', skuCount: 1, totalQty: 1, totalValue: 1 }], staleDays: 90,
+  } })
+  await ready()
+  expect(document.body.textContent).toContain('从未出库的库存纳入滞销')
+  expect(document.body.textContent).toContain('自入库本仓起算')
+  const statuses = [...host.querySelectorAll('tbody tr')].map(row => row.lastElementChild?.textContent)
+  expect(statuses).toEqual(['从未出库', '91 天未出库', '正常'])
+  expect(host.textContent).not.toContain('（积压）')
+})

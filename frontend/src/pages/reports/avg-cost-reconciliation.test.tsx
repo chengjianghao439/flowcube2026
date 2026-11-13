@@ -33,7 +33,7 @@ test('单位成本可区分四位，价值差异保持两位且无写入', () =>
 })
 test.each([null, undefined, Number.NaN])('异常单位成本%s显示缺失，不被Number转为0', value => {
   state.data.list = [row(value, 1)]; draw()
-  const cell = host.querySelector('tbody tr td:nth-child(6)')
+  const cell = host.querySelector('tbody tr td:nth-child(7)')
   expect(cell?.textContent).toBe('—'); expect(cell?.textContent).not.toContain('0.00')
 })
 test.each([['avg_cost','当前移动均价'],['cost_price','当前进价估值'],['zero_fallback','当前按0估值'],[undefined,'来源未记录']])('来源%s只在按需打开时显示，隐藏浮层不泄漏', async (source, label) => {
@@ -55,4 +55,16 @@ test('仅实际截断时简短显示200/201行范围，金额合计保持接口�
   expect(host.textContent).toContain('200 / 201');expect(host.textContent).toContain('价值差合计为已显示范围')
   Object.assign(state.data,{truncated:false,matchedRows:200});draw()
   expect(host.textContent).not.toContain('价值差合计为已显示范围')
+})
+
+test('同一商品的两仓记录分别显示本仓名称及各自数量', () => {
+  state.data.list = [
+    { ...row(10, 1), warehouseName: '合成原仓', containerQty: 6 },
+    { ...row(10, 1), rowKey: '1-9', warehouseId: 9, warehouseName: '合成新仓', containerQty: 1 },
+  ]
+  draw()
+  const rows = Array.from(host.querySelectorAll('tbody tr'))
+  expect(rows).toHaveLength(2)
+  expect(rows[0].textContent).toContain('合成原仓')
+  expect(rows[1].textContent).toContain('合成新仓')
 })

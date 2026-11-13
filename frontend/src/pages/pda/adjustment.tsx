@@ -34,18 +34,19 @@ import { parseBarcode } from '@/utils/barcode'
 // ── 列表：待处理的改单确认任务池 ──────────────────────────────────────────────
 function AdjustmentListPage() {
   const navigate = useNavigate()
-  const { data, isLoading, isError, refetch } = usePdaPendingAdjustments()
+  const { data, isLoading, isFetching, isError, refetch } = usePdaPendingAdjustments()
   const tasks = data ?? []
+  const checkingEmpty = isLoading || (isFetching && !tasks.length)
 
   return (
     <div className="min-h-screen bg-background">
       <PdaHeader title="改单确认" subtitle="拆箱 / 归还库位确认" onBack={() => navigate('/pda')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />} />
       <div className="max-w-md mx-auto px-4 py-5 space-y-4">
-        {!isError && <p className="text-xs text-muted-foreground">{tasks.length} 个任务待处理</p>}
-        {isLoading && <PdaLoading className="h-32" />}
+        {!checkingEmpty && !isError && <p className="text-xs text-muted-foreground">{tasks.length} 个任务待处理</p>}
+        {checkingEmpty && <PdaLoading className="h-32" />}
         {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
-        {!isLoading && !isError && tasks.length === 0 && (
+        {!checkingEmpty && !isError && tasks.length === 0 && (
           <PdaEmptyCard icon={<PencilLine className="h-12 w-12 text-muted-foreground" />} title="暂无待确认改单" description="没有因订单修改而需要归还/拆箱的任务" />
         )}
         {!isError && tasks.map(t => (

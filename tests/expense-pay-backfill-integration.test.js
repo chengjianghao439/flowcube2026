@@ -29,7 +29,7 @@ const originalFund = () => ({ id: 101, account_id: 12, direction: 2, biz_type: 3
 const originalOperation = () => ({ id: 7, request_key: 'original', action: 'expense.pay.81', user_id: 9, status: 1,
   resource_type: 'expense_claim', resource_id: 81, response_json: JSON.stringify({ id: 81, status: 4, amount: 300 }), responseData: { id: 81, status: 4, amount: 300 } })
 
-function fixture({ closed = false, replay = false, stored = null, priorFunds = [], priorOperation = originalOperation(), realOperations = false } = {}) {
+function fixture({ closed = false, replay = false, stored = null, priorFunds = [], priorOperation = originalOperation(), realOperations = false, pending = false, allowSelfApprove = false } = {}) {
   const events = [], funds = [], applications = [], keys = []
   const query = async (sql, params) => {
     if (sql.includes('FROM operation_requests')) {
@@ -45,7 +45,7 @@ function fixture({ closed = false, replay = false, stored = null, priorFunds = [
     if (sql.includes('FROM finance_account_transactions')) return [priorFunds]
     if (sql.includes('FROM finance_accounts')) { if (sql === 'SELECT id FROM finance_accounts WHERE id=? FOR UPDATE') events.push('account'); return [[{ id: 12, company_id: 1 }]] }
     if (sql.includes('FROM expense_claim_items')) return [[{ id: 1, amount: '300.0000' }]]
-    if (sql.includes('FROM expense_claims')) return [[{ id: 81, claim_no: 'EC81', status: stored?.executed_at || replay ? 4 : 3, total_amount: '300.0000', paid_account_id: stored?.executed_at || replay ? 12 : null, paid_at: stored?.executed_at || (replay ? '2026-10-07 10:00:00' : null) }]]
+    if (sql.includes('FROM expense_claims')) return [[{ id: 81, claim_no: 'EC81', applicant_id: 9, status: pending ? 2 : stored?.executed_at || replay ? 4 : 3, total_amount: '300.0000', paid_account_id: stored?.executed_at || replay ? 12 : null, paid_at: stored?.executed_at || (replay ? '2026-10-07 10:00:00' : null) }]]
     events.push(sql.startsWith('SELECT') ? 'account' : 'update'); return [{}]
   }
   const conn = {
@@ -63,7 +63,7 @@ function fixture({ closed = false, replay = false, stored = null, priorFunds = [
       lockStatusRow: async borrowed => { assert.equal(borrowed, conn); events.push('claim'); return { id: 81, claim_no: 'EC81', status: 3, total_amount: '300.0000', applicant_name: 'fixture' } },
       compareAndSetStatus: async borrowed => { assert.equal(borrowed, conn); events.push('status') },
     },
-    '../../utils/selfApprove': {},
+    '../../utils/selfApprove': { canSelfApprove: async id => { assert.equal(id, 9); return allowSelfApprove } },
     '../../utils/operationRequest': realOperations ? loadOperations(pool) : {
       ...actualOperations,
       beginResourceOperationRequest: async (borrowed, options) => { assert.equal(borrowed, conn); keys.push(options); events.push('operation'); return replay ? { enabled: true, replay: true, responseData: { id: 81, status: 4, amount: 300 } } : { enabled: true, id: 7, replay: false } },
@@ -91,6 +91,15 @@ function fixture({ closed = false, replay = false, stored = null, priorFunds = [
   Object.assign(loaded.exports, load(filename))
   return { service: loaded.exports, conn, events, funds, applications, keys }
 }
+
+test('报销待审批详情按当前审批人和原自批豁免提供按钮可用性', async () => {
+  for (const allowSelfApprove of [false, true]) {
+    const { service } = fixture({ pending: true, allowSelfApprove })
+    assert.equal((await service.findById(81, { approverId: 9 })).approvalAllowed, allowSelfApprove)
+    assert.equal((await service.findById(81, { approverId: 10 })).approvalAllowed, true)
+    assert.equal((await service.findById(81)).approvalAllowed, false)
+  }
+})
 const body = { accountId: 12, happenedAt: '2020-01-15', remark: 'fixture' }
 const operator = { operatorId: 9, operatorName: 'fixture' }
 

@@ -100,6 +100,9 @@ test('suggestion basic-unit reference is independent of container qty, stock/res
   const queries = [], pool = { async query(sql) { queries.push(sql); if (sql.includes('COUNT(*)')) return [[{ total: 1 }]]; return [[{ product_id: 3, warehouse_id: 8, unit_value: /MAX\(c.remaining_qty \*/.test(sql) ? 150 : 5, total_qty: 18, on_hand_qty: 30, reserved_qty: 12, total_value: 150, valuation_basis: 'avg_cost' }]] } }
   const service = load('modules/disposal/disposal.service.js', { './disposal.handling.target-guards': handlingGuards, '../../config/db': { pool }, '../../utils/AppError': AppError, '../../utils/qtyPrecision': precision, '../../utils/warehouseScope': scope, '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status, '../../utils/pagination': { normalizePagination }, '../../utils/selfApprove': {}, '../../utils/codeGenerator': {}, '../../engine/inventoryEngine': {}, '../../engine/containerEngine': {}, '../../utils/operationRequest': {}, './disposal.receipt': {} })
   const r = await service.getSuggestions({ warehouseId: 8, scopeWarehouseIds: [8] }); assert.equal(r.list[0].unitValue, 5); assert.equal(r.list[0].totalQty, 18); assert.equal(r.list[0].onHandQty, 30); assert.equal(r.list[0].reservedQty, 12); assert.equal(r.list[0].totalValue, 150); assert.equal(r.list[0].valuationBasis, 'avg_cost'); assert.equal(queries.length, 2)
+  for (const sql of queries) {
+    assert.match(sql, /HAVING MAX\(lo.last_outbound_at\) IS NULL OR DATEDIFF\(NOW\(\), MAX\(lo.last_outbound_at\)\) > \?/)
+  }
 })
 test('routes accept only scrap DTO; controller passes exact original request key/operator/scope', async () => {
   const registrations = [], router = { use() {}, get() {}, put: (p, ...h) => registrations.push({ method: 'put', p, h }), post: (p, ...h) => registrations.push({ method: 'post', p, h }) }
@@ -151,4 +154,23 @@ test('multiple scrap items lock all dimensions ascending before containers and b
 test('converted old head new dispose refuses before stock, while original successful ACK skips conversion gate', async () => {
   const f=fixture({ converted:true }); await assert.rejects(f.service.dispose(11,operator,[8],'original'),e=>e.code==='DISPOSAL_ALREADY_CONVERTED'); assert.ok(!f.events.includes('stock')); assert.ok(!f.events.includes('commit'));
   const replay=fixture({converted:true,replay:true,state:4}); assert.deepEqual(clean(await replay.service.dispose(11,operator,[8],'original')),original); assert.ok(!replay.events.includes('conversion')); assert.ok(!replay.events.includes('stock'));
+})
+
+test('来源报废参考价读取已核范围内的一个商品，以保存同一公式估值', async () => {
+  const calls = []
+  let price = { unit_value: '10.0000', valuation_basis: 'avg_cost' }
+  const pool = { async query(sql, args) { calls.push({ sql, args }); return [price ? [price] : []] } }
+  const service = load('modules/disposal/disposal.service.js', {
+    './disposal.handling.target-guards': handlingGuards, '../../config/db': { pool }, '../../utils/AppError': AppError,
+    '../../utils/qtyPrecision': precision, '../../utils/warehouseScope': scope, '../../utils/statusTransition': transition,
+    '../../constants/documentStatusRules': status, '../../utils/pagination': { normalizePagination }, '../../utils/selfApprove': {},
+    '../../utils/codeGenerator': {}, '../../engine/inventoryEngine': {}, '../../engine/containerEngine': {}, '../../utils/operationRequest': {}, './disposal.receipt': {},
+  })
+  assert.deepEqual(clean(await service.getScrapValuation(3)), { unitValue: 10, basis: 'avg_cost' })
+  assert.deepEqual(Array.from(calls[0].args), [3])
+  assert.match(calls[0].sql, /COALESCE\(NULLIF\(p.avg_cost,0\), NULLIF\(p.cost_price,0\), p.sale_price, 0\)/)
+  price = { unit_value: 0, valuation_basis: 'none' }
+  assert.deepEqual(clean(await service.getScrapValuation(3)), { unitValue: 0, basis: 'none' })
+  price = null
+  assert.equal(await service.getScrapValuation(3), null)
 })

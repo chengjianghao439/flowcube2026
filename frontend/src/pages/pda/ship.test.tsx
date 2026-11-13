@@ -95,21 +95,32 @@ test('列表点「确认出库」后，待出库列表被重新拉取且 total �
   expect(host.textContent).toContain('WT-RET-B')                   // 未出库的仍在
 })
 
-async function scanBox() {
+test('出库入口提示物流码、箱码及扫码的即时后果', () => {
+  expect(host.textContent).toContain('扫描物流码或箱码')
+  expect(host.textContent).toContain('扫描有效条码将立即确认本任务出库')
+})
+
+async function scanBox(barcode = 'BOX1') {
   const manual=[...host.querySelectorAll('button')].find(b=>b.textContent==='手动输入')!
   await act(async()=>manual.click())
   const input=host.querySelector<HTMLInputElement>('[data-scanner-manual]')!
-  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,'BOX1');input.dispatchEvent(new Event('input',{bubbles:true}))})
+  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(input,barcode);input.dispatchEvent(new Event('input',{bubbles:true}))})
   await act(async()=>{input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await new Promise(r=>setTimeout(r,10))})
 }
-test('FE07 扫码完成单个仓库任务只提示本批，不能宣称客户整单已完成',async()=>{
+test.each(['L000001', 'BOX1'])('FE07 扫 %s 完成单个仓库任务只提示本批',async barcode=>{
   api.pkg.mockResolvedValue({warehouseTaskId:21,taskNo:'WT-BATCH-2',customerName:'多批客户',warehouseName:'第二仓',warehouseTaskStatus:6,packages:[]})
-  await scanBox()
+  await scanBox(barcode)
   expect(api.ship).toHaveBeenCalledWith(21,'stable-key')
   expect(host.textContent).toContain('本任务出库完成')
   expect(host.textContent).toContain('仓库任务 WT-BATCH-2')
   expect(host.textContent).toContain('本批已发往 多批客户，整单进度请查看销售单')
   expect(host.textContent).not.toContain('多批客户 已完成发货')
+})
+test('库存码误扫不会查询包裹或发起出库', async () => {
+  await scanBox('I000001')
+  expect(api.err).toHaveBeenCalledWith(expect.stringContaining('扫描物流条码或箱码'))
+  expect(api.pkg).not.toHaveBeenCalled()
+  expect(api.ship).not.toHaveBeenCalled()
 })
 test('FE07 已出库包裹提示任务已完成，不重复发起出库',async()=>{
   api.pkg.mockResolvedValue({warehouseTaskId:21,taskNo:'WT-BATCH-2',customerName:'多批客户',warehouseTaskStatus:7,packages:[]})

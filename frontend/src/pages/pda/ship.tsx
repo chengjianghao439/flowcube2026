@@ -2,7 +2,7 @@ import { qty as formatQty } from '@/lib/format'
 import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
 /**
  * PDA 出库确认  /pda/ship
- * 无感操作：扫物流条码 → 自动查询 → 自动出库，无需额外确认按钮
+ * 扫物流码或箱码 → 查询任务 → 确认本任务出库
  */
 import { useState, useCallback } from 'react'
 import { Truck, CircleCheck, Package } from 'lucide-react'
@@ -133,8 +133,8 @@ export default function PdaShipPage() {
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'box') {
       err(parsed.type === 'unknown'
-        ? '未识别为物流条码，请扫描箱贴上的物流条码（L…/BOX…）'
-        : `这是${parsed.label}，请扫描箱贴上的物流条码（L…/BOX…）`)
+        ? '条码未识别，请扫描物流条码或箱码（L…/BOX…）'
+        : `这是${parsed.label}，请扫描物流条码或箱码（L…/BOX…）`)
       return 'rejected'
     }
     setPendingScanKey(null)
@@ -345,7 +345,8 @@ export default function PdaShipPage() {
             <span className="text-sm font-bold text-foreground">{totalBoxes} 箱</span>
           </PdaCard>
         ) : null}
-        <PdaScanner onScan={handleScan} placeholder="扫描物流条码" disabled={loading || shipMut.isPending || shipAction.submitBlocked}
+        <p className="pb-1 text-xs text-muted-foreground">扫描有效条码将立即确认本任务出库</p>
+        <PdaScanner onScan={handleScan} placeholder="扫描物流码或箱码" disabled={loading || shipMut.isPending || shipAction.submitBlocked}
           resolution={pendingScanKey && shipAction.phase === 'failed' ? { requestKey: pendingScanKey, outcome: 'rejected' } : null} />
         {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">出库中…</span></div>}
       </PdaBottomBar>

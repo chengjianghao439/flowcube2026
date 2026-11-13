@@ -1,5 +1,6 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
+import { isReversedDateRange } from '@/lib/dateRange'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,9 @@ interface Props {
 export default function ReturnQueryDialog({ open, type, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<ReturnQueryValues>(EMPTY)
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
+  const rangeErrorId = useId()
+  const rangeInvalid = isReversedDateRange(draft.startDate, draft.endDate)
+  const apply = () => { if (!rangeInvalid) onApply(draft) }
   const [partyOpen, setPartyOpen] = useState(false)
   const [productOpen, setProductOpen] = useState(false)
   const partyLabel = type === 'purchase' ? '供应商' : '客户'
@@ -70,7 +74,8 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
         width={type === 'sale' ? 680 : 520}
         onClose={onClose}
         onReset={() => setDraft(resetDraft())}
-        onApply={() => onApply(draft)}
+        onApply={apply}
+        applyDisabled={rangeInvalid}
       >
         <QueryFormLayout>
           <label className="flex flex-col gap-1">
@@ -79,7 +84,7 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
               placeholder="退货单号…"
               value={draft.keyword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
               className="h-9"
             />
           </label>
@@ -140,12 +145,12 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
 
           <label className="fc-query-date-start flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
-            <DatePicker aria-label="创建日期（起）" value={draft.startDate} max={draft.endDate || undefined}
+            <DatePicker aria-label="创建日期（起）" aria-invalid={rangeInvalid || undefined} aria-describedby={rangeInvalid ? rangeErrorId : undefined} value={draft.startDate} max={draft.endDate || undefined}
               onChange={v => set('startDate', v)} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
-            <DatePicker aria-label="创建日期（止）" value={draft.endDate} min={draft.startDate || undefined}
+            <DatePicker aria-label="创建日期（止）" aria-invalid={rangeInvalid || undefined} aria-describedby={rangeInvalid ? rangeErrorId : undefined} value={draft.endDate} min={draft.startDate || undefined}
               onChange={v => set('endDate', v)} className="h-9" />
           </label>
 
@@ -155,10 +160,11 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
               placeholder="按退货单备注内容查询…"
               value={draft.remark}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('remark', e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
               className="h-9"
             />
           </label>
+          {rangeInvalid && <p id={rangeErrorId} role="alert" className="col-span-full text-sm text-destructive-ink">起始日期不能晚于结束日期。</p>}
         </QueryFormLayout>
       </QueryDialog>
 

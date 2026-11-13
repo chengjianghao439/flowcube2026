@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { StatusBadge } from '@/components/shared/StatusBadge'
@@ -79,8 +80,9 @@ export default function PurchasePage() {
   // range=all 是「清空」写下的显式意图（看全部），不再套默认。
   const rangeAll = searchParams.get('range') === 'all'
   const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
-  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
-  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
+  const useDefaultDates = !startDate && !endDate && !rangeAll
+  const effectiveStartDate = useDefaultDates ? defaultRange.start : startDate
+  const effectiveEndDate = useDefaultDates ? defaultRange.end : endDate
 
   const [confirmState, setConfirmState] = useState<{
     open: boolean
@@ -158,6 +160,7 @@ export default function PurchasePage() {
     ...(productId ? { productId: String(productId) } : {}),
     ...(supplierId ? { supplierId: String(supplierId) } : {}),
     ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
+    ...(overdueOnly ? { overdueOnly: 'true' } : {}),
     ...(!overdueOnly && effectiveStartDate ? { startDate: effectiveStartDate } : {}),
     ...(!overdueOnly && effectiveEndDate ? { endDate: effectiveEndDate } : {}),
   }
@@ -215,28 +218,30 @@ export default function PurchasePage() {
     supplierId && { key: 'supplier', label: `供应商：${supplierName || supplierId}`, onRemove: () => updateParams({ supplierId: null, supplierName: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
     productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
-    // 日期筛选按需求不在主页展示，仅在查询弹窗中呈现
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<PurchaseOrder>[] = [
-    { key: 'orderNo', title: '采购单号', width: 12 },
-    { key: 'supplierName', title: '供应商', width: 17 },
-    { key: 'warehouseName', title: '仓库', width: 9 },
-    { key: 'totalAmount', title: '金额', width: 9, align: 'right', render: (v) => <span className="tabular-nums">{money(Number(v))}</span> },
+    { key: 'orderNo', title: '采购单号', width: 142, minWidth: 142, noWrap: true, render: (_, order) => (
+      <button type="button" className="max-w-full whitespace-normal [overflow-wrap:anywhere] rounded text-left font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-ring"
+        onClick={() => goToDetail(order)}>{order.orderNo}</button>
+    ) },
+    { key: 'supplierName', title: '供应商', width: 128, minWidth: 112 },
     {
-      key: 'status', title: '状态', width: 8,
+      key: 'status', title: '状态', width: 100, minWidth: 100,
       render: (v, row) => <StatusBadge type="purchase" status={v as number} aria-label={(row as PurchaseOrder).statusName} />
     },
-    { key: 'operatorName', title: '经办人', width: 11 },
-    { key: 'createdAt', title: '创建时间', width: 13, render: (v) => formatDisplayDateTime(v) },
+    { key: 'totalAmount', title: '金额', width: 108, minWidth: 108, noWrap: true, align: 'right', render: (v) => <span className="font-medium">{money(Number(v))}</span> },
+    { key: 'warehouseName', title: '仓库', width: 90, minWidth: 90 },
+    { key: 'operatorName', title: '经办人', width: 90, minWidth: 90, noWrap: true },
+    { key: 'createdAt', title: '创建时间', width: 150, minWidth: 150, noWrap: true, render: (v) => formatDisplayDateTime(v) },
     {
-      key: 'remark', title: '备注', expandableText: true, width: 11,
+      key: 'remark', title: '备注', expandableText: true, width: 92, minWidth: 80,
       render: (v) => v
         ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{String(v)}</span>
         : <span className="text-muted-foreground/50">—</span>
     },
     {
-      key: 'id', title: '操作', width: 10, render: (_, row) => {
+      key: 'id', title: '操作', width: 136, minWidth: 136, render: (_, row) => {
         const r = row as PurchaseOrder
         return (
           <TableActionsMenu
@@ -355,8 +360,10 @@ export default function PurchasePage() {
         options={[{value: '', label: '全部订单'}, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({value, label}))]}
         onChange={status => updateParams({status: status || null, page: 1})} />
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={overdueOnly ? undefined : effectiveStartDate}
+            endDate={overdueOnly ? undefined : effectiveEndDate}
+            onClear={() => updateParams({ startDate: null, endDate: null, range: 'all', page: 1 })} />
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
@@ -365,9 +372,8 @@ export default function PurchasePage() {
               </button>
             </span>
           ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
+          {chips.length > 0 && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+      </div>
 
       {isError && data && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-warning/30 px-3 py-2 text-sm"><span>刷新失败，当前显示上次读取的数据。</span><Button size="sm" variant="outline" onClick={() => void refetch()}>重试</Button></div>}
       {isError && !data ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable
@@ -377,6 +383,7 @@ export default function PurchasePage() {
         onRowDoubleClick={order => goToDetail(order)}
         virtualized
         fluid
+        scrollLabel="采购订单表格"
         columnStorageKey="purchase:status-v3"
       />}
 

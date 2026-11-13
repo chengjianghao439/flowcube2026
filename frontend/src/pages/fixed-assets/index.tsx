@@ -2,7 +2,7 @@ import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -22,7 +22,7 @@ import type { FixedAsset } from '@/api/fixedAssets'
 import type { TableColumn } from '@/types'
 import type { StatusTone } from '@/lib/statusTone'
 import { downloadExport } from '@/lib/exportDownload'
-import { todayYmd } from '@/lib/dateTime'
+import { beijingPeriod, todayYmd } from '@/lib/dateTime'
 
 const ASSET_STATUS: Record<number, { label: string; tone: StatusTone }> = {
   1: { label: '使用中', tone: 'active' },
@@ -32,6 +32,7 @@ const ASSET_STATUS: Record<number, { label: string; tone: StatusTone }> = {
 
 function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const qc = useQueryClient()
+  const residualRateId = useId()
   const [form, setForm] = useState({ assetName: '', category: '', departmentName: '', acquireDate: todayYmd(), originalCost: '', residualRate: '0.05', usefulMonths: '36' })
   const { mutate: create, isPending } = useMutation({
     mutationFn: createFixedAssetApi,
@@ -70,8 +71,9 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
-              <Label>残值率（默认 5%）</Label>
-              <Input aria-label="残值率" type="number" value={form.residualRate} onChange={e => set('residualRate')(e.target.value)} step="0.01" className="text-right" />
+              <Label htmlFor={residualRateId}>残值率</Label>
+              <Input id={residualRateId} aria-describedby={`${residualRateId}-hint`} type="number" value={form.residualRate} onChange={e => set('residualRate')(e.target.value)} step="0.01" className="text-right" />
+              <p id={`${residualRateId}-hint`} className="text-xs text-muted-foreground">输入 0 至 0.9999 的数值。默认 0.05 表示 5%。</p>
             </div>
             <div className="space-y-1">
               <Label>使用年限（月）*</Label>
@@ -198,7 +200,7 @@ export default function FixedAssetsPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => downloadExport('/export/fixed-assets').catch(e => toast.error((e as Error).message))}>导出</Button>
-            <Button variant="outline" disabled={deprPending} onClick={() => runDepr(undefined)}>{deprPending ? '计提中…' : '计提本月折旧'}</Button>
+            <Button variant="outline" disabled={deprPending} onClick={() => runDepr(beijingPeriod())}>{deprPending ? '计提中…' : '计提本月折旧'}</Button>
             <Button onClick={() => setCreateOpen(true)}>新增资产</Button>
           </div>
         }

@@ -17,6 +17,7 @@ import { getSuppliersApi, createSupplierApi, updateSupplierApi, deleteSupplierAp
 import type { Supplier } from '@/types/suppliers'
 import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { downloadExport } from '@/lib/exportDownload'
@@ -111,6 +112,9 @@ export default function SuppliersPage() {
        ]} /> : <div className="flex flex-wrap gap-1">{ledger.canView && <Button size="sm" variant="outline" onClick={() => ledger.open(row)}>往来明细</Button>}{can(PERMISSIONS.SUPPLIER_DELETE) && <Button size="sm" variant="outline" onClick={() => helpers.openDelete(row)}>删除</Button>}</div>}
       queryKey={['suppliers', { page, pageSize: 20, keyword }]}
       listQuery={() => getSuppliersApi({ page, pageSize: 20, keyword })}
+      emptyState={keyword ? (
+        <EmptyState variant="no-result" title="没有匹配的供应商" description="可清除搜索或换一个编码、名称。" />
+      ) : <EmptyState variant="no-data" title="暂无供应商" description="当前可查看的范围内还没有供应商记录。" />}
       recordUnit="个"
       deleteApi={(id) => deleteSupplierApi(id, { skipGlobalError: true })}
       deleteMessage="供应商被采购、退货或库存流水引用后不能删除；如需停用，请编辑并取消启用。"
@@ -154,9 +158,9 @@ export default function SuppliersPage() {
             </div>
           )}
           <FilterCard>
-            <Input aria-label="搜索供应商编码或名称" placeholder="搜索编码或名称" value={search} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} onKeyDown={(e:React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search) } }} className="h-9 w-60" />
-            <Button size="sm" variant="outline" onClick={()=>{setKeyword(search);}}>搜索</Button>
-            {keyword && <Button size="sm" variant="ghost" onClick={()=>{setSearch('');setKeyword('');}}>重置</Button>}
+            <Input aria-label="搜索供应商编码或名称" placeholder="搜索编码或名称" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') setKeyword(search.trim()) }} className="h-9 w-60" />
+            <Button size="sm" variant="outline" onClick={() => setKeyword(search.trim())}>搜索</Button>
+            {(keyword || search) && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>清除搜索</Button>}
           </FilterCard>
         </>
       }

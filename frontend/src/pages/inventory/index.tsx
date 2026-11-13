@@ -8,16 +8,16 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
-import { qtyStep } from '@/lib/qtyStep'
-import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
+import { qtyStep, quantityInputError } from '@/lib/qtyStep'
 import { ImportSteps } from '@/components/shared/ImportSteps'
-import { useEffect, useState, useRef, useContext, useMemo } from 'react'
+import { useEffect, useState, useRef, useContext, useId, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Package, Warehouse, Lock, CheckCircle, X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { InventoryQuantitySummary } from './InventoryQuantitySummary'
@@ -46,16 +46,21 @@ import type { Category } from '@/types/categories'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { importStockApi } from '@/api/inventory'
 
+const [codeColumn, articleColumn, specColumn, nameColumn, colorColumn] = productIdentityColumns()
 const inventoryColumns: (TableColumn<object> & { headerTitle?: string })[] = [
-  ...productIdentityColumns().map((column, index) => ({ ...column, width: [160, 160, 144, 224, 112][index] })),
-  { key: 'unit', title: '单位', width: 80 },
-  { key: 'categoryPath', title: '分类路径', width: 180 },
-  { key: 'warehouseName', title: '仓库', width: 112 },
-  { key: 'onHand', title: '在库数量', width: 112, align: 'right' },
+  { ...codeColumn, width: 142 },
+  { ...nameColumn, width: 168 },
+  { key: 'warehouseName', title: '仓库', width: 104 },
+  { key: 'onHand', title: '在库数量', width: 104, align: 'right' },
   { key: 'reserved', title: '已预占', width: 96, align: 'right' },
-  { key: 'available', title: '可用库存', headerTitle: '可用库存 = 在库 − 已预占', width: 96, align: 'right' },
-  { key: 'updatedAt', title: '最近更新', width: 144 },
-  { key: 'actions', title: '操作', width: 96 },
+  { key: 'available', title: '可用库存', headerTitle: '可用库存 = 在库 − 已预占', width: 104, align: 'right' },
+  { key: 'unit', title: '单位', width: 80 },
+  { ...articleColumn, width: 132 },
+  { ...specColumn, width: 120 },
+  { ...colorColumn, width: 88 },
+  { key: 'categoryPath', title: '分类路径', width: 160 },
+  { key: 'updatedAt', title: '最近更新', width: 150 },
+  { key: 'actions', title: '操作', width: 112 },
 ]
 
 const inventoryRowKey = (row: InventoryOverviewItem) => row.id
@@ -153,8 +158,15 @@ export default function InventoryPage() {
   // 出库弹窗
   const [opOpen, setOpOpen] = useState(false); const [, setOpType] = useState<OpType>('outbound')
   const [form, setForm] = useState(emptyOp)
-  // 「只能整数」的商品把手工调整数量框的 step 切成 1（迁移 254）
-  const allowDecimalOf = useProductQtyPolicies([Number(form.productId) || 0])
+  const outboundQuantityId = useId()
+  const [outboundQuantityBadInput, setOutboundQuantityBadInput] = useState(false)
+  const outboundProductId = Number(form.productId) || 0
+  const allowDecimalOf = useProductQtyPolicies([outboundProductId])
+  const outboundAllowsDecimal = allowDecimalOf(outboundProductId)
+  const outboundQuantity = Number(form.quantity)
+  const outboundQuantityError = outboundQuantityBadInput ? '请输入有效数量' : form.quantity
+    ? quantityInputError(form.quantity, !outboundAllowsDecimal) || (outboundQuantity <= 0 ? '数量必须大于 0' : null)
+    : null
   const [productFinderOpen,  setProductFinderOpen]  = useState(false)
 
   const PAGE_SIZE = 20
@@ -163,8 +175,9 @@ export default function InventoryPage() {
   // 首次打开与切回已挂载页签范围一致。logRange=all 是「清空」写下的显式意图（看全部）。
   const logRangeAll = searchParams.get('logRange') === 'all'
   const defaultLogRange = useMemo(() => defaultRangeYmds(LOG_DEFAULT_RANGE_DAYS), [])
-  const effectiveLogStartDate = logStartDate || (logRangeAll ? '' : defaultLogRange.start)
-  const effectiveLogEndDate = logEndDate || (logRangeAll ? '' : defaultLogRange.end)
+  const useDefaultLogDates = !logStartDate && !logEndDate && !logRangeAll
+  const effectiveLogStartDate = useDefaultLogDates ? defaultLogRange.start : logStartDate
+  const effectiveLogEndDate = useDefaultLogDates ? defaultLogRange.end : logEndDate
 
   const { data: overview, isLoading: overviewLoading, isFetching: overviewFetching, isPlaceholderData: overviewPlaceholder,
     isPaused: overviewPaused, error: overviewError, refetch: retryOverview } = useInventoryOverview({
@@ -184,6 +197,7 @@ export default function InventoryPage() {
   const { data: categoryTree = [] } = useCategoryTree()
   const { mutate: outbound, isPending, recovery } = useOutbound({ productName: form.productName, warehouseName: form.warehouseName || (warehouses ?? []).find(w => w.id === Number(form.warehouseId))?.name || '' })
   const opFrozen = isPending || !!recovery?.blocked
+  const outboundDisabled = opFrozen || !form.productId || !form.warehouseId || !form.quantity || !!outboundQuantityError
   const outboundOutcomeKey = recovery?.lastOutcome?.requestKey
   useEffect(() => {
     if (recovery?.lastOutcome?.phase === 'success') { setForm(emptyOp); setOpOpen(false) }
@@ -199,12 +213,13 @@ export default function InventoryPage() {
     setOpType(t)
     const original = recovery?.record?.body
     setForm(original ? { ...emptyOp, productId: String(original.productId), productName: recovery.record?.display?.productName || `商品 #${original.productId}`, warehouseId: String(original.warehouseId), warehouseName: recovery.record?.display?.warehouseName || '', quantity: String(original.quantity), unitPrice: original.unitPrice == null ? '' : String(original.unitPrice), remark: original.remark || '' } : emptyOp)
+    setOutboundQuantityBadInput(false)
     setOpOpen(true)
   }
   function handleOp(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (opFrozen || !can(PERMISSIONS.INVENTORY_ADJUST)) return
-    const base = { productId: +form.productId, warehouseId: +form.warehouseId, quantity: +form.quantity, remark: form.remark || undefined }
+    if (outboundDisabled || !can(PERMISSIONS.INVENTORY_ADJUST)) return
+    const base = { productId: outboundProductId, warehouseId: +form.warehouseId, quantity: outboundQuantity, remark: form.remark || undefined }
     outbound({ ...base, supplierId: null, unitPrice: form.unitPrice ? +form.unitPrice : null }, { onSuccess: () => setOpOpen(false) })
   }
 
@@ -279,7 +294,7 @@ export default function InventoryPage() {
   }
 
   const logCols: TableColumn<InventoryLog>[] = [
-    { key: 'createdAt', title: '时间', width: 160, render: v => formatDisplayDateTime(v) },
+    { key: 'createdAt', title: '时间', width: 160, noWrap: true, render: v => formatDisplayDateTime(v) },
     { key: 'typeName', title: '类型', width: 80, render: (_, r) => <SoftStatusLabel label={TYPE_NAMES[r.type]} tone={TYPE_TONE[r.type] ?? 'info'} /> },
     ...productIdentityColumns(),
     { key: 'warehouseName', title: '仓库', width: 140 },
@@ -310,13 +325,18 @@ export default function InventoryPage() {
 
   const renderInventoryRow = (row: InventoryOverviewItem) => (
     <tr key={row.id} data-selected={drawerItem?.id === row.id && drawerOpen || undefined} className={`border-b border-border/40 transition-colors hover:bg-muted/20 ${drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''}`}>
-      <ProductIdentityCells product={row} /><td className="px-4 py-3">{row.unit || '—'}</td>
-      <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
-      <td className="px-4 py-3 text-muted-foreground">{row.warehouseName}</td>
+      <td className="px-4 py-3"><div className="whitespace-normal [overflow-wrap:anywhere] font-mono text-xs" title={row.productCode}>{row.productCode || '—'}</div></td>
+      <td className="px-4 py-3 [overflow-wrap:anywhere]">{row.productName || '—'}</td>
+      <td className="px-4 py-3 text-muted-foreground [overflow-wrap:anywhere]">{row.warehouseName}</td>
       <td className="px-4 py-3 text-right tabular-nums"><span className="font-medium">{formatQty(row.onHand)}</span></td>
       <td className="px-4 py-3 text-right tabular-nums"><Button variant="link" size="sm" className="h-auto p-0 tabular-nums" aria-label={`查看${row.productName}在${row.warehouseName}的预占明细`} onClick={() => setReservationItem(row)}>{formatQty(row.reserved)}</Button></td>
       <td className="px-4 py-3 text-right tabular-nums"><AvailableBadge available={row.available} onHand={row.onHand} /></td>
-      <td className="px-4 py-3 text-left text-xs text-muted-foreground">{formatDisplayDateTime(row.updatedAt)}</td>
+      <td className="px-4 py-3">{row.unit || '—'}</td>
+      {[row.articleNumber, row.spec, row.color].map((value, index) => (
+        <td key={['articleNumber', 'spec', 'color'][index]} className="px-4 py-3 [overflow-wrap:anywhere]">{value || '—'}</td>
+      ))}
+      <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
+      <td className="px-4 py-3 text-left text-xs text-muted-foreground"><div className="whitespace-normal [overflow-wrap:anywhere] tabular-nums" title={formatDisplayDateTime(row.updatedAt)}>{formatDisplayDateTime(row.updatedAt)}</div></td>
       <td className="px-4 py-3 text-left">
         <Button size="sm" variant={drawerItem?.id === row.id && drawerOpen ? 'secondary' : 'ghost'}
           className="h-7 px-2 text-xs" onClick={() => { setDrawerItem(row); setDrawerOpen(true) }}>查看条码</Button>
@@ -327,22 +347,27 @@ export default function InventoryPage() {
   return (
     <div className="desktop-inventory-page space-y-4">
       <PageHeader title="库存管理"
-        description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存"  actions={
-        <div className="flex gap-2 flex-wrap">
+        description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存"  actions={<>
+        <div role="group" aria-label="查看与查询库存" className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={() => tab === 'logs' ? setLogsQueryOpen(true) : setOverviewQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={() => downloadExport(
             tab === 'logs' ? '/export/inventory-logs' : '/export/stock',
-            // 出入库记录导出沿用列表的日期窗口（该导出接口目前只支持日期条件）
             tab === 'logs' ? {
+              ...(logType ? { type: String(logType) } : {}),
+              ...(logProductId ? { productId: String(logProductId) } : {}),
+              ...(logWarehouseId ? { warehouseId: String(logWarehouseId) } : {}),
               ...(effectiveLogStartDate ? { startDate: effectiveLogStartDate } : {}),
               ...(effectiveLogEndDate ? { endDate: effectiveLogEndDate } : {}),
             } : undefined,
-          ).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
-          {can(PERMISSIONS.IMPORT_STOCK_EXECUTE) && <Button variant="outline" onClick={() => setImportOpen(true)} disabled={tab !== 'overview'}>导入库存</Button>}
-          {can(PERMISSIONS.INVENTORY_ADJUST) && <Button variant="outline" onClick={() => openOp('outbound')}>出库</Button>}
-          {can(PERMISSIONS.STOCKCHECK_VIEW) && <Button variant="outline" asChild><Link to="/stockcheck">查看盘点</Link></Button>}
+          ).catch(e => toast.error((e as Error).message))}>{tab === 'logs' ? '导出流水 Excel' : '导出当前库存'}</Button>
+          {can(PERMISSIONS.STOCKCHECK_VIEW) && <Button variant="ghost" asChild><Link to="/stockcheck">查看盘点</Link></Button>}
         </div>
-      } />
+        {(can(PERMISSIONS.IMPORT_STOCK_EXECUTE) || can(PERMISSIONS.INVENTORY_ADJUST)) &&
+          <div role="group" aria-label="库存录入操作" className="flex flex-wrap items-center gap-2 sm:border-l sm:border-border sm:pl-2">
+            {can(PERMISSIONS.IMPORT_STOCK_EXECUTE) && <Button variant="outline" onClick={() => setImportOpen(true)} disabled={tab !== 'overview'}>导入库存</Button>}
+            {can(PERMISSIONS.INVENTORY_ADJUST) && <Button onClick={() => openOp('outbound')}>出库</Button>}
+          </div>}
+      </>} />
 
 
       {/* 标签切换 */}
@@ -355,8 +380,10 @@ export default function InventoryPage() {
         ))}
       </div>
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+      {(tab === 'logs' || chips.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
+          {tab === 'logs' && <AppliedDateRange label="流水日期" startDate={effectiveLogStartDate} endDate={effectiveLogEndDate}
+            onClear={() => updateParams({ logStartDate: null, logEndDate: null, logRange: 'all', logPage: 1 })} />}
           {chips.map(c => (
             <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
               {c.label}
@@ -365,7 +392,7 @@ export default function InventoryPage() {
               </button>
             </span>
           ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          {chips.length > 0 && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
         </div>
       )}
 
@@ -385,8 +412,9 @@ export default function InventoryPage() {
 
           {/* 库存表格 */}
           <div className="desktop-table desktop-inventory-table card-base overflow-hidden">
-            <div className="overflow-x-auto">
-              <ResizableTable columns={inventoryColumns} columnStorageKey="inventory-overview" minWidth={1816} aria-rowcount={list.length + 1}>
+            <div className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+              role="region" aria-label="库存总览表格，可横向滚动" tabIndex={0} data-table-scroll>
+              <ResizableTable columns={inventoryColumns} columnStorageKey="inventory-overview" aria-rowcount={list.length + 1}>
                 {!overviewLoading && list.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={list} columns={13} getRowKey={inventoryRowKey} renderRow={renderInventoryRow} /> : <tbody>
                   {overviewLoading ? (
                     <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
@@ -411,7 +439,7 @@ export default function InventoryPage() {
       <KeepAliveSection active={tab === 'logs'} className="space-y-4">
           {logReadState === 'failed' ? <QueryErrorState error={logError} title="库存流水读取失败" compact onRetry={() => { if (active && tab === 'logs') void retryLogs() }} />
             : logReadState === 'paused' ? <div className="px-1 py-3 text-sm text-muted-foreground" role="status">网络已暂停，联网后继续读取流水。</div>
-              : <DataTable virtualized columns={logCols} data={logReadState === 'ready' ? logs?.list ?? [] : []} loading={logReadState === 'loading'} emptyText="暂无流水" rowKey="id" />}
+              : <DataTable virtualized columns={logCols} data={logReadState === 'ready' ? logs?.list ?? [] : []} loading={logReadState === 'loading'} emptyText="暂无流水" rowKey="id" scrollLabel="出入库记录表格" />}
 
           {logReadState === 'ready' && (logs?.truncated || logs?.list.length !== logsTotal
             ? <div className="px-1 py-3 text-xs text-warning-ink" role="status">流水未取齐：显示前 {logs?.list.length.toLocaleString()} 条 / 匹配 {logsTotal.toLocaleString()} 条，请缩小筛选范围。</div>
@@ -443,13 +471,28 @@ export default function InventoryPage() {
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>数量 *</Label><Input quantity type="number" step={qtyStep(allowDecimalOf(Number(form.productId) || 0))} min="0" value={form.quantity} onChange={e => setF('quantity', e.target.value)} disabled={opFrozen} /></div>
+              <div className="space-y-2">
+                <Label htmlFor={outboundQuantityId}>数量 <span aria-hidden="true" className="text-destructive-ink">*</span></Label>
+                {/* 在此保留用户输入，由字段错误和提交处理使用同一份数量校验。 */}
+                <Input id={outboundQuantityId} required type="number" step={qtyStep(outboundAllowsDecimal)} min="0"
+                  value={form.quantity} disabled={opFrozen} aria-invalid={!!outboundQuantityError}
+                  aria-describedby={`${outboundQuantityId}-hint`}
+                  onChange={e => {
+                    if (opFrozen) return
+                    setOutboundQuantityBadInput(e.target.validity.badInput)
+                    setF('quantity', e.target.value)
+                  }} />
+                <div id={`${outboundQuantityId}-hint`} role="status" className="space-y-1 text-xs">
+                  <p className="text-muted-foreground">{outboundAllowsDecimal ? '请输入大于 0 的数量，最多两位小数。' : '请输入大于 0 的整数。'}</p>
+                  {outboundQuantityError && <p className="text-destructive-ink">{outboundQuantityError}</p>}
+                </div>
+              </div>
               <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setF('unitPrice', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
             </div>
             <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpOpen(false)} disabled={isPending}>取消</Button>
-              {can(PERMISSIONS.INVENTORY_ADJUST) && <Button type="submit" disabled={opFrozen || !form.productId || !form.warehouseId || !form.quantity}>{isPending ? '提交中…' : '出库'}</Button>}
+              {can(PERMISSIONS.INVENTORY_ADJUST) && <Button type="submit" disabled={outboundDisabled}>{isPending ? '提交中…' : '出库'}</Button>}
             </DialogFooter>
           </form>
         </DialogContent>

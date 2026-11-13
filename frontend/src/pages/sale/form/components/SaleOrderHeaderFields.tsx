@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 export function SaleOrderHeaderFields({
   readOwner, interactionGuard, warehouseReadOnly = false, customerId, customerName, customerError, setCustomerFinderOpen,
   warehouseId, warehouseName, setWarehouseId, setWarehouseName, warehouseError, setWarehouseError,
-  carrierId, setCarrierId, carrierOptions,
+  carrierId, setCarrierId, carrierOptions, carrierLoading, carrierError, retryCarriers,
   shippingProduct, setShippingProduct, shippingProductDisabled = false,
   freightType, setFreightType,
   receiverName, setReceiverName,
@@ -39,6 +39,7 @@ export function SaleOrderHeaderFields({
   warehouseId: string; setWarehouseId: (v: string) => void; setWarehouseName: (v: string) => void
   warehouseError: boolean; setWarehouseError: (v: boolean) => void
   carrierId: string; setCarrierId: (v: string) => void; carrierOptions: CarrierOption[]
+  carrierLoading?: boolean; carrierError?: boolean; retryCarriers?: () => void
   shippingProduct: string; setShippingProduct: (v: string) => void; shippingProductDisabled?: boolean
   freightType: string; setFreightType: (v: string) => void
   receiverName: string; setReceiverName: (v: string) => void
@@ -53,6 +54,8 @@ export function SaleOrderHeaderFields({
 }) {
   const fieldId = useId()
   const selectedCarrier = carrierOptions.find(c => String(c.id) === carrierId)
+  const carrierPrompt = carrierLoading ? '正在加载承运商…' : carrierError ? '承运商加载失败'
+    : carrierOptions.length ? '请选择承运商' : '暂无承运商'
   const navigate = useNavigate()
   const sectionActive = useSectionActive()
   const currentInteraction = useRef({ interactionGuard, headerReadOnly, sectionActive })
@@ -82,6 +85,7 @@ export function SaleOrderHeaderFields({
           {warehouseReadOnly ? <p className="py-2 text-sm">{warehouseName || warehouseId}</p> : <WarehouseSelect
             id={`${fieldId}-warehouse`}
             readOwner={readOwner}
+            showReadStatus
             value={warehouseId ? +warehouseId : null}
             onChange={(id, name) => apply(() => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) })}
             placeholder="选择仓库"
@@ -92,17 +96,20 @@ export function SaleOrderHeaderFields({
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label htmlFor={`${fieldId}-carrier`}>承运商</Label>
-          <Select value={carrierId || '__none__'} onValueChange={v => apply(() => { setCarrierId(v === '__none__' ? '' : v); setShippingProduct('') })} disabled={headerReadOnly}>
+          <Select value={carrierId || '__none__'} onValueChange={v => apply(() => { setCarrierId(v === '__none__' ? '' : v); setShippingProduct('') })} disabled={headerReadOnly || (!carrierOptions.length && (carrierLoading || carrierError))}>
             <SelectTrigger id={`${fieldId}-carrier`} className="h-9 w-full">
-              <SelectValue placeholder={carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'} />
+              <SelectValue placeholder={carrierPrompt} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__none__">{carrierOptions.length === 0 ? '暂无承运商，请先创建' : '请选择承运商'}</SelectItem>
+              <SelectItem value="__none__">{carrierPrompt}</SelectItem>
               {carrierOptions.map(c => (
                 <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {carrierError && !headerReadOnly && retryCarriers && (
+            <button type="button" aria-label="重试加载承运商" className="text-xs font-medium text-primary hover:underline" onClick={() => apply(retryCarriers)}>重试</button>
+          )}
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label htmlFor={`${fieldId}-freight`}>运费方式</Label>

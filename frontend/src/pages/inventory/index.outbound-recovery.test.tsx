@@ -33,6 +33,38 @@ beforeEach(async()=>{
  api.post.mockReset();api.receipt.mockReset();await mount()
 })
 afterEach(async()=>{await unmount();vi.restoreAllMocks();useAuthStore.getState().logout()})
+test('整数商品的无效出库数量保留在字段内，且修正前不会提交', async () => {
+  await act(async () => button('出库').click())
+  const dialog = document.querySelector('[role="dialog"]')!
+  const picker = [...dialog.querySelectorAll('button')].find(b => b.textContent?.includes('点击选择商品'))!
+  await act(async () => picker.click())
+  await act(async () => button('选中合成商品').click())
+  await act(async () => button('选中合成仓库').click())
+  const quantity = dialog.querySelector<HTMLInputElement>('input[type="number"]')!
+  const submit = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!
+  const setQuantity = (value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(quantity, value)
+    quantity.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  const describedText = () => quantity.getAttribute('aria-describedby')?.split(' ').map(id => document.getElementById(id)?.textContent).join(' ')
+  await setQuantity('0.5')
+  expect(quantity.value).toBe('0.5')
+  expect(quantity.getAttribute('aria-invalid')).toBe('true')
+  expect(describedText()).toContain('该商品数量只能是整数')
+  expect(submit.disabled).toBe(true)
+  await act(async () => dialog.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  expect(api.post).not.toHaveBeenCalled()
+
+  await setQuantity('0')
+  expect(describedText()).toContain('数量必须大于 0')
+  expect(submit.disabled).toBe(true)
+  await setQuantity('2')
+  expect(quantity.value).toBe('2')
+  expect(describedText()).toContain('请输入大于 0 的整数')
+  expect(quantity.getAttribute('aria-invalid')).toBe('false')
+  expect(submit.disabled).toBe(false)
+})
+
 test('实际库存页未决正文冻结，关弹窗/卸载重开仍显示原商品仓库数量，核成功后清原输入',async()=>{
  await act(async()=>button('出库').click())
  const picker=[...document.body.querySelectorAll('button')].find(b=>b.textContent?.includes('点击选择商品'))!

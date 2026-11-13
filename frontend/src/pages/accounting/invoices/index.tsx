@@ -6,7 +6,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
  * 进项/销项发票池 + 录入 + 认证/抵扣/红冲台账。发票与业务单弱关联，税额只在凭证映射时拆分。
  * 前端不算会计（税额拆分/凭证一律后端）；本页仅按税率给录入做价税辅助计算。
  */
-import { useMemo, useState, useEffect, useId } from 'react'
+import { useMemo, useState, useEffect, useId, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -28,6 +28,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { useInvoices, useCreateInvoice, useUpdateInvoice, useChangeInvoiceStatus, useDeleteInvoice } from '@/hooks/useInvoices'
+import type { ApiClientError } from '@/api/client'
 import type { TableColumn } from '@/types'
 import { INVOICE_STATUS_LABELS, type Invoice, type CreateInvoiceParams } from '@/types/accounting'
 import InvoiceQueryDialog, { type InvoiceQueryValues } from './InvoiceQueryDialog'
@@ -53,6 +54,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
   })
   // 版本冲突（迁移 263）：**保留弹窗与草稿**，只做提示，由用户复制后关闭重开核对。
   const [conflict, setConflict] = useState(false)
+  const [duplicate, setDuplicate] = useState(false)
   const [baseline, setBaseline] = useState(f)
   // 日期手输先保存在控件内，未 blur 前也属于未保存输入。
   const [inputDirty, setInputDirty] = useState(false)
@@ -65,7 +67,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
     if (!open) return
     // 每次**真正重建表单**（打开 / 换编辑对象 / 转录入）都清掉上一次的冲突提示，
     // 否则手动关闭重开或转"录入"会带着旧冲突条。
-    setConflict(false); setInputDirty(false)
+    setConflict(false); setDuplicate(false); setInputDirty(false)
     const next = edit ? {
       invoiceCode: edit.invoiceCode ?? '', invoiceNo: edit.invoiceNo ?? '', partyName: edit.partyName, partyTaxNo: edit.partyTaxNo ?? '',
       withTax: String(edit.amountWithTax), taxRate: String(edit.taxRate), invoiceDate: formatDisplayDate(edit.invoiceDate, ''), sourceNo: edit.sourceNo ?? '', remark: edit.remark ?? '',
@@ -82,6 +84,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
   function submit() {
     const submission = draft.beginSubmit()
     if (!submission) return
+    setDuplicate(false)
     const d: CreateInvoiceParams = {
       invoiceType, invoiceCode: f.invoiceCode || null, invoiceNo: f.invoiceNo.trim(), partyName: f.partyName.trim(), partyTaxNo: f.partyTaxNo || null,
       amountNoTax: noTax, taxRate: rate, taxAmount, amountWithTax: withTax, invoiceDate: f.invoiceDate, sourceNo: f.sourceNo || null, remark: f.remark || null,
@@ -99,6 +102,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
       onError: (e: unknown) => {
         if (!submission.finish()) return
         const code = (e as { code?: string } | null)?.code
+        if (code === 'INVOICE_DUP') setDuplicate(true)
         if (code === 'INVOICE_CONCURRENT_MODIFIED') {
           // **保留弹窗与草稿**：只失效列表并给内联提示；由用户先复制、关闭、等刷新完成后重开核对。
           // 不自动关闭弹窗、不自动重试、不把新版本 merge 进旧草稿（避免"新版本 + 旧草稿"）。
@@ -107,7 +111,12 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
         }
       },
     })
-    else create(d, { onSuccess: () => { if (submission.finish()) { toast.success('发票已录入'); onClose() } }, onError: () => { submission.finish() } })
+    else create(d, {
+      onSuccess: () => { if (submission.finish()) { toast.success('发票已录入'); onClose() } },
+      onError: (e: unknown) => {
+        if (submission.finish() && (e as { code?: string } | null)?.code === 'INVOICE_DUP') setDuplicate(true)
+      },
+    })
   }
 
   const typeName = invoiceType === 1 ? '进项' : '销项'
@@ -118,6 +127,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
         {/* 编辑态与默认（录入）态一眼可分 */}
         <DialogHeader description={<>
           {conflict && <span role="alert"><span className="font-medium text-destructive-ink">本次修改未保存（该发票已被他人修改）</span> 当前填写内容仍在。请先复制需要保留的内容，再关闭本弹窗、等列表刷新完成后重新打开，核对最新内容后再提交。 </span>}
+          {duplicate && <span role="alert" className="block text-destructive-ink">这张发票已登记，本次未保存。请核对原票、票号和往来单位。</span>}
           {edit ? <>正在编辑：<span className="font-medium text-foreground">{f.invoiceNo ? `发票号 ${f.invoiceNo}` : `#${edit.id}`}{f.partyName ? ` · ${f.partyName}` : ''}</span></> : !conflict && '填写发票资料、往来单位与金额。'}
         </>}>
           <DialogTitle className="flex flex-wrap items-center gap-2">
@@ -178,12 +188,37 @@ export default function InvoicesPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<Invoice | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Invoice | null>(null)
+  const [deleteRefreshNotice, setDeleteRefreshNotice] = useState(false)
+  const [redFlushTarget, setRedFlushTarget] = useState<Invoice | null>(null)
   const { mutate: changeStatus } = useChangeInvoiceStatus()
+  const { mutate: redFlush, isPending: redFlushing } = useChangeInvoiceStatus()
   const { mutate: del, isPending: deleting } = useDeleteInvoice()
 
   function doStatus(inv: Invoice, action: 'certify' | 'deduct' | 'redFlush', label: string) {
-    changeStatus({ id: inv.id, action }, { onSuccess: () => toast.success(`已${label}`) })
+    if (action === 'redFlush') setRedFlushTarget(inv)
+    else changeStatus({ id: inv.id, action }, { onSuccess: () => toast.success(`已${label}`) })
   }
+  const cancelRedFlush = useCallback(() => setRedFlushTarget(null), [])
+  const confirmRedFlush = useCallback(() => {
+    if (!canManage || !redFlushTarget || redFlushing) return
+    redFlush({ id: redFlushTarget.id, action: 'redFlush' }, {
+      onSuccess: () => { toast.success('已红冲'); setRedFlushTarget(null) },
+    })
+  }, [canManage, redFlushTarget, redFlushing, redFlush])
+  const cancelDelete = useCallback(() => setDeleteTarget(null), [])
+  const confirmDelete = useCallback(() => {
+    if (!canManage || deleteTarget?.status !== 1 || deleting) return
+    del(deleteTarget.id, {
+      onSuccess: () => { toast.success('已删除'); setDeleteTarget(null) },
+      onError: (e: unknown) => {
+        const { code, status } = (e as ApiClientError | undefined) ?? {}
+        if (code !== 'INVOICE_DELETE_LOCKED' && code !== 'INVOICE_STATUS_CHANGED' && status !== 404) return
+        setDeleteTarget(null)
+        setDeleteRefreshNotice(true)
+        void refetch()
+      },
+    })
+  }, [canManage, deleteTarget, deleting, del, refetch])
 
   function applyQuery(values: InvoiceQueryValues) {
     setKeyword(values.keyword); setStatus(values.status); setQueryOpen(false)
@@ -194,13 +229,13 @@ export default function InvoicesPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<Invoice>[] = [
-    { key: 'invoiceNo', title: '发票号码', width: 130, render: (_v, r) => <span className="font-mono text-doc-code-muted">{r.invoiceNo}</span> },
+    { key: 'invoiceNo', title: '发票号码', width: 210, minWidth: 210, render: (_v, r) => <span className="whitespace-nowrap font-mono text-doc-code-muted" title={r.invoiceNo ?? undefined}>{r.invoiceNo ?? '—'}</span> },
     { key: 'partyName', title: invoiceType === 1 ? '供应商' : '客户', render: (_v, r) => <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere]">{r.partyName}</span> },
     { key: 'amountNoTax', title: '不含税', width: 110, align: 'right', render: (_v, r) => <span className="tabular-nums">{m(r.amountNoTax)}</span> },
     { key: 'taxRate', title: '税率', width: 70, align: 'right', render: (_v, r) => `${(r.taxRate * 100).toFixed(0)}%` },
     { key: 'taxAmount', title: '税额', width: 100, align: 'right', render: (_v, r) => <span className="tabular-nums">{m(r.taxAmount)}</span> },
     { key: 'amountWithTax', title: '价税合计', width: 120, align: 'right', render: (_v, r) => <span className="tabular-nums font-medium">{m(r.amountWithTax)}</span> },
-    { key: 'invoiceDate', title: '开票日期', width: 110, render: (_v, r) => formatDisplayDate(r.invoiceDate, '') },
+    { key: 'invoiceDate', title: '开票日期', width: 122, minWidth: 122, render: (_v, r) => <span className="whitespace-nowrap">{formatDisplayDate(r.invoiceDate, '')}</span> },
     { key: 'sourceNo', title: '关联单号', width: 120, render: (_v, r) => r.sourceNo || '—' },
     { key: 'status', title: '状态', width: 90, render: (_v, r) => <SoftStatusLabel label={r.statusName} tone={statusTone(r.invoiceType, r.status)} /> },
     { key: 'actions', title: '操作', width: 190, render: (_v, r) => {
@@ -208,15 +243,15 @@ export default function InvoicesPage() {
       const primary = r.invoiceType === 1 && r.status === 1 ? { label: '认证', action: 'certify' as const }
         : r.invoiceType === 1 && r.status === 2 ? { label: '抵扣', action: 'deduct' as const }
           : r.invoiceType === 2 && r.status === 1 ? { label: '红冲', action: 'redFlush' as const } : null
-      // 非 status=1 原本不可编辑，后端也拒绝；无推进动作时保留原单一删除入口。
-      if (!primary) return <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink" title="删除" onClick={() => setDeleteTarget(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
+      if (!primary) return null
       return <TableActionsMenu primaryLabel={primary.label} primaryVariant={primary.action === 'redFlush' ? 'destructive' : 'outline'}
         onPrimaryClick={() => doStatus(r, primary.action, primary.label)}
-        items={[
-          ...(r.status === 1 ? [{ label: '编辑', icon: <Pencil className="mr-1.5 h-3.5 w-3.5" />, disabled: isFetching || isError, afterMenuClose: true,
-            onClick: () => { setEditTarget(r); setDialogOpen(true) } }] : []),
-          { label: '删除', icon: <Trash2 className="mr-1.5 h-3.5 w-3.5" />, destructive: true, afterMenuClose: true, onClick: () => setDeleteTarget(r) },
-        ]} />
+        items={r.status === 1 ? [
+          { label: '编辑', icon: <Pencil className="mr-1.5 h-3.5 w-3.5" />, disabled: isFetching || isError, afterMenuClose: true,
+            onClick: () => { setEditTarget(r); setDialogOpen(true) } },
+          { label: '删除', icon: <Trash2 className="mr-1.5 h-3.5 w-3.5" />, destructive: true, separatorBefore: true, disabled: isFetching || isError, afterMenuClose: true,
+            onClick: () => { setDeleteRefreshNotice(false); setDeleteTarget(r) } },
+        ] : []} />
     } },
   ]
 
@@ -250,6 +285,8 @@ export default function InvoicesPage() {
         <Button size="sm" variant="ghost" onClick={() => { setKeyword(''); setStatus('') }}>清空</Button>
       </div>}
 
+      {deleteRefreshNotice && <p role="status" className="text-sm text-muted-foreground">删除未完成，请核对刷新后的发票列表。</p>}
+
       {isError ? (
           <QueryErrorState error={error} onRetry={() => void refetch()} title="发票列表加载失败" compact />
         ) : (
@@ -262,14 +299,27 @@ export default function InvoicesPage() {
 
       <InvoiceDialog open={dialogOpen} invoiceType={editTarget?.invoiceType ?? invoiceType} edit={editTarget} onClose={() => { setDialogOpen(false); setEditTarget(null) }} />
       <ConfirmDialog
-        open={!!deleteTarget}
+        open={canManage && !!redFlushTarget}
         variant="destructive"
-        title={`删除发票「${deleteTarget?.invoiceNo}」`}
-        description="删除后不可恢复；已生成的凭证会在下次生成时按新的发票状态重算税额。"
+        title={`红冲发票「${redFlushTarget?.invoiceNo}」`}
+        description="确认后，这张销项发票将标为已红冲，并从关联业务单的已开票金额中扣除。请先核对发票号码。"
+        confirmText="确认红冲"
+        loading={redFlushing}
+        onConfirm={confirmRedFlush}
+        onCancel={cancelRedFlush}
+      />
+      <ConfirmDialog
+        open={canManage && deleteTarget?.status === 1}
+        variant="destructive"
+        title={deleteTarget ? `删除发票「${deleteTarget.invoiceNo || `#${deleteTarget.id}`}」` : '删除发票'}
+        description={deleteTarget ? `删除后，这张${deleteTarget.statusName}发票将从台账中移除，无法恢复。${
+          deleteTarget.invoiceType === 2 && deleteTarget.sourceType === 'sale_order' && deleteTarget.sourceId != null
+            ? '关联销售单的已开票金额将扣除本票的价税合计。后续生成凭证时将不再取用本票税额。' : ''
+        }` : ''}
         confirmText="确认删除"
         loading={deleting}
-        onConfirm={() => deleteTarget && del(deleteTarget.id, { onSuccess: () => { toast.success('已删除'); setDeleteTarget(null) } })}
-        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
       />
     </div>
   )

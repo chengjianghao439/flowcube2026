@@ -26,13 +26,14 @@ function readKey() {
 }
 const rowKey = (row: InventoryReservationDisplayRow) => row.id
 
-export function ReservationSnapshotRead({ item, owner, server, generation, renderSummary }: {
+export function ReservationSnapshotRead({ item, owner, server, generation, draft, onDraftChange, keyword, onApplyKeyword, renderSummary }: {
   item: Item; owner: string; server: string | undefined; generation: number
+  draft: string; onDraftChange: (value: string) => void; keyword: string; onApplyKeyword: () => void
   renderSummary: (summary: InventoryReservationSummary) => ReactNode
 }) {
   const client = useQueryClient(), { can } = usePermission()
   const instance = useId()
-  const [draft, setDraft] = useState(''), [keyword, setKeyword] = useState(''), [revision, setRevision] = useState(0)
+  const [revision, setRevision] = useState(0)
   const [expired, setExpired] = useState(false)
   const key = ['inventory-reservation-snapshot', owner, instance, item.productId, item.warehouseId, keyword, revision]
   const query = useInfiniteQuery({
@@ -96,8 +97,8 @@ export function ReservationSnapshotRead({ item, owner, server, generation, rende
   }
   return <div className="space-y-3">
     <p className="text-sm">{item.productName} · {item.warehouseName} · 数量单位：{item.unit || '基本单位'}</p>
-    <form className="flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); setKeyword(draft.trim()); refresh() }}>
-      <Input className="h-8 w-64" aria-label="筛选销售原单" placeholder="销售单号或客户" maxLength={100} value={draft} onChange={event => setDraft(event.target.value)} />
+    <form className="flex flex-wrap items-center gap-2" onSubmit={event => { event.preventDefault(); onApplyKeyword(); refresh() }}>
+      <Input className="h-8 w-64" aria-label="筛选销售原单" placeholder="销售单号或客户" maxLength={100} value={draft} onChange={event => onDraftChange(event.target.value)} />
       <Button size="sm" type="submit">查询</Button><Button size="sm" variant="outline" type="button" onClick={refresh}>刷新</Button>
     </form>
     {query.isError || expired ? <QueryErrorState error={expired ? new Error('读取数据已过期，请重新读取') : query.error}

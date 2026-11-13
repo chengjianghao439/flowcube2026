@@ -1,5 +1,5 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -34,6 +34,11 @@ interface Props {
 export default function ProductQueryDialog({ open, initial, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<ProductQueryValues>(EMPTY)
   const [supplierOpen, setSupplierOpen] = useState(false)
+  const priceErrorId = useId()
+  const minPrice = Number(draft.minPrice)
+  const maxPrice = Number(draft.maxPrice)
+  const priceInvalid = Boolean(draft.minPrice && draft.maxPrice && Number.isFinite(minPrice) && Number.isFinite(maxPrice) && minPrice > maxPrice)
+  const apply = () => { if (!priceInvalid) onApply(draft) }
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -46,7 +51,8 @@ export default function ProductQueryDialog({ open, initial, onClose, onApply }: 
         width={520}
         onClose={onClose}
         onReset={() => setDraft(EMPTY)}
-        onApply={() => onApply(draft)}
+        applyDisabled={priceInvalid}
+        onApply={apply}
       >
         <QueryFormLayout>
           <label className="flex flex-col gap-1 col-span-2">
@@ -55,7 +61,7 @@ export default function ProductQueryDialog({ open, initial, onClose, onApply }: 
               placeholder="请输入关键字…"
               value={draft.keyword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(d => ({ ...d, keyword: e.target.value }))}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
               className="h-9"
             />
           </label>
@@ -96,9 +102,11 @@ export default function ProductQueryDialog({ open, initial, onClose, onApply }: 
             <Input
               type="number" min="0" step="0.01"
               placeholder="不限"
+              aria-invalid={priceInvalid || undefined}
+              aria-describedby={priceInvalid ? priceErrorId : undefined}
               value={draft.minPrice}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(d => ({ ...d, minPrice: e.target.value }))}
-              className="h-9"
+              className={priceInvalid ? 'h-9 border-destructive/60' : 'h-9'}
             />
           </label>
 
@@ -107,11 +115,14 @@ export default function ProductQueryDialog({ open, initial, onClose, onApply }: 
             <Input
               type="number" min="0" step="0.01"
               placeholder="不限"
+              aria-invalid={priceInvalid || undefined}
+              aria-describedby={priceInvalid ? priceErrorId : undefined}
               value={draft.maxPrice}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDraft(d => ({ ...d, maxPrice: e.target.value }))}
-              className="h-9"
+              className={priceInvalid ? 'h-9 border-destructive/60' : 'h-9'}
             />
           </label>
+          {priceInvalid && <p id={priceErrorId} role="alert" className="col-span-2 text-xs text-destructive-ink">最低售价不能高于最高售价。</p>}
         </QueryFormLayout>
       </QueryDialog>
 

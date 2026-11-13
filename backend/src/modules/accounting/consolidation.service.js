@@ -1,5 +1,6 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { SOURCE_TYPES } = require('../../constants/voucherSource')
 const { periodRange } = require('./accounting.ledger.service')
 
 /**
@@ -89,7 +90,7 @@ async function getConsolidatedBalanceSheet({ groupId, period }) {
   }
 }
 
-/** 合并利润表：Σ子账套收入/费用科目净额 */
+/** 合并利润表：与普通利润表一致，汇总各账套结转前的损益发生额。 */
 async function getConsolidatedIncomeStatement({ groupId, period }) {
   const companies = await getGroupCompanies(groupId)
   if (!companies.length) throw new AppError('集团账套不存在或无子账套', 404)
@@ -103,11 +104,12 @@ async function getConsolidatedIncomeStatement({ groupId, period }) {
      JOIN acct_voucher_entries e ON e.account_id=a.id
      JOIN acct_vouchers v ON v.id=e.voucher_id
      WHERE a.is_leaf=1 AND a.category IN (4,5,6) AND a.deleted_at IS NULL
+       AND v.source_type NOT IN (?, ?)
        AND a.company_id IN (${companies.map(() => '?').join(',')})
        AND v.company_id IN (${companies.map(() => '?').join(',')})
      GROUP BY a.id, a.code, a.name, a.category
      ORDER BY a.code ASC`,
-    [...[start, end, start, end], ...companies.map(c => c.id), ...companies.map(c => c.id)],
+    [start, end, start, end, SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y, ...companies.map(c => c.id), ...companies.map(c => c.id)],
   )
   const revenue = [], expenses = []
   let revenueTotal = 0, expenseTotal = 0

@@ -3,7 +3,7 @@ import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { PaginatedData } from '@/types'
 import type { PurchaseOrder, CreatePurchaseParams } from '@/types/purchase'
 export const getPurchaseListApi = (params: object) => client.get<PaginatedData<PurchaseOrder>>('/purchase', { params })
-export const getPurchaseDetailApi = (id: number) => client.get<PurchaseOrder>(`/purchase/${id}`)
+export const getPurchaseDetailApi = (id: number, config?: Parameters<typeof client.get>[1]) => client.get<PurchaseOrder>(`/purchase/${id}`, config)
 export const createPurchaseApi = (data: CreatePurchaseParams, requestKey?: string) =>
   client.post<{ id: number; orderNo: string }>('/purchase', data, requestKey ? { headers: withRequestKeyHeaders(requestKey) } : undefined)
 export const updatePurchaseApi = (id: number, data: CreatePurchaseParams) => client.put<PurchaseOrder>(`/purchase/${id}`, data)

@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { formatPrintStatus } from '@/utils/displayFormatters'
 import type { BarcodePrintJobInfo } from '@/types/print-jobs'
@@ -9,9 +8,15 @@ const REF_LABELS: Record<string, string> = {
   waybill: '运单记录',
 }
 
-/** 排队请求的原始资料；份数与客户端回报都不能替代现场核纸。 */
-export default function PrintRequestDetails({ job }: { job: BarcodePrintJobInfo | null }) {
-  if (!job) return null
+function printResultHint(status: BarcodePrintJobInfo['statusKey']) {
+  if (status === 'success') return '客户端已回报成功，请现场核对标签纸张。'
+  if (status === 'queued' || status === 'printing') return '打印结果尚待确认，请核对工作站和现场纸张。'
+  if (status === 'failed' || status === 'timeout') return '请先核对工作站、打印机和纸张。'
+  return '请根据客户端回报和现场纸张核对结果。'
+}
+
+/** 展示已打开的打印任务及其客户端回报。 */
+export default function PrintRequestDetails({ job, hasNewerJob }: { job: BarcodePrintJobInfo; hasNewerJob: boolean }) {
   const purpose = job.requestPurpose === 'initial' ? '初打' : job.requestPurpose === 'reprint' ? '补打' : '未记录'
   const requester = `${job.createdByName || '未记录'}${job.createdById != null ? `（#${job.createdById}）` : ''}`
   const copies = job.requestedCopies != null ? `${job.requestedCopies} 份` : '未记录'
@@ -23,26 +28,30 @@ export default function PrintRequestDetails({ job }: { job: BarcodePrintJobInfo 
     ['请求人', requester],
     ['请求时间', formatDisplayDateTime(job.createdAt, '未记录')],
     ['请求份数', copies],
-    ['状态', state],
+    ['打印任务状态', state],
+    ['打印机', job.printerName || '未记录'],
+    ['打印机编号', job.printerCode || '未记录'],
     ['客户端回报时间', formatDisplayDateTime(job.acknowledgedAt, '未记录')],
     ...(referenceLabel && job.refId != null ? [['关联业务', `${referenceLabel} #${job.refId}`]] : []),
     ...(job.refCode ? [['关联条码', job.refCode]] : []),
     ...(job.sourcePrintJobId != null ? [['来源打印记录', `#${job.sourcePrintJobId}`]] : []),
-    ['错误', job.errorMessage || '未记录'],
   ]
   return (
-    <div className="space-y-1">
-      {job.requestPurpose === 'reprint' && <Badge variant="outline" className="text-xs font-normal" data-print-purpose="reprint">补打</Badge>}
-      <details className="text-xs">
-        <summary className="w-fit cursor-pointer rounded-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">打印记录</summary>
-        <dl className="mt-2 space-y-1.5 leading-5">
-          {fields.map(([label, value]) => <div key={label} className="space-y-0.5">
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="break-words">{value}</dd>
-          </div>)}
-        </dl>
-        <p className="mt-2 leading-5 text-muted-foreground">份数是本次请求数量。客户端回报不代表实际出纸，请现场核对标签纸张。</p>
-      </details>
+    <div className="space-y-4 px-5 py-4 text-sm">
+      {hasNewerJob && <p className="text-muted-foreground" role="status">列表已有更新的打印任务。关闭后可查看最新记录。</p>}
+      <dl className="grid grid-cols-1 gap-x-5 gap-y-3 leading-5 sm:grid-cols-2">
+        {fields.map(([label, value]) => <div key={label} className="min-w-0 space-y-0.5">
+          <dt className="text-xs text-muted-foreground">{label}</dt>
+          <dd className="[overflow-wrap:anywhere]">{value}</dd>
+        </div>)}
+        {job.errorMessage && <div className="min-w-0 space-y-0.5 sm:col-span-2">
+          <dt className="text-xs text-muted-foreground">错误</dt>
+          <dd className="whitespace-pre-wrap [overflow-wrap:anywhere]">{job.errorMessage}</dd>
+        </div>}
+      </dl>
+      <p className="border-t pt-3 text-xs leading-5 text-muted-foreground">
+        份数为本次请求数量。{printResultHint(job.statusKey)}
+      </p>
     </div>
   )
 }

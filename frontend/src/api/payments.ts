@@ -159,6 +159,7 @@ export interface ReconciliationStatement {
   status: 1 | 2 | 3
   statusName: string
   itemCount?: number
+  hasPendingPayableConfirmation?: boolean
   confirmedByName?: string | null
   confirmedAt?: string | null
   remark?: string | null

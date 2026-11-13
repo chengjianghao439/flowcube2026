@@ -28,6 +28,7 @@ const {
   assertCanCompleteLocalDesktop,
   clientOfflineReclaimSeconds,
 } = require(path.resolve(__dirname, '../backend/src/modules/print-jobs/print-jobs.status'))
+const { buildPrintStatus, deriveInboundPrintJobState, buildInboundPrintBatches } = require('../backend/src/modules/inbound-tasks/inbound-tasks.status')
 
 const results = []
 let failures = 0
@@ -80,6 +81,24 @@ check('入库取消优先，真正排队/打印超时仍待人工确认', () => 
   assert.strictEqual(deriveInboundBarcodeStatus({ print_status: STATUS.FAILED, printer_id: null, error_message: EXPIRE_MESSAGE, inbound_task_status: 5 }).statusKey, 'cancelled')
   for (const print_status of [STATUS.PENDING, STATUS.PRINTING]) {
     assert.strictEqual(deriveInboundBarcodeStatus({ print_status, printer_id: 1, print_updated_at: new Date(Date.now() - 31 * 60000) }, { printTimeoutMinutes: 30 }).statusKey, 'timeout')
+  }
+})
+check('收货详情和批次区分缺打印机、排队、超时、失败、回执成功', () => {
+  const cases = [
+    [{ status: 3, printer_id: null, error_message: EXPIRE_MESSAGE }, 'unassigned'],
+    [{ status: 0, printer_id: 10, updated_at: new Date() }, 'queued'],
+    [{ status: 1, printer_id: 10, updated_at: new Date() }, 'printing'],
+    [{ status: 3, printer_id: 10, error_message: EXPIRE_MESSAGE }, 'timeout'],
+    [{ status: 3, printer_id: 10, error_message: CLIENT_OFFLINE_MESSAGE }, 'timeout'],
+    [{ status: 3, printer_id: null, error_message: 'label render failed: LABEL_RENDER_FAILED' }, 'failed'],
+    [{ status: 3, printer_id: 10, error_message: '打印机缺纸' }, 'failed'],
+    [{ status: 2, printer_id: 10 }, 'success'],
+  ]
+  for (const [row, key] of cases) {
+    const state = deriveInboundPrintJobState(row)
+    assert.strictEqual(state.statusKey, key)
+    assert.strictEqual(buildInboundPrintBatches([{ ...state, id: 1, createdAt: new Date().toISOString() }])[0].statusKey, key)
+    assert.strictEqual(buildPrintStatus({ total: 1, [key]: 1 }).key, key)
   }
 })
 check('完成 / 打印中 / 排队 各自映射正确', () => {

@@ -27,7 +27,7 @@ beforeEach(() => {
   useCompanyStore.setState({ companyId: 2 })
   voucher = {
     id: 901, voucherNo: '记-日期回归-0001', voucherDate: '', period: '202610',
-    sourceType: 'manual', sourceTypeName: '手工凭证', sourceId: null, sourceNo: null,
+    sourceType: 'asset_depreciation', sourceTypeName: 'asset_depreciation', sourceId: null, sourceNo: null,
     summary: '合成日期回归凭证', totalDebit: 100, totalCredit: 100,
     status: 1, isReversal: 0, reversedId: null, createdAt: '2026-10-16T00:00:00+08:00',
     entries: [
@@ -74,6 +74,7 @@ it.each([
   const row = [...host.querySelectorAll('tbody tr')].find(item => item.textContent?.includes(voucher.voucherNo))!
   expect(row).toBeDefined()
   expect.soft(row.querySelectorAll('td')[1].textContent).toBe(expected)
+  expect(row.textContent).toContain('固定资产折旧')
 
   const view = [...row.querySelectorAll('button')].find(button => button.textContent?.trim() === '查看')!
   expect(view).toBeDefined()
@@ -84,4 +85,5 @@ it.each([
   expect(dateLabel).toBeDefined()
   expect(requests).toContain('get /accounting/vouchers/901')
   expect(dateLabel.parentElement?.textContent).toBe(`日期：${expected}`)
+  expect(dialog.querySelector('[title="asset_depreciation"]')?.textContent).toBe('来源：固定资产折旧')
 })

@@ -9,7 +9,10 @@ import { searchGlobalApi, type GlobalSearchItem } from '@/api/search'
 vi.mock('@/api/search', () => ({ searchGlobalApi: vi.fn() }))
 let host: HTMLDivElement
 let root: Root
-function Location() { return <output data-current-path>{useLocation().pathname}</output> }
+function Location() {
+  const { pathname, search } = useLocation()
+  return <output data-current-path>{pathname + search}</output>
+}
 beforeEach(async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: class { observe() {} unobserve() {} disconnect() {} } })
   Element.prototype.scrollIntoView = vi.fn()
@@ -121,6 +124,20 @@ test('服务端判定命中的结果不会再次被客户端标题过滤，中�
   expect(host.querySelector('[role="option"]')?.textContent).toContain('连接器')
   await act(async () => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true })))
   expect(host.querySelector('[data-current-path]')?.textContent).toBe('/')
+})
+
+test.each(['回车', '鼠标'])('报销搜索通过%s保留明细定位参数', async method => {
+  const path = '/finance/expenses?detailId=17'
+  vi.mocked(searchGlobalApi).mockResolvedValue(page([
+    { ...result('EX-17'), type: 'expense', typeLabel: '费用报销', id: 17, path },
+  ]))
+  await type('EX-17')
+  await act(async () => vi.runOnlyPendingTimersAsync())
+  await act(async () => {
+    if (method === '回车') host.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    else host.querySelector<HTMLElement>('[role="option"]')!.click()
+  })
+  expect(host.querySelector('[data-current-path]')?.textContent).toBe(path)
 })
 
 test('其他表单按Escape不清除已收起的搜索草稿或抢走焦点', async () => {

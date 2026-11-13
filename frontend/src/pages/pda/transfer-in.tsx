@@ -4,7 +4,7 @@ import PdaProductIdentity from '@/components/pda/PdaProductIdentity'
  * 两步：扫在途库存条码 → 扫目标库位 → POST /transfer/:id/scan-in（容器落库位、翻在库）。
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, CircleCheck, Hourglass } from 'lucide-react'
+import { ArrowDownToLine, CircleAlert, CircleCheck, Hourglass } from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { parseBarcode } from '@/utils/barcode'
@@ -162,12 +162,17 @@ export default function PdaTransferInPage() {
     )
   }
   if (!isError && order.status !== 3) {
+    const forceClosed = order.closedReason === 'force_close'
+    const completed = order.status === 4 && !forceClosed
+    const description = forceClosed ? '调拨已异常了结，未入库货物已按运输损耗核销。'
+      : completed ? '调拨完成，货物已入库。'
+        : order.status === 5 ? '该调拨单已取消。' : '尚未出库，请先由调出仓扫码出库。'
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="调入仓扫码入库" onBack={() => navigate('/pda/transfer')} />
         <div className="mx-auto max-w-md px-4 pt-4">{recoveryNotice}</div>
-        <PdaEmptyState icon={order.status >= 4 ? <CircleCheck className="h-12 w-12 text-success-ink" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={order.statusName}
-          description={order.status < 3 ? '尚未出库，请先由调出仓扫码出库。' : '该调拨单不在待入库状态。'}
+        <PdaEmptyState icon={completed ? <CircleCheck className="h-12 w-12 text-success-ink" /> : forceClosed ? <CircleAlert className="h-12 w-12 text-warning-ink" /> : <Hourglass className="h-12 w-12 text-muted-foreground" />} title={forceClosed ? '异常了结' : order.statusName}
+          description={description}
           actionText="返回调拨执行" onAction={() => navigate('/pda/transfer')} />
       </div>
     )

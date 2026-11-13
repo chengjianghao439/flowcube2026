@@ -105,7 +105,7 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
     if(sql.startsWith('SELECT pr.order_id AS poId,')){assert.match(sql,/FROM payment_records pr JOIN purchase_orders po/);return [[]]}
     if(sql.startsWith('SELECT t.id AS txnId,')){assert.match(sql,/WHERE t.biz_type IN \(1, 2, 3, 5\)$/);return [[]]}
     if(sql.startsWith('SELECT id, return_no, supplier_id, supplier_name, total_amount, updated_at AS vdate FROM purchase_returns')){assert.match(sql,/WHERE status = 3 AND deleted_at IS NULL/);return [[]]}
-    if(sql.startsWith('SELECT sr.id, sr.return_no, sr.customer_id,')){assert.match(sql,/WHERE sr.status = 3 AND sr.deleted_at IS NULL/);return [[]]}
+    if(sql.startsWith('SELECT sr.id, sr.sale_order_id, sr.return_no, sr.customer_id,')){assert.match(sql,/WHERE sr.status = 3 AND sr.deleted_at IS NULL/);return [[]]}
     if(sql.startsWith('SELECT sri.id FROM sale_return_items sri JOIN sale_returns sr'))return [[]]
     if(sql.startsWith('SELECT sr.id FROM sale_returns sr LEFT JOIN sale_ordinary_return_bases'))return [[]]
     if(sql.startsWith('SELECT r.*,sri.return_id,sri.sale_item_id'))return [[]]

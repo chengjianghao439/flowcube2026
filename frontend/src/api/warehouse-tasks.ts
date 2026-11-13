@@ -24,6 +24,7 @@ export interface WarehouseTaskItem {
 export interface WarehouseTask {
   id: number
   taskNo: string
+  taskType?: 'sale_out' | 'purchase_return' | 'sale_return_out'
   saleOrderId: number
   saleOrderNo: string
   customerId: number
@@ -168,7 +169,7 @@ export const startPickingApi = (id: number) =>
   client.put(`/warehouse-tasks/${id}/start-picking`, {}, { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
 
 export const readyToShipApi = (id: number, requestKey?: string) =>
-  client.put(`/warehouse-tasks/${id}/ready`, {}, {
+  client.put<{ taskId: number; status?: TaskStatus }>(`/warehouse-tasks/${id}/ready`, {}, {
     skipGlobalError: true,
     headers: requestKey
       ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })

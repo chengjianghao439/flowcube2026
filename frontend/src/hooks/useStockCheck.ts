@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { getCheckListApi, getCheckDetailApi, createCheckApi, updateCheckItemsApi, submitCheckApi, refreshCheckItemApi, cancelCheckApi } from '@/api/stockcheck'
 import { useInvalidate } from '@/hooks/useInvalidate'
+import { useWarehouseHandoffQuery } from './useWarehouseHandoffQuery'
 import type { CreateCheckParams } from '@/types/stockcheck'
 
 export const useCheckList   = (params: object) => useQuery({ queryKey: ['stockcheck', params], queryFn: () => getCheckListApi(params) })
-export const useCheckDetail = (id: number)     => useQuery({ queryKey: ['stockcheck', id],     queryFn: () => getCheckDetailApi(id), enabled: !!id, refetchInterval: false })
+export const useCheckDetail = (id: number, visible = true) => useWarehouseHandoffQuery({ queryKey: ['stockcheck', id], queryFn: () => getCheckDetailApi(id), enabled: !!id }, visible)
 
 export const useCreateCheck = () => {
   const invalidate = useInvalidate()

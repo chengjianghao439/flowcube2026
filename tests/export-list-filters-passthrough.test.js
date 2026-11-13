@@ -49,11 +49,11 @@ const exportService = require(path.resolve(__dirname, '../backend/src/modules/ex
 
 /**
  * 从 findAll 的签名解析筛选键。
- * 形态固定为 `async function findAll({ a = 1, b = '', ... } = {}) {...}`。
+ * 解析 `findAll` 的第一个解构参数。后续参数用于授权或执行上下文。
  */
 function parseFindAllFilterKeys(fn) {
   const src = fn.toString()
-  const matched = src.match(/findAll\s*\(\s*\{([\s\S]*?)\}\s*=\s*\{\s*\}\s*\)/)
+  const matched = src.match(/findAll\s*\(\s*\{([\s\S]*?)\}\s*=\s*\{\s*\}\s*[,)]/)
   if (!matched) throw new Error('无法解析 findAll 的解构签名，测试口径失效——请检查函数形态是否变化')
   return matched[1]
     .split(',')
@@ -82,6 +82,11 @@ const CASES = [
     name: '对账单列表',
     servicePath: '../backend/src/modules/payments/reconciliation-statements.service',
     exportMethod: 'getStatementsExportPayload',
+  },
+  {
+    name: '费用报销列表',
+    servicePath: '../backend/src/modules/finance/expense-claims.service',
+    exportMethod: 'getExpenseClaimsExportPayload',
   },
 ]
 
@@ -121,6 +126,39 @@ for (const testCase of CASES) {
     }
   })
 }
+
+test('采购导出按经办人编号和逾期状态筛选，原经办人名称筛选仍可用', async () => {
+  const { pool } = require(offlineDbPath)
+  const queries = []
+  pool.query = async (sql, params) => { queries.push({ sql, params }); return [[]] }
+  try {
+    await exportService.getPurchaseExportPayload({ operatorId: '19', overdueOnly: 'true', scopeWarehouseIds: [5] })
+    await exportService.getPurchaseExportPayload({ operator: '合成经办人', scopeWarehouseIds: [] })
+  } finally {
+    pool.query = unexpectedDbCall
+  }
+  assert.match(queries[0].sql, /o\.warehouse_id IN \(\?\).*o\.operator_id = \?.*o\.status IN \(1,2\) AND o\.expected_date IS NOT NULL AND o\.expected_date < CURDATE\(\)/s)
+  assert.deepEqual(queries[0].params, [[5], 19])
+  assert.match(queries[1].sql, /AND 1=0.*o\.operator_name LIKE \?/s)
+  assert.deepEqual(queries[1].params, ['%合成经办人%'])
+})
+
+test('库存流水导出同时保留授权范围、业务筛选和单边日期', async () => {
+  const { pool } = require(offlineDbPath)
+  const queries = []
+  pool.query = async (sql, params) => { queries.push({ sql, params }); return [[]] }
+  try {
+    await exportService.getInventoryLogsExportPayload({
+      type: '2', productId: '19', warehouseId: '7', endDate: '2026-11-13', scopeWarehouseIds: [5],
+    })
+  } finally {
+    pool.query = unexpectedDbCall
+  }
+  assert.equal(queries.length, 1)
+  assert.match(queries[0].sql, /l\.warehouse_id IN \(\?\).*l\.type = \?.*l\.product_id = \?.*l\.warehouse_id = \?.*l\.created_at < DATE_ADD\(\?, INTERVAL 1 DAY\)/s)
+  assert.doesNotMatch(queries[0].sql, /l\.created_at >=/)
+  assert.deepEqual(queries[0].params, [[5], 2, 19, 7, '2026-11-13'])
+})
 
 test('空串与 null 的筛选不应被当成非法值导致导出报错', async () => {
   const service = require(path.resolve(__dirname, '../backend/src/modules/payments/reconciliation-statements.service'))

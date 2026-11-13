@@ -7,20 +7,30 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import apiClient, { setApiClientBaseURL } from '@/api/client'
 import SaleReturnFormPage from './sale/form'
 import PurchaseReturnFormPage from './purchase/form'
+import TransferFormPage from '@/pages/transfer/form'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { KeepAliveOutlet } from '@/components/layout/KeepAliveOutlet'
 import { useAuthStore } from '@/store/authStore'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { useWorkspaceStore, HOME_TAB, MAX_WORKSPACE_TABS } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 import { disposeWorkspaceHistoryGuard } from '@/router/workspaceHistoryGuard'
-const mocks = vi.hoisted(() => ({ sale: vi.fn(), purchase: vi.fn(), detail: vi.fn(), create: vi.fn(), query: vi.fn(), warning: vi.fn() }))
+const mocks = vi.hoisted(() => ({ sale: vi.fn(), purchase: vi.fn(), detail: vi.fn(), create: vi.fn(), updateTransfer: vi.fn(), query: vi.fn(), warning: vi.fn() }))
 vi.mock('@/api/client', async importOriginal => ({ ...await importOriginal<typeof import('@/api/client')>() }))
 const originalAdapter = apiClient.defaults.adapter, originalBaseURL = apiClient.defaults.baseURL
 const unknownRequests: string[] = []
 vi.mock('@/api/returns', () => ({ getSaleReturnSourceOrderApi: mocks.sale, getPurchaseReturnSourceOrderApi: mocks.purchase, getSaleReturnDetailApi: mocks.detail, getPurchaseReturnDetailApi: mocks.detail, createSaleReturnApi: mocks.create, createPurchaseReturnApi: mocks.create }))
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: mocks.query }))
-vi.mock('@/components/finder', () => ({ CustomerFinder: ({ open, onConfirm }: { open: boolean; onConfirm: (v: unknown) => void }) => open ? <button onClick={() => onConfirm({ id: 2, name: '手工客户', code: 'M' })}>选手工客户</button> : null, SupplierFinder: ({ open, onConfirm }: { open: boolean; onConfirm: (v: unknown) => void }) => open ? <button onClick={() => onConfirm({ id: 2, name: '手工供应商', code: 'M' })}>选手工供应商</button> : null, ProductFinder: ({ open, onConfirm }: { open: boolean; onConfirm: (v: unknown) => void }) => open ? <button onClick={() => onConfirm({ id: 2, name: '手工商品', code: 'M', unit: '件', salePrice: 4, costPrice: 4 })}>选手工商品</button> : null }))
+vi.mock('@/components/finder', () => ({
+  CustomerFinder: ({ open, onConfirm }: { open: boolean; onConfirm: (v: unknown) => void }) => open ? <button onClick={() => onConfirm({ id: 2, name: '手工客户', code: 'M' })}>选手工客户</button> : null,
+  SupplierFinder: ({ open, onConfirm }: { open: boolean; onConfirm: (v: unknown) => void }) => open ? <button onClick={() => onConfirm({ id: 2, name: '手工供应商', code: 'M' })}>选手工供应商</button> : null,
+  ProductFinder: ({ open, onConfirm, onClose }: { open: boolean; onConfirm: (v: unknown) => void; onClose: () => void }) => open ? <>
+    <button onClick={() => { onConfirm({ id: 2, name: '手工商品', code: 'M', unit: '件', salePrice: 4, costPrice: 4 }); onClose() }}>选手工商品</button>
+    <button onClick={onClose}>取消选品</button>
+  </> : null,
+}))
+vi.mock('@/api/transfer', () => ({ getTransferDetailApi: mocks.detail, createTransferApi: vi.fn(), updateTransferApi: mocks.updateTransfer, confirmTransferApi: vi.fn(), cancelTransferApi: vi.fn() }))
 vi.mock('@/components/shared/WarehouseSelect', () => ({ WarehouseSelect: ({ onChange, disabled }: { onChange: (id: number, name: string) => void; disabled: boolean }) => <button disabled={disabled} onClick={() => onChange(2, '手工仓')}>选手工仓</button> }))
 vi.mock('@/api/products', () => ({ getProductApi: () => Promise.resolve({ units: [] }) }))
 vi.mock('@/hooks/useProductQtyPolicies', () => ({ useProductQtyPolicies: () => () => true }))
@@ -58,13 +68,88 @@ async function click(host: HTMLElement, label: string) {
 async function page(kind: string, path: string, run: (host: HTMLElement, rerender: (path: string) => Promise<void>) => Promise<void>, direct = false) {
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host), cache = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const Component = kind === 'sale' ? SaleReturnFormPage : PurchaseReturnFormPage
+  const Component = kind === 'sale' ? SaleReturnFormPage : kind === 'purchase' ? PurchaseReturnFormPage : TransferFormPage
   async function rerender(next: string) {
     await act(async () => root.render(<QueryClientProvider client={cache}><MemoryRouter initialEntries={[next]}><TabPathContext.Provider value={direct ? '' : next}><Component /></TabPathContext.Provider></MemoryRouter></QueryClientProvider>)); await flush()
   }
   try { await rerender(path); await run(host, rerender) }
   finally { act(() => root.unmount()); host.remove(); cache.clear() }
 }
+test.each(['sale', 'purchase', 'transfer'])('%s 取消新增选品不改明细或脏状态，取消换品保留已选行和数量', async kind => {
+  const route = kind === 'transfer' ? '/transfer/new' : `/returns/${kind}/new`
+  await page(kind, route, async host => {
+    const openFinder = () => click(host, kind === 'transfer' ? '添加商品' : '+ 添加商品')
+    const quantity = () => host.querySelector<HTMLInputElement>('input[placeholder="数量"]')
+    const original = host.textContent
+    await openFinder()
+    expect(quantity()).toBeNull()
+    expect(useDirtyGuardStore.getState().isTabDirty(route)).toBe(false)
+    await click(host, '取消选品')
+    expect(host.textContent).toBe(original)
+    await openFinder()
+    await click(host, '选手工商品')
+    expect(host.querySelectorAll('input[placeholder="数量"]')).toHaveLength(1)
+    expect(quantity()?.value).toBe('1')
+    expect(useDirtyGuardStore.getState().isTabDirty(route)).toBe(true)
+    await change(quantity()!, '3')
+    await click(host, '手工商品')
+    await click(host, '取消选品')
+    expect(host.querySelectorAll('input[placeholder="数量"]')).toHaveLength(1)
+    expect(quantity()?.value).toBe('3')
+    expect(host.textContent).toContain('手工商品')
+  })
+})
+
+test('调拨草稿取消编辑时仅询问未保存改动，继续编辑保留输入', async () => {
+  const route = '/transfer/10'
+  mocks.detail.mockResolvedValue({ id: 10, orderNo: 'TO10', fromWarehouseId: 1, fromWarehouseName: '仓一', toWarehouseId: 2, toWarehouseName: '仓二', status: 1, items: [] })
+  await page('transfer', route, async host => {
+    await click(host, '编辑')
+    await click(host, '取消编辑')
+    expect(host.textContent).not.toContain('编辑调拨单')
+    await click(host, '编辑')
+    await click(host, '添加商品')
+    await click(host, '选手工商品')
+    await click(host, '取消编辑')
+    expect(useDirtyGuardStore.getState().isTabDirty(route)).toBe(true)
+    await click(document.body, '继续编辑')
+    expect(host.textContent).toContain('手工商品')
+    await click(host, '取消编辑')
+    await click(document.body, '放弃本次修改')
+    expect(host.textContent).not.toContain('编辑调拨单')
+    expect(useDirtyGuardStore.getState().isTabDirty(route)).toBe(false)
+    await click(host, '编辑')
+    await click(host, '添加商品')
+    await click(host, '选手工商品')
+    let finishSave!: () => void
+    mocks.updateTransfer.mockImplementationOnce(() => new Promise<void>(resolve => { finishSave = resolve }))
+    await click(host, '保存修改')
+    expect(host.querySelector<HTMLInputElement>('input[placeholder="数量"]')?.disabled).toBe(true)
+    expect(useDirtyGuardStore.getState().isTabDirty(route)).toBe(true)
+    await act(async () => finishSave())
+    await flush()
+    expect(host.textContent).not.toContain('编辑调拨单')
+    expect(useDirtyGuardStore.getState().isTabDirty(route)).toBe(false)
+  })
+})
+
+test.each([
+  { canView: true, sourceId: 31, hasLink: true },
+  { canView: false, sourceId: 31, hasLink: false },
+  { canView: true, sourceId: null, hasLink: false },
+])('采购退货详情按查看权限 $canView 和原单 ID $sourceId 决定是否显示原单号链接', async ({ canView, sourceId, hasLink }) => {
+  const permissions = canView ? [PERMISSIONS.RETURN_ORDER_VIEW, PERMISSIONS.PURCHASE_ORDER_VIEW] : [PERMISSIONS.RETURN_ORDER_VIEW]
+  useAuthStore.getState().login('fixture', null, { id: 5, roleId: 2, permissions } as never)
+  mocks.detail.mockResolvedValue({ id: 90, returnNo: 'PR90', purchaseOrderId: sourceId, purchaseOrderNo: 'PO31', supplierName: '原供应商', warehouseName: '仓一', status: 2, totalAmount: 8, createdAt: '2026-10-01', items: [] })
+  await page('purchase', '/returns/purchase/90', async host => {
+    expect(host.textContent).toContain('PO31')
+    const link = host.querySelector<HTMLAnchorElement>('a[href="/purchase/31"]')
+    if (!hasLink) { expect(link).toBeNull(); return }
+    expect(link?.textContent).toBe('PO31')
+    await act(async () => link!.click())
+    expect(useWorkspaceStore.getState().tabs.some(tab => tab.path === '/purchase/31')).toBe(true)
+  })
+})
 test.each(['sale', 'purchase'])('%s source query opens a new form and gets authoritative historical price/remaining quantity with owned config', async kind => {
   await page(kind, pathFor(kind) + '&unitPrice=999&quantity=999', async host => {
     expect(host.textContent).toContain(kind === 'sale' ? '新建销售退货单' : '新建采购退货单')
@@ -99,7 +184,16 @@ test.each(['sale', 'purchase'])('%s source API id/no mismatches and failures nev
 })
 test.each(['sale', 'purchase'])('%s zero remaining comes from source API and cannot create', async kind => {
   mocks[kind as 'sale'].mockResolvedValueOnce({ ...source, items: [{ ...line, remainingQty: 0 }] })
-  await page(kind, pathFor(kind), async host => { expect(mocks.warning).toHaveBeenCalledWith('该原单已无剩余可退数量'); expect(host.querySelector('input[placeholder="数量"]')).toBeNull(); await click(host, '创建退货单'); expect(mocks.create).not.toHaveBeenCalled() })
+  await page(kind, pathFor(kind), async host => {
+    const sourceName = kind === 'sale' ? '销售单' : '采购单'
+    expect(mocks.warning).toHaveBeenCalledWith('该原单已无剩余可退数量')
+    expect(host.textContent).toContain(`原${sourceName}暂无剩余可退数量。`)
+    expect(host.querySelector('input[placeholder="数量"]')).toBeNull()
+    const submit = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('创建退货单'))
+    expect(submit?.disabled).toBe(true)
+    await click(host, '创建退货单')
+    expect(mocks.create).not.toHaveBeenCalled()
+  })
 })
 test.each(['sale', 'purchase'])('%s auto read cannot overwrite a remark edited while source is pending', async kind => {
   let finish!: (value: unknown) => void

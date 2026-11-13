@@ -32,6 +32,9 @@ import type { TableColumn } from '@/types'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import WaveQueryDialog, { type WaveQueryValues } from './WaveQueryDialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { ApiClientError } from '@/api/client'
 
 function getWaveClosureCopy(wave: PickingWave | null) {
   if (!wave) {
@@ -82,6 +85,14 @@ export default function PickingWavesPage() {
   const [queryOpen, setQueryOpen] = useState(false)
   const selectedWaveId = Number(searchParams.get('waveId') || 0) || null
   const focus = searchParams.get('focus') || ''
+  const hasFilters = Boolean(keyword || statusFilter || warehouseFilter || startDate || endDate)
+  const exportParams = {
+    ...(keyword && { keyword }),
+    ...(statusFilter && { status: statusFilter }),
+    ...(warehouseFilter && { warehouseId: String(warehouseFilter) }),
+    ...(startDate && { startDate }),
+    ...(endDate && { endDate }),
+  }
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['picking-waves', keyword, statusFilter, warehouseFilter, startDate, endDate],
@@ -155,8 +166,6 @@ export default function PickingWavesPage() {
 
   const chips = [
     warehouseFilter && { key: 'warehouse', label: `仓库：${warehouseName || warehouseFilter}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
-    startDate && { key: 'startDate', label: `创建自：${startDate}`, onRemove: () => updateParams({ startDate: null }) },
-    endDate && { key: 'endDate', label: `创建至：${endDate}`, onRemove: () => updateParams({ endDate: null }) },
     keyword && { key: 'keyword', label: `批次号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
     statusFilter && { key: 'status', label: `状态：${WAVE_STATUS_LABEL[Number(statusFilter) as WaveStatus] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
@@ -238,28 +247,34 @@ export default function PickingWavesPage() {
         description="核对批次拣货、分拣与打印进度。"
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/picking-waves').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/picking-waves', exportParams).catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
       />
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <AppliedDateRange label="创建日期" startDate={startDate} endDate={endDate}
+          onClear={() => updateParams({ startDate: null, endDate: null })} />
+        {chips.map(c => (
+          <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            {c.label}
+            <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {hasFilters && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+      </div>
 
-      {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} title="批次列表加载失败" /> : <>
-        <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id" />
+      {error instanceof ApiClientError && error.status === 403 ? (
+        <EmptyState variant="no-permission" description="当前账号无权查看拣货批次。" />
+      ) : isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} title="批次列表加载失败" /> : <>
+        <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id"
+          emptyState={hasFilters ? (
+            <EmptyState variant="no-result" title="没有符合条件的拣货批次"
+              action={<Button variant="outline" size="sm" onClick={clearAll}>清除筛选</Button>} />
+          ) : <EmptyState variant="no-data" title="暂无拣货批次" description="当前可查看的仓库还没有拣货批次。" />} />
         {!isLoading && <ListSummary total={total} unit="个" />}
       </>}
 

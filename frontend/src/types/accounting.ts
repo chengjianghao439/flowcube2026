@@ -270,7 +270,7 @@ export const CLOSING_STATUS_LABELS: Record<string, string> = {
   current: '结转已最新', stale: '结转需更新', missing: '未生成结转', not_required: '无需结转',
 }
 
-// 凭证来源类型（用于筛选下拉；展示直接用后端 sourceTypeName）
+// 凭证来源类型，用于筛选及旧接口返回原始代码时的展示。
 export const VOUCHER_SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'purchase_settle', label: '采购结算' },
   { value: 'sale_revenue', label: '销售收入' },
@@ -279,9 +279,19 @@ export const VOUCHER_SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
   { value: 'payment_out', label: '付款' },
   { value: 'supplier_refund_in', label: '供应商退款' },
   { value: 'expense_pay', label: '费用报销' },
+  { value: 'refund_pay', label: '退款出账' },
   { value: 'purchase_return', label: '采购退货' },
   { value: 'sale_return', label: '销售退货' },
   { value: 'stock_check', label: '盘点盈亏' },
+  { value: 'freight_settle', label: '运费结算' },
+  { value: 'manual_payable', label: '手工应付' },
+  { value: 'asset_acquire', label: '固定资产购入' },
+  { value: 'asset_depreciation', label: '固定资产折旧' },
+  { value: 'asset_disposal', label: '固定资产处置' },
+  { value: 'salary_accrual', label: '工资计提' },
+  { value: 'social_company', label: '单位社保公积金' },
+  { value: 'social_personal', label: '代扣社保公积金' },
+  { value: 'salary_payment', label: '工资发放' },
   { value: 'period_close', label: '期末损益结转' },
   { value: 'period_close_year', label: '年度利润结转' },
   { value: 'manual', label: '手工凭证' },

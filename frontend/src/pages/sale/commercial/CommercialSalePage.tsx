@@ -114,8 +114,8 @@ export default function CommercialSalePage({
     !!order.warehouseTaskCancelRequestedAt ||
     !!order.warehouseTaskAdjustmentRequestedAt ||
     !!order.tasks?.some((t) => t.cancelRequestedAt || t.adjustmentRequestedAt)
-  useSaleEditEntry(tabPath, true, () => {
-    if (order.status === 1 && can(PERMISSIONS.SALE_ORDER_UPDATE) && !locked && !returning) {
+  useSaleEditEntry(tabPath, true, mode => {
+    if (mode === 'edit' && order.status === 1 && can(PERMISSIONS.SALE_ORDER_UPDATE) && !locked && !returning) {
       setEditor(current => current ?? { baseline: order, adjust: false })
     }
   })
@@ -162,7 +162,16 @@ export default function CommercialSalePage({
       backup.invalidate()
       if (op.action === 'delete') onClose()
       else {
-        toast.success('原单操作已提交，请核对最新状态与仓库归还进度')
+        const message = {
+          create: '已创建销售单',
+          update: '已保存销售单',
+          adjust: '已提交改单，请核对最新状态与仓库归还进度',
+          ship: '已发起出库，请在仓库任务中查看执行进度',
+          reserve: '已占用库存',
+          release: '已取消占库',
+          cancel: result.result?.pending ? '已提交取消，请查看仓库归还进度' : '已提交取消，请核对最新状态',
+        }[op.action]
+        toast.success(message)
         await reload(false, result)
       }
     }

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useNavigate, type NavigateFunction } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, expect, test, vi } from 'vitest'
 import SaleFormPage from '../form'
@@ -73,6 +73,8 @@ async function mount(
   cache.setQueryData(['sale', 80], foreign)
   if (ownedCache) cache.setQueryData(['sale', 'commercial-detail', 80, '/a', 5, 10], ownedCache)
   let finish!: (o: SaleOrder) => void
+  let navigate!: NavigateFunction
+  function RouterObserver() { navigate = useNavigate(); return null }
   mocks.get.mockReturnValue(
     new Promise((resolve) => {
       finish = resolve
@@ -83,6 +85,7 @@ async function mount(
       root.render(
         <QueryClientProvider client={cache}>
           <MemoryRouter initialEntries={['/sale/80']}>
+            <RouterObserver />
             <TabPathContext.Provider value="/sale/80">
               <SaleFormPage />
             </TabPathContext.Provider>
@@ -99,9 +102,11 @@ async function mount(
       finish,
       async (path) => {
         await act(async () => {
+          navigate(path, { replace: true })
           root.render(
             <QueryClientProvider client={cache}>
               <MemoryRouter initialEntries={['/sale/80']}>
+                <RouterObserver />
                 <TabPathContext.Provider value={path}>
                   <SaleFormPage />
                 </TabPathContext.Provider>

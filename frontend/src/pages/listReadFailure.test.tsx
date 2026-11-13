@@ -47,8 +47,9 @@ async function page(sample: typeof samples[number], run: (host: HTMLDivElement, 
 test.each(samples)('$path 首次读取失败显示持续错误和重试，不显示空数据或零总数', async sample => {
   fixture.list.mockRejectedValue(new Error('读取失败夹具'))
   await page(sample, async host => {
+    const emptyMessage = sample.prefix === 'returns' ? '没有符合条件的退货单' : '暂无数据'
     expect(host.textContent).toContain('读取失败夹具')
-    expect(host.textContent).not.toContain('暂无数据')
+    expect(host.textContent).not.toContain(emptyMessage)
     expect(host.textContent).not.toMatch(/共\s*0\s*单/)
     const retry = [...host.querySelectorAll('button')].find(button => button.textContent === '重试')
     expect(retry).toBeTruthy()
@@ -57,7 +58,7 @@ test.each(samples)('$path 首次读取失败显示持续错误和重试，不显
     await act(async () => retry!.click()); await flush()
     expect(fixture.list.mock.calls.at(-1)?.[0]).toEqual(previousParams)
     expect(host.textContent).not.toContain('读取失败夹具')
-    expect(host.textContent).toContain('暂无数据')
+    expect(host.textContent).toContain(emptyMessage)
     expect(host.textContent).toMatch(/共\s*0\s*单/)
   })
 })

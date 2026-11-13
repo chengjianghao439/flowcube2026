@@ -80,6 +80,26 @@ test.each([1, 2, 3, 6])('销售状态%s的真实菜单清理后才打开取消�
   } finally { await act(async () => root.unmount()); host.remove(); useAuthStore.setState({ user: null }) }
 })
 
+test.each([
+  { commercialModel: null, label: '修改订单' },
+  { commercialModel: 'kit-v1' as const, label: '查看后修改订单' },
+])('列表入口按订单模型导航：$label', async ({ commercialModel, label }) => {
+  useAuthStore.setState({ user: { roleId: 5, permissions: [PERMISSIONS.SALE_ORDER_VIEW, PERMISSIONS.SALE_ORDER_UPDATE] } as never })
+  const host = document.createElement('div'), root = createRoot(host), detail = vi.fn(), edit = vi.fn()
+  document.body.append(host)
+  try {
+    await act(async () => root.render(<SaleRowActions row={{ id: 5, status: 2, commercialModel } as SaleOrder}
+      anyPending={false} onAsk={vi.fn()} onReserveSale={vi.fn()} onCancelSale={vi.fn()} onDeleteSale={vi.fn()}
+      onViewTask={vi.fn()} onDetail={detail} onEdit={edit} onPrint={vi.fn()} />))
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="更多操作"]')!.click())
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(item => item.textContent === label)
+    expect(item).toBeDefined()
+    await act(async () => item!.click())
+    expect(commercialModel ? detail : edit).toHaveBeenCalledOnce()
+    expect(commercialModel ? edit : detail).not.toHaveBeenCalled()
+  } finally { await act(async () => root.unmount()); host.remove(); useAuthStore.setState({ user: null }) }
+})
+
 test.each([1,6])('普通列表状态%s的原未决请求转入详情核对，禁新占库和写菜单', async status => {
   const previous=useAuthStore.getState()
   useAuthStore.getState().login('synthetic',null,{id:9,username:'synthetic',realName:'合成人员',roleId:1,roleName:'合成'})

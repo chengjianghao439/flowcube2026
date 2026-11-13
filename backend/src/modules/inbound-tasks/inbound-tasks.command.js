@@ -4,7 +4,7 @@ const { pool } = require('../../config/db')
 const { assertQtyPrecisionWith, assertQtyPrecision } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const AppError = require('../../utils/AppError')
 const { createContainer, CONTAINER_STATUS, SOURCE_TYPE } = require('../../engine/containerEngine')
-const { enqueueContainerLabelJob } = require('../print-jobs/print-jobs.service')
+const { enqueueContainerLabelJob, EXPIRE_MESSAGE } = require('../print-jobs/print-jobs.service')
 const {
   genTaskNo,
   appendInboundEvent,
@@ -595,11 +595,9 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
       containers,
     }
     // 收货是"货已经在库"这个事实的记录，不应该因为打印基础设施暂时没就绪而回滚。
-    // enqueueContainerLabelJob 在真正找不到可用打印机时返回 null（预期状态，非异常），
-    // 这里只跳过该容器的打印任务、不中断收货；后续可通过整单/明细补打把标签补上。
-    // 若打印任务写入本身出错（如 DB 异常），enqueueContainerLabelJob 内部会直接抛错，
-    // 仍然会正确回滚整个收货事务。
+    // 无打印机和标签渲染失败只留打印记录，仍正常登记收货。数据库写入错误继续回滚事务。
     let noPrinterCount = 0
+    let printFailedCount = 0
     for (const container of containers) {
       const job = await enqueueContainerLabelJob({
         conn,
@@ -615,16 +613,19 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         requestPurpose: 'initial',
         jobUniqueKey: `inbound_receive:${taskId}:container:${container.containerId}`,
       })
-      // job.unprintable：没有可用打印机，只落了一条失败记录（打印记录页可见、可补打），
-      // 不能算「已提交打印」——否则现场会以为标签已经在打。
-      if (!job?.id || job.unprintable) {
+      if (!job?.id || (job.unprintable && job.errorMessage === EXPIRE_MESSAGE)) {
         noPrinterCount += 1
+        continue
+      }
+      if (job.unprintable) {
+        printFailedCount += 1
         continue
       }
       result.printJobIds.push(Number(job.id))
     }
     result.printJobId = result.printJobIds[0] ?? null
     result.noPrinterCount = noPrinterCount
+    result.printFailedCount = printFailedCount
     if (result.printJobIds.length > 0) {
       await appendInboundEvent(
         conn,
@@ -645,10 +646,15 @@ async function receive(taskId, payload, { userId, requestKey, pdaWarehouseId, sc
         taskId,
         'print_skipped_no_printer',
         '暂无可用打印机',
-        `${productName} 有 ${noPrinterCount} 个容器暂未生成打印任务（无可用标签打印机），收货已正常记录，可稍后整单/明细补打`,
+        `${productName} 有 ${noPrinterCount} 个条码未派发（无可用标签打印机），收货已登记，请到打印记录补打`,
         { userId, realName: null },
         { noPrinterCount },
       )
+    }
+    if (printFailedCount > 0) {
+      await appendInboundEvent(conn, taskId, 'print_prepare_failed', '标签打印准备失败',
+        `${productName} 有 ${printFailedCount} 个条码未派发，收货已登记，请到打印记录查看原因`,
+        { userId, realName: null }, { printFailedCount })
     }
     await completeOperationRequest(conn, requestState, {
       data: result,

@@ -1,5 +1,5 @@
 const AppError = require('../../utils/AppError')
-const { isStalledErrorMessage } = require('../print-jobs/print-jobs.service')
+const { deriveInboundPrintJobResult } = require('../print-jobs/print-jobs.status')
 const { DEFAULT_INBOUND_THRESHOLDS } = require('../../utils/inboundThresholds')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { qtyUnits, qtyNumber } = require('./inbound-tasks.cost')
@@ -21,6 +21,7 @@ const PRINT_STATUS_LABEL = {
   success: '已打印',
   failed: '打印失败',
   timeout: '超时待确认',
+  unassigned: '未配置打印机',
   cancelled: '已取消',
 }
 const PUTAWAY_STATUS_LABEL = {
@@ -41,6 +42,7 @@ function buildPrintStatus(summary, cancelled = false) {
   if (!summary || !summary.total) return { key: 'not_started', label: PRINT_STATUS_LABEL.not_started }
   if (summary.timeout > 0) return { key: 'timeout', label: PRINT_STATUS_LABEL.timeout }
   if (summary.failed > 0) return { key: 'failed', label: PRINT_STATUS_LABEL.failed }
+  if (summary.unassigned > 0) return { key: 'unassigned', label: PRINT_STATUS_LABEL.unassigned }
   if (summary.printing > 0) return { key: 'printing', label: PRINT_STATUS_LABEL.printing }
   if (summary.queued > 0) return { key: 'queued', label: PRINT_STATUS_LABEL.queued }
   if (summary.success > 0) return { key: 'success', label: PRINT_STATUS_LABEL.success }
@@ -72,12 +74,14 @@ function buildExceptionFlags(task) {
   const flags = {
     failedPrintJobs: Number(printSummary.failed || 0),
     timeoutPrintJobs: Number(printSummary.timeout || 0),
+    unassignedPrintJobs: Number(printSummary.unassigned || 0),
     overduePutawayContainers: Number(putawaySummary.overdueContainers || 0),
   }
   return {
     ...flags,
     hasException: flags.failedPrintJobs > 0
       || flags.timeoutPrintJobs > 0
+      || flags.unassignedPrintJobs > 0
       || flags.overduePutawayContainers > 0,
   }
 }
@@ -93,27 +97,12 @@ function buildReceiptStatus(task) {
 }
 
 function deriveInboundPrintJobState(row, thresholds = DEFAULT_INBOUND_THRESHOLDS) {
-  const rawStatus = Number(row.status)
-  const timedOut = (
-    (rawStatus === 0 || rawStatus === 1)
-      && !!row.updated_at
-      && (Date.now() - new Date(row.updated_at).getTime()) >= Number(thresholds.printTimeoutMinutes || DEFAULT_INBOUND_THRESHOLDS.printTimeoutMinutes) * 60 * 1000
-  ) || (rawStatus === 3 && isStalledErrorMessage(row.error_message))
-
-  const base = (statusKey, statusLabel) => ({
-    key: statusKey,
-    label: statusLabel,
-    statusKey,
-    statusLabel,
-  })
-
-  if (Number(row.task_status) === 5) return base('cancelled', PRINT_STATUS_LABEL.cancelled)
-  if (timedOut) return base('timeout', PRINT_STATUS_LABEL.timeout)
-  if (rawStatus === 2) return base('success', PRINT_STATUS_LABEL.success)
-  if (rawStatus === 3) return base('failed', PRINT_STATUS_LABEL.failed)
-  if (rawStatus === 1) return base('printing', PRINT_STATUS_LABEL.printing)
-  if (rawStatus === 0) return base('queued', PRINT_STATUS_LABEL.queued)
-  return base('queued', PRINT_STATUS_LABEL.queued)
+  const result = deriveInboundPrintJobResult({ ...row, print_status: row.status, print_updated_at: row.updated_at }, thresholds)
+  const statusKey = Number(row.task_status) === 5 ? 'cancelled'
+    : result.statusKey === 'voided_job' ? 'failed'
+      : result.statusKey === 'no_job' ? 'queued' : result.statusKey
+  const statusLabel = PRINT_STATUS_LABEL[statusKey]
+  return { key: statusKey, label: statusLabel, statusKey, statusLabel }
 }
 
 function getInboundPrintDispatchReasonLabel(reason) {
@@ -133,6 +122,7 @@ function buildInboundBatchStatus(summary) {
   if (summary.cancelled > 0) return { key: 'cancelled', label: PRINT_STATUS_LABEL.cancelled }
   if (summary.timeout > 0) return { key: 'timeout', label: PRINT_STATUS_LABEL.timeout }
   if (summary.failed > 0) return { key: 'failed', label: PRINT_STATUS_LABEL.failed }
+  if (summary.unassigned > 0) return { key: 'unassigned', label: PRINT_STATUS_LABEL.unassigned }
   if (summary.printing > 0) return { key: 'printing', label: PRINT_STATUS_LABEL.printing }
   if (summary.queued > 0) return { key: 'queued', label: PRINT_STATUS_LABEL.queued }
   return { key: 'success', label: PRINT_STATUS_LABEL.success }
@@ -171,6 +161,7 @@ function buildInboundPrintBatches(recentPrintJobs = []) {
       success: 0,
       failed: 0,
       timeout: 0,
+      unassigned: 0,
       cancelled: 0,
     }
     const printerNames = new Set()
@@ -206,6 +197,7 @@ function buildInboundPrintBatches(recentPrintJobs = []) {
       success: summary.success,
       failed: summary.failed,
       timeout: summary.timeout,
+      unassigned: summary.unassigned,
       cancelled: summary.cancelled,
       firstCreatedAt,
       lastUpdatedAt,

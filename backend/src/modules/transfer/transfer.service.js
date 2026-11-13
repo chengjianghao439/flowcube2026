@@ -15,7 +15,7 @@ const { normalizePagination } = require('../../utils/pagination')
 const { assertQtyPrecision } = require('../../utils/qtyPrecision')  // 商品级数量精度开关（迁移 254）
 const STATUS = { 1:'草稿', 2:'待出库', 3:'在途', 4:'已完成', 5:'已取消' }
 
-const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehouse_id, fromWarehouseName:r.from_warehouse_name, toWarehouseId:r.to_warehouse_id, toWarehouseName:r.to_warehouse_name, status:r.status, statusName:STATUS[r.status], remark:r.remark, submittedAt:r.submitted_at, submittedByName:r.submitted_by_name, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
+const fmt = r => ({ id:r.id, orderNo:r.order_no, fromWarehouseId:r.from_warehouse_id, fromWarehouseName:r.from_warehouse_name, toWarehouseId:r.to_warehouse_id, toWarehouseName:r.to_warehouse_name, status:r.status, statusName:r.closed_reason === 'force_close' ? '异常了结' : STATUS[r.status], closedReason:r.closed_reason ?? null, remark:r.remark, submittedAt:r.submitted_at, submittedByName:r.submitted_by_name, operatorId:r.operator_id, operatorName:r.operator_name, createdAt:r.created_at })
 
 const fmtItem = r => ({ id:r.id, productId:r.product_id, productCode:r.product_code, productName:r.product_name, unit:r.unit, articleNumber:r.article_number, spec:r.spec, color:r.color, quantity:Number(r.quantity), deductedQty:Number(r.deducted_qty||0), receivedQty:Number(r.received_qty||0), remark:r.remark })
 

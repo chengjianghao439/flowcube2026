@@ -18,6 +18,14 @@ const fixture = vi.hoisted(() => ({
   /** 取证用：置 true 时回执查询挂起，直到测试调用 statusResolver */
   deferStatus: false,
   statusResolver: null as null | (() => void),
+  accounts: vi.fn(async () => [{ id: 1, name: '测试账户', currentBalance: -100 }]),
+  payments: vi.fn(async () => ({
+    list: [{
+      id: 6, orderNo: 'AP-TEST-1', partyName: '验收测试供应商', balance: 20,
+      status: 2, confirmStatus: 1, dueDate: '2026-09-29',
+    }],
+  })),
+  statements: vi.fn(async () => ({ list: [] as Array<Record<string, unknown>> })),
 }))
 
 vi.mock('@/components/shared/AppDialog', () => ({
@@ -65,16 +73,11 @@ vi.mock('@/components/ui/select', () => {
   }
 })
 vi.mock('@/api/finance', () => ({
-  getActiveAccountsApi: async () => [{ id: 1, name: '测试账户', currentBalance: -100 }],
+  getActiveAccountsApi: fixture.accounts,
 }))
 vi.mock('@/api/payments', () => ({
-  getPaymentsApi: async () => ({
-    list: [{
-      id: 6, orderNo: 'AP-TEST-1', partyName: '验收测试供应商', balance: 20,
-      status: 2, confirmStatus: 1, dueDate: '2026-09-29',
-    }],
-  }),
-  getStatementsApi: async () => ({ list: [] }),
+  getPaymentsApi: fixture.payments,
+  getStatementsApi: fixture.statements,
   createReceiptApi: async () => ({ id: 1, receiptNo: 'PY-NEW', settledAmount: 0, balance: 0 }),
   settleReceiptApi: async (id: number, _alloc: unknown, requestKey: string) => {
     fixture.settleCalls.push({ id, requestKey })
@@ -104,7 +107,7 @@ const RECEIPT_A = {
 }
 const RECEIPT_B = { ...RECEIPT_A, id: 88, receiptNo: 'PY20260929088' }
 
-async function renderInto(root: ReturnType<typeof createRoot>, receipt: unknown) {
+async function renderInto(root: ReturnType<typeof createRoot>, receipt: unknown, target?: 'statement') {
   await act(async () => root.render(
     <QueryClientProvider client={qc}>
       <SettleReceiptDialog
@@ -112,6 +115,7 @@ async function renderInto(root: ReturnType<typeof createRoot>, receipt: unknown)
         onClose={() => { closeCount++ }}
         type={1}
         settlementTypes="1"
+        target={target}
         receipt={receipt as never}
       />
     </QueryClientProvider>,
@@ -122,10 +126,10 @@ async function renderInto(root: ReturnType<typeof createRoot>, receipt: unknown)
 }
 
 /** 继续核销模式：receipt 固定，弹窗打开即进入「继续核销 — PY20260929077」 */
-async function mount(receipt: unknown = RECEIPT_A) {
+async function mount(receipt: unknown = RECEIPT_A, target?: 'statement') {
   const host = document.createElement('div'); document.body.append(host); hosts.push(host)
   const root = createRoot(host)
-  await renderInto(root, receipt)
+  await renderInto(root, receipt, target)
   return { host, root, rerender: (r: unknown) => renderInto(root, r) }
 }
 
@@ -158,6 +162,50 @@ afterEach(() => {
   fixture.toasts.length = 0; closeCount = 0
   fixture.receiptStatus = 'success'; fixture.failWith = null
   fixture.deferStatus = false; fixture.statusResolver = null
+})
+
+it.each(['empty', 'error'])('资金账户查询 %s 时显示相应原因并阻止登记', async state => {
+  if (state === 'empty') fixture.accounts.mockResolvedValueOnce([])
+  else fixture.accounts.mockRejectedValueOnce(new Error('模拟账户读取失败'))
+  const { host, root } = await mount(null)
+  try {
+    await vi.waitFor(() => expect(host.textContent).toContain(state === 'empty' ? '暂无启用的资金账户' : '账户读取失败'))
+    expect(button(host, '仅登记不核销').disabled).toBe(true)
+    expect(Boolean(button(host, '重读账户'))).toBe(state === 'error')
+  } finally {
+    await act(async () => root.unmount())
+  }
+})
+
+it('供应商对账单在核销前提示含待财务确认的应付及处理位置', async () => {
+  fixture.statements.mockResolvedValueOnce({ list: [
+    { id: 63, statementNo: 'SP-63', status: 2, balance: 20, totalAmount: 20, partyName: RECEIPT_A.partyName, hasPendingPayableConfirmation: true },
+  ] })
+  const { host, root } = await mount(RECEIPT_A, 'statement')
+  try {
+    await vi.waitFor(() => expect(host.textContent).toContain('SP-63'))
+    expect(host.textContent).toContain('含待确认应付')
+    expect(host.textContent).toContain('月结供应商对账 → 全部账款')
+  } finally {
+    await act(async () => root.unmount())
+  }
+})
+
+it('候选请求失败可重试，待确认的应付说明为尚无符合条件的现结应付', async () => {
+  fixture.payments.mockRejectedValueOnce(new Error('候选读取中断')).mockResolvedValueOnce({ list: [{
+    id: 8, orderNo: 'AP-待确认', partyName: RECEIPT_A.partyName, balance: 20,
+    status: 1, confirmStatus: 0, dueDate: '2026-09-29',
+  }] })
+  const { host, root } = await mount(RECEIPT_A)
+  try {
+    await vi.waitFor(() => expect(host.textContent).toContain('待核销明细读取失败'))
+    expect(host.textContent).not.toContain('当前没有符合条件')
+    await act(async () => button(host, '重试').click())
+    await vi.waitFor(() => expect(host.textContent).toContain('待确认账款请先确认结算'))
+    expect(host.textContent).not.toContain('AP-待确认')
+  } finally {
+    await act(async () => root.unmount())
+  }
 })
 
 it('★ 查询在途期间又提交一次时，陈旧的 success 回执不得抹掉新一次的未确认、不得轮换它的键', async () => {

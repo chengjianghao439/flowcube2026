@@ -101,3 +101,22 @@ test('从默认列表实际应用自定义日期后再开详情并关闭，显�
   expect(api.list.mock.calls.every(([params]) => params.startDate === dateRange.startDate && params.endDate === dateRange.endDate)).toBe(true)
   await click('查询'); expect(dates().map(el => el.value)).toEqual([dateRange.startDate, dateRange.endDate])
 })
+
+test('倒置日期禁用查询并拦截单号回车，单边与清除日期仍保留单号', async () => {
+  await render()
+  await click('查询')
+  await input(dates()[0], '2026-10-09')
+  expect(dates().every(field => field.getAttribute('aria-invalid') === 'true')).toBe(true)
+  expect(button('查询').disabled).toBe(true)
+  const orderNo = document.querySelector<HTMLInputElement>('input[placeholder="销售单号…"]')!
+  await act(async () => orderNo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  retained()
+  await input(dates()[1], '')
+  await click('查询')
+  expect(request()).toMatchObject({ startDate: '2026-10-09', endDate: undefined, keyword: extra.keyword })
+  expect(host.textContent).toContain('自 2026-10-09 起')
+  await click('清除日期限制')
+  expect(request()).toMatchObject({ startDate: undefined, endDate: undefined, keyword: extra.keyword })
+  expect(current().get('range')).toBe('all')
+  expect(host.textContent).toContain('未限日期')
+})

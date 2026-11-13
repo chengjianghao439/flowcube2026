@@ -215,24 +215,19 @@ export default function InboundTasksPage() {
     {
       key: 'taskNo',
       title: '任务单号',
-      width: 11.47,
-      render: v => <span className="block min-w-0 whitespace-normal [overflow-wrap:anywhere] " title={String(v)}>{v as string}</span>,
+      width: 142,
+      minWidth: 142,
+      noWrap: true,
+      render: (_, task) => (
+        <button type="button" className="max-w-full whitespace-normal [overflow-wrap:anywhere] rounded text-left font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-ring"
+          onClick={() => openDetail(task)}>{task.taskNo}</button>
+      ),
     },
     {
       key: 'supplierName',
       title: '供应商',
-      width: 13.23,
-      render: v => {
-        const text = String(v ?? '')
-        return text
-          ? <span className="block min-w-0 whitespace-normal [overflow-wrap:anywhere] " title={text}>{text}</span>
-          : <span className="whitespace-nowrap text-muted-foreground">—</span>
-      },
-    },
-    {
-      key: 'warehouseName',
-      title: '仓库',
-      width: 7.95,
+      width: 128,
+      minWidth: 112,
       render: v => {
         const text = String(v ?? '')
         return text
@@ -243,13 +238,15 @@ export default function InboundTasksPage() {
     {
       key: 'status',
       title: '状态',
-      width: 7.53,
-      render: (_, row) => <InboundTaskStatus task={row as InboundTask} onView={() => openDetail(row as InboundTask)} />,
+      width: 112,
+      minWidth: 112,
+      render: (_, row) => <InboundTaskStatus task={row} onView={() => openDetail(row)} />,
     },
     {
-      key: 'operatorName',
-      title: '操作人',
-      width: 11.05,
+      key: 'warehouseName',
+      title: '仓库',
+      width: 90,
+      minWidth: 90,
       render: v => {
         const text = String(v ?? '')
         return text
@@ -258,18 +255,26 @@ export default function InboundTasksPage() {
       },
     },
     {
+      key: 'operatorName',
+      title: '操作人',
+      width: 90,
+      minWidth: 90,
+      noWrap: true,
+      render: v => String(v ?? '') || '—',
+    },
+    {
       key: 'createdAt',
       title: '创建时间',
-      width: 13.37,
-      render: v => {
-        const text = formatDisplayDateTime(v)
-        return <span className="block whitespace-nowrap" title={text}>{text}</span>
-      },
+      width: 150,
+      minWidth: 150,
+      noWrap: true,
+      render: v => formatDisplayDateTime(v),
     },
     {
       key: 'remark',
       title: '备注', expandableText: true,
-      width: 12.95,
+      width: 92,
+      minWidth: 80,
       render: v => v
         ? <span className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-muted-foreground" title={String(v)}>{v as string}</span>
         : <span className="text-muted-foreground/50">—</span>,
@@ -277,7 +282,8 @@ export default function InboundTasksPage() {
     {
       key: 'id',
       title: '操作',
-      width: 8.45,
+      width: 136,
+      minWidth: 136,
       render: (_, row) => {
         const task = row as InboundTask
         const items = []
@@ -299,11 +305,11 @@ export default function InboundTasksPage() {
             },
           })
         }
-        items.push({
-          label: '查看打印 / 补打',
+        if (can(PERMISSIONS.PRINT_JOB_VIEW)) items.push({
+          label: can(PERMISSIONS.PRINT_JOB_REPRINT) ? '查看打印 / 补打' : '查看打印记录',
           onClick: () => {
             const path = `/settings/barcode-print-query?category=inbound&inboundTaskId=${task.id}`
-            addTab({ key: path, title: `补打 ${task.taskNo}`, path })
+            addTab({ key: path, title: '条码打印查询', path })
             navigate(path)
           },
         })
@@ -418,6 +424,7 @@ export default function InboundTasksPage() {
         loading={isLoading}
         rowKey="id"
         fluid
+        scrollLabel="收货订单表格"
         virtualized
         columnStorageKey="inbound-tasks:v5"
         onRowDoubleClick={openDetail}

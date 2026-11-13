@@ -2,6 +2,7 @@ const svc = require('./warehouse-tasks.service')
 const { successResponse } = require('../../utils/response')
 const { extractRequestKey } = require('../../utils/requestKey')
 const { getOperatorFromRequest } = require('../../utils/operator')
+const { WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 
 // 单据级数据权限（2026-08-21 审计高危修复）：限仓用户只能访问自己仓库的任务。
 // 所有涉及 taskId 的接口都取 req.user.warehouseIds 传给 service 层做 assertInScope。
@@ -26,7 +27,16 @@ const assign = async(req,res,next)=>{ try{await svc.assign(+req.params.id,req.bo
 const assignSortingBin = async(req,res,next)=>{ try{const data=await svc.assignSortingBin(+req.params.id,{requestKey:extractRequestKey(req),userId:req.user?.userId??null,operatorName:getOperatorFromRequest(req).realName,scopeWarehouseIds:scopeOf(req)});return successResponse(res,data,'分拣格已补分配')}catch(e){next(e)} }
 const startPicking = async(req,res,next)=>{ try{await svc.startPicking(+req.params.id,{scopeWarehouseIds:scopeOf(req),pdaWarehouseId:pdaWarehouseOf(req)});return successResponse(res,null,'备货已开始')}catch(e){next(e)} }
 const pickedQtyDeprecated = (req,res)=>res.status(410).json({success:false,code:'WAREHOUSE_TASK_PICKED_QTY_GONE',message:'该接口已废弃，请使用 PDA 拣货扫码路径 POST /api/scan-logs',data:null})
-const readyToShip = async(req,res,next)=>{ try{const data=await svc.readyToShip(+req.params.id,{requestKey:extractRequestKey(req),userId:req.user?.userId??null,scopeWarehouseIds:scopeOf(req),pdaWarehouseId:pdaWarehouseOf(req)});return successResponse(res,data,'已标记为待分拣')}catch(e){next(e)} }
+const readyToShip = async (req, res, next) => {
+  try {
+    const data = await svc.readyToShip(+req.params.id, {
+      requestKey: extractRequestKey(req), userId: req.user?.userId ?? null,
+      scopeWarehouseIds: scopeOf(req), pdaWarehouseId: pdaWarehouseOf(req),
+    })
+    const statusName = WT_STATUS_NAME[data?.status]
+    return successResponse(res, data, statusName ? `已标记为${statusName}` : '已完成拣货')
+  } catch (e) { next(e) }
+}
 const findEvents = async(req,res,next)=>{ try{return successResponse(res,await svc.findEvents(+req.params.id, scopeOf(req)),'ok')}catch(e){next(e)} }
 const debugSnapshot = async(req,res,next)=>{ try{return successResponse(res,await svc.getDebugSnapshot(+req.params.id, scopeOf(req)),'任务数据快照')}catch(e){next(e)} }
 const sortDone = async(req,res,next)=>{ try{const sortedItems=req.body?.items??null;const result=await svc.sortTask(+req.params.id,sortedItems,{requestKey:extractRequestKey(req),userId:req.user?.userId??null,operatorName:getOperatorFromRequest(req).realName,scopeWarehouseIds:scopeOf(req),pdaWarehouseId:pdaWarehouseOf(req)});const msg=result.allSorted?'分拣完成，已进入待复核':`分拣进度 ${result.progress}，继续操作`;return successResponse(res,result,msg)}catch(e){next(e)} }

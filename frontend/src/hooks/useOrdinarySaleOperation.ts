@@ -79,8 +79,27 @@ export function useOrdinarySaleOperation(saleId: number, active = true) {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const current = () => mounted.current && latest.current.saleId === saleId && latest.current.active && inboundEditOwnerCurrent(owner)
   const readCurrent = () => read(owner, saleId)
-  let pending: OrdinarySaleQuery | null = null, storageError = ''
-  try { pending = current() ? readCurrent() : null; if (pending) observed.current = pending; else pending = current() ? observed.current : null } catch (e) { storageError = e instanceof Error ? e.message : '原操作查询身份不可读取' }
+  let pending: OrdinarySaleQuery | null = null, missing: OrdinarySaleQuery | null = null, storageError = ''
+  try {
+    if (current()) {
+      pending = readCurrent()
+      if (pending) observed.current = pending
+      else if (observed.current?.saleId === saleId) missing = pending = observed.current
+    }
+  } catch (e) { storageError = e instanceof Error ? e.message : '原操作查询身份不可读取' }
+  useEffect(() => {
+    if (!missing) return
+    let cancelled = false
+    // 另一个工作区可能已经确认同一次写入。只有匹配原身份的持久终态才能解除冻结。
+    void matchingCompactTerminal(terminalKey(missing), missing).then(terminal => {
+      if (cancelled || !terminal || terminal.state === 'reserved' || observed.current !== missing
+        || !inboundEditOwnerCurrent(owner)) return
+      observed.current = null
+      if (frozen.current?.query.requestKey === missing.requestKey) frozen.current = null
+      notify()
+    }).catch(() => { /* 无法证明终态时保留原查询入口。 */ })
+    return () => { cancelled = true }
+  }, [missing, owner])
   function capture(r?: OrdinarySaleQuery) {
     if (!current() || !positive(saleId)) throw Error('原订单、账号、服务器或当前页面已变化，请回原处查询')
     if (r && (domain(r) !== domain({...owner, saleId}) || snapshot(readCurrent() ?? observed.current!) !== snapshot(r))) throw Error('原操作查询身份已变化，请保留记录并核对')

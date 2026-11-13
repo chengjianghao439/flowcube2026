@@ -12,10 +12,11 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useAuthStore } from '@/store/authStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 
-const mocks = vi.hoisted(() => ({ receipt:vi.fn(), statement:vi.fn(), payments:vi.fn(), ledger:vi.fn() }))
+const mocks = vi.hoisted(() => ({ receipt:vi.fn(), statement:vi.fn(), payments:vi.fn(), ledger:vi.fn(), entries:vi.fn() }))
 vi.mock('@/api/payments', async original => ({
   ...await original<typeof import('@/api/payments')>(),
   getReceiptDetailApi:mocks.receipt, getStatementDetailApi:mocks.statement, getPaymentsApi:mocks.payments,
+  getEntriesApi:mocks.entries,
   getReceiptsApi:vi.fn(async()=>({list:[],pagination:{total:0}})), getDebitAccountOptionsApi:vi.fn(async()=>[]),
 }))
 vi.mock('@/api/party-ledger',()=>({getPartyLedger:mocks.ledger}))
@@ -34,6 +35,7 @@ beforeEach(()=>{
   useAuthStore.setState({user:{roleId:5,permissions:['payment.view','sale.order.view','purchase.order.view']} as never})
   useWorkspaceStore.setState({tabs:[],activeKey:'/payments/receivable'})
   close.mockReset();mocks.receipt.mockReset().mockResolvedValue(receipt());mocks.statement.mockReset();mocks.payments.mockReset();mocks.ledger.mockReset()
+  mocks.entries.mockReset().mockResolvedValue([])
   client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:300000}}})
   host=document.createElement('div');document.body.append(host);root=createRoot(host)
 })
@@ -108,6 +110,31 @@ test('往来明细的汇款核销原单关闭来源portal',async()=>{
   mocks.ledger.mockResolvedValue({party:{name:'单位'},summary:{},list:[{id:1,receiptId:7,documentNo:'RC-7'}]})
   await render(<PartyLedgerPage/>,path);await click('收付款');await act(async()=>{await settle()});await click('原业务单')
   expect(host.querySelector('output')?.textContent).toBe('/sale/81');expect(document.querySelector('[role="dialog"]')).toBeNull()
+})
+
+test('往来账区分记账时刻与业务日期，账款流水显示北京时间业务日', async () => {
+  const path = '/payments/ledger/customer/42'
+  useWorkspaceStore.setState({ activeKey: path })
+  mocks.ledger.mockResolvedValue({
+    party: { name: '合成单位' }, summary: {}, historyStartedAt: '2026-11-10T16:00:00.000Z',
+    list: [{ id: 9, recordId: 17, documentNo: 'AR-17', occurredAt: '2026-11-12T17:10:00.000Z', businessDate: '2026-11-12' }],
+  })
+  mocks.entries.mockResolvedValue([{ id: 1, amount: 200, paymentDate: '2026-11-11T16:00:00.000Z', operatorName: '合成操作人' }])
+  const { usePaymentActions } = await vi.importActual<typeof import('@/components/shared/usePaymentActions')>('@/components/shared/usePaymentActions')
+  function PaymentFlow() {
+    const { renderActions, dialogs } = usePaymentActions(2)
+    return <>{renderActions({ id: 17, type: 2, orderNo: 'AR-17', status: 3 } as Parameters<typeof renderActions>[0])}{dialogs}</>
+  }
+  await render(<><PartyLedgerPage /><PaymentFlow /></>, path)
+  const row = [...host.querySelectorAll('tbody tr')].find(element => element.textContent?.includes('AR-17'))!
+  expect(row.textContent).toContain('2026-11-13 01:10')
+  expect(row.querySelectorAll('td')[1].textContent).toBe('2026-11-12')
+  expect(host.textContent).toContain('完整记账始于 2026-11-11 00:00')
+  await click('流水')
+  await act(async () => { await settle() })
+  expect(mocks.entries).toHaveBeenCalledWith(17)
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('2026-11-12 · 合成操作人')
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain('2026-11-11T16:00:00.000Z')
 })
 
 test('暂停的旧缓存明确显示暂停且不提供来源导航',async()=>{

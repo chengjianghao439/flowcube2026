@@ -102,6 +102,33 @@ test('pending container list shows the new split barcode and quantity while stil
   expect(api.location).not.toHaveBeenCalled()
 })
 
+test('待上架只计算合格余量并同时展示应收和拒收', async () => {
+  await act(async () => {
+    qc.setQueryData(['pda-return-task', 31], { id: 31, taskNo: 'RT31', status: 4, warehouseId: 2,
+      items: [{ expectedQty: 3, checkedQty: 3, rejectedQty: 1, putawayQty: 1 }],
+    })
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+  expect(host.textContent).toContain('已上架 1')
+  expect(host.textContent).toContain('待上架 1')
+  expect(host.textContent).toContain('应收 3')
+  expect(host.textContent).toContain('拒收 1')
+})
+
+test('全拒收完成后显示无合格待上架数量并停用扫码', async () => {
+  await act(async () => {
+    qc.setQueryData(['pda-return-task', 31], { id: 31, taskNo: 'RT31', status: 5, warehouseId: 2,
+      items: [{ expectedQty: 2, checkedQty: 2, rejectedQty: 2, putawayQty: 0 }],
+    })
+    await new Promise(resolve => setTimeout(resolve, 0))
+  })
+  expect(host.textContent).toContain('退货入仓已完成')
+  expect(host.textContent).toContain('合格待上架 0')
+  expect(host.textContent).toContain('拒收 2')
+  await scan('I000123')
+  expect(api.container).not.toHaveBeenCalled()
+})
+
 test('a late write receipt from the previous task does not clear the newly scanned task container', async () => {
   let finishPrevious!: (value: object) => void
   api.putaway.mockReturnValueOnce(new Promise(resolve => { finishPrevious = resolve }))

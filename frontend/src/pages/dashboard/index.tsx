@@ -56,7 +56,8 @@ export default function DashboardPage() {
 
   const merged = useMemo(() => mergeLayout(saved), [saved])
 
-  const [editing, setEditing] = useState(false)
+  const [layoutMode, setLayoutMode] = useState<'view' | 'edit' | 'preview'>('view')
+  const editing = layoutMode !== 'view'
   const [draft, setDraft] = useState<DashboardLayout | null>(null)
   const [libOpen, setLibOpen] = useState(false)
   const dragId = useRef<string | null>(null)
@@ -91,16 +92,16 @@ export default function DashboardPage() {
   const addable = layout.widgets.filter(w => WIDGET_MAP[w.id] && !w.visible && allowed[w.id])
 
   // ── 编辑操作 ──────────────────────────────────────────────────────────────
-  function startEdit() { setDraft(mergeLayout(saved)); setEditing(true) }
-  function cancelEdit() { setEditing(false); setDraft(null); setLibOpen(false) }
-  function showAll() { setDraft(buildAllLayout()); setEditing(true); setLibOpen(false) }
+  function startEdit() { setDraft(mergeLayout(saved)); setLayoutMode('edit') }
+  function cancelEdit() { setLayoutMode('view'); setDraft(null); setLibOpen(false) }
+  function showAll() { setDraft(buildAllLayout()); setLayoutMode('preview'); setLibOpen(false) }
   function resetDefault() { setDraft(buildDefaultLayout()); toast.success('已载入推荐布局预览，保存后生效') }
   async function save() {
     if (!draft) return
     try {
       await saveMut.mutateAsync(draft)
       toast.success('仪表盘布局已保存')
-      setEditing(false); setDraft(null); setLibOpen(false)
+      cancelEdit()
     } catch {
       toast.error('保存失败，请重试')
     }
@@ -139,11 +140,13 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="仪表盘"
-        description={editing ? '拖拽调整卡片顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : "查看待办、经营指标与个人工具。"} status={editing ? <EditModeBadge /> : undefined}
+        description={layoutMode === 'preview' ? '预览当前权限下的全部卡片，可以调整布局。保存后应用，取消返回原布局。'
+          : editing ? '拖拽调整卡片顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : '查看待办、经营指标与个人工具。'}
+        status={layoutMode === 'preview' ? <EditModeBadge label="布局预览" /> : editing ? <EditModeBadge /> : undefined}
         actions={<div className="flex flex-wrap items-center gap-2">
           {!editing ? (
             <>
-              <Button variant="outline" size="sm" onClick={showAll}><LayoutGrid className="h-3.5 w-3.5" /> 展示全部卡片</Button>
+              <Button variant="outline" size="sm" onClick={showAll}><LayoutGrid className="h-3.5 w-3.5" /> 预览全部卡片</Button>
               <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>
             </>
           ) : (

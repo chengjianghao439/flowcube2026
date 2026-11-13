@@ -8,6 +8,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -96,6 +97,7 @@ export default function FinanceAccountsPage() {
   const fieldId = useId()
   const qc = useQueryClient()
   const { can } = usePermission()
+  const canCreate = can(PERMISSIONS.FINANCE_ACCOUNT_CREATE)
   const canUpdate = can(PERMISSIONS.FINANCE_ACCOUNT_UPDATE)
   const canAdjust = can(PERMISSIONS.FINANCE_ACCOUNT_ADJUST)
 
@@ -124,11 +126,12 @@ export default function FinanceAccountsPage() {
   if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
   if (query.type) queryChips.push({ key: 'type', text: `类型：${TYPE_NAME[query.type] ?? query.type}`, onClear: dropQ('type') })
   if (query.isActive) queryChips.push({ key: 'act', text: `状态：${query.isActive === '1' ? '启用' : '停用'}`, onClear: dropQ('isActive') })
-  const { data: transactions } = useVisibleQuery({
+  const transactionsQuery = useVisibleQuery({
     queryKey: ['finance-account-transactions', txAccount?.id],
     queryFn: () => getAccountTransactionsApi({ accountId: txAccount!.id, pageSize: 200 }),
     enabled: !!txAccount,
   })
+  const transactions = transactionsQuery.isError ? undefined : transactionsQuery.data
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['finance-accounts'] })
@@ -139,6 +142,7 @@ export default function FinanceAccountsPage() {
 
   const saveMut = useMutation({
     mutationFn: () => {
+      if (editing ? !canUpdate : !canCreate) throw new Error('没有保存资金账户的权限')
       const payload = {
         name: form.name.trim(),
         type: Number(form.type),
@@ -170,7 +174,7 @@ export default function FinanceAccountsPage() {
     onSuccess: () => { invalidate(); setDeleteTarget(null); toast.success('账户已删除') },
   })
 
-  function openCreate() { setEditing(null); setForm(EMPTY_FORM); setFormOpen(true) }
+  function openCreate() { if (canCreate) { setEditing(null); setForm(EMPTY_FORM); setFormOpen(true) } }
   function openEdit(a: FinanceAccount) {
     setEditing(a)
     setForm({
@@ -224,7 +228,7 @@ export default function FinanceAccountsPage() {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => downloadExport('/export/finance-accounts').catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            <Button onClick={openCreate}>新建账户</Button>
+            {canCreate && <Button onClick={openCreate}>新建账户</Button>}
           </div>
         )}
       />
@@ -244,7 +248,7 @@ export default function FinanceAccountsPage() {
       <AccountsQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={setQuery} />
 
       {/* 新建 / 编辑 */}
-      <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
+      <Dialog open={formOpen && (editing ? canUpdate : canCreate)} onOpenChange={v => !v && setFormOpen(false)}>
         <DialogContent className="max-w-2xl">
           {/* 编辑态与默认（新建）态一眼可分 */}
           <DialogHeader description={editing ? <>
@@ -312,21 +316,25 @@ export default function FinanceAccountsPage() {
       {/* 账户流水 */}
       <Dialog open={!!txAccount} onOpenChange={v => !v && setTxAccount(null)}>
         <DialogContent className="max-w-4xl">
-          <DialogHeader description={"核对该账户的逐笔收支与余额。"}><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
+          <DialogHeader description="核对该账户全部日期的收支与余额。"><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
           {txAccount && (
             <div className="text-sm text-muted-foreground">
               当前余额 <span className="font-semibold text-foreground">{money(txAccount.currentBalance)}</span>
               {transactions && <>
-                {' '}· 期间收入 <span className="text-success-ink">{money(transactions.summary.inAmount)}</span>
-                {' '}· 支出 <span className="text-destructive-ink">{money(transactions.summary.outAmount)}</span>
+                {' '}· 累计收入 <span className="text-success-ink">{money(transactions.summary.inAmount)}</span>
+                {' '}· 累计支出 <span className="text-destructive-ink">{money(transactions.summary.outAmount)}</span>
               </>}
             </div>
           )}
-          <div className="max-h-96 overflow-y-auto rounded-md border">
+          {transactionsQuery.isError ? (
+            <QueryErrorState error={transactionsQuery.error} onRetry={() => void transactionsQuery.refetch()} title="账户流水加载失败" compact />
+          ) : transactionsQuery.isLoading ? (
+            <p role="status" className="text-sm text-muted-foreground">正在加载账户流水…</p>
+          ) : transactions && <div className="max-h-96 overflow-y-auto rounded-md border">
             <ReportTable className="w-full text-sm">
               <thead className="sticky top-0 text-xs text-muted-foreground">
                 <tr>
-                  <th className="px-2 py-1.5 text-left">日期</th>
+                  <th className="w-28 whitespace-nowrap px-2 py-1.5 text-left">日期</th>
                   <th className="px-2 py-1.5 text-left">类型</th>
                   <th className="px-2 py-1.5 text-left">关联单号</th>
                   <th className="px-2 py-1.5 text-left">往来方</th>
@@ -338,7 +346,7 @@ export default function FinanceAccountsPage() {
               <tbody>
                 {transactions?.list.map(t => (
                   <tr key={t.id} className="border-t">
-                    <td className="px-2 py-1.5">{formatDisplayDate(String(t.happenedAt))}</td>
+                    <td className="whitespace-nowrap px-2 py-1.5 tabular-nums">{formatDisplayDate(t.happenedAt)}</td>
                     <td className="px-2 py-1.5"><SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} /></td>
                     <td className="px-2 py-1.5 text-doc-code-muted">{t.bizNo || '—'}</td>
                     <td className="px-2 py-1.5">{t.partyName || '—'}</td>
@@ -352,7 +360,12 @@ export default function FinanceAccountsPage() {
                 )}
               </tbody>
             </ReportTable>
-          </div>
+          </div>}
+          {transactions && transactions.pagination.total > transactions.list.length && (
+            <p className="text-xs text-muted-foreground">
+              明细显示最近 {transactions.list.length} 条，共 {transactions.pagination.total} 条。累计金额覆盖全部日期。
+            </p>
+          )}
           <DialogFooter><Button variant="outline" onClick={() => setTxAccount(null)}>关闭</Button></DialogFooter>
         </DialogContent>
       </Dialog>

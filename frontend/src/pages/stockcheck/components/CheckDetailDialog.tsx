@@ -5,6 +5,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,7 +30,8 @@ function showActionError(error: unknown) {
 }
 
 export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
-  const { data: loadedCheck, isLoading, error, refetch } = useCheckDetail(checkId||0)
+  const visible = useSectionActive()
+  const { data: loadedCheck, isLoading, error, refetch } = useCheckDetail(checkId || 0, open && visible)
   const check = !error && loadedCheck?.id === checkId ? loadedCheck : undefined
   const currentEditableId = useRef<number | null>(null)
   currentEditableId.current = open && check?.status === 1 ? check.id : null

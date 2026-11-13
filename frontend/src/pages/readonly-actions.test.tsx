@@ -4,14 +4,16 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { fireEvent, getByRole, queryByRole } from '@testing-library/dom'
+import { fireEvent, findByRole, getByRole, queryByRole } from '@testing-library/dom'
 import userEvent from '@testing-library/user-event'
 import apiClient from '@/api/client'
+import { AxiosError } from 'axios'
 import * as apiConfig from '@/config/api'
 import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
 import type { User } from '@/types'
 import ReturnsPage from './returns'
+import LogisticsPage from './logistics'
 import InventoryPage from './inventory'
 import ProductsPage from './products'
 import ProductFormPage from './products/form'
@@ -44,6 +46,8 @@ const list = (rows: unknown[] = []) => ({ list: rows, pagination: { page: 1, pag
 let host: HTMLDivElement, root: Root, query: QueryClient
 const originalAdapter = apiClient.defaults.adapter
 const writes: string[] = []
+const reads: string[] = []
+const deniedReads = new Set<string>()
 const readPermissions = [P.RETURN_ORDER_VIEW, P.INVENTORY_VIEW, P.PRODUCT_VIEW, P.CATEGORY_VIEW, P.FINANCE_EXPENSE_VIEW, P.PAYMENT_VIEW, P.PRINT_TEMPLATE_VIEW, P.PRINT_PRINTER_VIEW, P.CARRIER_VIEW]
 
 function authorize(extra: string[] = []) {
@@ -54,6 +58,8 @@ function dataFor(path: string) {
   if (path === '/products') return list([product])
   if (path === '/products/3') return product
   if (path === '/carriers') return list([carrier])
+  if (path === '/carriers/active') return [carrier]
+  if (path === '/logistics') return list()
   if (path === '/print-templates') return [template]
   if (path === '/printers') return [printer]
   if (path === '/printers/registration-warehouses') return [{ id: 31, name: '合成仓库' }]
@@ -83,12 +89,16 @@ async function menu() {
 }
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-  localStorage.clear(); writes.length = 0; authorize()
+  localStorage.clear(); writes.length = 0; reads.length = 0; deniedReads.clear(); authorize()
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   Element.prototype.scrollIntoView = vi.fn()
   apiClient.defaults.adapter = async config => {
     const path = new URL(config.url!, 'http://synthetic.invalid').pathname.replace(/^\/api/, '')
     if (config.method !== 'get') writes.push(`${config.method} ${path}`)
+    else reads.push(path)
+    if (deniedReads.has(path)) throw new AxiosError('无操作权限', AxiosError.ERR_BAD_REQUEST, config, undefined, {
+      data: { success: false, message: '无操作权限', code: 'PERMISSION_DENIED' }, status: 403, statusText: 'Forbidden', headers: {}, config,
+    })
     return { data: { success: true, data: dataFor(path) }, status: 200, statusText: 'OK', headers: {}, config }
   }
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
@@ -105,6 +115,35 @@ test.each(['purchase', 'sale'])('只读 %s 退货保留查询并隐藏新建', a
   expect(getByRole(host, 'button', { name: '查询' })).toBeTruthy()
   await act(async () => authorize([P.RETURN_ORDER_CREATE]))
   expect(getByRole(host, 'button', { name: /新建.*退货单/ })).toBeTruthy()
+})
+
+test.each(['/returns/purchase', '/returns/sale', '/logistics'])('%s 被服务端拒绝时呈现受限状态，不显示空表、计数或操作', async path => {
+  deniedReads.add(path)
+  authorize([P.LOGISTICS_VIEW, P.RETURN_ORDER_CREATE])
+  await draw(path === '/logistics' ? <LogisticsPage /> : <ReturnsPage />, path)
+  expect(host.textContent).toMatch(/无权查看(退货单|物流运单)/)
+  expect(host.textContent).not.toMatch(/暂无数据|暂无运单|张运单/)
+  expect(queryByRole(host, 'button', { name: /新建|导出|查询/ })).toBeNull()
+})
+
+test.each(['/returns/purchase', '/returns/sale', '/logistics'])('%s 缺少查看权限时不请求列表，单独的写权限不提供列表入口', async path => {
+  useAuthStore.getState().login('synthetic-only', null, {
+    id: 999, roleId: 5, permissions: [P.RETURN_ORDER_CREATE, P.LOGISTICS_MANAGE],
+  } as User)
+  await draw(path === '/logistics' ? <LogisticsPage /> : <ReturnsPage />, path)
+  expect(host.textContent).toMatch(/无权查看(退货单|物流运单)/)
+  expect(reads).not.toContain(path)
+  expect(queryByRole(host, 'button', { name: /新建|导出|查询/ })).toBeNull()
+})
+
+test('只有物流查看权限可用基础查询，承运商选项不会发起无权读取', async () => {
+  useAuthStore.getState().login('synthetic-only', null, { id: 999, roleId: 5, permissions: [P.LOGISTICS_VIEW] } as User)
+  await draw(<LogisticsPage />, '/logistics')
+  expect(reads).toContain('/logistics')
+  expect(host.textContent).toContain('没有符合条件的运单')
+  await click('查询', host)
+  expect(document.body.textContent).toContain('查询物流运单')
+  expect(reads).not.toContain('/carriers/active')
 })
 
 test.each(['purchase', 'sale'])('%s 退货行确认和取消分别授权', async type => {
@@ -161,9 +200,18 @@ test('商品编辑与申请改价只由商品更新权限授予', async () => {
 
 test('商品详情只有查看权限时隐藏保存，撤权后保留资料查看', async () => {
   await draw(<TabPathContext.Provider value="/products/3"><ProductFormPage /></TabPathContext.Provider>, '/products/3')
-  expect(host.querySelector<HTMLInputElement>('input[value="合成商品"]')).toBeTruthy()
+  expect(getByRole(host, 'heading', { name: '查看商品' })).toBeTruthy()
+  const name = host.querySelector<HTMLInputElement>('input[value="合成商品"]')!
+  expect(name.disabled || name.readOnly || name.matches(':disabled')).toBe(true)
+  expect(queryByRole(host, 'button', { name: /合成分类|合成供应商|增加辅助单位/ })).toBeNull()
+  await act(async () => { await userEvent.type(name, '临时改名') })
+  expect(name.value).toBe('合成商品')
+  expect(host.textContent).not.toContain('未保存')
+  expect(reads).not.toContain('/settings')
   expect(queryByRole(host, 'button', { name: /保存/ })).toBeNull()
   await act(async () => authorize([P.PRODUCT_UPDATE]))
+  expect(getByRole(host, 'heading', { name: '编辑商品' })).toBeTruthy()
+  expect(host.querySelector<HTMLInputElement>('input[value="合成商品"]')?.matches(':disabled')).toBe(false)
   expect(getByRole(host, 'button', { name: /保存/ })).toBeTruthy()
   await act(async () => authorize())
   expect(queryByRole(host, 'button', { name: /保存/ })).toBeNull()
@@ -205,6 +253,7 @@ test('报销新建和草稿编辑分别要求创建与更新权限', async () =>
   expect(queryByRole(host, 'button', { name: '更多操作' })).toBeNull()
   expect(getByRole(host, 'button', { name: '明细' })).toBeTruthy()
   await act(async () => authorize([P.FINANCE_EXPENSE_UPDATE]))
+  await findByRole(host, 'button', { name: '更多操作' })
   await menu()
   expect(getByRole(document.body, 'menuitem', { name: '编辑' })).toBeTruthy()
   expect(queryByRole(document.body, 'menuitem', { name: '提交审批' })).toBeNull()

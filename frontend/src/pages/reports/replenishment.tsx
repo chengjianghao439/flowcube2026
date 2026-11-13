@@ -10,6 +10,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ApiClientError } from '@/api/client'
 import { getReplenishmentApi, saveStockPoliciesApi, type ReplenishmentItem } from '@/api/inventory'
 import { usePermission } from '@/hooks/usePermission'
 import { useCategoryTree } from '@/hooks/useCategories'
@@ -153,7 +155,9 @@ export default function ReplenishmentPage() {
         </div>
       )}
 
-      {isError && !data ? (
+      {error instanceof ApiClientError && error.status === 403 ? (
+        <EmptyState variant="no-permission" description="当前账号无权查看补货建议。" />
+      ) : isError ? (
         <QueryErrorState
           error={error}
           onRetry={() => void refetch()}
@@ -167,7 +171,11 @@ export default function ReplenishmentPage() {
           data={list}
           loading={isLoading}
           rowKey="id"
-          emptyText="暂无待补货商品（所有商品的可用 + 在途都在补货点之上，或已有单据覆盖需求）"
+          emptyState={chips.length ? (
+            <EmptyState variant="no-result" title="没有符合条件的补货建议"
+              description="可调整关键字、仓库或分类后重新查询。"
+              action={<Button variant="outline" size="sm" onClick={reset}>清除筛选</Button>} />
+          ) : <EmptyState variant="no-data" title="暂无待补货商品" description="当前可查看的仓库和商品没有补货建议。" />}
         />
       )}
 

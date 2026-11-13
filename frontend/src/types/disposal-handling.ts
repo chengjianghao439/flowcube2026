@@ -1,3 +1,5 @@
+import type { DisposalSuggestion } from './disposal'
+
 export interface DisposalSourceInput { sourceId: number; expectedRevision: number; operationUuid: string }
 export interface HandlingLink {
   linkId: number; state: 'ACTIVE' | 'TERMINATED'; allocatedQuantity: number; executedQuantity: number | null; releasedQuantity: number
@@ -7,6 +9,7 @@ export interface HandlingLink {
 export interface HandlingSourceAck { id: number; intentUuid: string; productId: number; warehouseId: number; unit: string; handlingType: 1 | 2 | 3; quantity: number; revision: number }
 export interface HandlingSource extends HandlingSourceAck {
   originKind: 'ordinary' | 'legacy'; productCode: string; productName: string; warehouseName: string; warehouseCode: string; createdAt: string
+  scrapValuation?: { unitValue: number; basis: DisposalSuggestion['valuationBasis'] } | null
   budget: { intentionQuantity: number; allocatedQuantity: number; releasedQuantity: number; availableQuantity: number; actualExecutedQuantity: number | null; progress: string }; links: HandlingLink[]
 }
 export interface ConversionSnapshot {

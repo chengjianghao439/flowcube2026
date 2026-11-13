@@ -1,11 +1,12 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProductFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
+import { isReversedDateRange } from '@/lib/dateRange'
 
 /** 出入库记录查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface InventoryLogsQueryValues {
@@ -38,6 +39,8 @@ interface Props {
 export default function InventoryLogsQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<InventoryLogsQueryValues>(EMPTY)
   const [productOpen, setProductOpen] = useState(false)
+  const dateErrorId = useId()
+  const dateInvalid = isReversedDateRange(draft.startDate, draft.endDate)
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
@@ -51,7 +54,8 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o
         width={520}
         onClose={onClose}
         onReset={() => setDraft(resetDraft())}
-        onApply={() => onApply(draft)}
+        applyDisabled={dateInvalid}
+        onApply={() => { if (!dateInvalid) onApply(draft) }}
       >
         <QueryFormLayout>
           <label className="flex flex-col gap-1">
@@ -90,13 +94,16 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o
           <label className="fc-query-date-start flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">日期（起）</span>
             <DatePicker aria-label="日期（起）" value={draft.startDate} max={draft.endDate || undefined}
+              aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined}
               onChange={v => setDraft(d => ({ ...d, startDate: v }))} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">日期（止）</span>
             <DatePicker aria-label="日期（止）" value={draft.endDate} min={draft.startDate || undefined}
+              aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined}
               onChange={v => setDraft(d => ({ ...d, endDate: v }))} className="h-9" />
           </label>
+          {dateInvalid && <p id={dateErrorId} role="alert" className="col-span-2 text-xs text-destructive-ink">起始日期不能晚于结束日期。</p>}
         </QueryFormLayout>
       </QueryDialog>
 

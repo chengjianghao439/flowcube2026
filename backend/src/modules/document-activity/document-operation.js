@@ -41,4 +41,16 @@ function resolveOperation(method, rawPath, statusCode, response) {
   }
   return null
 }
-module.exports = { resolveOperation, DOCUMENT_PATHS }
+
+function displayOperationTitle(type, id, title, method, rawPath, statusCode) {
+  if (method === 'POST' && rawPath && statusCode >= 200 && statusCode < 300) {
+    const path = rawPath.split('?')[0].replace(/\/$/, '')
+    if (type === 'sale' && path === `/api/sale/${id}/commercial-preview`) return '预览套内配件需求'
+    if (type === 'sale' && path === `/api/sale/${id}/ship`) return '发起出库'
+    if (type === 'inbound' && path === `/api/inbound-tasks/${id}/submit`) return '提交到 PDA'
+    if (type === 'warehouse-task' && path === `/api/warehouse-tasks/${id}/assign-sorting-bin`) return '分配分拣格'
+  }
+  return ['sale', 'warehouse-task'].includes(type) && title === '处理单据' ? '请求操作（具体动作未记录）' : title
+}
+
+module.exports = { resolveOperation, displayOperationTitle, DOCUMENT_PATHS }

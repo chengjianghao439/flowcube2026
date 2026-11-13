@@ -27,7 +27,7 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
     identity: string;
 }) {
     const fieldId = useId();
-    const [submitted, setSubmitted] = useState<{ source: SupplierRefundSource; amount: string } | null>(null);
+    const [submitted, setSubmitted] = useState<{ source: SupplierRefundSource; amount: string; account: { id: number; name: string } } | null>(null);
     const scope = useSupplierRefundRead(), navigate = useNavigate(), [operationUuid] = useState(() => crypto.randomUUID()), [requestKey] = useState(() => createRequestKey('supplier-refund'));
     const write = useSupplierRefundOperation(identity, scope.active, () => scope.current() && mayRefund(P.SUPPLIER_REFUND_CREATE, P.FINANCE_ACCOUNT_VIEW));
     const [date, setDate] = useState(''), [account, setAccount] = useState(''), [remark, setRemark] = useState(''), [amounts, setAmounts] = useState<Record<number, string>>({}), [error, setError] = useState('');
@@ -43,12 +43,13 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
         if (!ready || !source.data)
             return;
         const s = source.data;
-        if (!date || !accounts.data?.some(a => a.id === Number(account)) || !sum || Object.entries(amounts).some(([, v]) => v !== '' && !inputRefundCashMoney(v)) || sum > refundMoney(s.availableAmount)! || sum > refundMoney(s.currentPaidAmount)! || canonical.some(a => refundMoney(a.amount)! > refundMoney(s.entries.find(e => e.entryId === a.entryId)!.availableAmount)!)) {
+        const selectedAccount = accounts.data?.find(a => a.id === Number(account));
+        if (!date || !selectedAccount || !sum || Object.entries(amounts).some(([, v]) => v !== '' && !inputRefundCashMoney(v)) || sum > refundMoney(s.availableAmount)! || sum > refundMoney(s.currentPaidAmount)! || canonical.some(a => refundMoney(a.amount)! > refundMoney(s.entries.find(e => e.entryId === a.entryId)!.availableAmount)!)) {
             setError('请填写真实日期、收入账户与准确两位退款分配，不能超过各自剩余额度和当前已付金额');
             return;
         }
         setError('');
-        setSubmitted({ source: s, amount });
+        setSubmitted({ source: s, amount, account: selectedAccount });
         await write.submit({ kind: 'create', draftIdentity: identity, operationUuid, requestKey, path: '/supplier-refunds', action: 'supplier.refund.create', refundDate: date, sourceFingerprint: canonicalRefund(s), source: { purchaseReturnId: s.purchaseReturnId, purchaseOrderId: s.purchaseOrderId, paymentRecordId: s.paymentRecordId, supplierId: s.supplierId, warehouseId: s.warehouseId, incomeAccountId: Number(account), amount }, body: { operationUuid, purchaseReturnId: s.purchaseReturnId, incomeAccountId: Number(account), refundDate: date, amount, allocations: canonical.sort((a, b) => a.entryId - b.entryId), remark } });
     }
     function openCreated() { const ack = write.result; if (!ack || !write.canApply(ack) || !scope.current())
@@ -60,6 +61,7 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
     const frozenDisplay = submitted && (write.pending || write.result || write.blocked) && scope.current();
     const displaySource = source.data || (frozenDisplay ? submitted.source : undefined);
     const displayAmount = frozenDisplay ? submitted.amount : amount;
+    const displayAccounts = frozenDisplay ? [submitted.account] : accounts.data;
     return <div className="space-y-4">
       <PageHeader title="供应商退款"
         description={scope.error || !accountRight || (source.data && !sourceCashReady) ? <>{scope.error && <span role="alert">{scope.error} </span>}{!accountRight && <span role="alert">选择收入账户需要账户查看权限，请联系管理人员核对授权。 </span>}{source.data && !sourceCashReady && <span role="alert">历史来源金额含不足一分的尾差，请先核对；原值保留，不会自动凑整退款。</span>}</> : '退款草稿来自准确采购退货，确认仅冻结退款；实际收款另行登记。'}  />
@@ -86,7 +88,7 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
       <fieldset disabled={!ready || write.busy} className="space-y-4 rounded-lg border border-border bg-card p-4">
         <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
           <div className="space-y-1.5"><Label htmlFor={`${fieldId}-date`}>真实银行回款日 *</Label><Input id={`${fieldId}-date`} type="date" aria-label="真实银行回款日" value={date} onChange={e => { if (scope.current()) setDate(e.target.value); }} /></div>
-          <div className="space-y-1.5"><Label htmlFor={`${fieldId}-account`}>收入账户 *</Label><select id={`${fieldId}-account`} aria-label="收入账户" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" value={account} onChange={e => { if (scope.current()) setAccount(e.target.value); }}><option value="">请选择收入账户</option>{accounts.data?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+          <div className="space-y-1.5"><Label htmlFor={`${fieldId}-account`}>收入账户 *</Label><select id={`${fieldId}-account`} aria-label="收入账户" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" value={account} onChange={e => { if (scope.current()) setAccount(e.target.value); }}><option value="">请选择收入账户</option>{displayAccounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
         </div>
         <section aria-label="准确原付款分配" className="space-y-3">
           <h2 className="text-sm font-semibold">原付款分配</h2>

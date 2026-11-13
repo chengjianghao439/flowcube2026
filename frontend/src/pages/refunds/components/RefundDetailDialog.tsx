@@ -13,7 +13,7 @@ import type { StatusTone } from '@/lib/statusTone'
 import { useRefundDetail, useSubmitRefund, useExecuteRefund, useCancelRefund, invalidateFinance } from '@/hooks/useRefund'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
 import { BackfillRequestDialog } from '@/components/shared/payments/BackfillRequestDialog'
 import { UncertainSubmitNotice } from '@/components/shared/payments/UncertainSubmitNotice'
 import { useIdempotentSubmit } from '@/components/shared/payments/useIdempotentSubmit'
@@ -95,7 +95,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
       submittedTargetIdRef.current = refund.id
       submittedRefundNoRef.current = refund.refundNo ?? null
       guard.remember(
-        `退款 ${money(refund.amount)} · ${refund.refundDate ? String(refund.refundDate).slice(0, 10) : '—'} · ${refund.customerName} · ${refund.refundNo}`,
+        `退款 ${money(refund.amount)} · ${formatDisplayDate(refund.refundDate)} · ${refund.customerName} · ${refund.refundNo}`,
         `refund.execute.${refund.id}`,
       )
       const res = await execute.mutateAsync({ id: refund.id, requestKey: guard.keyRef.current, backfillReason })
@@ -112,7 +112,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
       if (kind === 'period-closed') {
         ask((e as Error).message, (
           <>
-            退款 {money(refund.amount)} · {refund.refundDate ? String(refund.refundDate).slice(0, 10) : '—'}
+            退款 {money(refund.amount)} · {formatDisplayDate(refund.refundDate)}
             <br />客户：{refund.customerName} · 原销售单 <span className="text-doc-code">{refund.saleOrderNo}</span>
           </>
         ), runExecute)
@@ -172,7 +172,7 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
             <div><span className="text-muted-foreground">销售单：</span><span className="text-doc-code">{refund.saleOrderNo}</span></div>
             <div><span className="text-muted-foreground">客户：</span>{refund.customerName}</div>
             <div><span className="text-muted-foreground">退款金额：</span><span className="tabular-nums text-xl font-semibold">{money(refund.amount)}</span></div>
-            <div><span className="text-muted-foreground">退款日期：</span>{refund.refundDate ? String(refund.refundDate).slice(0, 10) : '—'}</div>
+            <div><span className="text-muted-foreground">退款日期：</span>{formatDisplayDate(refund.refundDate)}</div>
             <div><span className="text-muted-foreground">经办人：</span>{refund.operatorName || '—'}</div>
             {refund.confirmedByName && <div><span className="text-muted-foreground">确认人：</span>{refund.confirmedByName}</div>}
             {refund.refundedAt && <div><span className="text-muted-foreground">退款完成：</span>{formatDisplayDateTime(refund.refundedAt)}</div>}

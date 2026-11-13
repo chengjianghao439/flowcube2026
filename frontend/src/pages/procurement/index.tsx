@@ -60,13 +60,18 @@ export default function ProcurementPlanListPage() {
   })
 
   const columns: TableColumn<ProcurementPlan>[] = [
-    { key: 'code', title: '采购计划 / 编号', width: 280, render: (_, r) => <RecordIdentity title={r.name || '采购计划'} code={r.code} /> },
+    { key: 'code', title: '采购计划 / 编号', width: 220, render: (_, plan) => (
+      <RecordIdentity title={plan.name || '采购计划'} code={
+        <button type="button" className="max-w-full whitespace-normal [overflow-wrap:anywhere] rounded text-left font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-ring"
+          onClick={() => navigate(`/procurement/${plan.id}`)}>{plan.code}</button>
+      } />
+    ) },
+    { key: 'status', title: '状态', width: 102, render: (_, r) => <SoftStatusLabel label={r.statusName} tone={STATUS_TONE[r.status] ?? 'draft'} /> },
+    { key: 'itemCount', title: '建议行数', width: 100, noWrap: true, align: 'right', render: v => Number(v) },
     { key: 'forecastWindow', title: '预测窗口', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
     { key: 'horizonDays', title: '覆盖周期', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
-    { key: 'itemCount', title: '建议行数', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v)}</span> },
-    { key: 'status', title: '状态', width: 110, render: (_, r) => <SoftStatusLabel label={r.statusName} tone={STATUS_TONE[r.status] ?? 'draft'} /> },
     { key: 'operatorName', title: '生成人', width: 100 },
-    { key: 'createdAt', title: '生成时间', width: 160, render: v => formatDisplayDateTime(String(v)) },
+    { key: 'createdAt', title: '生成时间', width: 150, noWrap: true, render: v => formatDisplayDateTime(String(v)) },
     { key: 'id', title: '操作', width: 90, render: (_, r) => <Button size="sm" variant="outline" onClick={() => navigate(`/procurement/${r.id}`)}>查看</Button> },
   ]
 
@@ -84,7 +89,7 @@ export default function ProcurementPlanListPage() {
         {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>}
       </FilterCard>
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="采购计划加载失败" compact />
-        : <DataTable virtualized preserveFocus columns={columns} data={data?.list ?? []} loading={isLoading} />}
+        : <DataTable virtualized preserveFocus columns={columns} data={data?.list ?? []} loading={isLoading} scrollLabel="采购计划表格" />}
       {!isError && !isLoading && data && !data.truncated && <ListSummary total={data.pagination.total} unit="单" />}
 
       <Dialog open={genOpen} onOpenChange={setGenOpen}>

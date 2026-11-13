@@ -14,6 +14,9 @@ import { formatDisplayDateTime, formatDisplayDate, todayYmd } from '@/lib/dateTi
 import { toast } from '@/lib/toast'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ApiClientError } from '@/api/client'
 import { getReconciliationApi, type ReconciliationRecord } from '@/api/reports'
 import { ReceiptPanel, type ReceiptPanelHandle } from '@/components/shared/ReceiptPanel'
 import { StatementPanel, type StatementPanelHandle } from '@/components/shared/StatementPanel'
@@ -22,6 +25,7 @@ import { EMPTY_PAYMENT_QUERY, type PaymentQueryValues } from '@/components/share
 import { SETTLEMENT_TYPE } from '@/generated/status'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { usePermission } from '@/hooks/usePermission'
+import { resolveRoutePermission } from '@/router/routeDefinitions'
 import { SettlementConfirmDialog } from '@/components/shared/payments/SettlementConfirmDialog'
 import type { TableColumn } from '@/types'
 
@@ -38,7 +42,7 @@ const MONTHLY_SCOPE = String(SETTLEMENT_TYPE.MONTHLY)
 const COPY = {
   1: {
     title: '月结供应商对账',
-    description: '月结供应商的应付账单：按账期核对、登记付款、导出 Excel，可从对账单直接打开采购单与收货单。现结供应商见「现结供应商账款」。',
+    description: '月结供应商的应付账单：按账期核对、登记付款、导出 Excel。现结供应商见「现结供应商账款」。',
     party: '供应商',
     paidCol: '已付',
     payPath: '/payments/payable',
@@ -47,7 +51,7 @@ const COPY = {
   },
   2: {
     title: '月结客户对账',
-    description: '月结客户的应收账单：按账期核对、登记收款、导出 Excel，可从对账单直接打开销售单。现结客户见「现结客户账款」。',
+    description: '月结客户的应收账单：按账期核对、登记收款、导出 Excel。现结客户见「现结客户账款」。',
     party: '客户',
     paidCol: '已收',
     payPath: '/payments/receivable',
@@ -94,6 +98,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   }
   const exportParams = {
     type: String(type),
+    settlementTypes: MONTHLY_SCOPE,
     ...(query.docNo ? { orderNo: query.docNo } : {}),
     ...(query.partyName ? { partyName: query.partyName } : {}),
     ...(query.status ? { status: query.status } : {}),
@@ -107,11 +112,14 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
 
   const reconciliationQ = useVisibleQuery({
     queryKey: ['reconciliation', type, query],
-    queryFn: () => getReconciliationApi({ ...exportParams, pageSize: 500, settlementTypes: MONTHLY_SCOPE }),
+    queryFn: () => getReconciliationApi({ ...exportParams, pageSize: 500 }),
     enabled: active && effectiveTab === 'records',
   })
 
   const { data, isLoading, isError, error, refetch } = reconciliationQ
+  const hasDateRange = Boolean(query.startDate || query.endDate)
+  const hasFilters = Object.values(query).some(Boolean)
+  const clearDates = () => setQuery(current => ({ ...current, startDate: '', endDate: '' }))
   // 必须 useMemo：`data?.list ?? []` 每次渲染都是新数组引用，下面 displayRows 的排序
   // 会因此每次重跑（列表页动辄几百行）
   const rows = useMemo(() => data?.list ?? [], [data])
@@ -174,15 +182,19 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
       const r = row as ReconciliationRecord
       // 月结账款只能通过对账单核销；待确认应付先由财务核对上架结算。
       const pendingConfirmation = type === 1 && r.confirmStatus === 0 && canConfirmPayments
+      const sourceRight = r.sourcePath ? resolveRoutePermission(r.sourcePath) : undefined
+      const receiptRight = r.receiptPath ? resolveRoutePermission(r.receiptPath) : undefined
+      const sourcePath = sourceRight && can(sourceRight) ? r.sourcePath : null
+      const receiptPath = receiptRight && can(receiptRight) ? r.receiptPath : null
       const items: TableActionItem[] = []
-      if (pendingConfirmation && r.sourcePath) items.push({ label: '原单', onClick: () => openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`) })
-      if (r.receiptPath) items.push({ label: '收货单', onClick: () => openPath(r.receiptPath, `收货单 ${r.receiptTaskNo}`) })
+      if (pendingConfirmation && sourcePath) items.push({ label: '原单', onClick: () => openPath(sourcePath, `原单 ${r.sourceOrderNo}`) })
+      if (receiptPath && (pendingConfirmation || sourcePath)) items.push({ label: '收货单', onClick: () => openPath(receiptPath, `收货单 ${r.receiptTaskNo}`) })
+      if (!pendingConfirmation && !sourcePath && !receiptPath) return null
       return (
         <TableActionsMenu
-          primaryLabel={pendingConfirmation ? '确认结算' : '原单'}
+          primaryLabel={pendingConfirmation ? '确认结算' : sourcePath ? '原单' : '收货单'}
           primaryVariant={pendingConfirmation ? 'default' : 'outline'}
-          primaryDisabled={!pendingConfirmation && !r.sourcePath}
-          onPrimaryClick={() => pendingConfirmation ? setConfirmRecord(r) : openPath(r.sourcePath, `原单 ${r.sourceOrderNo}`)}
+          onPrimaryClick={() => pendingConfirmation ? setConfirmRecord(r) : sourcePath ? openPath(sourcePath, `原单 ${r.sourceOrderNo}`) : openPath(receiptPath, `收货单 ${r.receiptTaskNo}`)}
           items={items}
         />
       )
@@ -193,7 +205,9 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
     <div className="space-y-5">
       <PageHeader
         title={copy.title}
-        description={copy.description}
+        description={effectiveTab === 'receipts'
+          ? `${type === 1 ? '付款' : '收款'}单涵盖现结与月结。${canExecutePayments ? '此处可核销已确认的月结对账单。' : ''}`
+          : copy.description}
         actions={(
           <div className="flex flex-wrap gap-2">
             {/* 每个 tab 的动作按钮都落在右上角 PageHeader，跨 tab 位置一致 */}
@@ -230,6 +244,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
           <button
             key={item.key}
             type="button"
+            aria-current={effectiveTab === item.key ? 'true' : undefined}
             onClick={() => setTab(item.key)}
             className={`px-4 py-2 text-sm font-medium transition-colors ${effectiveTab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
           >
@@ -242,7 +257,10 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
       <KeepAliveSection active={canViewPayments && effectiveTab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar /></KeepAliveSection>
 
       <KeepAliveSection active={effectiveTab === 'records'} className="space-y-4">
-      <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
+      <div className="flex flex-wrap items-center gap-2">
+        <AppliedDateRange label="创建日期" startDate={query.startDate} endDate={query.endDate} onClear={clearDates} />
+        <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} showDateChip={false} />
+      </div>
 
       <PaymentQueryDialog
         title={`查询${copy.title}`}
@@ -254,14 +272,17 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
         partyType={type}
         statusOptions={copy.statusOptions}
         showDueDate
+        resetLabel="重置"
       />
 
-      {isError && !data && (
+      {error instanceof ApiClientError && error.status === 403 ? (
+        <EmptyState variant="no-permission" description="当前账号无权查看月结账款。" />
+      ) : isError && (
         <QueryErrorState
           error={error}
           onRetry={() => void refetch()}
           title="对账数据加载失败"
-          description="当前对账单数据无法加载，请点击右上角刷新页面或稍后重试"
+          description="当前月结账款无法加载，请重试。"
           compact
         />
       )}
@@ -272,7 +293,11 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
           data={displayRows}
           loading={isLoading}
           onRowDoubleClick={(row) => openPath(row.sourcePath || row.receiptPath, row.orderNo)}
-          emptyText="暂无对账数据"
+          emptyState={hasFilters ? (
+            <EmptyState variant="no-result" title="没有符合条件的月结账款"
+              description="可调整筛选条件后重新查询。"
+              action={hasDateRange ? <Button variant="outline" size="sm" onClick={clearDates}>清除创建日期</Button> : undefined} />
+          ) : <EmptyState variant="no-data" title="暂无月结账款" description="当前可查看的范围内还没有月结账款。" />}
         />
       )}
       </KeepAliveSection>

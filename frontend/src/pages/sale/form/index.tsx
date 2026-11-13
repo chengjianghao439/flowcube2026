@@ -65,7 +65,7 @@ import ReleaseAllocationDialog from '@/pages/sale/components/ReleaseAllocationDi
 import { SectionCard }    from '@/components/shared/SectionCard'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
 import { useCreateSale, useSaleDetail, useShipSale, useCancelSale, useDeleteSale } from '@/hooks/useSale'
-import { getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
+import { canStartSaleAdjustment, getSaleWorkflowStatus } from '@/lib/saleWorkflowStatus'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import { cn } from '@/lib/utils'
@@ -173,7 +173,7 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
     remark, setRemark, carrierId, setCarrierId, shippingProduct, setShippingProduct, freightType, setFreightType,
     receiverName, setReceiverName, receiverPhone, setReceiverPhone, receiverAddress, setReceiverAddress,
     discountAmount, setDiscountAmount, total, discount, discountedTotal,
-    quantityRefs, carrierOptions,
+    quantityRefs, carrierOptions, carrierLoading, carrierError, retryCarriers,
     items, priceLoading, priceErrors,
     finderOpen, setFinderOpen, setFinderItemKey,
     customerFinderOpen, setCustomerFinderOpen,
@@ -262,6 +262,7 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
         warehouseId={warehouseId} setWarehouseId={handling ? () => {} : setWarehouseId} setWarehouseName={handling ? () => {} : setWarehouseName}
         warehouseError={issues.some(i => i.target === 'warehouse')} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
+        carrierLoading={carrierLoading} carrierError={carrierError} retryCarriers={retryCarriers}
         shippingProduct={shippingProduct} setShippingProduct={setShippingProduct}
         shippingProductDisabled={frozen}
         freightType={freightType} setFreightType={setFreightType}
@@ -323,14 +324,14 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
 // ════════════════════════════════════════════════════════════════════════════
 
 function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: string; closeTab: () => void }) {
-  const { data: order, isLoading, isFetching, isPaused, isError, refetch } = useSaleDetail(saleId)
+  const active = useActiveWorkspaceTab()
+  const { data: order, isLoading, isFetching, isPaused, isError, refetch } = useSaleDetail(saleId, active)
   const { can } = usePermission()
   // Once classified, this resource stays behind the owned read even if legacy bootstrap finishes later.
   const commercialResource = useRef({ saleId, identified: false })
   if (commercialResource.current.saleId !== saleId) commercialResource.current = { saleId, identified: false }
   if (order?.commercialModel === 'kit-v1') commercialResource.current.identified = true
   const needsCommercialRead = commercialResource.current.identified
-  const active = useActiveWorkspaceTab()
   const handoff = readSaleHandoff(tabPath, saleId)
   const hasHandoff = handoff !== null && handoff !== 'invalid'
   const [checkedPath, setCheckedPath] = useState('')
@@ -370,9 +371,13 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   }>({ open: false, title: '', description: '', variant: 'default', confirmText: '确认', onConfirm: () => {} })
 
   const isPending = shipMutate.isPending || !!shipMutate.recovery?.blocked || deleteMutate.isPending || cancelMutate.isPending || !!cancelMutate.recovery?.blocked
+  // 分仓、已部分发货或仓库执行阻断的订单不能进入改单。
+  const canAdjust = !!order && canStartSaleAdjustment(order)
   useDirtyGuard(tabPath, isPending || !!cancelReason.trim())
-  useSaleEditEntry(tabPath, !needsCommercialRead && !!order && !isFetching && !isPaused && !isError, () => {
-    if (order?.status === 1 && can(PERMISSIONS.SALE_ORDER_UPDATE) && !isPending) setEditing(true)
+  useSaleEditEntry(tabPath, !needsCommercialRead && !!order && !isFetching && !isPaused && !isError, mode => {
+    if (!can(PERMISSIONS.SALE_ORDER_UPDATE) || isPending || editing || adjustMode) return
+    if (mode === 'edit' && order?.status === 1) setEditing(true)
+    if (mode === 'adjust' && canAdjust) setAdjustMode(true)
   })
 
   if (editing) return <ExistingSaleEditor saleId={saleId} tabPath={tabPath} onDone={() => setEditing(false)} />
@@ -398,15 +403,14 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     )
   }
 
-  // 分仓/分批：多仓订单、或已有部分发货的订单，明细已锁定（后端拒绝改单），不进改单视图。
-  // 占库期（状态2/6）无 taskId 也可改单（占库期改单）；执行期（状态3）需有 taskId。
-  const canAdjust = (order.status === 2 || order.status === 3 || order.status === 6)
-    && !order.warehouseTaskCancelRequestedAt && !order.warehouseTaskAdjustmentRequestedAt
-    && !order.executionAdjustmentBlocked && !order.isMultiWarehouse && (order.shippedTotalQty ?? 0) === 0
   const ws = getSaleWorkflowStatus(order)
   const reservationPending = !!order.warehouseTaskCancelRequestedAt || !!order.warehouseTaskAdjustmentRequestedAt
     || !!order.tasks?.some(task => task.cancelRequestedAt || task.adjustmentRequestedAt)
   const mayReserve = order.status === 1 || order.status === 6 || (order.status === 3 && !!order.hasUnreservedItems)
+  const showReserve = can(PERMISSIONS.SALE_ORDER_RESERVE) && mayReserve
+  const showDispatch = can(PERMISSIONS.SALE_ORDER_SHIP) && (order.status === 2 || order.status === 6 || (order.status === 3 && order.hasUndispatchedItems))
+  const showDelete = can(PERMISSIONS.SALE_ORDER_DELETE) && order.status === 5
+  const showCancel = can(PERMISSIONS.SALE_ORDER_CANCEL) && [1, 2, 3, 6].includes(order.status)
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -420,9 +424,8 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
         }
         rightActions={
           <>
-            <ReturnSourceButton kind="sale" sourceId={order.id} sourceNo={order.orderNo} />
-            <ReorderSourceButton sourceId={order.id} model="ordinary" disabled={isFetching || isError || isPaused} />
-            {can(PERMISSIONS.SALE_ORDER_DELETE) && order.status === 5 && (
+            {(showDelete || showCancel) && <div className="flex items-center gap-2 border-r border-border pr-2" role="group" aria-label="订单撤销操作">
+            {showDelete && (
               <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setConfirmState({
                   open: true, title: '确认删除订单', description: '删除后订单将无法恢复。', variant: 'destructive', confirmText: '确认删除',
@@ -434,17 +437,15 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
                 <X className="h-4 w-4 mr-1" />删除订单
               </Button>
             )}
-            {can(PERMISSIONS.SALE_ORDER_CANCEL) && (order.status === 1 || order.status === 2 || order.status === 3 || order.status === 6) && (
+            {showCancel && (
               <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" disabled={isPending}
                 onClick={() => setCancelOpen(true)}>
                 <X className="h-4 w-4 mr-1" />取消订单
               </Button>
             )}
-            {can(PERMISSIONS.SALE_ORDER_RESERVE) && mayReserve && (
-              <Button variant="outline" disabled={isPending || reservationPending} onClick={() => setReserveDialogOpen(true)}>
-                <Warehouse className="h-4 w-4 mr-1" />{order.status === 1 ? '占用库存' : '补占库存'}
-              </Button>
-            )}
+            </div>}
+            <ReturnSourceButton kind="sale" sourceId={order.id} sourceNo={order.orderNo} />
+            <ReorderSourceButton sourceId={order.id} model="ordinary" disabled={isFetching || isError || isPaused} />
             {can(PERMISSIONS.SALE_ORDER_RELEASE) && (order.status === 2 || order.status === 6) && (
               <Button variant="outline" disabled={isPending} onClick={() => setReleaseDialogOpen(true)}>
                 <Warehouse className="h-4 w-4 mr-1" />取消占库
@@ -452,25 +453,24 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
             )}
             {/* 打印与订单状态无关（模板只依赖订单基础信息 + 明细），每个状态都可打印，与采购单一致 */}
             <Button variant="outline" onClick={() => setPrintOpen(true)}>打印订单</Button>
-            {can(PERMISSIONS.SALE_ORDER_SHIP) && (order.status === 2 || order.status === 6) && (
-              <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
-                发起出库
-              </Button>
-            )}
-            {/* 分批：履约中且仍有未派发行时可继续发剩余 */}
-            {can(PERMISSIONS.SALE_ORDER_SHIP) && order.status === 3 && order.hasUndispatchedItems && (
-              <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
-                继续发货
-              </Button>
-            )}
             {can(PERMISSIONS.SALE_ORDER_UPDATE) && canAdjust && (
-              <Button variant="outline" disabled={isPending} onClick={() => setAdjustMode(true)}>
+              <Button variant={showReserve || showDispatch ? 'outline' : 'default'} disabled={isPending} onClick={() => setAdjustMode(true)}>
                 <Pencil className="h-4 w-4 mr-1" />修改订单
               </Button>
             )}
             {can(PERMISSIONS.SALE_ORDER_UPDATE) && order.status === 1 && (
-              <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>
+              <Button variant={showReserve ? 'outline' : 'default'} disabled={isPending} onClick={() => setEditing(true)}>
                 <Pencil className="h-4 w-4 mr-1" />编辑
+              </Button>
+            )}
+            {showReserve && (
+              <Button variant={showDispatch ? 'outline' : 'default'} disabled={isPending || reservationPending} onClick={() => setReserveDialogOpen(true)}>
+                <Warehouse className="h-4 w-4 mr-1" />{order.status === 1 ? '占用库存' : '补占库存'}
+              </Button>
+            )}
+            {showDispatch && (
+              <Button disabled={isPending} onClick={() => setShipDialogOpen(true)}>
+                {order.status === 3 ? '继续发货' : '发起出库'}
               </Button>
             )}
           </>

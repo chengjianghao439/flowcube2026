@@ -41,7 +41,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   vi.clearAllMocks()
   useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
-  useAuthStore.getState().login('offline', null, { id: 7, roleId: 5, username: 'offline', realName: '测试', roleName: '财务', permissions: [P.FINANCE_ACCOUNT_VIEW, P.FINANCE_ACCOUNT_UPDATE, P.PAYMENT_VIEW] })
+  useAuthStore.getState().login('offline', null, { id: 7, roleId: 5, username: 'offline', realName: '测试', roleName: '财务', permissions: [P.FINANCE_ACCOUNT_VIEW, P.FINANCE_ACCOUNT_CREATE, P.FINANCE_ACCOUNT_UPDATE, P.PAYMENT_VIEW] })
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })

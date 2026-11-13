@@ -26,6 +26,8 @@ interface PdaScannerProps {
   /** 只结束与本次待确认原键相同的手输，不能用解除禁用推断成功。 */
   resolution?: PdaScanResolution | null
   placeholder?: string
+  /** 绑定页等需要区分具体录入内容时，给入口和输入框提供同一个名称。 */
+  manualEntryLabel?: string
   disabled?: boolean
   /** 处理中才显示 spinner；等待核对/完成等禁用状态使用暂停说明。 */
   busy?: boolean
@@ -42,6 +44,7 @@ export default function PdaScanner({
   onScan,
   resolution,
   placeholder = '等待扫码…',
+  manualEntryLabel,
   disabled = false,
   busy = false,
   disabledReason = '扫码已暂停，请先处理当前提示',
@@ -193,7 +196,7 @@ export default function PdaScanner({
             <input
               ref={manualInputRef}
               data-scanner-manual="true"
-              aria-label={`手动输入：${placeholder}`}
+              aria-label={manualEntryLabel ?? `手动输入：${placeholder}`}
               value={manualValue}
               readOnly={paused}
               aria-busy={processing || busy}
@@ -202,7 +205,7 @@ export default function PdaScanner({
                 if (e.key === 'Enter') { e.preventDefault(); commitManual() }
                 if (e.key === 'Escape') exitManualMode()
               }}
-              placeholder="输入条码后按回车"
+              placeholder={manualEntryLabel ?? '输入条码后按回车'}
               className="min-h-11 w-full rounded-sm bg-transparent text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
               autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
             />
@@ -234,7 +237,7 @@ export default function PdaScanner({
               onClick={enterManualMode}
               disabled={paused}
               className="min-h-11 rounded-xl border border-border bg-background px-3 py-2 text-xs font-medium text-muted-foreground motion-safe:active:scale-95 disabled:opacity-40 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >手动输入</button>
+            >{manualEntryLabel ?? '手动输入'}</button>
           ) : null}
         </div>
       </div>

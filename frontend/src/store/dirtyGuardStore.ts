@@ -81,7 +81,7 @@ export const useDirtyGuardStore = create<DirtyGuardState>((set, get) => ({
           type: 'question',
           title: '离开确认',
           message,
-          buttons: ['确定离开', '继续编辑'],
+          buttons: ['放弃本次修改', '继续编辑'],
           defaultId: 1,
           cancelId: 1,
           noLink: true,

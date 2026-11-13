@@ -153,12 +153,12 @@ for(const bizType of [6,2])test('extra application-bound fund cannot be ignored 
  await assert.rejects(f.load('service').regenerateVoucher(app.id,operator));assert.equal(funds(f).filter(t=>t.biz_id===61).length,1)
  assert.equal(f.data.finance_period_backfills[0].voucher_generated_at,null)
 })
-test('old payment execute retains execution-day posting instead of adopting approved day',async()=>{
+test('old payment execute retains the original approval period on delayed execution',async()=>{
  const f=await fixture(),app=await approveOnly(f),row=f.data.finance_period_backfills[0]
  row.biz_type='payment';row.request_snapshot=JSON.stringify({recordId:31,body:{amount:1},operator:{operatorId:9},requestKey:'old'})
  const result=await f.load('service').execute(app.id,operator)
- const today=require('../backend/src/utils/backendTime').beijingTodayYmd().replaceAll('-','').slice(0,6)
- assert.equal(result.postingPeriod,today);assert.equal(result.result.legacyPeriod,today);assert.equal(funds(f).length,0)
+ const approvedPeriod=f.approvedDate.replaceAll('-','').slice(0,6)
+ assert.equal(result.postingPeriod,approvedPeriod);assert.equal(result.result.legacyPeriod,approvedPeriod);assert.equal(funds(f).length,0)
 })
 
 for(const amount of ['0.0100','0.0200'])test('actual exported application inspector proves lawful cent projection '+amount,async()=>{

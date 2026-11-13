@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 import { getByRole } from '@testing-library/dom'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { DEFAULT_LABEL_ELEMENTS } from '@/constants/printFieldDefs'
+import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import PrintTemplateEditor from './editor'
 
 const mocks = vi.hoisted(() => ({ detail: vi.fn(), sample: vi.fn(), save: vi.fn(), generation: 1, permissions: ['print.template.manage'] }))
@@ -148,6 +149,94 @@ test('DPI is saved and participates in undo/redo', async () => {
   await click('保存'); expect(mocks.save.mock.calls.at(-1)![0].layout.dpi).toBe(300)
   await click('撤销'); expect(select.value).toBe('203')
   await click('重做'); expect(select.value).toBe('300')
+})
+
+test('坐标完整输入只占一条撤销记录，另一次输入可独立撤销重做', async () => {
+  const element = { ...DEFAULT_LABEL_ELEMENTS[8][1], id: 'position', label: '位置样本', x: 10 }
+  mocks.detail.mockResolvedValue({ ...tpl, layout: { elements: [element] } })
+  await render()
+  act(() => getByRole(host, 'button', { name: /^元素：位置样本/ }).focus())
+  const x = () => host.querySelector<HTMLInputElement>('input[type="number"][min="0"][step="1"]')!
+  const user = userEvent.setup()
+  expect(x().value).toBe('10')
+  await act(async () => { await user.clear(x()); await user.type(x(), '11'); await user.tab() })
+  expect(x().value).toBe('11')
+  await click('撤销')
+  expect(x().value).toBe('10')
+  await click('重做')
+  expect(x().value).toBe('11')
+
+  await act(async () => { await user.clear(x()); await user.type(x(), '19'); await user.keyboard('{Enter}') })
+  expect(x().value).toBe('19')
+  await click('撤销')
+  expect(x().value).toBe('11')
+  await click('撤销')
+  expect(x().value).toBe('10')
+  await click('重做')
+  expect(x().value).toBe('11')
+  await click('重做')
+  expect(x().value).toBe('19')
+})
+
+test('新建模板的自动排版保持干净，键入坐标后保护未保存的模板', async () => {
+  const path = '/settings/print-templates/new'
+  mocks.sample.mockResolvedValue({ type: 1, kind: 'sale', sourceLabel: 'SL-1', record: { orderNo: 'SL-1', items: [] } })
+  await render(path)
+  expect(useDirtyGuardStore.getState().isTabDirty(path)).toBe(false)
+  const layer = getByRole(host, 'button', { name: /^元素：单据编号/ })
+  act(() => layer.focus())
+  const x = getByRole(host, 'spinbutton', { name: 'X' }) as HTMLInputElement
+  const user = userEvent.setup()
+  await act(async () => { await user.clear(x); await user.type(x, '11'); await user.tab() })
+  expect(useDirtyGuardStore.getState().isTabDirty(path)).toBe(true)
+  await click('撤销')
+  expect(useDirtyGuardStore.getState().isTabDirty(path)).toBe(false)
+})
+
+test('A4 屏幕预览的长商品编码保留全文，优先按正常断点换行', async () => {
+  const code = 'SYNTHETIC-LONG-SKU-00000123456789'
+  mocks.detail.mockResolvedValue({
+    ...tpl, type: 1, paperSize: 'A4',
+    layout: { elements: [{
+      ...DEFAULT_LABEL_ELEMENTS[8][1], type: 'table', fieldKey: 'itemsTable', label: '明细',
+      width: 180, height: 90, tableColumns: ['code', 'name', 'qty'], tableColumnWidths: { code: 25 },
+    }] },
+  })
+  mocks.sample.mockResolvedValue({
+    type: 1, kind: 'sale', sourceLabel: 'SO-REAL',
+    record: { orderNo: 'SO-REAL', items: [{ productCode: code, productName: '合成商品', unit: '件', quantity: 1, unitPrice: 2, amount: 2 }] },
+  })
+  await render()
+  await click('预览')
+  const cell = getByRole(host, 'cell', { name: code }) as HTMLTableCellElement
+  expect(cell.title).toBe(code)
+  expect(cell.style.wordBreak).toBe('normal')
+  expect(cell.style.overflowWrap).toBe('anywhere')
+  expect(getByRole(host, 'cell', { name: '合成商品' }).getAttribute('title')).toBeNull()
+})
+
+test('纸宽及独立的画布操作分别撤销，并保留原边界校验', async () => {
+  await render()
+  const width = () => host.querySelector<HTMLInputElement>('input[title="宽度 mm"]')!
+  const user = userEvent.setup()
+  await act(async () => { await user.clear(width()); await user.type(width(), '99'); await user.tab() })
+  expect(width().value).toBe('99')
+  const firstElement = getByRole(host, 'button', { name: `元素：${DEFAULT_LABEL_ELEMENTS[8][0].label}（Enter/空格选中，方向键微调，Delete 删除）` })
+  act(() => firstElement.focus())
+  await click('删除该元素')
+  expect(firstElement.isConnected).toBe(false)
+  await click('撤销')
+  expect(width().value).toBe('99')
+  expect(host.querySelectorAll('[role="button"][aria-label^="元素："]')).toHaveLength(DEFAULT_LABEL_ELEMENTS[8].length)
+  await click('撤销')
+  expect(width().value).toBe('75')
+  await click('重做')
+  expect(width().value).toBe('99')
+
+  await act(async () => { await user.clear(width()); await user.type(width(), '999'); await user.tab() })
+  expect(width().value).toBe('120')
+  await click('撤销')
+  expect(width().value).toBe('99')
 })
 
 

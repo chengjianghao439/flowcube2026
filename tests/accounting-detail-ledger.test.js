@@ -65,3 +65,34 @@ test('FIN15 actual supplier ledger labels refund while retaining direction, bala
   assert.deepEqual(plain(result.summary),{openingBalance:0,increase:0.33,decrease:50,closingBalance:-49.67})
   assert.equal(reads.length,7)
 })
+
+test('合并利润与普通利润同口径，损益结转前后仍是 11 − 20', async () => {
+  const { SOURCE_TYPES } = require('../backend/src/constants/voucherSource')
+  const period = '202611', start = '2026-11-01', end = '2026-11-30'
+  let closed = false
+  const pool = {
+    async query(sql, params) {
+      if (sql.includes('FROM acct_companies')) return [[{ id: 1, code: 'MAIN', name: '主账套' }]]
+      assert.deepEqual(plain(params.slice(0, 4)), [start, end, start, end])
+      const excludes = /v\.source_type\s+NOT IN\s*\(\?,\s*\?\)/i.test(sql)
+      if (excludes) assert.deepEqual(plain(params.slice(4, 6)), [SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y])
+      const closingOffset = closed && !excludes
+      return [[
+        { code: '6001', name: '主营业务收入', category: 5, balance_dir: 2, c: 11, d: closingOffset ? 11 : 0 },
+        { code: '6401', name: '主营业务成本', category: 6, balance_dir: 1, d: 20, c: closingOffset ? 20 : 0 },
+      ]]
+    },
+  }
+  const mock = { '../../config/db': { pool } }
+  const ledger = load('modules/accounting/accounting.ledger.service.js', mock)
+  const consolidated = load('modules/accounting/consolidation.service.js', { ...mock, './accounting.ledger.service': ledger })
+  for (const value of [false, true]) {
+    closed = value
+    const [ordinary, group] = await Promise.all([
+      ledger.getIncomeStatement({ period, companyId: 1 }),
+      consolidated.getConsolidatedIncomeStatement({ period, groupId: 1 }),
+    ])
+    assert.equal(ordinary.profit, -9)
+    assert.deepEqual([group.revenueTotal, group.expenseTotal, group.netProfit], [11, 20, -9])
+  }
+})

@@ -40,6 +40,20 @@ test('递归VM夹具保留真实生命周期能力且各次加载独立', async 
   await second.waitForTasks()
 })
 
+test('调拨异常了结展示运输损耗，保留调出调入事实并清零在途', async () => {
+  const pool = { query: async () => [[]] }
+  const { buildProgress } = loadService('backend/src/modules/document-activity/document-progress.js', { '../../config/db': { pool } })
+  const items = [{ deductedQty: 2.35, receivedQty: 1.2 }]
+  const inTransit = await buildProgress('transfer', 1, { status: 3, items })
+  const closed = await buildProgress('transfer', 1, { status: 4, closedReason: 'force_close', items })
+  assert.equal(inTransit.sections[0].rows[0].inTransitQty, 1.15)
+  const row = closed.sections[0].rows[0]
+  assert.equal(row.inTransitQty, 0)
+  assert.equal(row.transportLossQty, 1.15)
+  assert.equal(row.deductedQty, 2.35)
+  assert.equal(row.receivedQty, 1.2)
+})
+
 function fixture({ failAudit = false } = {}) {
   const queries = [], before = [{ product_id: 7, product_code: 'SYN-7', product_name: '合成商品', unit: '件', sale_price: '1.2345' }]
   let staged = [], saved = [], rolledBack = false, finalRows = before

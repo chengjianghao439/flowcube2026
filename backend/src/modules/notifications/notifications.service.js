@@ -60,9 +60,8 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
        AND c.exp_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL ? DAY)${cSc.sql}`,
     [EXPIRY_WINDOW_DAYS, ...cSc.params],
   )
-  // 呆滞库存预警（文档09 Phase2）：某商品×仓仍有在库，且最后一次出库距今 > staleDays 天。
-  // 口径与 inventory.aging 一致（last_outbound 取 inventory_logs type=2 出库方向的最近一次），
-  // 无出库记录视为从未动销（也判呆滞）。提醒去呆滞报表确认处置。
+  // 按商品和仓库统计有效在库。最近出库取 inventory_logs type=2 的最近一条；
+  // 从未出库或最近出库距今超过阈值均提醒。
   const STALE_DAYS = Number(process.env.STALE_WARNING_DAYS || 90)
   const [[{ staleCount }]] = await pool.query(
     `SELECT COUNT(*) AS staleCount FROM (
@@ -238,7 +237,7 @@ async function buildNotifications(scopeWarehouseIds = null, userId = null) {
   if (overdueReceivable > 0) pushNotification(items, seen, { code: 'OVERDUE_RECEIVABLE', category: 'finance', priority: 10, type: 'danger', icon: '🚨', text: `${overdueReceivable} 笔应收账款已逾期`, path: '/payments/receivable' })
   if (lowStockCount > 0) pushNotification(items, seen, { code: 'LOW_STOCK', category: 'inventory', priority: 20, type: 'warning', icon: '⚠️', text: `${lowStockCount} 项库存低于补货点`, path: '/reports/replenishment' })
   if (expiringCount > 0) pushNotification(items, seen, { code: 'EXPIRING_STOCK', category: 'inventory', priority: 18, type: 'warning', icon: '⏳', text: `${expiringCount} 个批次库存 ${EXPIRY_WINDOW_DAYS} 天内到期，请尽快处理`, path: '/inventory?tab=containers' })
-  if (staleCount > 0) pushNotification(items, seen, { code: 'STALE_STOCK', category: 'inventory', priority: 17, type: 'warning', icon: '🏚️', text: `${staleCount} 项库存已 ${STALE_DAYS} 天未动销（呆滞），建议处置`, path: '/reports/inventory-aging' })
+  if (staleCount > 0) pushNotification(items, seen, { code: 'STALE_STOCK', category: 'inventory', priority: 17, type: 'warning', icon: '🏚️', text: `${staleCount} 项在库商品从未出库，或距最近一次出库超过 ${STALE_DAYS} 天（按仓计数）`, path: '/reports/inventory-aging' })
   if (pendingPurchase > 0) pushNotification(items, seen, { code: 'PENDING_PURCHASE', category: 'operations', priority: 30, type: 'info', icon: '📦', text: `${pendingPurchase} 笔采购单待处理`, path: '/purchase' })
   if (pendingSale > 0) pushNotification(items, seen, { code: 'PENDING_SALE', category: 'operations', priority: 30, type: 'info', icon: '🚚', text: `${pendingSale} 笔销售单待处理`, path: '/sale' })
   if (unpaidPayable > 0) pushNotification(items, seen, { code: 'UNPAID_PAYABLE', category: 'finance', priority: 12, type: 'danger', icon: '💳', text: `${unpaidPayable} 笔应付账款未结清`, path: '/payments/payable' })

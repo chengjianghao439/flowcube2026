@@ -32,8 +32,8 @@ vi.mock('@/components/shared/DataTable', () => ({
     columns: Array<{ key: string; render?: (value: unknown, row: unknown) => React.ReactNode }>
     data: unknown[]
   }) => <div>{data.map((row, index) => (
-    <div key={index}>{columns.filter(column => ['latestJob', 'printer'].includes(column.key)).map(column => (
-      <div key={column.key}>{column.render?.(undefined, row)}</div>
+    <div key={index} data-row-index={index}>{columns.filter(column => ['barcodeStatusKey', 'latestJob', 'printer'].includes(column.key)).map(column => (
+      <div key={column.key} data-column-key={column.key}>{column.render?.(undefined, row)}</div>
     ))}</div>
   ))}</div>,
 }))
@@ -69,11 +69,10 @@ test('显式收货单上下文只统计该单，不能混入其他单失败和�
   expect(count('未配置打印机')).toBe('1')
 })
 
-test('未配置打印机有独立筛选、状态标签和补打引导', () => {
+test('未配置打印机有独立筛选和任务状态标签', () => {
   render('?inboundTaskId=1')
   expect(BARCODE_PRINT_STATUS_OPTIONS).toContainEqual({ value: 'unassigned', label: '未配置打印机' })
-  expect(host.textContent).toContain('未配置打印机')
-  expect(host.textContent).toContain('绑定打印机后到打印记录补打')
+  expect(host.querySelector('[data-row-index="4"] [data-column-key="latestJob"]')?.textContent).toBe('未配置打印机')
 })
 
 test.each(['outbound', 'logistics'])('%s 的未配置计数不混入真正超时和普通失败', category => {
@@ -86,13 +85,14 @@ test.each(['outbound', 'logistics'])('%s 的未配置计数不混入真正超时
 })
 
 // 2026-09-27 GUI 验收：作废把「最近任务结果」整个覆盖掉，同一行只剩「条码已作废」。
-test('作废行同时显示「条码状态」与「最近任务结果」，互不覆盖', () => {
+test('作废行同时显示业务状态与最近打印任务状态', () => {
   render()
-  // 行级业务状态（连同原因）
-  expect(host.textContent).toContain('条码已作废')
-  expect(host.textContent).toContain('原因：入库撤回')
-  // 最近任务自身的结果——修复前这一条会被「条码已作废」吞掉
-  expect(host.textContent).toContain('最近任务：已打印')
+  const row = host.querySelector('[data-row-index="5"]')
+  const business = row?.querySelector('[data-column-key="barcodeStatusKey"]')?.textContent
+  expect(business).toContain('条码已作废')
+  expect(business).toContain('原因：入库撤回')
+  expect(row?.querySelector('[data-column-key="latestJob"]')?.textContent).toBe('已打印')
+  expect(host.querySelector('[data-row-index="3"] [data-column-key="barcodeStatusKey"]')?.textContent).toBe('—')
 })
 
 test('因作废被撤回终结的任务显示「未出纸」，不复用「打印失败」文案', () => {

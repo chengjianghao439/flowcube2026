@@ -51,7 +51,6 @@ export default function AccountingPeriodsPage() {
   const closeMut = useMutation({
     mutationFn: (period: string) => closePeriodApi(period, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已结账'); setClosing(null); invalidate() },
-    onError: (e) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '结账失败'),
   })
 
   const reopenMut = useMutation({
@@ -100,7 +99,7 @@ export default function AccountingPeriodsPage() {
             </Button>
           )}
           {!r.closed ? (
-            <Button size="sm" variant="outline" disabled={closeMut.isPending} onClick={() => setClosing(r)} title="结账后该期间凭证不可变动">
+            <Button size="sm" variant="outline" disabled={closeMut.isPending} onClick={() => { closeMut.reset(); setClosing(r) }} title="结账后该期间凭证不可变动">
               <Lock className="mr-1 h-3.5 w-3.5" />结账
             </Button>
           ) : (
@@ -141,12 +140,15 @@ export default function AccountingPeriodsPage() {
       </Dialog>
 
       {/* 结账确认 */}
-      <Dialog open={!!closing} onOpenChange={v => !v && setClosing(null)}>
+      <Dialog open={!!closing} onOpenChange={v => !v && !closeMut.isPending && setClosing(null)}>
         <DialogContent className="sm:max-w-xl">
           <DialogHeader description={<>{<>
             确认结账 {closing && fmtPeriod(closing.period)}？结账后该期间凭证锁定，账面视为已确认；如需调整须反结账。
           </>}</>}><DialogTitle>结账</DialogTitle></DialogHeader>
 
+          {closeMut.isError && <p role="alert" className="text-sm text-destructive-ink">
+            {closeMut.error instanceof Error && closeMut.error.message ? closeMut.error.message : '结账失败，请刷新期间状态后重试。'}
+          </p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setClosing(null)} disabled={closeMut.isPending}>取消</Button>
             <Button onClick={() => closing && closeMut.mutate(closing.period)} disabled={closeMut.isPending}>{closeMut.isPending ? '结账中…' : '确认结账'}</Button>

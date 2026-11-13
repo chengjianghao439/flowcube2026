@@ -35,7 +35,7 @@ vi.mock('@/hooks/useCriticalPdaAction', () => ({ useCriticalPdaAction: (opts: { 
   }
 } }))
 vi.mock('@/hooks/usePendingRequests', () => ({ usePendingRequests: () => ({ records: state.pending ? [state.pending] : [] }) }))
-vi.mock('@/hooks/usePdaFeedback', () => ({ usePdaFeedback: () => ({ flash: null, ok: vi.fn(), warn: vi.fn(), err: vi.fn() }) }))
+vi.mock('@/hooks/usePdaFeedback', () => ({ usePdaFeedback: () => ({ flash: null, ok: vi.fn(), warn: vi.fn(), err: vi.fn(), clear: vi.fn() }) }))
 vi.mock('@/hooks/useOfflineScan', () => ({ useOfflineScan: () => ({ submitScan: vi.fn(), logError: vi.fn() }) }))
 vi.mock('@/components/pda/PdaScanner', () => ({ default: ({ onScan }: { onScan: (code: string) => void }) => { state.scan = onScan; return null } }))
 vi.mock('@/api/warehouse-tasks', () => ({

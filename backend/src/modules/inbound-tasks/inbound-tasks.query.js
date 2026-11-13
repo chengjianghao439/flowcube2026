@@ -23,7 +23,7 @@ const {
   buildInboundPrintBatches,
   ensureInboundTaskExists,
 } = require('./inbound-tasks.status')
-const { EXPIRE_MESSAGE } = require('../print-jobs/print-jobs.service')
+const { EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE } = require('../print-jobs/print-jobs.status')
 const { EFFECTIVE_ASSIGNED_QTY_SQL } = require('./inbound-tasks.short-receipt')
 
 function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], recentPrintJobs = [], thresholds = DEFAULT_INBOUND_THRESHOLDS) {
@@ -41,6 +41,7 @@ function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], rec
     success: Number(summary.successPrintJobs || 0),
     failed: Number(summary.failedPrintJobs || 0),
     timeout: Number(summary.timeoutPrintJobs || 0),
+    unassigned: Number(summary.unassignedPrintJobs || 0),
   }
   const putawaySummary = {
     waitingContainers: Number(summary.waitingContainers || 0),
@@ -138,32 +139,36 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
 
   const [printRows] = await conn.query(
     `SELECT
-        c.inbound_task_id AS task_id,
-        COUNT(*) AS total_jobs,
-        SUM(CASE WHEN latest.status = 0 THEN 1 ELSE 0 END) AS queued_jobs,
-        SUM(CASE WHEN latest.status = 1 THEN 1 ELSE 0 END) AS printing_jobs,
-        SUM(CASE WHEN latest.status = 2 THEN 1 ELSE 0 END) AS success_jobs,
-        SUM(CASE WHEN latest.status = 3 AND IFNULL(latest.error_message, '') <> ? THEN 1 ELSE 0 END) AS failed_jobs,
-        SUM(
-          CASE
-            WHEN (
-              (latest.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, latest.updated_at, NOW()) >= ?)
-              OR (latest.status = 3 AND IFNULL(latest.error_message, '') = ?)
-            )
-            THEN 1 ELSE 0
-          END
-        ) AS timeout_jobs
-     FROM inventory_containers c
-     INNER JOIN (
-       SELECT ref_id, MAX(id) AS max_id
-       FROM print_jobs
-       WHERE ref_type = 'inventory_container'
-       GROUP BY ref_id
-     ) latest_ref ON latest_ref.ref_id = c.id
-     INNER JOIN print_jobs latest ON latest.id = latest_ref.max_id
-     WHERE c.inbound_task_id IN (${placeholders})
-     GROUP BY c.inbound_task_id`,
-    [EXPIRE_MESSAGE, printTimeoutMinutes, EXPIRE_MESSAGE, ...ids],
+        task_id,
+        SUM(job_state = 'queued') AS queued_jobs,
+        SUM(job_state = 'printing') AS printing_jobs,
+        SUM(job_state = 'success') AS success_jobs,
+        SUM(job_state = 'failed') AS failed_jobs,
+        SUM(job_state = 'timeout') AS timeout_jobs,
+        SUM(job_state = 'unassigned') AS unassigned_jobs
+     FROM (
+       SELECT c.inbound_task_id AS task_id,
+         CASE
+           WHEN latest.status = 3 AND latest.printer_id IS NULL AND latest.error_message = ? THEN 'unassigned'
+           WHEN latest.status IN (0,1) AND TIMESTAMPDIFF(MINUTE, latest.updated_at, NOW()) >= ? THEN 'timeout'
+           WHEN latest.status = 3 AND latest.error_message IN (?, ?) THEN 'timeout'
+           WHEN latest.status = 3 THEN 'failed'
+           WHEN latest.status = 2 THEN 'success'
+           WHEN latest.status = 1 THEN 'printing'
+           ELSE 'queued'
+         END AS job_state
+       FROM inventory_containers c
+       INNER JOIN (
+         SELECT ref_id, MAX(id) AS max_id
+         FROM print_jobs
+         WHERE ref_type = 'inventory_container'
+         GROUP BY ref_id
+       ) latest_ref ON latest_ref.ref_id = c.id
+       INNER JOIN print_jobs latest ON latest.id = latest_ref.max_id
+       WHERE c.inbound_task_id IN (${placeholders})
+     ) AS jobs
+     GROUP BY task_id`,
+    [EXPIRE_MESSAGE, printTimeoutMinutes, EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE, ...ids],
   )
 
   const map = new Map(ids.map(id => [id, {
@@ -184,6 +189,7 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
     successPrintJobs: 0,
     failedPrintJobs: 0,
     timeoutPrintJobs: 0,
+    unassignedPrintJobs: 0,
   }]))
 
   for (const row of itemRows) {
@@ -218,6 +224,7 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
       successPrintJobs: Number(row.success_jobs || 0),
       failedPrintJobs: Number(row.failed_jobs || 0),
       timeoutPrintJobs: Number(row.timeout_jobs || 0),
+      unassignedPrintJobs: Number(row.unassigned_jobs || 0),
     })
   }
   return map
@@ -245,6 +252,7 @@ async function loadInboundRecentPrintJobs(taskId, thresholds = DEFAULT_INBOUND_T
     `SELECT
         j.id,
         j.status,
+        j.printer_id,
         j.error_message,
         j.ref_id,
         j.ref_code,

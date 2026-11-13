@@ -38,6 +38,17 @@ async function setup() {
 }
 afterEach(async () => { await cleanup?.(); fixture.task = undefined; fixture.permissions = null; expect(fixture.write).not.toHaveBeenCalled(); vi.clearAllMocks(); vi.unstubAllGlobals() })
 
+test('收货详情的单据打印要求打印模板查看权限，独立于条码任务权限', async () => {
+  fixture.task = task()
+  fixture.permissions = new Set([PERMISSIONS.INBOUND_ORDER_VIEW, PERMISSIONS.PRINT_JOB_VIEW])
+  const { host, draw } = await setup()
+  const print = () => [...host.querySelectorAll('button')].find(button => button.textContent?.trim() === '打印')
+  expect(print()).toBeUndefined()
+  fixture.permissions.add(PERMISSIONS.PRINT_TEMPLATE_VIEW)
+  await draw()
+  expect(print()).toBeDefined()
+})
+
 test('基础信息和准确采购来源保留，四标签切回仍为同一详情', async () => {
   fixture.task = task(); const { host } = await setup()
   expect(host.querySelector('h1')?.textContent).toBe('IN-21')

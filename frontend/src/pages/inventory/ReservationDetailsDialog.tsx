@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useState, useSyncExternalStore } from 'react'
 import { getApiClientBaseURL, subscribeApiClientBaseURL } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -13,24 +13,33 @@ import { ReservationSnapshotRead } from './ReservationSnapshotRead'
 type Item = Pick<InventoryOverviewItem, 'productId' | 'warehouseId' | 'productName' | 'warehouseName' | 'unit'>
 
 export default function ReservationDetailsDialog({ open, onClose, item }: { open: boolean; onClose: () => void; item: Item | null }) {
-  const active = useActiveWorkspaceTab()
   const user = useAuthStore(state => state.user)
   const generation = useAuthStore(state => state.sessionGeneration)
   const server = useSyncExternalStore(subscribeApiClientBaseURL, getApiClientBaseURL)
   const owner = JSON.stringify([generation, user?.id, user?.roleId, user?.permissions, server])
   const { can } = usePermission()
   const valid = !!item && [item.productId, item.warehouseId].every(id => Number.isSafeInteger(id) && id > 0)
-  return <Dialog open={open && active} onOpenChange={next => { if (!next) onClose() }}>
+  if (!open) return null
+  return <ReservationDialog key={`${owner}:${item?.productId}:${item?.warehouseId}`} item={valid ? item : null}
+    canRead={can(P.INVENTORY_VIEW)} owner={owner} server={server} generation={generation} onClose={onClose} />
+}
+
+function ReservationDialog({ item, canRead, owner, server, generation, onClose }: {
+  item: Item | null; canRead: boolean; owner: string; server: string | undefined; generation: number; onClose: () => void
+}) {
+  const active = useActiveWorkspaceTab()
+  const [draft, setDraft] = useState('')
+  const [keyword, setKeyword] = useState('')
+  return <Dialog open={active} onOpenChange={next => { if (!next) onClose() }}>
     <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-      <DialogHeader description={!can(P.INVENTORY_VIEW) ? '没有查看库存的权限' : !valid ? '库存商品或仓库信息无效' : '核对预占来源、订单与仓库分布。'}><DialogTitle>库存预占明细</DialogTitle></DialogHeader>
-      {open && active && (can(P.INVENTORY_VIEW) ? valid && item
-        ? <ReservationSnapshotRead renderSummary={summary => <QuantitySummary summary={summary} />} key={`${owner}:${item.productId}:${item.warehouseId}`} item={item} owner={owner} server={server} generation={generation} />
-        : null : null)}
+      <DialogHeader description={!canRead ? '没有查看库存的权限' : !item ? '库存商品或仓库信息无效' : '核对预占来源、订单与仓库分布。'}><DialogTitle>库存预占明细</DialogTitle></DialogHeader>
+      {active && canRead && item && <ReservationSnapshotRead renderSummary={summary => <QuantitySummary summary={summary} />}
+        item={item} owner={owner} server={server} generation={generation} draft={draft} onDraftChange={setDraft}
+        keyword={keyword} onApplyKeyword={() => setKeyword(draft.trim())} />}
       <DialogFooter><Button variant="outline" onClick={onClose}>关闭</Button></DialogFooter>
     </DialogContent>
   </Dialog>
 }
-
 
 function QuantitySummary({ summary: s }: { summary: InventoryReservationSummary }) {
   const cells = [

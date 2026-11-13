@@ -14,11 +14,14 @@ const FREIGHT_DEBIT_ACCOUNT = '6601'
  *
  * 铁律：
  *  - 只有 freight_type=1 寄付（我方付）才计入应付；到付/第三方付不产生应付（否则虚增应付）。
- *    手工录入但无法关联运单的账单，视为我方成本（寄付）计入——录入者录它就意味着这是我方要付的钱。
- *  - 运费应付以"承运商月结汇总单"为账款主体承接 payment_records.order_id（运费无采购/销售 order_id，
- *    不能多条硬塞同一 order_id 冲突 UNIQUE(type,order_id)）。settlement_type 用月结、confirm_status=0 待财务确认。
+ *    无法核实运单的账单留在待核对，不凭账单录入推定付款方式。
+ *  - 承运商月结汇总单以 payment_record_id 关联应付；账款的 order_id 留空。
+ *    settlement_type 用月结、confirm_status=0 待财务确认。
  *  - 全量重算幂等：同承运商同账期反复生成，按当前所有合格账单 SUM 覆盖，不重复计账。
  */
+const VERIFIED_WAYBILL_JOIN = `LEFT JOIN logistics_waybills w ON w.id = b.waybill_id
+  AND w.carrier_id = b.carrier_id AND w.status <> 5
+  AND (w.tracking_no = b.tracking_no OR JSON_CONTAINS(w.tracking_numbers, JSON_QUOTE(b.tracking_no)))`
 
 function fmtBill(r) {
   return {
@@ -74,7 +77,7 @@ async function listFreightBills({ page = 1, pageSize = 20, carrierId = null, bil
     `SELECT b.*, c.name AS carrier_name, w.freight_type
      FROM logistics_freight_bills b
      LEFT JOIN carriers c ON c.id = b.carrier_id
-     LEFT JOIN logistics_waybills w ON w.id = b.waybill_id
+     ${VERIFIED_WAYBILL_JOIN}
      ${whereSql} ORDER BY b.id DESC LIMIT ? OFFSET ?`,
     [...params, pageSize, offset],
   )
@@ -96,23 +99,21 @@ async function createFreightBill({ carrierId, trackingNo, waybillId = null, bill
   const freight = Number(actualFreight)
   if (!Number.isFinite(freight) || freight < 0) throw new AppError('运费金额非法', 400)
 
-  let wid = waybillId ? Number(waybillId) : null
+  const explicitId = waybillId == null ? null : Number(waybillId)
+  if (explicitId != null && (!Number.isSafeInteger(explicitId) || explicitId <= 0)) throw new AppError('运单无效', 400)
   let period = billPeriod
-  if (!wid) {
-    // 匹配「代表号 + 全部母子单号」（2026-09-18 审计 P2）：直连取号的运单把平台返回的全部
-    // 母子单号存进 tracking_numbers（JSON 字符串数组，见 logistics.direct.js 的
-    // `JSON.stringify(result.trackingNos)`），而 tracking_no 只是其中一个代表号。
-    // 原先只按 tracking_no 单列等值匹配，多箱单的子单号几乎**永远匹配不上** → waybill_id 落 NULL，
-    // 而 generateSettlement 的合格条件含 `OR b.waybill_id IS NULL`，于是关联失败的到付账单
-    // 被默认当成我方成本并入结算。
-    const [[wb]] = await pool.query(
-      `SELECT id FROM logistics_waybills
-        WHERE tracking_no = ?
-           OR (tracking_numbers IS NOT NULL AND JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?)))
-        LIMIT 1`,
-      [tn, tn],
-    )
-    if (wb) wid = wb.id
+  // 代表号和母子单号都参与匹配。同承运商出现多条候选且未显式指定时留待核对。
+  const [candidates] = await pool.query(
+    `SELECT id FROM logistics_waybills
+      WHERE carrier_id = ? AND status <> 5
+        AND (tracking_no = ? OR JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?)))
+        ${explicitId == null ? '' : 'AND id = ?'}
+      ORDER BY id LIMIT 2`,
+    explicitId == null ? [cid, tn, tn] : [cid, tn, tn, explicitId],
+  )
+  const wid = candidates.length === 1 ? candidates[0].id : null
+  if (explicitId != null && wid == null) {
+    throw new AppError('运单与承运商或快递单号不匹配，或运单已作废', 400, 'FREIGHT_WAYBILL_MISMATCH')
   }
   if (!period) {
     // 账期缺省取当前年月（真实场景由导入文件带；此处兜底）
@@ -167,28 +168,39 @@ async function generateSettlement({ carrierId, billPeriod }, { createdBy = null 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [[carrier]] = await conn.query('SELECT id, name FROM carriers WHERE id = ? AND deleted_at IS NULL', [cid])
+    const [[carrier]] = await conn.query('SELECT id, name FROM carriers WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [cid])
     if (!carrier) throw new AppError('承运商不存在', 404)
 
-    // 合格账单：寄付(freight_type=1) 或 无法关联运单(视为我方成本)。锁定以串行化并发生成。
-    const [bills] = await conn.query(
-      `SELECT b.id, b.actual_freight
-       FROM logistics_freight_bills b
-       LEFT JOIN logistics_waybills w ON w.id = b.waybill_id
-       WHERE b.carrier_id = ? AND b.bill_period = ?
-         AND (w.freight_type = 1 OR b.waybill_id IS NULL)
-       FOR UPDATE`,
-      [cid, period],
-    )
-    if (!bills.length) throw new AppError('该承运商该账期无寄付运费可对账', 400)
-    const total = bills.reduce((s, b) => s + Number(b.actual_freight), 0)
-    const billIds = bills.map(b => b.id)
-
-    // 汇总单头 upsert（uk_carrier_period）。先确保有 id 承接 payment_records.order_id。
+    // 先核已归入本汇总单的记录。历史成员失去寄付证据时阻止重算，保留既有账款待核。
     let [[settlement]] = await conn.query(
       'SELECT * FROM logistics_freight_settlements WHERE carrier_id = ? AND bill_period = ? FOR UPDATE',
       [cid, period],
     )
+    if (settlement) {
+      const [[unverified]] = await conn.query(
+        `SELECT b.id FROM logistics_freight_bills b
+         ${VERIFIED_WAYBILL_JOIN}
+         WHERE b.settlement_id = ?
+           AND (b.carrier_id <> ? OR b.bill_period <> ? OR w.freight_type IS NULL OR w.freight_type <> 1)
+         LIMIT 1 FOR UPDATE`,
+        [settlement.id, cid, period],
+      )
+      if (unverified) throw new AppError('原汇总含待核对账单，请先核对寄付运单，原应付未重算', 409, 'FREIGHT_SETTLEMENT_REVIEW_REQUIRED')
+    }
+    const [bills] = await conn.query(
+      `SELECT b.id, b.actual_freight
+       FROM logistics_freight_bills b
+       ${VERIFIED_WAYBILL_JOIN}
+       WHERE b.carrier_id = ? AND b.bill_period = ?
+         AND w.freight_type = 1 AND (b.settlement_id IS NULL OR b.settlement_id = ?)
+       FOR UPDATE`,
+      [cid, period, settlement?.id ?? null],
+    )
+    if (!bills.length) throw new AppError('该账期没有已核实的寄付运单，待核对账单暂不生成应付', 400, 'FREIGHT_NO_ELIGIBLE_BILLS')
+    const total = bills.reduce((s, b) => s + Number(b.actual_freight), 0)
+    const billIds = bills.map(b => b.id)
+
+    // 汇总单头 upsert（uk_carrier_period）。先确保有 id 承接 payment_records.order_id。
     if (!settlement) {
       const settlementNo = await generateDailyCode(conn, 'FS', 'logistics_freight_settlements', 'settlement_no')
       const [ins] = await conn.query(

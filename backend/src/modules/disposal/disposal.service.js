@@ -34,6 +34,9 @@ const DISPOSE_TYPE_LABEL = { 1: '降价促销', 2: '退货供应商', 3: '报废
 
 // 基本单位参考价：avg_cost → cost_price → sale_price，最后兜底0；不称成交价或纯成本。
 const UNIT_VALUE_EXPR = 'COALESCE(NULLIF(p.avg_cost,0), NULLIF(p.cost_price,0), p.sale_price, 0)'
+const VALUATION_BASIS_EXPR = `CASE WHEN NULLIF(p.avg_cost,0) IS NOT NULL THEN 'avg_cost'
+  WHEN NULLIF(p.cost_price,0) IS NOT NULL THEN 'cost_price'
+  WHEN p.sale_price IS NOT NULL THEN 'sale_price' ELSE 'none' END`
 const VALUE_EXPR = `c.remaining_qty * ${UNIT_VALUE_EXPR}`
 
 const genNo = conn => generateDailyCode(conn, 'DP', 'inventory_disposal_orders', 'disposal_no')
@@ -75,7 +78,7 @@ const fmt = r => ({
 })
 
 /**
- * 呆滞建议（处置单数据源）：某商品×某仓仍有在库 且 最后一次出库距今 > staleDays。
+ * 呆滞建议（处置单数据源）：某商品×某仓仍有在库，且从未出库或最近出库距今超过 staleDays 个业务日历日。
  * 纯只读，不写、不 FOR UPDATE，接仓库数据权限。金额口径与库龄报表一致。
  */
 async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouseId = null, staleDays = 90, scopeWarehouseIds = null }) {
@@ -96,9 +99,7 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
             MAX(${UNIT_VALUE_EXPR}) AS unit_value,
             SUM(c.remaining_qty) AS on_hand_qty,
             COALESCE(MAX(st.reserved), 0) AS reserved_qty,
-            CASE WHEN MAX(p.avg_cost) IS NOT NULL AND MAX(p.avg_cost)<>0 THEN 'avg_cost'
-                 WHEN MAX(p.cost_price) IS NOT NULL AND MAX(p.cost_price)<>0 THEN 'cost_price'
-                 WHEN MAX(p.sale_price) IS NOT NULL THEN 'sale_price' ELSE 'none' END AS valuation_basis,
+            MAX(${VALUATION_BASIS_EXPR}) AS valuation_basis,
             SUM(${VALUE_EXPR}) AS total_value,
             MAX(lo.last_outbound_at) AS last_outbound_at
      FROM inventory_containers c
@@ -151,6 +152,16 @@ async function getSuggestions({ page = 1, pageSize = 50, keyword = '', warehouse
     avgCost: Number(r.avg_cost || 0),
   }))
   return { list, pagination: { page, pageSize: ps, total }, staleDays: Number(staleDays) }
+}
+
+// 调用方从已核仓库范围的报废来源取得 productId，不接受用户另传商品或价格。
+async function getScrapValuation(productId) {
+  const [[product]] = await pool.query(
+    `SELECT ${UNIT_VALUE_EXPR} AS unit_value, ${VALUATION_BASIS_EXPR} AS valuation_basis
+       FROM product_items p WHERE p.id = ? AND p.deleted_at IS NULL AND p.is_active = 1`,
+    [productId],
+  )
+  return product ? { unitValue: Number(product.unit_value), basis: product.valuation_basis } : null
 }
 
 async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, warehouseId = null, startDate = '', endDate = '', scopeWarehouseIds = null }) {
@@ -240,8 +251,8 @@ async function create({ warehouseId, remark, items, operator, scopeWarehouseIds 
     const productIds = [...new Set(items.map(i => Number(i.productId)))]
     const [products] = await conn.query(
       `SELECT id, code, name, unit, allow_decimal_qty,
-              COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), sale_price, 0) AS unit_value
-         FROM product_items
+              ${UNIT_VALUE_EXPR} AS unit_value
+         FROM product_items p
         WHERE id IN (${productIds.map(() => '?').join(',')}) AND deleted_at IS NULL ORDER BY id FOR SHARE`,
       productIds,
     )
@@ -310,8 +321,8 @@ async function update(id, { warehouseId, remark, items }, scopeWarehouseIds = nu
     const productIds = [...new Set(items.map(i => Number(i.productId)))]
     const [products] = await conn.query(
       `SELECT id, code, name, unit, allow_decimal_qty,
-              COALESCE(NULLIF(avg_cost,0), NULLIF(cost_price,0), sale_price, 0) AS unit_value
-         FROM product_items
+              ${UNIT_VALUE_EXPR} AS unit_value
+         FROM product_items p
         WHERE id IN (${productIds.map(() => '?').join(',')}) AND deleted_at IS NULL ORDER BY id FOR SHARE`,
       productIds,
     )
@@ -552,4 +563,4 @@ async function cancel(id, scopeWarehouseIds = null) {
   }
 }
 
-module.exports = { getSuggestions, findAll, findById, create, update, submit, approve, reject, dispose, cancel }
+module.exports = { getSuggestions, getScrapValuation, findAll, findById, create, update, submit, approve, reject, dispose, cancel }

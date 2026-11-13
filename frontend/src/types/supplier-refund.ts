@@ -68,11 +68,13 @@ export interface SupplierRefund {
     supplier_id: number;
     warehouse_id: number;
     income_account_id: number;
+    income_account_name?: string;
     amount: string;
     refund_date: string;
     status: 1 | 2 | 3 | 4;
     created_by: number;
     confirmAllowed?: boolean;
+    confirmUnavailableReason?: string | null;
     remark?: string | null;
     source_fingerprint: string;
     fund_transaction_id: number | null;
@@ -81,6 +83,7 @@ export interface SupplierRefund {
     allocations: {
         entry_id: number;
         receipt_id: number | null;
+        source_no?: string;
         amount: string;
         budget_state: string;
     }[];

@@ -76,6 +76,16 @@ const button = (name: string) => [...host.querySelectorAll<HTMLButtonElement>('b
 async function click(name: string) { expect(button(name), name).toBeTruthy(); await act(async () => button(name)!.click()); await pause() }
 const success = (d: Direction) => ({ status: 'success', resourceType: 'transfer_order', resourceId: 31, data: { transferId: 31, containerBarcode: 'I000001', productId: 7, qty: 1, completed: d === 'In' }, message: '' })
 
+test.each([
+  [null, '调拨完成，货物已入库。'],
+  ['force_close', '调拨已异常了结，未入库货物已按运输损耗核销。'],
+])('入库结束页按实际了结方式呈现结果（%s）', async (closedReason, expected) => {
+  detail = async () => ({ ...order(), closedReason })
+  await render('In')
+  expect(host.textContent).toContain(expected)
+  expect(posts()).toHaveLength(0)
+})
+
 test.each(['In', 'Out'] as const)('terminal %s keeps manual receipt query after one automatic not_found; no POST', async d => {
   await seed(d); await render(d)
   expect(host.textContent).toContain('已完成'); expect(statusCalls()).toHaveLength(1)

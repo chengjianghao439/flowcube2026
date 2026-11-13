@@ -151,9 +151,34 @@ async function findById(id,userId) {
     const currentActor=await actor.load(conn,userId,false);actor.authorize(currentActor)
     const row=await head(conn,rules.safeId(id),currentActor,false)
     const ctx=await context(conn,Number(row.purchase_return_id),currentActor,false)
-    await frozenContext(conn,row,ctx,currentActor,false)
-    const [allocations]=await conn.query('SELECT entry_id,receipt_id,amount,budget_state FROM supplier_refund_allocations WHERE refund_id=? ORDER BY id',[row.id])
-    return{...row,purchase_return_no:ctx.pr.return_no,purchase_order_no:ctx.po.order_no,supplier_name:ctx.pr.supplier_name,warehouse_name:ctx.pr.warehouse_name,refund_date:rules.date(row.refund_date),allocations,confirmAllowed:Number(row.status)===1 && (currentActor.roleId===1 || currentActor.permissions.includes(P.SUPPLIER_REFUND_CONFIRM)) && (Number(row.created_by)!==currentActor.userId || currentActor.allowSelfApprove)}
+    const frozen = await frozenContext(conn,row,ctx,currentActor,false)
+    const proofs = new Map(frozen.payment.proofs.map(proof => [proof.entryId, proof]))
+    const allocations = frozen.own.map(({ entry_id, receipt_id, amount, budget_state }) => {
+      const proof = proofs.get(Number(entry_id))
+      return { entry_id, receipt_id, amount, budget_state, source_no: proof.receipt?.receiptNo ?? proof.out.bizNo }
+    })
+    const draft = Number(row.status) === 1
+    let confirmUnavailableReason = null
+    if (draft) {
+      if (currentActor.roleId !== 1 && !currentActor.permissions.includes(P.SUPPLIER_REFUND_CONFIRM)) {
+        confirmUnavailableReason = '请由有供应商退款确认权限的同事确认冻结。'
+      } else if (Number(row.created_by) === currentActor.userId && !currentActor.allowSelfApprove) {
+        confirmUnavailableReason = '请由其他有权限的同事确认冻结。'
+      } else if (Number(ctx.pr.status) !== 1) {
+        confirmUnavailableReason = '原采购退货已不在草稿状态，请先核对原退货单。'
+      } else if (Number(frozen.incomeAccount.is_active) !== 1 || frozen.incomeAccount.deleted_at) {
+        confirmUnavailableReason = '原收入账户不可用，请联系资金账户管理员核对。'
+      }
+    }
+    const canViewAccounts = currentActor.roleId === 1 || currentActor.permissions.includes(P.FINANCE_ACCOUNT_VIEW)
+    return {
+      ...row, purchase_return_no: ctx.pr.return_no, purchase_order_no: ctx.po.order_no,
+      supplier_name: ctx.pr.supplier_name, warehouse_name: ctx.pr.warehouse_name,
+      refund_date: rules.date(row.refund_date), allocations,
+      income_account_name: canViewAccounts ? frozen.incomeAccount.name : undefined,
+      confirmAllowed: draft && !confirmUnavailableReason,
+      confirmUnavailableReason,
+    }
   })
 }
 async function receive(id,body,options){

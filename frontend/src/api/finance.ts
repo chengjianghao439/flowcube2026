@@ -91,6 +91,7 @@ export interface ExpenseClaim {
   status: 1 | 2 | 3 | 4 | 5 | 6
   statusName: string
   statusTone: string
+  approvalAllowed?: boolean
   itemCount?: number
   submittedAt?: string | null
   approvedByName?: string | null

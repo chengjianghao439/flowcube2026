@@ -52,6 +52,7 @@ export default function AvgCostReconciliationPage() {
 
   const columns: TableColumn<AvgCostRow>[] = [
     ...productIdentityColumns(),
+    { key: 'warehouseName', title: '仓库', width: 120, render: (v, row) => String(v || `仓库 #${row.warehouseId}`) },
     { key: 'unitCost', title: '单位成本', width: 90, align: 'right', render: (v, row) => <CurrentValuationCost value={v as number | null | undefined} source={row.unitCostSource} productName={row.productName} /> },
     { key: 'cacheQty', title: '账面数量', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
     { key: 'containerQty', title: '实际库存', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },

@@ -1,5 +1,6 @@
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
+import { isReversedDateRange } from '@/lib/dateRange'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -33,6 +34,9 @@ interface Props {
 export default function WaveQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<WaveQueryValues>(EMPTY)
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
+  const rangeErrorId = useId()
+  const rangeInvalid = isReversedDateRange(draft.startDate, draft.endDate)
+  const apply = () => { if (!rangeInvalid) onApply(draft) }
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -48,7 +52,8 @@ export default function WaveQueryDialog({ open, initial, resetValues, onClose, o
       width={520}
       onClose={onClose}
       onReset={() => setDraft(resetDraft())}
-      onApply={() => onApply(draft)}
+      onApply={apply}
+      applyDisabled={rangeInvalid}
     >
       <QueryFormLayout>
         <label className="flex flex-col gap-1 col-span-2">
@@ -57,7 +62,7 @@ export default function WaveQueryDialog({ open, initial, resetValues, onClose, o
             placeholder="请输入批次号…"
             value={draft.keyword}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
             className="h-9"
           />
         </label>
@@ -89,14 +94,15 @@ export default function WaveQueryDialog({ open, initial, resetValues, onClose, o
 
         <label htmlFor="wave-query-start" className="fc-query-date-start flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
-          <DatePicker aria-label="创建日期（起）" id="wave-query-start" value={draft.startDate} max={draft.endDate || undefined}
+          <DatePicker aria-label="创建日期（起）" aria-invalid={rangeInvalid || undefined} aria-describedby={rangeInvalid ? rangeErrorId : undefined} id="wave-query-start" value={draft.startDate} max={draft.endDate || undefined}
             onChange={v => set('startDate', v)} className="h-9" />
         </label>
         <label htmlFor="wave-query-end" className="flex flex-col gap-1">
           <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
-          <DatePicker aria-label="创建日期（止）" id="wave-query-end" value={draft.endDate} min={draft.startDate || undefined}
+          <DatePicker aria-label="创建日期（止）" aria-invalid={rangeInvalid || undefined} aria-describedby={rangeInvalid ? rangeErrorId : undefined} id="wave-query-end" value={draft.endDate} min={draft.startDate || undefined}
             onChange={v => set('endDate', v)} className="h-9" />
         </label>
+        {rangeInvalid && <p id={rangeErrorId} role="alert" className="col-span-full text-sm text-destructive-ink">起始日期不能晚于结束日期。</p>}
       </QueryFormLayout>
     </QueryDialog>
   )

@@ -8,13 +8,16 @@ import { getWavePerformanceApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { ApiClientError } from '@/api/client'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
 import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { usePollingReport } from '@/hooks/usePollingReport'
-import { formatDisplayDateTime } from '@/lib/dateTime'
+import { beijingYmd, formatDisplayDateTime, shiftYmd } from '@/lib/dateTime'
 import type { WaveStats } from '@/api/reports'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
@@ -60,7 +63,11 @@ export default function WavePerformancePage() {
     intervalMs: 60_000,
   })
 
-  const { data, isLoading, isError, error, dataUpdatedAt, refetch } = wavePerformanceQ
+  const { data: report, isLoading, isError, error, dataUpdatedAt, refetch } = wavePerformanceQ
+  const data = isError ? undefined : report
+  const hasDetailRange = Boolean(applied.startDate || applied.endDate)
+  // 汇总查询的起点为北京时间数据库 CURDATE() 往前 30 天，明细请求使用独立的日期条件。
+  const summaryStart = data && dataUpdatedAt ? shiftYmd(beijingYmd(new Date(dataUpdatedAt)), -30) : undefined
 
   const apply = () => setApplied({ startDate, endDate })
   const reset = () => {
@@ -137,7 +144,9 @@ export default function WavePerformancePage() {
         )}
       />
 
-      {isError && !data && (
+      {error instanceof ApiClientError && error.status === 403 ? (
+        <EmptyState variant="no-permission" description="当前账号无权查看批次效率。" />
+      ) : isError && (
         <QueryErrorState
           error={error}
           onRetry={() => void refetch()}
@@ -165,9 +174,10 @@ export default function WavePerformancePage() {
         updatedAt={dataUpdatedAt ? formatDisplayDateTime(new Date(dataUpdatedAt)) : undefined}
       />
 
+      {summaryStart && <AppliedDateRange label="汇总范围" startDate={summaryStart} />}
       {/* 汇总卡片 */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-        <StatTile icon={Layers} label="总批次数" value={data?.summary.totalWaves ?? '-'} hint="近 30 天" />
+        <StatTile icon={Layers} label="总批次数" value={data?.summary.totalWaves ?? '—'} />
         <StatTile
           icon={CheckCircle2}
           label="已完成批次"
@@ -186,13 +196,19 @@ export default function WavePerformancePage() {
       </div>
 
       {/* 批次明细表 */}
-      <ReportPanel
+      <AppliedDateRange label="明细创建日期" startDate={applied.startDate} endDate={applied.endDate}
+        onClear={() => {
+          setStartDate('')
+          setEndDate('')
+          setApplied({ startDate: '', endDate: '' })
+        }} />
+      {!isError && <ReportPanel
         title="批次明细"
         description="点击列标题排序，查看每个批次的任务数、SKU 与效率。"
         helper="当前列表支持按任务数、SKU、拣货量和时长排序"
         empty={!isLoading && !isError && waves.length === 0}
-        emptyTitle="暂无批次数据"
-        emptyDescription="当前筛选条件下没有批次记录"
+        emptyTitle={hasDetailRange ? '没有符合日期条件的批次' : '暂无批次数据'}
+        emptyDescription={hasDetailRange ? '可调整明细创建日期，或清除日期限制。' : '当前可查看的仓库还没有批次记录。'}
       >
         {isLoading ? (
           <div className="flex h-40 items-center justify-center">
@@ -209,7 +225,7 @@ export default function WavePerformancePage() {
             onSortChange={toggleSort}
           />
         )}
-      </ReportPanel>
+      </ReportPanel>}
       {data && !isLoading && !isError && <ListSummary total={waves.length} unit="个" />}
     </div>
   )

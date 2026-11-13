@@ -57,7 +57,7 @@ function overviewFixture({ scope = [8], groups, count = 2, failGroups = false, d
   ]
   const pool = { async query(sql, params = []) {
     queries.push({ sql, params }); assert.match(sql.trim(), /^SELECT\b/)
-    if(drift && sql.includes('AS containerQty')) return [[{productId:1,warehouseId:8,containerQty:10,cacheQty:12},{productId:2,warehouseId:8,containerQty:20,cacheQty:25},{productId:3,warehouseId:8,containerQty:30,cacheQty:30}]]
+    if(drift && sql.includes('AS containerQty')) return [[{productId:1,warehouseId:8,warehouseName:'合成仓八',containerQty:10,cacheQty:12},{productId:2,warehouseId:8,containerQty:20,cacheQty:25},{productId:3,warehouseId:8,containerQty:30,cacheQty:30}]]
     if(drift && sql.includes('FROM inventory_stock s')) return [[]]
     if(drift && sql.includes('AS unit_cost')) return [[{id:1,code:'P1',name:'合成均价',unit:'个',unit_cost:'3.4567',unit_cost_source:'avg_cost'},{id:2,code:'P2',name:'合成进价',unit:'个',unit_cost:'4.1234',unit_cost_source:'cost_price'},{id:3,code:'P3',name:'合成缺成本',unit:'个',unit_cost:'0.0000',unit_cost_source:'zero_fallback'}]]
 
@@ -119,7 +119,7 @@ test('库存对账只读DTO标注当前估值来源，原单位成本及两位�
   const f=overviewFixture({drift:true}),data=await f.api.findStockDrift({scopeWarehouseIds:[8]})
   const rows=new Map(data.list.map(r=>[r.productId,r]))
   assert.equal(rows.get(1).unitCostSource,'avg_cost');assert.equal(rows.get(2).unitCostSource,'cost_price');assert.equal(rows.get(3).unitCostSource,'zero_fallback')
-  assert.equal(rows.get(1).unitCost,3.4567);assert.equal(rows.get(1).cacheValue,41.48);assert.equal(rows.get(1).containerValue,34.57);assert.equal(rows.get(1).diffValue,6.91)
+  assert.equal(rows.get(1).warehouseName,'合成仓八'); assert.equal(rows.get(1).unitCost,3.4567);assert.equal(rows.get(1).cacheValue,41.48);assert.equal(rows.get(1).containerValue,34.57);assert.equal(rows.get(1).diffValue,6.91)
   assert.equal(rows.get(2).unitCost,4.1234);assert.equal(rows.get(2).diffValue,20.62);assert.equal(rows.get(3).unitCost,0)
   const sql=f.queries.find(q=>q.sql.includes('AS unit_cost')).sql
   assert.match(sql,/COALESCE\(NULLIF\(avg_cost,0\), NULLIF\(cost_price,0\), 0\) AS unit_cost/)
@@ -143,4 +143,31 @@ test('成本对账201行只标注截断范围，200行价值口径及仓筛选�
     assert.deepEqual(selectedScope,[8]);assert.equal(data.list.length,200);assert.equal(data.totalRows,200);assert.equal(data.totalDiffValue,4000);assert.equal(data.driftedCount,200)
     assert.equal(data.matchedRows,n);assert.equal(data.truncated,n===201);assert.equal(data.list[0].unitCostSource,'avg_cost')
   }
+})
+
+test('存放报表按 MySQL 业务日历天与处置建议判定同一滞销边界', async () => {
+  const filename = path.resolve(__dirname, '../backend/src/modules/inventory/inventory.aging.js')
+  const agingRequire = createRequire(filename)
+  const module = { exports: {} }
+  const rows = [
+    { product_id: 1, warehouse_id: 8, avg_age_days: 0, days_since_outbound: null, last_outbound_at: null },
+    { product_id: 2, warehouse_id: 8, avg_age_days: 123, days_since_outbound: null, last_outbound_at: null },
+    { product_id: 3, warehouse_id: 8, days_since_outbound: 90, last_outbound_at: new Date() },
+    { product_id: 4, warehouse_id: 8, days_since_outbound: 91, last_outbound_at: new Date() },
+  ]
+  const pool = { async query(sql) {
+    if (sql.includes('GROUP BY age_bucket')) return [[]]
+    if (sql.includes('SELECT COUNT(*) AS total')) return [[{ total: rows.length }]]
+    assert.match(sql, /DATEDIFF\(NOW\(\), lo.last_outbound_at\) AS days_since_outbound/)
+    return [rows]
+  } }
+  vm.runInNewContext(fs.readFileSync(filename, 'utf8'), { module, require: id => {
+    if (id === '../../config/db') return { pool }
+    if (id === '../../utils/warehouseScope') return { scopeFilter: () => ({ sql: '', params: [] }) }
+    return agingRequire(id)
+  } }, { filename })
+  const { list } = await module.exports.getInventoryAging({ staleDays: 90, scopeWarehouseIds: [8] })
+  assert.deepEqual(Array.from(list, row => row.daysSinceOutbound), [null, null, 90, 91])
+  assert.deepEqual(Array.from(list, row => row.isStale), [true, true, false, true])
+  assert.equal(list[0].avgAgeDays, 0)
 })

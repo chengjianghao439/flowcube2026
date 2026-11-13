@@ -60,6 +60,8 @@ export function BoardSalesActions() {
   const [priority,setPriority]=useState(true)
   const { data, isLoading, error, refetch } = useDashboardSummary()
   const { can } = usePermission()
+  const canViewSales = can(PERMISSIONS.SALE_ORDER_VIEW)
+  const showPriority = canViewSales && priority
   const open = useOpenPage()
   const rows = [
     {
@@ -103,9 +105,9 @@ export function BoardSalesActions() {
       title="今天要推进的业务"
       icon={ClipboardList}
       scrollBody
-      action={<Button variant="outline" size="sm" className="h-8 px-2.5 text-xs" onClick={()=>setPriority(v=>!v)}>{priority?'状态总览':'优先处理'}</Button>}
+      action={canViewSales && <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs" onClick={()=>setPriority(v=>!v)}>{showPriority?'状态总览':'优先处理'}</Button>}
     >
-      {priority ? <PrioritySales/> : error ? (
+      {showPriority ? <PrioritySales/> : error ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} compact />
       ) : (
         rows.map((row) => (

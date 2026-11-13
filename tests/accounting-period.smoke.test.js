@@ -213,8 +213,12 @@ async function main() {
     )
     const [cki] = await conn.query(
       'INSERT INTO inventory_check_items (check_id, product_id, product_code, product_name, book_qty, unit) VALUES (?, ?, ?, ?, 6, ?)',
-      [ck.insertId, product.id, product.code, product.name, 6, product.unit],
+      [ck.insertId, product.id, product.code, product.name, product.unit],
     )
+    const [[checkItem]] = await conn.query('SELECT book_qty, unit FROM inventory_check_items WHERE id=?', [cki.insertId])
+    log.assert('盘点夹具分别保存账面数量 6 与商品单位',
+      Number(checkItem?.book_qty) === 6 && checkItem?.unit === product.unit,
+      `数量=${checkItem?.book_qty} 单位=${checkItem?.unit}`)
 
     // 个体容器扫到计 1
     const indBarcode = await (async () => { const [[r]] = await conn.query('SELECT barcode FROM inventory_containers WHERE id=?', [cInd.insertId]); return r.barcode })()

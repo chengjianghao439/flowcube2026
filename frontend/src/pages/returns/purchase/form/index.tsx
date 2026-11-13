@@ -1,5 +1,6 @@
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
+import { ReturnToSourceOrder } from '@/pages/returns/ReturnSourceButton'
 import { readHandlingSourceId, handlingConfig, mayHandle, handlingQty } from '@/lib/disposalHandlingRecovery'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
 import { useDisposalHandlingSource } from '@/hooks/useDisposalHandlingSource'
@@ -186,11 +187,8 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
   })
 
   function addItem() {
-    if (handling) return
-    const key = counter
-    setCounter(c => c + 1)
-    setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0 }])
-    setFinderItemKey(key)
+    if (locked || submitting || handling || boundSource) return
+    setFinderItemKey(null)
     setFinderOpen(true)
   }
   const removeItem = (k: number) => { if (!handling) setItems(p => p.filter(i => i._key !== k)) }
@@ -206,13 +204,19 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
   }
 
   function handleFinderConfirm(product: ProductFinderResult) {
-    if (handling || boundSource) return
-    if (finderItemKey === null) return
-    const k = finderItemKey
-    setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], unitPrice: product.costPrice ?? 0 }
-      : i,
-    ))
+    if (!finderOpen || locked || submitting || handling || boundSource || !Number.isSafeInteger(product.id) || product.id <= 0) return
+    const k = finderItemKey ?? counter
+    const fields = {
+      productId: product.id, productCode: product.code, productName: product.name,
+      articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null,
+      unit: product.unit, entryUnit: product.unit, units: [], unitPrice: product.costPrice ?? 0,
+    }
+    if (finderItemKey === null) {
+      setCounter(c => c + 1)
+      setItems(prev => [...prev, { _key: k, quantity: 1, ...fields }])
+    } else {
+      setItems(prev => prev.map(item => item._key === k ? { ...item, ...fields } : item))
+    }
     // 拉多计量单位供单位下拉（无辅助单位则下拉不出现、按基本单位录入）
     getProductApi(product.id)
       .then(full => { const units = full?.units ?? []; setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i))) })
@@ -350,6 +354,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
   }
 
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
+  const noReturnableSourceItems = boundSource !== null && !boundSource.items.some(item => item.remainingQty > 0)
 
   return (
     <div className="desktop-document-form flex flex-col gap-3">
@@ -358,7 +363,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
         description={`${handling ? `处理来源：${handling.source.data?.source.productName ?? '核对中'}；可关联基本量 ${handling.source.data?.source.budget.availableQuantity ?? '—'}。请填写准确采购单并明确选择原采购行。` : ''}${boundSource ? `已锚定原单 ${boundSource.orderNo}。商品、单位和原成交价只读；可按行填写本次退货数量，填 0 或移除表示本次不退，数量不得超过剩余可退量。` : '本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择供应商、仓库与商品填写。'}`}
         subtitle={<UnsavedBadge show={isDirty} />}
         rightActions={
-          <Button onClick={handleSubmit} disabled={submitting || locked || loadingSource} className="gap-1.5">
+          <Button onClick={handleSubmit} disabled={submitting || locked || loadingSource || noReturnableSourceItems} className="gap-1.5">
             {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中…</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
           </Button>
         }
@@ -439,7 +444,12 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
       >
         {items.length === 0 ? (
           <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
-            <p className="text-sm text-muted-foreground">还没有退货明细，点击上方"添加商品"或先绑定原采购单</p>
+            {boundSource ? (
+              <>
+                <p className="text-sm text-muted-foreground">{noReturnableSourceItems ? '原采购单暂无剩余可退数量。' : '请先选择本次退货的原采购行。'}</p>
+                <ReturnToSourceOrder kind="purchase" sourceId={boundSource.id} sourceNo={boundSource.orderNo} />
+              </>
+            ) : <p className="text-sm text-muted-foreground">{handling ? '请载入原采购单并选择准确的来源。' : '请载入原采购单或添加本次退货的商品。'}</p>}
           </div>
         ) : (
           <>
@@ -691,13 +701,15 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       <OrderDetailSections type="purchase-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
       <SectionCard title="基础信息" compact>
         <dl className="desktop-document-facts grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
-          {[
+          {([
             ['供应商', ret.supplierName],
             ['仓库', ret.warehouseName],
-            ['关联采购单', ret.purchaseOrderNo || '—'],
+            ['关联采购单', ret.purchaseOrderId && ret.purchaseOrderNo
+              ? <ReturnToSourceOrder kind="purchase" sourceId={ret.purchaseOrderId} sourceNo={ret.purchaseOrderNo} showNumber />
+              : ret.purchaseOrderNo || '—'],
             ['经办人', ret.operatorName],
             ['创建时间', formatDisplayDateTime(ret.createdAt)],
-          ].map(([label, value]) => (
+          ] as const).map(([label, value]) => (
             <div key={label}>
               <dt className="mb-0.5 text-helper">{label}</dt>
               <dd className="font-medium">{value}</dd>

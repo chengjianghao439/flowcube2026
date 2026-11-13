@@ -33,3 +33,36 @@ test('七天后原键仅查询，mounted not_found不POST',async()=>{const now=D
 test('换账号/服务器/错SO阻迟到结果，原记录留下',async()=>{await mount();let resolve!:(v:null)=>void;api.reserve.mockImplementation(()=>new Promise(r=>{resolve=r}));let operation!:Promise<unknown>;await act(async()=>{operation=write.run('reserve',body('reserve')).catch(e=>e)});await vi.waitFor(()=>expect(api.reserve).toHaveBeenCalledOnce());await act(async()=>useAuthStore.getState().login('other-synthetic',null,user(10)));await act(async()=>{resolve(null);await operation});expect(saved()).toHaveLength(1);await act(async()=>{await expect(write.queryOriginal()).rejects.toThrow('账号')});expect(api.receipt).not.toHaveBeenCalled();await act(async()=>root.unmount());root=createRoot(host);useAuthStore.getState().login('synthetic',null,user());await mount();setApiClientBaseURL('http://other-synthetic.invalid/api');await act(async()=>{await expect(write.queryOriginal()).rejects.toThrow('服务器')});expect(api.receipt).not.toHaveBeenCalled();await mount(8);await act(async()=>{await expect(write.run('ship',body('ship'))).rejects.toBeTruthy()});expect(api.ship).not.toHaveBeenCalled()})
 
 test('初次409通用CONFLICT不能宣称未执行，继续保留原身份',async()=>{await mount();api.reserve.mockRejectedValue({status:409,code:'CONFLICT',message:'上次提交结果仍待确认'});await act(async()=>{await expect(write.run('reserve',body('reserve'))).rejects.toBeTruthy()});expect(saved()).toHaveLength(1);expect(write.blocked).toBe(true);expect(write.canRetry).toBe(true)})
+
+test('列表发起占库后已持久确认成功，已打开的详情随之解除冻结', async () => {
+  let detail!: ReturnType<typeof useOrdinarySaleOperation>
+  function Detail() { detail = useOrdinarySaleOperation(7); return null }
+  await act(async () => root.render(<><Probe /><Detail /></>))
+  let resolve!: (data: null) => void
+  api.reserve.mockImplementation(() => new Promise(r => { resolve = r }))
+  let operation!: Promise<unknown>
+  await act(async () => {
+    operation = write.run('reserve', body('reserve'))
+    await vi.waitFor(() => expect(api.reserve).toHaveBeenCalledOnce())
+  })
+  expect(detail.pending).toMatchObject({ requestKey: originalKey('reserve') })
+  await act(async () => { resolve(null); await operation })
+  await vi.waitFor(() => expect(detail.blocked).toBe(false))
+  expect(detail.pending).toBeNull()
+  expect(api.receipt).not.toHaveBeenCalled()
+})
+
+test('另一个页面丢失未终结的请求身份时仍保持冻结', async () => {
+  let detail!: ReturnType<typeof useOrdinarySaleOperation>
+  function Detail() { detail = useOrdinarySaleOperation(7); return null }
+  await act(async () => root.render(<><Probe /><Detail /></>))
+  await fail('reserve')
+  expect(detail.pending).not.toBeNull()
+  const key = saved()[0]
+  await act(async () => {
+    localStorage.removeItem(key)
+    window.dispatchEvent(new StorageEvent('storage', { key }))
+  })
+  expect(detail.blocked).toBe(true)
+  expect(detail.pending).toMatchObject({ requestKey: originalKey('reserve') })
+})

@@ -31,6 +31,7 @@ function fmt(row) {
     status: Number(row.status),
     statusName: ST_NAME[Number(row.status)],
     itemCount: row.item_count != null ? Number(row.item_count) : undefined,
+    hasPendingPayableConfirmation: row.pending_payable_count != null ? Number(row.pending_payable_count) > 0 : undefined,
     confirmedByName: row.confirmed_by_name,
     confirmedAt: row.confirmed_at,
     remark: row.remark,
@@ -323,12 +324,14 @@ async function findAll({
 
   const [rows] = await pool.query(
     `SELECT s.*, (SELECT COUNT(*) FROM reconciliation_statement_items i WHERE i.statement_id = s.id) AS item_count,
-            COALESCE(agg.real_total, 0) AS real_total, COALESCE(agg.real_paid, 0) AS real_paid
+            COALESCE(agg.real_total, 0) AS real_total, COALESCE(agg.real_paid, 0) AS real_paid,
+            COALESCE(agg.pending_payable_count, 0) AS pending_payable_count
        FROM reconciliation_statements s
        LEFT JOIN (
          SELECT i.statement_id,
                 SUM(r.total_amount) AS real_total,
-                SUM(r.paid_amount)  AS real_paid
+                SUM(r.paid_amount)  AS real_paid,
+                SUM(CASE WHEN r.type = 1 AND r.balance > 0 AND COALESCE(r.confirm_status, 0) <> 1 THEN 1 ELSE 0 END) AS pending_payable_count
            FROM reconciliation_statement_items i
            JOIN payment_records r ON r.id = i.record_id
           GROUP BY i.statement_id

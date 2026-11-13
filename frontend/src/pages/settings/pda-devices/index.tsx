@@ -49,6 +49,8 @@ const STATUS_LABEL: Record<PdaDeviceStatus, string> = {
 }
 
 const NO_WAREHOUSE = '__none__'
+const UNRESTRICTED_DEVICE_LABEL = '不限仓（按账号权限作业）'
+const DEVICE_SCOPE_HELP = '选择仓库后，设备仅限本仓作业。设备不限仓时，作业仍受登录账号的权限和仓库范围约束。'
 
 export default function PdaDevicesPage() {
   const qc = useQueryClient(), inputId = useId()
@@ -110,7 +112,7 @@ export default function PdaDevicesPage() {
   const columns: TableColumn<PdaDevice>[] = [
     { key: 'deviceName', title: '设备名称', width: 16, render: v => (v as string) || '—' },
     { key: 'deviceCode', title: '设备码', width: 16, render: v => <span className="font-mono text-xs">{v as string}</span> },
-    { key: 'warehouseName', title: '所属仓库', width: 14, render: v => (v as string) || <span className="text-muted-foreground">未绑定（可跨仓作业）</span> },
+    { key: 'warehouseName', title: '所属仓库', width: 14, render: (v, row) => (v as string) || <span className="text-muted-foreground">{row.warehouseId == null ? UNRESTRICTED_DEVICE_LABEL : `仓库 #${row.warehouseId}`}</span> },
     {
       key: 'status', title: '状态', width: 10,
       render: (v) => {
@@ -139,7 +141,7 @@ export default function PdaDevicesPage() {
     <div className="space-y-4">
       <PageHeader
         title="PDA 设备"
-        description="绑定仓库后，这台 PDA 只能作业本仓的单据；未绑定的设备可在任何仓作业。 停用设备或重置密钥会让这台设备立即退出登录——设备丢失时请立即「停用」。"
+        description="登记设备并指定作业范围。停用设备或重置密钥会让设备立即退出登录。"
         actions={<Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
       />
       <FilterCard>
@@ -188,16 +190,16 @@ export default function PdaDevicesPage() {
             <div>
               <Label htmlFor={`${inputId}-create-warehouseId`} className="mb-1 block">所属仓库</Label>
               <Select value={form.warehouseId} onValueChange={v => setForm(f => ({ ...f, warehouseId: v }))}>
-                <SelectTrigger id={`${inputId}-create-warehouseId`}><SelectValue placeholder="选择仓库" /></SelectTrigger>
+                <SelectTrigger id={`${inputId}-create-warehouseId`} aria-describedby={`${inputId}-create-warehouse-help`}><SelectValue placeholder="选择仓库" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NO_WAREHOUSE}>不绑定（可在任何仓作业）</SelectItem>
+                  <SelectItem value={NO_WAREHOUSE}>{UNRESTRICTED_DEVICE_LABEL}</SelectItem>
                   {(warehouses ?? []).map(w => (
                     <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                绑定后，这台机器扫其他仓库的收货单/上架单会被直接拒绝。
+              <p id={`${inputId}-create-warehouse-help`} className="mt-1 text-xs text-muted-foreground">
+                {DEVICE_SCOPE_HELP} 不限仓的设备仅由不限仓账号登记。
               </p>
             </div>
           </div>
@@ -283,14 +285,15 @@ export default function PdaDevicesPage() {
                   value={editing.warehouseId == null ? NO_WAREHOUSE : String(editing.warehouseId)}
                   onValueChange={v => setEditing(d => d && ({ ...d, warehouseId: v === NO_WAREHOUSE ? null : Number(v) }))}
                 >
-                  <SelectTrigger id={`${inputId}-edit-warehouseId`}><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={`${inputId}-edit-warehouseId`} aria-describedby={`${inputId}-edit-warehouse-help`}><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_WAREHOUSE}>不绑定（可在任何仓作业）</SelectItem>
+                    <SelectItem value={NO_WAREHOUSE}>{UNRESTRICTED_DEVICE_LABEL}</SelectItem>
                     {(warehouses ?? []).map(w => (
                       <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p id={`${inputId}-edit-warehouse-help`} className="mt-1 text-xs text-muted-foreground">{DEVICE_SCOPE_HELP}</p>
               </div>
             </div>
           )}

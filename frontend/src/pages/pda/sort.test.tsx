@@ -47,6 +47,7 @@ vi.mock('@/hooks/useCriticalPdaAction', () => ({
 vi.mock('@/hooks/usePdaFeedback', () => ({
   usePdaFeedback: () => ({
     flash: null,
+    clear: vi.fn(),
     ok: (t: string) => { state.feedback.push({ kind: 'ok', text: t }) },
     warn: (t: string) => { state.feedback.push({ kind: 'warn', text: t }) },
     err: (t: string) => { state.feedback.push({ kind: 'err', text: t }) },

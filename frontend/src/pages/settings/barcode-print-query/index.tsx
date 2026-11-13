@@ -1,16 +1,18 @@
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { submitReprintIntent, getReprintIntent, reprintOwnerIdentity, subscribeReprintIntents, reprintIntentRevision, listReprintIntents } from '@/lib/printReprintIntent'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { useContext, useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useContext, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X, Search, PackageOpen, PackageCheck, Truck } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { AppDialog } from '@/components/shared/AppDialog'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getBarcodePrintRecordsApi, reprintBarcodeRecordApi } from '@/api/print-jobs'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
@@ -18,7 +20,7 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { readNullableIntParam } from '@/lib/urlSearchParams'
 import type { TableColumn } from '@/types'
-import type { BarcodePrintCategory, BarcodePrintRecord } from '@/types/print-jobs'
+import type { BarcodePrintCategory, BarcodePrintJobInfo, BarcodePrintRecord } from '@/types/print-jobs'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { usePermission } from '@/hooks/usePermission'
@@ -43,16 +45,16 @@ function safeId(id: unknown): id is number {
   return typeof id === 'number' && Number.isSafeInteger(id) && id > 0
 }
 
-function jobNextStep(job: BarcodePrintRecord['latestJob']) {
-  if (job?.statusKey === 'success') return '客户端已回报成功，请现场核对标签纸张。'
-  if (job?.statusKey === 'queued' || job?.statusKey === 'printing') return '打印结果尚待确认，请核对工作站和现场纸张，避免重复打印。'
-  if (job?.statusKey === 'failed' || job?.statusKey === 'timeout') return '先核对工作站、打印机和纸张，确认需要后再使用本页既有补打。'
-  return null
+interface PrintHistorySelection {
+  category: BarcodePrintCategory
+  recordId: number
+  barcode: string
+  job: BarcodePrintJobInfo
 }
 
 /** 「最近一次打印任务自身的结果」。注意它**不包含**条码的业务状态（见 barcodeStatusBadge）。 */
 function jobStatusBadge(job: BarcodePrintRecord['latestJob']) {
-  if (!job) return <SoftStatusLabel label="未生成打印任务" tone="draft" />
+  if (!job || job.statusKey === 'no_job') return <SoftStatusLabel label="无打印任务" tone="draft" />
   if (job.statusKey === 'unassigned') return <SoftStatusLabel label="未配置打印机" tone="warning" />
   if (job.statusKey === 'success')    return <SoftStatusLabel label="已打印"     tone="success" />
   if (job.statusKey === 'timeout')    return <SoftStatusLabel label="超时待确认" tone="warning" />
@@ -61,21 +63,20 @@ function jobStatusBadge(job: BarcodePrintRecord['latestJob']) {
   if (job.statusKey === 'voided_job') return <SoftStatusLabel label="未出纸"     tone="danger" />
   if (job.statusKey === 'cancelled')  return <SoftStatusLabel label="已取消"     tone="danger" />
   if (job.statusKey === 'printing')   return <SoftStatusLabel label="打印中"     tone="active" />
-  return <SoftStatusLabel label="待派发" tone="draft" />
+  if (job.statusKey === 'queued')     return <SoftStatusLabel label="待派发"     tone="draft" />
+  return <SoftStatusLabel label={formatPrintStatus(job.statusKey, job.printStateLabel)} tone="draft" />
 }
 
 /**
- * 状态列：条码的**业务状态**（入库条码由后端给 `barcodeStatusKey`）。
- * 作废与「最近任务结果」是两件事——作废容器既有的任务可能仍显示「已打印」，
- * 所以这里只画业务状态，任务结果留在「打印机 / 最近任务」列里单独展示。
- * 出库/物流条码没有行级业务状态，退回任务结果，行为与改动前一致。
+ * 入库 DTO 在作废或取消以外会把打印结果填到 barcodeStatusKey。
+ * 业务状态列只展示可以独立确认的业务状态。
  */
 function barcodeStatusBadge(record: BarcodePrintRecord) {
   const key = record.barcodeStatusKey
   // 容器作废：打印历史保留并照常显示，但不能再补打（后端补打接口另有独立拒绝，按钮禁用只是提前告知）
   if (key === 'voided') return <SoftStatusLabel label="条码已作废" tone="danger" />
   if (key === 'cancelled') return <SoftStatusLabel label="已取消" tone="danger" />
-  return jobStatusBadge(record.latestJob)
+  return <span className="text-muted-foreground" aria-label="无独立业务状态">—</span>
 }
 
 export default function BarcodePrintQueryPage() {
@@ -99,8 +100,10 @@ export default function BarcodePrintQueryPage() {
   const [status, setStatus] = useState('__all__')
   const [queryOpen, setQueryOpen] = useState(false)
   const [recovery, setRecovery] = useState(false)
+  const [history, setHistory] = useState<PrintHistorySelection | null>(null)
   const [confirm, setConfirm] = useState<{ row: BarcodePrintRecord; key: string | null; owner: string; another: boolean } | null>(null)
   const confirmTrigger = useRef<HTMLElement | null>(null)
+  const historyTrigger = useRef<HTMLButtonElement | null>(null)
   const queryTrigger = useRef<HTMLButtonElement>(null)
   const openConfirm = useCallback((value: NonNullable<typeof confirm>) => {
     confirmTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -143,6 +146,19 @@ export default function BarcodePrintQueryPage() {
     refetchInterval: isActiveTab ? AUTO_REFRESH_MS : false,
   })
   const canOperate = isActiveTab && !!query.data && !query.isFetching && !query.isPaused && !query.isError
+  const canReadHistory = isActiveTab && !!query.data && !query.isPaused && !query.isError
+  const historyRow = history && canReadHistory
+    ? query.data?.list.find(row => row.category === history.category && row.recordId === history.recordId)
+    : undefined
+  const latestHistoryJob = historyRow?.latestJob
+  const historyJob = history && latestHistoryJob
+    ? latestHistoryJob.id === history.job.id ? latestHistoryJob : history.job
+    : null
+  useEffect(() => {
+    if (history && latestHistoryJob?.id === history.job.id && latestHistoryJob !== history.job) {
+      setHistory({ ...history, job: latestHistoryJob })
+    }
+  }, [history, latestHistoryJob])
   const total = query.data?.pagination?.total ?? 0
   const awaitingRecoveryQuery = recovery && !keyword && !initialInboundTaskId && !initialInboundTaskItemId
   const currentCategory = CATEGORY_OPTIONS.find(item => item.value === category)
@@ -218,8 +234,8 @@ export default function BarcodePrintQueryPage() {
         width: 150,
         render: (_, row) => (
           <div className="space-y-1">
-            <div className="text-doc-code-strong">{row.barcode}</div>
-            <div className="text-[11px] text-muted-foreground">{row.barcodeKind}</div>
+            <div className="text-doc-code-strong whitespace-normal [overflow-wrap:anywhere]" title={row.barcode}>{row.barcode}</div>
+            <div className="whitespace-normal [overflow-wrap:anywhere] text-[11px] text-muted-foreground">{row.barcodeKind}</div>
           </div>
         ),
       },
@@ -228,8 +244,8 @@ export default function BarcodePrintQueryPage() {
         title: category === 'inbound' ? '商品信息' : '业务信息',
         render: (_, row) => (
           <div className="space-y-1">
-            <div className="font-medium">{row.title}</div>
-            {row.subtitle && <div className="text-xs text-muted-foreground">{row.subtitle}</div>}
+            <div className="whitespace-normal [overflow-wrap:anywhere] font-medium" title={row.title}>{row.title}</div>
+            {row.subtitle && <div className="whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground" title={row.subtitle}>{row.subtitle}</div>}
           </div>
         ),
       },
@@ -237,7 +253,7 @@ export default function BarcodePrintQueryPage() {
         key: 'bizNo',
         title: bizTitle,
         width: 140,
-        render: (_, row) => row.bizNo ? <span className="text-doc-code">{row.bizNo}</span> : <span className="text-muted-foreground">—</span>,
+        render: (_, row) => row.bizNo ? <span className="text-doc-code block whitespace-normal [overflow-wrap:anywhere]" title={row.bizNo}>{row.bizNo}</span> : <span className="text-muted-foreground">—</span>,
       },
       {
         key: 'warehouseName',
@@ -245,51 +261,67 @@ export default function BarcodePrintQueryPage() {
         width: 160,
         render: (_, row) => (
           <div className="space-y-1 text-sm">
-            <div>{row.warehouseName ?? '—'}</div>
-            <div className="text-xs text-muted-foreground">{row.locationCode || row.extraInfo || '—'}</div>
+            <div className="whitespace-normal [overflow-wrap:anywhere]" title={row.warehouseName ?? undefined}>{row.warehouseName ?? '—'}</div>
+            <div className="whitespace-normal [overflow-wrap:anywhere] text-xs text-muted-foreground" title={row.locationCode || row.extraInfo || undefined}>{row.locationCode || row.extraInfo || '—'}</div>
           </div>
         ),
       },
       {
-        key: 'latestJob',
-        title: '条码状态',
-        width: 130,
+        key: 'barcodeStatusKey',
+        title: '业务状态',
+        width: 136,
         render: (_, row) => (
           <div className="space-y-1">
             {barcodeStatusBadge(row)}
             {/* 作废原因跟着**业务状态**走（解释为什么这张条码不能再补打），不跟任务结果混在一起 */}
             {row.voidReason && (
-              <div className="text-[11px] leading-4 text-muted-foreground">原因：{row.voidReason}</div>
+              <div className="whitespace-normal [overflow-wrap:anywhere] text-[11px] leading-4 text-muted-foreground" title={row.voidReason}>原因：{row.voidReason}</div>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'latestJob',
+        title: '打印任务状态',
+        width: 158,
+        render: (_, row) => (
+          <div className="space-y-1">
+            {jobStatusBadge(row.latestJob)}
+            {row.latestJob?.requestPurpose === 'reprint' && (
+              <div><Badge variant="outline" className="text-xs font-normal" data-print-purpose="reprint">补打</Badge></div>
             )}
           </div>
         ),
       },
       {
         key: 'printer',
-        title: '打印机 / 最近任务',
-        width: 220,
-        render: (_, row) => (
-          <div className="space-y-1 text-sm">
-            <div>{row.latestJob?.printerName ?? (row.latestJob?.printerCode ? '已绑定打印机' : '—')}</div>
-            <div className="text-xs leading-5 text-muted-foreground break-words" title={row.latestJob?.errorMessage ?? row.latestJob?.printStateLabel ?? undefined}>
-              {/* 明确标注是「任务」结果：与左侧的条码业务状态并列而非互相覆盖 */}
-              {row.latestJob
-                ? `最近任务：${formatPrintStatus(row.latestJob.statusKey, row.latestJob.printStateLabel, row.latestJob.errorMessage)}`
-                : '无打印任务'}
+        title: '打印机 / 记录',
+        width: 160,
+        render: (_, row) => {
+          const job = row.latestJob
+          return (
+            <div className="text-sm">
+              <div className="whitespace-normal [overflow-wrap:anywhere]" title={job?.printerName ?? job?.printerCode ?? undefined}>{job?.printerName ?? job?.printerCode ?? '—'}</div>
+              {job && <button
+                type="button"
+                aria-label={`查看打印记录 ${row.barcode}`}
+                aria-haspopup="dialog"
+                disabled={!canReadHistory}
+                className="rounded-sm py-0.5 text-xs text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                onClick={event => {
+                  historyTrigger.current = event.currentTarget
+                  setHistory({ category: row.category, recordId: row.recordId, barcode: row.barcode, job })
+                }}
+              >查看打印记录</button>}
             </div>
-            {row.latestJob?.printerCode && (
-              <div className="text-[11px] text-muted-foreground">打印机编号：{row.latestJob.printerCode}</div>
-            )}
-            <PrintRequestDetails job={row.latestJob} />
-            {jobNextStep(row.latestJob) && <p className="text-xs leading-5 text-muted-foreground">{jobNextStep(row.latestJob)}</p>}
-          </div>
-        ),
+          )
+        },
       },
       {
         key: 'createdAt',
         title: '最近变化',
-        width: 150,
-        render: (_, row) => formatDisplayDateTime(row.latestJob?.updatedAt || row.createdAt),
+        width: 168,
+        render: (_, row) => <span className="whitespace-nowrap tabular-nums">{formatDisplayDateTime(row.latestJob?.updatedAt || row.createdAt)}</span>,
       },
       {
         key: 'action',
@@ -322,7 +354,7 @@ export default function BarcodePrintQueryPage() {
         },
       },
     ]
-  }, [storedIntents, category, reprinting, reprintingRequest, reprint, openPath, openConfirm, focusQuery, canOperate, canReprint, canViewInbound, canViewWave])
+  }, [storedIntents, category, reprinting, reprintingRequest, reprint, openPath, openConfirm, focusQuery, canOperate, canReadHistory, canReprint, canViewInbound, canViewWave])
 
   const handoffReading = hasInboundHandoff && (query.isFetching || query.isPaused || query.isError)
   const rows = useMemo(() => handoffReading ? [] : query.data?.list ?? [], [query.data, handoffReading])
@@ -573,6 +605,9 @@ export default function BarcodePrintQueryPage() {
         />
         <DataTable
           virtualized
+          preserveFocus
+          retainFocusedRow
+          scrollLabel="条码打印查询表格"
           columns={columns}
           data={rows}
           loading={query.isLoading || (handoffReading && (query.isFetching || query.isPaused))}
@@ -589,6 +624,37 @@ export default function BarcodePrintQueryPage() {
           {canOperate ? <ListSummary total={total} unit="条" /> : <span>{awaitingRecoveryQuery ? '等待输入查询条件' : '记录数量待核对'}</span>}
           <span>状态每 {AUTO_REFRESH_MS / 1000} 秒自动刷新</span>
       </div>
+
+      <AppDialog
+        open={!!history && isActiveTab}
+        onOpenChange={open => { if (!open) setHistory(null) }}
+        dialogId="barcode-print-request-details"
+        title="打印记录"
+        description={history && `条码 ${history.barcode}`}
+        descriptionInHeader
+        defaultWidth={660}
+        minWidth={360}
+        resizable={false}
+        sizeToContent
+        onCloseAutoFocus={event => {
+          event.preventDefault()
+          if (!activeTabRef.current) return
+          const target = historyTrigger.current
+          historyTrigger.current = null
+          if (target?.isConnected && !target.disabled) target.focus({ preventScroll: true })
+          else focusQuery()
+        }}
+      >
+        {historyJob ? (
+          <PrintRequestDetails job={historyJob} hasNewerJob={!!latestHistoryJob && latestHistoryJob.id !== historyJob.id} />
+        ) : (
+          <p className="px-5 py-4 text-sm text-muted-foreground" role="status">
+            {query.isError ? '打印记录读取失败。关闭后可在列表重新读取。'
+              : query.isPaused ? '网络已暂停，恢复后会重新读取打印记录。'
+              : '当前查询结果中已找不到这条打印记录。'}
+          </p>
+        )}
+      </AppDialog>
 
       <BarcodePrintQueryDialog
         open={queryOpen}

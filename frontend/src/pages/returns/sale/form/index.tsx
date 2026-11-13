@@ -1,5 +1,6 @@
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
+import { ReturnToSourceOrder } from '@/pages/returns/ReturnSourceButton'
 import { money, unitPrice } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
@@ -145,6 +146,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
   const [items, setItems] = useState<DraftItem[]>([])
   // 「只能整数」的商品把退货数量框的 step 切成 1（迁移 254）
   const isKit = boundSource?.commercialModel === 'kit-v1'
+  const noReturnableSourceItems = boundSource !== null && !boundSource.items.some(item => item.remainingQty > 0)
   const isOrdinaryNet = !isKit && boundSource?.moneyModel === 'ordinary-net-v1'
   const allowDecimalOf = useProductQtyPolicies(isKit ? [] : items.map(i => i.productId))
   const [sourceError, setSourceError] = useState(handoff === 'invalid' ? '原单交接参数无效，请核对来源；可清除后手动录入' : '')
@@ -177,10 +179,8 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
   })
 
   function addItem() {
-    const key = counter
-    setCounter(c => c + 1)
-    setItems(p => [...p, { _key: key, productId: 0, productCode: '', productName: '', articleNumber: null, spec: null, color: null, unit: '', entryUnit: '', units: [], quantity: 1, unitPrice: 0 }])
-    setFinderItemKey(key)
+    if (locked || submitting || boundSource) return
+    setFinderItemKey(null)
     setFinderOpen(true)
   }
   const removeItem = (k: number) => setItems(p => p.filter(i => i._key !== k))
@@ -194,12 +194,19 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
   }
 
   function handleFinderConfirm(product: ProductFinderResult) {
-    if (finderItemKey === null || locked) return
-    const k = finderItemKey
-    setItems(prev => prev.map(i => i._key === k
-      ? { ...i, productId: product.id, productCode: product.code, productName: product.name, articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null, unit: product.unit, entryUnit: product.unit, units: [], unitPrice: product.salePrice ?? 0 }
-      : i,
-    ))
+    if (!finderOpen || locked || submitting || boundSource || !Number.isSafeInteger(product.id) || product.id <= 0) return
+    const k = finderItemKey ?? counter
+    const fields = {
+      productId: product.id, productCode: product.code, productName: product.name,
+      articleNumber: product.articleNumber ?? null, spec: product.spec ?? null, color: product.color ?? null,
+      unit: product.unit, entryUnit: product.unit, units: [], unitPrice: product.salePrice ?? 0,
+    }
+    if (finderItemKey === null) {
+      setCounter(c => c + 1)
+      setItems(prev => [...prev, { _key: k, quantity: 1, ...fields }])
+    } else {
+      setItems(prev => prev.map(item => item._key === k ? { ...item, ...fields } : item))
+    }
     // 拉多计量单位供单位下拉（无辅助单位则下拉不出现、按基本单位录入）
     getProductApi(product.id)
       .then(full => { const units = full?.units ?? []; setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i))) })
@@ -357,7 +364,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
         description={boundSource ? `已关联原单 ${boundSource.orderNo}。${isKit ? '请按原成交行、实际出库批次和组件选择；原成交资料不随套定义改版变化。' : isOrdinaryNet ? '可调整本次退货数量或移除不退商品；原单价仅供参考，净冲减金额提交后核定。' : '退货单价默认取原单真实成交价，数量默认取剩余可退数量。'}` : '本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择客户、仓库与商品填写。'}
         subtitle={<UnsavedBadge show={isDirty} />}
         rightActions={
-          <Button onClick={handleSubmit} disabled={submitting || locked || loadingSource} className="gap-1.5">
+          <Button onClick={handleSubmit} disabled={submitting || locked || loadingSource || noReturnableSourceItems} className="gap-1.5">
             {submitting ? (<><Loader2 className="h-4 w-4 animate-spin" />创建中…</>) : (<><Save className="h-4 w-4" />创建退货单</>)}
           </Button>
         }
@@ -435,7 +442,14 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
       >
         {items.length === 0 ? (
           <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
-            <p className="text-sm text-muted-foreground">载入原销售单，或添加本次需要退回的商品。</p>
+            {boundSource ? (
+              <>
+                <p className="text-sm text-muted-foreground">{noReturnableSourceItems
+                  ? '原销售单暂无剩余可退数量。'
+                  : isKit ? '请从原成交行选择本次退回的商品。' : '当前没有选中的退货商品。'}</p>
+                <ReturnToSourceOrder kind="sale" sourceId={boundSource.id} sourceNo={boundSource.orderNo} />
+              </>
+            ) : <p className="text-sm text-muted-foreground">载入原销售单，或添加本次需要退回的商品。</p>}
           </div>
         ) : (
           <>

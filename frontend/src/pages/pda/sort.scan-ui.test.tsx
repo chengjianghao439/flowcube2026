@@ -5,18 +5,22 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import PdaSortPage from './sort'
 
-const api = vi.hoisted(() => ({ product: vi.fn(), error: vi.fn() }))
+const api = vi.hoisted(() => ({ product: vi.fn(), error: vi.fn(), refetch: vi.fn(), sortDone: vi.fn() }))
 vi.mock('@tanstack/react-query', async (importOriginal) => ({
   ...await importOriginal<typeof import('@tanstack/react-query')>(),
-  useQuery: () => ({ data: [], isLoading: false, refetch: vi.fn() }),
+  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => ({
+    data: queryKey[0] === 'pda-sort-handoff-task' ? { id: 9, taskNo: 'WT009' } : [],
+    isLoading: false, refetch: api.refetch,
+  }),
 }))
 vi.mock('@/api/sorting-bins', () => ({ scanProductForSortApi: api.product, getSortingBinsApi: vi.fn() }))
+vi.mock('@/api/warehouse-tasks', () => ({ getTaskByIdApi: vi.fn(), sortDoneApi: api.sortDone }))
 vi.mock('@/hooks/useCriticalPdaAction', () => ({
   useCriticalPdaAction: () => ({ submitBlocked: false, networkStatus: 'online' }),
 }))
 vi.mock('@/components/pda/PdaCriticalActionNotice', () => ({ default: () => null }))
 vi.mock('@/hooks/usePdaFeedback', () => ({
-  usePdaFeedback: () => ({ flash: null, ok: vi.fn(), err: api.error, warn: vi.fn() }),
+  usePdaFeedback: () => ({ flash: null, ok: vi.fn(), err: api.error, warn: vi.fn(), clear: vi.fn() }),
 }))
 
 let host: HTMLDivElement
@@ -29,6 +33,8 @@ beforeEach(() => {
     pickedQty: 2, unit: '个', taskNo: 'WT001', customerName: '客户', taskId: 7, itemId: 8,
   })
   api.error.mockReset()
+  api.refetch.mockReset()
+  api.sortDone.mockReset()
   host = document.createElement('div')
   document.body.append(host)
   root = createRoot(host)
@@ -51,8 +57,11 @@ test('分拣页的手输入口与拣货一致，并送入原分拣扫码流程',
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
-  expect(api.product).toHaveBeenCalledWith('P001')
+  expect(api.product).toHaveBeenCalledWith('P001', undefined)
   expect(host.textContent).toContain('请将以下商品放入指定分拣格')
+  expect(host.textContent).toContain('B01')
+  expect(host.textContent).not.toContain('暂无分拣格')
+  expect(api.refetch).toHaveBeenCalledOnce()
 })
 
 test('扫码遇到未分配分拣格时提示联系主管并刷新重扫', async () => {
@@ -72,4 +81,23 @@ test('扫码遇到未分配分拣格时提示联系主管并刷新重扫', async
   expect(api.error).toHaveBeenCalledWith(expect.stringContaining('联系主管'))
   expect(api.error.mock.calls[0][0]).toContain('刷新')
   expect(host.textContent).not.toContain('请将以下商品放入指定分拣格')
+})
+
+test('拣货交接的查询限定本单，其他任务的扫码结果不推进', async () => {
+  await act(async () => {
+    root.render(<MemoryRouter initialEntries={['/pda/sort?taskId=9']}><PdaSortPage /></MemoryRouter>)
+  })
+  expect(host.textContent).toContain('WT009')
+  const manualButton = [...host.querySelectorAll('button')].find(button => button.textContent === '手动输入')!
+  await act(async () => { manualButton.click() })
+  const input = host.querySelector<HTMLInputElement>('[data-scanner-manual="true"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'P001')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+  expect(api.product).toHaveBeenCalledWith('P001', 9)
+  expect(api.error).toHaveBeenCalledWith(expect.stringContaining('本单取货码或商品码'))
+  expect(host.textContent).not.toContain('请将以下商品放入指定分拣格')
+  expect(api.sortDone).not.toHaveBeenCalled()
 })

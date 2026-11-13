@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getTaskByIdApi, getPickSuggestionsApi,
   readyToShipApi,
+  type TaskStatus, type WarehouseTask,
 } from '@/api/warehouse-tasks'
 import { getContainerByBarcodeApi } from '@/api/inventory'
 import type { PickSuggestionItem, PickSuggestionContainer } from '@/api/warehouse-tasks'
@@ -30,7 +31,7 @@ import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import PdaDoneView from '@/components/pda/PdaDoneView'
 import PdaNextStep from '@/components/pda/PdaNextStep'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { WT_STATUS } from '@/constants/warehouseTaskStatus'
+import { WT_STATUS, WT_STATUS_NAME } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaActionError, formatPdaErrorMessage, PDA_INVENTORY_NOT_FOUND } from '@/utils/displayFormatters'
 
@@ -45,6 +46,11 @@ interface PickScanResult {
     qty: number
     print: { queued: boolean; unprintable: boolean; reason: string | null } | null
   }
+}
+
+function reachedPostPickStatus(task: WarehouseTask) {
+  const next = task.taskType === 'purchase_return' || task.taskType === 'sale_return_out' ? WT_STATUS.SHIPPING : WT_STATUS.SORTING
+  return task.status !== WT_STATUS.CANCELLED && taskReachedStatus(task, next)
 }
 
 // ─── 子组件：商品拣货卡片 ──────────────────────────────────────────────────────
@@ -139,8 +145,8 @@ export default function PdaTaskPage() {
   }, [err])
   const { submitScan, logError } = useOfflineScan(onLogFailure)
   const [scanning, setScanning]   = useState(false)
-  const [finished, setFinished] = useState<number | null>(null)
-  const [sortTask, setSortTask] = useState<{ id: number; taskNo: string } | null>(null)
+  const [finished, setFinished] = useState<{ id: number; status?: TaskStatus } | null>(null)
+  const [handoffTask, setHandoffTask] = useState<WarehouseTask | null>(null)
   const [scanResolution, setScanResolution] = useState<PdaScanResolution | null>(null)
   const [pendingScan, setPendingScan] = useState<{ requestKey: string; action: 'pick' | 'ready' } | null>(null)
   const currentTaskId = useRef(taskId)
@@ -189,10 +195,10 @@ export default function PdaTaskPage() {
         queryKey: ['pda-task', taskId],
         queryFn: () => getTaskByIdApi(taskId, { skipGlobalError: true }),
       })
-      if (currentTaskId.current === taskId && taskReachedStatus(latest, WT_STATUS.SORTING)) {
-        setFinished(taskId)
-        if (currentTaskId.current === taskId && latest.id === taskId && latest.status === WT_STATUS.SORTING) setSortTask(latest)
-        ok('拣货已成功，任务状态已更新为「待分拣」')
+      if (currentTaskId.current === taskId && latest.id === taskId && reachedPostPickStatus(latest)) {
+        setFinished({ id: taskId, status: latest.status })
+        setHandoffTask(latest)
+        ok(stateConfirmedMessage('拣货', latest.statusName))
       }
       // 仅**恢复**路径（查回执）在此提示：正常提交由 handleScan 单点提示，避免双发。
       // 数量用回执里的**原 picked.qty**，不拿当前界面值覆盖。
@@ -200,34 +206,34 @@ export default function PdaTaskPage() {
     },
     resolveServerState: async () => {
       const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
-      if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
+      if (latest.id === taskId && reachedPostPickStatus(latest)) {
         return { effective: true, message: stateConfirmedMessage(`拣货任务 ${taskId}`, latest.statusName) }
       }
       return { effective: false }
     },
   })
-  const readyAction = useCriticalPdaAction<{ taskId: number }>({
+  const readyAction = useCriticalPdaAction<{ taskId: number; status?: TaskStatus }>({
     action: `warehouse.ready.${taskId}`,
     requestAction: 'warehouse.ready-to-ship',
     label: `完成拣货任务 ${taskId}`,
-    onConfirmed: async (_data, ctx) => {
+    onConfirmed: async (data, ctx) => {
       if (ctx.recovered) setScanResolution({ requestKey: ctx.requestKey, outcome: 'accepted' })
       if (currentTaskId.current !== taskId) return
-      setFinished(taskId)
-      setSortTask(null)
+      setFinished({ id: taskId, status: data?.taskId === taskId ? data.status : undefined })
+      setHandoffTask(null)
       await qc.invalidateQueries({ queryKey: ['pda-task', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-suggestions', taskId] })
       await qc.invalidateQueries({ queryKey: ['pda-my-tasks'] })
       await qc.invalidateQueries({ queryKey: ['pda-my-task-sku-summary'] })
       try {
         const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
-        if (currentTaskId.current === taskId && latest.id === taskId && latest.status === WT_STATUS.SORTING) setSortTask(latest)
-      } catch { /* 完成回执保留；无法重读原任务时不给分拣交接。 */ }
+        if (currentTaskId.current === taskId && latest.id === taskId) setHandoffTask(latest)
+      } catch { /* 完成回执保留；无法重读原任务时不给作业交接。 */ }
     },
     resolveServerState: async () => {
       const latest = await getTaskByIdApi(taskId, { skipGlobalError: true })
-      if (taskReachedStatus(latest, WT_STATUS.SORTING)) {
-        return { effective: true, data: { taskId }, message: stateConfirmedMessage(`完成拣货任务 ${taskId}`, latest.statusName) }
+      if (latest.id === taskId && reachedPostPickStatus(latest)) {
+        return { effective: true, data: { taskId, status: latest.status }, message: stateConfirmedMessage(`完成拣货任务 ${taskId}`, latest.statusName) }
       }
       return { effective: false }
     },
@@ -343,11 +349,11 @@ export default function PdaTaskPage() {
         const fresh = refetchResult.data?.items ?? []
         if (fresh.length > 0 && fresh.every(i => i.remaining <= 0)) {
           const readyResult = await readyAction.run((requestKey) =>
-            readyToShipApi(taskId, requestKey).then(() => ({ taskId })),
+            readyToShipApi(taskId, requestKey).then(result => result ?? { taskId }),
           )
           if (readyResult.kind === 'pending') {
             setPendingScan({ requestKey: readyResult.requestKey, action: 'ready' })
-            warn('网络中断，完成拣货的结果待确认。请先确认是否已进入待分拣。')
+            warn('网络中断，完成拣货的结果待确认。请先核对原任务状态。')
             return { kind: 'pending', requestKey: readyResult.requestKey }
           }
         }
@@ -365,18 +371,26 @@ export default function PdaTaskPage() {
   const totalReq  = items.reduce((s,i) => s + i.requiredQty, 0)
   const totalPick = items.reduce((s,i) => s + i.pickedQty,   0)
 
-  if (finished === taskId) return (
+  const currentHandoff = handoffTask?.id === taskId ? handoffTask : null
+  const nextStatus = currentHandoff?.status ?? (finished?.id === taskId ? finished.status : undefined)
+  const canHandoff = !!currentHandoff && task?.id === taskId && !isLoading && !taskError && !pickAction.submitBlocked && !readyAction.submitBlocked && readyAction.networkStatus === 'online'
+  if (finished?.id === taskId) return (
     <PdaDoneView
       icon={<CircleCheck className="h-20 w-20 text-success-ink" />}
       title="拣货完成！"
-      description={`任务 ${task?.taskNo ?? `#${taskId}`} 已进入「待分拣」`}
+      description={`任务 ${task?.taskNo ?? `#${taskId}`} ${nextStatus && WT_STATUS_NAME[nextStatus] ? `已进入「${WT_STATUS_NAME[nextStatus]}」` : '已确认完成拣货，请刷新任务列表查看当前状态。'}`}
       actionText="返回任务列表"
       onAction={() => navigate('/pda/picking')}
     >
       <PdaNextStep
-        enabled={sortTask?.id === taskId && task?.id === taskId && !isLoading && !taskError && !pickAction.submitBlocked && !readyAction.submitBlocked && readyAction.networkStatus === 'online'}
+        enabled={canHandoff && nextStatus === WT_STATUS.SORTING}
         required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}
-        to="/pda/sort" label="去分拣" hint="到分拣页仍需扫描商品或取货码，再扫分拣格码确认。"
+        to={`/pda/sort?taskId=${taskId}`} label="去分拣" hint="先扫本单取货码或整件商品码，再扫分拣格码确认。"
+      />
+      <PdaNextStep
+        enabled={canHandoff && nextStatus === WT_STATUS.SHIPPING && (currentHandoff.taskType === 'purchase_return' || currentHandoff.taskType === 'sale_return_out')}
+        required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}
+        to="/pda/ship" label="去出库" hint="请在待出库的退货任务中核对单号后确认出库。"
       />
     </PdaDoneView>
   )
@@ -450,7 +464,7 @@ export default function PdaTaskPage() {
           resolution={pendingScan && (pendingScan.action === 'pick' ? pickAction : readyAction).phase === 'failed'
             ? { requestKey: pendingScan.requestKey, outcome: 'rejected' } : scanResolution}
           placeholder="扫描库存条码"
-          disabled={isLoading || taskError || suggestionError || scanning || finished === taskId || pickAction.submitBlocked || readyAction.submitBlocked}
+          disabled={isLoading || taskError || suggestionError || scanning || pickAction.submitBlocked || readyAction.submitBlocked}
           onDuplicate={() => err('重复扫码，请稍候')}
         />
       </PdaBottomBar>

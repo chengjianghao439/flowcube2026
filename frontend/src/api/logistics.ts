@@ -3,7 +3,7 @@ import type { PaginatedData } from '@/types'
 import type { LogisticsWaybill, UpdateShipmentParams, TrackEvent, FreightBill, FreightSettlement } from '@/types/logistics'
 
 // ─── 运单 ─────────────────────────────────────────────────────────────────────
-export const getWaybillsApi     = (params: object)                       => client.get<PaginatedData<LogisticsWaybill>>('/logistics', { params })
+export const getWaybillsApi     = (params: object)                       => client.get<PaginatedData<LogisticsWaybill>>('/logistics', { params, skipGlobalError: true })
 export const getWaybillDetailApi = (id: number)                          => client.get<LogisticsWaybill>(`/logistics/${id}`)
 export const getWaybillTrackApi  = (id: number)                          => client.get<TrackEvent[]>(`/logistics/${id}/track`)
 export const updateWaybillShipmentApi = (id: number, data: UpdateShipmentParams, config?: Parameters<typeof client.put>[2]) => client.put<LogisticsWaybill>(`/logistics/${id}/shipment`, data, config)

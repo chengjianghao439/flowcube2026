@@ -46,8 +46,11 @@ export interface ContainerLogItem {
 }
 
 /** 单容器流水（库存条码/塑料盒通用），个体条码的追溯时间线 */
-export const getContainerLogsApi = async (containerId: number) =>
-  apiClient.get<ContainerLogItem[]>(`/inventory/containers/${containerId}/logs`)
+export const getContainerLogsApi = async (containerId: number) => {
+  const logs = await apiClient.get<ContainerLogItem[]>(`/inventory/containers/${containerId}/logs`)
+  // 出库日志可以存正数量，按变动方向展示；调整日志的原始符号有业务意义。
+  return logs.map(log => log.type === 2 && log.qty > 0 ? { ...log, qty: -log.qty } : log)
+}
 
 export const getContainerByBarcodeApi = async (barcode: string, config?: Parameters<typeof apiClient.get>[1]) =>
   apiClient.get<{

@@ -19,7 +19,7 @@ export function DirtyGuardDialog() {
       open={pendingConfirm !== null}
       title="离开确认"
       description={pendingConfirm?.message ?? '当前内容尚未保存，确定离开吗？'}
-      confirmText="确定离开"
+      confirmText="放弃本次修改"
       cancelText="继续编辑"
       variant="destructive"
       onConfirm={() => resolveConfirm(true)}

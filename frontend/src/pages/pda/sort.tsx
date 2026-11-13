@@ -10,8 +10,8 @@ import PdaOverviewText from '@/components/pda/PdaOverviewText'
  */
 import { useState, useRef } from 'react'
 import { ClipboardList } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { skipToken, useQuery } from '@tanstack/react-query'
 import { getSortingBinsApi, scanProductForSortApi } from '@/api/sorting-bins'
 import type { SortingBin } from '@/api/sorting-bins'
 import { getTaskByIdApi, sortDoneApi } from '@/api/warehouse-tasks'
@@ -28,6 +28,7 @@ import { WT_STATUS } from '@/constants/warehouseTaskStatus'
 import { stateConfirmedMessage, taskReachedStatus } from '@/lib/pdaCriticalState'
 import { formatPdaActionError, formatPdaErrorMessage } from '@/utils/displayFormatters'
 import PdaNextStep from '@/components/pda/PdaNextStep'
+import { Button } from '@/components/ui/button'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
 type Step = 'scan-product' | 'confirm-bin'
@@ -51,6 +52,15 @@ interface BinHint {
 
 export default function PdaSortPage() {
   const nav = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const requestedTaskId = Number(params.get('taskId'))
+  const handoffTaskId = Number.isSafeInteger(requestedTaskId) && requestedTaskId > 0 ? requestedTaskId : null
+  const { data: handoffTask } = useQuery({
+    queryKey: ['pda-sort-handoff-task', handoffTaskId],
+    queryFn: handoffTaskId === null ? skipToken : () => getTaskByIdApi(handoffTaskId, { skipGlobalError: true }),
+    retry: false,
+  })
+  const handoffTaskNo = handoffTask?.id === handoffTaskId ? handoffTask?.taskNo : undefined
   const [step, setStep]     = useState<Step>('scan-product')
   const [hint, setHint]     = useState<BinHint | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -64,7 +74,7 @@ export default function PdaSortPage() {
     generation: number
     unverifiedOwner?: boolean
   } | null>(null)
-  const { flash, ok, err, warn }  = usePdaFeedback()
+  const { flash, ok, err, warn, clear }  = usePdaFeedback()
   const sortAction = useCriticalPdaAction<{ allSorted: boolean; progress?: string; warning?: string | null }>({
     action: 'warehouse.sort',
     requestAction: 'warehouse.sort',
@@ -130,6 +140,9 @@ export default function PdaSortPage() {
   const { data: bins, isLoading, isError, refetch } = useQuery({
     queryKey: ['sorting-bins-occupied'],
     queryFn: () => getSortingBinsApi().then(r => r ?? []),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: 'always',
     refetchInterval: 15_000,
   })
 
@@ -145,13 +158,25 @@ export default function PdaSortPage() {
     setCheckTask(null)
     setScanning(true)
     try {
-      const res = await scanProductForSortApi(code)
+      const res = await scanProductForSortApi(code, handoffTaskId ?? undefined)
       const result = res
-      if (!result) { err('未找到可分拣的商品或取货码，请核对条码后重试'); return 'rejected' }
+      if (!result) {
+        err(handoffTaskId === null
+          ? '未找到可分拣的商品或取货码，请核对条码后重试'
+          : '此条码在本单内没有可分拣明细，请核对取货码或商品码。')
+        return 'rejected'
+      }
+      // 交接只限制当前视图接受的扫码结果，提交仍使用服务端解析的任务与明细。
+      if (handoffTaskId !== null && result.taskId !== handoffTaskId) {
+        err(`此条码对应其他任务。请扫本单取货码或商品码${handoffTaskNo ? `（${handoffTaskNo}）` : ''}。`)
+        return 'rejected'
+      }
       if (!result.sortingBinCode) { err(`任务 ${result.taskNo} 待分配分拣格，请联系主管补分配，刷新后重新扫商品`); return 'rejected' }
+      const binCode = result.sortingBinCode
       const isPickCode = Boolean(result.isPickCode)
+      clear()
       setHint({
-        binCode: result.sortingBinCode, productCode: result.productCode, productName: result.productName,
+        binCode, productCode: result.productCode, productName: result.productName,
         // 取货码的量是「这张取货码的有效取货量」；商品码路径只能报**未被取货标签覆盖**的
         // 剩余已拣量（sortableQty），否则会与标签份额重复计算
         qty: isPickCode ? Number(result.qty ?? 0) : Number(result.sortableQty ?? result.pickedQty ?? 0),
@@ -162,6 +187,7 @@ export default function PdaSortPage() {
         scannedCode: code,
       })
       setStep('confirm-bin')
+      if (!bins?.some(bin => bin.currentTaskId === result.taskId && bin.code.toUpperCase() === binCode.toUpperCase())) void refetch({ cancelRefetch: false })
       return 'accepted'
     } catch (error) { err(formatPdaActionError(error, '查询失败，请重试')); return 'rejected' }
     finally { setScanning(false) }
@@ -171,6 +197,12 @@ export default function PdaSortPage() {
     if (sortAction.submitBlocked) { err(sortAction.blockedReason || '当前不可提交'); return 'rejected' }
     const code = raw.trim()
     if (!code || !hint) return 'ignored'
+    if (handoffTaskId !== null && hint.taskId !== handoffTaskId) {
+      setHint(null)
+      setStep('scan-product')
+      err('交接任务已切换，请扫当前任务的取货码。')
+      return 'rejected'
+    }
     if (code.toUpperCase() !== hint.binCode.toUpperCase()) {
       err(`放错格：请放 ${hint.binCode}`)
       return 'rejected'
@@ -235,6 +267,7 @@ export default function PdaSortPage() {
 
   const occupiedBins = (bins ?? []).filter(b => b.status === 2)
   const freeBins     = (bins ?? []).filter(b => b.status === 1)
+  const assignedBinMissing = hint && !bins?.some(bin => bin.currentTaskId === hint.taskId && bin.code.toUpperCase() === hint.binCode.toUpperCase())
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -242,8 +275,6 @@ export default function PdaSortPage() {
         onBack={() => nav('/pda')}
         right={<PdaRefreshButton onRefresh={() => refetch()} />}
       />
-      <PdaFlash flash={flash} />
-
       <div className="max-w-md mx-auto flex-1 px-4 pb-8 space-y-4 py-4 w-full">
         <PdaCriticalActionNotice
           blockedReason={sortAction.blockedReason}
@@ -265,12 +296,31 @@ export default function PdaSortPage() {
           onDismissError={() => sortAction.clearError()}
         />
 
+        {handoffTaskId !== null && <PdaCard>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-foreground">
+              {handoffTaskNo ? `交接任务 ${handoffTaskNo}` : '拣货交接任务'}
+            </p>
+            <p className="text-sm text-muted-foreground">有取货码时请扫本单取货码。整件拣货可扫商品码。</p>
+            <Button type="button" variant="outline" size="sm"
+              disabled={scanning || step !== 'scan-product' || sortAction.submitBlocked}
+              onClick={() => {
+                const next = new URLSearchParams(params)
+                next.delete('taskId')
+                clear()
+                setParams(next, { replace: true })
+              }}
+            >退出本单分拣</Button>
+          </div>
+        </PdaCard>}
+
         {checkTask && <PdaCard>
           <p className="font-mono text-sm font-semibold text-foreground mb-3">任务 {checkTask.taskNo} 已进入待复核</p>
           <PdaNextStep
             enabled={!scanning && !sortAction.submitBlocked && sortAction.networkStatus === 'online'}
             required={[PERMISSIONS.WAREHOUSE_TASK_VIEW, PERMISSIONS.WAREHOUSE_TASK_CHECK]}
-            to={`/pda/check/${checkTask.id}`} label="去复核" hint="也可留在本页继续扫描其他商品。"
+            to={`/pda/check/${checkTask.id}`} label="去复核"
+            hint={handoffTaskId === null ? '也可留在本页继续扫描其他商品。' : '处理其他任务时，可先退出本单分拣。'}
           />
         </PdaCard>}
 
@@ -295,7 +345,7 @@ export default function PdaSortPage() {
           <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
             step==='scan-product' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
           }`}>1</div>
-          <p className={`text-sm ${step==='scan-product' ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>扫产品条码</p>
+          <p className={`text-sm ${step==='scan-product' ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{handoffTaskId === null ? '扫商品条码' : '扫本单条码'}</p>
           <div className="flex-1 h-px bg-border" />
           <div className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
             step==='confirm-bin' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
@@ -333,7 +383,10 @@ export default function PdaSortPage() {
         {/* 分拣格状态总览 */}
         {isLoading && <PdaLoading className="h-24" />}
         {isError && <PdaQueryError onRetry={() => { void refetch() }} />}
-        {!isLoading && !isError && (
+        {!isLoading && !isError && assignedBinMissing && (
+          <p className="text-xs text-muted-foreground">分拣格总览尚未显示当前分配，请按上方格号扫码确认。</p>
+        )}
+        {!isLoading && !isError && !assignedBinMissing && (
           <>
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">分拣格状态</p>
@@ -363,11 +416,14 @@ export default function PdaSortPage() {
         )}
       </div>
       <PdaBottomBar>
+        {flash && <div className="[&>*]:mx-0 [&>*]:mt-0"><PdaFlash flash={flash} /></div>}
         <PdaScanner
           onScan={step === 'scan-product' ? handleProductScan : handleBinScan}
           resolution={pendingScanKey && sortAction.phase === 'failed'
             ? { requestKey: pendingScanKey, outcome: 'rejected' } : scanResolution}
-          placeholder={step === 'scan-product' ? '扫描商品条码' : '扫描分拣格条码'}
+          placeholder={step === 'scan-product'
+            ? (handoffTaskId === null ? '扫描商品条码' : '扫描本单取货码或商品条码')
+            : '扫描分拣格条码'}
           disabled={scanning || sortAction.submitBlocked || isError}
           busy={scanning}
           onDuplicate={() => err('重复扫码，请稍候')}

@@ -129,6 +129,7 @@ export default function PdaFillPage({ active = true, onBack, onWorkStateChange }
       if (!owner.current()) return null
       if (d.containerKind === 'plastic_box') throw new Error('塑料盒不能作为放货来源，请扫整件库存条码')
       if (d.containerStatus !== 'stored') throw new Error('来源须为「在库」状态的整件库存条码')
+      if (d.individual) throw new Error('一件一码不可放入塑料盒，请扫描其他整件库存条码')
       if (d.lockedByTaskId) throw new Error('该来源已被拣货任务锁定，不能放货')
       if (!(d.remainingQty > 0)) throw new Error('该来源已无余量')
       return d

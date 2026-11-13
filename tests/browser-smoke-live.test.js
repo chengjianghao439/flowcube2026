@@ -29,7 +29,7 @@ const mergedSource = fs.readFileSync(path.join(root, 'frontend/src/router/merged
 const mergedViews = {}
 for (const group of mergedSource.matchAll(/\{\s*key:\s*'[^']+',\s*title:\s*'([^']+)'[^[]*views:\s*\[([\s\S]*?)\]/g)) {
   for (const view of group[2].matchAll(/\{\s*path:\s*'([^']+)',\s*label:\s*'([^']+)'/g)) {
-    mergedViews[view[1]] = { title: group[1], label: view[2] }
+    mergedViews[view[1]] = { title: group[1], label: view[2], groupHeading: group[0].includes("tabTitle: 'group'") }
   }
 }
 assert.equal(Object.keys(mergedViews).length, 15, '组合页注册格式改变时须同步夹具读取器')
@@ -88,7 +88,10 @@ async function runFixture(script, scenario = 'success') {
           const view=mergedViews[route];
           document.body.replaceChildren();
           const heading=document.createElement('h1');
-          heading.textContent=scenario==='stale-merged-title'?titles[route]:view.title;
+          heading.textContent=scenario==='stale-merged-title'?(view.groupHeading?titles[route]:view.title):(view.groupHeading?view.title:view.label);
+          if(!view.groupHeading&&scenario!=='missing-merged-parent'){
+            const parent=document.createElement('p');parent.setAttribute('data-page-group','');parent.textContent=view.title;document.body.append(parent);
+          }
           const nav=document.createElement('nav');nav.setAttribute('aria-label',view.title+'视图');
           const link=document.createElement('a');link.href='#'+(scenario==='wrong-merged-href'?'/incorrect-view':route);link.textContent=view.label;
           link.setAttribute('aria-current',scenario==='wrong-merged-view'?'false':'page');
@@ -130,7 +133,7 @@ test('真实浏览器完成 ERP、四个 PDA 页面、受限权限和授权对�
   for (const route of Object.keys(titles)) assert.ok(r.seen.includes(route), `漏验收 ${route}`)
   t.diagnostic(`fixture elapsed ${r.elapsed} ms; distinct routes ${new Set(r.seen).size}`)
 })
-for (const scenario of ['broken-pda', 'broken-permission', 'render-error', 'stale-merged-title', 'wrong-merged-view', 'wrong-merged-href', 'wrong-finance-component', 'limited-login-403']) {
+for (const scenario of ['broken-pda', 'broken-permission', 'render-error', 'stale-merged-title', 'missing-merged-parent', 'wrong-merged-view', 'wrong-merged-href', 'wrong-finance-component', 'limited-login-403']) {
   test(`真实浏览器发现 ${scenario} 时必须失败并退出`, { timeout: 95000 }, async () => {
     const r = await runFixture('smoke-pages.node.js', scenario)
     assert.equal(r.status, 1, r.output)

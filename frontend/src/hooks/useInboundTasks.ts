@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { captureInboundEditOwner, inboundEditConfig, inboundEditOwnerCurrent, mayUpdateInbound, type InboundEditOwner } from './useInboundTaskEditRecovery'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { useInvalidate } from '@/hooks/useInvalidate'
+import { useWarehouseHandoffQuery } from './useWarehouseHandoffQuery'
 import {
   getInboundTasksApi,
   getInboundTaskEditContextApi,
@@ -26,13 +27,12 @@ export function useInboundTasks(params: QueryParams & { status?: number; product
 }
 
 export function useInboundTaskDetail(id: number | null, options?: { refetchInterval?: number | false; visible?: boolean }) {
-  return useQuery({
+  return useWarehouseHandoffQuery({
     queryKey: [QUERY_KEY, 'detail', id],
     queryFn: ({ signal }) => getInboundTaskByIdApi(id!, { signal, skipGlobalError: true }),
-    enabled: !!id && options?.visible !== false,
-    subscribed: options?.visible !== false,
+    enabled: !!id,
     refetchInterval: options?.refetchInterval,
-  })
+  }, options?.visible)
 }
 
 export function useInboundTaskContainers(id: number | null) {

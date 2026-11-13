@@ -1,6 +1,7 @@
 import { useOrdinarySaleOperation } from '@/hooks/useOrdinarySaleOperation'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { canStartSaleAdjustment } from '@/lib/saleWorkflowStatus'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { SaleOrder } from '@/types/sale'
 
@@ -31,11 +32,10 @@ export function SaleRowActions({
   const canCancel = can(PERMISSIONS.SALE_ORDER_CANCEL)
   const canDelete = can(PERMISSIONS.SALE_ORDER_DELETE)
   const canShip = can(PERMISSIONS.SALE_ORDER_SHIP)
-  // 占库期（状态2/6，无 taskId 也可改单）与执行期（状态3，需 taskId）都可改单；
-  // 没有取消/改单挂起中、且非多仓、零出库才允许——与详情页 canAdjust 口径一致。
-  const canAdjust = canUpdate && (row.status === 2 || row.status === 3 || row.status === 6)
-    && !row.warehouseTaskCancelRequestedAt && !row.warehouseTaskAdjustmentRequestedAt
-    && !row.executionAdjustmentBlocked && !row.isMultiWarehouse && (row.shippedTotalQty ?? 0) === 0
+  const adjustAction = row.commercialModel === 'kit-v1'
+    ? { label: '查看后修改订单', onClick: onDetail, disabled: writePending }
+    : { label: '修改订单', onClick: onEdit, disabled: writePending }
+  const canAdjust = canUpdate && canStartSaleAdjustment(row)
 
   // 打印与订单状态无关（模板只依赖订单基础信息 + 明细），每个状态都可打印，与采购单一致
   const printItem = { label: '打印订单', onClick: onPrint }
@@ -66,7 +66,7 @@ export function SaleRowActions({
         onPrimaryClick={onDetail}
         items={[
           { label: '查看详情', onClick: onDetail },
-          ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: writePending }] : []),
+          ...(canAdjust ? [adjustAction] : []),
           printItem,
           ...(can(PERMISSIONS.SALE_ORDER_RELEASE) ? [{ label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: writePending }] : []),
           ...(canCancel ? [{ label: '取消订单', onClick: () => onCancelSale(row.id), afterMenuClose: true, destructive: true, disabled: writePending }] : []),
@@ -86,7 +86,7 @@ export function SaleRowActions({
         items={[
           ...(canShip ? [{ label: '核对发货', onClick: onDetail, disabled: writePending }] : []),
           { label: '查看详情', onClick: onDetail },
-          ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: writePending }] : []),
+          ...(canAdjust ? [adjustAction] : []),
           printItem,
           ...(can(PERMISSIONS.SALE_ORDER_RELEASE) ? [{ label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: writePending }] : []),
           ...(canCancel ? [{ label: '取消订单', onClick: () => onCancelSale(row.id), afterMenuClose: true, destructive: true, disabled: writePending }] : []),
@@ -109,7 +109,7 @@ export function SaleRowActions({
         items={[
           ...(canContinueShip ? [{ label: '查看详情', onClick: onViewTask }] : []),
           ...(canSupplement && canContinueShip ? [{ label: '补占库存', onClick: onDetail, disabled: writePending }] : []),
-          ...(canAdjust ? [{ label: '修改订单', onClick: onDetail, disabled: writePending }] : []),
+          ...(canAdjust ? [adjustAction] : []),
           printItem,
           ...(canCancel ? [{
             label: '取消订单',

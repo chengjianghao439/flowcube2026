@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
+import { useWarehouseHandoffQuery } from './useWarehouseHandoffQuery'
 import { getPendingAdjustmentsApi, getAdjustmentDetailApi } from '@/api/warehouse-tasks'
 
 /** PDA 改单确认 — 任务池列表（15s 轮询） */
 export function usePdaPendingAdjustments() {
-  return useQuery({
+  return useWarehouseHandoffQuery({
     queryKey: ['pda-adjustments-pending'],
     queryFn: () => getPendingAdjustmentsApi().then(r => r ?? []),
     refetchInterval: 15_000,

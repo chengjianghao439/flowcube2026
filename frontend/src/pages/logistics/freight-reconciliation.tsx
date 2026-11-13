@@ -76,7 +76,11 @@ export default function FreightReconciliationPage() {
     { key: 'billPeriod', title: '账期', width: 90 },
     { key: 'actualFreight', title: '实际运费', width: 100, align: 'right', render: v => <span className="tabular-nums">{Number(v).toFixed(2)}</span> },
     { key: 'freightType', title: '运费方式', width: 90, render: v => v === 1 ? '寄付' : v === 2 ? '到付' : v === 3 ? '第三方付款' : <span className="text-muted-foreground">—</span> },
-    { key: 'reconciled', title: '状态', width: 90, render: v => <SoftStatusLabel label={v ? '已核对' : '待核对'} tone={v ? 'success' : 'draft'} /> },
+    { key: 'reconciled', title: '状态', width: 140, render: (v, row) => {
+      if (v && row.freightType !== 1) return <SoftStatusLabel label="历史汇总待核对" tone="draft" />
+      if (v) return <SoftStatusLabel label="已核对" tone="success" />
+      return <SoftStatusLabel label={row.freightType == null ? '待匹配运单' : row.freightType === 1 ? '待核对' : '不计入应付'} tone="draft" />
+    } },
   ]
 
   const settlementColumns: TableColumn<FreightSettlement>[] = [
@@ -94,7 +98,7 @@ export default function FreightReconciliationPage() {
     <div className="space-y-4">
       <PageHeader
         title="运费对账"
-        description="录入承运商回传的运费账单，按「承运商 + 账期」汇总生成对承运商的应付（仅寄付计入，月结，需财务确认后付款）。"
+        description="按承运商和账期汇总已匹配寄付运单的账单。未匹配的账单留待核对；应付需财务确认后付款。"
       />
 
 
@@ -120,7 +124,7 @@ export default function FreightReconciliationPage() {
           disabled={!canGenerate || generateMut.isPending}
           onClick={() => confirmAction({
             title: '生成承运商应付',
-            description: `按当前账单汇总生成「${carrierList.find(c => String(c.id) === carrierId)?.name ?? ''}」${period} 的运费应付？重复生成为全量重算，不会重复计账。`,
+            description: `按已匹配的寄付运单生成「${carrierList.find(c => String(c.id) === carrierId)?.name ?? ''}」${period} 的运费应付？未匹配的账单留待核对。`,
             confirmText: '生成应付',
             onConfirm: () => generateMut.mutate(),
           })}

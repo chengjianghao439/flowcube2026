@@ -1,9 +1,9 @@
 /**
  * PDA 上架（收货订单）— 路由 /pda/putaway/:id
- * 扫库存条码 I → 扫货架条码 R → 调用 POST /inbound-tasks/:id/putaway
+ * 扫库存条码 → 扫库位条码或输入库位编码 → 调用 POST /inbound-tasks/:id/putaway
  */
 import { ArrowUpFromLine, CircleCheck, Hourglass } from 'lucide-react'
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getInboundTaskByIdApi, putawayInboundApi, getInboundTaskContainersApi } from '@/api/inbound-tasks'
@@ -24,12 +24,18 @@ function PutawayRunner({ taskId }: { taskId: number }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { warn, err, flash } = usePdaFeedback()
+  const resetScanner = useRef<(() => void) | null>(null)
   const putawayAction = useCriticalPdaAction<void>({
     action: `inbound.putaway.${taskId}`,
     label: `收货单 ${taskId} 上架`,
     onConfirmed: async () => {
-      await qc.invalidateQueries({ queryKey: ['pda-inbound-task', taskId] })
-      await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
+      // 刷新后若没有待上架箱，扫码组件会卸载；先清掉已完成箱的本地扫码草稿。
+      resetScanner.current?.()
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['pda-inbound-task', taskId] }),
+        qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] }),
+        qc.invalidateQueries({ queryKey: ['inbound-tasks'] }),
+      ])
     },
     // 网络波动导致提交结果不明时，用目标容器是否已经离开"待上架"清单来核实
     // 上一次上架请求是否其实已经生效，而不是让用户只能凭经验决定要不要重试。
@@ -43,18 +49,13 @@ function PutawayRunner({ taskId }: { taskId: number }) {
       return {
         effective: true,
         data: undefined,
-        message: `上架已成功，库存条码已上架到货架 ${stored.locationCode ?? ''}。`,
+        message: stored.locationCode ? `库存条码已上架到库位 ${stored.locationCode}。` : '库存条码已完成上架。',
       }
     },
   })
   const flowDef = useMemo(
     () =>
       makePutawayFlow({
-        onAfterPutaway: async () => {
-          await qc.invalidateQueries({ queryKey: ['pda-inbound-task', taskId] })
-          await qc.invalidateQueries({ queryKey: ['pda-inbound-tasks'] })
-          await qc.invalidateQueries({ queryKey: ['inbound-tasks'] })
-        },
         submitPutaway: async ({ taskId: nextTaskId, containerId, locationId, deviatedFromSuggestion, suggestedLocationCode }) => {
           const result = await putawayAction.run(
             (requestKey) => putawayInboundApi(nextTaskId, { containerId, locationId, deviatedFromSuggestion, suggestedLocationCode }, requestKey).then(() => undefined),
@@ -65,11 +66,15 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           }
         },
       }),
-    [taskId, qc, putawayAction],
+    [putawayAction],
   )
 
-  const initialContext: PutawayFlowContext = { taskId, containerId: null }
+  const initialContext = useMemo<PutawayFlowContext>(() => ({ taskId, containerId: null }), [taskId])
   const engine = usePdaFlow<PutawayFlowContext>(flowDef, initialContext, `inbound-putaway-${taskId}`)
+  useLayoutEffect(() => {
+    resetScanner.current = engine.reset
+    return () => { resetScanner.current = null }
+  }, [engine.reset])
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -80,8 +85,6 @@ function PutawayRunner({ taskId }: { taskId: number }) {
         onBack={() => navigate('/pda/inbound')}
         right={<span className="text-xs text-muted-foreground">库存上架</span>}
       />
-
-      <PdaFlash flash={flash ?? engine.flash} />
 
       <div className="max-w-md mx-auto px-4 pt-3 w-full">
         <PdaCriticalActionNotice
@@ -104,7 +107,9 @@ function PutawayRunner({ taskId }: { taskId: number }) {
           onDismissError={() => putawayAction.clearError()}
         />
         <PdaFlowSteps steps={flowDef.steps} currentId={engine.stepId} />
-        <p className="text-xs text-muted-foreground mt-2">{engine.currentStep.label}</p>
+        <p className="text-xs text-muted-foreground mt-2">
+          {engine.stepId === 'scan-location' ? '使用本仓的库位标签（如 R000123），也可手动输入库位编码。' : engine.currentStep.label}
+        </p>
         {/*
           偏离推荐库位需要「同一库位连扫两次」确认，此前只弹一条一闪而过的提示，
           现场很容易当成扫了没反应（2026-09-17 验收 ISSUE-014）。这里把待确认状态
@@ -118,7 +123,7 @@ function PutawayRunner({ taskId }: { taskId: number }) {
               {engine.context.suggestedLocations?.[0]?.locationCode
                 ? <>，建议库位 <span className="font-mono">{engine.context.suggestedLocations[0].locationCode}</span></>
                 : null}
-              。确认放到该库位请再扫一次同一库位条码；改放建议库位则直接扫建议库位条码。
+              。请再次扫描或输入同一库位以确认，也可改用建议库位的条码或编码。
             </p>
           </div>
         ) : null}
@@ -127,13 +132,13 @@ function PutawayRunner({ taskId }: { taskId: number }) {
       <div className="flex-1" />
 
       <PdaBottomBar>
+        {(flash ?? engine.flash) && (
+          <div className="[&>*]:mx-0 [&>*]:mt-0"><PdaFlash flash={flash ?? engine.flash} /></div>
+        )}
         <PdaScanner
+          key={engine.stepId}
           allowIntentionalRepeat={engine.stepId === 'scan-location' && !!engine.context.deviationArmedCode}
-          onScan={async (code) => {
-            // 扫容器只是校验步骤、无服务端副作用；真正的上架落库发生在扫库位
-            // 那一步，查询失效已经在 onAfterPutaway 里做了，这里不用重复触发。
-            await engine.scan(code)
-          }}
+          onScan={engine.scan}
           placeholder={engine.currentStep.placeholder}
           disabled={engine.scanning || putawayAction.submitBlocked}
           busy={engine.scanning}
@@ -236,5 +241,5 @@ export default function PdaPutawayPage() {
       <PdaEmptyState title="暂无待上架货物" description="已收到的货已全部上架，仍可继续收货" actionText="继续收货" onAction={() => navigate(`/pda/receive/${taskId}`)} />
     </div>
   }
-  return <PutawayRunner taskId={taskId} />
+  return <PutawayRunner key={taskId} taskId={taskId} />
 }

@@ -11,7 +11,7 @@ import type { User } from '@/types'
 // 保留真实 useCriticalPdaAction / usePendingRequests，仅隔离网络与硬件边界。
 const api = vi.hoisted(() => ({ task: vi.fn(), sort: vi.fn(), receipt: vi.fn(), scan: null as null | ((code: string) => void) }))
 vi.mock('@/hooks/useNetworkStatus', () => ({ useNetworkStatus: () => 'online' }))
-vi.mock('@/hooks/usePdaFeedback', () => ({ usePdaFeedback: () => ({ flash: null, ok: vi.fn(), warn: vi.fn(), err: vi.fn() }) }))
+vi.mock('@/hooks/usePdaFeedback', () => ({ usePdaFeedback: () => ({ flash: null, clear: vi.fn(), ok: vi.fn(), warn: vi.fn(), err: vi.fn() }) }))
 vi.mock('@/api/warehouse-tasks', () => ({ getTaskByIdApi: api.task, sortDoneApi: api.sort }))
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: api.receipt }))
 vi.mock('@/api/sorting-bins', () => ({ getSortingBinsApi: async () => [], scanProductForSortApi: async (code: string) => ({

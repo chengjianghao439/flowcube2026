@@ -10,12 +10,15 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import { Button } from '@/components/ui/button'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getPurchaseReturnsApi, confirmPurchaseReturnApi, cancelPurchaseReturnApi, getSaleReturnsApi, confirmSaleReturnApi, cancelSaleReturnApi } from '@/api/returns'
+import { ApiClientError } from '@/api/client'
 import { downloadExport } from '@/lib/exportDownload'
 import { OrderPrintOverlay } from '@/components/print/OrderPrintOverlay'
 import { mapReturnOrderToPrint } from '@/lib/orderPrintData'
@@ -38,6 +41,8 @@ const DEFAULT_RANGE_DAYS = 7
 
 export default function ReturnsPage() {
   const { can } = usePermission()
+  const canView = can(PERMISSIONS.RETURN_ORDER_VIEW)
+  const canPrint = can(PERMISSIONS.PRINT_TEMPLATE_VIEW)
   const permissionRef = useRef(can)
   permissionRef.current = can
   const qc = useQueryClient()
@@ -87,11 +92,13 @@ export default function ReturnsPage() {
   // effect，因此首次打开与从菜单切回已挂载页签的范围一致。range=all 是「清空」的显式意图（看全部）。
   const rangeAll = searchParams.get('range') === 'all'
   const defaultRange = useMemo(() => defaultRangeYmds(DEFAULT_RANGE_DAYS), [])
-  const effectiveStartDate = startDate || (rangeAll ? '' : defaultRange.start)
-  const effectiveEndDate = endDate || (rangeAll ? '' : defaultRange.end)
+  const useDefaultRange = !rangeAll && !startDate && !endDate
+  const effectiveStartDate = useDefaultRange ? defaultRange.start : startDate
+  const effectiveEndDate = useDefaultRange ? defaultRange.end : endDate
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['returns', type, { keyword, remark, operatorId, statusFilter, productId, partyId, warehouseId, effectiveStartDate, effectiveEndDate }],
+    enabled: canView,
     queryFn: () => apiList({
       page: 1,
       pageSize: PAGE_SIZE,
@@ -226,6 +233,9 @@ export default function ReturnsPage() {
       page: 1,
     })
   }
+  function clearDateRange() {
+    updateParams({ startDate: null, endDate: null, range: 'all', page: 1 })
+  }
 
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
@@ -239,7 +249,7 @@ export default function ReturnsPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<RowType>[] = [
-    { key: 'returnNo', title: type === 'sale' ? '退货单 / 创建时间' : '退货单号', width: type === 'sale' ? 240 : 170, render: (v, row) => type === 'sale' ? <RecordIdentity title={String(v)} detail={formatDisplayDateTime(row.createdAt)} /> : String(v) },
+    { key: 'returnNo', title: '退货单 / 创建时间', width: 240, render: (v, row) => <RecordIdentity title={String(v)} detail={formatDisplayDateTime(row.createdAt)} /> },
     { key: partyKey, title: partyLabel, width: 140 },
     { key: 'warehouseName', title: '仓库', width: 140 },
     { key: 'totalAmount', title: '金额', width: 140, align: 'right', render: (v, row) => {
@@ -253,7 +263,6 @@ export default function ReturnsPage() {
       return <SoftStatusLabel label={(row as RowType).statusName} tone={tone} />
     } },
     { key: 'operatorName', title: '经办人', width: 112, minWidth: 112 },
-    ...(type === 'purchase' ? [{ key: 'createdAt', title: '时间', width: 160, render: (v: unknown) => formatDisplayDateTime(v) } satisfies TableColumn<RowType>] : []),
     {
       key: 'remark', title: '备注', expandableText: true, width: 200,
       render: (v) => v
@@ -273,7 +282,7 @@ export default function ReturnsPage() {
               onClick: () => mut(() => confirmFn(r.id), r.id),
               disabled: pendingId === r.id,
             }] : []),
-            { label: '打印', onClick: () => setPrintTarget(r) },
+            ...(canPrint ? [{ label: '打印', onClick: () => setPrintTarget(r) }] : []),
             ...((r.status === 1 || r.status === 2) && can(PERMISSIONS.RETURN_ORDER_CANCEL) ? [{
               label: pendingId === r.id ? '处理中…' : '取消',
               onClick: () => openConfirm(
@@ -293,11 +302,22 @@ export default function ReturnsPage() {
     } },
   ]
 
+  const title = type === 'purchase' ? '采购退货' : '销售退货'
+  const description = type === 'purchase' ? '退回供应商，出库减少库存' : '查看退货单、收货与质检进度；上架完成后更新库存和应收。'
+  if (!canView || (error instanceof ApiClientError && error.status === 403)) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={title} description={description} />
+        <EmptyState variant="no-permission" description="当前账号无权查看退货单。" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
-        title={type === 'purchase' ? '采购退货' : '销售退货'}
-        description={type === 'purchase' ? '退回供应商，出库减少库存' : '查看退货单、收货与质检进度；上架完成后更新库存和应收。'}
+        title={title}
+        description={description}
         actions={
           <>
             <Button variant="outline"
@@ -311,22 +331,22 @@ export default function ReturnsPage() {
       />
 
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <AppliedDateRange label="创建日期" startDate={effectiveStartDate} endDate={effectiveEndDate} onClear={clearDateRange} />
+        {chips.map(c => (
+          <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            {c.label}
+            <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {(chips.length > 0 || effectiveStartDate || effectiveEndDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+      </div>
 
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : (
-        <DataTable columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail} />
+        <DataTable columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail}
+          emptyText={chips.length || effectiveStartDate || effectiveEndDate ? '没有符合条件的退货单' : '暂无退货单'} />
       )}
 
       {!isError && !isLoading && data && <ListSummary total={total} unit="单" />}
@@ -341,7 +361,7 @@ export default function ReturnsPage() {
         onCancel={closeConfirm}
       />
 
-      {printTarget && (
+      {canPrint && printTarget && (
         <OrderPrintOverlay
           templateType={3}
           title={printTarget.returnNo}

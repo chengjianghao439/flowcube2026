@@ -221,3 +221,18 @@ test('INVENTORY-Q10 无日期的流水首次查询和重置仍使用页面七日
   await click('重置', dialog()); expect(dates.map(input => input.value)).toEqual([defaults.start, defaults.end])
   expect(params()).toEqual({ tab: 'logs' })
 })
+
+test('库存流水单边日期在列表可见，清除只改变日期而保留其他流水条件', async () => {
+  const latestLogs = () => requests.filter(url => url.pathname === '/api/inventory/logs').at(-1)?.searchParams
+  await draw(0, '?tab=logs&logType=2&logWarehouseId=8&logStartDate=2026-10-08')
+  await wait(() => expect(latestLogs()?.get('startDate')).toBe('2026-10-08'))
+  expect(latestLogs()?.has('endDate')).toBe(false)
+  expect(host.textContent).toContain('自 2026-10-08 起')
+  const clearDate = host.querySelector<HTMLButtonElement>('button[aria-label="清除日期限制"]')!
+  await act(async () => clearDate.click())
+  await wait(() => expect(latestLogs()?.has('startDate')).toBe(false))
+  expect(latestLogs()?.has('endDate')).toBe(false)
+  expect(latestLogs()?.get('type')).toBe('2')
+  expect(latestLogs()?.get('warehouseId')).toBe('8')
+  expect(host.textContent).toContain('未限日期')
+})

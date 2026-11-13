@@ -11,6 +11,7 @@ export interface AvgCostRow {
   spec: string | null
   color: string | null
   warehouseId: number
+  warehouseName?: string | null
   unitCost: number
   unitCostSource?: 'avg_cost' | 'cost_price' | 'zero_fallback'
   cacheQty: number

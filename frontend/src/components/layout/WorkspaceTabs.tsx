@@ -37,14 +37,24 @@ export function WorkspaceTabs() {
   const menuFocusIndex = useRef(0)
   const menuId = useId()
   const tabRefs = useRef(new Map<string, HTMLButtonElement>())
+  const stripRef = useRef<HTMLDivElement>(null)
+  const activeTabPresent = focusKey === activeKey
   const focusAfterClose = useRef(false)
   const guardedFocus = useRef<{ confirm: NonNullable<typeof pendingConfirm>; target: HTMLElement | null } | null>(null)
   const tabId = (key: string) => `${menuId}-tab-${encodeURIComponent(key)}`
 
-  // 激活标签变化时自动滚入视图
+  // 新标签注册后和窗口缩放后都核对可见范围。
   useEffect(() => {
-    tabRefs.current.get(activeKey)?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
-  }, [activeKey])
+    const strip = stripRef.current
+    const target = tabRefs.current.get(activeKey)
+    if (!activeTabPresent || !strip || !target) return
+    const reveal = () => target.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    reveal()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(reveal)
+    observer.observe(strip)
+    return () => observer.disconnect()
+  }, [activeKey, activeTabPresent])
 
   useEffect(() => {
     if (!focusAfterClose.current) return
@@ -213,6 +223,7 @@ export function WorkspaceTabs() {
     <div className="flex w-full min-w-0 items-center gap-0">
       {/* 可横向滚动的标签列表 */}
       <div
+        ref={stripRef}
         className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-1"
         style={{ scrollbarWidth: 'none' }}
       >

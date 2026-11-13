@@ -167,7 +167,7 @@ export function KeepAliveOutlet() {
       <div className="flex h-full items-center justify-center p-6">
         <div className="card-base w-full max-w-xl p-6 text-center">
           <h2 className="text-lg font-semibold text-foreground">页面不存在</h2>
-          <p className="mt-2 text-sm text-muted-foreground">这个地址没有对应的页面，请从左侧菜单进入。</p>
+          <p className="mt-2 text-sm text-muted-foreground">这个地址没有对应的页面，请从顶部导航进入。</p>
         </div>
       </div>
     )

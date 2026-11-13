@@ -4,15 +4,18 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { DashboardLayout } from '@/types/dashboard'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { BoardSalesActions } from '@/components/dashboard/widgets/OperationalWidgets'
 import DashboardPage from './index'
 
-const state = vi.hoisted(() => ({ saved: { widgets: [] } as DashboardLayout, save: vi.fn() }))
+const state = vi.hoisted(() => ({ saved: { widgets: [] } as DashboardLayout, save: vi.fn(), permissions: null as Set<string> | null }))
 vi.mock('@/hooks/useDashboard', () => ({
   useDashboardLayout: () => ({ data: state.saved, isLoading: false }),
   useSaveDashboardLayout: () => ({ mutateAsync: state.save, isPending: false }),
   useLowStock: () => ({ data: [] }),
+  useDashboardSummary: () => ({ data: { pendingPurchaseOrders: 3 }, isLoading: false }),
 }))
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => state.permissions === null || state.permissions.has(permission) }) }))
 vi.mock('@/hooks/useDirtyGuard', () => ({ useDirtyGuard: () => {} }))
 vi.mock('@/components/dashboard/registry', async importOriginal => {
   const original = await importOriginal<typeof import('@/components/dashboard/registry')>()
@@ -31,7 +34,26 @@ beforeEach(() => {
   state.save.mockReset().mockImplementation(async (layout: DashboardLayout) => { state.saved = structuredClone(layout); return state.saved })
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
 })
-afterEach(() => { act(() => root.unmount()); host.remove() })
+afterEach(() => { act(() => root.unmount()); host.remove(); state.permissions = null })
+
+test('采购权限能查看待处理采购，销售卡片仅对有销售查看权限的岗位显示', async () => {
+  state.saved = { widgets: ['kpi-pending-sale', 'kpi-pending-purchase'].map(id => ({ id, visible: true, w: 1 })) }
+  state.permissions = new Set([PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.PURCHASE_ORDER_VIEW])
+  const draw = () => act(async () => root.render(<MemoryRouter><DashboardPage /></MemoryRouter>))
+  await draw()
+  expect(ids()).toEqual(['kpi-pending-purchase'])
+  state.permissions.add(PERMISSIONS.SALE_ORDER_VIEW)
+  await draw()
+  expect(ids()).toEqual(['kpi-pending-sale', 'kpi-pending-purchase'])
+})
+
+test('仅可查看采购的账号打开业务待办即可看到采购内容', async () => {
+  state.permissions = new Set([PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.PURCHASE_ORDER_VIEW])
+  await act(async () => root.render(<MemoryRouter><BoardSalesActions /></MemoryRouter>))
+  expect(host.textContent).toContain('待处理采购')
+  expect(host.textContent).not.toContain('销售查看权限')
+  expect(host.textContent).not.toContain('状态总览')
+})
 
 test('保存的跨分区顺序及指标/业务卡交错顺序在展示页原样生效', async () => {
   const order = ['system-version', 'board-workbench', 'kpi-pending-sale', 'fun-year', 'chart-sale-trend']
@@ -64,4 +86,17 @@ test('用户空布局保持空；主动载入推荐只是预览，原保存才�
   await click('编辑仪表盘'); await click('载入推荐')
   expect(ids()[0]).toBe('board-workbench'); expect(state.save).not.toHaveBeenCalled()
   await click('保存'); expect(state.save).toHaveBeenCalledOnce()
+})
+test('预览全部卡片明确标出布局预览，取消恢复原布局', async () => {
+  state.saved = { widgets: [{ id: 'system-version', visible: true, w: 2 }] }
+  state.permissions = new Set([PERMISSIONS.DASHBOARD_VIEW])
+  await act(async () => root.render(<MemoryRouter><DashboardPage /></MemoryRouter>))
+  expect(ids()).toEqual(['system-version'])
+  await click('预览全部卡片')
+  expect(host.textContent).toContain('布局预览')
+  expect(host.textContent).toContain('保存后应用，取消返回原布局')
+  expect(ids()).not.toContain('kpi-pending-sale')
+  await click('取消')
+  expect(ids()).toEqual(['system-version'])
+  expect(state.save).not.toHaveBeenCalled()
 })

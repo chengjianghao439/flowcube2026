@@ -774,11 +774,12 @@ async function findStockDrift({ productId = null, warehouseId = null, scopeWareh
 
   // 容器主视角：有 ACTIVE 容器的商品×仓（含缓存为 0 或缺失的）
   const [cRows] = await pool.query(
-    `SELECT c.product_id AS productId, c.warehouse_id AS warehouseId,
+    `SELECT c.product_id AS productId, c.warehouse_id AS warehouseId, MAX(w.name) AS warehouseName,
             SUM(c.remaining_qty) AS containerQty,
             COALESCE(s.quantity, 0) AS cacheQty
      FROM inventory_containers c
      LEFT JOIN inventory_stock s ON s.product_id = c.product_id AND s.warehouse_id = c.warehouse_id
+     LEFT JOIN inventory_warehouses w ON w.id = c.warehouse_id
      WHERE ${condC.join(' AND ')}${scC.sql}
      GROUP BY c.product_id, c.warehouse_id`,
     [...paramsC, ...scC.params],
@@ -791,8 +792,9 @@ async function findStockDrift({ productId = null, warehouseId = null, scopeWareh
   if (warehouseId) { condS.push('s.warehouse_id = ?'); paramsS.push(warehouseId) }
 
   const [sRows] = await pool.query(
-    `SELECT s.product_id AS productId, s.warehouse_id AS warehouseId, s.quantity AS cacheQty
+    `SELECT s.product_id AS productId, s.warehouse_id AS warehouseId, w.name AS warehouseName, s.quantity AS cacheQty
      FROM inventory_stock s
+     LEFT JOIN inventory_warehouses w ON w.id = s.warehouse_id
      LEFT JOIN (
        SELECT product_id, warehouse_id, SUM(remaining_qty) AS sq
        FROM inventory_containers
@@ -806,12 +808,12 @@ async function findStockDrift({ productId = null, warehouseId = null, scopeWareh
 
   const rows = new Map()
   for (const r of cRows) {
-    rows.set(`${r.productId}-${r.warehouseId}`, { productId: Number(r.productId), warehouseId: Number(r.warehouseId), containerQty: Number(r.containerQty), cacheQty: Number(r.cacheQty), note: null })
+    rows.set(`${r.productId}-${r.warehouseId}`, { productId: Number(r.productId), warehouseId: Number(r.warehouseId), warehouseName: r.warehouseName ?? null, containerQty: Number(r.containerQty), cacheQty: Number(r.cacheQty), note: null })
   }
   for (const r of sRows) {
     const key = `${r.productId}-${r.warehouseId}`
     if (rows.has(key)) continue
-    rows.set(key, { productId: Number(r.productId), warehouseId: Number(r.warehouseId), containerQty: 0, cacheQty: Number(r.cacheQty), note: '库存表有量但无在库容器汇总' })
+    rows.set(key, { productId: Number(r.productId), warehouseId: Number(r.warehouseId), warehouseName: r.warehouseName ?? null, containerQty: 0, cacheQty: Number(r.cacheQty), note: '库存表有量但无在库容器汇总' })
   }
 
   let list = [...rows.values()].map(row => {
@@ -845,6 +847,7 @@ async function findStockDrift({ productId = null, warehouseId = null, scopeWareh
         spec: p ? (p.spec || null) : null,
         color: p ? (p.color || null) : null,
         warehouseId: row.warehouseId,
+        warehouseName: row.warehouseName,
         unitCost,
         unitCostSource: p ? p.unit_cost_source : 'zero_fallback',
         cacheQty,

@@ -12,7 +12,7 @@ const { validateBody } = require('../../utils/route')
 const router = Router()
 router.use(authMiddleware)
 
-// GET /api/sorting-bins/scan?code=xxx
+// GET /api/sorting-bins/scan?code=xxx&taskId=（可选，限定普通商品匹配）
 router.get('/scan', requirePermission(PERMISSIONS.SORTING_BIN_VIEW), ctrl.scan)
 
 // GET /api/sorting-bins?warehouseId=&keyword=&status=

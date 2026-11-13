@@ -816,7 +816,7 @@ export const routePatterns: RoutePatternEntry[] = [
   },
   {
     pattern: /^\/products\/\d+$/,
-    title: (path) => `编辑商品 #${path.split('/').pop()}`,
+    title: (path) => `商品 #${path.split('/').pop()}`,
     permission: PERMISSIONS.PRODUCT_VIEW,
     componentKey: 'ProductFormPage',
     keepAlive: true,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
 import { Input } from '@/components/ui/input'
@@ -8,6 +8,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
 import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { todayYmd } from '@/lib/dateTime'
+import { isReversedDateRange } from '@/lib/dateRange'
 import { SALE_STATUS, SALE_STATUS_NAME } from '@/generated/status'
 
 /** 查询弹窗的状态顺序（与列表快捷筛选一致，名字取自生成物） */
@@ -53,8 +54,9 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
   const [customerOpen, setCustomerOpen] = useState(false)
   const [productOpen, setProductOpen] = useState(false)
-
-
+  const dateErrorId = useId()
+  const dateInvalid = isReversedDateRange(draft.startDate, draft.endDate)
+  const apply = () => { if (!dateInvalid) onApply(draft) }
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -71,7 +73,8 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
         width={680}
         onClose={onClose}
         onReset={() => setDraft(resetDraft())}
-        onApply={() => onApply(draft)}
+        applyDisabled={dateInvalid}
+        onApply={apply}
       >
         <div className="grid content-start grid-cols-1 gap-x-5 gap-y-3 overflow-y-auto px-5 py-4 sm:grid-cols-2">
           <p className="col-span-full text-sm font-semibold">订单条件</p>
@@ -81,7 +84,7 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
               placeholder="销售单号…"
               value={draft.keyword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
               className="h-9"
             />
           </label>
@@ -144,13 +147,16 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
           <label className="fc-query-date-start flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
             <DatePicker aria-label="创建日期（起）" value={draft.startDate} max={draft.endDate || undefined}
+              aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined}
               onChange={v => set('startDate', v)} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
             <DatePicker aria-label="创建日期（止）" value={draft.endDate} min={draft.startDate || undefined}
+              aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined}
               onChange={v => set('endDate', v)} className="h-9" />
           </label>
+          {dateInvalid && <p id={dateErrorId} role="alert" className="col-span-full text-xs text-destructive-ink">创建日期的起始日期不能晚于结束日期。</p>}
 
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-xs font-medium text-muted-foreground">备注</span>
@@ -158,7 +164,7 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
               placeholder="按订单备注内容查询…"
               value={draft.remark}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('remark', e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
               className="h-9"
             />
           </label>

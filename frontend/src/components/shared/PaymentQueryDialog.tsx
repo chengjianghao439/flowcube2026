@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { X } from 'lucide-react'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import { Button } from '@/components/ui/button'
@@ -8,7 +8,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CustomerFinder, SupplierFinder } from '@/components/finder'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
-import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
+import { getMonthDateRange, getRelativeDateRange, isReversedDateRange } from '@/lib/dateRange'
 import { todayYmd } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
@@ -30,11 +30,12 @@ interface FieldLabels {
  * 「查询」按钮已移到各页面右上角，这里只负责把生效条件显示成可逐个移除的小标签。
  * 无生效条件时不渲染任何东西（面板保持干净）。
  */
-export function PaymentQueryBar({ query, onChange, labels, clearValue = EMPTY_PAYMENT_QUERY }: {
+export function PaymentQueryBar({ query, onChange, labels, clearValue = EMPTY_PAYMENT_QUERY, showDateChip = true }: {
   query: PaymentQueryValues
   onChange: (next: PaymentQueryValues) => void
   labels: FieldLabels
   clearValue?: PaymentQueryValues
+  showDateChip?: boolean
 }) {
   const chips: QueryChip[] = []
   const drop = (...keys: (keyof PaymentQueryValues)[]) =>
@@ -46,7 +47,7 @@ export function PaymentQueryBar({ query, onChange, labels, clearValue = EMPTY_PA
   if (query.confirmStatus) {
     chips.push({ key: 'confirmStatus', text: `结算确认：${query.confirmStatus === '0' ? '待确认' : '已确认'}`, onClear: drop('confirmStatus') })
   }
-  if (query.startDate || query.endDate) {
+  if (showDateChip && (query.startDate || query.endDate)) {
     const sameDay = query.startDate && query.startDate === query.endDate
     chips.push({
       key: 'date',
@@ -87,6 +88,7 @@ interface Props {
    * 内部仍写 startDate/endDate 两个字段（取同一天），后端与导出无需区分。
    */
   singleDate?: boolean
+  resetLabel?: string
 }
 
 /**
@@ -96,10 +98,14 @@ interface Props {
  */
 export function PaymentQueryDialog({
   open, initial, onClose, onApply, labels, partyType, statusOptions, clearValue = EMPTY_PAYMENT_QUERY, title = '查询',
-  showDueDate = false, showConfirmStatus = false, singleDate = false,
+  showDueDate = false, showConfirmStatus = false, singleDate = false, resetLabel = '清空',
 }: Props) {
   const [v, setV] = useState<PaymentQueryValues>(initial)
   const [partyFinderOpen, setPartyFinderOpen] = useState(false)
+  const rangeErrorId = useId()
+  const dueErrorId = useId()
+  const rangeInvalid = !singleDate && isReversedDateRange(v.startDate, v.endDate)
+  const dueRangeInvalid = showDueDate && isReversedDateRange(v.dueStart, v.dueEnd)
   const { can } = usePermission()
   const canFindParty = can(partyType === 1 ? PERMISSIONS.SUPPLIER_VIEW : PERMISSIONS.CUSTOMER_VIEW)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
@@ -110,8 +116,9 @@ export function PaymentQueryDialog({
   return (
     <>
     <QueryDialog open={open} title={title} dialogId={`payment-query-${partyType}`} width={680}
-      onClose={onClose} onReset={() => setV(clearValue)} resetLabel="清空"
-      onApply={() => { onApply(v); onClose() }}>
+      onClose={onClose} onReset={() => setV(clearValue)} resetLabel={resetLabel}
+      applyDisabled={rangeInvalid || dueRangeInvalid}
+      onApply={() => { if (!rangeInvalid && !dueRangeInvalid) { onApply(v); onClose() } }}>
         <div className="fc-payment-query space-y-4 px-5 py-5">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
@@ -193,21 +200,27 @@ export function PaymentQueryDialog({
                 onChange={x => setV(prev => ({ ...prev, startDate: x, endDate: x }))} />
             ) : (
               <div className="flex items-center gap-2">
-                <DatePicker aria-label={`${labels.dateLabel}（起）`} value={v.startDate} onChange={x => set('startDate', x)} max={v.endDate || undefined} className="h-9 flex-1" />
+                <DatePicker aria-label={`${labels.dateLabel}（起）`} aria-invalid={rangeInvalid || undefined}
+                  aria-describedby={rangeInvalid ? rangeErrorId : undefined} value={v.startDate} onChange={x => set('startDate', x)} max={v.endDate || undefined} className="h-9 flex-1" />
                 <span className="text-muted-foreground">至</span>
-                <DatePicker aria-label={`${labels.dateLabel}（止）`} value={v.endDate} onChange={x => set('endDate', x)} min={v.startDate || undefined} className="h-9 flex-1" />
+                <DatePicker aria-label={`${labels.dateLabel}（止）`} aria-invalid={rangeInvalid || undefined}
+                  aria-describedby={rangeInvalid ? rangeErrorId : undefined} value={v.endDate} onChange={x => set('endDate', x)} min={v.startDate || undefined} className="h-9 flex-1" />
               </div>
             )}
+            {rangeInvalid && <p id={rangeErrorId} role="alert" className="text-sm text-destructive-ink">起始日期不能晚于结束日期。</p>}
           </div>
 
           {showDueDate && (
             <div className="space-y-1">
               <Label>到期日</Label>
               <div className="flex items-center gap-2">
-                <DatePicker aria-label="到期日（起）" value={v.dueStart} onChange={x => set('dueStart', x)} max={v.dueEnd || undefined} className="h-9 flex-1" />
+                <DatePicker aria-label="到期日（起）" aria-invalid={dueRangeInvalid || undefined}
+                  aria-describedby={dueRangeInvalid ? dueErrorId : undefined} value={v.dueStart} onChange={x => set('dueStart', x)} max={v.dueEnd || undefined} className="h-9 flex-1" />
                 <span className="text-muted-foreground">至</span>
-                <DatePicker aria-label="到期日（止）" value={v.dueEnd} onChange={x => set('dueEnd', x)} min={v.dueStart || undefined} className="h-9 flex-1" />
+                <DatePicker aria-label="到期日（止）" aria-invalid={dueRangeInvalid || undefined}
+                  aria-describedby={dueRangeInvalid ? dueErrorId : undefined} value={v.dueEnd} onChange={x => set('dueEnd', x)} min={v.dueStart || undefined} className="h-9 flex-1" />
               </div>
+              {dueRangeInvalid && <p id={dueErrorId} role="alert" className="text-sm text-destructive-ink">到期日的起始日期不能晚于结束日期。</p>}
             </div>
           )}
 

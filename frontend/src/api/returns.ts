@@ -34,7 +34,7 @@ export interface ReturnTask {
   pendingPutawayContainers?: RejectedContainer[]
 }
 
-export const getPurchaseReturnsApi  = (p:object) => client.get<PaginatedData<PurchaseReturn>>('/returns/purchase', {params:p})
+export const getPurchaseReturnsApi  = (p:object) => client.get<PaginatedData<PurchaseReturn>>('/returns/purchase', {params:p, skipGlobalError:true})
 export const getPurchaseReturnDetailApi = (id:number) => client.get<PurchaseReturn>(`/returns/purchase/${id}`)
 export const getPurchaseReturnSourceOrderApi = (orderNo:string, config?: AxiosRequestConfig) => client.get<PurchaseReturnSourceOrder>('/returns/purchase/source-order', { ...config, params:{ ...config?.params, orderNo } })
 export const createPurchaseReturnApi= (d:object, requestKey?: string, config?: AxiosRequestConfig) =>
@@ -43,7 +43,7 @@ export const confirmPurchaseReturnApi=(id:number,config?:import('axios').AxiosRe
 /** 拣货实物尚未归还时保留原退货状态；null 兼容已完成取消的原响应。 */
 export interface PurchaseReturnCancelResult { pendingCancel: boolean; tasks: Array<{ id: number; taskNo: string }> }
 export const cancelPurchaseReturnApi = (id:number) => client.post<PurchaseReturnCancelResult | null>(`/returns/purchase/${id}/cancel`)
-export const getSaleReturnsApi       = (p:object) => client.get<PaginatedData<SaleReturn>>('/returns/sale', {params:p})
+export const getSaleReturnsApi       = (p:object) => client.get<PaginatedData<SaleReturn>>('/returns/sale', {params:p, skipGlobalError:true})
 export const getSaleReturnDetailApi  = (id:number, config?: AxiosRequestConfig) => client.get<SaleReturn>(`/returns/sale/${id}`, config)
 export const getSaleReturnSourceOrderApi = (orderNo:string, config?: AxiosRequestConfig) => client.get<SaleReturnSourceOrder>('/returns/sale/source-order', { ...config, params:{ ...config?.params, orderNo } })
 export const createSaleReturnApi     = (d:object, requestKey?: string, config?: AxiosRequestConfig) =>

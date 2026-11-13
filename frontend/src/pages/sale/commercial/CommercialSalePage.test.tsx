@@ -11,7 +11,8 @@ import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useWorkspaceStore, HOME_TAB } from '@/store/workspaceStore'
 import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
-const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), get: vi.fn(), activity: vi.fn(), defaults: { baseURL: '/a' } }))
+const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), get: vi.fn(), activity: vi.fn(), success: vi.fn(), defaults: { baseURL: '/a' } }))
+vi.mock('@/lib/toast', () => ({ toast: { success: mocks.success, error: vi.fn(), warning: vi.fn() } }))
 vi.mock('@/api/client', () => ({ default: { defaults: mocks.defaults }, getApiClientBaseURL: () => mocks.defaults.baseURL, subscribeApiClientBaseURL: () => () => {} }))
 vi.mock('@/api/operation-requests', () => ({ getOperationRequestStatusApi: mocks.query }))
 vi.mock('@/api/document-activity', () => ({ getDocumentActivityApi: mocks.activity }))
@@ -258,6 +259,7 @@ test('mounted ship selection rejects fractional kits and submits commercial grou
     ).toBe(true)
     await change('1')
     await click('确认发起出库')
+    expect(mocks.success).toHaveBeenCalledWith('已发起出库，请在仓库任务中查看执行进度')
     expect(mocks.execute.mock.calls[0][0].operation).toEqual({
       action: 'ship',
       id: 80,
@@ -385,6 +387,14 @@ function expectRecoveryVisible(host: HTMLElement) {
   expect(query.disabled).toBe(false)
   expect(query.closest('[aria-hidden="true"]')).toBeNull()
 }
+test('套件占库成功反馈显示占库结果', async () => {
+  allowDetailActions()
+  await mount(async () => {
+    await click('占用库存')
+    await click('确认')
+    expect(mocks.success).toHaveBeenCalledWith('已占用库存')
+  }, { ...order, status: 1 })
+})
 test.each([
   ['reserve', 1, '占用库存'], ['release', 2, '取消占库'],
   ['cancel', 1, '取消订单'], ['delete', 5, '删除订单']

@@ -35,3 +35,14 @@ test('旧数据临时失败明确标记且暂停写操作；403/404隐藏旧敏�
  expect(ui.host.textContent).toContain('刷新失败，当前显示上次读取的数据'); expect(ui.host.textContent).toContain('旧收货单'); expect(ui.host.textContent).not.toContain('结束本次收货')
  for (const status of [403, 404]) { fixture.error = { status }; await ui.draw(); expect(ui.host.textContent).not.toContain('旧收货单') }
 })
+test('提交人使用提交留存的姓名，缺失时标记未记录', async () => {
+ fixture.task = { id: 21, taskNo: '已提交收货单', status: 2, statusName: '收货中', items: [],
+   purchaseOrderId: null, purchaseOrderNo: null, supplierName: null, warehouseId: 1, warehouseName: '合成仓',
+   operatorId: 2, operatorName: '后续操作员', remark: null, createdAt: '2026-11-13 09:00:00', updatedAt: '2026-11-13 11:00:00',
+   submittedAt: '2026-11-13 10:00:00', submittedByName: '提交员' }
+ const ui = await setup()
+ expect(ui.host.textContent).toContain('提交人：提交员')
+ fixture.task = { ...fixture.task, submittedByName: null }
+ await ui.draw()
+ expect(ui.host.textContent).toContain('提交人：未记录')
+})

@@ -256,11 +256,14 @@ async function main() {
         'INSERT INTO warehouse_tasks (task_no,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name) VALUES (?,0,?,?,?,?,?)',
         [`STAT${code}`, `SO${code}`, ctx.customer.id, ctx.customer.name, ctx.warehouse.id, ctx.warehouse.name],
       )
-      let containerId, packageId
+      let containerId, packageId, inboundTaskId
       const jobIds = []
       try {
         const barcode = `STAT${code}`
         containerId = await addContainer(barcode, 1)
+        const [inboundTask] = await pool.query('INSERT INTO inbound_tasks (task_no,warehouse_id,status,submitted_at) VALUES (?,?,2,NOW())', [barcode, ctx.warehouse.id])
+        inboundTaskId = inboundTask.insertId
+        await pool.query('UPDATE inventory_containers SET inbound_task_id=? WHERE id=?', [inboundTaskId, containerId])
         const [pkg] = await pool.query('INSERT INTO packages (barcode,warehouse_task_id,status) VALUES (?,?,1)', [barcode, task.insertId])
         packageId = pkg.insertId
         for (const [category, refType, refId] of [['inbound', 'inventory_container', containerId], ['outbound', 'package', packageId], ['logistics', 'waybill', task.insertId]]) {
@@ -277,6 +280,15 @@ async function main() {
           ]
           for (const sample of samples) {
             await pool.query('UPDATE print_jobs SET printer_id=?,error_message=? WHERE id=?', [sample.printerId, sample.error, job.insertId])
+            if (category === 'inbound') {
+              const response = await http.get(`/api/inbound-tasks/${inboundTaskId}`, { token })
+              assert.equal(response.status, 200)
+              const detail = response.data.data
+              assert.equal(detail.printSummary[sample.status], 1)
+              assert.equal(detail.printSummary.timeout, sample.status === 'timeout' ? 1 : 0)
+              assert.equal(detail.printStatus.key, sample.status)
+              assert.equal(detail.recentPrintJobs[0].statusKey, sample.status)
+            }
             for (const status of ['unassigned', 'timeout', 'failed']) {
               const response = await http.get(`/api/print-jobs/barcodes?category=${category}&keyword=${encodeURIComponent(barcode)}&status=${status}`, { token })
               assert.equal(response.status, 200)
@@ -287,6 +299,16 @@ async function main() {
               if (expectedCount) assert.equal(result.list[0].latestJob.statusKey, status, `${category}: derived state agrees with SQL`)
             }
           }
+          if (category === 'inbound') {
+            for (const [raw, key] of [[0, 'queued'], [1, 'printing'], [2, 'success']]) {
+              await pool.query('UPDATE print_jobs SET printer_id=?,status=?,error_message=NULL,updated_at=NOW() WHERE id=?', [p.insertId, raw, job.insertId])
+              const response = await http.get(`/api/inbound-tasks/${inboundTaskId}`, { token })
+              assert.equal(response.status, 200)
+              assert.equal(response.data.data.printSummary[key], 1)
+              assert.equal(response.data.data.printSummary.timeout, 0)
+              assert.equal(response.data.data.recentPrintJobs[0].statusKey, key)
+            }
+          }
         }
       } finally {
         if (jobIds.length) {
@@ -295,6 +317,7 @@ async function main() {
           assert.equal(Number(remaining), 0)
         }
         if (containerId) await pool.query('DELETE FROM inventory_containers WHERE id=?', [containerId])
+        if (inboundTaskId) await pool.query('DELETE FROM inbound_tasks WHERE id=?', [inboundTaskId])
         if (packageId) await pool.query('DELETE FROM packages WHERE id=?', [packageId])
         await pool.query('DELETE FROM warehouse_tasks WHERE id=?', [task.insertId])
       }

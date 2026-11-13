@@ -64,8 +64,8 @@ export const WIDGETS: WidgetDef[] = [
   // —— 关键指标（sm）——
   { id: 'kpi-total-qty',       title: '库存总数量',      description: '各仓库库存数量汇总',        icon: Boxes,         category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiTotalQty },
   { id: 'kpi-total-value',     title: '库存总价值',      description: '按成本价估算的库存金额',    icon: Wallet,        category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiTotalValue },
-  { id: 'kpi-pending-purchase', title: '待处理采购',     description: '草稿 + 已提交的采购单数',   icon: ShoppingCart,  category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiPendingPurchase },
-  { id: 'kpi-pending-sale',    title: '待处理销售',      description: '待占库、部分占库与已占库订单数', icon: ClipboardList, category: 'kpi', permission: PERMISSIONS.DASHBOARD_VIEW,       defaultW: 1, size: 'sm', Component: Kpi.KpiPendingSale },
+  { id: 'kpi-pending-purchase', title: '待处理采购',     description: '草稿 + 已提交的采购单数',   icon: ShoppingCart,  category: 'kpi', permission: PERMISSIONS.PURCHASE_ORDER_VIEW,  defaultW: 1, size: 'sm', Component: Kpi.KpiPendingPurchase },
+  { id: 'kpi-pending-sale',    title: '待处理销售',      description: '待占库、部分占库与已占库订单数', icon: ClipboardList, category: 'kpi', permission: PERMISSIONS.SALE_ORDER_VIEW,   defaultW: 1, size: 'sm', Component: Kpi.KpiPendingSale },
   { id: 'kpi-shipped-today',   title: '今日出库',        description: '今日已出库单数',            icon: Truck,         category: 'kpi', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 1, size: 'sm', Component: Kpi.KpiShippedToday },
   { id: 'kpi-scan-today',      title: '今日扫码量',      description: '今日 PDA 扫码次数',         icon: ScanLine,      category: 'kpi', permission: PERMISSIONS.REPORT_VIEW,          defaultW: 1, size: 'sm', Component: Kpi.KpiScanToday },
   { id: 'kpi-receivable',      title: '未清应收',        description: '未收回应收账款合计',        icon: HandCoins,     category: 'kpi', permission: PERMISSIONS.PAYMENT_VIEW,         defaultW: 1, size: 'sm', Component: Kpi.KpiReceivable },

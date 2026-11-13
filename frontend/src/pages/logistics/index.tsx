@@ -14,6 +14,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { EmptyState } from '@/components/shared/EmptyState'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -25,6 +27,7 @@ import { useCarriersActive } from '@/hooks/useCarriers'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getWaybillsApi, setWaybillTrackingApi, retryWaybillApi, voidWaybillApi } from '@/api/logistics'
+import { ApiClientError } from '@/api/client'
 import type { LogisticsWaybill } from '@/types/logistics'
 import type { TableColumn } from '@/types'
 import WaybillQueryDialog, { type WaybillQueryValues } from './WaybillQueryDialog'
@@ -39,29 +42,38 @@ export default function LogisticsPage() {
   const nav = useNavigate()
   const qc = useQueryClient()
   const { can } = usePermission()
+  const canView = can(PERMISSIONS.LOGISTICS_VIEW)
   const canManage = can(PERMISSIONS.LOGISTICS_MANAGE)
+  const canViewCarriers = can(PERMISSIONS.CARRIER_VIEW)
 
   const [applied, setApplied] = useState<{ keyword: string; status: string; carrierId: number | null; startDate: string; endDate: string }>({ keyword: '', status: 'all', carrierId: null, startDate: todayYmd(), endDate: todayYmd() })
   const [trackTarget, setTrackTarget] = useState<LogisticsWaybill | null>(null)
   const [trackingInput, setTrackingInput] = useState('')
   const [queryOpen, setQueryOpen] = useState(false)
-
-  // 筛选 chip 显示承运商名称而非主键 ID（与查询弹窗共用 carriers-active 缓存，不额外发请求）
-  const { data: carriers = [] } = useCarriersActive()
-  const carrierMap = useMemo(() => new Map(carriers.map(c => [c.id, c.name])), [carriers])
+  const filters = {
+    keyword: applied.keyword || undefined,
+    status: applied.status === 'all' ? undefined : applied.status,
+    carrierId: applied.carrierId ?? undefined,
+    startDate: applied.startDate || undefined,
+    endDate: applied.endDate || undefined,
+  }
+  const exportParams = Object.fromEntries(
+    Object.entries(filters).flatMap(([key, value]) => value === undefined ? [] : [[key, String(value)]]),
+  )
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['waybills', applied],
+    enabled: canView,
     queryFn: () => getWaybillsApi({
       page: 1,
       pageSize: 500,
-      keyword: applied.keyword || undefined,
-      status: applied.status === 'all' ? undefined : applied.status,
-      carrierId: applied.carrierId ?? undefined,
-      startDate: applied.startDate || undefined,
-      endDate: applied.endDate || undefined,
+      ...filters,
     }),
   })
+  const denied = !canView || (error instanceof ApiClientError && error.status === 403)
+  // 查询弹窗和筛选标签共用承运商选项，运单查看权限不代表承运商查看权限。
+  const { data: carriers } = useCarriersActive(undefined, () => !denied && canViewCarriers)
+  const carrierMap = useMemo(() => new Map(carriers?.map(c => [c.id, c.name])), [carriers])
   const list = data?.list ?? []
 
   function invalidate() { qc.invalidateQueries({ queryKey: ['waybills'] }) }
@@ -94,6 +106,7 @@ export default function LogisticsPage() {
     setQueryOpen(false)
   }
   function clearAll() { reset() }
+  function clearDateRange() { setApplied(current => ({ ...current, startDate: '', endDate: '' })) }
 
   const chips = [
     applied.keyword && { key: 'keyword', label: `关键字：${applied.keyword}`, onRemove: () => setApplied({ ...applied, keyword: '' }) },
@@ -137,35 +150,44 @@ export default function LogisticsPage() {
     },
   ]
 
+  const description = '核对包裹运单、取号与物流状态。'
+  if (denied) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="物流运单" description={description} />
+        <EmptyState variant="no-permission" description="当前账号无权查看物流运单。" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <PageHeader
         title="物流运单"
-        description="核对包裹运单、取号与物流状态。"
+        description={description}
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/waybills').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/waybills', exportParams).catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" onClick={() => refetch()}>刷新</Button>
           </>
         }
       />
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <AppliedDateRange label="创建日期" startDate={applied.startDate} endDate={applied.endDate} onClear={clearDateRange} />
+        {chips.map(c => (
+          <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            {c.label}
+            <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {(chips.length > 0 || applied.startDate || applied.endDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+      </div>
 
-      {isError && !data ? (
+      {isError ? (
         <QueryErrorState error={error} onRetry={() => void refetch()} title="运单加载失败" compact />
       ) : (
         <>
@@ -174,9 +196,9 @@ export default function LogisticsPage() {
             data={list}
             loading={isLoading}
             rowKey="id"
-            emptyText="暂无运单"
+            emptyText={chips.length || applied.startDate || applied.endDate ? '没有符合条件的运单' : '暂无运单'}
           />
-          <ListSummary total={list.length} unit="张运单" />
+          {data && <ListSummary total={data.pagination?.total ?? list.length} unit="张运单" />}
         </>
       )}
 
@@ -198,6 +220,7 @@ export default function LogisticsPage() {
       </Dialog>
 
       <WaybillQueryDialog
+        carriers={canViewCarriers ? carriers ?? [] : undefined}
         open={queryOpen}
         initial={initialQuery}
         resetValues={{ startDate: todayYmd(), endDate: todayYmd() }}

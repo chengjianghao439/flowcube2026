@@ -396,14 +396,14 @@ async function buildPurchaseReturn(conn) {
  * 事件8：销售退货入库冲收入与成本。一张凭证 4 分录：
  *   借 主营业务收入6001（冲）+ 借 库存商品1405（退回入库）
  *   贷 应收账款1122〔客户〕 + 贷 主营业务成本6401（冲）
- * 应收冲减额 = SUM((合格入库量)×退货单价)（与 recomputeSaleReceivable 严格一致）；
+ * 仅关联原销售单的退货冲减应收；优先实际净额回执，旧关联单按合格量 × 退货单价。
  * 成本冲回额 = SUM((合格入库量)×原出库 cost_snapshot)（**只反转当初已确认的成本**，见下方注释）。
  */
 async function buildSaleReturn(conn) {
   const commercialAmounts=await require('./voucher-sale-returns').loadCommercialReturnVoucherAmounts(conn)
   const ordinaryAmounts=await require('../sale/sale.ordinary-return-money').voucherAmounts(conn)
   const [rows] = await conn.query(`
-    SELECT sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at AS vdate,
+    SELECT sr.id, sr.sale_order_id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at AS vdate,
            COALESCE(SUM(CASE WHEN sri.dispatch_component_id IS NOT NULL THEN cri.financial_amount ELSE (rti.checked_qty - rti.rejected_qty) * sri.unit_price END), 0) AS arAmount,
            -- 成本冲回只反转「当初出库时**已确认**的成本」（sale_order_items.cost_snapshot），
            -- **不能**回退商品主档的 avg_cost/cost_price（2026-09-18 审计 [36]）：
@@ -418,13 +418,16 @@ async function buildSaleReturn(conn) {
       JOIN return_task_items rti ON rti.task_id = rt.id
       JOIN sale_return_items sri ON sri.id = rti.return_item_id
       LEFT JOIN sale_commercial_refund_receipts cri ON cri.return_item_id=sri.id
-      LEFT JOIN sale_order_items soi ON soi.id = sri.sale_item_id
+      LEFT JOIN sale_order_items soi ON soi.id = sri.sale_item_id AND soi.order_id = sr.sale_order_id
      WHERE sr.status = 3 AND sr.deleted_at IS NULL
-     GROUP BY sr.id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at`)
+     GROUP BY sr.id, sr.sale_order_id, sr.return_no, sr.customer_id, sr.customer_name, sr.updated_at`)
   const [[{missing}]]=await conn.query(`SELECT COUNT(*) AS missing FROM sale_return_items sri JOIN sale_returns sr ON sr.id=sri.return_id LEFT JOIN sale_commercial_refund_receipts r ON r.return_item_id=sri.id WHERE sr.status=3 AND sr.deleted_at IS NULL AND sri.dispatch_component_id IS NOT NULL AND r.id IS NULL`)
   if(Number(missing))throw new AppError('已执行成套退货缺少来源退款记录',409,'SALE_COMMERCIAL_SOURCE_INVALID')
   const specs = []
   for (const r of rows) {
+    // 无原单的退货只执行仓库业务，没有可冲回的原销售应收或出库成本。
+    // 既有凭证留给人工核对；不要从这些历史退货自动生成冲销或改账。
+    if (r.sale_order_id == null) continue
     const ar = commercialAmounts.has(Number(r.id)) ? Number(commercialAmounts.get(Number(r.id)))
       : ordinaryAmounts.has(Number(r.id)) ? Number(ordinaryAmounts.get(Number(r.id))) : round2(r.arAmount)
     const cogs = round2(r.cogsBack)
@@ -440,7 +443,7 @@ async function buildSaleReturn(conn) {
     }
     specs.push({
       sourceType: SOURCE_TYPES.SALE_RETURN, sourceId: r.id, sourceNo: r.return_no, voucherDate: r.vdate,
-      summary: `销售退货冲收入与成本 ${r.return_no || ''}`.trim(), legs,
+      summary: `${ar > 0 ? '销售退货冲收入与成本' : '销售退货冲回成本'} ${r.return_no || ''}`.trim(), legs,
     })
   }
   return specs

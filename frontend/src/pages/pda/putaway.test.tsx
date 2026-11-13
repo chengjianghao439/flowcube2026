@@ -13,6 +13,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { ApiClientError } from '@/api/client'
 import Page from './putaway'
 
 const api = vi.hoisted(() => ({ task: vi.fn(), container: vi.fn(), location: vi.fn(), suggestion: vi.fn(), putaway: vi.fn() }))
@@ -24,9 +25,17 @@ vi.mock('@/api/inbound-tasks', () => ({
 
 vi.mock('@/api/inventory', () => ({ getContainerByBarcodeApi: api.container }))
 vi.mock('@/api/locations', () => ({ getLocationByCodeApi: api.location }))
-vi.mock('@/api/client', () => ({ payloadClient: { get: api.suggestion } }))
-vi.mock('@/hooks/useCriticalPdaAction', () => ({ useCriticalPdaAction: () => ({
-  run: async (execute: (key: string) => Promise<unknown>) => ({ kind: 'success', data: await execute('scan-test-key') }),
+vi.mock('@/api/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@/api/client')>(),
+  payloadClient: { get: api.suggestion },
+}))
+vi.mock('@/hooks/useCriticalPdaAction', () => ({ useCriticalPdaAction: ({ onConfirmed }: { onConfirmed?: (data: unknown, ctx: { recovered: boolean; requestKey: string }) => unknown }) => ({
+  run: async (execute: (key: string) => Promise<unknown>) => {
+    const requestKey = 'scan-test-key'
+    const data = await execute(requestKey)
+    await onConfirmed?.(data, { recovered: false, requestKey })
+    return { kind: 'success', data }
+  },
   submitBlocked: false, phase: 'idle',
 }) }))
 
@@ -46,6 +55,7 @@ const TASK = {
   items: [{ id: 2281, productId: 2782, orderedQty: 100, receivedQty: 32 }],
 }
 
+let qc: QueryClient
 let host: HTMLDivElement
 let root: Root | null = null
 
@@ -54,7 +64,7 @@ async function mountPage(task: Record<string, unknown>) {
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   await act(async () => {
     root!.render(
       <QueryClientProvider client={qc}>
@@ -143,6 +153,17 @@ test('上架页与拣货页统一：默认等硬件扫码，只有点手动输�
 
   await act(async () => { [...host.querySelectorAll('button')].find(button => button.textContent === '手动输入')!.click() })
   const locationInput = host.querySelector<HTMLInputElement>('[data-scanner-manual="true"]')!
+  expect(locationInput.getAttribute('aria-label')).toContain('库位编码')
+  api.location.mockResolvedValueOnce(null)
+  await act(async () => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(locationInput, 'H000001')
+    locationInput.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await act(async () => { locationInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+  expect(host.querySelector('[data-scanner-manual="true"]')).toBe(locationInput)
+  expect(locationInput.value).toBe('H000001')
+  expect(api.putaway).not.toHaveBeenCalled()
   await act(async () => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
     setter.call(locationInput, 'R000804')
@@ -177,10 +198,99 @@ test.each([
 test('库存扫码成功显示商品与推荐库位；仅扫库位才提交上架', async () => {
   await mountPage({ ...TASK, status: 3 })
   await scan('I000917')
-  expect(host.textContent).toContain('测试商品')
-  expect(host.textContent).toContain('LOC-A01')
+  expect(host.textContent).toContain('测试商品，建议库位 LOC-A01，扫描库位条码或输入库位编码')
+  expect(host.textContent).toContain('R000123')
   expect(api.putaway).not.toHaveBeenCalled()
   await scan('R000804')
   expect(api.putaway).toHaveBeenCalledWith(1979, { containerId: 917, locationId: 804, deviatedFromSuggestion: undefined, suggestedLocationCode: undefined }, 'scan-test-key')
-  expect(host.textContent).toContain('已上架到 LOC-A01')
+  expect(host.textContent).toContain('已上架到库位 LOC-A01')
+})
+
+test.each(['H000001', 'WRONG-CODE'])('库位查询拒绝 %s 后说明支持的标识并允许录入库位编码', async code => {
+  await mountPage(TASK)
+  await scan('I000917')
+  api.location.mockRejectedValueOnce(new ApiClientError({ status: 404, message: `库位编码 ${code} 不存在` }))
+  await scan(code)
+  expect(host.textContent).toContain('未找到库位，请扫描本仓库位条码（如 R000123）或输入库位编码')
+  expect(api.putaway).not.toHaveBeenCalled()
+
+  await scan('LOC-A01')
+  expect(api.location).toHaveBeenLastCalledWith('LOC-A01')
+  expect(api.putaway).toHaveBeenCalledExactlyOnceWith(1979, expect.objectContaining({ containerId: 917, locationId: 804 }), 'scan-test-key')
+})
+
+test('其他仓库位被上架接口拒绝后保持库位步骤，可扫本仓库位重试', async () => {
+  api.suggestion.mockResolvedValueOnce({ suggestions: [] })
+  await mountPage(TASK)
+  await scan('I000917')
+  api.location.mockResolvedValueOnce({ id: 900, code: 'OTHER-A01' })
+  api.putaway.mockRejectedValueOnce(new ApiClientError({ status: 400, message: '库位与库存条码不在同一仓库' }))
+  await scan('R000900')
+  expect(host.textContent).toContain('库位与库存条码不在同一仓库')
+  expect(host.textContent).toContain('使用本仓的库位标签（如 R000123）')
+  expect(host.textContent).not.toContain('已上架到库位')
+
+  await scan('R000804')
+  expect(api.putaway.mock.calls.map(([, payload]) => payload.locationId)).toEqual([900, 804])
+  expect(host.textContent).toContain('已上架到库位 LOC-A01')
+})
+
+test('偏离推荐库位需有意复扫，重复上报不会提前提交', async () => {
+  await mountPage(TASK)
+  await scan('I000917')
+  api.location.mockResolvedValue({ id: 805, code: 'LOC-A02' })
+  const start = Date.now()
+  const now = vi.spyOn(Date, 'now').mockReturnValue(start)
+  try {
+    await scan('R000805')
+    expect(host.textContent).toContain('确认放到库位 LOC-A02 请再扫一次')
+    expect(api.putaway).not.toHaveBeenCalled()
+    await scan('R000805')
+    expect(api.putaway).not.toHaveBeenCalled()
+
+    now.mockReturnValue(start + 350)
+    await scan('R000805')
+    expect(api.putaway).toHaveBeenCalledExactlyOnceWith(1979, {
+      containerId: 917, locationId: 805, deviatedFromSuggestion: true, suggestedLocationCode: 'LOC-A01',
+    }, 'scan-test-key')
+  } finally {
+    now.mockRestore()
+  }
+})
+
+test('先上架首箱导致扫码组件卸载，再收一箱仍从库存条码开始', async () => {
+  await mountPage({ ...TASK, putawaySummary: { waitingContainers: 1, storedContainers: 0 } })
+  await scan('I000917')
+  let finishRefresh!: () => void
+  const refreshGate = new Promise<void>(resolve => { finishRefresh = resolve })
+  const invalidate = qc.invalidateQueries.bind(qc)
+  vi.spyOn(qc, 'invalidateQueries').mockImplementation(async (...args) => {
+    await invalidate(...args)
+    if (args[0]?.queryKey?.[0] === 'pda-inbound-task') await refreshGate
+  })
+  api.task.mockResolvedValue({ ...TASK, putawaySummary: { waitingContainers: 0, storedContainers: 1 } })
+  await scan('R000804')
+  await vi.waitFor(() => expect(host.textContent).toContain('暂无待上架货物'))
+  await act(async () => finishRefresh())
+
+  const next = { ...TASK, putawaySummary: { waitingContainers: 1, storedContainers: 1 } }
+  api.task.mockResolvedValue(next)
+  api.container.mockResolvedValue({ containerId: 918, productName: '第二箱', inboundTaskId: 1979, containerStatus: 'waiting_putaway' })
+  await act(async () => { qc.setQueryData(['pda-inbound-task', 1979], next) })
+  await vi.waitFor(() => expect(host.querySelector('[data-testid="pda-scan-area"]')).not.toBeNull())
+  await scan('I000918')
+  expect(api.container).toHaveBeenCalledWith('I000918', { skipGlobalError: true })
+  expect(api.putaway).toHaveBeenCalledTimes(1)
+  await scan('R000804')
+  expect(api.putaway.mock.calls.map(([, payload]) => payload.containerId)).toEqual([917, 918])
+})
+
+test('上架请求结果未知时保留原箱和库位步骤', async () => {
+  await mountPage(TASK)
+  await scan('I000917')
+  api.putaway.mockRejectedValueOnce(new Error('上架结果待确认'))
+  await scan('R000804')
+  expect(host.textContent).toContain('上架结果待确认')
+  const draft = JSON.parse(sessionStorage.getItem('pda_flow_inbound-putaway-1979')!)
+  expect(draft).toMatchObject({ stepId: 'scan-location', context: { containerId: 917 } })
 })

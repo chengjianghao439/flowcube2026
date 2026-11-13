@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { SaleOrder } from '@/types/sale'
 import { useCommercialSaleRead } from '@/hooks/useCommercialSale'
 import { Button } from '@/components/ui/button'
+import { canStartSaleAdjustment } from '@/lib/saleWorkflowStatus'
 import CommercialEditor from './CommercialEditor'
 
 /** Freeze the actual owned read once; background refreshes cannot replace an open draft. */
@@ -14,6 +15,10 @@ export function ExistingSaleEditor({ saleId, tabPath, adjust = false, onDone }: 
   useEffect(() => {
     if (!baseline && read.isFetchedAfterMount && !read.isFetching && !read.isError && read.data?.id === saleId) setBaseline(read.data)
   }, [baseline, read.isFetchedAfterMount, read.isFetching, read.isError, read.data, saleId])
+  if (baseline && adjust && (baseline.commercialModel === 'kit-v1' || !canStartSaleAdjustment(baseline))) return <div className="space-y-3 p-4 text-sm" role="status">
+    <p>当前订单状态已变化，请返回订单核对可用操作。</p>
+    <Button variant="outline" onClick={onDone}>返回订单</Button>
+  </div>
   if (baseline) return <CommercialEditor key={generation} order={baseline} owner={read.readOwner} tabPath={tabPath} adjust={adjust}
     ordinaryOnlySave={baseline.commercialModel !== 'kit-v1'} onDone={onDone} onReload={next => { setBaseline(next); setGeneration(value => value + 1) }} />
   return <div className="space-y-3 p-4 text-sm" role={read.isError ? 'alert' : 'status'}>

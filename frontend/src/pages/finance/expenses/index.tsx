@@ -1,7 +1,11 @@
 import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
 import { useApprovalReadScope } from '@/hooks/useApprovalReadScope'
+import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { useDialogDraftGuard } from '@/hooks/useDialogDraftGuard'
+import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { money } from '@/lib/format'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
@@ -10,10 +14,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { QueryDialog } from '@/components/shared/QueryDialog'
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import ListSummary from '@/components/shared/ListSummary'
-import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
-import { todayYmd } from '@/lib/dateTime'
+import { formatDisplayDate, todayYmd } from '@/lib/dateTime'
+import { isReversedDateRange } from '@/lib/dateRange'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,7 +33,6 @@ import type { StatusTone } from '@/lib/statusTone'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import { downloadExport } from '@/lib/exportDownload'
-import { formatDisplayDate } from '@/lib/dateTime'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { EditModeBadge } from '@/components/shared/EditModeBadge'
@@ -49,7 +56,10 @@ type DraftItem = { categoryId: string; amount: string; happenedAt: string; descr
 const emptyItem = (): DraftItem => ({ categoryId: '', amount: '', happenedAt: todayYmd(), description: '' })
 
 interface ExpQuery { keyword: string; status: string; startDate: string; endDate: string; minAmount: string; maxAmount: string }
-const EMPTY_EXP_QUERY: ExpQuery = { keyword: '', status: '', startDate: todayYmd(), endDate: todayYmd(), minAmount: '', maxAmount: '' }
+function defaultExpenseQuery(): ExpQuery {
+  const today = todayYmd()
+  return { keyword: '', status: '', startDate: today, endDate: today, minAmount: '', maxAmount: '' }
+}
 const STATUS_NAME: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map(([v, l]) => [v, l]))
 
 /** 费用报销查询弹窗：关键字 + 状态 + 创建日期区间 + 金额区间（比原来平铺的一格搜索框多了日期/金额） */
@@ -59,54 +69,58 @@ function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
   const [v, setV] = useState<ExpQuery>(initial)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   const set = (patch: Partial<ExpQuery>) => setV(p => ({ ...p, ...patch }))
+  const invalidDateRange = isReversedDateRange(v.startDate, v.endDate)
+  const invalidAmountRange = v.minAmount !== '' && v.maxAmount !== '' &&
+    Number.isFinite(Number(v.minAmount)) && Number.isFinite(Number(v.maxAmount)) && Number(v.minAmount) > Number(v.maxAmount)
+  const invalidRange = invalidDateRange || invalidAmountRange
   return (
-    <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader description={"设置费用报销单的筛选条件。"}><DialogTitle>查询费用报销单</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-            <div className="space-y-1">
-              <Label>关键字</Label>
-              <Input className="h-9" placeholder="单号 / 事由 / 申请人" value={v.keyword}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ keyword: e.target.value })} />
-            </div>
-            <div className="space-y-1">
-              <Label>状态</Label>
-              <Select value={v.status || '__all__'} onValueChange={x => set({ status: x === '__all__' ? '' : x })}>
-                <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部</SelectItem>
-                  {STATUS_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label>创建日期</Label>
-            <div className="flex items-center gap-2">
-              <DatePicker value={v.startDate} onChange={x => set({ startDate: x })} max={v.endDate || undefined} className="h-9 flex-1" />
-              <span className="text-muted-foreground">至</span>
-              <DatePicker value={v.endDate} onChange={x => set({ endDate: x })} min={v.startDate || undefined} className="h-9 flex-1" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label>报销金额</Label>
-            <div className="flex items-center gap-2">
-              <Input type="number" min="0" step="0.01" placeholder="最小金额" className="h-9 flex-1"
-                value={v.minAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ minAmount: e.target.value })} />
-              <span className="text-muted-foreground">至</span>
-              <Input type="number" min="0" step="0.01" placeholder="最大金额" className="h-9 flex-1"
-                value={v.maxAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ maxAmount: e.target.value })} />
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setV(EMPTY_EXP_QUERY)}>清空</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <QueryDialog open={open} dialogId="expense-claims-query" title="查询费用报销单" width={620}
+      onClose={onClose} onReset={() => setV(defaultExpenseQuery())}
+      applyDisabled={invalidRange} onApply={() => { if (!invalidRange) { onApply(v); onClose() } }}>
+      <QueryFormLayout>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">关键字</span>
+          <Input className="h-9" placeholder="单号 / 事由 / 申请人" value={v.keyword}
+            onChange={e => set({ keyword: e.target.value })} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">状态</span>
+          <Select value={v.status || '__all__'} onValueChange={x => set({ status: x === '__all__' ? '' : x })}>
+            <SelectTrigger className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">全部</SelectItem>
+              {STATUS_OPTIONS.map(([val, name]) => <SelectItem key={val} value={val}>{name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </label>
+        <label className="fc-query-date-start flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
+          <DatePicker aria-label="创建日期（起）" value={v.startDate} onChange={x => set({ startDate: x })}
+            aria-invalid={invalidDateRange} aria-describedby={invalidDateRange ? 'expense-query-date-error' : undefined}
+            max={v.endDate || undefined} className="h-9" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
+          <DatePicker aria-label="创建日期（止）" value={v.endDate} onChange={x => set({ endDate: x })}
+            aria-invalid={invalidDateRange} aria-describedby={invalidDateRange ? 'expense-query-date-error' : undefined}
+            min={v.startDate || undefined} className="h-9" />
+        </label>
+        {invalidDateRange && <p id="expense-query-date-error" role="alert" className="col-span-full text-sm text-destructive-ink">起始日期不能晚于结束日期。</p>}
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">最小金额（元）</span>
+          <Input type="number" min="0" step="0.01" placeholder="不限" className="h-9"
+            aria-invalid={invalidAmountRange} aria-describedby={invalidAmountRange ? 'expense-query-amount-error' : undefined}
+            value={v.minAmount} onChange={e => set({ minAmount: e.target.value })} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-muted-foreground">最大金额（元）</span>
+          <Input type="number" min="0" step="0.01" placeholder="不限" className="h-9"
+            aria-invalid={invalidAmountRange} aria-describedby={invalidAmountRange ? 'expense-query-amount-error' : undefined}
+            value={v.maxAmount} onChange={e => set({ maxAmount: e.target.value })} />
+        </label>
+        {invalidAmountRange && <p id="expense-query-amount-error" role="alert" className="col-span-full text-sm text-destructive-ink">最小金额不能大于最大金额。</p>}
+      </QueryFormLayout>
+    </QueryDialog>
   )
 }
 
@@ -120,7 +134,7 @@ export default function ExpenseClaimsPage() {
   const canApprove = can(PERMISSIONS.FINANCE_EXPENSE_APPROVE)
   const canPay = can(PERMISSIONS.FINANCE_EXPENSE_PAY)
 
-  const [query, setQuery] = useState<ExpQuery>(EMPTY_EXP_QUERY)
+  const [query, setQuery] = useState(defaultExpenseQuery)
   const [queryOpen, setQueryOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -129,13 +143,23 @@ export default function ExpenseClaimsPage() {
   const [title, setTitle] = useState('')
   const [remark, setRemark] = useState('')
   const [items, setItems] = useState<DraftItem[]>([emptyItem()])
+  const [baseline, setBaseline] = useState('')
+  const [loadingEdit, setLoadingEdit] = useState(false)
+  const editRequest = useRef({ generation: 0 }).current
   const [detailId, setDetailId] = useState<number | null>(null)
   const [payTarget, setPayTarget] = useState<ExpenseClaim | null>(null)
   const [payAccount, setPayAccount] = useState('')
   const [rejectTarget, setRejectTarget] = useState<ExpenseClaim | null>(null)
+  const rejectScope = useRef('')
   const [rejectReason, setRejectReason] = useState('')
-  const handoff = useApprovalDetailHandoff('/finance/expenses', PERMISSIONS.FINANCE_EXPENSE_VIEW, getExpenseClaimApi, formOpen || queryOpen || !!payTarget || !!rejectTarget || detailId != null)
+  const handoff = useApprovalDetailHandoff('/finance/expenses', PERMISSIONS.FINANCE_EXPENSE_VIEW, getExpenseClaimApi,
+    formOpen || loadingEdit || queryOpen || !!payTarget || !!rejectTarget || detailId != null, true)
   const scope = useApprovalReadScope()
+  const active = useActiveWorkspaceTab()
+  useEffect(() => {
+    setLoadingEdit(false)
+    return () => { editRequest.generation++ }
+  }, [active, scope.key, editRequest])
 
   const { prompt, ask, close: closePrompt } = useBackfillPrompt()
   // 请求键轮换时机交给守卫：成功与明确被拒才换键，超时/断网与期间已结账一律保留——
@@ -143,26 +167,24 @@ export default function ExpenseClaimsPage() {
   const guard = useIdempotentSubmit({ action: 'expense.pay', prefix: 'expense-pay' })
 
   const PAGE_SIZE = 20
-  const { data, isLoading } = useQuery({
-    queryKey: ['expense-claims', query],
+  const appliedFilters = Object.fromEntries<string>(Object.entries(query).filter(([, value]) => value !== ''))
+  const { data, isLoading } = useVisibleQuery({
+    queryKey: ['expense-claims', scope.key, query],
     queryFn: () => getExpenseClaimsApi({
       page: 1,
       pageSize: PAGE_SIZE,
-      keyword: query.keyword || undefined,
-      status: query.status || undefined,
-      startDate: query.startDate || undefined,
-      endDate: query.endDate || undefined,
-      minAmount: query.minAmount || undefined,
-      maxAmount: query.maxAmount || undefined,
+      ...appliedFilters,
     }),
   })
+  useEffect(() => {
+    if (active) void qc.invalidateQueries({ queryKey: ['expense-claims', scope.key] }, { cancelRefetch: false })
+  }, [qc, active, handoff.open, scope.key])
   const total = data?.pagination?.total ?? 0
 
   const queryChips: QueryChip[] = []
   const dropQ = (...ks: (keyof ExpQuery)[]) => () => { setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q })); }
   if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
   if (query.status) queryChips.push({ key: 'status', text: `状态：${STATUS_NAME[query.status] ?? query.status}`, onClear: dropQ('status') })
-  if (query.startDate || query.endDate) queryChips.push({ key: 'date', text: `创建日期：${query.startDate || '…'} ~ ${query.endDate || '…'}`, onClear: dropQ('startDate', 'endDate') })
   if (query.minAmount || query.maxAmount) queryChips.push({ key: 'amt', text: `金额：${query.minAmount || '0'} ~ ${query.maxAmount || '不限'}`, onClear: dropQ('minAmount', 'maxAmount') })
   const { data: categories } = useQuery({
     queryKey: ['expense-categories', 'active'],
@@ -173,18 +195,21 @@ export default function ExpenseClaimsPage() {
     queryFn: () => getActiveAccountsApi(),
     enabled: !!payTarget,
   })
-  const { data: manualDetail } = useQuery({
+  const manualDetail = useQuery({
     queryKey: ['expense-claim', scope.key, detailId],
     queryFn: async () => {
       const result = await getExpenseClaimApi(detailId!)
       if (!scope.isCurrent() || result?.id !== detailId) throw new Error('原单读取失败，请重新核对')
       return result
     },
-    enabled: detailId != null,
+    enabled: active && detailId != null && can(PERMISSIONS.FINANCE_EXPENSE_VIEW),
+    staleTime: 0,
   })
 
-  const detail = handoff.open ? handoff.data : manualDetail
-  const shownDetailId = handoff.open ? handoff.data?.id : detailId
+  const detail = handoff.open ? handoff.data : manualDetail.data
+  const shownDetailId = handoff.open ? handoff.data?.id : active && can(PERMISSIONS.FINANCE_EXPENSE_VIEW) ? detailId : null
+  const canApproveDetail = canApprove && detail?.status === 2 && detail.approvalAllowed === true &&
+    (handoff.open ? handoff.ready : manualDetail.isSuccess && !manualDetail.isFetching && !manualDetail.isPaused && detail.id === detailId)
   const closeDetail = () => { if (handoff.open) handoff.close(); else setDetailId(null) }
 
   const invalidate = () => {
@@ -225,6 +250,11 @@ export default function ExpenseClaimsPage() {
       return editingId ? updateExpenseClaimApi(editingId, payload) : createExpenseClaimApi(payload)
     },
     onSuccess: () => { invalidate(); setFormOpen(false); toast.success(editingId ? '报销单已保存' : '报销单已创建') },
+  })
+  const draft = useDialogDraftGuard({
+    open: formOpen, identity: editingId ?? 'new',
+    dirty: baseline !== JSON.stringify({ title, remark, items }),
+    pending: saveMut.isPending, onClose: () => setFormOpen(false),
   })
   const payMut = useMutation({
     // id 从调用参数取而不是读 payTarget 闭包：补录弹窗的确认回调是旧渲染里存下的函数，
@@ -267,53 +297,93 @@ export default function ExpenseClaimsPage() {
     },
   })
   const rejectMut = useMutation({
-    mutationFn: () => {
-      if (!currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_APPROVE)) throw new Error('没有审批报销权限')
-      return rejectExpenseClaimApi(rejectTarget!.id, rejectReason.trim())
+    mutationFn: ({ id, reason, owner }: { id: number; reason: string; owner: string }) => {
+      if (owner !== scope.key || !scope.isCurrent() || !currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_APPROVE)) throw new Error('审批权限或登录状态已变化，请重新打开报销单')
+      return rejectExpenseClaimApi(id, reason)
     },
-    onSuccess: () => { invalidate(); setRejectTarget(null); toast.success('已驳回') },
+    onSuccess: (_response, { owner }) => {
+      if (owner === scope.key && scope.isCurrent()) { invalidate(); setRejectTarget(null); toast.success('已驳回') }
+    },
   })
+  const approveMut = useMutation({
+    mutationFn: ({ id, owner }: { id: number; owner: string }) => {
+      if (owner !== scope.key || !scope.isCurrent() || !currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_APPROVE)) throw new Error('审批权限或登录状态已变化，请重新打开报销单')
+      return approveExpenseClaimApi(id)
+    },
+    onSuccess: (_response, { owner }) => {
+      if (owner === scope.key && scope.isCurrent()) { invalidate(); toast.success('已批准，可付款') }
+    },
+  })
+  function openReject(claim: ExpenseClaim) {
+    if (!scope.isCurrent() || !currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_APPROVE)) return
+    rejectScope.current = scope.key
+    setRejectTarget(claim)
+    setRejectReason('')
+  }
 
+  function openForm(claim?: Awaited<ReturnType<typeof getExpenseClaimApi>>) {
+    const title = claim?.title ?? ''
+    const remark = claim?.remark ?? ''
+    const items = claim ? claim.items.map(i => ({
+      categoryId: String(i.categoryId), amount: String(i.amount),
+      happenedAt: formatDisplayDate(i.happenedAt, ''), description: i.description ?? '',
+    })) : [emptyItem()]
+    setEditingId(claim?.id ?? null)
+    setEditingNo(claim?.claimNo ?? '')
+    setTitle(title)
+    setRemark(remark)
+    setItems(items)
+    setBaseline(JSON.stringify({ title, remark, items }))
+    setFormOpen(true)
+  }
   function openCreate() {
-    if (!canCreate) return
-    setEditingId(null); setEditingNo(''); setTitle(''); setRemark(''); setItems([emptyItem()]); setFormOpen(true)
+    if (!canCreate || loadingEdit) return
+    openForm()
   }
   async function openEdit(c: ExpenseClaim) {
-    if (!canUpdate) return
-    const d = await getExpenseClaimApi(c.id)
-    if (!currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_UPDATE)) return
-    setEditingId(c.id); setEditingNo(c.claimNo || ''); setTitle(d.title ?? ''); setRemark(d.remark ?? '')
-    setItems(d.items.map(i => ({
-      categoryId: String(i.categoryId), amount: String(i.amount),
-      happenedAt: String(i.happenedAt).slice(0, 10), description: i.description ?? '',
-    })))
-    setFormOpen(true)
+    if (!canUpdate || loadingEdit) return
+    const request = ++editRequest.generation
+    setLoadingEdit(true)
+    try {
+      const claim = await getExpenseClaimApi(c.id)
+      if (editRequest.generation === request && scope.isCurrent() && claim.id === c.id &&
+          currentPermission.current(PERMISSIONS.FINANCE_EXPENSE_UPDATE)) openForm(claim)
+    } catch {
+      // 请求层展示读取失败，用户可以重新从该行打开编辑。
+    } finally {
+      if (editRequest.generation === request) setLoadingEdit(false)
+    }
   }
 
   const columns: TableColumn<ExpenseClaim>[] = [
-    { key: 'claimNo', title: '报销事由 / 单号', width: 280, render: (_, r) => <RecordIdentity title={r.title || '—'} code={r.claimNo} /> },
+    { key: 'claimNo', title: '报销事由 / 单号', width: 204, render: (_, claim) => (
+      <RecordIdentity title={claim.title || '—'} code={
+        <button type="button" className="max-w-full whitespace-normal [overflow-wrap:anywhere] rounded text-left font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-ring"
+          onClick={() => setDetailId(claim.id)}>{claim.claimNo}</button>
+      } />
+    ) },
     { key: 'applicantName', title: '申请人', width: 110 },
-    { key: 'itemCount', title: '笔数', width: 70, render: v => `${v ?? 0} 笔` },
-    { key: 'totalAmount', title: '金额', width: 120, align: 'right', render: v => <span className="tabular-nums font-medium">{money(v as number)}</span> },
     { key: 'status', title: '状态', width: 100, render: (_, row) => {
       const c = row as ExpenseClaim
       return <SoftStatusLabel label={c.statusName} tone={c.statusTone as StatusTone} />
     }},
+    { key: 'totalAmount', title: '金额', width: 110, align: 'right', noWrap: true, render: v => <span className="font-medium">{money(v as number)}</span> },
+    { key: 'itemCount', title: '笔数', width: 80, noWrap: true, render: v => `${v ?? 0} 笔` },
+    { key: 'createdAt', title: '创建日期', width: 124, noWrap: true, render: v => formatDisplayDate(String(v)) },
     { key: 'approvedByName', title: '审批人', width: 110, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
     { key: 'paidAccountName', title: '付款账户', width: 140, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
-    { key: 'createdAt', title: '创建日期', width: 110, render: v => formatDisplayDate(String(v)) },
     { key: 'id', title: '操作', width: 150, render: (_, row) => {
       const c = row as ExpenseClaim
-      const menu: Array<{ label: string; onClick: () => void }> = []
+      const menu: TableActionItem[] = []
       if (c.status === 1) {
-        if (canUpdate) menu.push({ label: '编辑', onClick: () => void openEdit(c) })
+        if (canUpdate) menu.push({ label: '编辑', onClick: () => void openEdit(c), disabled: loadingEdit })
         if (canCreate) menu.push({ label: '提交审批', onClick: () => void act(PERMISSIONS.FINANCE_EXPENSE_CREATE, () => submitExpenseClaimApi(c.id), '已提交审批') })
       }
       if (c.status === 2) {
         if (canCreate) menu.push({ label: '撤回', onClick: () => void act(PERMISSIONS.FINANCE_EXPENSE_CREATE, () => withdrawExpenseClaimApi(c.id), '已撤回为草稿') })
-        if (canApprove) {
-          menu.push({ label: '批准', onClick: () => void act(PERMISSIONS.FINANCE_EXPENSE_APPROVE, () => approveExpenseClaimApi(c.id), '已批准，可付款') })
-          menu.push({ label: '驳回', onClick: () => { setRejectTarget(c); setRejectReason('') } })
+        if (canApprove && c.approvalAllowed === true) {
+          menu.push({ label: '批准', onClick: () => { if (!approveMut.isPending) approveMut.mutate({ id: c.id, owner: scope.key }) } })
+          menu.push({ label: '驳回', onClick: () => openReject(c) })
         }
       }
       if (c.status === 3 && canPay) {
@@ -341,10 +411,10 @@ export default function ExpenseClaimsPage() {
         title="费用报销"
         description="登记日常经营费用，审批通过后从资金账户付款。付款会自动记入账户流水。"
         actions={(
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => downloadExport('/export/expense-claims').catch(e => toast.error((e as Error).message))}>导出</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => downloadExport('/export/expense-claims', appliedFilters).catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            {canCreate && <Button onClick={openCreate}>新建报销单</Button>}
+            {canCreate && <Button onClick={openCreate} disabled={loadingEdit}>新建报销单</Button>}
           </div>
         )}
       />
@@ -352,17 +422,20 @@ export default function ExpenseClaimsPage() {
 
       {summary && <SummaryStrip items={[{ label: '报销总额', value: money(summary.totalAmount) }, { label: '待审批', value: money(summary.pendingAmount), tone: 'text-warning-ink' }, { label: '已付款', value: money(summary.paidAmount), tone: 'text-success-ink' }]} />}
 
-      <QueryChips chips={queryChips} onClearAll={() => { setQuery(EMPTY_EXP_QUERY); }} />
+      <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
+        <AppliedDateRange label="创建日期" startDate={query.startDate} endDate={query.endDate} onClear={dropQ('startDate', 'endDate')} />
+        <QueryChips chips={queryChips} onClearAll={() => setQuery(defaultExpenseQuery())} />
+      </div>
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+      <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" scrollLabel="费用报销表格" />
 
       <ListSummary total={total} unit="张" />
 
       <ExpensesQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={(q) => { setQuery(q); }} />
 
       {/* 新建 / 编辑 */}
-      <Dialog open={formOpen} onOpenChange={v => !v && setFormOpen(false)}>
-        <DialogContent className="max-w-5xl">
+      <Dialog open={active && formOpen} onOpenChange={v => !v && draft.requestClose()}>
+        <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="max-w-5xl">
           {/* 编辑态与默认（新建）态一眼可分 */}
           <DialogHeader description={editingId ? <>
                 正在编辑：<span className="font-medium text-foreground">{editingNo || `#${editingId}`}{title ? ` · ${title}` : ''}</span>
@@ -375,12 +448,12 @@ export default function ExpenseClaimsPage() {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
-              <Label>事由</Label>
-              <Input value={title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} placeholder="如：7月差旅与办公" />
+              <Label htmlFor="expense-draft-title">事由</Label>
+              <Input id="expense-draft-title" value={title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} placeholder="如：7月差旅与办公" />
             </div>
             <div className="space-y-1">
-              <Label>备注</Label>
-              <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} />
+              <Label htmlFor="expense-draft-remark">备注</Label>
+              <Input id="expense-draft-remark" value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} />
             </div>
           </div>
 
@@ -402,7 +475,7 @@ export default function ExpenseClaimsPage() {
                     </SelectContent>
                   </Select>
                   <Input
-                    type="number" min="0.01" step="0.01" placeholder="金额" className="col-span-2 h-9 text-right"
+                    type="number" min="0.01" step="0.01" placeholder="金额" aria-label={`第 ${idx + 1} 行金额`} className="col-span-2 h-9 text-right"
                     value={it.amount}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => setItems(p => p.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x))}
                   />
@@ -426,19 +499,25 @@ export default function ExpenseClaimsPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>取消</Button>
+            <Button variant="outline" disabled={draft.locked} onClick={draft.requestClose}>取消</Button>
             {(editingId ? canUpdate : canCreate) && <Button disabled={totalAmount <= 0 || saveMut.isPending} onClick={() => saveMut.mutate()}>
               {saveMut.isPending ? '保存中…' : `${editingId ? '保存修改' : '保存'}（${money(totalAmount)}）`}
             </Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDialog {...draft.discardProps}
+        confirmText="放弃本次修改"
+        description={editingId ? '关闭后会保留已保存的报销单，本次输入会丢失。' : '关闭后本次填写的报销单草稿会丢失。'} />
 
       <ApprovalHandoffNotice {...handoff} />
       {/* 明细 */}
-      <Dialog open={shownDetailId != null} onOpenChange={v => !v && closeDetail()}>
+      <Dialog open={shownDetailId != null} onOpenChange={v => !v && !approveMut.isPending && closeDetail()}>
         <DialogContent className="max-w-3xl">
-          <DialogHeader description={detail?.rejectReason ? <span className="text-destructive-ink">驳回原因：{detail.rejectReason}</span> : '核对报销明细、审批与付款进度。'}><DialogTitle>报销单 — <span className="text-doc-code-strong">{detail?.claimNo}</span></DialogTitle></DialogHeader>
+          <DialogHeader description={detail?.status === 5 ? <>
+            {detail.rejectReason && <span className="text-destructive-ink">驳回原因：{detail.rejectReason} </span>}
+            申请人如需继续报销，请补齐资料后新建报销单。
+          </> : '核对报销明细、审批与付款进度。'}><DialogTitle>报销单 — <span className="text-doc-code-strong">{detail?.claimNo}</span></DialogTitle></DialogHeader>
           <OrderDetailSections type="expense" id={shownDetailId || 0}>
 
           {detail && (
@@ -473,7 +552,15 @@ export default function ExpenseClaimsPage() {
             </ReportTable>
           </div>
           </OrderDetailSections>
-          <DialogFooter><Button variant="outline" onClick={closeDetail}>关闭</Button></DialogFooter>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDetail} disabled={approveMut.isPending}>关闭</Button>
+            {canApproveDetail && detail && <>
+              <Button variant="outline" disabled={approveMut.isPending} onClick={() => { closeDetail(); openReject(detail) }}>驳回</Button>
+              <Button disabled={approveMut.isPending} onClick={() => approveMut.mutate({ id: detail.id, owner: scope.key }, {
+                onSuccess: () => { if (scope.isCurrent()) closeDetail() },
+              })}>{approveMut.isPending ? '批准中…' : '批准'}</Button>
+            </>}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -542,17 +629,19 @@ export default function ExpenseClaimsPage() {
       />
 
       {/* 驳回 */}
-      <Dialog open={!!rejectTarget && canApprove} onOpenChange={v => !v && setRejectTarget(null)}>
+      <Dialog open={!!rejectTarget && canApprove && rejectScope.current === scope.key} onOpenChange={v => !v && !rejectMut.isPending && setRejectTarget(null)}>
         <DialogContent>
-          <DialogHeader description={"填写驳回原因，供报销人核对。"}><DialogTitle>驳回报销单 — {rejectTarget?.claimNo}</DialogTitle></DialogHeader>
+          <DialogHeader description="填写驳回原因。申请人补齐资料后需新建报销单。"><DialogTitle>驳回报销单 — {rejectTarget?.claimNo}</DialogTitle></DialogHeader>
           <div className="space-y-1">
             <Label>驳回原因 *</Label>
             <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRejectReason(e.target.value)}
-              placeholder="如：缺少发票，请补充后重新提交" />
+              placeholder="如：缺少发票，请补齐资料后新建报销单" />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRejectTarget(null)}>取消</Button>
-            <Button disabled={!rejectReason.trim() || rejectMut.isPending} onClick={() => rejectMut.mutate()}>
+            <Button variant="outline" onClick={() => setRejectTarget(null)} disabled={rejectMut.isPending}>取消</Button>
+            <Button disabled={!rejectReason.trim() || rejectMut.isPending} onClick={() => {
+              if (rejectTarget) rejectMut.mutate({ id: rejectTarget.id, reason: rejectReason.trim(), owner: rejectScope.current })
+            }}>
               {rejectMut.isPending ? '提交中…' : '确认驳回'}
             </Button>
           </DialogFooter>

@@ -1,13 +1,16 @@
 const { pool } = require('../../config/db')
 const { loadDocument } = require('./document-registry')
-const { DOCUMENT_PATHS, resolveOperation } = require('./document-operation')
+const { DOCUMENT_PATHS, resolveOperation, displayOperationTitle } = require('./document-operation')
 const { buildProgress } = require('./document-progress')
 const { parsePayload } = require('./document-change-audit')
 const { isKnownChangePayload, taskReferences, validId, rowsInScope } = require('./document-history-scope')
 function savedEvent(row, type, id) {
   const parsed = parsePayload(row.payload_json)
   const payload = Number(row.payload_version) === 1 && isKnownChangePayload(parsed) ? parsed : null
-  const event = { id: `operation-${row.id}`, title: row.title, description: row.description, createdByName: row.createdByName, createdAt: row.createdAt, payload, source: payload?.version === 1 ? '业务变更' : '操作记录' }
+  const title = row.payload_version == null && !parsed
+    ? displayOperationTitle(type, id, row.title, row.requestMethod, row.requestPath, row.requestStatusCode)
+    : row.title
+  const event = { id: `operation-${row.id}`, title, description: row.description, createdByName: row.createdByName, createdAt: row.createdAt, payload, source: payload?.version === 1 ? '业务变更' : '操作记录' }
   // Keep provenance private: a malformed change must not fall back to its potentially scoped summary.
   Object.defineProperty(event, '_scope', { value: { type: row.document_type || type, id: Number(row.document_id ?? id), invalid: (row.payload_version != null || (parsed && typeof parsed === 'object' && Object.hasOwn(parsed,'version'))) && !payload, raw: parsed } })
   return event
@@ -77,10 +80,13 @@ function publicChangePayload(payload, type, warehouseIds) {
   const contextKeys = ['phase','saleEventId','warehouseId','warehouseTaskId','warehouseTaskIds','adjustmentId','adjustmentNo','pending','productId','approvalId','priceHistoryIds']
   return {version:1,kind:payload.kind,reason:typeof payload.reason === 'string' ? payload.reason : null,quantityScale:2,priceScale:4,actors:Object.fromEntries(['operator','applicant','approver'].filter(role => payload.actors?.[role]).map(role => [role,pick(payload.actors[role],['id','name','role'])])),rows,context:pick(payload.context || {},contextKeys),hiddenRowCount:payload.rows.length-rows.length}
 }
+const SAVED_OPERATIONS_SQL = `SELECT e.id,e.document_type,e.document_id,e.title,e.description,e.payload_version,e.payload_json,e.created_by_name AS createdByName,e.created_at AS createdAt,
+       l.method AS requestMethod,l.path AS requestPath,l.status_code AS requestStatusCode
+     FROM document_operation_events e LEFT JOIN operation_logs l ON l.id=e.operation_log_id`
 async function loadOperations(type, id) {
   const [saved] = await pool.query(
-    `SELECT id,document_type,document_id,title,description,payload_version,payload_json,created_by_name AS createdByName,created_at AS createdAt
-     FROM document_operation_events WHERE (document_type=? AND document_id=?) OR (?='product' AND document_type='price' AND JSON_EXTRACT(payload_json,'$.context.productId')=?) ORDER BY id DESC`, [type, id, type, id])
+    `${SAVED_OPERATIONS_SQL}
+     WHERE (e.document_type=? AND e.document_id=?) OR (?='product' AND e.document_type='price' AND JSON_EXTRACT(e.payload_json,'$.context.productId')=?) ORDER BY e.id DESC`, [type, id, type, id])
   const prefix = `${DOCUMENT_PATHS[type]}/${id}`
   // Historical request logs have no response payload. Only exact resource paths are attributable.
   const [legacy] = await pool.query(
@@ -93,7 +99,7 @@ async function loadOperations(type, id) {
     ...saved.map(row => savedEvent(row,type,id)),
     ...legacy.flatMap(e => {
       const op = resolveOperation(e.method, e.path, e.status_code, { success: true })
-      return op && op.type === type && op.id === id ? [{ id: `legacy-${e.id}`, title: op.title, description: null, createdByName: e.user_name, createdAt: e.created_at, source: '历史请求记录' }] : []
+      return op && op.type === type && op.id === id ? [{ id: `legacy-${e.id}`, title: displayOperationTitle(type, id, op.title, e.method, e.path, e.status_code), description: null, createdByName: e.user_name, createdAt: e.created_at, source: '历史请求记录' }] : []
     }),
   ])
 }
@@ -110,8 +116,7 @@ async function loadRelatedOperations(related) {
     for (let start = 0; start < ids.length; start += 100) {
       const chunk = ids.slice(start, start + 100)
       const [saved] = await pool.query(
-        `SELECT id,document_type,document_id,title,description,payload_version,payload_json,created_by_name AS createdByName,created_at AS createdAt
-         FROM document_operation_events WHERE document_type=? AND document_id IN (?) ORDER BY id DESC`, [type, chunk])
+        `${SAVED_OPERATIONS_SQL} WHERE e.document_type=? AND e.document_id IN (?) ORDER BY e.id DESC`, [type, chunk])
       events.push(...saved.map(row => savedEvent(row,type,row.document_id)))
       const paths = chunk.map(id => `${DOCUMENT_PATHS[type]}/${id}`)
       const conditions = paths.map(() => '(l.path=? OR l.path LIKE ?)').join(' OR ')
@@ -123,7 +128,7 @@ async function loadRelatedOperations(related) {
       events.push(...legacy.flatMap(e => {
         const op = resolveOperation(e.method, e.path, e.status_code, { success: true })
         return op && op.type === type && idSet.has(Number(op.id))
-          ? [{ id: `legacy-${e.id}`, title: op.title, description: null, createdByName: e.user_name, createdAt: e.created_at, source: '历史请求记录' }] : []
+          ? [{ id: `legacy-${e.id}`, title: displayOperationTitle(type, op.id, op.title, e.method, e.path, e.status_code), description: null, createdByName: e.user_name, createdAt: e.created_at, source: '历史请求记录' }] : []
       }))
     }
   }

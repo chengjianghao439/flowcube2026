@@ -75,3 +75,9 @@ test('成功保存原草稿后清除关闭保护并回到只读默认态', async
   expect(rulesTable.textContent).toContain('17')
   expect(mocks.guard.mock.lastCall?.[1]).toBe(false)
 })
+
+test('分档页解释单商品累计占比与档位，并不以快慢定义各档', async () => {
+  await click('商品分档结果')
+  expect(host.textContent).toContain('单一商品占比 100% 时归 C 档')
+  expect(host.textContent).not.toContain('卖得慢')
+})

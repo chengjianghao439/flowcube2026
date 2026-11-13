@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, afterEach, test, expect, vi } from 'vitest'
 import { useAuthStore } from '@/store/authStore'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
-import clientApi, { setApiClientBaseURL } from '@/api/client'
+import clientApi, { ApiClientError, setApiClientBaseURL } from '@/api/client'
 import ReservationDetailsDialog from './ReservationDetailsDialog'
 import InventoryPage from './index'
 const api = vi.hoisted(() => ({ read: vi.fn() }))
@@ -204,6 +204,28 @@ test('提交原单关键词建立新读取，保留同商品仓却不复用旧to
   expect(api.read.mock.calls.at(-1)?.[0]).toMatchObject({keyword:'新筛选',offset:0})
   expect(api.read.mock.calls.at(-1)?.[0]?.snapshotId).toBeUndefined()
   expect(host.textContent).toContain('SO-新筛选');expect(host.textContent).not.toContain('SO-当前')
+})
+
+test('从原单返回保留已应用条件与草稿，失败后按原条件从头重试', async () => {
+  draw(); await flush()
+  const user = userEvent.setup()
+  const input = () => host.querySelector<HTMLInputElement>('[aria-label="筛选销售原单"]')!
+  await act(async () => { await user.type(input(), '原单条件{Enter}'); await user.type(input(), '未提交') })
+  await flush()
+  expect(api.read.mock.calls.at(-1)?.[0]).toMatchObject({ keyword: '原单条件', offset: 0 })
+
+  draw(item, true, false)
+  api.read.mockRejectedValueOnce(new ApiClientError({ status: 503, message: '预占明细读取繁忙' }))
+  draw(); await flush()
+  expect(input().value).toBe('原单条件未提交')
+  expect(host.textContent).toContain('预占明细读取失败')
+  expect(api.read.mock.calls.at(-1)?.[0]).toEqual({ productId: 7, warehouseId: 8, keyword: '原单条件', offset: 0 })
+
+  api.read.mockResolvedValue(result(7, 8, 'SO-原条件恢复'))
+  await act(async () => { await user.click([...host.querySelectorAll('button')].find(button => button.textContent === '重试')!) })
+  await flush()
+  expect(api.read.mock.calls.at(-1)?.[0]).toEqual({ productId: 7, warehouseId: 8, keyword: '原单条件', offset: 0 })
+  expect(host.textContent).toContain('SO-原条件恢复')
 })
 
 test('同一事件内关闭再重开也不能沿用旧缓存快照',async()=>{
