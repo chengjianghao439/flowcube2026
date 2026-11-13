@@ -151,7 +151,10 @@ function inboundReadFixture() {
     '../../config/db': { pool }, '../../utils/logger': {}, '../../engine/containerEngine': { CONTAINER_STATUS: statuses },
     '../../utils/inboundThresholds': {}, '../../utils/warehouseScope': scope,
     './inbound-tasks.status': { DEFAULT_INBOUND_THRESHOLDS: { printTimeoutMinutes: 5, putawayTimeoutHours: 24 } },
-    '../print-jobs/print-jobs.service': { EXPIRE_MESSAGE: 'timeout' },
+    '../print-jobs/print-jobs.status': load('modules/print-jobs/print-jobs.status.js', {
+      '../../utils/inboundThresholds': { DEFAULT_INBOUND_THRESHOLDS: { printTimeoutMinutes: 5 } },
+      '../../engine/containerEngine': { CONTAINER_STATUS: statuses },
+    }),
     './inbound-tasks.helpers': { fmtPurchasableItem: row => ({ purchaseItemId: row.purchase_item_id, remainingQty: row.remaining_qty }) },
   })
   return { query, pool, calls }

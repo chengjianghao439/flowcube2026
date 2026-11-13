@@ -887,10 +887,10 @@ async function main() {
         VALUES (2,?,?,'审计退货客户',?,0,?,1,1)`, [saleId, orderNo, shipped * 20, shipped * 20])
       return { saleId, itemId, orderNo }
     }
-    async function returnOf({ itemId, qty }) {
+    async function returnOf({ saleId, orderNo, itemId, qty }) {
       const returnId = await insert(`INSERT INTO sale_returns
-        (return_no,customer_id,customer_name,warehouse_id,warehouse_name,operator_id,operator_name,status)
-        VALUES (?,?,'审计退货客户',?,'审计回归仓',1,'测试',3)`, [unique('SR'), cust, f.wh])
+        (return_no,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name,operator_id,operator_name,status)
+        VALUES (?,?,?,?,'审计退货客户',?,'审计回归仓',1,'测试',3)`, [unique('SR'), saleId, orderNo, cust, f.wh])
       const itemLine = await insert(`INSERT INTO sale_return_items
         (return_id,product_id,product_code,product_name,unit,quantity,sale_item_id,unit_price)
         VALUES (?,?,?,'审计退货商品','个',?,?,20)`, [returnId, productId, pcode, qty, itemId])
@@ -908,7 +908,7 @@ async function main() {
     const cogsSpecs = await ve.buildSaleCogs(conn)
     assert.equal(cogsSpecs.find(s => Number(s.sourceId) === unknown.saleId), undefined,
       'cost_snapshot 为空时出库成本为 0，不应生成成本结转凭证')
-    const returnUnknown = await returnOf({ itemId: unknown.itemId, qty: 5 })
+    const returnUnknown = await returnOf({ ...unknown, qty: 5 })
     const unknownSpec = (await ve.buildSaleReturn(conn)).find(s => Number(s.sourceId) === returnUnknown)
     const legsOf = (spec, code) => (spec?.legs || []).filter(l => l.code === code)
     const debit1405 = legsOf(unknownSpec, '1405').reduce((a, l) => a + Number(l.amount), 0)
@@ -920,7 +920,7 @@ async function main() {
     const known = await shipSale({ snapshot: 8, shipped: 5 })
     const knownCogs = (await ve.buildSaleCogs(conn)).find(s => Number(s.sourceId) === known.saleId)
     assert.equal(legsOf(knownCogs, '6401').reduce((a, l) => a + Number(l.amount), 0), 40, '出库结转 = 5×8')
-    const returnKnown = await returnOf({ itemId: known.itemId, qty: 3 })
+    const returnKnown = await returnOf({ ...known, qty: 3 })
     const knownSpec = (await ve.buildSaleReturn(conn)).find(s => Number(s.sourceId) === returnKnown)
     const d = legsOf(knownSpec, '1405').reduce((a, l) => a + Number(l.amount), 0)
     const c = legsOf(knownSpec, '6401').reduce((a, l) => a + Number(l.amount), 0)

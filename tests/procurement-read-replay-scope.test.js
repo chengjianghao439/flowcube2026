@@ -18,7 +18,12 @@ function load(file, deps, transform = source => source) {
 const scope = load('utils/warehouseScope.js', { '../config/db': {}, './AppError': AppError })
 const shortReceipt = load('modules/inbound-tasks/inbound-tasks.short-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, './inbound-tasks.cost': require('../backend/src/modules/inbound-tasks/inbound-tasks.cost') })
 const closeReceipt = load('modules/purchase/purchase.close-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope })
-const status = load('modules/inbound-tasks/inbound-tasks.status.js', { '../../utils/AppError': AppError, '../print-jobs/print-jobs.service': {}, '../../utils/inboundThresholds': {}, '../../constants/documentStatusRules': {}, './inbound-tasks.cost': require('../backend/src/modules/inbound-tasks/inbound-tasks.cost'), '../../utils/warehouseScope': scope })
+const printStatus = load('modules/print-jobs/print-jobs.status.js', {
+  '../../utils/AppError': AppError,
+  '../../utils/inboundThresholds': { DEFAULT_INBOUND_THRESHOLDS: { printTimeoutMinutes: 5 } },
+  '../../engine/containerEngine': { CONTAINER_STATUS: {} },
+})
+const status = load('modules/inbound-tasks/inbound-tasks.status.js', { '../../utils/AppError': AppError, '../print-jobs/print-jobs.status': printStatus, '../../utils/inboundThresholds': {}, '../../constants/documentStatusRules': {}, './inbound-tasks.cost': require('../backend/src/modules/inbound-tasks/inbound-tasks.cost'), '../../utils/warehouseScope': scope })
 function inbound({ taskWarehouse = 8, containerWarehouse = 8, taskExists = true, ownContainer = true } = {}) {
   const calls = [], pool = { async query(sql) {
     calls.push(sql)
@@ -31,7 +36,7 @@ function inbound({ taskWarehouse = 8, containerWarehouse = 8, taskExists = true,
   const query = load('modules/inbound-tasks/inbound-tasks.query.js', {
     '../../config/db': { pool }, '../../utils/AppError': AppError, '../../utils/logger': {}, '../../engine/containerEngine': { CONTAINER_STATUS: { ACTIVE: 1, PENDING_PUTAWAY: 4 } },
     '../../utils/inboundThresholds': {}, '../../utils/warehouseScope': scope, '../../utils/pagination': {},
-    './inbound-tasks.short-receipt': shortReceipt, './inbound-tasks.helpers': { fmtContainer: row => ({ id: row.id, barcode: row.barcode, warehouseId: row.warehouse_id }) }, './inbound-tasks.status': status, '../print-jobs/print-jobs.service': {},
+    './inbound-tasks.short-receipt': shortReceipt, './inbound-tasks.helpers': { fmtContainer: row => ({ id: row.id, barcode: row.barcode, warehouseId: row.warehouse_id }) }, './inbound-tasks.status': status, '../print-jobs/print-jobs.status': printStatus,
   })
   const suggestion = load('modules/inbound-tasks/inbound-tasks.suggestion.js', { '../../config/db': { pool }, '../../utils/AppError': AppError, '../../utils/response': { successResponse: (_res, d) => d }, '../../engine/containerEngine': { CONTAINER_STATUS: { ACTIVE: 1 } }, '../../utils/warehouseScope': scope, './inbound-tasks.status': status })
   return { query, suggestion, pool, calls }
