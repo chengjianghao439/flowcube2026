@@ -1,7 +1,7 @@
 {
-  "version": "0.14.2",
-  "versionCode": 162,
+  "version": "0.14.3",
+  "versionCode": 163,
   "filename": "app-release.apk",
-  "releaseNote": "- 移除采购申请功能及相关审批、转换入口；采购订单可直接创建，采购计划仍可生成采购草稿。",
-  "publishedAt": "2026-10-30T13:55:13.560Z"
+  "releaseNote": "- 销售、采购、收货、库存和报销列表更容易查看单号、状态、金额和常用操作。宽表支持键盘横向滚动，打开原单后返回可继续使用原筛选。",
+  "publishedAt": "2026-11-13T06:17:10.104Z"
 }
