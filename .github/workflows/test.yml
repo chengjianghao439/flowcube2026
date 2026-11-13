@@ -153,7 +153,8 @@ jobs:
 
   browser-smoke-runtime:
     name: 页面验收脚本（本地夹具真浏览器）
-    runs-on: ubuntu-latest
+    # Match the Noble runtime used by the pinned Playwright release gate.
+    runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09

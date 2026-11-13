@@ -168,7 +168,7 @@ npm run test:permissions
 
 发布页面脚本回归：`npm ci --prefix scripts/browser-smoke --ignore-scripts` 安装锁定依赖，`node scripts/browser-smoke/node_modules/playwright-core/cli.js install chromium` 安装匹配浏览器，再运行 `npm run test:browser-smoke`。该测试使用真实 Chromium 和随机回环端口夹具，覆盖 ERP/PDA、受限权限、错页/渲染错误、对账重定向失败及进程退出，不连接数据库或生产。Tests CI 的独立 `browser-smoke-runtime` job 执行它；生产依赖从 CI 构建镜像复制，不运行安装命令。
 
-发布工具离线回归：`npm run test:audit-tooling` 包含页面运行时、HTTPS 归档验证/回退和 main→PDA→桌面 tag 编排；`npm run test:release-tooling` 覆盖真实下载流的 SHA256、404、损坏包和缺摘要。工作流语法可用 `actionlint -shellcheck=''` 核对。`npm run release:verify -- --origin https://<生产域名>` 是线上只读核对，默认实际下载两种安装包，每包最多 120 秒，不启动安装程序。
+发布工具离线回归由 `npm run test:audit-tooling` 验证页面运行时、HTTPS 归档验证与回退，以及 main、PDA 和桌面 tag 的顺序。`npm run test:release-tooling` 覆盖下载流的 SHA256、404、损坏包和缺摘要。CI 浏览器夹具使用 `ubuntu-24.04`，与固定 Playwright 版本的 Noble 发布验收镜像一致。工作流语法可用 `actionlint -shellcheck=''` 核对。线上可用 `npm run release:verify -- --origin https://<生产域名>` 下载并校验两种安装包，每包最多 120 秒。
 
 
 数量精度回归（2026-09-22）：`npm run test:qty-precision` 包含原值/换算、逐箱、商品开关 schema 与最小权限、数量配置、拣货复核浮点边界、容器扣空/整箱归还行为测试；`test:qty-precision-coverage` 用 AST 验证实际业务入口调用，包含删除、改名和注释伪装的反向验证。`npm run smoke:qty-precision` 必须运行在已迁移的独立 MySQL 8 测试库，真实验证 `.005` 拆分不写库存、`.01` 拆分守恒、合法浮点噪声扣空，以及迁移 255 的 70 个目标列和原 SQL 重放幂等；安装包或生产数据均不参与。该 smoke 已接入 Tests 的数据库迁移后步骤。
