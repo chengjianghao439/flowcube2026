@@ -183,6 +183,7 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 - `npm run smoke:user-account-management`：独立测试库上的真实 HTTP/MySQL 账号改名权限、重名拒绝及新旧账号登录回归；已接入 Tests CI。
 - `npm run smoke:accounting-sale-period`：销售实际出库期间、旧累计根、闭期冲突、人工红冲、自动修订及来源完整性。
 - `npm run test:dirty-navigation`：真实 Chromium 的 file URL、延迟挂载工作区、确认/取消和重复历史遍历；需 `agent-browser@0.36.0` 与其 Chromium，命名会话由脚本 finally 关闭并验证退出。CI 安装依赖并运行。
+- `npm run smoke:qa-followup-browser`：真实 Chromium 使用合成扫码响应，验证拣货、分拣和库存查询拒绝后保留原码、恢复焦点并全选，重复提交只发一次。分拣错误必须在当前视口内紧邻扫码框上方，拣货与库存查询保留标题下的反馈断言。
 - `npm run smoke:nginx-headers`：需要 Docker，可通过 `DOCKER_CONTEXT` 选择本机环境；使用独立命名容器，不连接业务数据库。
 - `test:audit-client` 同时检查实际启动入口先初始化历史拦截器再渲染 Router，并包含移除/后移初始化的反向验证。
 

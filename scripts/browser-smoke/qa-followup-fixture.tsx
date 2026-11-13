@@ -84,10 +84,21 @@ window.__qaInspect = () => {
   const input = document.querySelector<HTMLInputElement>('[data-scanner-manual][aria-label^="手动输入："]')
   const alerts = [...document.querySelectorAll<HTMLElement>('[role="alert"]')]
   const header = document.querySelector('header')
+  const alert = alerts[0]
+  const scanner = input?.closest('[data-testid="pda-scan-area"]')
+  const scanPanel = scanner?.parentElement
+  const alertBounds = alert?.getBoundingClientRect()
+  const alertByScanner = scanner && scanPanel && alert && alertBounds &&
+    scanPanel.previousElementSibling === alert.parentElement &&
+    alertBounds.height > 0 && alertBounds.top >= 0 && alertBounds.bottom <= window.innerHeight &&
+    alertBounds.bottom <= scanner.getBoundingClientRect().top
+  const scanFeedbackInPlace = alerts.length === 1 && (location.hash === '#/pda/sort'
+    ? Boolean(alertByScanner)
+    : header?.nextElementSibling === alert)
   return {
     viewport: { width: window.innerWidth, height: window.innerHeight },
     route: location.hash, input: input ? { value: input.value, readOnly: input.readOnly, focused: document.activeElement === input, start: input.selectionStart, end: input.selectionEnd } : null,
-    alerts: alerts.map(alert => alert.textContent), topFeedback: alerts.length === 1 && header?.nextElementSibling === alerts[0],
+    alerts: alerts.map(alert => alert.textContent), scanFeedbackInPlace,
     toasts: document.querySelectorAll('.fc-toast').length, calls, feedback, errors,
     title: document.querySelector('h1')?.textContent, save: [...document.querySelectorAll('button')].some(button => button.textContent === '保存'),
   }

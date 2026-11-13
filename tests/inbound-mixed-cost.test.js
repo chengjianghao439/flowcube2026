@@ -10,7 +10,7 @@ const statusFile = path.resolve(__dirname, '../backend/src/modules/inbound-tasks
 const statusRequire = createRequire(statusFile)
 const status = { exports: {} }
 vm.runInNewContext(fs.readFileSync(statusFile, 'utf8'), { module: status, require: name => {
-  if (name === '../print-jobs/print-jobs.service') return { isStalledErrorMessage: () => false }
+  if (name === '../print-jobs/print-jobs.status') return { deriveInboundPrintJobResult: () => 'not_started' }
   if (name === '../../utils/inboundThresholds') return { DEFAULT_INBOUND_THRESHOLDS: {} }
   return statusRequire(name)
 } }, { filename: statusFile })

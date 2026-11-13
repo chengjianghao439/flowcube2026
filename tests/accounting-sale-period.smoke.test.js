@@ -268,8 +268,8 @@ test('同一业务在不同账套独立生成，闭期和历史根不跨账套�
 }))
 
 test('销售退货单独冲收入和成本，不从出库期间毛额重复扣减', () => fixture(async f => {
-  const sr = await f.insert(`INSERT INTO sale_returns(return_no,customer_id,customer_name,warehouse_id,warehouse_name,operator_id,operator_name,status)
-    VALUES (?,1,'跨期回归客户',?,'跨期回归仓',1,'回归',3)`,[unique(),f.wh])
+  const sr = await f.insert(`INSERT INTO sale_returns(return_no,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name,operator_id,operator_name,status)
+    VALUES (?,?,?,1,'跨期回归客户',?,'跨期回归仓',1,'回归',3)`,[unique(),f.orderId,f.orderNo,f.wh])
   const sri = await f.insert(`INSERT INTO sale_return_items(return_id,product_id,product_code,product_name,unit,quantity,sale_item_id,unit_price)
     VALUES (?,?,'F04','回归商品','个',20,?,1)`,[sr,f.prod,f.itemId])
   const rt = await f.insert(`INSERT INTO return_tasks(task_no,return_type,return_id,return_no,warehouse_id,status)

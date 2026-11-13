@@ -22,7 +22,7 @@ function retained(code) {
   cli('wait', '--fn', 'window.__qaInspect().input?.focused === true && !window.__qaInspect().input?.readOnly')
   const state = inspect()
   assert.deepEqual(state.input, { value: code, readOnly: false, focused: true, start: 0, end: code.length })
-  assert.equal(state.topFeedback, true); assert.equal(state.toasts, 0); assert.deepEqual(state.errors, [])
+  assert.equal(state.scanFeedbackInPlace, true); assert.equal(state.toasts, 0); assert.deepEqual(state.errors, [])
   return state
 }
 async function retainedPastFiveSeconds(code) {
