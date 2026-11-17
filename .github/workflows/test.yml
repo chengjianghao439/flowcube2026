@@ -665,8 +665,8 @@ jobs:
       - name: 单元测试 — 状态机动作表完整性（纯静态，防常量漂移）
         run: node tests/status-rules-integrity.test.js
 
-      - name: 迁移文件编号校验（历史重复/缺号 warn；新增撞号编号会失败，审计 4.10）
-        run: npm --prefix backend run migrate -- --check-gaps
+      - name: 迁移文件编号校验（已有历史文件例外与新增撞号）
+        run: npm run test:migration-numbering
 
       - name: 等待 MySQL 就绪
         run: |

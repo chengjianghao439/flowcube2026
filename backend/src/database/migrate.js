@@ -3,18 +3,21 @@
  * 当前已改为显式执行：由 scripts/migrate.js 或 npm run migrate 触发。
  *
  * 迁移文件按「编号 + 下划线 + 描述」命名（如 194_accounting_period_close.sql）。
- * 历史遗留：057/064/089 有重复编号、缺 008/009/040。编号校验（checkGaps）对这些
- * 只 console.warn 不中断——迁移仍按文件名排序执行，编号不参与执行顺序。
+ * 历史重复只豁免已确认的文件，缺号只提示。迁移仍按文件名排序执行。
  */
 const fs = require('fs')
 const path = require('path')
 const mysql2 = require('mysql2/promise')
-const { env } = require('../config/env')
 const { splitSqlStatements } = require('./sqlStatements')
 
-/** 历史遗留的重复编号（审计 4.10 现状）：这些是既有事实，校验放行不失败。
- *  只有「新增的重复编号」才应让 CI 失败——防止开发者手滑新建与已有迁移撞号的文件。 */
-const LEGACY_DUPLICATE_NUMBERS = new Set(['057', '064', '089'])
+const LEGACY_DUPLICATE_FILES = new Set([
+  '057_add_page_inbound_permission.sql',
+  '057_inbound_task_multi_purchase.sql',
+  '064_create_operation_requests.sql',
+  '064_product_cost_price_compat.sql',
+  '089_inventory_logs_change_qty_default.sql',
+  '089_widen_product_fields.sql',
+])
 
 /** 提取文件名开头的编号；非「编号_xxx.sql」格式返回 null */
 function migrationNumber(filename) {
@@ -31,21 +34,27 @@ function migrationNumber(filename) {
  * 真实执行仍按文件名排序，编号不参与执行顺序。
  */
 function checkMigrationGaps(files) {
-  const numbers = files
-    .map(migrationNumber)
-    .filter((n) => n !== null)
-    .sort((a, b) => a - b)
-  const duplicates = []
-  const seen = new Set()
-  for (const n of numbers) {
-    if (seen.has(n)) duplicates.push(String(n).padStart(3, '0'))
-    seen.add(n)
+  const byNumber = new Map()
+  for (const file of files) {
+    const number = migrationNumber(file)
+    if (number === null) continue
+    if (!byNumber.has(number)) byNumber.set(number, [])
+    byNumber.get(number).push(file)
   }
-  const newDuplicates = duplicates.filter((n) => !LEGACY_DUPLICATE_NUMBERS.has(n))
+  const numbers = [...byNumber.keys()].sort((a, b) => a - b)
+  const duplicates = []
+  const newDuplicates = []
+  for (const number of numbers) {
+    const group = byNumber.get(number)
+    if (group.length < 2) continue
+    const label = String(number).padStart(3, '0')
+    duplicates.push(label)
+    if (group.some(file => !LEGACY_DUPLICATE_FILES.has(file))) newDuplicates.push(label)
+  }
   const gaps = []
   if (numbers.length) {
     for (let n = numbers[0]; n <= numbers[numbers.length - 1]; n++) {
-      if (!seen.has(n)) gaps.push(String(n).padStart(3, '0'))
+      if (!byNumber.has(n)) gaps.push(String(n).padStart(3, '0'))
     }
   }
   return { gaps, duplicates, newDuplicates }
@@ -69,15 +78,6 @@ async function executeMigrationStatements(conn, sql, filename, { recordMigration
 }
 
 async function runMigrations({ checkGapsOnly = false, through, connection } = {}) {
-  const cfg = {
-    host: env.DB_HOST,
-    port: env.DB_PORT,
-    user: env.DB_USER,
-    password: env.DB_PASSWORD,
-    database: env.DB_NAME,
-    multipleStatements: true,
-  }
-
   // 扫描 SQL 文件（排除 migrate.js 自身）
   const dir = path.join(__dirname)
   const files = fs.readdirSync(dir)
@@ -86,23 +86,36 @@ async function runMigrations({ checkGapsOnly = false, through, connection } = {}
 
   // 编号静态检查（--check-gaps 模式只做检查不连库）
   const { gaps, duplicates, newDuplicates } = checkMigrationGaps(files)
+  const historicalDuplicates = duplicates.filter(number => !newDuplicates.includes(number))
   if (newDuplicates.length) {
-    console.error(`[Migrate] ✗ 新增重复迁移编号：${newDuplicates.join(', ')}——新迁移文件与已有文件撞号，请改用下一个可用编号（当前最大 ${migrationNumber(files[files.length - 1]) ?? '未知'} + 1）。历史遗留重复 ${duplicates.filter(d => !newDuplicates.includes(d)).join(', ') || '无'} 不受影响。`)
+    const conflicts = files.filter(file => newDuplicates.some(number => file.startsWith(`${number}_`)))
+    const message = `新增重复迁移编号：${newDuplicates.join(', ')}（${conflicts.join(', ')}）。请基于当前最大编号分配新文件。`
+    if (!checkGapsOnly) throw Object.assign(new Error(message), { code: 'MIGRATION_NUMBER_CONFLICT' })
+    console.error(`[Migrate] ✗ ${message}`)
   }
-  if (duplicates.length) {
-    console.warn(`[Migrate] ⚠ 重复迁移编号：${duplicates.join(', ')}（历史遗留 ${LEGACY_DUPLICATE_NUMBERS.has(duplicates[0]) ? '' : ''}，仅提示不中断）`)
+  if (historicalDuplicates.length) {
+    console.warn(`[Migrate] ⚠ 历史重复迁移编号：${historicalDuplicates.join(', ')}（既有文件，仅提示）`)
   }
   if (gaps.length) {
     console.warn(`[Migrate] ⚠ 缺迁移编号：${gaps.join(', ')}（历史遗留，不影响执行）`)
   }
   if (checkGapsOnly) {
-    console.log(`[Migrate] 编号校验完成：共 ${files.length} 个迁移文件，${newDuplicates.length ? `新增重复 ${newDuplicates.length} 个（将失败）` : '无新增重复'}，${duplicates.length ? `历史重复 ${duplicates.length} 个，` : '无历史重复，'}${gaps.length ? `缺号 ${gaps.length} 个` : '编号连续'}`)
+    console.log(`[Migrate] 编号校验完成：共 ${files.length} 个迁移文件，新增重复 ${newDuplicates.length} 个，历史重复 ${historicalDuplicates.length} 个，缺号 ${gaps.length} 个`)
     return { gaps, duplicates, newDuplicates, files: files.length }
   }
   // Explicit prefix execution for isolated fixture preparation. Default runs
   // every migration, including strict production-baseline assertions.
   if (through !== undefined && !files.includes(through)) throw new Error(`未知迁移终点：${through}`)
 
+  const { env } = require('../config/env')
+  const cfg = {
+    host: env.DB_HOST,
+    port: env.DB_PORT,
+    user: env.DB_USER,
+    password: env.DB_PASSWORD,
+    database: env.DB_NAME,
+    multipleStatements: true,
+  }
   const conn = connection || await mysql2.createConnection(cfg)
   try {
     // 先确保迁移记录表存在

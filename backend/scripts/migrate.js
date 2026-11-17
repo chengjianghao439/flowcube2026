@@ -1,11 +1,9 @@
 #!/usr/bin/env node
-require('dotenv').config()
 
 const { runMigrations } = require('../src/database/migrate')
 
 // --check-gaps：只做编号静态检查（不连库），进 CI 用。
-// 历史遗留的重复（057/064/089）与缺号（008/009/040）只 warn 不失败；
-// 但「新增的重复编号」（撞已有迁移文件）必须失败——防止手滑新建同号迁移文件在部署时才暴露。
+// 既有历史重复文件及缺号只提示，新文件造成的重复必须失败。
 if (process.argv.includes('--check-gaps')) {
   runMigrations({ checkGapsOnly: true })
     .then((result) => {
@@ -22,6 +20,7 @@ if (process.argv.includes('--check-gaps')) {
   return
 }
 
+require('dotenv').config()
 runMigrations()
   .then(() => {
     console.log('[Migrate] done')

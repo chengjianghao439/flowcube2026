@@ -46,6 +46,7 @@
     "test:workbench": "node --test tests/workbench.test.js",
     "test:acceptance-fixes": "node --test tests/acceptance-fixes-2026-09-17.test.js",
     "test:mysql8-dev-script": "node --test tests/mysql8-dev-script.test.js",
+    "test:migration-numbering": "node --test tests/migration-numbering.test.js && npm --prefix backend run migrate -- --check-gaps",
     "test:repair-smoke-instance-guard": "node --test tests/repair-smoke-instance-guard.test.js",
     "test:legacy-receivable-repair": "node --test tests/legacy-receivable-repair.test.js",
     "test:purchase-repair": "node --test tests/inbound-purchase-source.test.js tests/legacy-purchase-repair.test.js",
