@@ -27,6 +27,7 @@ module.exports = {
   assignSortingBin: sortingBin.assignSortingBin,
   updatePriority: command.updatePriority,
   cancel: command.cancel,
+  cancelForSaleWithinTransaction: command.cancelForSaleWithinTransaction,
 
   startPicking: pick.startPicking,
   updatePickedQty: pick.updatePickedQty,

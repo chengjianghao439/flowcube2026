@@ -478,38 +478,6 @@ async function syncShippedByWarehouseTaskWithinTransaction(conn, id, { taskId = 
   return { ...fmt(orderRow), status: Number(orderRow.status), statusName: SALE_STATUS_NAME[Number(orderRow.status)] }
 }
 
-async function syncCancelledByWarehouseTaskWithinTransaction(conn, id, { taskId = null, taskNo = null } = {}) {
-  const orderRow = await lockStatusRow(conn, {
-    table: 'sale_orders',
-    id,
-    columns: 'id, order_no, status',
-    entityName: '销售单',
-  })
-  if (Number(orderRow.status) === 5) return fmt(orderRow)
-  const rule = assertStatusAction('sale', 'cancel', orderRow.status)
-  await compareAndSetStatus(conn, {
-    table: 'sale_orders',
-    id,
-    fromStatus: rule.from,
-    toStatus: rule.to,
-    entityName: '销售单',
-  })
-  await appendSaleEvent(
-    conn,
-    id,
-    'warehouse_task_cancelled',
-    '仓库任务已取消',
-    `销售单 ${orderRow.order_no} 对应的仓库任务已取消`,
-    null,
-    { taskId: taskId != null ? Number(taskId) : null, taskNo: taskNo || null },
-  )
-  return {
-    ...fmt(orderRow),
-    status: rule.to,
-    statusName: SALE_STATUS_NAME[rule.to],
-  }
-}
-
 function mapTimeline(rows, order) {
   const base = rows.some(r => r.event_type === 'created') ? [] : [{
     id: `created-${order.id}`,
@@ -1954,7 +1922,7 @@ async function closeCommercialRemainder(conn, order) {
     WHERE sr.ref_type='sale_order' AND sr.ref_id=soi.order_id AND sr.product_id=soi.product_id AND sr.warehouse_id=soi.warehouse_id AND sr.status=1),dispatched_qty=shipped_qty WHERE order_id=?`,[order.id])
 }
 
-// 取消订单：仅 DRAFT(1) → CANCELLED(5)
+// 销售持有整单取消的事务、状态、变更记录及回执。部分实发按原规则关闭剩余。
 async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null, commercialInput = {}) {
   normalizeReason(commercialInput.changeReason)
   const conn = await pool.getConnection()
@@ -1994,8 +1962,7 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
 
     if (Number(orderRow.status) === 3) {
       const taskSvc = require('../warehouse-tasks/warehouse-tasks.service')
-      // 分仓：一个订单可能有多个仓库任务。遍历所有关联任务——已出库(7)的不能取消（货已发出），
-      // 其余活跃任务逐个取消（taskSvc.cancel 内部走逆向归还判断，并释放该订单未履行的预占）。
+      // 分仓单可有多个任务。销售统一取消活跃任务，保留已出库任务。
       const [tasks] = await conn.query(
         'SELECT id, status, warehouse_id FROM warehouse_tasks WHERE sale_order_id = ? AND deleted_at IS NULL',
         [id],
@@ -2007,14 +1974,18 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
       if (!tasks.length) {
         throw new AppError('销售单处于拣货中但未关联仓库任务，请先排查异常', 409)
       }
+      const isKit = orderRow.commercial_model === 'kit-v1'
+      const releaseOrderReservation = isKit ? null : transaction => releaseByRef(transaction, 'sale_order', id)
       for (const t of activeTasks) {
-        await taskSvc.cancel(t.id, { conn, syncSaleStatus: false, operator,preserveReservation:orderRow.commercial_model==='kit-v1' })
+        await taskSvc.cancelForSaleWithinTransaction(conn, t.id, {
+          saleOrderId: Number(id),
+          operator,
+          releaseOrderReservation,
+        })
       }
-      // 分批：未派发行（dispatched=0，没有任务）的预占不会被 taskSvc.cancel 释放；
-      // 且若活跃任务为空（如唯一任务已出库、剩余全是未派发行），上面循环根本不释放预占。
-      // 这里兜底整单释放剩余 active 预占（releaseByRef 幂等，已释放的不受影响）。
-      if(orderRow.commercial_model==='kit-v1')await require('./sale.commercial-cancellation').releaseUnpicked(conn,id)
-      else await releaseByRef(conn, 'sale_order', id)
+      // 普通单补齐没有活跃任务时的释放。套单保留已拣待归还的预占。
+      if (isKit) await require('./sale.commercial-cancellation').releaseUnpicked(conn, id)
+      else await releaseOrderReservation(conn)
       // 部分已发：有货已经发出，不能整单取消，改为按实发精简明细——未发过的行整行删除，
       // 发了一部分的行把数量降到实发量，这样订单里剩下的每一行都是"要求数量=实发数量"，
       // 状态就能老老实实显示"已出库"，不需要再挂一个"部分发货"的特殊标记。
@@ -2198,5 +2169,4 @@ module.exports = {
   deleteOrder,
   syncPickingByWarehouseTaskWithinTransaction,
   syncShippedByWarehouseTaskWithinTransaction,
-  syncCancelledByWarehouseTaskWithinTransaction,
 }

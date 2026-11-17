@@ -135,7 +135,7 @@ kit 实发仍 SO→WT→成交当前行→库存维度→容器，金额以真�
 
 QA数量从完整 RTI FOR UPDATE 当前读直接取得，不能先锁ID再用普通 JOIN 读旧RR快照。此前已完成退款 receipts 和其完成 RTI proof 当前读，核 checked−rejected=qualified=putaway；不去锁另一未完成 SR。不同来源退款与后批实发先锁 payment 再读/新增退款证据，防止等待前 RR 快照覆盖应收、证据范围锁与 payment 反锁。order current-money 查询只锁冗余 order_id 的证据主表，不锁 JOIN 的 g/wt，也不等 source budget mutex。
 
-退款证据只保存本次真实 QA 执行量与 immutable 金额，不维护另一可写库存数量台账。源预算与派发数量不会因退货改写；库存唯一源仍 ACTIVE 容器，缓存仍仅 syncStockFromContainers。kit 取消已拣待归还预占留到正常 PDA 实物返库；客户端不能传 preserveReservation 选择此行为，服务层只据锁定 kit 身份决定。
+退款证据只保存本次真实 QA 执行量与 immutable 金额，不维护另一可写库存数量台账。源预算与派发数量不会因退货改写；库存唯一源仍 ACTIVE 容器，缓存仍仅 syncStockFromContainers。kit 取消时，已拣待归还预占留到正常 PDA 实物返库，销售服务根据锁定的订单模型决定预占处理。
 
 C2规格复审补充：销售退货receive、QA完成与putaway完成三处门控必须按task锁之后，对完整RTI `ORDER BY id FOR UPDATE`当前读，再分别计算expected−received、received−checked、checked−rejected−putaway。不能用普通MVCC SUM，也不能只给聚合字面追加锁而假定所有事实已当前读。两位数量转百分整数差值，无浮点残量且不clamp真实剩量；source→SR→RT→库存维度→容器→payment既有执行锁序不改。普通销售RT采用同一当前读可靠性修正，采购退货不经过此销售RT链。
 ### C2 散件取消的预占归还事实（2026-10-01品质复审）

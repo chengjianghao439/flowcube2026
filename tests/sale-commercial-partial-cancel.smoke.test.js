@@ -10,9 +10,11 @@ let server,token,pda
 const q=async(sql,params=[]) => (await pool.query(sql,params))[0]
 const ins=async(sql,p)=>Number((await q(sql,p)).insertId)
 const units=n=>Math.round(Number(n)*100)
-async function http(path,body,{method='POST',expect=200,key=randomUUID(),device=false,auth=token,deviceHeaders=pda}={}) {
+async function http(path,body,{method='POST',expect=200,key=randomUUID(),code,device=false,auth=token,deviceHeaders=pda}={}) {
  const res=await fetch('http://127.0.0.1:'+server.address().port+'/api'+path,{method,headers:{Authorization:'Bearer '+auth,'Content-Type':'application/json','X-Request-Key':key,...(device?deviceHeaders:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(20000)})
- const json=await res.json();if(res.status!==expect)throw Object.assign(new Error(path+' '+res.status+' '+JSON.stringify(json)),{status:res.status});return json.data
+ const json=await res.json();if(res.status!==expect)throw Object.assign(new Error(path+' '+res.status+' '+JSON.stringify(json)),{status:res.status})
+ if (code) assert.equal(json.code, code, path)
+ return json.data
 }
 async function reserveQty(orderId){const [r]=await q("SELECT COALESCE(SUM(qty),0) qty FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=? AND status=1",[orderId]);return units(r.qty)}
 async function supply(productId,packages){
@@ -88,10 +90,43 @@ async function ordinaryScenario(){
  const tasks=await q('SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND deleted_at IS NULL ORDER BY id',[sale.id]);assert.equal(tasks.length,1)
  const taskId=Number(tasks[0].id),task=await http('/warehouse-tasks/'+taskId,undefined,{method:'GET'})
  await http('/scan-logs',{taskId,itemId:task.items[0].id,containerId:Number(container.id),barcode:container.barcode,productId,qty:1,scanMode:'散件'},{expect:201,device:true})
- await http('/sale/'+sale.id+'/cancel',{});const dto=await http('/warehouse-tasks/'+taskId+'/cancel-return-detail',undefined,{method:'GET'});assert.equal(dto.containers[0].qty,10);assert.equal(Object.hasOwn(dto.containers[0],'taskReturnQty'),false);assert.equal(Object.hasOwn(await http('/sale/'+sale.id,undefined,{method:'GET'}),'commercialGroups'),false);assert.equal(await reserveQty(sale.id),0,'ordinary cancellation retains original immediate release policy')
+ const salesCancel = '/sale/' + sale.id + '/cancel'
+ const warehouseCancel = '/warehouse-tasks/' + taskId + '/cancel'
+ const cancelKey = randomUUID()
+ const cancelBody = { changeReason: '回归验证普通单取消' }
+ async function cancelState() {
+  const [order] = await q('SELECT status FROM sale_orders WHERE id=?', [sale.id])
+  const [item] = await q('SELECT reserved_qty,dispatched_qty FROM sale_order_items WHERE order_id=?', [sale.id])
+  const [task] = await q('SELECT status,cancel_requested_at,sorting_bin_id FROM warehouse_tasks WHERE id=?', [taskId])
+  const [stock] = await q('SELECT quantity,reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=?', [productId, f.warehouseId])
+  const [physical] = await q('SELECT remaining_qty,locked_by_task_id FROM inventory_containers WHERE id=?', [container.id])
+  const [saleEvent] = await q("SELECT COUNT(*) AS count FROM sale_order_events WHERE sale_order_id=? AND event_type='cancelled'", [sale.id])
+  const [taskEvent] = await q("SELECT COUNT(*) AS count FROM warehouse_task_events WHERE task_id=? AND event_type='CANCEL_REQUESTED'", [taskId])
+  return { order, item, task, stock, physical, saleEvent, taskEvent, reservation: await reserveQty(sale.id) }
+ }
+
+ const before = await cancelState()
+ await http(warehouseCancel, {}, { method: 'PUT', expect: 409, code: 'SALE_ORDER_CANCEL_REQUIRED' })
+ assert.deepEqual(await cancelState(), before, 'the warehouse entry point must leave all sales facts untouched')
+
+ const first = await http(salesCancel, cancelBody, { key: cancelKey })
+ const pending = await cancelState()
+ assert.equal(Number(pending.order.status), 5)
+ assert.equal(Number(pending.task.status), Number(before.task.status))
+ assert.ok(pending.task.cancel_requested_at)
+ assert.deepEqual(pending.physical, before.physical, 'picked goods stay locked until scanned back')
+ assert.equal(units(pending.stock.quantity), units(before.stock.quantity))
+ assert.deepEqual([pending.reservation, units(pending.stock.reserved), units(pending.item.reserved_qty), units(pending.item.dispatched_qty)], [0, 0, 0, 0])
+ assert.deepEqual([Number(pending.saleEvent.count), Number(pending.taskEvent.count)], [1, 1])
+ assert.deepEqual(await http(salesCancel, cancelBody, { key: cancelKey }), first)
+ await http(salesCancel, cancelBody, { expect: 400 })
+ await http(warehouseCancel, {}, { method: 'PUT', expect: 409 })
+ assert.deepEqual(await cancelState(), pending, 'repeated cancel must not write a second event or release stock again')
+
+ const dto=await http('/warehouse-tasks/'+taskId+'/cancel-return-detail',undefined,{method:'GET'});assert.equal(dto.containers[0].qty,10);assert.equal(Object.hasOwn(dto.containers[0],'taskReturnQty'),false);assert.equal(Object.hasOwn(await http('/sale/'+sale.id,undefined,{method:'GET'}),'commercialGroups'),false);assert.equal(await reserveQty(sale.id),0,'ordinary cancellation retains original immediate release policy')
  const body={taskId,containerId:Number(container.id),barcode:container.barcode,locationId:f.locationId},key=randomUUID(),result=await http('/scan-logs/cancel-return',body,{expect:201,device:true,key});assert.deepEqual(await http('/scan-logs/cancel-return',body,{expect:201,device:true,key}),result)
  const [wt]=await q('SELECT status FROM warehouse_tasks WHERE id=?',[taskId]),[c]=await q('SELECT locked_by_task_id,remaining_qty FROM inventory_containers WHERE id=?',[container.id]),[scan]=await q('SELECT COUNT(*) count,SUM(qty) qty FROM scan_logs WHERE task_id=? AND scan_purpose=3',[taskId]);assert.equal(Number(wt.status),8);assert.equal(c.locked_by_task_id,null);assert.equal(Number(c.remaining_qty),10);assert.equal(Number(scan.count),1);assert.equal(Number(scan.qty),10,'ordinary return scan keeps original container remainder quantity')
- f.cases.push({name:'ordinary',saleId:sale.id,taskId,containers:[container],afterCancelReserved:0,finalStatus:8});console.log('[PASS ordinary] reserve5/PICK1/container10: original immediate reservation release, return scan10, replay once, WT8/lock0/stock10')
+ f.cases.push({name:'ordinary',saleId:sale.id,taskId,containers:[container],afterCancelReserved:0,finalStatus:8});console.log('[PASS ordinary] warehouse refused without writes, sales cancel replayed once, new key refused, immediate reservation release, return scan10, WT8/lock0/stock10')
 }
 async function scopeScenario(){
  f.headWarehouseId=await ins('INSERT INTO inventory_warehouses(code,name) VALUES (?,?)',[ref+'-head',ref+'-head'])

@@ -119,13 +119,13 @@ const WT_STATUS_TERMINAL = [WT_STATUS.SHIPPED, WT_STATUS.CANCELLED]
  * │              │    [前] 释放分拣格 releaseByTask（cancel-return.js）与容器    │
  * │              │         解锁（scan-logs 的取消归还扫码）；                    │
  * │              │    [后] 最终 CAS 到 8 之后只写事件。                          │
- * │              │ ② 直连路径（PENDING 直接取消，command.js）：                 │
+ * │              │ ② 无需实物归还时由 command.js 直接取消：                     │
  * │              │    [内] CAS 同语句清空 sorting_bin_id / sorting_bin_code；    │
  * │              │    [后] unlockContainersByTask、releaseByTask、释放预占、     │
  * │              │         取消包裹（packages.status → 3）、取消包裹打印任务    │
- * │              │         （print_jobs.status → 3）、同步销售单 → 5            │
- * │              │    （该路径下分拣格/容器锁本就为空，①②的动作集合等价）        │
- * │              │ [前] 两条路径都在 CAS 之前把「待归还容器库位」写进事件明细     │
+ * │              │         （print_jobs.status → 3）                            │
+ * │              │ 销售关联任务借用整单事务，由销售写订单状态及决定预占处理。     │
+ * │              │ 两条路径都在事件中保留处理前的待归还容器库位。                 │
  * └──────────────┴──────────────────────────────────────────────────────────────┘
  */
 const WT_ON_ENTER_ACTIONS = Object.freeze({
@@ -137,7 +137,7 @@ const WT_ON_ENTER_ACTIONS = Object.freeze({
   [WT_STATUS.SHIPPING]:  ['autoTriggerByPackDone', 'releaseSortingBin'],  // [前] 推进；sorting_bin 字段在 CAS 内清空
   // [前] 校验/扣减/重算 → [内] shipped_at → [后] 解锁容器 + 固化 cost_snapshot + 事件
   [WT_STATUS.SHIPPED]:   ['assertCreditWithinLimit', 'syncSaleOrderStatus:4', 'recomputeReceivable', 'unlockContainers', 'snapshotCost', 'recordShipDoneEvent'],
-  [WT_STATUS.CANCELLED]: ['releaseSortingBin', 'unlockContainers', 'releaseReservation', 'cancelPackages', 'cancelPackagePrintJobs', 'syncSaleOrderStatus:5'],
+  [WT_STATUS.CANCELLED]: ['releaseSortingBin', 'unlockContainers', 'releaseReservation', 'cancelPackages', 'cancelPackagePrintJobs'],
 })
 
 /**

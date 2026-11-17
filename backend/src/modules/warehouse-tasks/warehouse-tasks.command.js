@@ -3,7 +3,6 @@ const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { assertInScope } = require('../../utils/warehouseScope')
-const { releaseByRef } = require('../../engine/reservationEngine')
 const { unlockContainersByTask, lockStockDimension, CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
 const sortingBinSvc = require('../sorting-bins/sorting-bins.service')
@@ -283,10 +282,18 @@ async function updatePriority(id, priority, scopeWarehouseIds = null) {
   }
 }
 
-/**
- * 取消任务（→8）：同步销售单状态 → 5；释放分拣格
- */
-async function cancel(id, options = {}) {
+// 非销售任务可以由仓库直接取消。采购退货可借用原单事务。
+function cancel(id, options = {}) {
+  return cancelTask(id, options)
+}
+
+// 销售已锁定原单并持有事务。普通单由销售提供原时点的预占释放动作。
+async function cancelForSaleWithinTransaction(conn, id, { saleOrderId, operator, releaseOrderReservation }) {
+  if (!conn) throw new AppError('销售出库任务须在原单事务中取消', 500, 'WAREHOUSE_TASK_TRANSACTION_REQUIRED')
+  return cancelTask(id, { conn, operator }, { saleOrderId, releaseOrderReservation })
+}
+
+async function cancelTask(id, options, saleCancellation) {
   const manageConn = !options.conn
   const conn = options.conn || await pool.getConnection()
   try {
@@ -335,15 +342,18 @@ async function cancel(id, options = {}) {
     if (!isValidTransition(taskRow.status, rule.toStatus)) {
       throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
     }
-    // 销售订单可能拆成多个仓库任务。直接取消其中一个任务会误释放整单预占并覆盖整单状态，
-    // 所以销售关联任务必须由 sale.service.cancel() 统一锁定并取消同单全部任务。
-    if (taskRow.sale_order_id && options.syncSaleStatus !== false) {
+    // 同单多个任务只能由销售统一取消。使用任务锁内的当前归属核对发起订单。
+    if (saleCancellation && (taskRow.sale_order_id == null || Number(taskRow.sale_order_id) !== saleCancellation.saleOrderId)) {
+      throw new AppError('销售出库任务归属已变化，请刷新后核对', 409, 'SALE_ORDER_CANCEL_TASK_MISMATCH')
+    }
+    if (!saleCancellation && taskRow.sale_order_id) {
       throw new AppError(
         '销售出库任务请从销售订单执行取消，系统会统一处理同单全部任务和预占',
         409,
         'SALE_ORDER_CANCEL_REQUIRED',
       )
     }
+    const releaseOrderReservation = saleCancellation?.releaseOrderReservation
 
     // 解锁/清理前先查询所有被锁容器及其库位——用于判断分流路径，也用于归还指引
     const [lockedContainers] = await conn.query(
@@ -405,19 +415,7 @@ async function cancel(id, options = {}) {
         [id],
       )
       const packagesToUnpack = sealedPackages.map(p => ({ packageId: Number(p.id), barcode: p.barcode }))
-      if (taskRow.sale_order_id) {
-        if(!options.preserveReservation)await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
-        // 销售单业务状态立即变为已取消——不依赖物理归还进度。走 sale.service.cancel()
-        // 间接调用时它自己会做这一步（并传 syncSaleStatus:false 跳过这里，避免重复）；
-        // 直接调用本接口（PUT /warehouse-tasks/:id/cancel）时没有别人会做，必须在这里做。
-        if (options.syncSaleStatus !== false) {
-          const saleSvc = require('../sale/sale.service')
-          await saleSvc.syncCancelledByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
-            taskId: Number(taskRow.id),
-            taskNo: taskRow.task_no,
-          })
-        }
-      }
+      if (releaseOrderReservation) await releaseOrderReservation(conn)
       try {
         await recordEvent(conn, {
           taskId: id, taskNo: taskRow.task_no,
@@ -454,14 +452,12 @@ async function cancel(id, options = {}) {
       },
     })
 
-    // 只有任务真实切换到 CANCELLED 后，才执行资源释放与单据同步副作用。
+    // 任务切换到 CANCELLED 后再释放资源，普通单预占仍在包裹处理前释放。
 
     await unlockContainersByTask(conn, id)
     await sortingBinSvc.releaseByTask(conn, id)
 
-    if (taskRow.sale_order_id) {
-      if(!options.preserveReservation)await releaseByRef(conn, 'sale_order', Number(taskRow.sale_order_id))
-    }
+    if (releaseOrderReservation) await releaseOrderReservation(conn)
 
     // 取消关联的包裹（标记 status=3）并清理包裹打印任务
     const packagesSvc = require('../packages/packages.service')
@@ -476,13 +472,6 @@ async function cancel(id, options = {}) {
       )
     }
 
-    if (taskRow.sale_order_id && options.syncSaleStatus !== false) {
-      const saleSvc = require('../sale/sale.service')
-      await saleSvc.syncCancelledByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
-        taskId: Number(taskRow.id),
-        taskNo: taskRow.task_no,
-      })
-    }
     try {
       await recordEvent(conn, {
         taskId: id, taskNo: taskRow.task_no,
@@ -523,4 +512,5 @@ module.exports = {
   assign,
   updatePriority,
   cancel,
+  cancelForSaleWithinTransaction,
 }
