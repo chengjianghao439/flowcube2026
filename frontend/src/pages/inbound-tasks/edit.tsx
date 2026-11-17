@@ -21,12 +21,12 @@ import { getInboundListWorkspacePath } from '@/lib/inboundListNavigation'
 import { toast } from '@/lib/toast'
 import { quantityInputError } from '@/lib/qtyStep'
 import { unitPrice } from '@/lib/format'
-import type { InboundTask, InboundTaskEditContext, UpdateInboundTaskResult } from '@/types/inbound-tasks'
+import type { InboundTask, InboundTaskEditContext, PickedPurchaseItem, UpdateInboundTaskResult } from '@/types/inbound-tasks'
 import { InboundEntryTable } from './InboundEntryTable'
 import { InboundProductIdentity } from './InboundProductIdentity'
 import { InboundFreightFields } from './InboundFreightFields'
 import { parseInboundFreightAmount, type InboundFreightType } from './inboundFreight'
-import { PurchaseItemPickerDialog, type PickedPurchaseItem } from './PurchaseItemPickerDialog'
+import { PurchaseItemPickerDialog } from './PurchaseItemPickerDialog'
 
 interface Draft {
   remark: string; freightType: InboundFreightType; freightAmount: string; selected: Record<number, PickedPurchaseItem>

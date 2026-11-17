@@ -280,6 +280,13 @@ export interface InboundPurchaseCandidate {
   unitPrice: number
 }
 
+export interface PickedPurchaseItem {
+  item: InboundPurchaseCandidate
+  qty: number
+  qtyInput?: string
+  inboundItemId?: number
+}
+
 export interface InboundTaskEditContext {
   task: InboundTask
   supplierId: number

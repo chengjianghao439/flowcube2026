@@ -6,8 +6,8 @@ import { captureInboundEditOwner, type InboundEditOwner } from '@/hooks/useInbou
 import { useAuthStore } from '@/store/authStore'
 import type { User } from '@/types'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { PurchaseItemPickerDialog, type PickedPurchaseItem } from './PurchaseItemPickerDialog'
-import type { InboundPurchaseCandidate } from '@/types/inbound-tasks'
+import { PurchaseItemPickerDialog } from './PurchaseItemPickerDialog'
+import type { InboundPurchaseCandidate, PickedPurchaseItem } from '@/types/inbound-tasks'
 const fixture = vi.hoisted(() => ({ rows: [] as InboundPurchaseCandidate[], error: null as unknown, fetching: false, verify: vi.fn(), verifyEdit: vi.fn(), refetch: vi.fn(), hiddenRetry: null as null | (() => void) }))
 vi.mock('@/hooks/useInboundTasks', () => ({ useInboundPurchaseCandidates: (_id: number, keyword: string) => ({ data: { list: fixture.rows.filter(row => !keyword || row.productCode.includes(keyword)), pagination: { total: fixture.rows.length } }, error: fixture.error, isFetching: fixture.fetching, isLoading: false, refetch: fixture.refetch }) }))
 vi.mock('@/api/inbound-tasks', () => ({ verifyInboundPurchaseSelection: fixture.verify, verifyInboundEditPurchaseSelection: fixture.verifyEdit }))

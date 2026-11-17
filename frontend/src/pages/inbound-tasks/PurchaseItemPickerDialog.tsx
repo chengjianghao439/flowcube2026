@@ -10,9 +10,7 @@ import { verifyInboundEditPurchaseSelection, verifyInboundPurchaseSelection } fr
 import { qty as formatQty, unitPrice } from '@/lib/format'
 import { quantityInputError } from '@/lib/qtyStep'
 import { InboundEntryTable } from './InboundEntryTable'
-import type { InboundPurchaseCandidate } from '@/types/inbound-tasks'
-
-export interface PickedPurchaseItem { item: InboundPurchaseCandidate; qty: number; qtyInput?: string; inboundItemId?: number }
+import type { InboundPurchaseCandidate, PickedPurchaseItem } from '@/types/inbound-tasks'
 interface Props {
   editTaskId?: number; readOwner?: InboundEditOwner; canInteract?: () => boolean
   open: boolean; supplierId: number | null; initialSelection: Record<number, PickedPurchaseItem>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { draftFromGroups, draftFromOrder, toCommercialInputs, commercialPrintRows } from './commercialDraft'
+import { commercialPrintRows } from '@/lib/saleCommercialDisplay'
+import { draftFromGroups, draftFromOrder, toCommercialInputs } from './commercialDraft'
 import type { CommercialGroup } from '@/types/sale-commercial'
 const auxiliary = {
   id: 3,

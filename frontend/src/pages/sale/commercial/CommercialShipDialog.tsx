@@ -1,6 +1,6 @@
 import { ReportTable } from '@/components/shared/ReportTable'
 import { commercialWarehouseName } from './warehouseName'
-import { commercialUnit } from './commercialDraft'
+import { commercialUnit } from '@/lib/saleCommercialDisplay'
 import type { SaleOrder } from '@/types/sale'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'

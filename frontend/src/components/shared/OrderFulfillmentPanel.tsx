@@ -1,6 +1,6 @@
 import type { KitReadOwner } from '@/api/kits'
 import type { CommercialGroup } from '@/types/sale-commercial'
-import { commercialUnit } from '@/pages/sale/commercial/commercialDraft'
+import { commercialUnit } from '@/lib/saleCommercialDisplay'
 import { assertKitReadOwner } from '@/hooks/useKits'
 /** 订单详情的发货安排、来源解释与事项跟进；交接只导航或展开只读事实。 */
 import { explainFulfillmentAction, fulfillmentDocumentPath } from '@/lib/fulfillmentAction'

@@ -18,14 +18,14 @@ import { Input } from '@/components/ui/input'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import type { InboundCreateRecord } from '@/hooks/useInboundTaskCreateRecovery'
-import type { CreateInboundTaskResult } from '@/types/inbound-tasks'
+import type { CreateInboundTaskResult, PickedPurchaseItem } from '@/types/inbound-tasks'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { SupplierFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
 import type { FinderResult } from '@/types/finder'
 import { useCreateInboundTask } from '@/hooks/useInboundTasks'
 import { toast } from '@/lib/toast'
-import { PurchaseItemPickerDialog, type PickedPurchaseItem } from './PurchaseItemPickerDialog'
+import { PurchaseItemPickerDialog } from './PurchaseItemPickerDialog'
 
 export default function InboundTaskCreatePage() {
   const fieldPrefix = useId()

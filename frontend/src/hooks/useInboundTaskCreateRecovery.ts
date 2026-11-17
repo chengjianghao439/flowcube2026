@@ -7,8 +7,7 @@ import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { createRequestKey } from '@/lib/requestKey'
-import type { CreateInboundTaskParams, CreateInboundTaskResult } from '@/types/inbound-tasks'
-import type { PickedPurchaseItem } from '@/pages/inbound-tasks/PurchaseItemPickerDialog'
+import type { CreateInboundTaskParams, CreateInboundTaskResult, PickedPurchaseItem } from '@/types/inbound-tasks'
 
 const PREFIX = 'flowcube-inbound-create-v1:request:', TERMINAL_PREFIX = 'flowcube-inbound-create-v1:terminal:', TTL = 7 * 86400000
 const listeners = new Set<() => void>(), flights = new Set<string>()

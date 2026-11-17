@@ -4,7 +4,7 @@
  */
 
 import { formatDisplayDateTime, formatDisplayDate } from '@/lib/dateTime'
-import { commercialPrintRows } from '@/pages/sale/commercial/commercialDraft'
+import { commercialPrintRows } from '@/lib/saleCommercialDisplay'
 import { money, unitPrice } from '@/lib/format'
 import type { PrintItem } from '@/components/print/TemplateRenderer'
 import type { SaleOrder } from '@/types/sale'

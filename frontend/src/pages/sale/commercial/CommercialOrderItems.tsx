@@ -6,7 +6,7 @@ import type { SaleOrder } from '@/types/sale'
 import type { CommercialGroup, CommercialComponent } from '@/types/sale-commercial'
 import { CommercialItemIdentity } from './CommercialItemIdentity'
 import { componentDisplayQuantity, SALE_KIT_TABLE_CLASSES } from './commercialPresentation'
-import { commercialUnit } from './commercialDraft'
+import { commercialUnit } from '@/lib/saleCommercialDisplay'
 import { commercialWarehouseName } from './warehouseName'
 
 /** 客户成交行保留服务端量价，仓库组件金额不参与订单汇总。 */
