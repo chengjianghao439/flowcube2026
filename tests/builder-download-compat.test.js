@@ -336,7 +336,7 @@ test('postinstall, pinned get/undici and minimum Node contract are configured', 
   const pkg = JSON.parse(await fs.readFile(path.join(desktop, 'package.json')));
   assert.equal(pkg.scripts.postinstall, 'node build-support/patch-builder-download.cjs');
   assert.equal(pkg.overrides['@electron/get'], '5.1.0');
-  assert.equal(pkg.engines.node, '>=22.12.0');
+  assert.equal(pkg.engines.node, require('../package.json').engines.node);
   assert.equal(pkg.devDependencies.undici, '7.30.1');
   assert.equal(pkg.devDependencies.electron, '44.9.3');
   assert.equal(pkg.devDependencies['electron-builder'], '26.15.3');

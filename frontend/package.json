@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.14.3",
   "type": "module",
+  "engines": {
+    "node": "^22.12.0"
+  },
   "scripts": {
     "dev": "cross-env VITE_ELECTRON=1 vite",
     "dev:pda": "cross-env VITE_CAPACITOR=1 vite",

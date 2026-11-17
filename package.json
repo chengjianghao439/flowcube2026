@@ -1,6 +1,9 @@
 {
   "name": "flowcube",
   "private": true,
+  "engines": {
+    "node": "^22.12.0"
+  },
   "description": "仓库根脚本（tag / 工具），业务包见 frontend、desktop、backend",
   "scripts": {
     "dev:backend": "bash scripts/with-dev-env.sh npm --prefix backend run dev",
@@ -47,6 +50,7 @@
     "test:acceptance-fixes": "node --test tests/acceptance-fixes-2026-09-17.test.js",
     "test:mysql8-dev-script": "node --test tests/mysql8-dev-script.test.js",
     "test:migration-numbering": "node --test tests/migration-numbering.test.js && npm --prefix backend run migrate -- --check-gaps",
+    "test:node-version": "node scripts/check-node-version.cjs && node --test tests/node-version-contract.test.js",
     "test:repair-smoke-instance-guard": "node --test tests/repair-smoke-instance-guard.test.js",
     "test:legacy-receivable-repair": "node --test tests/legacy-receivable-repair.test.js",
     "test:purchase-repair": "node --test tests/inbound-purchase-source.test.js tests/legacy-purchase-repair.test.js",
