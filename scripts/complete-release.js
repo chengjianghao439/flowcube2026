@@ -12,13 +12,17 @@ function publishTagForCommit({ sha, tag, runner = execFileSync }) {
   return runner('bash', ['scripts/release-desktop-tag.sh'], { stdio: 'inherit' })
 }
 
-async function completeRelease({ repository, sha, token, tag, origin, wait = waitForChecks, verify = verifyLiveRelease,
+async function completeRelease({ repository, sha, token, tag, origin, browserRunId, pdaRunId, wait = waitForChecks, verify = verifyLiveRelease,
   publishTag = publishTagForCommit, log = console.log }) {
   if (!/^v\d+\.\d+\.\d+$/.test(tag || '')) throw new Error('无效发布 tag')
+  if (![browserRunId, pdaRunId].every(id => /^[1-9]\d*$/.test(id || '')) || browserRunId === pdaRunId) {
+    throw new Error('缺少本次网页和 PDA 发布的独立运行编号')
+  }
   const started = Date.now()
   // PDA 必须先发布完，避免 tag 与 PDA 同时进入单 pending 的服务器部署组。
   await wait({ repository, sha, token, timeoutMs: 270 * 60 * 1000,
-    requiredWorkflows: ['test.yml', 'security-scan.yml', 'deploy-browser.yml', 'build-pda-apk.yml', 'build-desktop.yml'] })
+    requiredWorkflows: ['test.yml', 'security-scan.yml', 'deploy-browser.yml', 'build-pda-apk.yml', 'build-desktop.yml'],
+    dispatchRunIds: { 'deploy-browser.yml': browserRunId, 'build-pda-apk.yml': pdaRunId } })
   await publishTag({ sha, tag })
   // 同 SHA 的 main 桌面构建只做验证；必须等 tag 的发布运行成功。
   await wait({ repository, sha, token, branch: tag, events: ['push'], timeoutMs: 60 * 60 * 1000,
@@ -32,7 +36,8 @@ async function completeRelease({ repository, sha, token, tag, origin, wait = wai
 
 if (require.main === module) {
   completeRelease({ repository: process.env.GITHUB_REPOSITORY, sha: process.env.GITHUB_SHA, token: process.env.GITHUB_TOKEN,
-    tag: process.env.RELEASE_TAG, origin: process.env.FLOWCUBE_ERP_ORIGIN })
+    tag: process.env.RELEASE_TAG, origin: process.env.FLOWCUBE_ERP_ORIGIN,
+    browserRunId: process.env.BROWSER_RELEASE_RUN_ID, pdaRunId: process.env.PDA_RELEASE_RUN_ID })
     .catch(error => { console.error(`::error::${error.message}`); process.exitCode = 1 })
 }
 module.exports = { completeRelease, publishTagForCommit }

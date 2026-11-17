@@ -16,20 +16,20 @@ SHA = 'a' * 40
 
 class RelayTests(unittest.TestCase):
     def run_fixture(self, **kwargs):
-        run = dict(id=123, run_attempt=1, head_sha=SHA, head_branch='main', event='push', path='.github/workflows/deploy-browser.yml', status='in_progress')
+        run = dict(id=123, run_attempt=1, head_sha=SHA, head_branch='main', event='workflow_dispatch', path='.github/workflows/deploy-browser.yml', status='in_progress')
         run.update(kwargs)
         return run
 
     def test_run_identity(self):
         good = self.run_fixture()
-        for key, wrong in [('head_sha', 'b'*40), ('head_branch', 'other'), ('event', 'workflow_dispatch'), ('path', '.github/workflows/build-desktop.yml')]:
+        for key, wrong in [('head_sha', 'b'*40), ('head_branch', 'other'), ('event', 'push'), ('path', '.github/workflows/build-desktop.yml')]:
             self.assertIsNone(relay.select_run([self.run_fixture(**{key: wrong})], SHA, 'image', '1.2.3'))
         self.assertEqual(relay.select_run([good], SHA, 'image', '1.2.3'), good)
 
     def test_desktop_requires_tag(self):
         main = self.run_fixture(path='.github/workflows/build-desktop.yml')
         self.assertIsNone(relay.select_run([main], SHA, 'desktop', '1.2.3'))
-        tag = dict(main, head_branch='v1.2.3')
+        tag = dict(main, head_branch='v1.2.3', event='push')
         self.assertEqual(relay.select_run([main, tag], SHA, 'desktop', '1.2.3'), tag)
 
     def test_deliver_original_and_cleanup_only_staging(self):
@@ -81,6 +81,15 @@ class RelayTests(unittest.TestCase):
 
     def test_latest_run(self):
         self.assertEqual(relay.select_run([self.run_fixture(), self.run_fixture(id=124)], SHA, 'image', '1.2.3')['id'], 124)
+
+    def test_dispatch_id_selects_its_run_not_other_same_sha_runs(self):
+        for kind in ('image', 'pda'):
+            workflow = '.github/workflows/' + relay.WORKFLOWS[kind]
+            exact = self.run_fixture(id=123, path=workflow)
+            other = self.run_fixture(id=124, path=workflow)
+            self.assertEqual(relay.select_run([exact, other], SHA, kind, '1.2.3', '123'), exact)
+            self.assertIsNone(relay.select_run([other], SHA, kind, '1.2.3', '123'))
+            self.assertIsNone(relay.select_run([dict(exact, event='push')], SHA, kind, '1.2.3', '123'))
 
     def test_attempt_paths(self):
         value = relay.artifact_spec('image', self.run_fixture(run_attempt=2), '1.2.3')
@@ -247,12 +256,17 @@ class RelayTests(unittest.TestCase):
         from unittest.mock import patch
         instance = object.__new__(relay.Relay)
         instance.sha = SHA; instance.version = '1.2.3'
+        instance.dispatch_run_ids = {'image': '123', 'pda': '124'}
         events = []; polls = {}
         def api(path):
             if '/artifacts?' in path:
                 return {'artifacts': [{'name': name} for name in ['deploy-images-123-1', 'flowcube-pda-apk', 'FlowCube-Desktop-Setup']]}
             workflow = path.split('/')[2].split('?')[0]
-            return {'workflow_runs': [self.run_fixture(path='.github/workflows/'+workflow, head_branch='v1.2.3' if workflow=='build-desktop.yml' else 'main')]}
+            return {'workflow_runs': [self.run_fixture(
+                path='.github/workflows/'+workflow,
+                head_branch='v1.2.3' if workflow=='build-desktop.yml' else 'main',
+                event='push' if workflow=='build-desktop.yml' else 'workflow_dispatch',
+                id=124 if workflow=='build-pda-apk.yml' else 123)]}
         instance.api = api
         instance.deliver = lambda kind, run, artifact: events.append('ready:'+kind) or 'relay'
         def current(run, kind):
@@ -268,7 +282,8 @@ class RelayTests(unittest.TestCase):
         from unittest.mock import patch
         instance = object.__new__(relay.Relay)
         instance.sha = SHA; instance.version = '1.2.3'
-        desktop = self.run_fixture(path='.github/workflows/build-desktop.yml', head_branch='v1.2.3',
+        instance.dispatch_run_ids = {'image': '123', 'pda': '124'}
+        desktop = self.run_fixture(path='.github/workflows/build-desktop.yml', head_branch='v1.2.3', event='push',
                                    run_attempt=2, run_started_at='2026-09-23T08:34:15Z')
         polls = []; delivered = []
         def api(path):
@@ -280,7 +295,7 @@ class RelayTests(unittest.TestCase):
                 return {'artifacts': artifacts}
             workflow = path.split('/')[2].split('?')[0]
             if workflow == 'build-desktop.yml': return {'workflow_runs': [desktop]}
-            return {'workflow_runs': [self.run_fixture(path='.github/workflows/'+workflow, status='completed', conclusion='success')]}
+            return {'workflow_runs': [self.run_fixture(path='.github/workflows/'+workflow, id=124 if workflow=='build-pda-apk.yml' else 123, status='completed', conclusion='success')]}
         instance.api = api
         instance.deliver = lambda kind, run, artifact: delivered.append(artifact['created_at']) or 'relay'
         instance.current_run = lambda run, kind: None
@@ -292,11 +307,12 @@ class RelayTests(unittest.TestCase):
         from unittest.mock import patch
         instance = object.__new__(relay.Relay)
         instance.sha = SHA; instance.version = '1.2.3'
-        desktop = self.run_fixture(path='.github/workflows/build-desktop.yml', head_branch='v1.2.3', run_attempt=2)
+        instance.dispatch_run_ids = {'image': '123', 'pda': '124'}
+        desktop = self.run_fixture(path='.github/workflows/build-desktop.yml', head_branch='v1.2.3', event='push', run_attempt=2)
         def api(path):
             workflow = path.split('/')[2].split('?')[0]
             if workflow == 'build-desktop.yml': return {'workflow_runs': [desktop]}
-            return {'workflow_runs': [self.run_fixture(path='.github/workflows/'+workflow, status='completed', conclusion='success')]}
+            return {'workflow_runs': [self.run_fixture(path='.github/workflows/'+workflow, id=124 if workflow=='build-pda-apk.yml' else 123, status='completed', conclusion='success')]}
         instance.api = api
         instance.deliver = lambda kind, run, artifact: self.fail('No artifact may be delivered')
         with patch.object(relay.time, 'sleep', lambda seconds: None):

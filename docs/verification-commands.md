@@ -39,6 +39,12 @@
 
 - 销售/价格有效差异同事务留痕、仓库交接只读、打印目的与派机分开；未知结果复用原正文/键 → `npm run test:change-records`、`npm run smoke:change-records-owned`（详见 `docs/backend-api-sql-conventions.md`、`docs/verification-commands.md`）
 
+## PR 必过检查与显式发布
+
+`node --test tests/release-orchestration.test.js` 读取真实工作流并执行聚合步骤和发布触发校验，覆盖 PR 全成功、失败、取消、跳过，及错误分支/提交。正式入口通过替身命令校验预检顺序、GitHub main 校验、网页与 PDA 的同一 SHA 和各自运行编号，触发失败后不继续；不会连接 GitHub 或服务器。编排回归已由 Tests 的 `npm run test:audit-tooling` 执行。原包中转运行身份与同一 SHA 的区分由 `npm run test:release-tooling` 的 Python 测试覆盖。
+
+工作流静态解析可用 `actionlint` 核对。实际 GitHub PR 运行、远端 Ruleset 生效及三端正式发布另行验收。
+
 ## Compose 2.27.0 发布预检兼容
 
 `npm run test:compose-preflight-compat` 校验并临时使用官方 2.27.0 CLI，执行 `server-update.sh` 原预检函数和独立合成 Node 容器。Tests CI 独立 job 必须实际执行，不能跳过。覆盖缓存候选、只读根目录/node 用户、禁止应用入口/依赖启动、缺镜像不拉取不构建、预检拒绝保留非零退出，以及恢复旧 `run --pull` 必然失败的反例。Mac 可用 `FLOWCUBE_COMPAT_DOCKER_CONTEXT=colima-flowcube`；测试基础镜像须提前本地准备，可用 `FLOWCUBE_COMPAT_NODE_IMAGE` 指定现有合成 Node 镜像。只清理本批临时镜像标签、容器、网络、卷和夹具；不连接生产、不安装全局 CLI。

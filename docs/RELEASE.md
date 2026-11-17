@@ -78,16 +78,17 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 本地桌面打包示例：`VITE_ERP_PRODUCTION_ORIGIN=https://api.example.com npm run dist:win --prefix desktop`。
 
-## Browser 自动部署（main 推送后浏览器直接看到新版本）
+## 网页和 PDA 显式部署
 
 工作流：`.github/workflows/deploy-browser.yml`（**Deploy Browser App**）。
 
-- 触发：`push` 到 `main`，或手动 `workflow_dispatch`
+- 合并到 `main` 触发 Tests、Security Scan 和桌面验证构建。网页和 PDA 正式工作流由获授权的发布入口显式触发。
+- 网页工作流要求在 `main` 上提交 `checkout_ref`，其值必须是触发时的完整提交 SHA。联合发布时 PDA 同时接收本次网页部署运行编号，并核对同一 SHA。
 - 前置门禁：等待实际待发布 SHA 的 Tests 与 Security Scan 全部成功，失败、取消或超时均不部署。
 - 目标：服务器获得部署锁后同步至该 SHA，再执行 `scripts/server-update.sh`；不得跳过发布门禁。
 - 结果：GitHub runner 构建 SHA 标记的镜像，通过 SSH 传输并核验归档摘要和镜像 revision；生产保存运行中镜像，只加载 CI 产物，等待 MySQL 健康，暂停业务写入并执行迁移，再切换应用并验证接口、页面和公网入口。发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。
 - PDA 首次迁移时先保存旧 APK 的已发布清单；新 APK 经独立构建校验、同 SHA 浏览器部署成功后，才由 `scripts/publish-pda.sh` 原子发布。
-- `Build PDA APK` 构建前有 `preflight` 前置门：先校验 `backend/apk/version.json` 与 `build.gradle` 一致（不一致直接失败，不白构建），再比对线上 `/api/pda/version`——目标版本号 + versionCode 都已发布时整条构建跳过并记为成功。`publish-pda.sh` 不允许「同一 versionCode 换成不同字节的安装包」（客户端不会因此更新），所以发版后再改 `frontend/**` 触发的构建会被跳过而不是白跑 4 分钟再失败；**要发新包必须先提升版本号**。手动补跑用 `gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<发布提交 SHA>`。
+- `Build PDA APK` 的前置门核对 `backend/apk/version.json` 和 `build.gradle`，再比对线上 `/api/pda/version`。目标版本号和 versionCode 已发布时，构建跳过并记为成功。更新安装包须先提升版本号。需要单独补发时，沿用 `gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<已部署的完整提交SHA>` 并等待该提交的网页部署记录。
 
 ### 需要的 Actions 配置
 
@@ -99,8 +100,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 说明：
 
 - 本地服务器配置由不入 Git 的 `deploy/production.local.json` 提供；CI 使用工作流声明的 `VITE_ERP_PRODUCTION_ORIGIN` 和 `FLOWCUBE_SERVER_*` Variables。
-- 如果缺少 `SSH_PRIVATE_KEY`，浏览器自动部署不会生效；此时即使 `main` 已更新，线上页面也仍会停在旧版本
-- 建议同时阅读 [docs/DEPLOY.md](/Users/chengjianghao/flowcube/docs/DEPLOY.md)，后续统一从 `npm run release:prod` 发版
+- `SSH_PRIVATE_KEY` 缺失时，网页发布在连接服务器前失败。部署边界见[部署说明](DEPLOY.md)。
 
 ## 正式发布流程（唯一入口）
 
@@ -119,12 +119,12 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
    git diff --cached --check
    git commit -m "release: bump version"
    ```
-5. 运行唯一正式入口：
+5. 通过 PR 将待发布代码合入 `main`，同步本地 `main` 并保持工作区干净。获得正式发布授权后运行：
    ```bash
    npm run release:prod
    ```
 
-`release:prod` 在 push 前离线校验 GitHub Actions 的可信主机键是否包含部署域名和端口，再预检本机现有代理（`HTTPS_PROXY`）与 `flowcube-prod` SSH 别名，启动原 CI artifact 自动中转并保持 Mac 在线；缺配置就停下。入口随后推送 main、等待同 SHA 检查/浏览器/PDA、推送新 tag、等待对应 tag 桌面发布和线上核对。PDA 对每次 main push 都建立运行，同版由前置门跳过构建。中转的大分段断流会缩小失败区间重试，保留已完成分段。CI 内的 HTTPS/SCP 只作故障回退，不是另一套人工发布命令。仅全部通过才返回成功。发布后可重复只读验收：
+`release:prod` 校验本地 HEAD 等于 GitHub 实际 `main`，核可信主机键、代理（`HTTPS_PROXY`）和 `flowcube-prod` SSH 别名。预检通过后显式触发同 SHA 的网页和 PDA 工作流，记录两个运行编号，中转和等待只使用本次编号。触发结果未知时先核对已存在的运行，避免重复触发。主线检查、网页和 PDA 完成后，才推送对应的 Windows tag 并核对线上三端。桌面 tag 前置检查仍要求目标为最新 `main`。如中途主线前移导致该检查失败，保留已完成阶段和原运行记录。运行期间保持中转 Mac 在线，CI 仍可按原边界使用 HTTPS/SCP 故障回退。发布后可重复只读验收：
 
 ```bash
 npm run release:verify -- --origin https://<生产域名>

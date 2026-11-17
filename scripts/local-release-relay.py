@@ -28,10 +28,15 @@ MAX_FILE = 1024**3
 MAX_METADATA = 1024 * 1024
 
 
-def select_run(runs, sha, kind, version):
+def source_event(kind):
+    return 'push' if kind == 'desktop' else 'workflow_dispatch'
+
+
+def select_run(runs, sha, kind, version, run_id=None):
     branch = 'v' + version if kind == 'desktop' else 'main'
     matches = [r for r in runs if r.get('head_sha') == sha and r.get('head_branch') == branch
-               and r.get('event') == 'push' and r.get('path') == '.github/workflows/' + WORKFLOWS[kind]]
+               and r.get('event') == source_event(kind) and r.get('path') == '.github/workflows/' + WORKFLOWS[kind]
+               and (run_id is None or str(r.get('id')) == str(run_id))]
     return max(matches, key=lambda r: (int(r['id']), int(r.get('run_attempt', 1)))) if matches else None
 
 
@@ -241,6 +246,7 @@ class Relay:
         self.version = env.get('RELEASE_TAG', '')[1:]
         self.target = env.get('FLOWCUBE_RELAY_SSH_TARGET', '')
         self.proxy = env.get('FLOWCUBE_RELAY_PROXY', '')
+        self.dispatch_run_ids = {'image': env.get('BROWSER_RELEASE_RUN_ID', ''), 'pda': env.get('PDA_RELEASE_RUN_ID', '')}
         if (not re.fullmatch(r'[\w.-]+/[\w.-]+', self.repo) or not re.fullmatch(r'[0-9a-f]{40}', self.sha)
                 or not re.fullmatch(r'\d+\.\d+\.\d+', self.version)
                 or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.@-]*', self.target)):
@@ -297,7 +303,7 @@ class Relay:
 
     def current_run(self, run, kind):
         current = self.api('actions/runs/' + str(run['id']))
-        if select_run([current], self.sha, kind, self.version) is None or current['run_attempt'] != run['run_attempt']:
+        if select_run([current], self.sha, kind, self.version, run['id']) is None or current['run_attempt'] != run['run_attempt']:
             raise RuntimeError('Run identity/attempt changed during relay')
         if current['status'] == 'completed':
             if current['conclusion'] == 'success':
@@ -335,13 +341,16 @@ class Relay:
         return 'relay'
 
     def watch(self):
+        run_ids = self.dispatch_run_ids
+        if any(not re.fullmatch(r'[1-9]\d*', run_ids.get(kind, '')) for kind in ('image', 'pda')) or run_ids['image'] == run_ids['pda']:
+            raise ValueError('Missing or invalid release dispatch run IDs')
         done = {}; sources = {}; failures = {}; deadline = time.monotonic() + 330*60
         while time.monotonic() < deadline and len(done) < 3:
             for kind in WORKFLOWS:
                 if kind in done:
                     continue
-                data = self.api('actions/workflows/' + WORKFLOWS[kind] + '/runs?head_sha=' + self.sha + '&event=push&per_page=100')
-                run = select_run(data['workflow_runs'], self.sha, kind, self.version)
+                data = self.api('actions/workflows/' + WORKFLOWS[kind] + '/runs?head_sha=' + self.sha + '&event=' + source_event(kind) + '&per_page=100')
+                run = select_run(data['workflow_runs'], self.sha, kind, self.version, run_ids.get(kind))
                 if not run:
                     continue
                 if run['status'] == 'completed':

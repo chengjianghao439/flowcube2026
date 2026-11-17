@@ -3,16 +3,17 @@
 
 const REQUIRED_WORKFLOWS = ['test.yml', 'security-scan.yml']
 
-function assessRuns(runs, sha, { branch = 'main', events = ['push', 'workflow_dispatch'] } = {}) {
+function assessRuns(runs, sha, { branch = 'main', events = ['push', 'workflow_dispatch'], runId } = {}) {
   if (!Array.isArray(runs)) throw new Error('GitHub 检查结果格式无效')
-  const run = runs.filter(r => r.head_sha === sha && r.head_branch === branch && events.includes(r.event))
+  const run = runs.filter(r => r.head_sha === sha && r.head_branch === branch && events.includes(r.event) &&
+      (runId === undefined || String(r.id) === String(runId)))
     .sort((a, b) => b.id - a.id || (b.run_attempt || 1) - (a.run_attempt || 1))[0]
   if (!run || run.status !== 'completed') return { state: 'pending', run }
   return { state: run.conclusion === 'success' ? 'success' : 'failed', run }
 }
 
 async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.github.com', requiredWorkflows = REQUIRED_WORKFLOWS,
-  branch = 'main', events = ['push', 'workflow_dispatch'],
+  branch = 'main', events = ['push', 'workflow_dispatch'], dispatchRunIds = {},
   // PDA 等待含上传、迁移及页面验收的整个浏览器部署；普通 Tests/Security 门禁仍只等 25 分钟。
   timeoutMs = (requiredWorkflows.includes('deploy-browser.yml') ? 225 : 25) * 60 * 1000, intervalMs = 15000,
   fetchImpl = fetch, now = Date.now, sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), log = console.log,
@@ -22,6 +23,9 @@ async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.git
   // 远小于总超时，并且给出可操作的提示（用手动补跑并指定已部署的提交）。
   missingRunTimeoutMs = 5 * 60 * 1000 }) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository || '') || !/^[a-f0-9]{40}$/i.test(sha || '') || !token) throw new Error('缺少合法仓库、提交 SHA 或 GitHub token')
+  for (const [workflow, id] of Object.entries(dispatchRunIds)) {
+    if (!requiredWorkflows.includes(workflow) || !/^[1-9]\d*$/.test(id || '')) throw new Error('发布工作流运行编号无效')
+  }
   const deadline = now() + timeoutMs
   const missingSince = new Map()
   while (true) {
@@ -50,7 +54,8 @@ async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.git
         await sleep(Math.min(1000 * (attempt + 1), Math.max(0, deadline - now())))
       }
       const data = await response.json()
-      const state = assessRuns(data.workflow_runs, sha, { branch, events })
+      const runId = dispatchRunIds[workflow]
+      const state = assessRuns(data.workflow_runs, sha, { branch, events: runId ? ['workflow_dispatch'] : events, runId })
       if (state.state === 'failed') throw new Error(`${workflow} 在 ${sha} 的检查未通过：${state.run.conclusion}`)
       return { workflow, ...state }
     }))
@@ -64,9 +69,8 @@ async function waitForChecks({ repository, sha, token, apiUrl = 'https://api.git
       const expired = missing.find(s => now() - missingSince.get(s.workflow) >= missingRunTimeoutMs)
       if (expired) {
         throw new Error(
-          `提交 ${sha} 上找不到 ${expired.workflow} 的运行（push/workflow_dispatch）。`
-          + '该提交多半没有触发部署（例如只改了文档并带 [skip ci]）；请改用实际发布提交重跑，'
-          + '手动补跑时在 checkout_ref 里填那次发布提交。',
+          `提交 ${sha} 上找不到 ${expired.workflow} 的运行${dispatchRunIds[expired.workflow] ? ' #' + dispatchRunIds[expired.workflow] : ''}。`
+          + '请先核对本提交的检查和正式部署触发记录；PDA 补发时请在 checkout_ref 填写实际部署的完整提交。',
         )
       }
     } else {
@@ -84,6 +88,7 @@ if (require.main === module) {
     process.exitCode = 1
   } else {
     waitForChecks({ repository: process.env.GITHUB_REPOSITORY, sha: process.env.GITHUB_SHA, token: process.env.GITHUB_TOKEN, apiUrl: process.env.GITHUB_API_URL,
+      dispatchRunIds: process.env.BROWSER_RELEASE_RUN_ID ? { 'deploy-browser.yml': process.env.BROWSER_RELEASE_RUN_ID } : {},
       requiredWorkflows: process.env.REQUIRE_BROWSER_DEPLOY === '1' ? [...REQUIRED_WORKFLOWS, 'deploy-browser.yml'] : REQUIRED_WORKFLOWS })
       .catch(error => { console.error(`::error::${error.message}`); process.exitCode = 1 })
   }

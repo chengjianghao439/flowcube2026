@@ -1,17 +1,18 @@
 name: Deploy Browser App
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
+    inputs:
+      checkout_ref:
+        description: 经授权发布的 main 完整提交 SHA，必须与触发时的 main 一致
+        required: true
+        type: string
 
 permissions:
   contents: read
   actions: write # 删除本次临时镜像 artifact，避免长期占用 Actions 存储配额。
 
-# 并发保护（2026-08-11 生产事故修复）：main 上连续多次 push 会触发多个 Deploy 并发在服务器
-# 跑 docker compose up --build 互相抢容器。concurrency 让同一时间只跑一个 Deploy——
+# 保持同一时间只跑一个部署，避免多次显式发布同时切换服务器容器。
 # 已开始的部署必须完成或故障停写，不在应用切换中途取消；待运行队列保留最新提交。
 concurrency:
   # 与 build-desktop / build-pda-apk 共用同一个 group：三者都要 SSH 到同一台服务器操作
@@ -26,14 +27,26 @@ env:
 
 jobs:
   deploy:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # 故障预算：检查 30 + 构建 20 + artifact 3 + 部署 165 + 清理 3；job 另留 3 分钟。
     timeout-minutes: 224
 
     steps:
+      - name: Validate authorized dispatch
+        shell: bash
+        env:
+          RELEASE_CHECKOUT_REF: ${{ inputs.checkout_ref }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main ||
+                ! "$RELEASE_CHECKOUT_REF" =~ ^[0-9a-f]{40}$ || "$RELEASE_CHECKOUT_REF" != "$GITHUB_SHA" ]]; then
+            echo '::error::网页部署必须显式指定触发时 main 的完整提交 SHA'
+            exit 1
+          fi
       - name: Checkout code
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Setup Node 22
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
