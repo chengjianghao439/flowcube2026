@@ -10,7 +10,7 @@
  */
 
 import { create } from 'zustand'
-import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { isElectronRuntime } from '@/lib/platform'
 
 interface PendingConfirm {
   message: string
@@ -72,7 +72,7 @@ export const useDirtyGuardStore = create<DirtyGuardState>((set, get) => ({
 
   showConfirm: (message, onConfirm, onCancel = () => {}) => {
     if (
-      IS_ELECTRON_DESKTOP &&
+      isElectronRuntime() &&
       typeof window !== 'undefined' &&
       typeof window.flowcubeDesktop?.showMessageBox === 'function'
     ) {

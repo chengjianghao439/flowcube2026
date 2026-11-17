@@ -11,7 +11,7 @@ import { useEffect, useRef } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AppDialog } from '@/components/shared/AppDialog'
-import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { isElectronRuntime } from '@/lib/platform'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -30,7 +30,7 @@ interface ConfirmDialogProps {
 function useNativeConfirmAvailable(): boolean {
   return (
     typeof window !== 'undefined' &&
-    IS_ELECTRON_DESKTOP &&
+    isElectronRuntime() &&
     typeof window.flowcubeDesktop?.showMessageBox === 'function'
   )
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { getEffectiveApiOrigin } from '@/config/api'
 import { payloadClient as apiClient } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
-import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { isElectronRuntime } from '@/lib/platform'
 import { preparePrintJobContent } from '@/lib/printJobContent'
 import { reportPrintOutcomeWithRetry } from '@/lib/desktopLocalPrint'
 import { registerPrintPoller, setDesktopClientId } from '@/lib/printQueue'
@@ -20,7 +20,7 @@ type ClaimedJob = {
 }
 
 async function getDesktopClientInfo(): Promise<ClientInfo | null> {
-  if (!IS_ELECTRON_DESKTOP) return null
+  if (!isElectronRuntime()) return null
   const fn = window.flowcubeDesktop?.getClientInfo
   if (typeof fn !== 'function') return null
   try {
@@ -100,8 +100,7 @@ export default function DesktopPrintClientBridge() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
   useEffect(() => {
-    if (!IS_ELECTRON_DESKTOP || !isAuthenticated) return
-    if (typeof window === 'undefined') return
+    if (!isElectronRuntime() || !isAuthenticated) return
     if (typeof window.flowcubeDesktop?.printZpl !== 'function') return
 
     let cancelled = false

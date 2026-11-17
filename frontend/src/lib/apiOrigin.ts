@@ -23,12 +23,6 @@ export function setStoredApiOrigin(raw: string): void {
   setApiBase(raw)
 }
 
-/** 当前页面是否为 file://（Electron 加载本地 dist） */
-export function isFileProtocol(): boolean {
-  if (typeof window === 'undefined') return false
-  return window.location.protocol === 'file:'
-}
-
 /**
  * 根据本地配置同步 axios baseURL。
  * - 已配置或安装包内置默认：使用绝对 `${origin}/api`

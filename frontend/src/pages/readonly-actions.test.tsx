@@ -352,6 +352,7 @@ test('打印机关联本机等待设备读取期间撤权，不发送更新请�
   let release!: (value: string) => void
   vi.spyOn(apiConfig, 'getEffectiveApiOrigin').mockReturnValue('https://synthetic.invalid')
   vi.stubGlobal('flowcubeDesktop', {
+    isDesktop: true,
     getPrintClientCredential: () => new Promise<string>(resolve => { release = resolve }),
     getClientInfo: async () => ({ clientId: 'synthetic-client', hostname: '合成设备' }),
     getSystemPrinters: async () => [{ name: printer.name }],

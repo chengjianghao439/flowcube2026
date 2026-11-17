@@ -10,7 +10,7 @@ import { payloadClient as client } from '@/api/client'
 import { getMyInfoApi, getMyWarehouseScopeApi } from '@/api/users'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
-import { IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { isElectronRuntime } from '@/lib/platform'
 import { visibleAccountIdentity } from '@/lib/visibleAccountIdentity'
 
 export default function UserMenu() {
@@ -105,7 +105,7 @@ export default function UserMenu() {
                 onClick={() => {
                   setMenuOpen(false)
                   if (
-                    IS_ELECTRON_DESKTOP &&
+                    isElectronRuntime() &&
                     typeof window.flowcubeDesktop?.showMessageBox === 'function'
                   ) {
                     void window.flowcubeDesktop.showMessageBox({

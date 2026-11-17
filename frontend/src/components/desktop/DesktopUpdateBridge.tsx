@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/lib/toast'
+import { getElectronBridge } from '@/lib/platform'
 
 /** 根部订阅，与登录、当前工作区或仪表盘是否打开无关。晚到快照由 preload 补送。 */
 export function DesktopUpdateBridge() {
@@ -9,13 +10,11 @@ export function DesktopUpdateBridge() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    const desktop = window.flowcubeDesktop
-    if (!desktop?.isDesktop) return
-    return desktop.subscribeUpdateAvailable?.(setUpdate)
+    return getElectronBridge()?.subscribeUpdateAvailable?.(setUpdate)
   }, [])
 
   async function handleUpdate() {
-    const start = window.flowcubeDesktop?.startUpdateDownload
+    const start = getElectronBridge()?.startUpdateDownload
     if (!update || !start || busy) return
     setBusy(true)
     try {
@@ -27,7 +26,7 @@ export function DesktopUpdateBridge() {
   }
 
   async function handleIgnore() {
-    const ignore = window.flowcubeDesktop?.ignoreUpdateVersion
+    const ignore = getElectronBridge()?.ignoreUpdateVersion
     if (!update || !ignore || busy) return
     setBusy(true)
     try {

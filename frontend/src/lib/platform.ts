@@ -1,23 +1,13 @@
-/**
- * 构建时注入的运行时平台标识（与 Vite env 一致）。
- *
- * 交付形态：
- * - **桌面 ERP**：`npm run dev` / `npm run build`（`VITE_ELECTRON=1`），仅随 Electron 安装包分发，非独立 Web 站点。
- * - **安卓 PDA**：`npm run dev:pda` / `npm run build:pda`（`VITE_CAPACITOR=1`）。
- */
-export const IS_ELECTRON_DESKTOP = import.meta.env.VITE_ELECTRON === '1'
-
-/** Capacitor / Android PDA WebView 打包 */
+/** PDA 构建入口与原生运行时独立，浏览器也可运行 PDA 构建。 */
 export const IS_CAPACITOR_PDA = import.meta.env.VITE_CAPACITOR === '1'
 
-/**
- * 运行时是否真的运行在 Electron 桌面壳内。
- *
- * ⚠️ 不要用 IS_ELECTRON_DESKTOP（VITE_ELECTRON 构建期常量）来判断「是不是桌面」：
- * 生产浏览器端同样用 Electron target 构建（VITE_ELECTRON=1），该常量也为 true，
- * 会把普通网页用户误当成桌面安装包（曾导致网页端被「安装包未配置服务器地址」门控挡死）。
- * 真正的桌面壳由 preload 注入 window.flowcubeDesktop，浏览器里不存在，故以此作运行时判据。
- */
+/** 网页与桌面共用 VITE_ELECTRON 构建。只有 preload 标记的桥可以提供桌面能力。 */
+export function getElectronBridge(): Window['flowcubeDesktop'] {
+  if (typeof window === 'undefined') return undefined
+  const bridge = window.flowcubeDesktop
+  return bridge?.isDesktop === true ? bridge : undefined
+}
+
 export function isElectronRuntime(): boolean {
-  return typeof window !== 'undefined' && !!window.flowcubeDesktop
+  return Boolean(getElectronBridge())
 }

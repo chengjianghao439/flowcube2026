@@ -24,21 +24,13 @@ export function desktopLocalPrintRequestHeaders(): Record<string, string> {
   return headers
 }
 
-function isDesktopLocalPrintAvailable(): boolean {
-  return (
-    typeof window !== 'undefined' && typeof window.flowcubeDesktop?.printZpl === 'function'
-  )
-}
-
 /** 按实际运行时判断本机打印能力；桌面接口存在但缺少打印方法时为 electron_no_bridge。 */
 export function getLocalPrintEnvironmentKind():
   | 'ok'
   | 'browser'
   | 'electron_no_bridge' {
-  if (typeof window === 'undefined') return 'browser'
-  if (isDesktopLocalPrintAvailable()) return 'ok'
-  if (isElectronRuntime()) return 'electron_no_bridge'
-  return 'browser'
+  if (!isElectronRuntime()) return 'browser'
+  return typeof window.flowcubeDesktop?.printZpl === 'function' ? 'ok' : 'electron_no_bridge'
 }
 
 function isConflictError(e: unknown): boolean {

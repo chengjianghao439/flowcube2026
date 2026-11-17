@@ -1,7 +1,7 @@
 /**
- * ERP API 根地址（不含 /api）。支持按 hostname 动态默认、多地址探测与 fallback。
+ * ERP API 根地址（不含 /api）。保留已配置地址和原恢复记录使用的同源地址。
  */
-import { IS_CAPACITOR_PDA, IS_ELECTRON_DESKTOP } from '@/lib/platform'
+import { IS_CAPACITOR_PDA, isElectronRuntime } from '@/lib/platform'
 import { ERP_PRODUCTION_ORIGIN } from '@/config/env'
 
 export const API_BASE_STORAGE_KEY = 'API_BASE_URL'
@@ -91,7 +91,7 @@ export function isStaleLocalViteProxyOrigin(raw: string): boolean {
  * - 内置地址缺失（漏注入）的应急态：仅清掉误同步的「本机」Vite 地址，保留 override 兜底。
  */
 export function clearElectronStaleViteOrigins(): void {
-  if (!IS_ELECTRON_DESKTOP) return
+  if (!isElectronRuntime()) return
   if (typeof localStorage === 'undefined') return
   const builtin = normalizeApiBase(getDynamicDefaultApi())
   const raw = readStorageValue(API_BASE_STORAGE_KEY)
@@ -104,32 +104,18 @@ export function clearElectronStaleViteOrigins(): void {
 }
 
 /**
- * 按当前页面 hostname 推断默认 API 根：
- * - Electron / file://：页面无 hostname，使用 VITE_ERP_PRODUCTION_ORIGIN（打包时注入）；缺失时不再静默退回 localhost
- * - Vite dev(5173) / preview(4173)：统一用当前页面 origin，API 走 /api 代理（局域网用 Mac IP 打开时勿直连 :3000，否则连到访问者本机或未监听端口）
- * - 浏览器 localhost / 127.0.0.1 → http://localhost:3000（直连后端，本机开发）
- * - 浏览器 192.168.* 且非上述端口 → http://{同主机}:3000
- * - 其它 → 构建期注入的生产地址；未注入时退回当前站点 origin
+ * Electron 使用安装包地址；本地文件也需要绝对 API 地址。
+ * HTTP(S) 页面使用当前站点的 /api 代理，包含 Vite 预览和正式网页。
  */
 export function getDynamicDefaultApi(): string {
   if (typeof window === 'undefined') return 'http://localhost:3000'
-  const envProd = ERP_PRODUCTION_ORIGIN
+  if (isFileProtocol() || isElectronRuntime()) return ERP_PRODUCTION_ORIGIN
+  return window.location.origin === 'null' ? '' : window.location.origin
+}
 
-  if (isFileProtocol() || IS_ELECTRON_DESKTOP) {
-    if (envProd) return envProd
-    return ''
-  }
-
-  const port = window.location.port
-  if (port === '5173' || port === '4173') {
-    return window.location.origin.replace(/\/$/, '')
-  }
-
-  const h = window.location.hostname.toLowerCase()
-  if (!h || h === 'localhost' || h === '127.0.0.1') return 'http://localhost:3000'
-  if (/^192\.168\./.test(h)) return `http://${h}:3000`
-  if (envProd) return envProd
-  return window.location.origin.replace(/\/$/, '')
+function hasSameOriginPackagedDefault(): boolean {
+  return !IS_CAPACITOR_PDA && ERP_PRODUCTION_ORIGIN !== '' &&
+    typeof window !== 'undefined' && ERP_PRODUCTION_ORIGIN === window.location.origin
 }
 
 export function probeErpApiOrigin(origin: string): Promise<boolean> {
@@ -167,51 +153,18 @@ export function probeRelativeErpApi(): Promise<boolean> {
 }
 
 /**
- * fallback 尝试顺序（去重）：
- * localStorage → 动态默认 → localhost:3000（仅浏览器开发态）→ 构建期生产地址
+ * 仅允许当前明确配置的地址参与重试。
+ * 网页的同源默认地址已由原请求使用，不是另一个重试候选。
  */
 export function collectErpApiFallbackCandidates(): string[] {
-  const out: string[] = []
-  const seen = new Set<string>()
-  const add = (raw: string | null | undefined) => {
-    const n = raw ? normalizeApiBase(raw) : ''
-    if (n && !seen.has(n)) {
-      seen.add(n)
-      out.push(n)
-    }
-  }
-
-  add(getStoredApiBaseOverride())
-
-  if (typeof window !== 'undefined') {
-    add(getDynamicDefaultApi())
-    if (!IS_ELECTRON_DESKTOP && !IS_CAPACITOR_PDA) {
-      add('http://localhost:3000')
-    }
-    add(ERP_PRODUCTION_ORIGIN)
-  } else {
-    add('http://localhost:3000')
-    add(ERP_PRODUCTION_ORIGIN)
-  }
-
-  return out
+  if (!isElectronRuntime() && !isFileProtocol() && hasSameOriginPackagedDefault()) return []
+  const origin = getEffectiveApiOrigin()
+  return origin ? [origin] : []
 }
 
 /** 已保存地址或动态默认（含旧键迁移） */
 export function getApiBase(): string {
-  // 桌面安装包优先用构建期内置地址（见 getStoredEffectiveApiOrigin 注释）
-  if (IS_ELECTRON_DESKTOP) {
-    const builtin = normalizeApiBase(getDynamicDefaultApi())
-    if (builtin) return builtin
-  }
-  const override = getStoredApiBaseOverride()
-  if (override) {
-    if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(override)) {
-      return getDynamicDefaultApi()
-    }
-    return override
-  }
-  return getDynamicDefaultApi()
+  return getEffectiveApiOrigin() ?? getDynamicDefaultApi()
 }
 
 /**
@@ -220,31 +173,6 @@ export function getApiBase(): string {
  */
 export function hasUserConfiguredApiOrigin(): boolean {
   return Boolean(getStoredApiBaseOverride())
-}
-
-/** 仅已写入 localStorage 的地址（去重、归一化），主键优先于旧键 */
-export function getUserConfiguredApiOriginsInOrder(): string[] {
-  const override = getStoredApiBaseOverride()
-  return override ? [override] : []
-}
-
-function getStoredEffectiveApiOrigin(): string | null {
-  // 桌面安装包：地址固定来自构建期注入，忽略本地残留 override，
-  // 避免老机器 localStorage 残留的旧地址压过新版内置地址（改地址 = 重新打包发版即可全量生效）。
-  // 仅当内置地址缺失（漏注入）时才应急回退到残留 override。
-  if (IS_ELECTRON_DESKTOP) {
-    const builtin = normalizeApiBase(getDynamicDefaultApi())
-    if (builtin) return builtin
-  }
-  const override = getStoredApiBaseOverride()
-  if (override) {
-    if (IS_ELECTRON_DESKTOP && isStaleLocalViteProxyOrigin(override)) {
-      const dynamic = normalizeApiBase(getDynamicDefaultApi())
-      return dynamic || null
-    }
-    return override
-  }
-  return null
 }
 
 export function setApiBase(url: string): void {
@@ -263,37 +191,29 @@ export function setApiBase(url: string): void {
 }
 
 /**
- * axios：浏览器未手动配置时返回 null → 相对路径 /api；
- * file:// 使用安装包内置默认地址；未注入时返回 null，由连接门控提示配置问题。
+ * 保留同源旧地址的原始 Axios 形态，供恢复记录按原地址匹配。
+ * 普通网页未配置地址时通过相对 /api 访问。
  */
 export function getEffectiveApiOrigin(): string | null {
-  const stored = getStoredEffectiveApiOrigin()
-  if (stored) return stored
-  if (!isFileProtocol()) return null
-  const d = normalizeApiBase(getDynamicDefaultApi())
-  return d || null
+  if (isElectronRuntime() || isFileProtocol()) {
+    if (ERP_PRODUCTION_ORIGIN) return ERP_PRODUCTION_ORIGIN
+    const override = getStoredApiBaseOverride()
+    return override && !isStaleLocalViteProxyOrigin(override) ? override : null
+  }
+  if (hasSameOriginPackagedDefault()) return ERP_PRODUCTION_ORIGIN
+  return getStoredApiBaseOverride() || null
 }
 
 function publishDefaultApiOriginToWindow(): void {
-  if (typeof window === 'undefined') return
-  const hostWindow = window as typeof window & { __FLOWCUBE_DEFAULT_API_ORIGIN__?: string }
-  hostWindow.__FLOWCUBE_DEFAULT_API_ORIGIN__ = normalizeApiBase(getDynamicDefaultApi()) || ''
+  if (!isElectronRuntime()) return
+  window.__FLOWCUBE_DEFAULT_API_ORIGIN__ = ERP_PRODUCTION_ORIGIN
 }
 
 publishDefaultApiOriginToWindow()
 
-/** 登录成功后固化当前 API 根 */
+/** 登录后只维护已保存且实际使用的地址。 */
 export function persistErpApiBaseAfterLogin(): void {
-  // 桌面安装包地址固定来自构建期注入，不写入 localStorage override（避免残留压过新版内置地址）
-  if (IS_ELECTRON_DESKTOP) return
-  const existing = getEffectiveApiOrigin()
-  if (existing) {
-    setApiBase(existing)
-    return
-  }
-  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
-    // Capacitor WebView 的 origin 不是后端（多为 https://localhost），禁止写入以免污染 API_BASE_URL
-    if (IS_CAPACITOR_PDA) return
-    setApiBase(window.location.origin)
-  }
+  if (isElectronRuntime() || isFileProtocol() || IS_CAPACITOR_PDA || hasSameOriginPackagedDefault()) return
+  const saved = getStoredApiBaseOverride()
+  if (saved) setApiBase(saved)
 }

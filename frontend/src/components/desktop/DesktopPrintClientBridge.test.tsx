@@ -7,7 +7,6 @@ import DesktopPrintClientBridge from './DesktopPrintClientBridge'
 const mocks = vi.hoisted(() => ({ post: vi.fn(), print: vi.fn() }))
 vi.mock('@/api/client', () => ({ payloadClient: { post: mocks.post } }))
 vi.mock('@/config/api', () => ({ getEffectiveApiOrigin: () => 'https://print-test.invalid' }))
-vi.mock('@/lib/platform', () => ({ IS_ELECTRON_DESKTOP: true }))
 vi.mock('@/store/authStore', () => ({ useAuthStore: (select: (s: { isAuthenticated: boolean }) => unknown) => select({ isAuthenticated: true }) }))
 let root: Root
 let host: HTMLDivElement
@@ -19,6 +18,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   mocks.post.mockReset(); mocks.print.mockReset().mockResolvedValue(undefined)
   Object.defineProperty(window, 'flowcubeDesktop', { configurable: true, value: {
+    isDesktop: true,
     getClientInfo: async () => ({ clientId: 'test-client', hostname: 'test-only' }),
     getPrintClientCredential: async () => 'a'.repeat(64),
     getSystemPrinters: async () => [{ name: '虚拟标签机' }], printZpl: mocks.print,
@@ -37,6 +37,13 @@ async function run(extra: Record<string, unknown> = {}, failComplete = false) {
   await act(async () => { await vi.advanceTimersByTimeAsync(1500) })
 }
 function reports(kind: string) { return mocks.post.mock.calls.filter(([url]) => url.endsWith(`/${kind}-client`)) }
+
+test('共享 ERP 构建中的网页即使存在同名方法也不领取桌面打印任务', async () => {
+  window.flowcubeDesktop!.isDesktop = false
+  await run()
+  expect(mocks.post).not.toHaveBeenCalled()
+  expect(mocks.print).not.toHaveBeenCalled()
+})
 
 test('三份标签以单份内容和份数提交，携带工作站凭据完成核销', async () => {
   await run({ copies: 3 })

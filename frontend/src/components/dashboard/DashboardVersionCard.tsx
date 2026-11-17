@@ -12,20 +12,21 @@ import { resolveAppUpdateDownloadUrl } from '@/lib/resolveAppUpdateDownloadUrl'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { STATUS_TONE_CLASS } from '@/lib/statusTone'
+import { getElectronBridge } from '@/lib/platform'
 
 export default function DashboardVersionCard() {
   const qc = useQueryClient()
   const [updateBusy, setUpdateBusy] = useState(false)
   const [checking, setChecking] = useState(false)
+  const desktop = getElectronBridge()
 
   const { data: desktopRuntime } = useQuery({
     queryKey: ['desktop-runtime-info'],
     queryFn: async () => {
-      const d = window.flowcubeDesktop
-      if (!d?.isPackaged || !d.getAppVersion) return { packaged: false as const, version: null as string | null }
-      const packaged = await d.isPackaged()
+      if (!desktop?.isPackaged || !desktop.getAppVersion) return { packaged: false as const, version: null as string | null }
+      const packaged = await desktop.isPackaged()
       if (!packaged) return { packaged: false as const, version: null as string | null }
-      const version = await d.getAppVersion()
+      const version = await desktop.getAppVersion()
       return { packaged: true as const, version }
     },
     staleTime: Infinity,
@@ -59,10 +60,7 @@ export default function DashboardVersionCard() {
         toast.warning('暂无法获取最新版本，请稍后重试')
       }
 
-      const d = window.flowcubeDesktop
-      if (d?.triggerUpdateCheck) {
-        await d.triggerUpdateCheck()
-      }
+      await desktop?.triggerUpdateCheck?.()
     } catch {
       toast.error('检查更新失败，请检查网络连接')
     } finally {
@@ -87,7 +85,7 @@ export default function DashboardVersionCard() {
     Boolean(desktopRuntime?.packaged) && showNewAvailable && Boolean(downloadUrl)
 
   async function handleDesktopUpdate() {
-    const start = window.flowcubeDesktop?.startUpdateDownload
+    const start = desktop?.startUpdateDownload
     if (!downloadUrl || !latestVer || !start) return
     setUpdateBusy(true)
     try {
