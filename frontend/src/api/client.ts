@@ -338,6 +338,7 @@ apiClient.interceptors.response.use(
 
     if (
       cfg
+      && (cfg.method === 'get' || cfg.method === 'head' || !!String(cfg.headers.get('X-Request-Key') ?? '').trim())
       && status == null
       && (transportCode === 'ERR_NETWORK' || rawMsg === 'Network Error')
     ) {
