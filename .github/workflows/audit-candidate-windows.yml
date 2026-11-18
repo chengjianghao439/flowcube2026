@@ -1,0 +1,75 @@
+name: Windows x64 audit candidate
+
+on:
+  push:
+    branches:
+      - codex/validate-audit-remediation-20261118
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  TARGET_SHA: 078f1a30ca27beb6ff2a71bb0869a29824e69471
+  VITE_ERP_PRODUCTION_ORIGIN: https://flowcube-validation.invalid
+  CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out fixed candidate
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: 078f1a30ca27beb6ff2a71bb0869a29824e69471
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: "22"
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          npm ci --prefix frontend
+          npm ci --prefix desktop
+      - name: Prepare fixed NSIS 3.0.4.1
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archive = Join-Path $env:RUNNER_TEMP "nsis-3.0.4.1.7z"
+          $directory = Join-Path $env:RUNNER_TEMP "flowcube-validation-nsis"
+          Invoke-WebRequest -Uri "https://github.com/electron-userland/electron-builder-binaries/releases/download/nsis-3.0.4.1/nsis-3.0.4.1.7z" -OutFile $archive
+          node scripts/verify-nsis-archive.cjs $archive
+          if ($LASTEXITCODE -ne 0) { throw "NSIS archive integrity check failed" }
+          7z x -y $archive "-o$directory"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "$directory\Bin\makensis.exe")) { throw "NSIS extraction failed" }
+          "ELECTRON_BUILDER_NSIS_DIR=$directory" >> $env:GITHUB_ENV
+      - name: Build and identify Windows installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          GITHUB_SHA="$TARGET_SHA" npm --prefix desktop run dist:win
+          test "$(cat desktop/.git-build-sha)" = "$TARGET_SHA"
+          node scripts/verify-desktop-icon.cjs "desktop/release/win-unpacked/极序 Flow.exe"
+          mkdir out
+          cp desktop/release/*.exe out/
+          node scripts/release-artifact-manifest.cjs write out .exe
+          node scripts/release-artifact-manifest.cjs verify out .exe
+          cat out/release-provenance.json
+      - name: Verify NSIS runtime
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem out -Filter "*.exe")
+          if ($installers.Count -ne 1) { throw "Expected a single Windows installer" }
+          $content = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($installers[0].FullName))
+          if ($content -notmatch "Nullsoft Install System v3.04") { throw "Installer runtime is not NSIS v3.04" }
+      - name: Upload verification artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: FlowCube-Windows-x64-Audit-Verification
+          path: out/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
