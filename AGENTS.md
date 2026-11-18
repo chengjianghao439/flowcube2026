@@ -15,9 +15,9 @@
 4. **显式指令优先**：用户当前要求 > 本文件 > 主题文档 > 历史归档。历史文档里的「已修复/未提交/当前数量」不得当作今天的状态。
 5. **不要反向推断**：本文件没写不等于允许；涉及库存、账款、权限、状态机的改动，先读对应主题文档与完整调用链，再动手。
 
-## 0.1 红线：没有守卫、后果重、最容易忘的
+## 0.1 红线：动手前核对
 
-> 这些**没有 CI 拦截**，全靠动手前对照；每条都指向实现位置，详细背景见对应主题文档（§4）。
+> 涉及这些路径时逐条核对。有测试入口的条目标出回归位置，实际 CI 接线以工作流为准。详细背景见对应主题文档（§4）。
 
 - **撤回收货拒绝「已不属于本仓」的容器**，三道守卫都要在：① `transfer_order_id` 非空（调拨在途）；② 容器 `warehouse_id` 已不在任务所属仓（整箱调拨已完成，409 `INBOUND_TASK_CONTAINER_MOVED_AWAY`）；③ 容器**曾参与过调拨**——`inventory_logs` 里有 `ref_type='transfer'` 的调出/调入流水（409 `INBOUND_TASK_CONTAINER_TRANSFERRED`）。②③ 不能只认容器当前仓库，③ 还**不能只查撤回候选容器**：候选集只有 ACTIVE/待上架/EMPTY，而在途异常了结（`forceCloseInTransit`）把在途容器置 **VOID** 并清空 `transfer_order_id`，容器同时脱离候选集、摘掉在途标记，四道守卫会全落空——故 ③ 按**该收货单名下全部未删除容器**是否有调拨流水判定（覆盖 A→B→A 往返与异常了结两种形态，但不误伤无调拨流水的普通作废）。回归 `tests/inbound-void-transferred-container.smoke.test.js`（§D 往返 / §E 异常了结 / §F 普通作废仍放行）（`inbound-tasks.void.js`、`transfer.service.js`）
 - **盘点扫码账面查询必须带 `locked_by_task_id IS NULL`**，action 用 `stockcheck.scan.<盘点单ID>` + 幂等回执（`stockcheck.service.js`、PDA `stockcheck.tsx`）
@@ -118,7 +118,7 @@
 - **项目凭据代为输入**（用户长期授权）：已授权任务中可用为本项目配置的凭据登录、输密码、完成认证，优先复用有效会话；**不索取密码/API Key/Token/恢复码**，不绕过验证码、生物识别等本人验证。
 - **不把密钥、口令、Token 写进代码、文档、日志或提交**，不在回复中回显；旧文档里的测试账号不要复制到新文档。
 - **模型提供方与上下文边界**：当前提供方会收到本会话完整上下文（仓库代码、命令输出、记忆摘要、开启 chronicle 时的屏幕内容）。允许：仓库代码、测试库、本地开发数据、脱敏样例；**禁止**：`deploy/production*.json`、`backend/.env` 真实口令、生产库导出、真实客户与账款明细。需要生产事实时由用户执行只读查询或先脱敏。
-- 不为普通子任务创建用户可见的新任务；是否委派按当前会话指令。技能按当前会话可用清单选择并读取，不假设 Claude 的命令、hooks 或插件在 Codex 中生效。
+- 不为普通子任务创建用户可见的新任务。是否委派按当前会话指令，技能按当前会话可用清单选择并读取，不假设 Claude 的命令、hooks 或插件在 Codex 中生效。交接和文档更新时点见 `docs/project-working-guide.md`。
 
 ## 2. 项目、目录与本地环境
 
@@ -165,7 +165,7 @@
 （命令均以 `npm run <名称>` 调用。）
 
 - **涉及数据库的测试必须用独立测试库**（`NODE_ENV=test` + 回环显式 `DB_*` + `flowcube_<用途>_test` 库名），**不得连生产库**。本机凭据在 `~/.config/flowcube/operations20260912-test.env`（`set -a; source …; set +a` 注入），且必须给可写的 `APP_UPDATE_DOWNLOADS_DIR`，否则 `app.js` 启动即 EACCES——**该报错与业务代码无关，别当成回归失败**。
-- 本机 Node 26 下前端单测有 9 文件 / 56 用例的既有假失败（`localStorage is not available`）；对照基线只看**是否新增失败**，不看绝对数。
+- 核对本地 Node 是否符合根 `.nvmrc`。需要判断既有失败时，在同一受支持版本和环境下复跑基线。
 - **纯文档修改**核对内容、路径与 diff 即可，不必起数据库或跑全量回归。
 - 各命令的完整说明、专项矩阵与隔离要求 → `docs/verification-commands.md`。
 
@@ -196,9 +196,9 @@
 | 2026-09-19 前单文件全文（本次重构来源） | `docs/agents-md-archive-2026-09-19.md` |
 | 2026-09-19 文档体系重构说明 | `docs/agents-md-refactor-2026-09-19.md` |
 | 抽出的日记全文（原 §11–§18） | `docs/agents-md-archive-2026-09-18.md` |
-| 2026-09-18 深审计 | `docs/audit-2026-09-18.md`、`output/audit-2026-09-18/findings/*.json` |
+| 2026-09-18 深审计 | `docs/audit-2026-09-18.md` |
 | 2026-09-26 一致性审查（报告 / 任务卡 / 返货设计） | `docs/system-consistency-audit-2026-09-26.md`、`docs/system-consistency-tasks-2026-09-26.md`、`docs/sale-return-reverse-flow-2026-09-26.md` |
 | 2026-09-26 开发库误迁移偏差（只读核对，保持原状） | `docs/dev8-migration-drift-2026-09-26.md` |
-| 发布说明与结果 | `docs/release-notes/*.md`、`docs/release-v0.9.*-result.md` |
+| 发布说明与结果 | `docs/release-notes/*.md`、`docs/release-v*-result.md` |
 | 历史分支与工作树长期归档（2026-09-25） | `docs/worktree-retention-2026-09-25.md` |
 | 本机环境与本地库切换 | `docs/local-tooling-2026-09-04.md`、`docs/local-mysql8-cutover-2026-09-04.md` |

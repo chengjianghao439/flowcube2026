@@ -100,7 +100,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 
 - 本地服务器配置由不入 Git 的 `deploy/production.local.json` 提供；CI 使用工作流声明的 `VITE_ERP_PRODUCTION_ORIGIN` 和 `FLOWCUBE_SERVER_*` Variables。
 - 如果缺少 `SSH_PRIVATE_KEY`，浏览器自动部署不会生效；此时即使 `main` 已更新，线上页面也仍会停在旧版本
-- 建议同时阅读 [docs/DEPLOY.md](/Users/chengjianghao/flowcube/docs/DEPLOY.md)，后续统一从 `npm run release:prod` 发版
+- 建议同时阅读 [部署说明](DEPLOY.md)，后续统一从 `npm run release:prod` 发版
 
 ## 正式发布流程（唯一入口）
 
