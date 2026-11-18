@@ -232,6 +232,10 @@ jobs:
         run: npm run test:inbound-edit
       - name: 变更记录与归属入口契约
         run: npm run test:change-records
+      - name: PDA日志接口字符边界与失败反馈
+        run: npm run test:pda-audit-log-api
+      - name: PDA审计日志迁移离线契约
+        run: npm run test:pda-audit-log-migration
 
       - name: 契约测试 — 界面文案口径（禁用实现词/半角标点/官网双份一致/金额格式化）
         run: npm run test:copy-conventions
@@ -653,11 +657,6 @@ jobs:
 
       - name: 单元测试 — 订单记录归属与数据范围（无需 DB）
         run: npm run test:document-activity
-
-      - name: PDA日志接口字符边界与失败反馈
-        run: npm run test:pda-audit-log-api
-      - name: PDA审计日志迁移离线契约
-        run: npm run test:pda-audit-log-migration
 
       - name: 单元测试 — 待办入口与巡检下线（无需 DB）
         run: npm run test:workbench

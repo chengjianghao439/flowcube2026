@@ -5,6 +5,8 @@ const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
+const { load: parseWorkflow } = require('../frontend/node_modules/js-yaml')
+const { workflowScriptReachability } = require('./helpers/workflowScriptReachability')
 const root = path.resolve(__dirname, '..')
 const migration = '293_pda_audit_logs_formal_schema.sql'
 const { splitSqlStatements } = require('../backend/src/database/sqlStatements')
@@ -122,17 +124,8 @@ test('new offline and owned suites are reachable in CI, with no permission-probe
   assert.doesNotMatch(lane[1], /relatedEvents|change-records|go-live|inbound-edit/)
   // Exercise the actual existing CI-reachability predicate, including its
   // negative paths; a local-only substring check cannot prove global CI wiring.
-  const policy = read('tests/deployment-resources.test.js')
-  const begin = policy.indexOf('  const isReached = (name) => {')
-  const end = policy.indexOf('  const testScripts =', begin)
-  assert.ok(begin >= 0 && end > begin)
   function reached({ scripts = p.scripts, workflow = ci, source = runner } = {}) {
-    const module = { exports: null }
-    vm.runInNewContext(policy.slice(begin, end) + "\nmodule.exports = isReached('smoke:pda-audit-log-migration-runtime')", {
-      module, pkg: { scripts }, workflowText: workflow, matrixSuites: new Set(), root, path,
-      fs: { readFileSync(file) { assert.equal(file, path.join(root, 'scripts/repair-smoke-ephemeral.sh')); return source } },
-    })
-    return module.exports
+    return workflowScriptReachability({ scripts, workflow: parseWorkflow(workflow), ownedRunner: source })('smoke:pda-audit-log-migration-runtime')
   }
   assert.equal(reached(), true, 'the actual global CI guard must recognize this owned runtime')
   assert.equal(reached({ scripts: { ...p.scripts, 'smoke:pda-audit-log-migration-owned': 'bash scripts/repair-smoke-ephemeral.sh --wrong-suite' } }), false)

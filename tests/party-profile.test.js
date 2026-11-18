@@ -118,6 +118,7 @@ function importer() {
   } }
   return { calls, generatedCodes, service: load('backend/src/modules/import/import.service.js', {
     '../../utils/warehouseScope': load('backend/src/utils/warehouseScope.js', { '../config/db': { pool } }),
+    './stockImportBatches': load('backend/src/modules/import/stockImportBatches.js', { '../../config/db': { pool } }),
     '../../config/db': { pool }, '../../utils/codeGenerator': { generateMasterCode: async () => { generatedCodes.push('AUTOCODE'); return 'AUTOCODE' } },
     '../../engine/inventoryEngine': {}, '../../engine/containerEngine': {},
   }) }

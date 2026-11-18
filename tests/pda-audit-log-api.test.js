@@ -3,7 +3,8 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const vm = require('node:vm')
+const { load: parseWorkflow } = require('../frontend/node_modules/js-yaml')
+const { workflowScriptReachability } = require('./helpers/workflowScriptReachability')
 const { createFixture, listen, payload } = require('./helpers/pdaAuditLogApiFixture')
 
 for (const kind of ['error', 'undo']) {
@@ -50,19 +51,12 @@ for (const kind of ['error', 'undo']) {
 test('API runtime CI bridge refuses disconnected aliases, workflow or runner', () => {
   const root = path.resolve(__dirname, '..'), read = file => fs.readFileSync(path.join(root, file), 'utf8')
   const pkg = JSON.parse(read('package.json')), workflow = read('.github/workflows/test.yml'), runner = read('scripts/repair-smoke-ephemeral.sh')
-  const policy = read('tests/deployment-resources.test.js')
-  const start = policy.indexOf('  const isReached = (name) => {'), end = policy.indexOf('  const testScripts =', start)
-  assert.ok(start >= 0 && end > start)
   function reached(scripts = pkg.scripts, workflowText = workflow, runnerText = runner) {
-    const module = { exports: null }
-    vm.runInNewContext(policy.slice(start, end) + "\nmodule.exports = isReached('smoke:pda-audit-log-api-runtime')", {
-      module, pkg: { scripts }, workflowText, matrixSuites: new Set(), root, path,
-      fs: { readFileSync(file) { assert.equal(file, path.join(root, 'scripts/repair-smoke-ephemeral.sh')); return runnerText } },
-    })
-    return module.exports
+    return workflowScriptReachability({ scripts, workflow: parseWorkflow(workflowText), ownedRunner: runnerText })('smoke:pda-audit-log-api-runtime')
   }
   assert.equal(reached(), true)
   assert.equal(reached({ ...pkg.scripts, 'smoke:pda-audit-log-api-owned': 'bash scripts/repair-smoke-ephemeral.sh --wrong-suite' }), false)
   assert.equal(reached(pkg.scripts, workflow.replaceAll('npm run smoke:pda-audit-log-api-owned', 'npm run absent-suite')), false)
+  assert.equal(reached(pkg.scripts, workflow.replace('- run: npm run smoke:pda-audit-log-api-owned', '# - run: npm run smoke:pda-audit-log-api-owned')), false)
   assert.equal(reached(pkg.scripts, workflow, runner.replace('run_smoke smoke:pda-audit-log-api-runtime', 'run_smoke absent-suite')), false)
 })

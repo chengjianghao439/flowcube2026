@@ -70,6 +70,7 @@ function fixture(options = {}) {
     release: () => calls.push('release'),
     query: async (raw, args = []) => {
       const sql = raw.replace(/\s+/g, ' ').trim(); sqls.push(sql)
+      if (sql === 'SET TRANSACTION ISOLATION LEVEL READ COMMITTED') { calls.push('cancel-read-committed'); return [[]] }
       if (sql.includes('disposal_handling_sources')) throw Error('H3 must not query/lock source')
       if (sql.startsWith('SELECT id,request_fingerprint FROM operation_requests WHERE request_key=')) return [[]]
       if (sql === 'SELECT id,request_fingerprint FROM operation_requests WHERE id=? FOR SHARE') { assert.equal(Number(args[0]), 1); return [[{ id: 1, request_fingerprint: state.requestFingerprint }]] }
@@ -191,6 +192,7 @@ test('same warehouse reserve/release/partial dispatch still commit once without 
 })
 test('linked partially shipped cancel keeps historical A/line while trimming current quantity', async () => {
   const f = fixture({ status: 3, shipped: 2, shippedTask: true }); await f.sale.cancel(81, actor, [8], 'key')
+  assert.deepEqual(f.calls.slice(0, 2), ['cancel-read-committed', 'begin'])
   assert.equal(f.state.head.status, 4); assert.equal(f.state.item.quantity, 2); assert.equal(f.state.link.allocated_quantity, 10); assert.equal(f.state.link.target_line_id, 501)
   assert.equal(f.state.receivable.total_amount, 4); assert.equal(f.state.receivable.balance, 4)
   assert.equal(JSON.parse(f.state.moneyBasis.source_snapshot).items[0].quantity, '10')
