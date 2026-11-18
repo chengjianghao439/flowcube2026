@@ -44,7 +44,7 @@ import type { InventoryLog, InventoryOverviewItem } from '@/types/inventory'
 import type { TableColumn } from '@/types'
 import type { Category } from '@/types/categories'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
-import { importStockApi } from '@/api/inventory'
+import { getStockImportStatusApi, importStockApi, stockImportRequestKey, type ImportStockResult } from '@/api/inventory'
 
 const [codeColumn, articleColumn, specColumn, nameColumn, colorColumn] = productIdentityColumns()
 const inventoryColumns: (TableColumn<object> & { headerTitle?: string })[] = [
@@ -152,7 +152,7 @@ export default function InventoryPage() {
   // 库存导入弹窗
   const [importOpen, setImportOpen] = useState(false)
   const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState<{ success: number; errors: string[] } | null>(null)
+  const [importResult, setImportResult] = useState<ImportStockResult | null>(null)
   const importFileRef = useRef<HTMLInputElement>(null)
 
   // 出库弹窗
@@ -309,15 +309,29 @@ export default function InventoryPage() {
   // 库存初始化导入：下载模板 → 填数上传 → 后端逐行建容器/落库（POST /import/stock）
   async function handleImportStock(file: File) {
     if (!can(PERMISSIONS.IMPORT_STOCK_EXECUTE)) return
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('导入文件不能超过 5 MB')
+      return
+    }
     setImporting(true)
+    setImportResult(null)
+    let requestKey: string | undefined
     try {
-      const res = await importStockApi(file)
-      const errors = res.errors ?? []
-      setImportResult({ success: res.success ?? 0, errors })
-      toast.success(`导入成功：${res.success ?? 0} 条`)
+      requestKey = await stockImportRequestKey(file)
+      const result = await importStockApi(file, requestKey)
+      setImportResult(result)
+      if (result.success === result.totalRows) toast.success(`导入完成：${result.success} 条`)
+      else toast.warning(`已完成 ${result.success} 条，可用原文件继续`)
     } catch (e) {
-      const err = e as { message?: string }
-      toast.error(err?.message || '导入失败')
+      const progress = requestKey ? await getStockImportStatusApi(requestKey).catch(() => null) : null
+      if (progress) {
+        setImportResult(progress)
+        if (progress.success === progress.totalRows) toast.success(`导入完成：${progress.success} 条`)
+        else toast.warning(`已完成 ${progress.success} 条，可用原文件继续`)
+      } else {
+        const err = e as { message?: string }
+        toast.error(err?.message || '导入结果暂不可查，请重新选择原文件')
+      }
     } finally {
       setImporting(false)
     }
@@ -520,7 +534,8 @@ export default function InventoryPage() {
             } />
             {importResult && (
               <div className="rounded-lg border p-3 text-sm space-y-1">
-                <p className="text-success-ink font-medium">导入成功：{importResult.success} 条</p>
+                <p className="font-medium">批次 IMP{importResult.batchId}，已完成 {importResult.success}/{importResult.totalRows} 条</p>
+                {importResult.success < importResult.totalRows && <p>重新选择原文件将继续处理未完成的行。</p>}
                 {importResult.errors.length > 0 && (
                   <div className="max-h-64 overflow-y-auto text-destructive-ink text-sm leading-6 space-y-0.5">
                     {importResult.errors.slice(0, 20).map((err, i) => <p key={i}>{err}</p>)}

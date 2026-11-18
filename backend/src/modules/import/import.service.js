@@ -9,6 +9,7 @@ const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../..
 const { SETTLEMENT_TYPE, normalizeTermsDays } = require('../../constants/settlementType')
 const { normalizePartyProfile } = require('../../utils/partyProfile')
 const { scopeFilter } = require('../../utils/warehouseScope')
+const { openStockImportRun, getStockImportStatus, readProgress, claimRow, completeRow, recordRowFailure } = require('./stockImportBatches')
 
 // 仅导入入口使用严格枚举；历史记录读取仍由 settlementType.normalizeSettlementType 兼容旧值。
 function parseImportedSettlementType(value) {
@@ -162,21 +163,6 @@ async function buildStockTemplate(scopeWarehouseIds = null) {
   }
 }
 
-async function createImportBatch(fileName) {
-  try {
-    const [result] = await pool.query(
-      'INSERT INTO inventory_import_batches (file_name, row_count) VALUES (?, 0)',
-      [fileName || 'stock.xlsx'],
-    )
-    return result.insertId
-  } catch (error) {
-    if (error.code === 'ER_NO_SUCH_TABLE') {
-      throw new AppError('缺少表 inventory_import_batches，请先执行迁移 038_inventory_full_loop_source.sql', 500)
-    }
-    throw error
-  }
-}
-
 async function importSingleStockRow({
   batchId,
   rowIndex,
@@ -198,6 +184,10 @@ async function importSingleStockRow({
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
+    if (await claimRow(connection, batchId, rowIndex)) {
+      await connection.commit()
+      return { ok: true }
+    }
     const [[product]] = await connection.query(
       'SELECT id, name, unit FROM product_items WHERE code=? AND deleted_at IS NULL',
       [String(code).trim()],
@@ -230,6 +220,7 @@ async function importSingleStockRow({
     })
     const diff = Math.round((target - current) * 100) / 100
     if (diff === 0) {
+      await completeRow(connection, batchId, rowIndex)
       await connection.commit()
       return { ok: true }
     }
@@ -268,6 +259,7 @@ async function importSingleStockRow({
       operatorName,
     })
 
+    await completeRow(connection, batchId, rowIndex)
     await connection.commit()
     return { ok: true }
   } catch (error) {
@@ -280,35 +272,28 @@ async function importSingleStockRow({
   }
 }
 
-async function importStock({ fileBuffer, originalName, operator, scopeWarehouseIds = null }) {
+async function importStock({ fileBuffer, originalName, operator, scopeWarehouseIds = null, requestKey }) {
   const dataRows = await parseStockImportRows(fileBuffer)
-  const batchId = await createImportBatch(originalName)
-  const userId = operator?.userId ?? null
+  const run = await openStockImportRun({ fileBuffer, originalName, operator, scopeWarehouseIds, requestKey, dataRows })
+  const userId = operator.userId
   const operatorName = operator?.realName || operator?.operatorName || '未知'
 
-  let success = 0
-  const errors = []
-  for (let index = 0; index < dataRows.length; index += 1) {
-    const result = await importSingleStockRow({
-      batchId,
-      rowIndex: index,
-      row: dataRows[index],
+  for (const [rowIndex, row] of dataRows.entries()) {
+    const outcome = await importSingleStockRow({
+      batchId: run.batchId,
+      rowIndex,
+      row,
       userId,
       operatorName,
-      scopeWarehouseIds,
+      scopeWarehouseIds: run.warehouseIds,
     })
-    if (result.ok) {
-      success += 1
-    } else {
-      errors.push(result.error)
-    }
+    if (!outcome.ok) await recordRowFailure(run.batchId, rowIndex, outcome.error)
   }
 
-  await pool.query('UPDATE inventory_import_batches SET row_count=? WHERE id=?', [success, batchId])
-
+  const data = await readProgress(run)
   return {
-    data: { batchId, success, errors },
-    message: `导入完成：成功${success}条${errors.length ? `，失败${errors.length}条` : ''}`,
+    data,
+    message: `导入完成：成功${data.success}条${data.errors.length ? `，失败${data.errors.length}条` : ''}`,
   }
 }
 
@@ -596,6 +581,7 @@ module.exports = {
   importProducts,
   buildStockTemplate,
   importStock,
+  getStockImportStatus,
   buildCustomerTemplate,
   importCustomers,
   buildSupplierTemplate,

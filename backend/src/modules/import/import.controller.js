@@ -45,8 +45,22 @@ async function importStock(req, res, next) {
       originalName: req.file.originalname,
       operator: getOperatorFromRequest(req),
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
+      requestKey: req.get('X-Request-Key'),
     })
     return successResponse(res, result.data, result.message)
+  } catch (error) {
+    next(error)
+  }
+}
+
+async function stockImportStatus(req, res, next) {
+  try {
+    const data = await importService.getStockImportStatus({
+      operator: getOperatorFromRequest(req),
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
+      requestKey: req.get('X-Request-Key'),
+    })
+    return successResponse(res, data)
   } catch (error) {
     next(error)
   }
@@ -114,6 +128,7 @@ module.exports = {
   importProducts,
   downloadStockTemplate,
   importStock,
+  stockImportStatus,
   downloadCustomerTemplate,
   importCustomers,
   downloadSupplierTemplate,

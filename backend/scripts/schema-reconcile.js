@@ -118,11 +118,18 @@ async function main() {
       GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE`,
   )
   const indexMap = new Map(indexRows.map(r => [
-    `${String(r.tbl).toLowerCase()}.${String(r.idx)}`,
+    `${String(r.tbl).toLowerCase()}.${String(r.idx).toLowerCase()}`,
     { unique: Number(r.nonUnique) === 0, columns: String(r.cols || '').split(',') },
   ]))
   const requiredUniques = [...REQUIRED_ACTIVE_UNIQUES]
   if (executedSet.has('064_create_operation_requests.sql')) requiredUniques.push(OPERATION_REQUEST_IDENTITY)
+  if (executedSet.has('298_stock_import_receipts.sql')) {
+    requiredUniques.push(
+      { table: 'inventory_stock_import_runs', index: 'primary', columns: ['user_id', 'request_key'] },
+      { table: 'inventory_stock_import_runs', index: 'uk_stock_import_run_batch', columns: ['batch_id'] },
+      { table: 'inventory_stock_import_rows', index: 'primary', columns: ['batch_id', 'row_index'] },
+    )
+  }
   const uniqueProblems = []
   for (const req of requiredUniques) {
     const found = indexMap.get(`${req.table}.${req.index}`)
@@ -134,7 +141,7 @@ async function main() {
   // 旧式 (业务键, deleted_at) 唯一键：只提示，不判失败——演化库上它们大多是历史遗留噪音
   const legacyPairUniques = indexRows
     .filter(r => Number(r.nonUnique) === 0 && String(r.cols || '').endsWith(',deleted_at'))
-    .map(r => `${String(r.tbl).toLowerCase()}.${String(r.idx)}(${r.cols})`)
+    .map(r => `${String(r.tbl).toLowerCase()}.${String(r.idx).toLowerCase()}(${r.cols})`)
     .sort()
 
   const columnProblems = []

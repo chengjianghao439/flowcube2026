@@ -296,17 +296,33 @@ export const getExpiryAlertsApi = (p: { warehouseId?: number | null; warnDays?: 
 // 注意：后端 importStock 返回的 errors 是字符串数组（每项已是完整文案"第N行：..."），
 // 不是 {row, message} 对象——旧类型声明成对象导致前端 map(e=>e.row) 取到 undefined（静默错）。
 export interface ImportStockResult {
+  batchId: number
+  requestKey: string
   success: number
+  totalRows: number
   errors: string[]
 }
 
-export const importStockApi = (file: File) => {
+export async function stockImportRequestKey(file: File): Promise<string | undefined> {
+  if (!globalThis.crypto?.subtle) return undefined
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer())
+  const hex = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+  return `stock-import:${hex}`
+}
+
+export const importStockApi = (file: File, requestKey?: string) => {
   const form = new FormData()
   form.append('file', file)
   return apiClient.post<ImportStockResult>('/import/stock', form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+    headers: { 'Content-Type': 'multipart/form-data', ...(requestKey && { 'X-Request-Key': requestKey }) },
     // 导入失败时拦截器会弹全局 toast，这里只需页面 catch 兜底一次，避免双重弹窗
     skipGlobalError: true,
     timeout: 60_000,
   })
 }
+
+export const getStockImportStatusApi = (requestKey: string) =>
+  apiClient.get<ImportStockResult>('/import/stock/status', {
+    headers: { 'X-Request-Key': requestKey },
+    skipGlobalError: true,
+  })
