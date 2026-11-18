@@ -10,6 +10,14 @@ const SNAPSHOT = /^generation-[a-f0-9]{64}$/
 const ASSET = /^[^/]+-[A-Za-z0-9_-]{8,}\.[a-zA-Z0-9]+$/
 const SIZE_LIMIT = 64 * 1024 * 1024
 
+function pruneInactive(root, active) {
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (entry.isDirectory() && SNAPSHOT.test(entry.name) && entry.name !== active) {
+      fs.rmSync(path.join(root, entry.name), { recursive: true })
+    }
+  }
+}
+
 function saveHistory({ root, action, currentImage, previousImage, container }) {
   if (!IMAGE_ID.test(currentImage)) throw Error('目标前端镜像 ID 无法证明')
   if (previousImage && !IMAGE_ID.test(previousImage)) throw Error('原前端镜像 ID 无法证明')
@@ -28,15 +36,17 @@ function saveHistory({ root, action, currentImage, previousImage, container }) {
     return
   }
   if (action !== 'prepare') throw Error('未知静态资源留存操作')
-  if (!previousImage || previousImage === currentImage) return
   const installed = fs.existsSync(recorded) ? fs.readFileSync(recorded, 'utf8').trim() : null
   if (installed && !IMAGE_ID.test(installed)) throw Error('前端已发布镜像记录无效')
-  const name = 'generation-' + previousImage.slice('sha256:'.length)
   let active = null
   try { active = fs.readlinkSync(pointer) } catch (error) { if (error.code !== 'ENOENT') throw error }
   if (active && (!SNAPSHOT.test(active) || !fs.existsSync(path.join(root, active, 'assets')))) {
     throw Error('原前端静态资源留存未通过核对')
   }
+  // A prior interruption can leave an inactive generation on disk.
+  pruneInactive(root, active)
+  if (!previousImage || previousImage === currentImage) return
+  const name = 'generation-' + previousImage.slice('sha256:'.length)
   // A failed candidate may have created a container without completing cutover.
   // Keep serving the last successfully captured predecessor during forward repair.
   if (active === name || (installed && installed !== previousImage) || (!installed && active)) return
@@ -64,10 +74,8 @@ function saveHistory({ root, action, currentImage, previousImage, container }) {
       fs.chmodSync(file, 0o644)
     }
     fs.chmodSync(assets, 0o755)
-    // Move a complete snapshot into place. If a prior crash left an inactive
-    // copy of this generation, remove only that exact task-owned generation.
+    // Move the complete snapshot into place before exposing it to Nginx.
     const snapshot = path.join(root, name)
-    if (fs.existsSync(snapshot)) fs.rmSync(snapshot, { recursive: true })
     const stagedSnapshot = path.join(stage, 'generation')
     fs.mkdirSync(stagedSnapshot, { mode: 0o755 })
     fs.chmodSync(stagedSnapshot, 0o755)
@@ -75,11 +83,7 @@ function saveHistory({ root, action, currentImage, previousImage, container }) {
     fs.renameSync(stagedSnapshot, snapshot)
     fs.symlinkSync(name, nextPointer)
     fs.renameSync(nextPointer, pointer)
-    for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-      if (entry.isDirectory() && SNAPSHOT.test(entry.name) && entry.name !== name) {
-        fs.rmSync(path.join(root, entry.name), { recursive: true })
-      }
-    }
+    pruneInactive(root, name)
   } finally {
     fs.rmSync(stage, { recursive: true, force: true })
   }
