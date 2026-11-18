@@ -62,6 +62,7 @@ function fixture({ status = 3, quantity = 10, reserved = 4, shipped = 4, allowDe
     '../../engine/containerEngine': { getStockProjection: async () => ({ available: 10 }) },
     '../../engine/reservationEngine': { reserve: async (current, args) => { assert.equal(current, conn); reserves.push(args) } },
     './sale.contracts': { getNetOrderAmount: (total, discount) => total - discount, saleOperationAction: (action, id) => `sale.${action}:${id}` },
+    './sale.events': require('../backend/src/modules/sale/sale.events'),
     '../inventory/inventory.service': { getAvailabilityByProducts: async () => { calls.push('availability'); return [] } },
   }
   const mod = { exports: {} }
@@ -82,6 +83,8 @@ test('执行中首批已发4后可补6，累计已占10且仍为执行中3', asy
   assert.equal(f.item.shipped_qty, 4)
   assert.equal(f.reserves.length, 1)
   assert.equal(f.reserves[0].qty, 6)
+  assert.equal(f.events.length, 1)
+  assert.equal(f.events[0][1], 'reserved')
   assert.deepEqual(f.calls.slice(-3), ['receipt', 'commit', 'release'])
 })
 test('首批尚未实发也可补未占需求，部分补占仍保持3', async () => {

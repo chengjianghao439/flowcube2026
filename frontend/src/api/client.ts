@@ -429,7 +429,7 @@ apiClient.interceptors.response.use(
       if (!config401.__authRefreshed && before.refreshToken && canRenew) {
         const refreshed = await tryRefreshTokens(config401)
         assertCurrentAuthSession(config401)
-        if (refreshed.kind === 'superseded') return Promise.reject(new axios.CanceledError('登录会话或服务器已变化'))
+        if (refreshed.kind === 'superseded') return Promise.reject(new axios.CanceledError('登录状态或服务器已变化'))
         if (refreshed.kind === 'success') {
           config401.__authRefreshed = true
           return apiClient.request(config401)

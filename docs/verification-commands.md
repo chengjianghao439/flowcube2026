@@ -43,6 +43,8 @@
 
 ### PDA 293 专项
 
+迁移器写入中断记录后，专属测试库中的 CREATE、CONVERT、ADD INDEX 三种注入场景都先验证原入口拒绝重跑，保存部分结构、原数据及未完成记录。夹具确认本轮归属和已知中断点后才清除该项测试记录，再验幂等 DDL 收敛。生产中断仍走恢复手册的人工核对。
+
 - `npm run test:pda-audit-log-migration`：离线加载真实 service、SQL 分句与迁移模块，数据库/env 边界显式 stub；验证编号、两表先检、原写入字段/精度/缺表降级、schema 对账及 180 天策略、CI 与 runner 独立入口。该命令不连接数据库或启动应用。
 - `npm run smoke:pda-audit-log-migration-owned`：既有 `repair-smoke-ephemeral.sh --pda-audit-log-migration` 专属模式。仅本机 Unix Docker，显式新建带本批 label 的容器与数据卷，回环随机非 3306/3307 端口、`flowcube_pdaaudit293_test`、0600 归属文件、活 runner 与实时 server_uuid；每次场景写入前复核完整归属。只用已有 `mysql:8.0` 镜像（`--pull=never`），不读取真实 `backend/.env`；显式注入合成测试配置并由真实 `runMigrations()` 完整迁移当前目录，然后执行 PDA 专项。结束按精确归属清理并逐项复核；不会启动应用或 GUI。
 - `npm run smoke:pda-audit-log-migration-runtime`：仅供上条 runner 调用，缺归属即拒绝。测试只重置本批一次性库的两张 PDA 表与 293 测试回执，不是运维回退命令。覆盖 fresh/legacy/缺一表、两表任一畸形均在首个 DDL 前拒绝、signed/null/default/EXTRA/主键/索引形状、Unicode/NULL/小数/时间戳 epoch/高自增/既有注释保全、CREATE/CONVERT/ADD INDEX 后中断及真实迁移重入。另以三条合成旧错误记录比较全部原始字段/epoch、计数与真实异常报表（含原 NULL 时间记录可见），查询降级必须失败。UTC 与 +08:00 在真正迁移连接设置并读取 `@@session.time_zone`；复合主键分别观察列与索引谓词，防止组合漂移掩盖索引守卫。
@@ -364,6 +366,8 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 独立规格再审结论为接受：`/tmp/c2-respec-scope-green.log`、`/tmp/c2-respec-create-scope-green.log` 各自真实复验范围不足的旧更新重放/新保存/原创建重放403，以及完整范围合法重放；`/tmp/c2-respec-rr-multicomponent-green.log` 按原旧RR快照及来源等待交错取得RT5/SR3/两条退款回执/AR0；`/tmp/c2-respec-rr-qa-green.log` 另验质检交错推进RT4，随后真实HTTP上架RT5/AR0。四脚本自然exit0，受影响纯测试20/20、diff检查通过，独立精确资源已收尾；原失败SR156/RT154保留审计。此结论只覆盖后端规格，品质审查和页面验收继续后置。
 
 ### 销售取消与 PDA 首拣双连接回归
+
+`npm run test:sale-order-contract` 同时执行销售占库续量用例。续量夹具直接调用真实的销售事件写入模块，原有状态、累计量、回执顺序和回滚断言继续验证。完整发布回归的有序清单同步包含报表可执行性和循环盘双连接两项。财务导出透传守卫以实际列表入口的第一组筛选参数为依据，导出共用的连接参数不属于筛选项。
 
 `npm run smoke:sale-commercial-partial-cancel` 在独立 MySQL 8 上通过真实 HTTP 调用销售取消和 PDA 散拣。取消读完销售明细后暂停，第二个连接提交首拣。测试核实流水和容器锁已经落库后放行取消，断言任务进入待归还、原容器仍锁定、再次拣货被拒，并在 PDA 扫码归还后才关任务、解锁容器。原有顺序取消、重复请求、套单预占和仓库范围用例继续在同一个 CI MySQL 步骤执行。
 

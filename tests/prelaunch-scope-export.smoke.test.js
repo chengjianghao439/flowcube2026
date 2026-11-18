@@ -9,7 +9,7 @@ const log = createLogger()
  * 断言依据是「列表接口支持什么」，不是「导出实现里写了什么」——避免测试与实现一起错。
  */
 function parseFilterKeys(fn) {
-  const matched = fn.toString().match(/findAll\s*\(\s*\{([\s\S]*?)\}\s*=\s*\{\s*\}\s*\)/)
+  const matched = fn.toString().match(/findAll\s*\(\s*\{([\s\S]*?)\}\s*=\s*\{\s*\}(?:\s*,\s*conn\s*=\s*pool)?\s*\)/)
   if (!matched) throw new Error('无法解析 findAll 解构签名，导出透传断言的判定口径失效')
   return matched[1].split(',').map(piece => piece.split('=')[0].trim())
     .filter(Boolean).filter(key => key !== 'page' && key !== 'pageSize')

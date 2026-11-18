@@ -60,6 +60,10 @@ function realMigrationRunner() {
   return module.exports.runMigrations
 }
 async function migrate() { await owned(); await realMigrationRunner()() }
+async function clearOwnedAttempt() {
+  await owned()
+  await conn.query('DELETE FROM db_migration_attempts WHERE id=1 AND filename=?', [migration])
+}
 async function resetAuditFixtures() {
   migrationTimezone = '+00:00'; migrationZones = []
   await owned()
@@ -69,6 +73,7 @@ async function resetAuditFixtures() {
     if (entry) await conn.query((entry.TABLE_TYPE === 'VIEW' ? 'DROP VIEW ' : 'DROP TABLE ') + '`' + name + '`')
   }
   await conn.query('DELETE FROM db_migrations WHERE filename=?', [migration])
+  await clearOwnedAttempt()
   await conn.query("SET SESSION time_zone='+00:00'")
 }
 const legacy = {
@@ -88,6 +93,7 @@ async function assertRejectedUnchanged() {
   const before = await snapshot()
   await assert.rejects(migrate(), error => /__pda_audit_logs_293_.*_preflight_mismatch__/.test(error.message))
   assert.deepEqual(await snapshot(), before, 'both tables, rows and migration ledger must remain unchanged')
+  assert.deepEqual(await query('SELECT filename FROM db_migration_attempts WHERE id=1'), [{ filename: migration }])
 }
 before(async () => {
   conn = await mysql.createConnection(config); await owned()
@@ -228,9 +234,11 @@ test('composite primary key independently fails the real index predicate', async
 test('drift of the first-table named index also leaves both old collations unchanged', async () => {
   await createLegacy(); await conn.query('ALTER TABLE pda_error_logs ADD KEY idx_pda_error_logs_created(task_id)'); await assertRejectedUnchanged()
 })
-for (const stage of ['first create', 'first convert', 'first added index']) test('partial DDL failure after ' + stage + ' reenters through the real runner and preserves history', async () => {
+for (const stage of ['first create', 'first convert', 'first added index']) test('partial DDL after ' + stage + ' blocks replay until reconciled and preserves history', async () => {
   if (stage !== 'first create') { await createLegacy(); await seed() }
   const before = await rows(), statements = splitSqlStatements(sql())
+  await owned()
+  await conn.query('INSERT INTO db_migration_attempts (id, filename) VALUES (1, ?)', [migration])
   let complete = false, prepared = ''
   for (const statement of statements) {
     await conn.query(statement)
@@ -239,7 +247,14 @@ for (const stage of ['first create', 'first convert', 'first added index']) test
     if ((stage === 'first create' && /CREATE TABLE IF NOT EXISTS `pda_error_logs`/.test(statement)) || (stage === 'first convert' && /^EXECUTE pda293_stmt/.test(statement) && prepared === 'convert') || (stage === 'first added index' && /^EXECUTE pda293_stmt/.test(statement) && prepared === 'index')) { complete = true; break }
   }
   assert.ok(complete, 'the intended real DDL interruption point must execute')
-  assert.equal((await query('SELECT filename FROM db_migrations WHERE filename=?', [migration])).length, 0)
+  const interrupted = await snapshot()
+  assert.equal(interrupted.ledger.length, 0)
+  await assert.rejects(migrate(), { code: 'MIGRATION_ATTEMPT_UNRECONCILED' })
+  assert.deepEqual(await snapshot(), interrupted, 'a blocked replay must leave the interrupted state unchanged')
+  assert.deepEqual(await query('SELECT filename FROM db_migration_attempts WHERE id=1'), [{ filename: migration }])
+  if (stage !== 'first create') assert.deepEqual(interrupted.rows, before)
+  // The fixture owns and just executed this exact partial state.
+  await clearOwnedAttempt()
   await migrate(); assert.deepEqual(definition(await schema()), freshDefinition)
   if (stage !== 'first create') assert.deepEqual(await rows(), before)
   const final = await snapshot(); await migrate(); assert.deepEqual(await snapshot(), final)
