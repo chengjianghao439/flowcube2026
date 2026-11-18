@@ -434,6 +434,8 @@ warehouse-tasks.ship的成本快照注释精确为本任务所发物料行在cos
 
 五报表时间条件与参数由`buildTimestampDateFilter`同步生成，保留原索引友好timestamp条件；九条带日期SQL按date→scope顺序，采购价趋势先productId。空范围AND1=0、不限范围null及独立无日期的库存仓价值/波次概览保持。新增纯函数捕获测试遍历11实际语句并反向恢复多余endDate，发现全部9条错位；真实SQL严格模式不关闭。
 
+2026-11-18 库存周转在同一 SQL 快照取出入库、当前库存投影及历史端点。三处使用同一授权仓集合，先按期内出库选 30 个商品，历史核对只回溯入榜商品。按商品与仓库核流水前后数量的接续、变动方向及末笔与当前库存的吻合，然后从同仓当前库存扣除期后有向变动。单条流水、缺口、日期不完整或早于库存流水清理窗口整日边界时，返回 `unavailableReason`，期末库存、平均库存和周转指标为空。当前库存始终保留；超保留期时出入库量只反映留存流水。今天的期末使用查询时库存。覆盖 A/B/全仓/空范围、期后变动、单条流水及超保留期的回归见 `tests/reports-date-scope-bindings.test.js` 和 `npm run smoke:reports-values`。
+
 委派密码重置的授权helper只接受原`withLockedTarget`锁后actor/target；当前reset权限、既有角色子集和仓范围子集均先于原UPDATE。本批只调用纯读授权helper及完整service被mock的路由，禁止实际密码/凭据测试。采购范围第二批完成的是直接`purchase.create`及本人对应创建结果查询；采购计划转单旧键在scope之前的既有残留未修，不把direct创建修复泛化到convert链。
 
 ## 2026-10-13 指定范围旁路与原销售操作

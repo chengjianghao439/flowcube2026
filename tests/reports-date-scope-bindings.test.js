@@ -15,17 +15,24 @@ function load(code = fs.readFileSync(file, 'utf8'), dateHelpers = helpers, turno
       return turnoverRow && sql.includes('AS inbound_qty') ? [[turnoverRow]] : [[]]
     } } },
     './reports.helpers': dateHelpers,
+    '../../utils/backendTime': { beijingTodayYmd: () => '2026-11-18' },
     '../inventory/inventoryProjection': projection,
     '../../utils/warehouseScope': { scopeFilter: (ids, column) => !Array.isArray(ids) ? { sql: '', params: [] } : !ids.length ? { sql: ' AND 1=0', params: [] } : { sql: ` AND ${column} IN (?)`, params: [ids] } },
   }
-  vm.runInNewContext(code, { module, require: name => mocks[name] || {} }, { filename: file })
+  vm.runInNewContext(code, { module, process: { env: {} }, require: name => mocks[name] || {} }, { filename: file })
   return { svc: module.exports, calls }
 }
 function expected(call, params) {
   const dated = /(?:o|l|pw)\.created_at >= \?|(?:o|l|pw)\.created_at < DATE_ADD\(\?, INTERVAL 1 DAY\)/.test(call.sql)
-  const out = call.sql.includes('i.product_id = ?') ? [99] : []
+  const turnover = call.sql.includes('AS proof_start')
+  const bounded = params.startDate && params.endDate
+  const out = turnover ? (bounded ? [params.startDate, params.endDate] : [null, null])
+    : call.sql.includes('i.product_id = ?') ? [99] : []
   if (dated) { if (params.startDate) out.push(params.startDate); if (params.endDate) out.push(params.endDate) }
-  if (Array.isArray(params.scopeWarehouseIds) && params.scopeWarehouseIds.length) out.push(params.scopeWarehouseIds)
+  if (Array.isArray(params.scopeWarehouseIds) && params.scopeWarehouseIds.length) {
+    out.push(params.scopeWarehouseIds)
+    if (turnover) out.push(params.scopeWarehouseIds, params.scopeWarehouseIds)
+  }
   return out
 }
 const dates = [{}, { startDate: '2026-10-10' }, { endDate: '2026-10-12' }, { startDate: '2026-10-10', endDate: '2026-10-12' }]
@@ -73,7 +80,7 @@ const turnoverCases = [
   { name: 'opening110 in20 out30 ending100', incoming: '20.00', outgoing: '30.00', ending: '100.00', average: 105, rate: 0.29, days: 105 },
   { name: 'opening100 inbound-only20 ending120', incoming: '20.00', outgoing: '0.00', ending: '120.00', average: 110, rate: 0, days: null },
   { name: 'opening100 outbound-only20 ending80', incoming: '0.00', outgoing: '20.00', ending: '80.00', average: 90, rate: 0.22, days: 135 },
-  { name: 'missing dates retain null days control', incoming: '20.00', outgoing: '20.00', ending: '100.00', average: 100, rate: 0.2, days: null, noDates: true },
+  { name: 'missing dates preserve scoped current stock with unavailable turnover', incoming: '20.00', outgoing: '20.00', ending: '100.00', average: null, rate: null, days: null, noDates: true },
   { name: 'allowed two-decimal quantities opening1.25 in0.25 out0.50 ending1', incoming: '0.25', outgoing: '0.50', ending: '1.00', average: 1.125, rate: 0.44, days: 67.5 },
   { name: 'zero endpoint average retains zero rate control', incoming: '10.00', outgoing: '10.00', ending: '0.00', average: 0, rate: 0, days: null },
   { name: 'opening10 outbound10 ending0 has positive average', incoming: '0.00', outgoing: '10.00', ending: '0.00', average: 5, rate: 2, days: 15 },
@@ -82,7 +89,8 @@ for (const fixture of turnoverCases) {
   test(`inventory turnover respects known endpoint conservation: ${fixture.name}`, async () => {
     const f = load(undefined, helpers, {
       code: 'SYN-TURNOVER', name: '合成守恒', unit: '件',
-      inbound_qty: fixture.incoming, outbound_qty: fixture.outgoing, current_qty: fixture.ending, log_count: 2,
+      inbound_qty: fixture.incoming, outbound_qty: fixture.outgoing, current_qty: fixture.ending,
+      period_end_qty: fixture.ending, period_change: Number(fixture.incoming) - Number(fixture.outgoing), history_gaps: 0, log_count: 2,
     })
     const params = fixture.noDates ? {} : { startDate: '2026-09-01', endDate: '2026-09-30' }
     const { turnover } = plain(await f.svc.fetchInventoryStatsRows(params))
@@ -95,3 +103,32 @@ for (const fixture of turnoverCases) {
       { currentQty: Number(fixture.ending), avgStock: fixture.average, turnRate: fixture.rate, turnDays: fixture.days })
   })
 }
+
+test('history endpoint is distinct from current scoped stock and carries the selected warehouse', async () => {
+  const f = load(undefined, helpers, {
+    code: 'HIST', name: '合成', unit: '件', inbound_qty: '20.00', outbound_qty: '30.00',
+    current_qty: '140.00', period_end_qty: '100.00', period_change: '-10.00', history_gaps: 0, log_count: 2,
+  })
+  const result = await f.svc.fetchInventoryStatsRows({ startDate: '2026-10-01', endDate: '2026-10-31', scopeWarehouseIds: [2] })
+  const row = result.turnover[0]
+  assert.equal(row.currentQty, 140)
+  assert.equal(row.periodEndQty, 100)
+  assert.equal(row.avgStock, 105)
+  assert.match(f.calls[0].sql, /inventory_stock ip.*ip\.warehouse_id IN \(\?\)/s)
+})
+
+test('turnover marks incomplete history and a single movement unavailable without hiding current stock', async () => {
+  for (const fixture of [
+    { history_gaps: 1, log_count: 2, reason: 'stock_history_unavailable' },
+    { history_gaps: 0, log_count: 1, reason: 'insufficient_movements' },
+  ]) {
+    const f = load(undefined, helpers, {
+      code: 'HIST', name: '合成', unit: '件', current_qty: '120.00', period_end_qty: '100.00',
+      inbound_qty: '20.00', outbound_qty: '0.00', period_change: '20.00', ...fixture,
+    })
+    const result = await f.svc.fetchInventoryStatsRows({ startDate: '2026-10-01', endDate: '2026-10-31' })
+    const row = result.turnover[0]
+    assert.deepEqual([row.currentQty, row.periodEndQty, row.avgStock, row.turnRate, row.turnDays, row.unavailableReason],
+      [120, null, null, null, null, fixture.reason])
+  }
+})

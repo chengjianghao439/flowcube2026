@@ -2,7 +2,7 @@ const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const { buildDateFilter, buildTimestampDateFilter } = require('./reports.helpers')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
-const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
+const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProjection')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const logger = require('../../utils/logger')
@@ -116,34 +116,88 @@ async function fetchSaleStatsRows({ startDate, endDate, scopeWarehouseIds = null
   return { byMonth, byCustomer, byProduct }
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+function turnoverPeriod(startDate, endDate) {
+  const today = beijingTodayYmd()
+  const start = Date.parse(startDate)
+  const end = Date.parse(endDate)
+  const validDay = (value, ms) => Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 10) === value
+  if (!validDay(startDate, start) || !validDay(endDate, end) || start > end || endDate > today) {
+    return { unavailableReason: 'date_range_required', days: null }
+  }
+  // 同库存流水清理的配置。边界日可能只留半天，所以从次日零点起才可核完整期。
+  const configured = Number(process.env.INVENTORY_LOG_TTL_DAYS)
+  const retentionDays = Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 180
+  if (start < Date.parse(today) - (retentionDays - 1) * DAY_MS) {
+    return { unavailableReason: 'history_outside_retention', days: null }
+  }
+  return { unavailableReason: null, days: (end - start) / DAY_MS + 1 }
+}
+
 async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
-  const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const { sql: dateCond, params: dateParams } = buildTimestampDateFilter('l.created_at', startDate, endDate)
   const lWh = scopeFilter(scopeWarehouseIds, 'l.warehouse_id')
   const ipWh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
-  // 周转率 = 期内出库量 / 平均库存，平均库存 = (期初 + 期末) / 2。
-  // 期初 = 期末 − 期内入库 + 期内出库（流水 quantity 恒为正数，方向由 type 区分），
-  // 即平均库存 = 期末 + (出库 − 入库) / 2。期内只有 1 条流水时没有库存观测点，
-  // 期初退化失败，这类商品在 JS 侧标记 turnDays=null 降级展示。
-  const periodDays = startDate && endDate ? Math.max(1, Math.round((Date.parse(endDate) - Date.parse(startDate)) / 86400000) + 1) : null
-
+  const period = turnoverPeriod(startDate, endDate)
   const turnover = await fetchMany(
-    `SELECT p.code, p.name, p.unit, p.article_number, p.spec, p.color,
-            SUM(CASE WHEN l.type=1 THEN l.quantity ELSE 0 END) AS inbound_qty,
-            SUM(CASE WHEN l.type=2 THEN l.quantity ELSE 0 END) AS outbound_qty,
-            COALESCE(s.total_qty, 0) AS current_qty,
-            COUNT(*) AS log_count
-     FROM inventory_logs l
-     JOIN product_items p ON l.product_id = p.id
-     LEFT JOIN (
-       SELECT ip.product_id, ip.quantity AS total_qty
-       FROM ${productInventoryProjectionSql} ip
-     ) s ON s.product_id = l.product_id
-     WHERE p.deleted_at IS NULL ${dateCond}${lWh.sql}
-     GROUP BY l.product_id, p.code, p.name, p.unit, p.article_number, p.spec, p.color, s.total_qty
-     ORDER BY outbound_qty DESC LIMIT 30`,
-    [...dateParams, ...lWh.params],
+    `WITH bounds AS (
+       SELECT CAST(? AS DATE) AS proof_start, DATE_ADD(CAST(? AS DATE), INTERVAL 1 DAY) AS end_exclusive
+     ), ranked_products AS (
+       SELECT l.product_id, COUNT(*) AS log_count,
+              SUM(CASE WHEN l.type=1 THEN l.quantity ELSE 0 END) AS inbound_qty,
+              SUM(CASE WHEN l.type=2 THEN l.quantity ELSE 0 END) AS outbound_qty
+       FROM inventory_logs l JOIN product_items p ON p.id=l.product_id
+       WHERE p.deleted_at IS NULL${dateCond}${lWh.sql}
+       GROUP BY l.product_id ORDER BY outbound_qty DESC, l.product_id LIMIT 30
+     ), scoped_stock AS (
+       SELECT ip.product_id, ip.warehouse_id, ip.quantity, ip.updated_at
+       FROM inventory_stock ip JOIN ranked_products rp ON rp.product_id=ip.product_id
+       WHERE 1=1${ipWh.sql}
+     ), history AS (
+       SELECT l.product_id, l.warehouse_id, l.type, l.ref_type, l.quantity, l.before_qty, l.after_qty, l.created_at,
+              LAG(l.after_qty) OVER stock_trace AS previous_qty,
+              LEAD(l.id) OVER stock_trace AS next_id
+       FROM inventory_logs l JOIN ranked_products rp ON rp.product_id=l.product_id CROSS JOIN bounds b
+       WHERE l.created_at >= b.proof_start AND l.created_at <= NOW()${lWh.sql}
+       WINDOW stock_trace AS (PARTITION BY l.product_id,l.warehouse_id ORDER BY l.created_at,l.id)
+     ), warehouse_history AS (
+       SELECT h.product_id, h.warehouse_id,
+              SUM(IF(h.created_at < b.end_exclusive,h.after_qty-h.before_qty,0)) AS period_change,
+              SUM(IF(h.created_at >= b.end_exclusive,h.after_qty-h.before_qty,0)) AS later_change,
+              MAX(IF(h.next_id IS NULL,h.after_qty,NULL)) AS latest_quantity,
+              SUM(CASE WHEN h.quantity < 0 OR h.before_qty < 0 OR h.after_qty < 0
+                 OR (h.previous_qty IS NOT NULL AND h.previous_qty <> h.before_qty) THEN 1
+                WHEN h.type=1 AND h.after_qty-h.before_qty=h.quantity THEN 0
+                WHEN h.type=2 AND h.before_qty-h.after_qty=h.quantity THEN 0
+                WHEN h.type=3 AND h.ref_type='container_split' AND h.after_qty=h.before_qty THEN 0
+                WHEN h.type=3 AND h.ref_type='inbound_task' AND h.before_qty-h.after_qty=h.quantity THEN 0
+                ELSE 1 END) AS gaps
+       FROM history h CROSS JOIN bounds b GROUP BY h.product_id,h.warehouse_id
+     ), dimensions AS (
+       SELECT product_id,warehouse_id FROM scoped_stock
+       UNION
+       SELECT product_id,warehouse_id FROM warehouse_history
+     ), product_totals AS (
+       SELECT d.product_id,
+              SUM(COALESCE(s.quantity,0)) AS current_qty,
+              SUM(COALESCE(s.quantity,0)-COALESCE(h.later_change,0)) AS period_end_qty,
+              SUM(COALESCE(h.period_change,0)) AS period_change,
+              SUM(CASE WHEN h.product_id IS NULL THEN COALESCE(s.updated_at>=b.proof_start,0)
+                       WHEN h.latest_quantity <> COALESCE(s.quantity,0) THEN 1
+                       ELSE h.gaps END) AS history_gaps
+       FROM dimensions d
+       LEFT JOIN scoped_stock s ON s.product_id=d.product_id AND s.warehouse_id=d.warehouse_id
+       LEFT JOIN warehouse_history h ON h.product_id=d.product_id AND h.warehouse_id=d.warehouse_id
+       CROSS JOIN bounds b GROUP BY d.product_id
+     )
+     SELECT p.code,p.name,p.unit,p.article_number,p.spec,p.color,
+            rp.inbound_qty,rp.outbound_qty,rp.log_count,
+            COALESCE(t.current_qty,0) AS current_qty,t.period_end_qty,t.period_change,t.history_gaps
+     FROM ranked_products rp JOIN product_items p ON p.id=rp.product_id
+     LEFT JOIN product_totals t ON t.product_id=rp.product_id
+     ORDER BY rp.outbound_qty DESC, rp.product_id`,
+    [period.days == null ? null : startDate, period.days == null ? null : endDate, ...dateParams, ...lWh.params, ...ipWh.params, ...lWh.params],
   )
 
   const byWarehouse = await fetchMany(
@@ -158,32 +212,38 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
     ipWh.params,
   )
 
-  return { turnover: turnover.map(r => {
-    const outboundQty = Number(r.outbound_qty)
-    const inboundQty = Number(r.inbound_qty)
-    const currentQty = Number(r.current_qty)
-    // 期初 = 期末 − 期内入库 + 期内出库；只有一条流水（log_count=1）时无期内库存观测点
-    const openingQty = currentQty - inboundQty + outboundQty
-    const avgStock = (openingQty + currentQty) / 2
-    // 展示用比率保留两位小数；周转天数用未舍入比率计算，避免舍入误差被放大
-    const rawRate = avgStock > 0 ? outboundQty / avgStock : 0
-    const turnRate = Math.round(rawRate * 100) / 100
-    return {
-      code: r.code,
-      name: r.name,
-      unit: r.unit,
-      articleNumber: r.article_number || null,
-      spec: r.spec || null,
-      color: r.color || null,
-      inboundQty,
-      outboundQty,
-      currentQty,
-      avgStock: Math.round(avgStock * 1000) / 1000,
-      turnRate,
-      // 周转天数 = 期内天数 / 周转率；无出库或未指定完整日期区间（无期初观测）时展示 null
-      turnDays: (periodDays != null && rawRate > 0) ? Math.round(periodDays / rawRate * 10) / 10 : null,
-    }
-  }), byWarehouse: byWarehouse.map(r => ({ warehouseName: r.warehouse_name, totalQty: +r.total_qty, totalValue: +r.total_value })) }
+  return {
+    unavailableReason: period.unavailableReason,
+    turnover: turnover.map(r => {
+      const inboundQty = Number(r.inbound_qty)
+      const outboundQty = Number(r.outbound_qty)
+      const currentQty = Number(r.current_qty)
+      const ending = Number(r.period_end_qty)
+      const opening = ending - Number(r.period_change)
+      const historyVerified = r.period_end_qty != null && Number(r.history_gaps) === 0 && ending >= 0 && opening >= 0
+      const unavailableReason = period.unavailableReason || (Number(r.log_count) < 2 ? 'insufficient_movements'
+        : !historyVerified ? 'stock_history_unavailable' : null)
+      const avgStock = unavailableReason ? null : (opening + ending) / 2
+      const rawRate = avgStock > 0 ? outboundQty / avgStock : 0
+      return {
+        code: r.code,
+        name: r.name,
+        unit: r.unit,
+        articleNumber: r.article_number || null,
+        spec: r.spec || null,
+        color: r.color || null,
+        inboundQty,
+        outboundQty,
+        currentQty,
+        periodEndQty: unavailableReason ? null : ending,
+        avgStock: avgStock == null ? null : Math.round(avgStock * 1000) / 1000,
+        turnRate: unavailableReason ? null : Math.round(rawRate * 100) / 100,
+        turnDays: rawRate > 0 ? Math.round(period.days / rawRate * 10) / 10 : null,
+        unavailableReason,
+      }
+    }),
+    byWarehouse: byWarehouse.map(r => ({ warehouseName: r.warehouse_name, totalQty: +r.total_qty, totalValue: +r.total_value })),
+  }
 }
 
 async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {

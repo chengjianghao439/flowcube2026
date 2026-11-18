@@ -22,7 +22,10 @@ export interface SaleStats {
   byCustomer: { customerName: string; orderCount: number; totalAmount: number }[]
   byProduct: ProductStatsRow[]
 }
+export type TurnoverUnavailableReason = 'date_range_required' | 'history_outside_retention' | 'insufficient_movements' | 'stock_history_unavailable'
+
 export interface InventoryStats {
+  unavailableReason: TurnoverUnavailableReason | null
   turnover: {
     code: string
     name: string
@@ -30,10 +33,12 @@ export interface InventoryStats {
     inboundQty: number
     outboundQty: number
     currentQty: number
+    periodEndQty: number | null
+    unavailableReason: TurnoverUnavailableReason | null
     /** 期内平均库存 (期初+期末)/2 */
-    avgStock: number
+    avgStock: number | null
     /** 周转率 = 期内出库量 / 平均库存 */
-    turnRate: number
+    turnRate: number | null
     /** 周转天数 = 期内天数 / 周转率；无完整日期区间或无出库时为 null */
     turnDays: number | null
   }[]

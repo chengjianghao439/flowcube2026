@@ -278,6 +278,74 @@ async function verifyKpiMetrics(ctx, log) {
   }
 }
 
+async function verifyInventoryTurnover(pool, log) {
+  const code = randomRef('Turn')
+  const products = [], warehouses = []
+  const day = daysAgo => cnYmd(new Date(Date.now() - daysAgo * 86400000))
+  try {
+    for (const [suffix, warehouse] of [['A', true], ['B', true], ['HIST', false], ['ONE', false]]) {
+      const [row] = warehouse
+        ? await pool.query('INSERT INTO inventory_warehouses(code,name) VALUES (?,?)', [`${code}-${suffix}`, `周转仓 ${suffix}`])
+        : await pool.query("INSERT INTO product_items(code,name,unit) VALUES (?,?,'个')", [`${code}-${suffix}`, `周转商品${suffix}`])
+      const ids = warehouse ? warehouses : products
+      ids.push(row.insertId)
+    }
+    const [a, b] = warehouses, [product, single] = products
+    const movement = (id, warehouse, before, after, daysAgo) => [
+      id, warehouse, after > before ? 1 : 2, Math.abs(after - before), after - before, before, after, `${day(daysAgo)} 12:00:00`,
+    ]
+    const add = rows => pool.query(
+      'INSERT INTO inventory_logs(product_id,warehouse_id,type,quantity,change_qty,before_qty,after_qty,created_at) VALUES ?', [rows],
+    )
+    await add([movement(product, a, 80, 100, 4), movement(product, a, 100, 70, 3),
+      movement(product, b, 55, 60, 4), movement(product, b, 60, 50, 3),
+      movement(single, a, 0, 9, 3), movement(product, a, 8, 9, 220), movement(product, a, 9, 8, 219)])
+    await pool.query('INSERT INTO inventory_stock(product_id,warehouse_id,quantity) VALUES ?', [[[product,a,70], [product,b,50], [single,a,9]]])
+    const dates = { startDate: day(4), endDate: day(3) }
+    const forProduct = report => report.turnover.find(r => r.code === `${code}-HIST`)
+    const scoped = async scopeWarehouseIds => reportsSvc.inventoryStats({ ...dates, scopeWarehouseIds })
+    const before = forProduct(await scoped([a]))
+    log.assert('A 仓历史期初 80、期末 70、平均 75，当前库存只取 A 仓',
+      before?.currentQty === 70 && before?.periodEndQty === 70 && before?.avgStock === 75 && before?.turnRate === 0.4)
+    const bOnly = forProduct(await scoped([b]))
+    log.assert('B 仓单独周转：期末 50、平均 52.5', bOnly?.periodEndQty === 50 && bOnly?.avgStock === 52.5)
+
+    await add([movement(product, b, 50, 500, 2)])
+    await pool.query('UPDATE inventory_stock SET quantity=500 WHERE product_id=? AND warehouse_id=?', [product, b])
+    const afterB = forProduct(await scoped([a]))
+    log.assert('B 仓期后变化无法影响 A 仓库存、分母或周转', JSON.stringify(before) === JSON.stringify(afterB))
+
+    await add([movement(product, a, 70, 130, 2)])
+    await pool.query('UPDATE inventory_stock SET quantity=130 WHERE product_id=? AND warehouse_id=?', [product, a])
+    const aView = await scoped([a]), afterA = forProduct(aView)
+    log.assert('A 仓期后增加 60，历史仍为 70，平均仍为 75',
+      afterA?.currentQty === 130 && afterA?.periodEndQty === 70 && afterA?.avgStock === 75 && afterA?.turnDays === 5)
+    const both = forProduct(await scoped([a, b])), all = forProduct(await scoped(null))
+    log.assert('两仓授权和全仓读取合成库存端点一致',
+      both?.currentQty === 630 && both?.periodEndQty === 120 && both?.avgStock === 127.5 && JSON.stringify(both) === JSON.stringify(all))
+    const noScope = await scoped([])
+    log.assert('空仓库范围没有流量或库存行', noScope.turnover.length === 0 && noScope.byWarehouse.length === 0)
+    const singleMovement = aView.turnover.find(r => r.code === `${code}-ONE`)
+    log.assert('仅 1 条流水保留当前库存，期末与周转标为不可算',
+      singleMovement?.currentQty === 9 && singleMovement?.turnRate === null && singleMovement?.unavailableReason === 'insufficient_movements')
+    const expired = await reportsSvc.inventoryStats({ startDate: day(220), endDate: day(219), scopeWarehouseIds: [a] })
+    log.assert('超保留期即使还有旧流水，也保留当前库存并标记历史不可算',
+      expired.unavailableReason === 'history_outside_retention' && forProduct(expired)?.currentQty === 130 && forProduct(expired)?.turnRate === null)
+
+    await pool.query('UPDATE inventory_stock SET quantity=140 WHERE product_id=? AND warehouse_id=?', [product, a])
+    const gap = forProduct(await scoped([a]))
+    log.assert('有未记录的库存变化时当前库存可见，历史周转不可算',
+      gap?.currentQty === 140 && gap?.periodEndQty === null && gap?.unavailableReason === 'stock_history_unavailable')
+  } finally {
+    if (products.length) {
+      await pool.query('DELETE FROM inventory_logs WHERE product_id IN (?)', [products])
+      await pool.query('DELETE FROM inventory_stock WHERE product_id IN (?)', [products])
+      await pool.query('DELETE FROM product_items WHERE id IN (?)', [products])
+    }
+    if (warehouses.length) await pool.query('DELETE FROM inventory_warehouses WHERE id IN (?)', [warehouses])
+  }
+}
+
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
@@ -376,6 +444,7 @@ async function main() {
   await pool.query('DELETE FROM product_items WHERE id=?', [productId])
 
   try {
+    await verifyInventoryTurnover(pool, log)
     await verifyProfitAnalysis(ctx, log)
     await verifyKpiMetrics(ctx, log)
   } finally {

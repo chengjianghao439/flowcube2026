@@ -45,9 +45,7 @@ async function saleStats(params) {
 }
 
 async function inventoryStats(params) {
-  const { turnover, byWarehouse } = await fetchInventoryStatsRows(params)
-  // turnover 已在 query 层完成口径计算（avgStock/turnRate/turnDays），这里只透传
-  return { turnover, byWarehouse }
+  return fetchInventoryStatsRows(params)
 }
 
 async function pdaPerformance(scopeWarehouseIds = null) {

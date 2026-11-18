@@ -8,6 +8,7 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
+import type { InventoryStats, TurnoverUnavailableReason } from '@/api/reports'
 import { getInventoryStatsApi, getPurchaseStatsApi, getSaleStatsApi, getPurchasePriceTrendApi } from '@/api/reports'
 import PageHeader from '@/components/shared/PageHeader'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -32,19 +33,14 @@ function rankColumn<T extends { rank: number }>(): TableColumn<T> {
 
 type SummaryTab = 'purchase' | 'sale' | 'inventory'
 
-/** 库存周转明细列：周转率/周转天数由后端按（期初+期末）/2 口径计算 */
-const turnoverColumns: TableColumn<{
-  code: string
-  name: string
-  unit: string
-  inboundQty: number
-  outboundQty: number
-  currentQty: number
-  avgStock: number
-  turnRate: number
-  turnDays: number | null
-  rank: number
-}>[] = [
+const turnoverUnavailableText: Record<TurnoverUnavailableReason, string> = {
+  date_range_required: '请选择完整且截至今天的日期区间。',
+  history_outside_retention: '所选日期已超出库存流水保留窗口，出入库量仅含留存记录。',
+  insufficient_movements: '仅有一条库存流水，暂无法核对期间库存。',
+  stock_history_unavailable: '库存流水无法与库存数量连续核对。',
+}
+
+const turnoverColumns: TableColumn<InventoryStats['turnover'][number] & { rank: number }>[] = [
   { key: 'rank', title: '排名', width: 70, render: v => <span className="text-muted-foreground">#{v as number}</span> },
   { key: 'code', title: '编码', width: 120, render: v => <span className="text-muted-foreground">{String(v)}</span> },
   { key: 'name', title: '名称', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
@@ -52,8 +48,16 @@ const turnoverColumns: TableColumn<{
   { key: 'inboundQty', title: '入库量', width: 95, render: v => <span className="text-green-600">+{String(v)}</span> },
   { key: 'outboundQty', title: '出库量', width: 95, render: v => <span className="text-red-500">-{String(v)}</span> },
   { key: 'currentQty', title: '当前库存', width: 100, render: v => <span className="font-semibold">{String(v)}</span> },
-  { key: 'avgStock', title: '平均库存', width: 100, render: v => <span className="text-muted-foreground">{String(v)}</span> },
-  { key: 'turnRate', title: '周转率', width: 90, render: v => <span className="font-medium tabular-nums">{Number(v).toFixed(2)}</span> },
+  { key: 'periodEndQty', title: '期末库存', width: 95, render: v => v == null ? '—' : String(v) },
+  { key: 'avgStock', title: '平均库存', width: 100, render: v => v == null ? '—' : String(v) },
+  {
+    key: 'turnRate',
+    title: '周转率',
+    width: 100,
+    render: (v, row) => v == null
+      ? <span className="text-muted-foreground" title={row.unavailableReason ? turnoverUnavailableText[row.unavailableReason] : undefined}>暂不可用</span>
+      : <span className="font-medium tabular-nums">{Number(v).toFixed(2)}</span>,
+  },
   {
     key: 'turnDays',
     title: '周转天数',
@@ -302,8 +306,13 @@ export default function ReportsPage() {
                   />
                   <p className="mt-3 text-xs text-muted-foreground">
                     周转率 = 期内出库量 ÷ 平均库存（(期初+期末)÷2）；周转天数 = 期内天数 ÷ 周转率。
-                    「平均库存」为 0 或仅 1 条流水、以及未选完整日期区间时，周转天数显示 —。
+                    期末为今天时使用当前库存。没有出库或平均库存为 0 时，周转天数显示 —。
                   </p>
+                  {invQ.data.unavailableReason && (
+                    <p role="status" className="mt-2 text-xs text-muted-foreground">
+                      {turnoverUnavailableText[invQ.data.unavailableReason]}
+                    </p>
+                  )}
                 </div>
               </>
             )}
