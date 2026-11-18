@@ -17,32 +17,32 @@ let oldAuth:ReturnType<typeof useAuthStore.getState>
 let host: HTMLDivElement, root: Root, qc: QueryClient, originalAdapter: typeof client.defaults.adapter, reads: string[]
 let releasePendingRead: (() => void) | undefined
 
-let holdHealth: boolean, disposed: boolean
-let healthCalls: string[], unexpectedFetches: string[]
-let pendingHealth: Set<() => void>
+let holdReads: boolean, disposed: boolean
+let unexpectedFetches: string[]
+let pendingReads: Set<() => void>
 let originalFetch: typeof fetch, originalBaseURL: typeof client.defaults.baseURL
 let originalOrigins: Array<[string, string | null]>
-function installHealthTransport() {
-  holdHealth = false; disposed = false; healthCalls = []; unexpectedFetches = []; pendingHealth = new Set()
+function installReadTransport() {
+  holdReads = false; disposed = false; unexpectedFetches = []; pendingReads = new Set()
   originalFetch = globalThis.fetch; originalBaseURL = client.defaults.baseURL
   originalOrigins = ['API_BASE_URL', 'flowcube:apiOrigin'].map(key => [key, localStorage.getItem(key)])
   for (const [key] of originalOrigins) localStorage.removeItem(key)
-  // Ensure real fallback has a distinct failed origin even when CI has no production origin.
+  // 保留与原配置不同的响应地址，核对失败不会探测其他地址，且清理会恢复原配置。
   client.defaults.baseURL = 'https://failed.invalid/api'
-  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const target = String(input)
-    let allowed = false
-    try { const url = new URL(target); allowed = url.pathname === '/api/health' && !url.search && init?.method === 'GET' && init.cache === 'no-store' && init.headers == null && init.body == null } catch { /* Report invalid input below; the real probe catches transport errors. */ }
-    if (!allowed) unexpectedFetches.push(target)
-    healthCalls.push(target)
-    return new Promise<Response>(resolve => {
-      const release = () => { pendingHealth.delete(release); resolve({ ok: false } as Response) }
-      pendingHealth.add(release)
-      if (!holdHealth) release()
-    })
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+    unexpectedFetches.push(String(input))
+    throw new Error('读取失败不应发起候选地址探测')
   }))
 }
-function releaseHealthProbes() { holdHealth = false; for (const release of pendingHealth) release() }
+function rejectRead(config: Parameters<AxiosAdapter>[0]): Promise<never> {
+  const error = new AxiosError('本批占库预览读取中断', 'ERR_NETWORK', config)
+  if (!holdReads) return Promise.reject(error)
+  return new Promise((_resolve, reject) => {
+    const release = () => { pendingReads.delete(release); reject(error) }
+    pendingReads.add(release)
+  })
+}
+function releaseReads() { holdReads = false; for (const release of pendingReads) release() }
 async function until(assertion: () => void) {
   await vi.waitFor(async () => {
     // Yield one notification turn; the assertion, rather than a fixed sleep, decides readiness.
@@ -52,7 +52,7 @@ async function until(assertion: () => void) {
 }
 
 beforeEach(() => {
-  installHealthTransport(); releasePendingRead = undefined
+  installReadTransport(); releasePendingRead = undefined
   oldAuth=useAuthStore.getState();useAuthStore.getState().login('synthetic',null,{id:9,username:'synthetic',realName:'合成操作员',roleId:1,roleName:'测试'})
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true }); reads = []; originalAdapter = client.defaults.adapter
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } })
@@ -64,12 +64,12 @@ async function cleanupFixture() {
   try {
     await act(async () => {
       root.unmount()
-      releaseHealthProbes()
+      releaseReads()
       releasePendingRead?.()
     })
     await Promise.allSettled(readsInFlight)
     await act(async () => qc.clear())
-    expect(pendingHealth.size).toBe(0)
+    expect(pendingReads.size).toBe(0)
     expect(unexpectedFetches).toEqual([])
   } finally {
     disposed = true; host.remove(); client.defaults.adapter = originalAdapter
@@ -87,17 +87,17 @@ function validateRead(config: Parameters<AxiosAdapter>[0]) { expect(config.metho
 function success(config: Parameters<AxiosAdapter>[0], data = preview) { return { status: 200, statusText: 'OK', headers: {}, config, data: { success: true, data } } }
 
 test('预览失败显示真实错误/重试，不冒充空表与0量，不提供可写来源；重试走原GET', async () => {
-  let fail = true; holdHealth = true
-  client.defaults.adapter = (async config => { validateRead(config); if (fail) throw new AxiosError('本批占库预览读取中断', 'ERR_NETWORK', config); return success(config) }) satisfies AxiosAdapter
+  let fail = true; holdReads = true
+  client.defaults.adapter = (async config => { validateRead(config); return fail ? rejectRead(config) : success(config) }) satisfies AxiosAdapter
   await mount()
-  await until(() => expect(healthCalls.length).toBeGreaterThan(0))
-  expect(pendingHealth.size).toBeGreaterThan(0)
+  await until(() => expect(pendingReads.size).toBeGreaterThan(0))
+  expect(reads).toEqual(['/sale/7/reserve-preview'])
   expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('加载商品与库存信息')
   expect(document.body.textContent?.split('加载商品与库存信息')).toHaveLength(2)
   expect(document.body.textContent).not.toContain('核对商品身份，按明细选择发货仓库和本次占库数量')
   expect(document.body.textContent).not.toContain('加载失败')
   expect(button('确认占用（0 项）').disabled).toBe(true)
-  await act(async () => releaseHealthProbes())
+  await act(async () => releaseReads())
   await until(() => expect(document.body.textContent).toContain('加载失败'))
   expect(document.body.textContent).toContain('加载失败')
   // 真实 API client 将 ERR_NETWORK 统一为现行员工可读错误。
@@ -163,12 +163,12 @@ test('首次正在读取不展示0量/空分配表', async () => {
 
 
 test('占库弹窗卸载时等待真实错误链结算后恢复原会话', async () => {
-  holdHealth = true
-  client.defaults.adapter = (async config => { validateRead(config); throw new AxiosError('synthetic offline preview', 'ERR_NETWORK', config) }) satisfies AxiosAdapter
+  holdReads = true
+  client.defaults.adapter = (async config => { validateRead(config); return rejectRead(config) }) satisfies AxiosAdapter
   let reached = false, released = false, cleaned = false
   let release!: () => void
   const settled = new Promise<void>(resolve => { release = () => { released = true; resolve() } })
-  // Retain the real normalization/health chain, then hold this test's final settlement.
+  // 保留真实 Axios 错误整形，在本轮请求最终结算前再次暂停。
   const interceptor = client.interceptors.response.use(undefined, async (error: unknown) => {
     expect(error).toBeInstanceOf(ApiClientError)
     expect((error as ApiClientError).code).toBe('NETWORK_ERROR')
@@ -177,14 +177,14 @@ test('占库弹窗卸载时等待真实错误链结算后恢复原会话', async
   let cleanup: Promise<void> | undefined
   try {
     await mount()
-    await until(() => expect(pendingHealth.size).toBeGreaterThan(0))
+    await until(() => expect(pendingReads.size).toBeGreaterThan(0))
     cleanup = cleanupFixture().then(() => { cleaned = true })
     await vi.waitFor(() => expect(reached).toBe(true))
-    expect(pendingHealth.size).toBe(0); expect(released).toBe(false)
+    expect(pendingReads.size).toBe(0); expect(released).toBe(false)
     expect(cleaned).toBe(false); expect(disposed).toBe(false)
     expect(globalThis.fetch).not.toBe(originalFetch)
     release(); await cleanup
-    expect(cleaned).toBe(true); expect(pendingHealth.size).toBe(0)
+    expect(cleaned).toBe(true); expect(pendingReads.size).toBe(0)
     expect(host.isConnected).toBe(false); expect(qc.getQueryCache().getAll()).toEqual([])
     expect(globalThis.fetch).toBe(originalFetch); expect(client.defaults.adapter).toBe(originalAdapter)
     expect(client.defaults.baseURL).toBe(originalBaseURL)

@@ -6,7 +6,7 @@
  * 那条并行路径曾与轮询争抢同一任务、导致同一张标签被打印两次。
  */
 import axios from 'axios'
-import { payloadClient as apiClient } from '@/api/client'
+import { ApiClientError, payloadClient as apiClient } from '@/api/client'
 import { isElectronRuntime } from '@/lib/platform'
 import { getDesktopClientId } from '@/lib/printQueue'
 
@@ -34,6 +34,7 @@ export function getLocalPrintEnvironmentKind():
 }
 
 function isConflictError(e: unknown): boolean {
+  if (e instanceof ApiClientError) return e.status === 409
   return axios.isAxiosError(e) && e.response?.status === 409
 }
 

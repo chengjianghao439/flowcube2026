@@ -12,13 +12,14 @@
  * 本测试把两侧对齐：
  *   · 后端：`app.use('/api/x', require('...routes'))` 的前缀 + 各 routes 文件里
  *     `router.<method>('<sub>')` 的子路径，拼成完整路径；
- *   · 前端：`client.<method>('<path>')` / `` client.<method>(`<path>`) ``（baseURL 已含 `/api`）；
+ *   · 前端：识别 `api/client` 的默认客户端和 `payloadClient` 导入及别名，再读取方法和路径；
+ *     除 API 目录外，扫描桌面打印桥和其 POST 回执包装调用（baseURL 已含 `/api`）；
  *   · 比对前把 `${id}` 与 `:id` 统一成 `:p`，并剥离查询串——参数名与查询条件不算差异。
  *
  * 已知边界（要放宽时先看这里）：
  *   · 只识别**字符串字面量**路径；`client.get(someVariable)` 这类动态调用会被跳过（漏报，不误报）；
- *   · 只识别 `router.get/post/put/patch/delete` 的平铺注册。若后端新增了嵌套
- *     `router.use('/:id/sub', subRouter)`，本测试可能误报——那种情况请在此补上嵌套展开，而不是删断言。
+ *   · `sale-commercial.ts` 按动作分支生成的路径由该前端模块的运行用例校验具体方法和路径。
+ *   · 后端识别字面路径及 `router.use('/prefix', 子路由)`，子路由由 `Router()` 或字面 `require` 提供。
  *
  * 运行：node tests/api-route-contract.test.js
  */
@@ -29,7 +30,8 @@ const path = require('node:path')
 
 const ROOT = path.resolve(__dirname, '..')
 const APP_JS = path.join(ROOT, 'backend/src/app.js')
-const API_DIR = path.join(ROOT, 'frontend/src/api')
+const FRONTEND_SRC = path.join(ROOT, 'frontend/src')
+const DESKTOP_PRINT_BRIDGE = 'components/desktop/DesktopPrintClientBridge.tsx'
 
 /** 路径归一化：剥离查询串 → 模板参数/Express 参数统一为 `:p` → 去掉尾部斜杠。 */
 function normalize(p) {
@@ -37,9 +39,32 @@ function normalize(p) {
   return (bare.replace(/\$\{[^}]*\}/g, ':p').replace(/:[A-Za-z0-9_]+/g, ':p') || '/')
 }
 
-/** 后端：挂载前缀 + 各 routes 文件的平铺路由。 */
+function collectRouterRoutes(file, prefix, routes) {
+  const src = fs.readFileSync(file, 'utf8').replace(/^\s*\/\/.*$/gm, '')
+  const localRouters = new Set(Array.from(src.matchAll(/\bconst\s+(\w+)\s*=\s*Router\(/g), (match) => match[1]))
+  const calls = [...src.matchAll(/\b(\w+)\.(get|post|put|patch|delete|use)\(\s*(['"])([^'"]*)\3/g)]
+  function visit(router, base) {
+    for (const call of calls) {
+      const [, receiver, method, , route] = call
+      if (receiver !== router) continue
+      const fullPath = base + route
+      if (method !== 'use') {
+        routes.set(`${method.toUpperCase()} ${normalize(fullPath)}`, path.basename(file))
+        continue
+      }
+      const args = src.slice(call.index + call[0].length)
+      const child = args.match(/^\s*,\s*(\w+)\s*\)/)?.[1]
+      const modulePath = args.match(/^\s*,\s*require\(\s*(['"])([^'"]+)\1\s*\)\s*\)/)?.[2]
+      if (localRouters.has(child)) visit(child, fullPath)
+      if (modulePath) collectRouterRoutes(path.resolve(path.dirname(file), modulePath + '.js'), fullPath, routes)
+    }
+  }
+  visit('router', prefix)
+}
+
+/** 后端：应用挂载前缀及对应的 Express 路由。 */
 function backendRoutes() {
-  const appSrc = fs.readFileSync(APP_JS, 'utf8')
+  const appSrc = fs.readFileSync(APP_JS, 'utf8').replace(/^\s*\/\/.*$/gm, '')
   const routes = new Map()
   let mounts = 0
   for (const m of appSrc.matchAll(/app\.use\('(\/api[^']*)',\s*require\('([^']+)'\)\)/g)) {
@@ -47,31 +72,50 @@ function backendRoutes() {
     const file = path.resolve(path.dirname(APP_JS), mod + '.js')
     if (!fs.existsSync(file)) continue
     mounts++
-    const src = fs.readFileSync(file, 'utf8')
-    for (const r of src.matchAll(/router\.(get|post|put|patch|delete)\(\s*'([^']*)'/g)) {
-      routes.set(`${r[1].toUpperCase()} ${normalize(prefix + r[2])}`, path.basename(file))
-    }
+    collectRouterRoutes(file, prefix, routes)
   }
   return { routes, mounts }
 }
 
-/** 前端：client.<method>('<path>')，baseURL 已含 /api，这里补回前缀。 */
-function frontendCalls() {
-  const calls = []
-  const files = fs
-    .readdirSync(API_DIR)
-    .filter((f) => f.endsWith('.ts') && !/\.test\.ts$/.test(f))
-  for (const f of files) {
-    const src = fs.readFileSync(path.join(API_DIR, f), 'utf8')
-    // 注意：泛型参数里会嵌套 `>`（如 `Record<string, number>`），用 `<[^>]*>` 会在第一个 `>` 截断、
-    // 整条调用被静默跳过——2026-09-19 反向验证发现该假阴性（改错路径居然不报错）。
-    // 改为「方法名之后、第一个 `(` 之前的任意内容」，泛型里有括号的写法才会漏（见文件头边界）。
-    for (const m of src.matchAll(/client\.(get|post|put|patch|delete)\b[^(]{0,200}?\(\s*([`'"])([^`'"]*)\2/g)) {
-      const p = m[3]
-      if (!p.startsWith('/')) continue // 动态拼接的路径不在此列（见文件头「已知边界」）
-      calls.push({ key: `${m[1].toUpperCase()} ${normalize('/api' + p)}`, raw: `${m[1].toUpperCase()} ${p}`, file: f })
-    }
+function importedClients(src) {
+  const clients = new Set()
+  const imports = /\bimport\s+(?!type\s)(?:([\w$]+)\s*,?\s*)?(?:\{([^}]+)\}\s*)?from\s*(['"])(?:\.\/client|@\/api\/client)\3/g
+  for (const [, defaultClient, names] of src.matchAll(imports)) {
+    if (defaultClient) clients.add(defaultClient)
+    const payload = names?.match(/(?:^|,)\s*payloadClient(?:\s+as\s+([\w$]+))?\s*(?=,|$)/)
+    if (payload) clients.add(payload[1] ?? 'payloadClient')
   }
+  return clients
+}
+
+function callsInSource(file, source) {
+  const src = source.replace(/^\s*\/\/.*$/gm, '')
+  const calls = []
+  function add(method, route) {
+    if (!route.startsWith('/')) return
+    // 动作名不是资源 ID。商品销售模块的运行用例检查每个具体动作的组合。
+    if (file === 'api/sale-commercial.ts' && route.includes('${op.action}')) return
+    calls.push({ key: `${method} ${normalize('/api' + route)}`, raw: `${method} ${route}`, file })
+  }
+  for (const client of importedClients(src)) {
+    const receiver = client.replace(/\$/g, '\\$')
+    // 泛型允许嵌套 >，不能以第一个 > 当作参数结束。
+    const pattern = new RegExp(`(?<![\\w$.])${receiver}\\s*\\.\\s*(get|post|put|patch|delete)\\b[^(]{0,200}?\\(\\s*([\x60'"])([^\x60'"]*)\\2`, 'g')
+    for (const [, method, , route] of src.matchAll(pattern)) add(method.toUpperCase(), route)
+  }
+  if (file === DESKTOP_PRINT_BRIDGE) {
+    for (const [, , route] of src.matchAll(/\breportPrintOutcomeWithRetry\(\s*([`'"])([^`'"]*)\1/g)) add('POST', route)
+  }
+  return calls
+}
+
+/** 前端：读实际导入的接口客户端，baseURL 已含 /api，这里补回前缀。 */
+function frontendCalls() {
+  const files = fs.readdirSync(path.join(FRONTEND_SRC, 'api'))
+    .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+    .map((file) => `api/${file}`)
+  files.push(DESKTOP_PRINT_BRIDGE)
+  const calls = files.flatMap((file) => callsInSource(file, fs.readFileSync(path.join(FRONTEND_SRC, file), 'utf8')))
   return { calls, files: files.length }
 }
 
@@ -82,6 +126,15 @@ function main() {
   assert.ok(mounts > 40, `只解析到 ${mounts} 个 /api 挂载，扫描逻辑可能失效`)
   assert.ok(routes.size > 300, `只解析到 ${routes.size} 条后端路由，扫描逻辑可能失效`)
   assert.ok(calls.length > 150, `只解析到 ${calls.length} 条前端调用，扫描逻辑可能失效`)
+  for (const [file, expected] of [
+    ['api/kits.ts', ['GET /api/kits', 'POST /api/kits', 'GET /api/kits/:p', 'PUT /api/kits/:p', 'DELETE /api/kits/:p']],
+    ['api/sale-commercial.ts', ['POST /api/kits/preview', 'POST /api/sale/:p/commercial-preview']],
+    [DESKTOP_PRINT_BRIDGE, ['POST /api/printers/client-heartbeat', 'POST /api/print-jobs/claim-client',
+      'POST /api/print-jobs/:p/complete-client', 'POST /api/print-jobs/:p/fail-client']],
+  ]) {
+    const scanned = new Set(calls.filter((call) => call.file === file).map((call) => call.key))
+    for (const key of expected) assert.ok(scanned.has(key), `${file} 未检出 ${key}，请核对调用或扫描逻辑`)
+  }
 
   const problems = []
   for (const c of calls) {
