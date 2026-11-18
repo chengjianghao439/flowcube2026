@@ -19,7 +19,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
-# 定位仓库根：脚本在 .claude/skills/release-flowcube/scripts/ 下，但发布要在项目根跑。
+# 定位仓库根：脚本在 .agents/skills/release-flowcube/scripts/ 下，但发布要在项目根跑。
 # 优先用当前工作目录（应为项目根），校验三端目录存在。
 ROOT="$(pwd)"
 for d in backend frontend desktop; do

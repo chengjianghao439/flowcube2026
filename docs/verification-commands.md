@@ -66,7 +66,7 @@
 
 用版本管理器加载根目录 [.nvmrc](../.nvmrc)。开发命令由 [with-dev-env.sh](../scripts/with-dev-env.sh) 加载项目环境并核对 Node 主版本。CI 使用的版本见 [Tests 工作流](../.github/workflows/test.yml)。开发和验收地址以 Vite 实际输出和 API 代理核对结果为准。
 
-Codex 本机配置的历次调整和验证见 [本机设置记录](codex-local-setup-2026-09-04.md)与[模型提供方记录](codex-model-provider-2026-09-17.md)。本机设置曾将 Claude 专用变量移出通用 shell 注入。凭据和个人设置保存在仓库外，使用前复核当前连接。
+Codex 本机配置的历次调整和验证见 [本机设置记录](codex-local-setup-2026-09-04.md)与[模型提供方记录](codex-model-provider-2026-09-17.md)。凭据和个人设置保存在仓库外，使用前复核当前连接。
 
 `npm run dev:setup` 用于新工作树，每端依赖按 lockfile 安装，应用连接配置单独准备。Codex 声明的启动操作见 [工作树环境配置](../.codex/environments/environment.toml)。首次安装以该工作树的实际命令退出结果为准。已运行的开发服务目录应保留其依赖，历史初始化证据见[本机设置记录](codex-local-setup-2026-09-04.md)。
 
