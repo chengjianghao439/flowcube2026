@@ -270,16 +270,16 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
 }
 
 // 新建盘点单，自动拉取该仓库所有有库存的商品为盘点明细
-async function create({ warehouseId, warehouseName, remark, operator, scopeWarehouseIds = null, checkType = 1, scopeType = null, scopeValue = null, productIds = null }) {
+async function create({ warehouseId, warehouseName, remark, operator, scopeWarehouseIds = null, checkType = 1, scopeType = null, scopeValue = null, productIds = null }, borrowedConnection = null) {
   assertInScope(scopeWarehouseIds, warehouseId, '盘点单')
   const type = Number(checkType) === 2 ? 2 : 1
-  const conn = await pool.getConnection()
+  const conn = borrowedConnection || await pool.getConnection()
   try {
-    // Candidate discovery may precede a concurrent stock/policy change. The
-    // authoritative book read below must see commits made while waiting for
-    // the product policy locks, rather than a prior RR snapshot.
-    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
-    await conn.beginTransaction()
+    if (!borrowedConnection) {
+      // The stock read after the product policy locks needs the latest committed data.
+      await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
+      await conn.beginTransaction()
+    }
     const checkNo = await genNo(conn)
     const [r] = await conn.query(
       `INSERT INTO inventory_checks (check_no,warehouse_id,warehouse_name,check_type,scope_type,scope_value,remark,operator_id,operator_name) VALUES (?,?,?,?,?,?,?,?,?)`,
@@ -303,10 +303,15 @@ async function create({ warehouseId, warehouseName, remark, operator, scopeWareh
     for (const s of stocks) assertQtyPrecisionWith(policies.get(Number(s.product_id)), s.quantity, '盘点账面数量')
     for(const s of stocks) {
       await conn.query(`INSERT INTO inventory_check_items (check_id,product_id,product_code,product_name,unit,book_qty) VALUES (?,?,?,?,?,?)`,[checkId,s.product_id,s.product_code,s.product_name,s.unit,s.quantity])
-    }    await conn.commit()
+    }
+    if (!borrowedConnection) await conn.commit()
     return { id:checkId, checkNo }
-  } catch(e){ await conn.rollback(); throw e }
-  finally { conn.release() }
+  } catch (error) {
+    if (!borrowedConnection) await conn.rollback()
+    throw error
+  } finally {
+    if (!borrowedConnection) conn.release()
+  }
 }
 
 // 填写实盘数量

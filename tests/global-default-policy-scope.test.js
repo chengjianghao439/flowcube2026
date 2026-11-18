@@ -43,7 +43,9 @@ function domain() {
   const inventory = load('backend/src/modules/inventory/inventory.service.js', {
     ...common, './manual-stock-request': {}, '../../engine/inventoryEngine': {}, '../../engine/containerEngine': {}, './inventoryProjection': {}, '../../utils/pagination': {}, '../../utils/expectedStock': {}, '../../utils/operationRequest': {},
   })
-  const cycle = load('backend/src/modules/stockcheck/stockcheck.cycle.js', common)
+  const cycle = load('backend/src/modules/stockcheck/stockcheck.cycle.js', {
+    ...common, '../../utils/backendTime': {}, '../../utils/logger': {},
+  })
   const products = load('backend/src/modules/products/products.service.js', {
     ...common,
     '../document-activity/document-change-audit': { normalizeReason: () => {}, assertChangeRequest: async () => 'proof', bindChangeRequest: async () => {} },

@@ -1,5 +1,7 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { beijingTodayYmd } = require('../../utils/backendTime')
+const logger = require('../../utils/logger')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 
 // 帕累托经典切点（服务端常量，可后续暴露配置）
@@ -119,18 +121,22 @@ async function getCycleCandidates({ warehouseId, scopeType, scopeValue, productI
   )
   const intervalDays = rule ? Number(rule.interval_days) : 90
   const batchLimit = rule ? Number(rule.batch_limit) : 200
-  const [rows] = await pool.query(
+  return { productIds: await loadAbcCandidates(pool, wid, cls, intervalDays, batchLimit), scopeType: 'abc', scopeValue: cls }
+}
+
+async function loadAbcCandidates(conn, warehouseId, abcClass, intervalDays, batchLimit) {
+  const [rows] = await conn.query(
     `SELECT s.product_id
      FROM (SELECT DISTINCT c.product_id FROM inventory_containers c
            WHERE c.warehouse_id=? AND c.status=1 AND c.deleted_at IS NULL) s
      JOIN product_abc_classes a ON a.warehouse_id=? AND a.product_id=s.product_id AND a.abc_class=?
      LEFT JOIN inventory_count_coverage cov ON cov.warehouse_id=? AND cov.product_id=s.product_id
      WHERE cov.last_counted_at IS NULL OR cov.last_counted_at < DATE_SUB(NOW(), INTERVAL ? DAY)
-     ORDER BY COALESCE(cov.last_counted_at, '1970-01-01') ASC
+     ORDER BY COALESCE(cov.last_counted_at, '1970-01-01') ASC, s.product_id ASC
      LIMIT ?`,
-    [wid, wid, cls, wid, intervalDays, batchLimit],
+    [warehouseId, warehouseId, abcClass, warehouseId, intervalDays, batchLimit],
   )
-  return { productIds: rows.map(r => Number(r.product_id)), scopeType: 'abc', scopeValue: cls }
+  return rows.map(r => Number(r.product_id))
 }
 
 /**
@@ -202,53 +208,116 @@ async function saveCycleRules({ warehouseId = 0, rules, scopeWarehouseIds }) {
   return getCycleRules({ warehouseId: wid, scopeWarehouseIds })
 }
 
-/**
- * 自动循环盘排程（文档08 Phase2）：每日由 scheduler 调用。
- * 对每个启用循环盘规则的仓库：① 重算 ABC 分类 ② 逐 ABC 级查到期未盘候选 ③ 自动生成抽盘单。
- * 幂等：只对「有到期未盘商品」的级别建单；同一天重复执行因 coverage 未刷新仍会重复建单——
- * 由调用方（scheduler）保证每天只跑一次；极端情况即使重复，也只是多一张待盘单，不破坏库存。
- * 全自动任务用系统操作人（userId=1 超管语义，绕过权限），盘点单仍走正常提交流程。
- */
-async function runAutoCycleScheduling() {
-  // 收集启用循环盘规则且当前有在库容器的仓库（有货才值得排程，避免空仓空跑）
+/** Warehouse/class/day claim, candidate read and creation share one READ COMMITTED transaction. */
+async function scheduleCycleClass(warehouse, rule, plannedDate, operator) {
+  const warehouseId = Number(warehouse.id)
+  const { abcClass, intervalDays, batchLimit } = rule
+  const key = [plannedDate, warehouseId, abcClass]
+  const conn = await pool.getConnection()
+  let reusable = true
+  try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
+    await conn.beginTransaction()
+    try {
+      await conn.query(
+        "INSERT INTO inventory_cycle_runs (planned_date,warehouse_id,abc_class,outcome) VALUES (?,?,?,'pending')", key,
+      )
+    } catch (error) {
+      if (error.code !== 'ER_DUP_ENTRY') throw error
+      // Read the winner after the unique-key wait. A durable pending row needs review.
+      const [[winner]] = await conn.query(
+        'SELECT outcome FROM inventory_cycle_runs WHERE planned_date=? AND warehouse_id=? AND abc_class=?', key,
+      )
+      if (!winner || !['created', 'no_candidates'].includes(winner.outcome)) {
+        throw new AppError('循环盘进度记录缺少完成结果，请核对', 409, 'STOCKCHECK_CYCLE_RUN_INCOMPLETE')
+      }
+      await conn.rollback()
+      return { outcome: 'already_done' }
+    }
+
+    const productIds = await loadAbcCandidates(conn, warehouseId, abcClass, intervalDays, batchLimit)
+    const stockcheck = productIds.length ? await require('./stockcheck.service').create({
+      warehouseId,
+      warehouseName: warehouse.name,
+      remark: `系统自动循环抽盘 ${abcClass} 类（周期 ${intervalDays} 天）`,
+      operator,
+      scopeWarehouseIds: null,
+      checkType: 2,
+      scopeType: 'abc',
+      scopeValue: abcClass,
+      productIds,
+    }, conn) : null
+    const outcome = stockcheck ? 'created' : 'no_candidates'
+    const [finalized] = await conn.query(
+      `UPDATE inventory_cycle_runs SET outcome=?,stockcheck_id=?
+       WHERE planned_date=? AND warehouse_id=? AND abc_class=? AND outcome='pending'`,
+      [outcome, stockcheck?.id ?? null, ...key],
+    )
+    if (finalized.affectedRows !== 1) throw new Error('循环盘完成记录没有写入')
+    await conn.commit()
+    return { outcome, checkNo: stockcheck?.checkNo, items: productIds.length }
+  } catch (error) {
+    try { await conn.rollback() } catch {
+      reusable = false
+      conn.destroy()
+    }
+    throw error
+  } finally {
+    if (reusable) conn.release()
+  }
+}
+
+/** Retry unfinished classes as long as the scheduler is in the same Beijing business day. */
+async function runAutoCycleScheduling({ plannedDate = beijingTodayYmd() } = {}) {
   const [warehouses] = await pool.query(
     `SELECT DISTINCT w.id, w.name
      FROM inventory_warehouses w
      WHERE w.deleted_at IS NULL AND w.is_active=1
        AND EXISTS (SELECT 1 FROM inventory_containers c WHERE c.warehouse_id=w.id AND c.status=1 AND c.deleted_at IS NULL)
-       AND EXISTS (SELECT 1 FROM inventory_cycle_rules r WHERE r.warehouse_id IN (0, w.id) AND r.enabled=1)`,
+       AND EXISTS (SELECT 1 FROM inventory_cycle_rules r WHERE r.warehouse_id IN (0, w.id) AND r.enabled=1)
+     ORDER BY w.id`,
   )
-  const results = { warehouses: warehouses.length, created: [], skipped: [] }
+  const results = { plannedDate, warehouses: warehouses.length, created: [], skipped: [], failed: [] }
   const operator = { userId: 1, realName: '系统自动排程', roleId: 1, warehouseIds: null }
+  const recordFailure = (warehouseId, abcClass, stage, error) => {
+    const failure = { plannedDate, warehouseId, abcClass, stage, code: error.code ?? null }
+    results.failed.push(failure)
+    logger.warn('循环盘自动排程失败，本计划日可重试', { ...failure, reason: error.message }, 'Stockcheck')
+  }
 
   for (const wh of warehouses) {
-    const wid = Number(wh.id)
-    // ① 重算 ABC（自动任务默认按出库金额口径）
-    await recomputeAbc({ warehouseId: wid })
-    // ② 逐级查候选并建单
-    for (const cls of VALID_ABC) {
-      const { rules } = await getCycleRules({ warehouseId: wid })
-      const rule = rules.find(r => r.abcClass === cls)
-      if (!rule?.enabled) continue
-      const cand = await getCycleCandidates({ warehouseId: wid, scopeType: 'abc', scopeValue: cls })
-      if (!cand.productIds.length) { results.skipped.push(`${wh.name}-${cls}(无到期)`); continue }
+    const warehouseId = Number(wh.id)
+    let pending
+    try {
+      const { rules } = await getCycleRules({ warehouseId })
+      const [completed] = await pool.query(
+        `SELECT abc_class FROM inventory_cycle_runs
+         WHERE planned_date=? AND warehouse_id=? AND outcome IN ('created','no_candidates')`, [plannedDate, warehouseId],
+      )
+      const completedClasses = new Set(completed.map(row => row.abc_class))
+      pending = rules.filter(rule => rule.enabled && !completedClasses.has(rule.abcClass))
+    } catch (error) {
+      recordFailure(warehouseId, null, 'read_schedule', error)
+      continue
+    }
+    if (!pending.length) continue
+    try {
+      await recomputeAbc({ warehouseId })
+    } catch (error) {
+      for (const rule of pending) recordFailure(warehouseId, rule.abcClass, 'recompute_abc', error)
+      continue
+    }
+    for (const rule of pending) {
+      const { abcClass } = rule
       try {
-        const stockcheckSvc = require('./stockcheck.service')
-        const r = await stockcheckSvc.create({
-          warehouseId: wid,
-          warehouseName: wh.name,
-          remark: `系统自动循环抽盘 ${cls} 类（周期 ${rule.intervalDays} 天）`,
-          operator,
-          scopeWarehouseIds: null,
-          checkType: 2,
-          scopeType: 'abc',
-          scopeValue: cls,
-          productIds: cand.productIds,
-        })
-        results.created.push({ warehouse: wh.name, abcClass: cls, checkNo: r.checkNo, items: cand.productIds.length })
-      } catch (e) {
-        // 范围无有货商品/已存在进行中盘点等：记录跳过
-        results.skipped.push(`${wh.name}-${cls}(${e.message || '建单失败'})`)
+        const result = await scheduleCycleClass(wh, rule, plannedDate, operator)
+        if (result.outcome === 'created') {
+          results.created.push({ warehouse: wh.name, warehouseId, abcClass, checkNo: result.checkNo, items: result.items })
+        } else {
+          results.skipped.push(`${wh.name}-${abcClass}(${result.outcome === 'no_candidates' ? '无到期商品' : '已完成'})`)
+        }
+      } catch (error) {
+        recordFailure(warehouseId, abcClass, 'schedule_class', error)
       }
     }
   }

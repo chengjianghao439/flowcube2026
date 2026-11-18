@@ -122,20 +122,17 @@ function startScheduler() {
     logger.info('[scheduler] 物流取号/轨迹 worker 已启动', {}, 'Scheduler')
   }
 
-  // 循环盘点自动排程（文档08 Phase2）：每天跑一次，重算 ABC + 自动生成到期抽盘单。
-  // 用「当天是否已跑」去重：进程启动后首个整点检查，若当天没跑过则立即跑一次（覆盖深夜启动场景），
-  // 之后每小时检查一次直到当天跑过。可调 STOCKCHECK_CYCLE_INTERVAL_MS 控制检查频率。
+  // 循环盘持久化记录每天各仓各类别的结果。进程只在当天全部成功后跳过后续检查。
   const { runAutoCycleScheduling } = require('./modules/stockcheck/stockcheck.cycle')
   let lastCycleDate = ''
   startWorker('stockcheck-cycle', async () => {
-    // 北京时间的「今天」做每天一次判断（显式 backendTime，不依赖进程 TZ）
     const today = beijingTodayYmd()
     if (lastCycleDate === today) return
-    const r = await runAutoCycleScheduling()
-    lastCycleDate = today
-    logger.info(`[scheduler] 循环盘自动排程完成：${r.warehouses} 仓，生成 ${r.created.length} 张抽盘单${r.skipped.length ? `，跳过 ${r.skipped.length} 项` : ''}`, { created: r.created }, 'Scheduler')
+    const result = await runAutoCycleScheduling({ plannedDate: today })
+    if (!result.failed.length) lastCycleDate = today
+    logger.info(`[scheduler] 循环盘自动排程：${result.warehouses} 仓，生成 ${result.created.length} 单，${result.failed.length} 项待重试`, result, 'Scheduler')
   }, num('STOCKCHECK_CYCLE_INTERVAL_MS', 60 * 60 * 1000))
-  logger.info('[scheduler] 循环盘自动排程 worker 已启动（每日一次，可 STOCKCHECK_CYCLE_INTERVAL_MS 调检查频率）', {}, 'Scheduler')
+  logger.info('[scheduler] 循环盘自动排程 worker 已启动（默认每小时检查，按业务日记录结果）', {}, 'Scheduler')
 
   // 钉钉只推作业异常；普通经营计数保留站内。消息带单号/持续时间/处理位置。
   const { sendDingtalkAlert } = require('./utils/dingtalkAlert')
