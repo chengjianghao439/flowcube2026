@@ -164,6 +164,13 @@ else
   add_alert certificate-probe warning "${CERT_HOST} 证书查询失败或超时"
 fi
 
+# 启用异地复制后，由同一钉钉监控复用成功心跳、最新成对回执时钟与恢复去重。
+if [ "${OFFSITE_BACKUP_REQUIRED:-0}" = 1 ]; then
+  if ! OFFSITE_STATUS_DIR="$BACKUP_DIR/.offsite-status" sh "$SCRIPT_DIR/offsite-backup.sh" health; then
+    add_alert offsite-backup critical "异地备份复制失败、心跳缺失或成对回执过期"
+  fi
+fi
+
 # 7. 记录容器ID和累计次数，由公共模块计算近30分钟采样新增次数。
 for pair in "mysql:flowcube-mysql" "backend:flowcube-backend" "frontend:flowcube-frontend"; do
   svc="${pair%%:*}"; expected="${pair##*:}"

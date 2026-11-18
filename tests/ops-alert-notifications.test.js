@@ -63,7 +63,7 @@ process.exit(0);
     run(script, scenario = {}, expectedStatus = 0) {
       const before = fs.existsSync(commands) ? fs.readFileSync(commands, 'utf8').trim().split('\n').length : 0
       const result = spawnSync('bash', [path.join(dir, 'scripts', script)], {
-        cwd: dir, env: { ...env, ALERT_SCENARIO: JSON.stringify(scenario) },
+        cwd: dir, env: { ...env, ALERT_SCENARIO: JSON.stringify(scenario), OFFSITE_BACKUP_REQUIRED: scenario.offsiteRequired ? '1' : '0' },
         encoding: 'utf8', timeout: 20000,
       })
       assert.equal(result.status, expectedStatus, result.stdout + result.stderr)
@@ -485,4 +485,17 @@ test('运维可选安全配置无效时发送前明确失败且不输出密钥',
   assert.equal(oversizedKeyword.status, 1)
   assert.match(oversizedKeyword.stderr, /钉钉消息编码失败/)
   assert.equal(oversizedKeyword.url, '')
+})
+
+test('启用异地监控后回执缺失告警，恢复时仅在心跳和成对回执均新鲜后解除', t => {
+  const f = fixture(t)
+  const unavailable = f.run('monitor.sh', { offsiteRequired: true })
+  assert.match(unavailable.text, /异地备份复制失败、心跳缺失或成对回执过期/)
+  assert.ok(JSON.parse(fs.readFileSync(f.stateFile)).observed['offsite-backup'])
+  const state = path.join(f.dir, 'backups/.offsite-status')
+  fs.mkdirSync(state)
+  const now = Math.floor(Date.now() / 1000)
+  fs.writeFileSync(path.join(state, 'state'), `passed ${now} ${now - 60}\n`)
+  f.run('monitor.sh', { offsiteRequired: true })
+  assert.equal(JSON.parse(fs.readFileSync(f.stateFile)).observed['offsite-backup'], undefined)
 })

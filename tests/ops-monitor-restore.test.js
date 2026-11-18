@@ -240,3 +240,152 @@ test('恢复演练遇到同一个具名卷的运行锁时退出，避免改动�
   assert.match(result.stderr, /演练.*进行/)
   assert.ok(!result.commands.some(c => c[0] === 'docker'))
 })
+
+test('小满归档保留整个持久目录，并可在新目标核对原任务归属和回执', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-assistant-backup-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const source = path.join(dir, 'source')
+  const target = path.join(dir, 'target')
+  fs.mkdirSync(path.join(source, 'metadata'), { recursive: true })
+  const task = {
+    id: 'synthetic-receipt', graph: 'sale', state: 'DONE', actor: { id: 12, roles: ['fixture-operator'] },
+    requestKey: 'agent-synthetic-receipt', result: { saleId: 17 },
+    steps: [{ receipt: { saleId: 17 } }],
+  }
+  fs.writeFileSync(path.join(source, 'tasks.json'), JSON.stringify([task]))
+  fs.writeFileSync(path.join(source, 'tasks.json.tmp'), 'transient bytes')
+  fs.writeFileSync(path.join(source, 'metadata', 'fixture.bin'), Buffer.from([0, 255, 5, 0]))
+  const incremental = path.join(source, 'tasks-v2')
+  fs.mkdirSync(incremental)
+  fs.writeFileSync(path.join(incremental, 'task-fixture.json'), JSON.stringify(task))
+  fs.writeFileSync(path.join(incremental, '.task-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.tmp'), 'unfinished')
+  fs.writeFileSync(path.join(source, 'metadata', 'ordinary.tmp'), 'persistent auxiliary bytes')
+  const run = (mode, dest, input) => spawnSync(process.execPath,
+    [path.join(root, 'scripts/lib/assistant-backup.cjs'), mode, dest], { encoding: 'utf8', input, timeout: 5000 })
+  const snapshot = run('snapshot', source)
+  assert.equal(snapshot.status, 0, snapshot.stderr)
+  const records = snapshot.stdout.trim().split('\n').map(line => JSON.parse(line))
+  assert.equal(records[0].formatVersion, 1)
+  assert.deepEqual(records.slice(1, -1).map(file => file.name).sort(),
+    ['metadata/fixture.bin', 'metadata/ordinary.tmp', 'tasks-v2/task-fixture.json', 'tasks.json'])
+  assert.equal(records.at(-1).files, 4)
+  assert.equal(run('restore', target, snapshot.stdout).status, 0)
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(target, 'tasks.json'))), [task])
+  assert.deepEqual(fs.readFileSync(path.join(target, 'metadata', 'fixture.bin')), Buffer.from([0, 255, 5, 0]))
+  assert.equal(fs.statSync(path.join(target, 'tasks.json')).mode & 0o777, 0o600)
+  assert.equal(run('restore', target, snapshot.stdout).status, 1, '已有任务目录不能覆盖')
+  assert.equal(run('verify', source, snapshot.stdout).status, 0)
+  records[1].sha256 = '0'.repeat(64)
+  const tampered = records.map(record => JSON.stringify(record)).join('\n') + '\n'
+  assert.equal(run('restore', path.join(dir, 'tampered'), tampered).status, 1)
+  assert.equal(fs.existsSync(path.join(dir, 'tampered')), false)
+  fs.symlinkSync(path.join(source, 'tasks.json'), path.join(source, 'unsafe-link'))
+  assert.equal(run('snapshot', source).status, 1)
+})
+
+test('异地复制在传完两类数据后才复制启动时已有的回执，远端冲突进入故障状态', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-offsite-copy-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const archive = path.join(dir, 'archive')
+  const receipts = path.join(archive, 'paired')
+  const status = path.join(dir, 'status')
+  const events = path.join(dir, 'calls')
+  const old = 'flowcube_20260101_000001.json'
+  const next = 'flowcube_20260101_000002.json'
+  fs.mkdirSync(receipts, { recursive: true })
+  fs.writeFileSync(path.join(receipts, old), '{}')
+  fs.writeFileSync(path.join(dir, 'rclone'), `#!${process.execPath}
+const fs = require('node:fs'), path = require('node:path');
+const args = process.argv.slice(2), mode = process.env.FAKE_RCLONE;
+const list = args[args.indexOf('--files-from-raw') + 1];
+fs.appendFileSync(process.env.FAKE_EVENTS, JSON.stringify({ args, entries: args.includes('--files-from-raw') ? fs.readFileSync(list, 'utf8') : '' }) + '\\n');
+if (!args.includes('--files-from-raw')) fs.writeFileSync(path.join(args[1], 'paired', '${next}'), '{}');
+if (mode === 'conflict') process.exit(7);
+`, { mode: 0o755 })
+  const run = (command, mode) => spawnSync('sh', [path.join(root, 'scripts/offsite-backup.sh'), command], {
+    encoding: 'utf8', timeout: 5000, env: {
+      ...process.env, PATH: dir + ':' + process.env.PATH, FAKE_RCLONE: mode, FAKE_EVENTS: events,
+      OFFSITE_BACKUP_DIR: archive, OFFSITE_STATUS_DIR: status, RCLONE_REMOTE: 'fixture:offsite',
+    },
+  })
+  assert.equal(run('once', 'ok').status, 0)
+  const calls = fs.readFileSync(events, 'utf8').trim().split('\n').map(JSON.parse)
+  assert.equal(calls.length, 2)
+  for (const call of calls) {
+    assert.equal(call.args[0], 'copy')
+    assert.ok(call.args.includes('--immutable'))
+  }
+  assert.ok(calls[0].args.includes('/flowcube_*.sql.gz') && calls[0].args.includes('/assistant/flowcube_*.json.gz'))
+  assert.equal(calls[1].entries, 'paired/' + old + '\n', '复制期间新出现的回执必须留到下轮')
+  assert.equal(run('health', 'ok').status, 0)
+  fs.writeFileSync(path.join(status, 'state'), `passed ${Math.floor(Date.now() / 1000)} 1\n`)
+  assert.equal(run('health', 'ok').status, 1, '最近复制成功仍须检查数据截止时间')
+  fs.writeFileSync(events, '')
+  assert.equal(run('once', 'conflict').status, 1)
+  assert.equal(run('health', 'ok').status, 1)
+  assert.equal(fs.readFileSync(events, 'utf8').trim().split('\n').length, 1, '文件失败禁止上线对应回执')
+})
+
+test('成对回执绑定两份归档的文件名、字节和摘要', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-backup-receipt-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const stamp = '20261118_020000'
+  fs.mkdirSync(path.join(dir, 'assistant'))
+  fs.mkdirSync(path.join(dir, 'paired'))
+  fs.writeFileSync(path.join(dir, `flowcube_${stamp}.sql.gz`), gzipSync('synthetic database'))
+  const assistant = path.join(dir, 'assistant', `flowcube_${stamp}.json.gz`)
+  fs.writeFileSync(assistant, gzipSync('synthetic assistant'))
+  const scripting = path.join(root, 'scripts/lib/backup-pair.cjs')
+  const run = (action, ...args) => spawnSync(process.execPath, [scripting, action, dir, stamp, ...args],
+    { encoding: 'utf8', timeout: 5000 })
+  const write = run('write', '12345678-1234-4123-af00-123456789abc', '8.0.46', 'flowcube_pair_test',
+    '2026-11-18T02:00:00.001Z', '2026-11-18T02:00:01.000Z', 'fixture_assistant', 'sha256:' + 'a'.repeat(64),
+    JSON.stringify({ capturedAt: '2026-11-18T02:00:00.000Z', files: 1 }))
+  assert.equal(write.status, 0, write.stderr)
+  assert.equal(run('verify').status, 0)
+  fs.appendFileSync(assistant, 'tampered')
+  const tampered = run('verify')
+  assert.equal(tampered.status, 1)
+  assert.match(tampered.stderr, /摘要或大小不符/)
+})
+
+test('小满来源不可用时仍保留已验证 SQL，数据库身份漂移不发布归档', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-backup-partial-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  fs.writeFileSync(path.join(dir, 'flock'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+  fs.writeFileSync(path.join(dir, 'docker'), `#!${process.execPath}
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const source = process.env.BACKUP_DIR + '/queries';
+if (args[0] === 'inspect') console.log('owned-fixture');
+else if (args[0] === 'compose') process.exit(1);
+else if (args.join(' ').includes('@@server_uuid')) {
+  const seen = fs.existsSync(source);
+  fs.writeFileSync(source, '1');
+  console.log((seen && process.env.SOURCE_DRIFT === '1' ? 'abcdefab' : '12345678') + '-1234-4123-af00-123456789abc 8.0.46 flowcube_fixture_test');
+} else if (args.join(' ').includes('mysqldump')) console.log('CREATE TABLE fixture (id INT);');
+else process.exit(1);
+`, { mode: 0o755 })
+  const run = (fixture, databaseOnly, drift) => {
+    const backupDir = path.join(dir, fixture)
+    const result = spawnSync('bash', [path.join(root, 'scripts/backup-db.sh')], {
+      encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, PATH: dir + ':' + process.env.PATH, PROJECT_DIR: dir, BACKUP_DIR: backupDir,
+        CONTAINER: 'offline-mysql', MIN_BYTES: '1', BACKUP_DATABASE_ONLY: databaseOnly, SOURCE_DRIFT: drift,
+        DINGTALK_WEBHOOK: '', DINGTALK_SECRET: '', DINGTALK_KEYWORD: '' },
+    })
+    return { ...result, archives: fs.readdirSync(backupDir).filter(file => file.endsWith('.sql.gz')) }
+  }
+  const partial = run('partial', '0', '0')
+  assert.equal(partial.status, 1, partial.stderr)
+  assert.match(partial.stderr, /小满卷身份或一致性校验失败/)
+  assert.equal(partial.archives.length, 1)
+  assert.equal(fs.existsSync(path.join(dir, 'partial/paired')), false)
+  const databaseOnly = run('database-only', '1', '0')
+  assert.equal(databaseOnly.status, 0, databaseOnly.stderr)
+  assert.equal(databaseOnly.archives.length, 1)
+  const drift = run('drift', '0', '1')
+  assert.equal(drift.status, 1, drift.stderr)
+  assert.match(drift.stderr, /MySQL 备份期间来源变化/)
+  assert.deepEqual(drift.archives, [])
+})

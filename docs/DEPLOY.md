@@ -244,6 +244,18 @@ DEPLOY_IMAGE_SHA256=<该CI归档的SHA256> bash scripts/server-update.sh
 
 推荐使用 Actions 的 Deploy Browser App → Run workflow，自动完成 CI 构建与传输。手动入口也必须提供同 SHA 的 CI 镜像归档，不允许降级为生产编译。脚本人工入口会重新查询同 SHA 的 Tests/Security；缺少凭据或检查失败会终止。不要默认设置 SKIP_RELEASE_GATE。仅更新服务器应用，不构建桌面安装包。
 
+## 日常成对备份与异地副本
+
+宿主 cron 模板每日 02:00 调用 `scripts/backup-db.sh`，本地保留阈值 `KEEP_DAYS` 默认 14 天。脚本查询实际 Compose 的 MySQL 和小满挂载身份，先读取小满持久目录，再用 `--single-transaction` 转储 MySQL。小满归档覆盖子目录和普通文件，跳过原子写入使用的已知暂存文件，第二次读取验证文件集合、原始字节数和摘要一致。小满归档上限为 32,768 个文件、单文件 128 MiB、全目录 256 MiB。超限或数据在归档期间变化应排查下一次可用快照。数据库成功而小满未成功时保留数据库副本、发送失败告警，且没有成对回执。独立 MySQL 可明确配置 `BACKUP_DATABASE_ONLY=1`。
+
+每轮的 SQL 归档沿用 `flowcube_<时间戳>.sql.gz`，小满归档在 `assistant/flowcube_<时间戳>.json.gz`，校验过的两份副本才有 `paired/flowcube_<时间戳>.json`。回执记录两份摘要、大小、MySQL UUID、库名和版本、小满卷和镜像身份，以及两个快照时间。两次读取的时间不同，恢复后需用 MySQL 原请求键核对小满任务业务结果。需要相同业务截止时，由运维在获准的停写窗口采集，先排空在途任务并记录截止。
+
+可选的 `docker-compose.backup.yml` 独立服务使用获准的 rclone remote。每次循环复制已完成的 SQL 和小满归档，成功后再复制本轮开始时已有的成对回执。默认每次结束后等 6 小时；远端同名冲突会失败，远端保留周期由存储策略和运维确认。服务健康检查结合上次复制状态、13 小时心跳窗口和 36 小时成对回执新鲜度。配置异地复制后，可给宿主监控设置 `OFFSITE_BACKUP_REQUIRED=1`，把缺失、超期或复制失败纳入钉钉告警；环境自定义的时间窗口须与复制服务一致。
+
+由运维确认远端位置、存储权限、保留期、告警接收和可取回性，业务负责人提供任务归属、权限及回执比对。数据恢复到独立目标，原卷和回执保留。按 [故障恢复手册](runbooks/failure-recovery.md#恢复小满及原业务回执) 校验本地归档或从异地取回的成对归档；远端只保留单份 SQL 时按数据库独立恢复。
+
+本地已用 MySQL 8.0.46 和独立小满卷演练，异地端使用真实 rclone 加另一文件系统目录模拟。原实例停止后，两个独立 UUID 的目标分别读回合成回执、账号权限和小满任务。总耗时 29 秒，其中停源后恢复核对 9.5 秒；小满快照时间 `2026-11-18T02:10:26.525Z`，数据库转储启动 `2026-11-18T02:10:26.712Z`。生产远端频率、备份覆盖范围及业务恢复时长需以实际运行证据核定。
+
 ## 发布失败与人工恢复
 
 发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。迁移前以固定完整 SHA 的候选镜像、Compose 实际迁移账户运行独立只读 helper（覆盖配置锁定 image/read_only，使用 pull_policy: never 并以 !reset 清除继承 build，兼容 Compose 2.27.0 run 无 --pull 参数，以 node 用户和 node entrypoint 执行，不启动应用或迁移器）。读取候选 SQL 和 db_migrations 求待执行集合；没有待执行触发器/函数时，不因 trust=0 拒绝。有相关待执行 SQL（含动态字符串及 ALTER FUNCTION）时，先核实际迁移数据库的 TRIGGER、CREATE ROUTINE 或 ALTER ROUTINE 权限，再核已有 log_bin=0、trust=1 或迁移账户全局 SUPER/ALL 之一；未知或查询失败在应用标签改变、停写和迁移之前拒绝。显式 DEFINER 身份未证明时拒绝；binlog 开启且 trust 关闭时，无法可靠证明函数声明的 CREATE/ALTER FUNCTION 保守拒绝。发布脚本不执行任何 SET GLOBAL，不修改或恢复数据库全局参数和权限；原 schema 权限与迁移器完整检查继续生效。现有备份/归属、镜像 revision、目标写入契约、迁移器、健康及页面门禁保持；不自动 image prune。
