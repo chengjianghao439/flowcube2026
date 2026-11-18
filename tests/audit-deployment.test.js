@@ -14,7 +14,7 @@ function deployment(scenario, transform = source => source) {
   const bin = path.join(dir, 'bin')
   fs.mkdirSync(bin)
   fs.mkdirSync(path.join(dir, 'scripts/lib'), { recursive: true })
-  for (const file of ['server-update.sh', 'lib/ops-common.sh']) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
+  for (const file of ['server-update.sh', 'lib/ops-common.sh', 'lib/web-asset-history.js']) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
   const updatePath = path.join(dir, 'scripts/server-update.sh')
   fs.writeFileSync(updatePath, transform(fs.readFileSync(updatePath, 'utf8')))
   for (const file of ['lib/runtime-guards.sh']) if (fs.existsSync(path.join(root, 'scripts', file))) fs.copyFileSync(path.join(root, 'scripts', file), path.join(dir, 'scripts', file))
@@ -73,6 +73,10 @@ fs.appendFileSync(log,JSON.stringify([cmd,...args])+'\\n');
 if(cmd==='git') {if(args[0]==='rev-parse')console.log((s==='sha'?'b':'a').repeat(40)); process.exit(0);}
 if(cmd==='flock'||cmd==='sleep')process.exit(0);
 if(cmd==='node'){
+ if(args[0]?.endsWith('web-asset-history.js')) {
+  const child=require('node:child_process').spawnSync(process.execPath,args,{stdio:'inherit',env:process.env});
+  process.exit(child.status??1);
+ }
  if(args[0]?.endsWith('pre-migrate-backup.js')) {
   const r=require('node:child_process').spawnSync(process.execPath,['--require',path.join(process.cwd(),'preload.js'),...args],{stdio:'inherit',env:process.env});
   if(s==='backup_tamper' && args[1]==='create' && r.status===0) fs.appendFileSync(path.join(args.at(-1),'database.sql.gz'),'tamper');
@@ -140,7 +144,15 @@ if(cmd==='docker') {
  if(a.includes("table_name='db_migrations'"))console.log('1');
  if(a.includes("filename='240_party_ledger_explicit_identity.sql'"))console.log(s==='ledger_gate'?'0':'1');
 
+ if(args[0]==='cp') {
+   const filename = s==='invalid_old_assets' ? 'index.js' : 'index-OuCw_SwN.js';
+   fs.writeFileSync(path.join(args.at(-1), filename), 'export default "old";');process.exit(0);
+ }
+ if(args[0]==='inspect'&&a.includes('com.docker.compose.service')) {
+   console.log('sha256:'+'2'.repeat(64)+(s==='wrong_old_assets_source'?' backend':' frontend'));process.exit(0);
+ }
  if(args[0]==='image'&&args[1]==='inspect') {
+   if(a.includes('{{.Id}}')) {console.log('sha256:'+'4'.repeat(64));process.exit(0);}
    if(a.includes('io.flowcube.quantity-return-cash-contract'))console.log(s==='write_contract_missing_target'||(s.startsWith('write_contract')&&args.at(-1).startsWith('sha256:'))?'':'1');
    else console.log(a.includes('io.flowcube.party-ledger-contract')?(s.startsWith('ledger_retry')?'':'1'):(s==='wrong-image'?'b':'a').repeat(40));
  }
@@ -453,3 +465,58 @@ for (const scenario of ['migration_condition_missing','migration_condition_unkno
     assert.match(r.stderr, /迁移条件/)
   })
 }
+
+test('前端历史资源来源或文件名不合约时在停写前终止', () => {
+  for (const scenario of ['invalid_old_assets', 'wrong_old_assets_source']) {
+    const r = deployment(scenario)
+    assert.equal(r.status, 1, r.stdout + r.stderr)
+    assert.match(r.stderr, /前端版本资源留存失败/)
+    assert.ok(!r.commands.some(c => c.join(' ').includes('compose stop') || c.join(' ').includes('npm run migrate')))
+  }
+})
+
+test('旧资源在切换之前复制，镜像标记在健康与页面验收之后更新', () => {
+  const r = deployment('success')
+  assert.equal(r.status, 0, r.stdout + r.stderr)
+  const prepare = r.commands.findIndex(c => c[0] === 'node' && c.join(' ').includes('web-asset-history.js prepare'))
+  const copy = r.commands.findIndex(c => c[0] === 'docker' && c[1] === 'cp' && c[2].includes('old-frontend-container'))
+  const stop = r.commands.findIndex(c => c.join(' ').includes('compose stop -t 60 backend'))
+  const confirm = r.commands.findIndex(c => c[0] === 'node' && c.join(' ').includes('web-asset-history.js confirm'))
+  const health = r.commands.findIndex(c => c[0] === 'curl' && c.join(' ').includes('/api/ready'))
+  assert.ok(prepare >= 0 && copy > prepare && stop > copy)
+  assert.ok(health > stop && confirm > health)
+})
+
+test('前端留存只替换完整的一代，遇到失败候选和同镜像重试时继续提供上次资源', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-previous-assets-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const assets = path.join(dir, 'history')
+  const image = letter => 'sha256:' + letter.repeat(64)
+  const script = path.join(root, 'scripts/lib/web-asset-history.js')
+  fs.writeFileSync(path.join(dir, 'docker'), `#!${process.execPath}
+const fs = require('node:fs'), path = require('node:path');
+const args = process.argv.slice(2);
+if (args[0] === 'inspect') process.stdout.write(process.env.EXPECTED_SOURCE + ' frontend');
+if (args[0] === 'cp') fs.writeFileSync(path.join(args.at(-1), process.env.ASSET_NAME), process.env.EXPECTED_SOURCE);
+`, { mode: 0o755 })
+  const run = (action, current, previous = '', filename = 'entry-A1b2c3D4.js') =>
+    spawnSync(process.execPath, [script, action, assets, image(current), previous && image(previous), 'owned-container'], {
+      encoding: 'utf8', timeout: 5000, env: { ...process.env, PATH: dir + ':' + process.env.PATH,
+        EXPECTED_SOURCE: previous && image(previous), ASSET_NAME: filename },
+    })
+  const active = path.join(assets, 'active')
+  const activeAssets = () => fs.readdirSync(path.join(active, 'assets'))
+  assert.equal(run('prepare', 'b', 'a').status, 0)
+  const initial = fs.readlinkSync(active)
+  assert.deepEqual(activeAssets(), ['entry-A1b2c3D4.js'])
+  assert.equal(run('prepare', 'b', 'b', 'invalid.js').status, 0, '同镜像不应重新复制')
+  assert.equal(run('prepare', 'c', 'b', 'invalid.js').status, 0, '首次未通过验收的镜像不替换留存')
+  assert.equal(fs.readlinkSync(active), initial)
+  assert.equal(run('confirm', 'c').status, 0)
+  assert.equal(run('prepare', 'd', 'c', 'invalid.js').status, 1)
+  assert.equal(fs.readlinkSync(active), initial)
+  assert.equal(run('prepare', 'd', 'c', 'entry-C1b2c3D4.js').status, 0)
+  assert.deepEqual(activeAssets(), ['entry-C1b2c3D4.js'])
+  assert.equal(fs.readFileSync(path.join(active, 'assets', 'entry-C1b2c3D4.js'), 'utf8'), image('c'))
+  assert.equal(fs.readdirSync(assets).filter(entry => entry.startsWith('generation-')).length, 1)
+})

@@ -81,3 +81,6 @@ security-scan-report*
 backend/apk/published-version.json
 backend/apk/.publish-pda.lock
 backend/apk/.publish-pda-*
+
+# Previous browser assets stored by the deployment script.
+.web-asset-history/

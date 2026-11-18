@@ -55,3 +55,6 @@ flowcube_backup.sql
 TEMP_BRAND_SYNC
 security-scan-report*
 gitleaks-report.json
+
+# Previous browser assets stored by the deployment script.
+.web-asset-history/

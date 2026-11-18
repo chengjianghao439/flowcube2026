@@ -195,6 +195,11 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
   assert_expected_commit
   ensure_mysql_ready
   assert_migration_conditions
+  frontend_image=$(docker image inspect -f '{{.Id}}' "flowcube-frontend:${expected}")
+  # Prepare while the source container is still available and before business
+  # stop-write. The helper exposes one complete previous generation to Nginx.
+  bounded 25 node "$SCRIPT_DIR/lib/web-asset-history.js" prepare "$ROOT/.web-asset-history" \
+    "$frontend_image" "$PREVIOUS_FRONTEND_IMAGE" "$frontend_id"
   for service in backend frontend; do docker tag "flowcube-${service}:${expected}" "flowcube-${service}:latest"; done
   # 停写标记先于停止请求；请求结果未知也不得自动恢复写入。
   APPLICATION_SWITCHED=1
@@ -242,6 +247,7 @@ if command -v docker >/dev/null 2>&1 && [ -f docker-compose.yml ]; then
     [[ "$public_html" == *'<title>极序 Flow</title>'* ]] || fail_deploy '公网前端页面检查失败'
   fi
   assert_expected_commit
+  bounded 5 node "$SCRIPT_DIR/lib/web-asset-history.js" confirm "$ROOT/.web-asset-history" "$frontend_image"
   bash scripts/install-cron.sh >/dev/null 2>&1 || echo '!! cron 同步失败，请手动检查'
   echo '==> 部署完成，健康检查与发布门禁已通过'
   exit 0

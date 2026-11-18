@@ -16,15 +16,24 @@ test('every public location retains security headers alongside its cache policy'
   const name = `flowcube-nginx-headers-${process.pid}`
   let created = false
   try {
-    for (const sub of ['html/assets', 'downloads/current', 'downloads/versions/v-test', 'snippets']) fs.mkdirSync(path.join(dir, sub), { recursive: true })
-    for (const file of ['html/index.html', 'html/assets/test.js', 'downloads/latest.json', 'downloads/current/test.txt', 'downloads/versions/v-test/test.txt']) fs.writeFileSync(path.join(dir, file), '{}')
+    for (const sub of ['html/assets', 'previous/active/assets', 'downloads/current', 'downloads/versions/v-test', 'snippets']) fs.mkdirSync(path.join(dir, sub), { recursive: true })
+    for (const file of [ 'downloads/latest.json', 'downloads/current/test.txt', 'downloads/versions/v-test/test.txt']) fs.writeFileSync(path.join(dir, file), '{}')
+    const current = '/assets/entry-nowHash2.js'
+    const old = '/assets/lazy-oldHash1.js'
+    const missing = '/assets/missing.js'
+    fs.writeFileSync(path.join(dir, 'html/index.html'), `<script type="module" src="${current}"></script>`)
+    fs.writeFileSync(path.join(dir, 'html' + current), 'export const build = "current";')
+    fs.writeFileSync(path.join(dir, 'previous/active' + old), 'export const build = "previous";')
+    // A shared hash present in both generations must prefer the current image.
+    fs.writeFileSync(path.join(dir, 'previous/active' + current), 'invalid fixture collision')
     const server = fs.readFileSync(path.join(root, 'docker/nginx.conf'), 'utf8')
       .replaceAll('/usr/share/nginx/html', '/test/html').replaceAll('/usr/share/nginx/downloads', '/test/downloads')
+      .replaceAll('/usr/share/nginx/previous-assets', '/test/previous')
       .replaceAll('/etc/nginx/snippets/', '/test/snippets/')
     fs.writeFileSync(path.join(dir, 'server.conf'), server)
     const snippet = path.join(root, 'docker/nginx-security-headers.conf')
     if (fs.existsSync(snippet)) fs.copyFileSync(snippet, path.join(dir, 'snippets/security-headers.conf'))
-    fs.writeFileSync(path.join(dir, 'nginx.conf'), 'events {}\nhttp { map $http_x_forwarded_proto $fc_forwarded_proto { default $scheme; } include /test/server.conf; }')
+    fs.writeFileSync(path.join(dir, 'nginx.conf'), 'events {}\nhttp { map $http_x_forwarded_proto $fc_forwarded_proto { default $scheme; } include /etc/nginx/mime.types; include /test/server.conf; }')
     // Synthetic public files must be readable by the Nginx worker UID.
     function publicFixture(directory) {
       fs.chmodSync(directory, 0o755)
@@ -52,7 +61,7 @@ test('every public location retains security headers alongside its cache policy'
     }
     for (const [url, status, cache] of [
       ['/', 200, 'no-store'], ['/index.html', 200, 'no-store'], ['/a/deep/route', 200, 'no-store'],
-      ['/assets/test.js', 200, 'immutable'], ['/assets/missing.js', 404, 'immutable'],
+      [current, 200, 'immutable'], [old, 200, 'immutable'], [missing, 404, 'no-store'],
       ['/latest.json', 200, 'no-store'], ['/current/test.txt', 200, 'no-store'], ['/current/missing', 404, 'no-store'],
       ['/versions/v-test/test.txt', 200, null], ['/downloads/latest.json', 200, null], ['/api/health', 502, null],
     ]) {
@@ -61,7 +70,23 @@ test('every public location retains security headers alongside its cache policy'
       assert.equal(response.status, status, url)
       for (const [header, value] of Object.entries(expected)) assert.equal(response.headers.get(header), value, `${url}: ${header}`)
       if (cache) assert.ok(response.headers.get('cache-control')?.includes(cache), `${url}: cache policy`)
+      if (url === missing) assert.doesNotMatch(response.headers.get('cache-control') || '', /immutable/)
     }
+    const entry = await (await fetch(base + '/index.html')).text()
+    assert.ok(entry.includes(current) && !entry.includes(old))
+    for (const [url, build] of [[current, 'current'], [old, 'previous']]) {
+      const response = await fetch(base + url)
+      assert.match(response.headers.get('content-type'), /javascript/)
+      assert.equal(await response.text(), `export const build = "${build}";`)
+    }
+    await (await fetch(base + missing)).arrayBuffer()
+    const newAsset = path.join(dir, 'html' + missing)
+    fs.writeFileSync(newAsset, 'export const loaded = true;')
+    fs.chmodSync(newAsset, 0o644)
+    docker('cp', newAsset, name + ':/test/html' + missing)
+    const available = await fetch(base + missing)
+    assert.equal(available.status, 200, '此前 404 的资源现在可重试')
+    assert.equal(await available.text(), 'export const loaded = true;')
   } catch (error) {
     if (created) console.error(docker('logs', name))
     throw error

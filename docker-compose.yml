@@ -135,6 +135,8 @@ services:
     volumes:
       # nginx 只暴露 canonical downloads root，下游路径为 /latest.json、/versions/、/current/。
       - ${FLOWCUBE_DOWNLOADS_DIR:-/var/www/flowcube-downloads}:/usr/share/nginx/downloads:ro
+      # 仅旧标签仍引用的上一版摘要资源；当前入口和当前资源从镜像读取。
+      - ./.web-asset-history:/usr/share/nginx/previous-assets:ro
 
   # 日志集中检索（P2-12）：Grafana Loki + 可选 grafana。用 observability profile 隔离——
   # 默认 docker compose up 不会起它们（不影响现有部署）；需要时显式：

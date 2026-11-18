@@ -279,6 +279,12 @@ DEPLOY_IMAGE_SHA256=<该CI归档的SHA256> bash scripts/server-update.sh
 
 嵌套超时信号：CI 外层设置 `FLOWCUBE_DEPLOY_TIMEOUT_GROUP=1`，内层命令使用 GNU timeout `--foreground`，使总超时的 TERM 同时到达等待中的客户端并让 Bash 执行停写清理 trap。独立监控不启用此模式。默认 600 秒失败收尾宽限覆盖停止应用、Docker 管理/清理及通知；扩大 HEALTH_CHECK_ATTEMPTS/DELAY 时须同步计算宽限和 CI job 时限。真实进程回归覆盖外层超时后停写与清理都必须执行，见 `tests/deployment-resources.test.js`。
 
+### 浏览器跨版本资源留存
+
+在进入停写窗口前，部署锁内从 Compose 实际的上一版前端容器复制带摘要的静态资源。核对旧镜像 ID、Compose 服务归属、文件形态与 64 MiB 容量上限，原子切换一个历史资源目录；留存准备有 25 秒时限。镜像构建也校验资源容量。候选通过健康、页面和配置的公网验收后，5 秒内更新已发布前端镜像记录。候选中断或未通过检查后向前修复时，沿用上一次留存；首次部署没有旧容器时照常启动。
+
+Nginx 通过只读挂载访问 `.web-asset-history`。新标签仍从当前镜像取得不缓存的入口 HTML；旧标签请求带摘要的资源时先读当前镜像，未找到再读上一代留存。两代均缺失时返回带 `Cache-Control: no-store` 的 HTTP 404。应用保留原有标签和提交状态，不触发整页刷新。已留存一代正常替换后只清理专属目录中的陈旧资源。
+
 ## Compose 覆盖配置与运行时环境（2026-09-05）
 
 现行 `scripts/server-update.sh` 沿用基础 `docker-compose.yml`，其 MySQL 仅回环 3306、前端仅回环 8080；本次没有改变该部署入口。需要彻底关闭宿主 MySQL 端口时，显式叠加 `docker-compose.prod.yml`。该文件要求 Docker Compose **2.24.4 或更新版本**，使用 `!override` 清除 MySQL 端口并精确替换前端映射。旧版 Compose 不支持时应升级，不能改回 `ports: []`（合并时不会清空）。前端保持 `127.0.0.1:8080:80`，宿主 80/443 留给 Caddy。
