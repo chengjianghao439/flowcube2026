@@ -215,3 +215,18 @@ test('切换新清单后旧下载URL仍取得对应旧APK；摘要缓存按文�
   assert.deepEqual(download.bytes, old.bytes)
   assert.equal(download.headers['X-FlowCube-PDA-Version-Code'], '2')
 })
+
+test('Android 用包内身份和版号拒绝同版或更早的安装包，并在成功 handoff 后报告安装界面', () => {
+  const source = fs.readFileSync(path.join(root, 'frontend/android/app/src/main/java/com/flowcube/pda/PdaAppUpdatePlugin.java'), 'utf8')
+    .replace(/^\s*\/\/.*$/gm, '')
+  const checksumIndex = source.indexOf('sha256Of(apkFile)')
+  const verifyIndex = source.indexOf('verifyApkVersion(apkFile, expectedVersionCode)')
+  const installIndex = source.indexOf('installApk(apkFile, operationId)')
+  assert.ok(checksumIndex >= 0 && verifyIndex > checksumIndex && installIndex > verifyIndex)
+  assert.match(source, /getPackageArchiveInfo\(apkFile\.getAbsolutePath\(\), 0\)/)
+  assert.match(source, /archiveVersion <= installedVersion/)
+  assert.match(source, /archiveVersion != expectedVersionCode/)
+  assert.match(source, /startActivity\(installIntent\)[\s\S]*emitProgress\(operationId, "installing"/)
+  assert.match(source, /Settings\.ACTION_MANAGE_UNKNOWN_APP_SOURCES/)
+  assert.match(source, /Build\.VERSION\.SDK_INT < Build\.VERSION_CODES\.O/)
+})

@@ -1,17 +1,26 @@
-import { registerPlugin } from '@capacitor/core'
+import { registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 
 export type PdaNativeUpdateProgress = {
+  operationId: string
   status: 'starting' | 'downloading' | 'downloaded' | 'installing' | 'permission_required' | 'error'
   progress: number
   message: string
 }
 
 type PdaAppUpdatePlugin = {
-  downloadAndInstall(options: { url: string; version: string; sha256?: string }): Promise<void>
+  getInstallPermission(): Promise<{ allowed: boolean }>
+  openInstallSettings(): Promise<void>
+  downloadAndInstall(options: {
+    url: string
+    version: string
+    versionCode: number
+    sha256?: string
+    operationId: string
+  }): Promise<void>
   addListener(
     eventName: 'updateProgress',
     listenerFunc: (payload: PdaNativeUpdateProgress) => void,
-  ): Promise<{ remove: () => Promise<void> }>
+  ): Promise<PluginListenerHandle>
 }
 
 export const PdaAppUpdate = registerPlugin<PdaAppUpdatePlugin>('PdaAppUpdate')
