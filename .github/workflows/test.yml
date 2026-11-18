@@ -874,6 +874,9 @@ jobs:
       - name: 冒烟测试 — 仓库运营与 PDA 异常指标、日期和仓库范围
         run: npm run smoke:warehouse-ops
 
+      - name: 循环盘排程双连接回归
+        run: npm run smoke:stockcheck-cycle-scheduling
+
       - name: 冒烟测试 — 出库信用复查（审计 4.8）
         run: npm run smoke:credit-outbound
 

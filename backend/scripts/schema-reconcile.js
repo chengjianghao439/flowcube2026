@@ -130,6 +130,12 @@ async function main() {
       { table: 'inventory_stock_import_rows', index: 'primary', columns: ['batch_id', 'row_index'] },
     )
   }
+  if (executedSet.has('299_inventory_cycle_runs.sql')) {
+    requiredUniques.push(
+      { table: 'inventory_cycle_runs', index: 'primary', columns: ['planned_date', 'warehouse_id', 'abc_class'] },
+      { table: 'inventory_cycle_runs', index: 'uk_inventory_cycle_runs_stockcheck', columns: ['stockcheck_id'] },
+    )
+  }
   const uniqueProblems = []
   for (const req of requiredUniques) {
     const found = indexMap.get(`${req.table}.${req.index}`)

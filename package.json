@@ -149,6 +149,7 @@
     "test:integration": "node tests/integration.test.js",
     "smoke:reports": "npm --prefix backend run smoke:reports",
     "smoke:reports-values": "node tests/reports-values.smoke.test.js",
+    "smoke:stockcheck-cycle-scheduling": "node --test tests/stockcheck-cycle-scheduling.smoke.test.js",
     "smoke:warehouse-ops": "node tests/warehouse-ops.smoke.test.js",
     "smoke:masterdata": "node tests/masterdata.smoke.test.js",
     "smoke:masterdata-import": "node tests/masterdata-import.smoke.test.js",
