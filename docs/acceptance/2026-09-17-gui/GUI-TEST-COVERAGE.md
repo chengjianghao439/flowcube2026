@@ -1,6 +1,6 @@
 # 极序 Flow 全系统 Computer Use 验收 — 覆盖记录
 
-任务：以真实用户界面（屏幕 + 鼠标 + 键盘）对极序 Flow 做深度验收，持续维护本文件与 `GUI-TEST-ISSUES.md`。
+> 历史验收记录，覆盖 2026-09-17 当轮实际操作。逐条问题见[问题记录](GUI-TEST-ISSUES.md)。现行验收入口见[本地预览与界面验收](../../local-preview-acceptance.md)。
 
 状态口径（只有前三种来自真实 GUI 操作）：
 

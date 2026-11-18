@@ -1,6 +1,6 @@
 # 2026-09-17 GUI 验收问题修复记录
 
-本轮把 Computer Use 验收发现的 18 类问题全部处理完（`GUI-TEST-ISSUES.md` 为问题原文）。
+本轮把 Computer Use 验收发现的 18 类问题全部处理完（[归档的问题清单](acceptance/2026-09-17-gui/GUI-TEST-ISSUES.md)为问题原文）。
 下面是每条的处理方式与验证证据。
 
 ## 一、错误码保真（ISSUE-003 / 015 / 016 根因，影响面最大）

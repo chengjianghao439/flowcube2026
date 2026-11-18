@@ -1,5 +1,7 @@
 # 开发与验证命令（全量）
 
+从[常用命令与本地环境](#常用命令与本地环境)开始，按改动范围选检查。涉及数据库时，先按[独立测试库](#独立测试库)核对归属和连接。实际可执行命令看[根脚本清单](../package.json)和各端清单，远端接线看 [Tests 工作流](../.github/workflows/test.yml)。带日期或候选版本的实测结论按当时提交和环境解读。
+
 ## Compose 2.27.0 发布预检兼容
 
 `npm run test:compose-preflight-compat` 校验并临时使用官方 2.27.0 CLI，执行 `server-update.sh` 原预检函数和独立合成 Node 容器。Tests CI 独立 job 必须实际执行，不能跳过。覆盖缓存候选、只读根目录/node 用户、禁止应用入口/依赖启动、缺镜像不拉取不构建、预检拒绝保留非零退出，以及恢复旧 `run --pull` 必然失败的反例。Mac 可用 `FLOWCUBE_COMPAT_DOCKER_CONTEXT=colima-flowcube`；测试基础镜像须提前本地准备，可用 `FLOWCUBE_COMPAT_NODE_IMAGE` 指定现有合成 Node 镜像。只清理本批临时镜像标签、容器、网络、卷和夹具；不连接生产、不安装全局 CLI。
@@ -62,29 +64,30 @@ GitHub 浏览器夹具任务的总时限为 15 分钟。系统依赖下载和安
 ---
 
 
-在仓库根目录运行，具体脚本以各端 `package.json` 为准：
+## 常用命令与本地环境
 
-本机已配置项目专用工具环境。若 `$HOME/.config/flowcube/dev-env.sh` 存在，执行本地开发、测试和 Android 命令前先 `source "$HOME/.config/flowcube/dev-env.sh"`，使用与 CI 一致的 Node 22，并加载 Java 21、Android SDK 路径；其他机器先核对实际安装位置，不复制本机路径。环境核查与 MCP 修复记录见 `docs/local-tooling-2026-09-04.md`。
+以下命令从仓库根目录运行。
 
-本机另安装官方 `chrome-devtools-mcp` 的独立 CLI，供用户授权切换工具时排查 CUA 浏览器读取故障；不依赖 Codex 重载 MCP。使用任务专属 `--sessionId`，结束时 `stop` 并用 `status` 核验；连接用户现有 Chrome 前按当前工具权限规则确认调试访问，完成后恢复本次开启的调试设置。安装路径、版本和实测范围见 `docs/local-tooling-2026-09-04.md`，不能把公开首页测试当作已登录控制台验收。
+若 `$HOME/.config/flowcube/dev-env.sh` 存在，执行本地开发、测试和 Android 命令前先 `source "$HOME/.config/flowcube/dev-env.sh"`。切换机器时核对实际 Node、Java 和 Android SDK。原本机环境核查和工具设置见 [2026-09-04 工具记录](local-tooling-2026-09-04.md)。
 
-根目录 `.nvmrc` 选择 Node 22，根包及各子包声明支持 `^22.13.0`，覆盖锁定的 ESLint 依赖下限。开发命令及工作树安装脚本共用版本预检，Tests 静态作业固定在最低的 Node `22.13.0` 上安装和校验，并运行 `npm run test:node-version` 校对范围、清单和锁文件。`.nvmrc` 需由版本管理器加载。`dev:pda` 默认使用 5174，ERP 默认使用 5173，实际地址以 Vite 输出为准。
+曾使用独立浏览器诊断工具排查界面读取故障，安装和实测范围见[工具记录](local-tooling-2026-09-04.md#2026-09-06-独立-chrome-devtools-工具)。每次使用前核对工具可用性，结束时关闭本任务会话。
 
-本机 Codex 个人设置已将 Claude 专用变量移出通用 shell 注入，并通过私有凭据文件/`http_headers_helper` 提供 GitHub MCP 认证；不把这些文件纳入仓库。个人设置备份、实际验证与需要用户完成的界面操作见 `docs/codex-local-setup-2026-09-04.md`。模型提供方（DeepSeek 官方 API / 官方 ChatGPT 登录）的配置、上下文边界与兼容性差异见 `docs/codex-model-provider-2026-09-17.md`。文件已修改不等于当前任务连接已重载；完成任务后重启应用。中文版“常规 → 跟进处理方式 → 调整方向”和“环境”的界面步骤由用户操作，不用其他手段绕过电脑控制工具对 Codex 自身的限制。
+用版本管理器加载根目录 [.nvmrc](../.nvmrc)。支持范围看根 [package.json](../package.json) 的 `engines.node`，`npm run test:node-version` 校验声明和锁文件。Tests 静态作业使用最低支持版本。开发和验收地址以 Vite 实际输出和 API 代理核对结果为准。
 
-`dev:setup` 用于新工作树，按三端 lockfile 执行 npm ci，不复制真实 `.env`；不要在用户正在使用的开发服务目录中为验证脚本而重装依赖。旧 `.codex/hooks.json` 的 EnterWorktree 匹配器已移除，应用保存的 `.codex/environments/environment.toml` 已配置 `npm run dev:setup` 设置脚本与后端、ERP、PDA、检查代码四个操作；新工作树自动触发仍需实际验证，不能仅凭配置文件认定成功。2026-09-04 临时空目录验证中，前后端安装成功，桌面端 Electron 安装阶段超过 240 秒测试时限，完整三端初始化尚待验证；不能以已有 node_modules 目录判断安装成功。
+Codex 本机配置的历次调整和验证见 [本机设置记录](codex-local-setup-2026-09-04.md)与[模型提供方记录](codex-model-provider-2026-09-17.md)。本机设置曾将 Claude 专用变量移出通用 shell 注入。凭据和个人设置保存在仓库外，使用前复核当前连接。
+
+`npm run dev:setup` 用于新工作树，每端依赖按 lockfile 安装，应用连接配置单独准备。Codex 声明的启动操作见 [工作树环境配置](../.codex/environments/environment.toml)。首次安装以该工作树的实际命令退出结果为准。已运行的开发服务目录应保留其依赖，历史初始化证据见[本机设置记录](codex-local-setup-2026-09-04.md)。
 
 `npm run dev:mysql8` 使用本机 `colima-flowcube` context 启动 `flowcube-dev-mysql8`，监听 127.0.0.1:3307；随机凭据位于用户目录 `~/.config/flowcube/mysql8.env`（600，**已存在则原样保留、绝不覆盖**）。**该命令只启动实例，不改动任何库结构**（容器复用 + 数据卷保留）；`dev:mysql8:stop` 停容器并保留数据卷。**把结构迁移到开发库 `flowcube_dev8` 必须显式运行 `npm run dev:mysql8:migrate`**——迁移目标**硬编码为本机回环 `127.0.0.1:3307` / `flowcube_dev8`**，不受外部 `DB_*` 影响、也不接受额外库名参数；容器或环境失败即非 0 且不继续（不隐式串联）。行为由 `npm run test:mysql8-dev-script` 以 stub（colima/docker/npm）契约锁定，**不连库、不起容器**。不自动导入业务数据，也不修改 `backend/.env`。
 
-**本机开发后端已于 2026-09-04 按用户授权切换至上述 MySQL 8.0.46**：旧 flowcube 库的 134 张表、215,843 行数据完整迁入，逐表内容摘要及结构一致，保留 233 条迁移记录（232 份 SQL 均已执行，另含历史记录）、56 个用户及原密码哈希/JWT。backend/.env 仅修改五个 DB 连接项，当前后端已重启并实测连接 3307；时区 +08:00。旧 MySQL 9.6 / 3306 和原库保留用于回退，不能继续向旧库写开发数据。电脑重启后先运行 `npm run dev:mysql8` 启动实例（若开发库结构落后，再显式运行 `npm run dev:mysql8:migrate`）再启动后端。备份、校验与回退说明见 `docs/local-mysql8-cutover-2026-09-04.md`；切换后的新写入不可被直接回退丢弃。
+本机开发库的切换、数据校验和回退依据见 [2026-09-04 开发库切换记录](local-mysql8-cutover-2026-09-04.md)。启动前核对实际连接，按上文区分启动实例和显式迁移。
 
 ```bash
-npm --prefix backend run dev
-npm --prefix frontend run dev           # Electron target，浏览器也可预览
-npm --prefix frontend run dev:pda       # PDA target
+npm run dev:backend
+npm run dev:erp
+npm run dev:pda
 npm --prefix desktop start
 
-npm --prefix backend run migrate       # 本地 schema 改动后显式执行
 npm --prefix backend run lint
 npm --prefix frontend run lint
 ./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit
@@ -141,7 +144,13 @@ npm run test:permissions
 
 `npm run test:party-profile` 是不启动应用、不连接数据库的真实 routes/service/导入/导出离线回归：仅 stub 数据库、鉴权及库存依赖，覆盖两主档字段、Unicode、原权限/唯一性、旧模板及地址尾列、原行号错误和 276 迁移的条件式源码/元数据计划。已接入 Tests CI static job；迁移 stub 不证明 MySQL 执行。`test:export` 另回读真实 XLSX 的完整名称/地址与换行行高；前端资料表单、跨端规则、打印数据适配和真实打印组件的受控 DOM 用例由既有 `npm --prefix frontend run test:unit` 通配发现并接 CI。GUI、Excel 客户端、真实 DB 与物理打印仍须独立验收。
 
-运行涉及数据库的测试前确认连接目标与测试数据清理行为，**不得连接生产库跑测试**。公共 `tests/helpers/testEnvironment.js` 要求 `NODE_ENV=test`、显式回环 `DB_HOST`、合法 `DB_PORT`、`DB_USER`/`DB_PASSWORD`、`flowcube_test` 或 `flowcube_<用途>_test` 库名；测试不再加载真实 `backend/.env`。可用 `FLOWCUBE_TEST_ENV_FILE=/绝对路径/.env.test` 显式加载测试专用配置，命令行环境优先，配置错误及迁移失败立即终止。新数据库测试必须复用此校验。**本机实操（2026-09-17 验证）**：测试库凭据在 `~/.config/flowcube/operations20260912-test.env`，文件名不是 `.env.test` 因而走不了 `FLOWCUBE_TEST_ENV_FILE`，改为 `set -a; source ~/.config/flowcube/operations20260912-test.env; set +a` 注入；还必须 `export APP_UPDATE_DOWNLOADS_DIR=/tmp/<可写目录>`，否则 `backend/src/app.js` 启动时就因默认 `/var/www/flowcube-downloads` 无写权限抛 EACCES——**这个报错与业务代码无关，别当成回归失败**。本机 Node 为 v26，前端单测因此有 9 个文件 56 个用例失败（`localStorage is not available`），属既有环境问题；对照基线时不看绝对数，看是否新增失败。没有运行或环境不具备时明确说明；不能据此声称全部通过。纯文档修改核对内容、路径和 diff 即可，不必启动数据库或全量业务回归。
+### 独立测试库
+
+运行涉及数据库的测试前确认连接目标、实例归属与清理行为。公共 `tests/helpers/testEnvironment.js` 要求 `NODE_ENV=test`、显式回环 `DB_HOST`、合法 `DB_PORT`、`DB_USER`、`DB_PASSWORD` 和测试库名。详情见[测试环境校验](../tests/helpers/testEnvironment.js)。新数据库测试复用这项校验。
+
+用 `FLOWCUBE_TEST_ENV_FILE=/绝对路径/.env.test` 加载测试专用配置，或显式导出本任务核实过的测试变量。测试配置文件必须命名为 `.env.test`，命令行环境优先。确认连接目标后再迁移或执行用例。需要启动应用时另设可写的 `APP_UPDATE_DOWNLOADS_DIR`。
+
+选择由根 `package.json` 支持的 Node 版本。需要对照既有失败时，在同一受支持版本和环境下复跑基线。没有运行或环境不具备时在验收记录里标明。纯文档修改核对内容、路径和 diff。
 
 本轮修复回归入口：`npm run smoke:prelaunch-finance`、`smoke:prelaunch-scope-export`、`smoke:prelaunch-hr` 与 `test:prelaunch-runtime`；数据库仍必须使用第 3 节独立测试环境。
 

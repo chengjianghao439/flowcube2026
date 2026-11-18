@@ -5,7 +5,7 @@
 ## 从这里开始
 
 1. 阅读 [AGENTS.md](AGENTS.md) 与 [项目工作指南](docs/project-working-guide.md)。确认当前工作树、基线提交、已有改动和交接范围。
-2. 本地切到 Node 22，最低 `22.13.0`，运行 `npm run dev:setup` 安装锁定依赖。新工作树使用自己核对过的环境配置。先按 [本地预览验收](docs/local-preview-acceptance.md) 确认专属回环数据库、端口和合成账号，再启动服务。
+2. 按 [.nvmrc](.nvmrc) 切换 Node，最低版本看 [package.json](package.json) 的 `engines.node`。运行 `npm run dev:setup` 安装锁定依赖。新工作树先按 [本地预览验收](docs/local-preview-acceptance.md) 核对专属回环数据库、端口和合成账号，再启动服务。
 3. 使用 `npm run dev:backend` 启动后端，`npm run dev:erp` 打开 ERP 开发端，`npm run dev:pda` 打开 PDA 开发端。开发库、全新空库和恢复副本各走 [部署说明](docs/DEPLOY.md) 定义的入口。
 4. 按 [验证命令](docs/verification-commands.md) 选择专项。发布按同一份 [发布说明](docs/RELEASE.md) 执行，核对实际授权和设备验收范围。
 

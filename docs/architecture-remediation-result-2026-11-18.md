@@ -1,6 +1,6 @@
 # 极序 Flow 架构整改本地验收
 
-整改基于两轮审查的主线 `04d033abcd622d61e5816d1bc3c34d9c79f5131c` 和已有本地架构提交。集成候选为 `codex/audit-remediation-20261118`。本报告按原计划编号记录。原架构工作树、主线保护工作树、建库草稿和隔离 GUI 草稿保持原状。 [原整改计划](/Users/chengjianghao/.codex/worktrees/architecture-followup/flowcube/docs/superpowers/plans/2026-11-18-flowcube-architecture-remediation.md)
+整改基于两轮审查的主线 `04d033abcd622d61e5816d1bc3c34d9c79f5131c` 和已有本地架构提交。集成候选为 `codex/audit-remediation-20261118`。本报告沿用原计划编号，计划原稿保存在原架构工作树。原架构工作树、主线保护工作树、建库草稿和隔离 GUI 草稿保持原状。
 
 ## 已接续的原有成果
 
@@ -39,11 +39,25 @@
 | 独立 MySQL 业务回归 | 主链路、销售部分取消、仓库看板、履约、会计及普通出库和返货事务均通过 |
 | 工具链和交接 | 前后端 lint、前端类型检查及构建、Android Java 编译、权限和前后端接口契约、迁移编号以及 AGENTS.md 注入守卫通过。前端 lint 仍有 `MessageText.tsx` 的两条既有 Fast Refresh 警告。 |
 
-## 仍有外部条件的事项
+## 远端验收补记
 
-- **5.2 和 5.3**　官方 advisory 仍未列出 `picomatch` 修复版。PR #114 维持草稿。发布依赖候选、同一 SHA 的两个远端门禁、正式主线保护和非生产远端演练待条件满足。 [官方公告](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) · [PR #114](https://github.com/chengjianghao439/flowcube2026/pull/114)
+2026-11-18，候选提交 `3c63bffd88a6fd070409fac2b17e5d1571972665` 推送至独立验证分支。以下三项均以该候选为验证对象。 [验证提交](https://github.com/chengjianghao439/flowcube2026/commit/3c63bffd88a6fd070409fac2b17e5d1571972665)
+
+| 检查 | 结果 | 证据 |
+|---|---|---|
+| GitHub Tests | 28 个任务全部通过，包含独立 MySQL 回归和合成浏览器验收 | [Tests 运行](https://github.com/chengjianghao439/flowcube2026/actions/runs/44227644477) |
+| Windows x64 | 隔离配置的安装包构建通过，验证了候选来源和 EXE 摘要 | [Windows 构建](https://github.com/chengjianghao439/flowcube2026/actions/runs/44227678639) |
+| 安全扫描 | 独立验证中前端和桌面依赖审计各报 6 项高危，扫描失败 | [安全扫描运行](https://github.com/chengjianghao439/flowcube2026/actions/runs/44227680430) |
+
+生产只读预检当日确认 MySQL 8.0.46 健康，候选待执行的迁移为 298–300。核到了当日日常备份和最近一次自动恢复演练的通过记录。本候选尚未执行生产迁移和发布专用备份。依赖修复与真机验收按本轮决定搁置，PR #114 仍单独保留。
+
+## 2026-11-18 记录的未完成事项
+
+接续时按链接核对公告、PR 和目标提交的最新结果。
+
+- **5.2 和 5.3**　当次核对时官方公告尚未列出 `picomatch` 修复版，PR #114 为草稿。待处理事项为发布依赖候选、让 PR #114 的两个必过检查在同一 SHA 上通过、启用正式主线保护及完成非生产发布演练。上方三个运行链接对应架构整改验证分支。 [官方公告](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) · [PR #114](https://github.com/chengjianghao439/flowcube2026/pull/114)
 - **5.4 和 5.5**　正式异地目标运行、数据留存与实际规模恢复仍待核实。合成 8.4.13 演练覆盖当前数据库迁移和应用关键路径。生产评估还需要获准的脱敏元数据、实际平台与账号插件，以及维护窗口、恢复耗时和切换批准。
 - **5.6**　Windows 干净安装、覆盖自动更新、换机中转，Android 真机升级、扫码及实际出纸需要对应设备。当前证据只覆盖工具、离线回归、构建或原生编译。
 - **7.2**　本轮没改独立 GUI 草稿。之前已有干净工作树在合成账号下浏览器登录、隔离标识和清理记录，后续等该草稿进入集成范围再复跑。
 
-本轮未推送、合并 PR、修改 GitHub 设置、发布或访问生产。生产账、正式备份目标及实体设备均未用于回归。任务独立测试容器、卷和浏览器会话已清理，原工作树的 Git 状态和草稿差异摘要与开工时一致。
+初次本地整改阶段未推送、合并 PR、修改 GitHub 设置、发布或访问生产。后续远端验证见上节。生产账、正式备份目标及实体设备均未用于回归。任务独立测试容器、卷和浏览器会话已清理，原工作树的 Git 状态和草稿差异摘要与开工时一致。
