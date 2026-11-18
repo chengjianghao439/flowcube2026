@@ -10,7 +10,7 @@ permissions:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-  TARGET_SHA: 078f1a30ca27beb6ff2a71bb0869a29824e69471
+  TARGET_SHA: 7dc5b5ed981d6159c73418bc8821184b356a930e
   VITE_ERP_PRODUCTION_ORIGIN: https://flowcube-validation.invalid
   CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
@@ -22,7 +22,7 @@ jobs:
       - name: Check out fixed candidate
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: 078f1a30ca27beb6ff2a71bb0869a29824e69471
+          ref: 7dc5b5ed981d6159c73418bc8821184b356a930e
           persist-credentials: false
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
