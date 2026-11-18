@@ -57,3 +57,15 @@ test('真实ERP网络fallback同步默认地址通知并仍按原端点重试', 
   expect(requestedBases).toEqual(['/api', 'https://fallback.test/api'])
   expect(observed).toEqual(['https://fallback.test/api'])
 })
+
+test('写请求响应丢失后保留原服务器，不向候选地址重放', async () => {
+  const requestedBases: Array<string | undefined> = []
+  api.defaults.adapter = async config => {
+    requestedBases.push(config.baseURL)
+    throw new AxiosError('Network Error', 'ERR_NETWORK', config)
+  }
+  await expect(api.post('/fixture', { income: 8 }, { skipGlobalError: true })).rejects.toMatchObject({ code: 'NETWORK_ERROR' })
+  expect(requestedBases).toEqual(['/api'])
+  expect(getApiClientBaseURL()).toBe('/api')
+  expect(observed).toHaveLength(0)
+})

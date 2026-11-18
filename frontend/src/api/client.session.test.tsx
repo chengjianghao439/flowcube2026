@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
+import { webcrypto } from 'node:crypto'
 import axios, { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
 import { act, type ComponentType } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { HashRouter } from 'react-router-dom'
 import { QueryClientProvider } from '@tanstack/react-query'
-import { beforeAll, beforeEach, afterEach, expect, test, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, afterEach, expect, test, vi } from 'vitest'
 import { queryClient } from '@/lib/queryClient'
 import { useAuthStore } from '@/store/authStore'
 import { useCompanyStore } from '@/store/companyStore'
@@ -43,14 +44,29 @@ function LoginProbe() { login = useLogin('/dashboard'); return null }
 async function loginAsB() {
   await act(async () => { await login.mutateAsync({ username: 'B', password: 'local-adapter-only' }); await new Promise(resolve => setTimeout(resolve, 5)) })
 }
+const originalLocks = Object.getOwnPropertyDescriptor(navigator, 'locks')
 beforeAll(async () => {
+  vi.stubGlobal('crypto', webcrypto)
+  vi.stubGlobal('BroadcastChannel', class extends EventTarget {
+    postMessage() { /* This suite uses one document. */ }
+    close() { /* No external resource. */ }
+  })
+  Object.defineProperty(navigator, 'locks', { configurable: true, value: {
+    request: async (_: string, run: () => Promise<unknown>) => run(),
+  } })
   axios.defaults.adapter = async config => { calls.push(config); return transport(config) }
   api = (await import('./client')).default
   useLogin = (await import('@/hooks/useAuth')).useLogin
   performSessionLogout = (await import('@/lib/authSession')).performSessionLogout
   ConsolidationPage = (await import('@/pages/accounting/consolidation')).default
 })
+afterAll(() => {
+  if (originalLocks) Object.defineProperty(navigator, 'locks', originalLocks)
+  else Reflect.deleteProperty(navigator, 'locks')
+  vi.unstubAllGlobals()
+})
 beforeEach(() => {
+  localStorage.clear()
   calls.length = 0
   vi.clearAllMocks()
   useAuthStore.getState().logout()

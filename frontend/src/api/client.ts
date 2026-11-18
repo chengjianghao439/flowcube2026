@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { collectAllRecords, type RecordIdentityResolver } from './allRecords'
+import { coordinateAuthRefresh, type RefreshResult } from './authRefreshCoordination'
 import type { AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 import { Capacitor } from '@capacitor/core'
 import { IS_CAPACITOR_PDA } from '@/lib/platform'
@@ -30,41 +31,58 @@ type RetriableConfig = InternalAxiosRequestConfig & { __pdaSessionRetried?: bool
  */
 // 独立实例不安装业务拦截器，refresh 的 401 不可递归续期。
 const authRefreshClient = axios.create()
-type RefreshResult = { kind: 'success'; token: string; refreshToken: string | null } | { kind: 'failed' | 'superseded' }
-let refreshInFlight: { sessionGeneration: number; refreshToken: string; baseURL: string | undefined; promise: Promise<RefreshResult> } | null = null
+let apiBaseRevision = 0
+let refreshInFlight: { sessionGeneration: number; refreshToken: string; baseURL: string | undefined; baseRevision: number; promise: Promise<RefreshResult> } | null = null
+const revokedAccessCodes = new Set(['AUTH_SESSION_INVALID', 'AUTH_USER_NOT_FOUND', 'AUTH_USER_DISABLED'])
 async function tryRefreshTokens(config: InternalAxiosRequestConfig): Promise<RefreshResult> {
   assertCurrentAuthSession(config)
   const { token, refreshToken, sessionGeneration } = useAuthStore.getState()
-  if (!refreshToken) return { kind: 'failed' }
+  if (!refreshToken) return { kind: 'unavailable' }
   const baseURL = config.baseURL ?? apiClient.defaults.baseURL
+  const baseRevision = apiBaseRevision
   // 旧服务器的迟到401不能把原会话的刷新凭据发送到新服务器。
   if (baseURL !== apiClient.defaults.baseURL) return { kind: 'superseded' }
-  if (refreshInFlight && refreshInFlight.sessionGeneration === sessionGeneration && refreshInFlight.refreshToken === refreshToken && refreshInFlight.baseURL === baseURL) return refreshInFlight.promise
+  if (refreshInFlight?.sessionGeneration === sessionGeneration && refreshInFlight.refreshToken === refreshToken
+    && refreshInFlight.baseURL === baseURL && refreshInFlight.baseRevision === baseRevision) return refreshInFlight.promise
   const isCurrentSession = () => {
     const current = useAuthStore.getState()
-    return current.sessionGeneration === sessionGeneration && current.token === token && current.refreshToken === refreshToken && apiClient.defaults.baseURL === baseURL
+    return current.sessionGeneration === sessionGeneration && current.token === token && current.refreshToken === refreshToken
+      && apiClient.defaults.baseURL === baseURL && apiBaseRevision === baseRevision
   }
-  const promise = (async (): Promise<RefreshResult> => {
-    try {
-      const res = await authRefreshClient.post<{ data?: { token?: string; refreshToken?: string | null } }>(
-        '/auth/refresh',
-        { refreshToken },
-        {
-          baseURL,
-          timeout: apiClient.defaults.timeout || 15000,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      )
-      if (!isCurrentSession()) return { kind: 'superseded' }
-      const d = res.data?.data
-      if (!d?.token) return { kind: 'failed' }
-      useAuthStore.getState().setTokens(d.token, d.refreshToken ?? null)
-      return { kind: 'success', token: d.token, refreshToken: useAuthStore.getState().refreshToken }
-    } catch {
-      return { kind: isCurrentSession() ? 'failed' : 'superseded' }
-    }
-  })()
-  const flight = { sessionGeneration, refreshToken, baseURL, promise }
+  const promise = coordinateAuthRefresh({
+    scope: baseURL ?? '',
+    refreshToken,
+    isCurrent: isCurrentSession,
+    rotate: async () => {
+      try {
+        const res = await authRefreshClient.post<{ data?: { token?: string; refreshToken?: string } }>(
+          '/auth/refresh',
+          { refreshToken },
+          {
+            baseURL,
+            timeout: apiClient.defaults.timeout || 15000,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+        const data = res.data?.data
+        if (typeof data?.token !== 'string' || !data.token || typeof data.refreshToken !== 'string'
+          || !data.refreshToken || data.refreshToken === refreshToken) return { kind: 'unknown' }
+        return { kind: 'success', token: data.token, refreshToken: data.refreshToken }
+      } catch (error) {
+        if (axios.isAxiosError<ApiErrorResponse>(error) && error.response?.status === 401) {
+          const code = error.response.data?.code
+          if (code === 'AUTH_REFRESH_INVALID' || code === 'AUTH_REFRESH_REPLAY') return { kind: 'revoked' }
+        }
+        // 代理错误和超时有可能发生在服务端已经完成一次性轮换之后。
+        return { kind: 'unknown' }
+      }
+    },
+  }).then((result): RefreshResult => {
+    if (!isCurrentSession()) return { kind: 'superseded' }
+    if (result.kind === 'success') useAuthStore.getState().setTokens(result.token, result.refreshToken)
+    return result
+  })
+  const flight = { sessionGeneration, refreshToken, baseURL, baseRevision, promise }
   refreshInFlight = flight
   // 不让旧会话请求的结束清除新会话正在进行的续期。
   const clearFlight = () => { if (refreshInFlight === flight) refreshInFlight = null }
@@ -229,6 +247,7 @@ export function subscribeApiClientBaseURL(listener: () => void): () => void {
 export function setApiClientBaseURL(baseURL: string | undefined): void {
   if (apiClient.defaults.baseURL === baseURL) return
   apiClient.defaults.baseURL = baseURL
+  apiBaseRevision++
   for (const listener of apiBaseURLListeners) listener()
 }
 
@@ -302,6 +321,7 @@ apiClient.interceptors.response.use(
 
     if (
       cfg
+      && (cfg.method === 'get' || cfg.method === 'head')
       && status == null
       && (transportCode === 'ERR_NETWORK' || rawMsg === 'Network Error')
     ) {
@@ -370,30 +390,41 @@ apiClient.interceptors.response.use(
 
     if (status === 401 && cfg?.automaticReplay === false) return Promise.reject(structuredError)
 
-    if (status === 401) {
-      // access token 过期（2026-08-21 权衡修复）：先尝试用 refresh token 换新，
-      // 成功则重放原请求；refresh 也失效（过期/被吊销/改密码）才登出。
-      // 只重试一次并打标记，避免 401→refresh→401 死循环。
-      const cfg401 = error.config as (InternalAxiosRequestConfig & { __authRefreshed?: boolean }) | undefined
+    if (status === 401 && cfg && !/^\/auth\/(?:login|logout|refresh)(?:[/?]|$)/.test(cfg.url ?? '')) {
+      const config401 = cfg as InternalAxiosRequestConfig & { __authRefreshed?: boolean }
       const before = useAuthStore.getState()
-      const tokenBefore = before.token
-      const refreshBefore = before.refreshToken
-      if (cfg401 && !cfg401.__authRefreshed) {
-        const refreshed = await tryRefreshTokens(cfg401)
-        assertCurrentAuthSession(cfg401)
-        if (refreshed.kind === 'superseded') return Promise.reject(structuredError)
-        if (refreshed.kind === 'success') {
-          cfg401.__authRefreshed = true
-          cfg401.headers = cfg401.headers ?? {}
-          ;(cfg401.headers as Record<string, string>).Authorization = `Bearer ${refreshed.token}`
-          return apiClient.request(cfg401)
-        }
+      const revoked = businessCode != null && revokedAccessCodes.has(businessCode)
+      const canRenew = businessCode == null || businessCode === 'AUTH_TOKEN_EXPIRED' || businessCode === 'AUTH_TOKEN_INVALID'
+      if ((revoked || canRenew) && before.token && config401.headers.get('Authorization') !== `Bearer ${before.token}`) {
+        if (config401.__authRefreshed) return Promise.reject(structuredError)
+        config401.__authRefreshed = true
+        return apiClient.request(config401)
       }
-      const current = useAuthStore.getState()
-      if (current.token !== tokenBefore || current.refreshToken !== refreshBefore) return Promise.reject(structuredError)
-      assertCurrentAuthSession(cfg401)
-      performSessionLogout()
-      return Promise.reject(structuredError)
+      const expiredWithoutRefresh = businessCode === 'AUTH_TOKEN_EXPIRED' && !before.refreshToken
+      if (before.token && (revoked || expiredWithoutRefresh)) {
+        performSessionLogout()
+        return Promise.reject(structuredError)
+      }
+      if (!config401.__authRefreshed && before.refreshToken && canRenew) {
+        const refreshed = await tryRefreshTokens(config401)
+        assertCurrentAuthSession(config401)
+        if (refreshed.kind === 'superseded') return Promise.reject(new axios.CanceledError('登录会话或服务器已变化'))
+        if (refreshed.kind === 'success') {
+          config401.__authRefreshed = true
+          return apiClient.request(config401)
+        }
+        if (refreshed.kind === 'revoked') {
+          performSessionLogout()
+          return Promise.reject(structuredError)
+        }
+        const unknown = refreshed.kind === 'unknown'
+        const message = unknown ? '登录续期结果待确认，当前输入已保留。' : '暂时无法续期，当前输入已保留。'
+        if (!config401.skipGlobalError) toast.error(message)
+        return Promise.reject(new ApiClientError({
+          message, status: 503,
+          code: unknown ? 'AUTH_REFRESH_OUTCOME_UNKNOWN' : 'AUTH_REFRESH_UNAVAILABLE',
+        }))
+      }
     }
 
     // skipGlobalError: true 时由调用方自行处理，不触发全局 toast

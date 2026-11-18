@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from 'axios'
-import { beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 const session = vi.hoisted(() => ({ sessionGeneration: 0, token: 'old' as string | null, refreshToken: 'refresh' as string | null, setTokens: vi.fn(), logout: vi.fn() }))
 vi.mock('@/store/authStore', () => ({ useAuthStore: { getState: () => session } }))
@@ -15,10 +15,11 @@ const company = vi.hoisted(() => ({ companyId: 1 }))
 const requests: InternalAxiosRequestConfig[] = []
 let failRefresh = false
 let failReplay = false
+let rejectRefresh: ((config: InternalAxiosRequestConfig) => AxiosError) | undefined
 let nextRefreshPause: Promise<void> | null = null
-function unauthorized(config: InternalAxiosRequestConfig) {
+function unauthorized(config: InternalAxiosRequestConfig, code?: string) {
   return new AxiosError('unauthorized', 'ERR_BAD_REQUEST', config, undefined,
-    { data: { message: 'unauthorized' }, status: 401, statusText: 'Unauthorized', config, headers: {} })
+    { data: { message: 'unauthorized', code }, status: 401, statusText: 'Unauthorized', config, headers: {} })
 }
 beforeEach(() => {
   vi.resetModules()
@@ -31,6 +32,7 @@ beforeEach(() => {
   requests.length = 0
   failRefresh = false
   failReplay = false
+  rejectRefresh = undefined
   nextRefreshPause = null
   axios.defaults.adapter = async config => {
     requests.push({ ...config, headers: new AxiosHeaders(config.headers) })
@@ -39,13 +41,17 @@ beforeEach(() => {
       nextRefreshPause = null
       if (pause) await pause
       await new Promise(resolve => setTimeout(resolve, 5))
-      if (failRefresh) throw unauthorized(config)
+      if (failRefresh) throw unauthorized(config, 'AUTH_REFRESH_INVALID')
+      if (rejectRefresh) throw rejectRefresh(config)
       return { data: { data: { token: 'new', refreshToken: 'next' } }, status: 200, statusText: 'OK', headers: {}, config }
     }
-    if (config.headers.Authorization !== 'Bearer new' || failReplay) throw unauthorized(config)
+    if (config.headers.Authorization !== 'Bearer new') throw unauthorized(config)
+    if (failReplay) throw unauthorized(config, 'AUTH_SESSION_INVALID')
     return { data: 'ok', status: 200, statusText: 'OK', headers: {}, config }
   }
 })
+
+afterEach(() => vi.unstubAllGlobals())
 
 test.each([
   ['browser', '/api'],
@@ -67,6 +73,7 @@ test('runtime API changes are used by the next refresh', async () => {
   api.defaults.baseURL = 'https://first.example.test/api'
   await api.get('/orders')
   session.token = 'old'
+  session.refreshToken = 'second-server-refresh'
   api.defaults.baseURL = 'https://second.example.test/api'
   await api.get('/orders')
   expect(requests.filter(r => r.url?.endsWith('/auth/refresh')).map(r => axios.getUri(r)))
@@ -234,4 +241,71 @@ test.each(['session','company'])('完整列表读取中 %s 改变，不再接入
   const {payloadClient} = await import('./client')
   await expect(payloadClient.get('/accounting/invoices',{params:{page:1,pageSize:20}})).rejects.toThrow()
   expect(requests).toHaveLength(1)
+})
+
+const refreshRequests = () => requests.filter(request => request.url === '/auth/refresh')
+
+test.each(['503', 'timeout', 'network after dispatch'])('refresh %s retains the session and never reuses an uncertain rotation token', async failure => {
+  rejectRefresh = config => {
+    if (failure === '503') {
+      return new AxiosError('upstream unavailable', 'ERR_BAD_RESPONSE', config, undefined, {
+        data: {}, status: 503, statusText: 'Service Unavailable', config, headers: {},
+      })
+    }
+    return new AxiosError(failure, failure === 'timeout' ? 'ECONNABORTED' : 'ERR_NETWORK', config)
+  }
+  const { default: api } = await import('./client')
+  await expect(api.post('/write', { value: '草稿' })).rejects.toMatchObject({ code: 'AUTH_REFRESH_OUTCOME_UNKNOWN' })
+  await expect(api.get('/same-session')).rejects.toMatchObject({ code: 'AUTH_REFRESH_OUTCOME_UNKNOWN' })
+  expect(refreshRequests()).toHaveLength(1)
+  expect(requests.filter(request => request.url === '/write')).toHaveLength(1)
+  expect(session.token).toBe('old')
+  expect(session.refreshToken).toBe('refresh')
+  expect(session.logout).not.toHaveBeenCalled()
+})
+
+test('known offline state retains the session without consuming rotation and can recover when online', async () => {
+  vi.stubGlobal('navigator', { onLine: false })
+  const { default: api } = await import('./client')
+  await expect(api.get('/orders')).rejects.toMatchObject({ code: 'AUTH_REFRESH_UNAVAILABLE' })
+  expect(refreshRequests()).toHaveLength(0)
+  expect(session.logout).not.toHaveBeenCalled()
+  vi.stubGlobal('navigator', { onLine: true })
+  await expect(api.get('/orders')).resolves.toMatchObject({ data: 'ok' })
+  expect(refreshRequests()).toHaveLength(1)
+})
+
+test('code-less gateway 401 from refresh does not establish a session revocation', async () => {
+  rejectRefresh = config => unauthorized(config)
+  const { default: api } = await import('./client')
+  await expect(api.get('/orders')).rejects.toMatchObject({ code: 'AUTH_REFRESH_OUTCOME_UNKNOWN' })
+  expect(session.logout).not.toHaveBeenCalled()
+})
+
+test('explicit access-session revocation exits without sending another rotation request', async () => {
+  const { default: api } = await import('./client')
+  api.defaults.adapter = async config => { throw unauthorized(config, 'AUTH_SESSION_INVALID') }
+  await expect(api.get('/orders')).rejects.toMatchObject({ status: 401, code: 'AUTH_SESSION_INVALID' })
+  expect(refreshRequests()).toHaveLength(0)
+  expect(session.logout).toHaveBeenCalledOnce()
+})
+
+test('an older business 401 after a successful rotation reuses the new access token without rotating again', async () => {
+  const { default: api } = await import('./client')
+  const adapter = api.defaults.adapter as typeof axios.defaults.adapter
+  if (typeof adapter !== 'function') throw new Error('缺少测试传输')
+  let release!: () => void
+  const wait = new Promise<void>(resolve => { release = resolve })
+  api.defaults.adapter = async config => {
+    if (config.url === '/slow' && config.headers.Authorization === 'Bearer old') {
+      await wait
+      throw unauthorized(config, 'AUTH_TOKEN_EXPIRED')
+    }
+    return adapter(config)
+  }
+  const slow = api.get('/slow')
+  await api.get('/fast')
+  release()
+  await expect(slow).resolves.toMatchObject({ data: 'ok' })
+  expect(refreshRequests()).toHaveLength(1)
 })
