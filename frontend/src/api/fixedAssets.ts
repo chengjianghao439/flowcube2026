@@ -58,5 +58,14 @@ export const listFixedAssetsApi = (params: Record<string, unknown>) =>
   client.get<PaginatedData<FixedAsset>>('/fixed-assets', { params })
 export const createFixedAssetApi = (data: CreateFixedAssetParams) => client.post<{ id: number; assetNo: string }>('/fixed-assets', data)
 export const runDepreciationApi = (period?: string) => client.post<DeprResult>('/fixed-assets/depreciation/run', period ? { period } : {})
-export const disposeFixedAssetApi = (id: number, data: { disposeType: number; disposeDate: string; income?: number; expense?: number }) =>
-  client.post<{ id: number; disposeNo: string; netBook: number; gain: number }>(`/fixed-assets/${id}/dispose`, data)
+export interface DisposeFixedAssetParams {
+  disposeType: number
+  disposeDate: string
+  income?: number
+  expense?: number
+}
+
+export const disposeFixedAssetApi = (id: number, data: DisposeFixedAssetParams, companyId: number) =>
+  client.post<{ id: number; disposeNo: string; netBook: number; gain: number }>(
+    `/fixed-assets/${id}/dispose`, data, { _companyScopeId: companyId, skipGlobalError: true },
+  )

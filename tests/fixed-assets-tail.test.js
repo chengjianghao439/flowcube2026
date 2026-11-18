@@ -11,24 +11,41 @@ const original = fs.readFileSync(filename, 'utf8')
 const engineSource = fs.readFileSync(path.resolve(__dirname, '../backend/src/modules/accounting/voucher-engine.js'), 'utf8')
 const round2 = vm.runInNewContext(engineSource.match(/^const round2 = (.+)$/m)[1])
 const clone = value => JSON.parse(JSON.stringify(value))
-function fixture({ cost = 100, rate = .05, months = 6, source = original, closed = false, failVoucher = false } = {}) {
-  let asset = { id: 7, company_id: 2, status: 1, asset_no: 'OFFLINE-7', asset_name: '合成资产', acquire_date: '2099-01-01', original_cost: cost, residual_rate: rate, useful_months: months }
-  let history = [], vouchers = [], checkpoint
+function fixture({ cost = 100, rate = .05, months = 6, source = original, closed = false, failVoucher = false, assetId = 7, companyId = 2, acquireDate = '2099-01-01' } = {}) {
+  let asset = { id: assetId, company_id: companyId, status: 1, asset_no: `OFFLINE-${assetId}`, asset_name: '合成资产', acquire_date: acquireDate, original_cost: cost, residual_rate: rate, useful_months: months }
+  let history = [], vouchers = [], disposals = [], checkpoint
   const events = []
   const conn = {
-    beginTransaction: async () => { events.push('begin'); checkpoint = clone({ asset, history, vouchers }) },
+    beginTransaction: async () => { events.push('begin'); checkpoint = clone({ asset, history, vouchers, disposals }) },
     commit: async () => events.push('commit'),
-    rollback: async () => { events.push('rollback'); ({ asset, history, vouchers } = checkpoint) },
+    rollback: async () => { events.push('rollback'); ({ asset, history, vouchers, disposals } = checkpoint) },
     release: () => events.push('release'),
     query: async (sql, p = []) => {
       events.push(sql)
-      if (sql.includes('SELECT * FROM fixed_assets')) return [[...(asset.status === 1 && asset.acquire_date.slice(0, 7).replace('-', '') <= p[1] ? [clone(asset)] : [])]]
-      if (sql.startsWith('SELECT * FROM fixed_asset_depr')) return [clone(history)]
+      if (sql.startsWith('SELECT * FROM fixed_assets WHERE id = ? AND company_id = ?')) {
+        return [[...(asset.id === p[0] && asset.company_id === p[1] ? [clone(asset)] : [])]]
+      }
+      if (sql.includes('SELECT * FROM fixed_assets')) return [[...(asset.company_id === p[0] && asset.status === 1 && asset.acquire_date.slice(0, 7).replace('-', '') <= p[1] ? [clone(asset)] : [])]]
+      if (sql.startsWith('SELECT * FROM fixed_asset_depr')) {
+        assert.equal(p[0], asset.id)
+        return [clone(history)]
+      }
       if (sql.includes('INSERT INTO fixed_asset_depr')) {
         const id = history.length + 1
         assert.ok(!history.some(h => h.period === p[2]), 'unique(asset_id,period)')
         history.push({ id, period: p[2], depr_date: p[3], monthly_amount: p[4], accum_amount: p[5], is_disposal: p[6] })
         return [{ insertId: id }]
+      }
+      if (sql.includes('INSERT INTO fixed_asset_disposals')) {
+        const [company, no, target, date, type, income, expense] = p
+        disposals.push({ company, no, target, date, type, income, expense })
+        return [{ insertId: disposals.length }]
+      }
+      if (sql.startsWith('UPDATE fixed_assets SET status = 3')) {
+        const [date, type, income, target] = p
+        assert.equal(target, asset.id)
+        Object.assign(asset, { status: 3, dispose_date: date, dispose_type: type, dispose_income: income })
+        return [{ affectedRows: 1 }]
       }
       if (sql.startsWith('UPDATE fixed_assets SET status = 2')) { asset.status = 2; return [{ affectedRows: 1 }] }
       throw new Error('Offline denied SQL: ' + sql)
@@ -36,8 +53,9 @@ function fixture({ cost = 100, rate = .05, months = 6, source = original, closed
   }
   const stubs = {
     '../../config/db': { pool: { getConnection: async () => { events.push('connection'); return conn } } },
-    '../../utils/AppError': AppError, '../../utils/codeGenerator': {},
-    '../accounting/voucher-engine': { round2, loadAccountMap: async () => new Map(), makeSeqAllocator: async () => async () => 1, upsertVoucher: async (_conn, spec) => {
+    '../../utils/AppError': AppError, '../../utils/codeGenerator': { generateDailyCode: async () => '处置夹具-99' },
+    '../accounting/voucher-engine': { round2, loadAccountMap: async () => new Map(), makeSeqAllocator: async () => async () => 1, upsertVoucher: async (_conn, spec, _accounts, _seq, _user, company) => {
+      assert.equal(company, companyId)
       if (typeof failVoucher === 'function' ? failVoucher(spec) : failVoucher) throw new AppError('合成凭证失败', 500, 'FIXTURE_VOUCHER_FAILURE')
       vouchers.push(clone(spec)); return { id: vouchers.length }
     } },
@@ -46,7 +64,13 @@ function fixture({ cost = 100, rate = .05, months = 6, source = original, closed
   }
   const loaded = { exports: {} }
   vm.runInNewContext(source + '\nmodule.exports.actualDepreciateAsset = depreciateAsset;', { module: loaded, require: name => { if (!(name in stubs)) throw new Error('Offline denied module: ' + name); return stubs[name] } }, { filename })
-  return { run: period => loaded.exports.runDepreciation({ period, companyId: 2 }, {}), direct: options => loaded.exports.actualDepreciateAsset(conn, asset, options, new Map(), async () => 1, {}, 2), facts: () => clone({ asset, history, vouchers }), events }
+  return {
+    run: period => loaded.exports.runDepreciation({ period, companyId }, {}),
+    direct: options => loaded.exports.actualDepreciateAsset(conn, asset, options, new Map(), async () => 1, {}, companyId),
+    dispose: (id, data, company) => loaded.exports.disposeAsset(id, data, {}, company),
+    facts: () => clone({ asset, history, vouchers, disposals }),
+    events,
+  }
 }
 const six = ['209901', '209902', '209903', '209904', '209905', '209906']
 
@@ -150,4 +174,27 @@ test('恢复旧Math.min判式会让实际末期行为断言失败（反向守卫
   const f = fixture({ source: changed })
   for (const period of six) await f.run(period)
   assert.throws(() => assert.equal(f.facts().history.at(-1).monthly_amount, 15.85), { code: 'ERR_ASSERTION' })
+})
+
+test('资产 B 的实际处置单和凭证采用其最终确认金额与日期', async () => {
+  const f = fixture({ assetId: 8, companyId: 1, acquireDate: '2026-01-01', rate: 0, months: 5 })
+  const selected = { disposeType: 1, disposeDate: '2026-11-18', income: 112.35, expense: 4.85 }
+  await assert.rejects(f.dispose(7, selected, 1), { statusCode: 404 })
+  await assert.rejects(f.dispose(8, selected, 2), { statusCode: 404 })
+  const result = await f.dispose(8, selected, 1)
+  const facts = f.facts()
+  assert.deepEqual(facts.disposals, [{
+    company: 1, no: result.disposeNo, target: 8, date: selected.disposeDate,
+    type: selected.disposeType, income: selected.income, expense: selected.expense,
+  }])
+  const voucher = facts.vouchers.find(row => row.sourceType === SOURCE_TYPES.ASSET_DISPOSAL)
+  assert.equal(voucher.sourceId, result.id)
+  assert.equal(voucher.voucherDate, selected.disposeDate)
+  assert.deepEqual(voucher.legs.filter(leg => leg.code === '1002').map(leg => [leg.direction, leg.amount]), [
+    [DIR.DEBIT, 112.35], [DIR.CREDIT, 4.85],
+  ])
+  assert.deepEqual(voucher.legs.filter(leg => leg.code === '6115').map(leg => [leg.direction, leg.amount]), [[DIR.CREDIT, 27.5]])
+  assert.equal(result.gain, -27.5)
+  assert.equal(facts.asset.status, 3)
+  assert.deepEqual(f.events.slice(-2), ['commit', 'release'])
 })

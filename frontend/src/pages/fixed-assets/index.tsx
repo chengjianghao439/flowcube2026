@@ -2,7 +2,8 @@ import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { useCompanyStore } from '@/store/companyStore'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -18,7 +19,7 @@ import { toast } from '@/lib/toast'
 import {
   listFixedAssetsApi, createFixedAssetApi, runDepreciationApi, disposeFixedAssetApi,
 } from '@/api/fixedAssets'
-import type { FixedAsset } from '@/api/fixedAssets'
+import type { DisposeFixedAssetParams, FixedAsset } from '@/api/fixedAssets'
 import type { TableColumn } from '@/types'
 import type { StatusTone } from '@/lib/statusTone'
 import { downloadExport } from '@/lib/exportDownload'
@@ -95,48 +96,79 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
   )
 }
 
-function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: () => void }) {
+interface DisposalTarget {
+  companyId: number
+  asset: FixedAsset
+  opening: number
+}
+
+function DisposeDialog({ target, isCurrent, onClose }: {
+  target: DisposalTarget
+  isCurrent: () => boolean
+  onClose: () => void
+}) {
+  const { asset, companyId } = target
   const qc = useQueryClient()
-  const [form, setForm] = useState({ disposeType: '1', disposeDate: todayYmd(), income: '', expense: '' })
+  const fieldId = useId()
+  const submitting = useRef(false)
+  const [form, setForm] = useState(() => ({ disposeType: '1', disposeDate: todayYmd(), income: '', expense: '' }))
   const { mutate: dispose, isPending } = useMutation({
-    mutationFn: (d: { disposeType: number; disposeDate: string; income: number; expense: number }) => disposeFixedAssetApi(asset!.id, d),
-    onSuccess: (r) => { toast.success(`处置完成 ${r.disposeNo}，净损益 ${money(r.gain)}`); onClose(); qc.invalidateQueries({ queryKey: ['fixed-assets'] }) },
-    onError: (e: Error) => toast.error(e.message),
+    mutationFn: (data: DisposeFixedAssetParams) => disposeFixedAssetApi(asset.id, data, companyId),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: ['fixed-assets', companyId] }) },
   })
-  if (!asset) return null
+
+  const requestClose = () => {
+    if (!submitting.current && isCurrent()) onClose()
+  }
+  const submit = () => {
+    if (submitting.current || !isCurrent()) return
+    submitting.current = true
+    dispose({
+      disposeType: Number(form.disposeType), disposeDate: form.disposeDate,
+      income: Number(form.income) || 0, expense: Number(form.expense) || 0,
+    }, {
+      onSuccess: (r) => {
+        if (!isCurrent()) return
+        toast.success(`处置完成 ${r.disposeNo}，净损益 ${money(r.gain)}`)
+        onClose()
+      },
+      onError: (error) => { if (isCurrent()) toast.error(error.message) },
+      onSettled: () => { submitting.current = false },
+    })
+  }
   return (
-    <Dialog open onOpenChange={v => !v && onClose()}>
-      <DialogContent className="fc-form-dialog sm:max-w-2xl">
+    <Dialog open onOpenChange={v => { if (!v) requestClose() }}>
+      <DialogContent aria-busy={isPending} className="fc-form-dialog sm:max-w-2xl">
         <DialogHeader description={"核对资产净值、处置方式与日期。"}><DialogTitle>处置资产 · {asset.assetName}</DialogTitle></DialogHeader>
         <div className="fc-form-dialog-body space-y-3 py-2">
           <div className="rounded-md bg-muted/60 px-3 py-2 text-sm">
             账面净值 <span className="font-semibold">{money(asset.netBookValue)}</span>（累计折旧 {money(asset.accumDepr)}）
           </div>
           <div className="space-y-1">
-            <Label>处置方式</Label>
-            <select value={form.disposeType} onChange={e => setForm(p => ({ ...p, disposeType: e.target.value }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
+            <Label htmlFor={`${fieldId}-type`}>处置方式</Label>
+            <select id={`${fieldId}-type`} disabled={isPending} value={form.disposeType} onChange={e => setForm(p => ({ ...p, disposeType: e.target.value }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
               <option value="1">出售</option>
               <option value="2">报废</option>
             </select>
           </div>
           <div className="space-y-1">
-            <Label>处置日期</Label>
-            <DatePicker value={form.disposeDate} onChange={v => setForm(p => ({ ...p, disposeDate: v }))} />
+            <Label htmlFor={`${fieldId}-date`}>处置日期</Label>
+            <DatePicker id={`${fieldId}-date`} disabled={isPending} value={form.disposeDate} onChange={v => setForm(p => ({ ...p, disposeDate: v }))} />
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
-              <Label>处置收入</Label>
-              <Input type="number" value={form.income} onChange={e => setForm(p => ({ ...p, income: e.target.value }))} className="text-right" />
+              <Label htmlFor={`${fieldId}-income`}>处置收入</Label>
+              <Input id={`${fieldId}-income`} disabled={isPending} type="number" value={form.income} onChange={e => setForm(p => ({ ...p, income: e.target.value }))} className="text-right" />
             </div>
             <div className="space-y-1">
-              <Label>清理费用</Label>
-              <Input type="number" value={form.expense} onChange={e => setForm(p => ({ ...p, expense: e.target.value }))} className="text-right" />
+              <Label htmlFor={`${fieldId}-expense`}>清理费用</Label>
+              <Input id={`${fieldId}-expense`} disabled={isPending} type="number" value={form.expense} onChange={e => setForm(p => ({ ...p, expense: e.target.value }))} className="text-right" />
             </div>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-          <Button variant="destructive" disabled={isPending} onClick={() => dispose({ disposeType: Number(form.disposeType), disposeDate: form.disposeDate, income: Number(form.income) || 0, expense: Number(form.expense) || 0 })}>
+          <Button variant="outline" onClick={requestClose} disabled={isPending}>取消</Button>
+          <Button variant="destructive" disabled={isPending} onClick={submit}>
             {isPending ? '处置中…' : '确认处置'}
           </Button>
         </DialogFooter>
@@ -150,7 +182,30 @@ export default function FixedAssetsPage() {
   const [keyword, setKeyword] = useState('')
   const [applied, setApplied] = useState<{ keyword: string }>({ keyword: '' })
   const [createOpen, setCreateOpen] = useState(false)
-  const [disposeTarget, setDisposeTarget] = useState<FixedAsset | null>(null)
+  const companyId = useCompanyStore(state => state.companyId)
+  const [disposeTarget, setDisposeTarget] = useState<DisposalTarget | null>(null)
+  const currentTarget = useRef<DisposalTarget | null>(null)
+  const nextOpening = useRef(0)
+
+  useEffect(() => useCompanyStore.subscribe((current, previous) => {
+    if (current.companyId === previous.companyId) return
+    currentTarget.current = null
+    setDisposeTarget(null)
+  }), [])
+
+  const openDisposal = (asset: FixedAsset) => {
+    if (currentTarget.current || useCompanyStore.getState().companyId !== companyId) return
+    const target = { asset, companyId, opening: ++nextOpening.current }
+    currentTarget.current = target
+    setDisposeTarget(target)
+  }
+  const isCurrent = (target: DisposalTarget) =>
+    currentTarget.current === target && useCompanyStore.getState().companyId === target.companyId
+  const closeDisposal = (target: DisposalTarget) => {
+    if (!isCurrent(target)) return
+    currentTarget.current = null
+    setDisposeTarget(null)
+  }
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: useCompanyQueryKey(['fixed-assets', applied]),
@@ -187,7 +242,7 @@ export default function FixedAssetsPage() {
       title: '操作',
       width: 110,
       render: (_, r) => (r.status === 1 || r.status === 2) ? (
-        <Button size="sm" variant="outline" onClick={() => setDisposeTarget(r)}>处置</Button>
+        <Button size="sm" variant="outline" onClick={() => openDisposal(r)}>处置</Button>
       ) : <span className="text-xs text-muted-foreground">—</span>,
     },
   ]
@@ -221,7 +276,14 @@ export default function FixedAssetsPage() {
       {total > 0 && <ListSummary total={total} />}
 
       <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => refetch()} />
-      <DisposeDialog asset={disposeTarget} onClose={() => setDisposeTarget(null)} />
+      {disposeTarget?.companyId === companyId && (
+        <DisposeDialog
+          key={disposeTarget.opening}
+          target={disposeTarget}
+          isCurrent={() => isCurrent(disposeTarget)}
+          onClose={() => closeDisposal(disposeTarget)}
+        />
+      )}
     </div>
   )
 }
