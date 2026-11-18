@@ -21,7 +21,7 @@
 const crypto = require('crypto')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
-const { SOURCE_TYPES, DIR } = require('../../constants/voucherSource')
+const { SOURCE_TYPES, DIR, OPERATING_FUND_COMPANY_ID, fundAccountCode } = require('../../constants/voucherSource')
 const { SALE_TYPES, loadSaleShipmentFacts, projectSaleShipments, reconcileSalePeriods } = require('./voucher-sale-periods')
 const { lockAccountingCompany } = require('./accounting.period-lock')
 const { reviseSourceVoucher } = require('./voucher-source-revisions')
@@ -29,11 +29,6 @@ const { normalizeSaleLegs, saleBalance } = require('./voucher-sale-money')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100
-
-/** 现金账户(finance_accounts.type=2)→库存现金 1001；其余(银行/支付宝/微信/其它)→银行存款 1002 */
-function fundAccountCode(accountType) {
-  return Number(accountType) === 2 ? '1001' : '1002'
-}
 
 /** mysql2 的 DATE/DATETIME 返回 Date 对象或字符串，按北京时间统一成 'YYYY-MM-DD' */
 function toDateStr(v) {
@@ -304,7 +299,7 @@ async function buildSaleCogs(conn) {
 
 /**
  * 事件4/5/6：收款/付款/费用报销。以 finance_account_transactions（资金进出唯一事实源）为驱动，
- * 一笔资金流水一张凭证，天然与资金流水勾稽。现金/银行由 finance_accounts.type 决定。
+ * 一笔资金流水只投影到资金账户所属账套。现金/银行由 finance_accounts.type 决定。
  *   收款(biz_type=1)：借 银行/现金 / 贷 应收账款〔客户〕
  *   付款(biz_type=2)：借 应付账款〔供应商〕 / 贷 银行/现金
  *   报销(biz_type=3)：借 管理费用6602（费用类别→科目映射暂缺，统一落管理费用）/ 贷 银行/现金
@@ -312,14 +307,14 @@ async function buildSaleCogs(conn) {
  *     此前退款写 OUT 流水减余额但凭证体系无分录，资金账实不勾稽）
  *   余额调整(biz_type=4)：不生成凭证（无对应会计事件）
  */
-async function buildFundVouchers(conn) {
+async function buildFundVouchers(conn, companyId = OPERATING_FUND_COMPANY_ID) {
   const [rows] = await conn.query(`
     SELECT t.id AS txnId, t.biz_type, t.biz_no, t.amount, t.party_name, t.happened_at AS vdate,
            t.voucher_date_override AS vdate_override,
            fa.type AS acctType
       FROM finance_account_transactions t
       JOIN finance_accounts fa ON fa.id = t.account_id
-     WHERE t.biz_type IN (1, 2, 3, 5)`)
+     WHERE t.biz_type IN (1, 2, 3, 5) AND fa.company_id = ?`, [companyId])
   const specs = []
   for (const r of rows) {
     const amount = round2(r.amount)
@@ -591,7 +586,7 @@ async function generateVouchers(conn, { period = null, createdBy = null, closedP
   const specs = [
     ...await buildPurchaseSettle(conn, taxByPO),
     ...saleSpecs,
-    ...await buildFundVouchers(conn),
+    ...await buildFundVouchers(conn, cid),
     ...(await require('./voucher-supplier-refunds').loadSources(conn,{companyId:cid})).map(source=>source.spec),
     ...await buildPurchaseReturn(conn),
     ...await buildSaleReturn(conn),

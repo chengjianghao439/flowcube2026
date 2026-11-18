@@ -98,12 +98,18 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
     }
     if(sql.startsWith('SELECT id,company_id,source_type,source_id,source_period,source_root_id,reversed_id,is_reversal,status,'))return [state.acct_vouchers.filter(v=>v.company_id===args[0]&&args[1].includes(v.source_type)).map(copy)]
     if(sql.startsWith('SELECT e.voucher_id,e.account_id,e.account_code AS code,'))return [[]]
-    if(sql.startsWith('SELECT t.id,t.biz_type,t.direction,t.amount,t.happened_at,'))return [state.finance_account_transactions.filter(t=>[1,2,3,5].includes(t.biz_type)).map(t=>({...copy(t),source_account_id:state.finance_accounts.find(a=>a.id===t.account_id)?.id,source_account_type:state.finance_accounts.find(a=>a.id===t.account_id)?.type}))]
+    if(sql.startsWith('SELECT t.id,t.biz_type,t.direction,t.amount,t.happened_at,')){
+      assert.deepEqual(Array.from(args.slice(0,3)),[1,1,1])
+      return [state.finance_account_transactions.filter(t=>[1,2,3,5].includes(t.biz_type)).map(t=>{
+        const account=state.finance_accounts.find(a=>a.id===t.account_id)
+        return {...copy(t),source_account_id:account?.id,source_account_type:account?.type,source_company_id:account?.company_id}
+      })]
+    }
     if(sql.startsWith('SELECT pr.id,pr.order_id,pr.created_at,pr.debit_account_code,'))return [[]]
     // Finite original domains have no rows in this accounting projection fixture.
     if(sql.startsWith('SELECT f.source_id AS id, COALESCE(SUM(f.tax_amount),0) tax FROM fin_invoices f')){assert.match(sql,/f.company_id = \?/);assert.equal(args.length,1);return [[]]}
     if(sql.startsWith('SELECT pr.order_id AS poId,')){assert.match(sql,/FROM payment_records pr JOIN purchase_orders po/);return [[]]}
-    if(sql.startsWith('SELECT t.id AS txnId,')){assert.match(sql,/WHERE t.biz_type IN \(1, 2, 3, 5\)$/);return [[]]}
+    if(sql.startsWith('SELECT t.id AS txnId,')){assert.match(sql,/WHERE t.biz_type IN \(1, 2, 3, 5\) AND fa.company_id = \?$/);assert.equal(args[0],1);return [[]]}
     if(sql.startsWith('SELECT id, return_no, supplier_id, supplier_name, total_amount, updated_at AS vdate FROM purchase_returns')){assert.match(sql,/WHERE status = 3 AND deleted_at IS NULL/);return [[]]}
     if(sql.startsWith('SELECT sr.id, sr.sale_order_id, sr.return_no, sr.customer_id,')){assert.match(sql,/WHERE sr.status = 3 AND sr.deleted_at IS NULL/);return [[]]}
     if(sql.startsWith('SELECT sri.id FROM sale_return_items sri JOIN sale_returns sr'))return [[]]
@@ -117,9 +123,12 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
     if(sql.startsWith('SELECT a.code, a.name, a.category, a.balance_dir,')){assert.match(sql,/a.category IN \(5, 6\)/);return [[]]}
     if(sql==='SELECT id, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ? AND company_id = ?'){assert.equal(args[0],'period_close');return [[]]}
     if(sql.startsWith('INSERT INTO acct_periods (company_id, period, status,')){assert.equal(args[0],1);assert.equal(args[1],'202610');state.acct_periods.push({company_id:args[0],period:args[1],status:2});return [{affectedRows:1}]}
-    // Historical reconciliation SQL is intentionally unchanged; expose exact old gross facts.
+    // Preserve the historical gross metrics with the ordinary-fund owner filter.
     if(sql.includes('COALESCE(SUM(IF(v.is_reversal=1,-e.amount,e.amount)),0) s')){assert.match(sql,/source_type IN \('receipt_in','payment_out','expense_pay'\)/);return [[{s:'100.00'}]]}
-    if(sql==='SELECT COALESCE(SUM(t.amount),0) s FROM finance_account_transactions t WHERE t.biz_type IN (1,2,3)')return [[{s:'100.00'}]]
+    if(sql==='SELECT COALESCE(SUM(t.amount),0) s FROM finance_account_transactions t JOIN finance_accounts fa ON fa.id=t.account_id WHERE t.biz_type IN (1,2,3) AND fa.company_id=?'){
+      assert.equal(args[0],1)
+      return [[{s:'100.00'}]]
+    }
     if(sql.startsWith('SELECT COALESCE(SUM(CASE WHEN direction=')){assert.ok(!sql.includes('supplier_refund_in'));return [[{s:'100.00'}]]}
     if(sql==='SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=1'||sql==='SELECT COALESCE(SUM(total_amount),0) s FROM payment_records WHERE type=2 AND order_id IS NOT NULL')return [[{s:'100.00'}]]
     if(sql.startsWith('SELECT COALESCE(SUM(CASE WHEN pr.debit_account_code IS NULL'))return [[{total:0,unclassified:0,unclassified_count:0,uncovered:0,uncovered_count:0}]]

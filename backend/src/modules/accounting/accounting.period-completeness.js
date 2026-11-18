@@ -2,10 +2,11 @@
 
 const AppError = require('../../utils/AppError')
 const { moneyUnits } = require('../../utils/decimalMoney')
-const { SOURCE_TYPES: S } = require('../../constants/voucherSource')
+const {
+  SOURCE_TYPES: S, ORDINARY_FUND_SOURCE_TYPES, ORDINARY_FUND_SOURCE_BY_BIZ_TYPE, OPERATING_FUND_COMPANY_ID,
+} = require('../../constants/voucherSource')
 
-const TYPES = [S.RECEIPT_IN, S.PAYMENT_OUT, S.EXPENSE_PAY, S.REFUND_PAY, S.PURCHASE_SETTLE, S.MANUAL_PAYABLE, S.FREIGHT_SETTLE]
-const FUND_TYPES = new Map([[1, S.RECEIPT_IN], [2, S.PAYMENT_OUT], [3, S.EXPENSE_PAY], [5, S.REFUND_PAY]])
+const TYPES = [...ORDINARY_FUND_SOURCE_TYPES, S.PURCHASE_SETTLE, S.MANUAL_PAYABLE, S.FREIGHT_SETTLE]
 const keyOf = (type, id) => JSON.stringify([type, Number(id)])
 const inPeriod = (engine, date, period) => engine.toDateStr(date).replaceAll('-', '').slice(0, 6) === period
 const legKey = leg => JSON.stringify([leg.code, Number(leg.auxType || 0), leg.auxId == null ? null : Number(leg.auxId), leg.auxName || null])
@@ -32,7 +33,7 @@ function net(legs) {
  */
 async function assertPeriodComplete(conn, period, companyId, engine) {
   // Current accounting reads also cover a caller that waited for a previous voucher writer.
-  const [headers] = await conn.query(
+  const [bookedHeaders] = await conn.query(
     `SELECT id,company_id,source_type,source_id,source_period,source_root_id,reversed_id,is_reversal,status,
             period,voucher_date,source_hash,total_debit,total_credit
        FROM acct_vouchers
@@ -43,21 +44,35 @@ async function assertPeriodComplete(conn, period, companyId, engine) {
        FROM acct_voucher_entries e JOIN acct_vouchers v ON v.id=e.voucher_id
       WHERE v.company_id=? AND (v.source_type IN (?) OR v.reversed_id IS NOT NULL OR v.source_root_id IS NOT NULL)
       FOR UPDATE`, [companyId, TYPES])
+  // Include foreign sources already booked here so their legacy vouchers can be identified.
+  // An orphaned transaction still needs review under the default operating book.
   const [funds] = await conn.query(
-    `SELECT t.id,t.biz_type,t.direction,t.amount,t.happened_at,t.voucher_date_override,fa.id AS source_account_id,fa.type AS source_account_type
+    `SELECT t.id,t.biz_type,t.direction,t.amount,t.happened_at,t.voucher_date_override,
+            fa.id AS source_account_id,fa.type AS source_account_type,fa.company_id AS source_company_id
        FROM finance_account_transactions t LEFT JOIN finance_accounts fa ON fa.id=t.account_id
-      WHERE t.biz_type IN (1,2,3,5)`)
+      WHERE t.biz_type IN (1,2,3,5) AND (COALESCE(fa.company_id,?)=? OR EXISTS (
+        SELECT 1 FROM acct_vouchers v WHERE v.company_id=? AND v.source_id=t.id AND v.source_type IN (?)
+      ))`, [OPERATING_FUND_COMPANY_ID, companyId, companyId, ORDINARY_FUND_SOURCE_TYPES])
   const [payables] = await conn.query(
     `SELECT pr.id,pr.order_id,pr.created_at,pr.debit_account_code,po.id AS source_order_id,
             EXISTS(SELECT 1 FROM logistics_freight_settlements fs WHERE fs.payment_record_id=pr.id) AS is_freight
        FROM payment_records pr LEFT JOIN purchase_orders po ON po.id=pr.order_id
       WHERE pr.type=1`)
   const anchors = new Map()
-  for (const f of funds) anchors.set(keyOf(FUND_TYPES.get(Number(f.biz_type)), f.id), {
-    date: f.voucher_date_override || f.happened_at, valid: f.source_account_id != null
-      && [1, 2, 3, 4, 5].includes(Number(f.source_account_type)) && moneyUnits(f.amount) > 0n
-      && Number(f.direction) === (Number(f.biz_type) === 1 ? 1 : 2),
-  })
+  const misplacedFunds = new Set()
+  for (const f of funds) {
+    const key = keyOf(ORDINARY_FUND_SOURCE_BY_BIZ_TYPE[f.biz_type], f.id)
+    const owner = Number(f.source_company_id ?? OPERATING_FUND_COMPANY_ID)
+    if (owner !== Number(companyId)) {
+      misplacedFunds.add(key)
+      continue
+    }
+    anchors.set(key, {
+      date: f.voucher_date_override || f.happened_at, valid: f.source_account_id != null
+        && [1, 2, 3, 4, 5].includes(Number(f.source_account_type)) && moneyUnits(f.amount) > 0n
+        && Number(f.direction) === (Number(f.biz_type) === 1 ? 1 : 2),
+    })
+  }
   for (const p of payables) anchors.set(keyOf(p.order_id != null ? S.PURCHASE_SETTLE : Number(p.is_freight) === 1 ? S.FREIGHT_SETTLE : S.MANUAL_PAYABLE,
     p.order_id == null ? p.id : p.order_id), { date: p.created_at, valid: p.order_id == null || p.source_order_id != null })
   for (const [key, a] of anchors) {
@@ -65,6 +80,7 @@ async function assertPeriodComplete(conn, period, companyId, engine) {
       const [type, id] = JSON.parse(key); denied(period, type, id, '业务来源的资金账户或采购单缺失', true)
     }
   }
+  const headers = bookedHeaders.filter(v => v.source_id == null || !misplacedFunds.has(keyOf(v.source_type, v.source_id)))
   const byId = new Map(headers.map(v => [Number(v.id), v]))
   const purchaseOrderIds = new Set(payables.filter(p => p.order_id != null && inPeriod(engine, p.created_at, period)).map(p => Number(p.order_id)))
   // 日期被移动的来源仍可能影响本期根/修订/人工红字，必须沿本期凭证回溯原锚点。
@@ -79,7 +95,7 @@ async function assertPeriodComplete(conn, period, companyId, engine) {
     }
   }
   const { taxByPO } = await engine.loadTaxMaps(conn, companyId)
-  const specs = [...await engine.buildFundVouchers(conn), ...await engine.buildPurchaseSettle(conn, taxByPO, { orderIds: [...purchaseOrderIds] }), ...await engine.buildUnbilledPayable(conn)]
+  const specs = [...await engine.buildFundVouchers(conn, companyId), ...await engine.buildPurchaseSettle(conn, taxByPO, { orderIds: [...purchaseOrderIds] }), ...await engine.buildUnbilledPayable(conn)]
   const expected = new Map()
   for (const spec of specs) {
     if (!inPeriod(engine, spec.voucherDate, period)) continue

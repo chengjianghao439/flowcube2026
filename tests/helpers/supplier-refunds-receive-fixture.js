@@ -191,6 +191,7 @@ function fixture(options = {}) {
     './supplier-refunds.accounting':{settleReceivedVoucher:async()=>({status:'pending'})},
     '../../utils/codeGenerator':{generateDailyCode:()=>{throw Error('unexpected generator')},generateMasterCode:()=>{throw Error('unexpected mastercode')}},
     '../../utils/pagination':require('../../backend/src/utils/pagination'),
+    '../../constants/voucherSource':require('../../backend/src/constants/voucherSource'),
     '../../constants/settlementType':require('../../backend/src/constants/settlementType'),
     '../../utils/logger':{info:(message,meta)=>assert.equal(typeof meta,'object')},
     '../../middleware/auth':{hasPermission:()=>{throw Error('unexpected frontend auth')}},

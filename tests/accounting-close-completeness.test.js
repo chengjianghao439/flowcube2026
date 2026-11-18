@@ -36,7 +36,7 @@ function fixture() {
 }
 function incoming(f, overrides = {}) {
   f.funds.push({ id: 11, biz_type: 1, direction: 1, amount: '100.0000', happened_at: date,
-    voucher_date_override: null, source_account_id: 9, source_account_type: 1, biz_no: 'B6-source', party_name: 'Synthetic party', ...overrides })
+    voucher_date_override: null, source_account_id: 9, source_account_type: 1, source_company_id: 1, biz_no: 'B6-source', party_name: 'Synthetic party', ...overrides })
 }
 function connection(f) {
   return {
@@ -51,15 +51,18 @@ function connection(f) {
       if (/SELECT a.code, a.name, a.category/.test(sql)) return [f.pl]
       if (/SELECT id, source_hash, status FROM acct_vouchers/.test(sql)) return [[].concat(f.closing || [])]
       if (/FROM acct_voucher_entries e JOIN acct_vouchers v/.test(sql)) {
-        assert.equal(params[0], 1)
-        return [f.entries.filter(e => f.headers.some(h => h.id === e.voucher_id && h.company_id === 1))]
+        return [f.entries.filter(e => f.headers.some(h => h.id === e.voucher_id && h.company_id === params[0]))]
+      }
+      if (/SELECT t.id,t.biz_type/.test(sql)) {
+        f.events.push('ordinary-snapshot')
+        return [f.funds.filter(t => params.length === 0 || (t.source_account_id == null ? 1 : t.source_company_id) === params[1]
+          || f.headers.some(h => h.company_id === params[2] && h.source_type === 'receipt_in' && h.source_id === t.id))]
       }
       if (/FROM acct_vouchers/.test(sql)) {
-        assert.equal(params[0], 1); assert.match(sql, /FOR UPDATE/)
-        return [f.headers.filter(h => h.company_id === 1)]
+        assert.match(sql, /FOR UPDATE/)
+        return [f.headers.filter(h => h.company_id === params[0])]
       }
-      if (/SELECT t.id,t.biz_type/.test(sql)) { f.events.push('ordinary-snapshot'); return [f.funds] }
-      if (/t.id AS txnId/.test(sql)) return [f.funds.filter(t => t.source_account_id != null).map(t => ({
+      if (/t.id AS txnId/.test(sql)) return [f.funds.filter(t => t.source_account_id != null && (params.length === 0 || t.source_company_id === params[0])).map(t => ({
         txnId: t.id, biz_type: t.biz_type, amount: t.amount, biz_no: t.biz_no, party_name: t.party_name,
         vdate: t.happened_at, vdate_override: t.voucher_date_override, acctType: t.source_account_type,
       }))]
@@ -143,6 +146,29 @@ test('FIN01 ledger company filter cannot be satisfied by another company voucher
   const f = fixture(), engine = nativeEngine(), conn = connection(f); incoming(f)
   book(f, engine, (await engine.buildFundVouchers(conn))[0]); f.headers[0].company_id = 2
   await rejectsVoucher(() => assertPeriodComplete(conn, period, 1, engine))
+})
+test('ordinary operating receipt belongs to the main accounting company', async () => {
+  const f = fixture(), engine = nativeEngine(), conn = connection(f); incoming(f)
+  assert.equal((await engine.buildFundVouchers(conn, 1)).length, 1)
+  assert.equal((await engine.buildFundVouchers(conn, 2)).length, 0)
+})
+test('an explicitly owned historical receipt belongs to that account’s company', async () => {
+  const f = fixture(), engine = nativeEngine(), conn = connection(f); incoming(f, { source_company_id: 2 })
+  assert.equal((await engine.buildFundVouchers(conn, 1)).length, 0)
+  assert.equal((await engine.buildFundVouchers(conn, 2)).length, 1)
+  await assertPeriodComplete(conn, period, 1, engine)
+  await rejectsVoucher(() => assertPeriodComplete(conn, period, 2, engine))
+})
+test('another accounting company can close while the main receipt remains unposted', async () => {
+  const f = fixture(), engine = nativeEngine(); incoming(f); f.allowWrites = true
+  assert.equal((await periodService(f, engine).closePeriod(period, {}, 2)).status, 2)
+  assert.ok(f.events.includes('commit'))
+})
+test('non-owner historical receipt does not enter another accounting company source completeness', async () => {
+  const f = fixture(), engine = nativeEngine(), conn = connection(f); incoming(f)
+  book(f, engine, (await engine.buildFundVouchers(conn, 1))[0]); f.headers[0].company_id = 2; f.entries.pop()
+  await assertPeriodComplete(conn, period, 2, engine)
+  assert.equal(f.headers.length, 1)
 })
 test('FIN01 AP builders: purchase gross and classified manual; NULL classification remains excluded', async () => {
   const f = fixture(), engine = nativeEngine(), conn = connection(f)

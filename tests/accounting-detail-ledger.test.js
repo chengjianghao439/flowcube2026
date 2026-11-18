@@ -73,6 +73,7 @@ test('合并利润与普通利润同口径，损益结转前后仍是 11 − 20'
   const pool = {
     async query(sql, params) {
       if (sql.includes('FROM acct_companies')) return [[{ id: 1, code: 'MAIN', name: '主账套' }]]
+      if (sql.includes('AS voucher_count')) return [[]]
       assert.deepEqual(plain(params.slice(0, 4)), [start, end, start, end])
       const excludes = /v\.source_type\s+NOT IN\s*\(\?,\s*\?\)/i.test(sql)
       if (excludes) assert.deepEqual(plain(params.slice(4, 6)), [SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y])

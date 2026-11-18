@@ -32,11 +32,24 @@ test('stored received fractional supplier fact keeps raw detail and permanent ol
  const own=await svc.getOwnOperation(uuid(3),{action:'supplier.refund.receive.61',requestKey:'fixed-key'},9);assert.equal(own.data.amount,'0.0067')
  assert.deepEqual(f.data,before)
 })
-function accountFixture(){const sql=[],row={id:1,opening_balance:'0.0001',current_balance:'0.0001'};const conn={beginTransaction:async()=>{},commit:async()=>{},rollback:async()=>{},release(){},query:async(q,args)=>{sql.push({q,args});if(q.startsWith('SELECT * FROM finance_accounts'))return [[copy(row)]];if(q.startsWith('UPDATE finance_accounts'))return [{affectedRows:1}];throw Error('Unexpected money projection '+q)}}
- const svc=load('modules/finance/finance-accounts.service.js',{'../../utils/decimalMoney':money,'../../utils/cashMoney':cash,'../../config/db':{pool:{getConnection:async()=>conn}},'../../utils/AppError':AppError,'../../utils/backendTime':{},'../../utils/codeGenerator':{},'../../utils/pagination':{}})
- return {svc,sql,row}}
+function accountFixture({hasTransactions=false,type=1,companyId=1,balance='0.0001'}={}){const sql=[],row={id:1,type,company_id:companyId,is_active:1,opening_balance:balance,current_balance:balance};const conn={beginTransaction:async()=>{},commit:async()=>{},rollback:async()=>{},release(){},query:async(q,args)=>{sql.push({q,args});if(q.startsWith('SELECT * FROM finance_accounts'))return [[copy(row)]];if(q.startsWith('SELECT id FROM finance_account_transactions'))return [hasTransactions?[{id:31}]:[]];if(q.startsWith('UPDATE finance_accounts'))return [{affectedRows:1}];throw Error('Unexpected money projection '+q)}}
+ const svc=load('modules/finance/finance-accounts.service.js',{'../../utils/decimalMoney':money,'../../utils/cashMoney':cash,'../../config/db':{pool:{getConnection:async()=>conn}},'../../utils/AppError':AppError,'../../constants/voucherSource':require('../backend/src/constants/voucherSource'),'../../utils/backendTime':{},'../../utils/codeGenerator':{},'../../utils/pagination':{}})
+ return {svc,conn,sql,row}}
 test('legacy fractional account metadata edit and explicit identical amount preserve old money',async()=>{
  for(const openingBalance of [undefined,'0.0001']){const f=accountFixture();await f.svc.update(1,{name:'保留原账',type:1,isActive:false,openingBalance});assert.equal(f.sql.length,2);assert.equal(f.sql[1].args[5],'0.0001');assert.ok(!f.sql.some(s=>/SUM|current_balance=/.test(s.q))) }
+})
+test('used bank account cannot change voucher account class to cash',async()=>{
+ const f=accountFixture({hasTransactions:true});await assert.rejects(f.svc.update(1,{name:'x',type:2}),e=>e.statusCode===409&&e.code==='FINANCE_ACCOUNT_POSTING_CLASS_LOCKED')
+ assert.match(f.sql[0].q,/FOR UPDATE/);assert.match(f.sql[1].q,/FOR UPDATE/)
+ assert.equal(f.sql.some(s=>s.q.startsWith('UPDATE')),false)
+})
+test('unused bank can become cash and used bank can change to another 1002 type',async()=>{
+ for(const [hasTransactions,type] of [[false,2],[true,3]]){const f=accountFixture({hasTransactions});await f.svc.update(1,{name:'x',type});assert.equal(f.sql.at(-1).args[1],type)}
+})
+test('new ordinary funds cannot use a legacy account belonging to a book whose period was not locked',async()=>{
+ const f=accountFixture({companyId:2,balance:'0.00'})
+ await assert.rejects(f.svc.recordTransaction(f.conn,{accountId:1,direction:1,amount:1,bizType:1,happenedAt:'2026-11-18'}),e=>e.statusCode===409&&e.code==='FINANCE_ACCOUNT_COMPANY_MISMATCH')
+ assert.equal(f.sql.length,1)
 })
 test('account real monetary edit and adjustment still reject old fractional source',async()=>{
  const f=accountFixture();await assert.rejects(f.svc.update(1,{name:'x',type:1,openingBalance:'0.01'}),e=>e.statusCode===409)

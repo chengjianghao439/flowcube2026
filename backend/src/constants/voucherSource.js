@@ -39,6 +39,20 @@ const SOURCE_TYPES = {
   SALARY_PAYMENT:  'salary_payment',  // 工资发放（source_id = hr_payrolls.id）
 }
 
+const ORDINARY_FUND_SOURCE_BY_BIZ_TYPE = Object.freeze({
+  1: SOURCE_TYPES.RECEIPT_IN,
+  2: SOURCE_TYPES.PAYMENT_OUT,
+  3: SOURCE_TYPES.EXPENSE_PAY,
+  5: SOURCE_TYPES.REFUND_PAY,
+})
+const ORDINARY_FUND_SOURCE_TYPES = Object.values(ORDINARY_FUND_SOURCE_BY_BIZ_TYPE)
+const OPERATING_FUND_COMPANY_ID = 1
+
+/** 现金账户投影至库存现金，其余账户投影至银行存款。 */
+function fundAccountCode(accountType) {
+  return Number(accountType) === 2 ? '1001' : '1002'
+}
+
 const SOURCE_TYPE_VALUES = Object.values(SOURCE_TYPES)
 
 // 借贷方向（与 acct_accounts.balance_dir / acct_voucher_entries.direction 一致）
@@ -186,6 +200,10 @@ function referencedAccountCodes() {
 module.exports = {
   SOURCE_TYPES,
   SOURCE_TYPE_VALUES,
+  ORDINARY_FUND_SOURCE_BY_BIZ_TYPE,
+  ORDINARY_FUND_SOURCE_TYPES,
+  OPERATING_FUND_COMPANY_ID,
+  fundAccountCode,
   DIR,
   PRESET_ACCOUNTS,
   PRESET_CODES,

@@ -23,6 +23,7 @@ function reports(byCompany = { 1: [] }, failure = null) {
     if (sql.includes('FROM acct_companies')) {
       return [Object.keys(byCompany).map(id => ({ id: Number(id), code: `C${id}`, name: `合成账套${id}` }))]
     }
+    if (sql.includes('AS voucher_count')) return [[]]
     assert.match(sql, /FROM acct_accounts a/)
     assert.match(sql, /a\.company_id\s*=\s*\?/)
     assert.match(sql, /a\.is_leaf\s*=\s*1/)
@@ -74,7 +75,7 @@ for (const kind of ['single', 'group']) for (const sample of cases) {
     const f = reports({ 1: sample.rows })
     const result = kind === 'single' ? await f.single(1) : await f.group()
     check(result, sample)
-    assert.equal(f.calls.length, kind === 'single' ? 1 : 2)
+    assert.equal(f.calls.length, kind === 'single' ? 1 : 3)
   })
 }
 test('company isolation and grouped sum both retain contra-asset sign', async () => {

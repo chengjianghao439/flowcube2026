@@ -397,3 +397,155 @@ test('最大合法销售金额人工红冲也精确复制头金额与分录', ()
     WHERE v.company_id=? AND e.account_code='1122'`,[f.companyId])
   assert.equal(net.amount,'0.00')
 }, {persist:true}))
+
+test('普通资金归资金账户账套、另一账套独立结账、合并列报历史差异', async () => {
+  const vouchers = require('../backend/src/modules/accounting/accounting.voucher.service')
+  const periods = require('../backend/src/modules/accounting/accounting.period.service')
+  const consolidation = require('../backend/src/modules/accounting/consolidation.service')
+  const companies = require('../backend/src/modules/accounting/companies.service')
+  const finance = require('../backend/src/modules/finance/finance-accounts.service')
+  const { assertFinancePeriodOpen } = require('../backend/src/modules/accounting/finance-period.guard')
+  const date = '2081-06-18', period = '208106'
+  const [[{ vouchers: bookedInTestPeriod, periodRows }]] = await pool.query(
+    `SELECT (SELECT COUNT(*) FROM acct_vouchers WHERE company_id=1 AND period=?) AS vouchers,
+            (SELECT COUNT(*) FROM acct_periods WHERE company_id=1 AND period=?) AS periodRows`, [period, period],
+  )
+  assert.equal(Number(bookedInTestPeriod) + Number(periodRows), 0, '资金归属回归只写未占用的合成期间')
+  const child = (await companies.createCompany({ code: unique(), name: '资金归属回归账套', parentId: 1 })).id
+  const conn = await pool.getConnection()
+  const accountIds = [], fundIds = []
+  async function addAccount(companyId, type) {
+    const [result] = await conn.query('INSERT INTO finance_accounts(code,name,company_id,type) VALUES (?,?,?,?)',
+      [unique(), '合成资金账户', companyId, type])
+    accountIds.push(result.insertId)
+    return result.insertId
+  }
+  async function register(accountId, bizType, direction, amount) {
+    await conn.beginTransaction()
+    try {
+      await assertFinancePeriodOpen(conn, date)
+      const { id } = await finance.recordTransaction(conn, { accountId, direction, amount, bizType, happenedAt: date })
+      fundIds.push(id)
+      await conn.commit()
+      return id
+    } catch (error) { await conn.rollback(); throw error }
+  }
+  try {
+    const beforeBalance = await consolidation.getConsolidatedBalanceSheet({ groupId: 1, period })
+    const beforeIncome = await consolidation.getConsolidatedIncomeStatement({ groupId: 1, period })
+    const balanceOf = report => Number(report.assets.find(entry => entry.code === '1002')?.amount || 0)
+    const bank = await addAccount(1, 1)
+    const childAccount = await addAccount(child, 1)
+    await assert.rejects(register(childAccount, 1, 1, '1.00'), { code: 'FINANCE_ACCOUNT_COMPANY_MISMATCH' })
+    const receipt = await register(bank, 1, 1, '173.24')
+    const expense = await register(bank, 3, 2, '26.25')
+    const [projected] = await conn.query("SELECT * FROM acct_vouchers WHERE source_type IN ('receipt_in','expense_pay') AND source_id IN (?)", [[receipt, expense]])
+    assert.equal(projected.length, 0)
+    await vouchers.generatePeriodVouchers({ period, companyId: child })
+    assert.equal((await periods.closePeriod(period, null, child)).status, 2)
+    await vouchers.generatePeriodVouchers({ period, companyId: 1 })
+    const [booked] = await conn.query("SELECT * FROM acct_vouchers WHERE source_type IN ('receipt_in','expense_pay') AND source_id IN (?)", [[receipt, expense]])
+    assert.deepEqual(booked.map(row => Number(row.company_id)), [1, 1])
+    await assert.rejects(finance.update(bank, { name: '想改现金', type: 2, isActive: true }), { code: 'FINANCE_ACCOUNT_POSTING_CLASS_LOCKED' })
+    await finance.update(bank, { name: '编辑账户资料', type: 3, isActive: true, remark: '同为银行存款科目' })
+    assert.equal((await vouchers.generatePeriodVouchers({ period, companyId: 1 })).updated, 0)
+    const receiptHeader = booked.find(row => Number(row.source_id) === receipt)
+    const [[{ account_code }]] = await conn.query('SELECT account_code FROM acct_voucher_entries WHERE voucher_id=? AND direction=1', [receiptHeader.id])
+    assert.equal(account_code, '1002')
+    await periods.generateClosingVouchers(period, null, 1)
+    assert.equal((await periods.closePeriod(period, null, 1)).status, 2)
+
+    // Seed historical vouchers through the existing primitive after reopening only the synthetic child period.
+    await periods.reopenPeriod(period, null, child)
+    const childMap = await engine.loadAccountMap(conn, child)
+    const allocate = await engine.makeSeqAllocator(conn, child)
+    const specs = (await engine.buildFundVouchers(conn, 1)).filter(spec => [receipt, expense].includes(Number(spec.sourceId)))
+    await conn.beginTransaction()
+    for (const spec of specs) await engine.upsertVoucher(conn, spec, childMap, allocate, null, child)
+    await conn.commit()
+    const [beforeLegacy] = await conn.query("SELECT * FROM acct_vouchers WHERE company_id=? AND source_type IN ('receipt_in','expense_pay') AND source_id IN (?)", [child, [receipt, expense]])
+    assert.equal(beforeLegacy.length, 2)
+    const activeGroup = await consolidation.getConsolidatedBalanceSheet({ groupId: 1, period })
+    assert.equal(Math.round((balanceOf(activeGroup) - balanceOf(beforeBalance)) * 100), 14699)
+    const childReceipt = beforeLegacy.find(row => Number(row.source_id) === receipt)
+    await vouchers.reverseVoucher(childReceipt.id, null, child)
+    // Before closing, the child's expense is duplicated on the books. Consolidation uses source ownership.
+    const groupBalance = await consolidation.getConsolidatedBalanceSheet({ groupId: 1, period })
+    const groupIncome = await consolidation.getConsolidatedIncomeStatement({ groupId: 1, period })
+    assert.equal(Math.round((balanceOf(groupBalance) - balanceOf(beforeBalance)) * 100), 14699)
+    assert.equal(Math.round((groupIncome.expenseTotal - beforeIncome.expenseTotal) * 100), 2625)
+    const legacy = groupBalance.fundOwnershipReview.filter(row => row.bookedCompanyId === child)
+    assert.deepEqual(legacy.map(row => [row.sourceType, row.voucherCount, row.netFundAmount]).sort(),
+      [['expense_pay', 1, -26.25], ['receipt_in', 2, 0]])
+    await vouchers.generatePeriodVouchers({ period, companyId: child })
+    const [afterLegacy] = await conn.query('SELECT id, source_hash FROM acct_vouchers WHERE id IN (?) ORDER BY id',
+      [beforeLegacy.map(row => row.id)])
+    assert.deepEqual(afterLegacy, beforeLegacy.map(row => ({ id: row.id, source_hash: row.source_hash })).sort((a, b) => a.id - b.id))
+    // Simulate an imported receipt with an explicit existing account owner.
+    const [legacyOwned] = await conn.query(
+      'INSERT INTO finance_account_transactions (account_id,direction,amount,biz_type,balance_after,happened_at) VALUES (?,1,9.17,1,9.17,?)',
+      [childAccount, date],
+    )
+    fundIds.push(legacyOwned.insertId)
+    await vouchers.generatePeriodVouchers({ period, companyId: child })
+    const [[owned]] = await conn.query("SELECT company_id FROM acct_vouchers WHERE source_type='receipt_in' AND source_id=?", [legacyOwned.insertId])
+    assert.equal(Number(owned.company_id), child)
+    const withOwned = await consolidation.getConsolidatedBalanceSheet({ groupId: 1, period })
+    assert.equal(Math.round((balanceOf(withOwned) - balanceOf(beforeBalance)) * 100), 15616)
+    await periods.generateClosingVouchers(period, null, child)
+    assert.equal((await periods.closePeriod(period, null, child)).status, 2)
+  } finally {
+    await conn.rollback()
+    try {
+      await conn.query('DELETE FROM acct_closing_details WHERE company_id IN (1,?) AND period=?', [child, period])
+      await conn.query('DELETE FROM acct_voucher_entries WHERE voucher_id IN (SELECT id FROM acct_vouchers WHERE company_id IN (1,?) AND period=?)', [child, period])
+      await conn.query('DELETE FROM acct_vouchers WHERE company_id IN (1,?) AND period=? AND is_reversal=1', [child, period])
+      await conn.query('DELETE FROM acct_vouchers WHERE company_id IN (1,?) AND period=?', [child, period])
+      await conn.query('DELETE FROM acct_periods WHERE company_id IN (1,?) AND period=?', [child, period])
+      if (fundIds.length) await conn.query('DELETE FROM finance_account_transactions WHERE id IN (?)', [fundIds])
+      if (accountIds.length) await conn.query('DELETE FROM finance_accounts WHERE id IN (?)', [accountIds])
+      await conn.query('UPDATE acct_accounts SET parent_id=NULL WHERE company_id=?', [child])
+      await conn.query('DELETE FROM acct_accounts WHERE company_id=?', [child])
+      await conn.query('DELETE FROM acct_companies WHERE id=?', [child])
+    } finally { conn.release() }
+  }
+})
+
+test('首笔银行流水提交后，等待中的账户改类必须读取当前流水并拒绝', async () => {
+  const finance = require('../backend/src/modules/finance/finance-accounts.service')
+  const { assertFinancePeriodOpen } = require('../backend/src/modules/accounting/finance-period.guard')
+  const writer = await pool.getConnection()
+  const date = '2081-07-18'
+  let accountId, updateResult
+  try {
+    const [account] = await writer.query("INSERT INTO finance_accounts(code,name,type) VALUES (?, '并发归属银行账户', 1)", [unique()])
+    accountId = account.insertId
+    await writer.beginTransaction()
+    await assertFinancePeriodOpen(writer, date)
+    await writer.query('SELECT id FROM finance_accounts WHERE id=? FOR UPDATE', [accountId])
+    updateResult = finance.update(accountId, { name: '现金', type: 2, isActive: true }).then(
+      () => ({ status: 'updated' }),
+      error => ({ status: 'rejected', error }),
+    )
+    const pending = Symbol('账户行锁等待')
+    assert.equal(await Promise.race([updateResult, new Promise(resolve => setTimeout(() => resolve(pending), 75))]), pending)
+    const { id } = await finance.recordTransaction(writer, {
+      accountId, direction: 1, amount: '19.83', bizType: 1, happenedAt: date,
+    })
+    await writer.commit()
+    const result = await updateResult
+    assert.equal(result.status, 'rejected')
+    assert.equal(result.error.code, 'FINANCE_ACCOUNT_POSTING_CLASS_LOCKED')
+    const spec = (await engine.buildFundVouchers(writer, 1)).find(v => Number(v.sourceId) === id && v.sourceType === 'receipt_in')
+    assert.equal(spec?.legs[0].code, '1002')
+  } finally {
+    await writer.rollback()
+    if (updateResult) await updateResult
+    try {
+      if (accountId) {
+        await writer.query('DELETE FROM finance_account_transactions WHERE account_id=?', [accountId])
+        await writer.query('DELETE FROM finance_accounts WHERE id=?', [accountId])
+      }
+    } finally { writer.release() }
+  }
+})

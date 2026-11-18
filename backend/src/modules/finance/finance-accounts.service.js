@@ -2,6 +2,7 @@ const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
 const { cashCents, storedCashCents, cashNumber } = require('../../utils/cashMoney')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
+const { ORDINARY_FUND_SOURCE_BY_BIZ_TYPE, OPERATING_FUND_COMPANY_ID, fundAccountCode } = require('../../constants/voucherSource')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { normalizePagination } = require('../../utils/pagination')
@@ -108,6 +109,10 @@ async function recordTransaction(conn, {
 
   const [[acc]] = await conn.query('SELECT * FROM finance_accounts WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
   if (!acc) throw new AppError('资金账户不存在', 404)
+  // 普通资金入口已锁主账套门。持账户行锁核实归属，避免写到未检查期间的账套。
+  if (ORDINARY_FUND_SOURCE_BY_BIZ_TYPE[Number(bizType)] && Number(acc.company_id) !== OPERATING_FUND_COMPANY_ID) {
+    throw new AppError('请选择主账套的资金账户', 409, 'FINANCE_ACCOUNT_COMPANY_MISMATCH')
+  }
   if (!acc.is_active) throw new AppError(`账户「${acc.name}」已停用，不能再用于收付款`, 400)
   storedCashCents(acc.opening_balance, '账户原期初余额')
   storedCashCents(acc.current_balance, '账户原余额')
@@ -190,8 +195,7 @@ async function create({ name, type, accountNo, bankName, holder, openingBalance 
 }
 
 /**
- * 编辑账户。**期初余额一旦有流水就不允许再改**——改了会让所有历史流水的
- * balance_after 快照与实际对不上，等于篡改账目。要调整余额请走 adjust()。
+ * 编辑账户。有流水后保护期初余额与入账科目，保留原余额快照和凭证投影。
  */
 async function update(id, { name, type, accountNo, bankName, holder, openingBalance, isActive, sortOrder, remark }) {
   const conn = await pool.getConnection()
@@ -205,11 +209,19 @@ async function update(id, { name, type, accountNo, bankName, holder, openingBala
     if (openingChanged) {
       cashCents(openingBalance, { label: '账户期初余额' })
       storedCashCents(acc.opening_balance, '账户原期初余额')
-      const [[{ n }]] = await conn.query(
-        'SELECT COUNT(*) AS n FROM finance_account_transactions WHERE account_id=? FOR UPDATE', [id],
+    }
+    const postingClassChanged = fundAccountCode(type) !== fundAccountCode(acc.type)
+    if (openingChanged || postingClassChanged) {
+      // 与首次流水写入共用账户行锁，等待后用当前读检查已提交的流水。
+      const [[transaction]] = await conn.query(
+        'SELECT id FROM finance_account_transactions WHERE account_id=? LIMIT 1 FOR UPDATE', [id],
       )
-      if (Number(n) > 0) {
+      if (transaction && openingChanged) {
         throw new AppError('该账户已有资金流水，期初余额不能再改；如需调整请用「余额调整」', 409)
+      }
+      if (transaction) {
+        throw new AppError('该账户已有资金流水，不能更改入账科目；如需使用不同科目，请新建资金账户', 409,
+          'FINANCE_ACCOUNT_POSTING_CLASS_LOCKED')
       }
     }
 
