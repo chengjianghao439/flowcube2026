@@ -850,6 +850,9 @@ jobs:
       - name: 冒烟测试 — 用户改密/禁用 token 失效（安全语义守护，2026-08-22 新增）
         run: node tests/users-roles.smoke.test.js
 
+      - name: 冒烟测试 — 报表查询可执行性
+        run: npm run smoke:reports
+
       - name: 冒烟测试 — 报表数值正确性（与底层表核对，审计 4.6）
         run: npm run smoke:reports-values
 

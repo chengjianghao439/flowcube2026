@@ -1,0 +1,30 @@
+# 摘自本地 PR #114 快照 dcd4431，仅供部署守卫测试
+jobs:
+  pr-gate:
+    name: Tests PR Gate
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs:
+      - compose-227-preflight
+      - pda-audit-log-api-owned
+      - pda-audit-log-migration-owned
+      - go-live-owned
+      - inbound-edit-owned
+      - retention-reprint-owned
+      - change-records-owned
+      - browser-smoke-runtime
+      - desktop-download-compat
+      - static
+      - regression-plastic-box
+      - qa-role-upgrade
+      - regression
+      - prelaunch-regression
+      - consistency-audit-20260926
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every job to succeed
+        shell: bash
+        env:
+          REQUIRED_RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          jq -e 'type == "array" and length > 0 and all(.[]; . == "success")' <<< "$REQUIRED_RESULTS"

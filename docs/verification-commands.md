@@ -159,6 +159,8 @@ npm run test:permissions
 `.github/workflows/server-diagnostics.yml`（`workflow_dispatch` **只读**服务器诊断：内存/`MemAvailable`、进程 TOP RSS、容器状态与 cgroup 内存、OOM 记录、磁盘与目录占用、镜像/卷计数）是运维诊断入口——**本机出口 IP 被 sshd 限流时的唯一通道**，`tests/deployment-resources.test.js` 机械断言它不得含删除/重启/清理命令（反向验证 3 例成立）。
 运维/迁移回归（static job 「运维回归」步骤）：`node --test tests/ops-alert-notifications.test.js tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js`。前两项验备份恢复判定与资源边界，后两项验触发器分号规范化与迁移逐条切分，均不连数据库。
 
+部署资源守卫解析实际 Tests YAML，只有 PR 上会执行并传播失败的明确 npm / Node 命令、矩阵步骤和已登记的独占 runner 转发才计作接线。独立报表可执行性 `smoke:reports` 在 regression 测试库运行。PR #114 两项汇总 job 在本地使用 `tests/fixtures/pr-gates/` 中的快照，使用实际 bash/jq 检验成功、失败、跳过及取消。启用保护时应把守卫改为始终要求两项实际 job，防止同时删掉两项时退回夹具。该门禁沿用前端锁定的 js-yaml，依赖 jq。
+
 废弃目录回归：`npm run release:check-downloads`（`backend/downloads/` 只允许 `.gitignore`/`README.md`）——`.gitignore` 挡得住普通提交、挡不住 `git add -f`，而守卫只看 git 视角，所以必须在 CI 静态 job 真跑，不连数据库。
 
 导出格式回归：`npm run test:export`（static job 与 `test:upload` 同一步执行）——校验 xlsx 导出的日期列写成日期单元格并带 `yyyy-mm-dd` / `yyyy-mm-dd hh:mm` 数字格式（2026-09-16 起），不连数据库。

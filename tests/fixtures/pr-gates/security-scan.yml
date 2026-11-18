@@ -1,0 +1,18 @@
+# 摘自本地 PR #114 快照 dcd4431，仅供部署守卫测试
+jobs:
+  pr-gate:
+    name: Security Scan PR Gate
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs:
+      - gitleaks
+      - npm-audit
+      - sensitive-files
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every job to succeed
+        shell: bash
+        env:
+          REQUIRED_RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          jq -e 'type == "array" and length > 0 and all(.[]; . == "success")' <<< "$REQUIRED_RESULTS"

@@ -501,6 +501,168 @@ test('PDA 原生扫码单元测试必须在正式 APK 构建前运行', () => {
   assert.ok(testIndex >= 0 && testIndex < buildIndex, 'Android 单元测试必须在正式 APK 构建前通过')
 })
 
+function readWorkflow(file) {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  return yaml.load(fs.readFileSync(file, 'utf8'))
+}
+
+function onEveryPr(value) {
+  const condition = typeof value === 'string' ? value.trim().replace(/^\$\{\{\s*|\s*\}\}$/g, '') : value
+  return condition === undefined || condition === true || condition === 'true' || condition === 'success()'
+}
+
+function propagatesFailure(value) {
+  return value === undefined || value === false
+}
+
+// Accept the direct npm and Node invocations CI uses today. An arbitrary shell script
+// mentioning a command (including a comment or a heredoc) is not evidence it runs.
+function reachableWorkflowCommands(workflow) {
+  const commands = []
+  if (!Object.hasOwn(workflow.on || {}, 'pull_request')) return commands
+  for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
+    if (!onEveryPr(job.if) || !propagatesFailure(job['continue-on-error'])) continue
+    for (const step of job.steps || []) {
+      if (!onEveryPr(step.if) || !propagatesFailure(step['continue-on-error']) || typeof step.run !== 'string') continue
+      const run = step.run.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#')).join('\n')
+      const chain = run.split(/\s+&&\s+/)
+      if (!chain.every(command => /^npm run [\w:-]+$|^npm run smoke:\$\{\{ matrix\.suite \}\}$|^node(?: --test)?(?: tests\/[\w./-]+\.js)+$/.test(command))) continue
+      for (const command of chain) commands.push({ command, env: step.env, job, jobName })
+    }
+  }
+  return commands
+}
+
+function verifyPrGate(workflow, name) {
+  const trigger = workflow.on?.pull_request
+  assert.ok(trigger?.branches?.includes('main') && !trigger.paths && !trigger['paths-ignore'] && !trigger.types,
+    `${name} 必须覆盖目标为 main 的 PR`)
+  const gate = workflow.jobs['pr-gate']
+  assert.ok(gate, `缺少 ${name}`)
+  assert.equal(gate.name, name)
+  assert.match(gate.if || '', /^\$\{\{\s*always\(\) && github\.event_name == 'pull_request'\s*\}\}$/,
+    `${name} 必须在 PR 依赖 job 失败或被跳过时仍然评估`)
+  assert.ok(Array.isArray(gate.needs))
+  assert.deepEqual([...gate.needs].sort(), Object.keys(workflow.jobs).filter(id => id !== 'pr-gate').sort(),
+    `${name} 必须等待全部依赖`)
+  assert.ok(propagatesFailure(gate['continue-on-error']))
+  for (const id of gate.needs) {
+    const job = workflow.jobs[id]
+    assert.ok(onEveryPr(job.if) && propagatesFailure(job['continue-on-error']), `${name} 的依赖 ${id} 必须在 PR 执行并传播失败`)
+  }
+  if (name === 'Tests PR Gate') {
+    const runnableJobs = new Set(reachableWorkflowCommands(workflow).map(entry => entry.jobName))
+    for (const id of gate.needs) assert.ok(runnableJobs.has(id), `${name} 的依赖 ${id} 缺少有效测试命令`)
+  } else {
+    verifySecurityJobs(workflow.jobs)
+  }
+  assert.equal(gate.steps?.length, 1)
+  const [step] = gate.steps
+  assert.ok(onEveryPr(step.if) && propagatesFailure(step['continue-on-error']))
+  assert.equal(step.shell, 'bash')
+  assert.equal(step.env?.REQUIRED_RESULTS, '${{ toJSON(needs.*.result) }}')
+  assert.equal(step.run?.trim(), 'jq -e \'type == "array" and length > 0 and all(.[]; . == "success")\' <<< "$REQUIRED_RESULTS"')
+}
+
+function verifySecurityJobs(jobs) {
+  const requiredStep = (id, name, condition) => {
+    const step = jobs[id]?.steps?.find(candidate => candidate.name === name)
+    assert.ok(step && propagatesFailure(step['continue-on-error']), `${id} 缺少必跑步骤 ${name}`)
+    if (condition) assert.equal(step.if, condition)
+    else assert.ok(onEveryPr(step.if), `${id} 的 ${name} 不能跳过`)
+    return step
+  }
+  const license = requiredStep('gitleaks', 'Detect Gitleaks license')
+  assert.equal(license.id, 'license')
+  assert.match(license.run || '', /^if \[ -n "\$GITLEAKS_LICENSE" \]; then echo "enabled=true" >> "\$GITHUB_OUTPUT"; else echo "enabled=false" >> "\$GITHUB_OUTPUT"; fi$/)
+  const scanner = requiredStep('gitleaks', 'Run Gitleaks', "steps.license.outputs.enabled == 'true'")
+  assert.match(scanner.uses || '', /^gitleaks\/gitleaks-action@[a-f0-9]{40}$/)
+  const fallback = requiredStep('gitleaks', 'Fallback gitleaks (Docker)', "steps.license.outputs.enabled != 'true'")
+  assert.match(fallback.run || '', /^\s*docker run --rm .+\\$/m)
+  assert.match(fallback.run || '', /^\s*ghcr\.io\/gitleaks\/gitleaks@sha256:[a-f0-9]{64} detect \\$/m)
+  const audit = requiredStep('npm-audit', 'Audit dependencies and enforce result integrity')
+  assert.deepEqual([...jobs['npm-audit'].strategy.matrix.target].sort(), ['backend', 'desktop', 'frontend', 'scripts/browser-smoke'])
+  assert.match(audit.run || '', /^npm --prefix \$\{\{ matrix\.target \}\} audit --json .* > audit-report\.json$/m)
+  assert.match(audit.run?.trim() || '', /\nnode scripts\/check-npm-audit\.js audit-report\.json "\$AUDIT_EXIT"$/)
+  const inventory = requiredStep('sensitive-files', 'Check for tracked secrets')
+  assert.match(inventory.run || '', /^\s*result=\$\(git ls-files "\$pattern" /m)
+  assert.match(inventory.run?.trim() || '', /\nexit "\$ISSUES"$/)
+}
+
+test('真实工作流的同一步骤注释、留空、失活或掩盖失败时不能计入 CI', () => {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  const workflow = fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8')
+  const command = 'npm run release:check-downloads'
+  const required = `        run: ${command}`
+  function verify(source) {
+    assert.ok(reachableWorkflowCommands(yaml.load(source)).some(entry => entry.command === command),
+      `${command} 必须实际执行并传播失败`)
+  }
+  verify(workflow)
+  for (const replacement of [
+    `        # run: ${command}`,
+    '        run: ""',
+    `${required}\n        if: ${'${{ false }}'}`,
+    `${required}\n        if: ${'${{ failure() }}'}`,
+    `${required}\n        continue-on-error: true`,
+    `${required} || true`,
+    `        run: |\n          # ${command}\n          echo skipped`,
+    `        run: |\n          exit 0\n          ${command}`,
+  ]) {
+    assert.throws(() => verify(workflow.replace(required, replacement)), /必须实际执行/, replacement)
+  }
+  const brokenJob = workflow.replace('  static:\n', '  static:\n    if: false\n')
+  assert.throws(() => verify(brokenJob), /必须实际执行/)
+})
+
+test('两项 PR Gate 均等待全部依赖，并拒绝失败、取消、跳过及空结果', () => {
+  const gateNames = { 'test.yml': 'Tests PR Gate', 'security-scan.yml': 'Security Scan PR Gate' }
+  const workflows = Object.keys(gateNames).map(file => [file, readWorkflow(path.join(root, '.github/workflows', file))])
+  // 在 PR #114 接线后，任一在用 Gate 都要求两条实际工作流同时满足契约。
+  const activated = workflows.some(([, workflow]) => 'pr-gate' in workflow.jobs)
+  for (const [file, workflow] of workflows) {
+    const fixture = activated ? { jobs: {} } : readWorkflow(path.join(root, 'tests/fixtures/pr-gates', file))
+    const jobs = { ...workflow.jobs, ...fixture.jobs }
+    const name = gateNames[file]
+    verifyPrGate({ ...workflow, jobs }, name)
+    const gate = jobs['pr-gate']
+    for (const change of [
+      broken => { broken['pr-gate'].needs.pop() },
+      broken => { broken[gate.needs[0]].if = false },
+      broken => { broken[gate.needs[0]]['continue-on-error'] = true },
+      broken => { delete broken[gate.needs[0]] },
+      broken => { delete broken['pr-gate'].if },
+      broken => { broken['pr-gate'].steps[0].if = false },
+      broken => { broken['pr-gate'].steps[0].run = '# ' + gate.steps[0].run },
+      broken => { broken['pr-gate'].steps[0].run += ' || true' },
+      broken => { broken['pr-gate'].steps[0].env.REQUIRED_RESULTS = '["success"]' },
+    ]) {
+      const broken = structuredClone(jobs)
+      change(broken)
+      assert.throws(() => verifyPrGate({ ...workflow, jobs: broken }, name), { code: 'ERR_ASSERTION' })
+    }
+    if (name === 'Security Scan PR Gate') {
+      const broken = structuredClone(jobs)
+      broken['npm-audit'].steps.find(step => step.name === 'Audit dependencies and enforce result integrity').if = false
+      assert.throws(() => verifyPrGate({ ...workflow, jobs: broken }, name), /不能跳过/)
+    }
+    assert.throws(() => verifyPrGate({ ...workflow, on: { pull_request: { branches: ['unrelated'] } }, jobs }, name), /必须覆盖/)
+    for (const [results, expected] of [
+      [Array(gate.needs.length).fill('success'), 0],
+      [['success', 'failure'], 1],
+      [['success', 'cancelled'], 1],
+      [['success', 'skipped'], 1],
+      [[], 1],
+      [{ result: 'success' }, 1],
+    ]) {
+      const checked = spawnSync('bash', ['-eo', 'pipefail', '-c', gate.steps[0].run], {
+        env: { ...process.env, REQUIRED_RESULTS: JSON.stringify(results) }, encoding: 'utf8', timeout: 5000,
+      })
+      assert.equal(checked.status, expected, `${name} ${JSON.stringify(results)}: ${checked.stderr}`)
+    }
+  }
+})
+
 // 2026-09-19 发现：`scripts/check-deprecated-downloads.js` 早就存在，package.json 也声明了
 // `release:check-downloads`，但**没有任何 workflow 跑过它**——于是「backend/downloads/ 已废弃、
 // 不得提交发布文件」这条写在 AGENTS.md 里的规则，实际上没有任何一处会拦。
@@ -518,16 +680,9 @@ test('废弃 downloads 守卫必须有 CI 执行入口（防「脚本写了但�
   const scriptPath = path.join(root, 'scripts/check-deprecated-downloads.js')
   assert.ok(fs.existsSync(scriptPath), 'scripts/check-deprecated-downloads.js 必须存在')
 
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8'))
-  const runners = []
-  for (const [jobName, job] of Object.entries(workflow.jobs || {})) {
-    for (const step of job.steps || []) {
-      if (String(step.run || '').includes(command)) runners.push(`${jobName}/${step.name}`)
-    }
-  }
-  assert.ok(runners.length >= 1,
-    `没有任何 CI 步骤执行 \`${command}\`：backend/downloads 的废弃规则会变成无人执行的摆设（已接线位置：${runners.join(', ') || '无'}）`)
+  const workflow = readWorkflow(path.join(root, '.github/workflows/test.yml'))
+  assert.ok(reachableWorkflowCommands(workflow).some(entry => entry.command === command && entry.jobName === 'static'),
+    `Tests static job 必须执行 ${command} 并传播失败`)
 
   // 反向确认脚本不是空壳：它必须真的检查 git 视角下的该目录，否则接线也只是"跑了个寂寞"。
   const source = fs.readFileSync(scriptPath, 'utf8')
@@ -554,53 +709,39 @@ test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁�
   }
 
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const workflowDir = path.join(root, '.github/workflows')
-
-  let workflowText = ''
-  const matrixSuites = new Set()
-  for (const name of fs.readdirSync(workflowDir)) {
-    const text = fs.readFileSync(path.join(workflowDir, name), 'utf8')
-    workflowText += `\n${text}`
-    const parsed = yaml.load(text)
-    for (const job of Object.values(parsed.jobs || {})) {
-      const suites = job.strategy && job.strategy.matrix && job.strategy.matrix.suite
-      if (Array.isArray(suites)) suites.forEach(s => matrixSuites.add(`smoke:${s}`))
-    }
+  const workflow = readWorkflow(path.join(root, '.github/workflows/test.yml'))
+  const reachable = reachableWorkflowCommands(workflow)
+  const commands = new Set(reachable.map(entry => entry.command))
+  const directTestFiles = new Set(reachable.flatMap(({ command }) =>
+    command.startsWith('node ') ? command.split(' ').filter(arg => arg.startsWith('tests/')) : []))
+  const matrixSuites = new Set(reachable
+    .filter(entry => entry.command === 'npm run smoke:${{ matrix.suite }}')
+    .flatMap(entry => entry.job.strategy?.matrix?.suite || []))
+  const ownedRunner = fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8')
+  const ownedModes = {
+    'smoke:go-live-runtime': 'go-live',
+    'smoke:inbound-edit-runtime': 'inbound-edit',
+    'smoke:retention-reprint-runtime': 'retention-reprint',
+    'smoke:change-records-runtime': 'change-records',
+    'smoke:change-records-regressions': 'change-records',
+    'smoke:pda-audit-log-api-runtime': 'pda-audit-log-api',
+    'smoke:pda-audit-log-migration-runtime': 'pda-audit-log-migration',
   }
 
-  const isReached = (name) => {
-    if (workflowText.includes(`npm run ${name}`)) return true
-    if (matrixSuites.has(name)) return true
-    // The destructive go-live suite runs inside the owned runner, never on a shared CI DB.
-    if (name === 'smoke:go-live-runtime' &&
-        pkg.scripts['smoke:go-live-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --go-live' &&
-        workflowText.includes('npm run smoke:go-live-owned') &&
-        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:go-live-runtime')) return true
-    if (name === 'smoke:inbound-edit-runtime' &&
-        pkg.scripts['smoke:inbound-edit-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --inbound-edit' &&
-        workflowText.includes('npm run smoke:inbound-edit-owned') &&
-        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:inbound-edit-runtime')) return true
-    if (name === 'smoke:retention-reprint-runtime' &&
-        pkg.scripts['smoke:retention-reprint-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --retention-reprint' &&
-        workflowText.includes('npm run smoke:retention-reprint-owned') &&
-        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:retention-reprint-runtime')) return true
-    if (['smoke:change-records-runtime', 'smoke:change-records-regressions'].includes(name) &&
-        pkg.scripts['smoke:change-records-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --change-records' &&
-        workflowText.includes('npm run smoke:change-records-owned') &&
-        (name !== 'smoke:change-records-regressions' || /FLOWCUBE_CHANGE_REGRESSIONS:\s*['"]1['"]/.test(workflowText)) &&
-        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes(`run_smoke ${name}`)) return true
-    if (name === 'smoke:pda-audit-log-api-runtime' &&
-        pkg.scripts['smoke:pda-audit-log-api-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-api' &&
-        workflowText.includes('npm run smoke:pda-audit-log-api-owned') &&
-        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:pda-audit-log-api-runtime')) return true
-    if (name === 'smoke:pda-audit-log-migration-runtime' &&
-        pkg.scripts['smoke:pda-audit-log-migration-owned'] === 'bash scripts/repair-smoke-ephemeral.sh --pda-audit-log-migration' &&
-        workflowText.includes('npm run smoke:pda-audit-log-migration-owned') &&
-        fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8').includes('run_smoke smoke:pda-audit-log-migration-runtime')) return true
-    // 有些脚本在 CI 里按文件调用（如 node --test tests/xxx.test.js）
-    const files = (pkg.scripts[name].match(/[\w./-]+\.(js|sh|cjs)/g) || [])
-    return files.some(f => workflowText.includes(path.basename(f)))
+  const isReached = name => {
+    if (commands.has(`npm run ${name}`)) return true
+    if (name.startsWith('smoke:') && matrixSuites.has(name.slice('smoke:'.length))) return true
+    // This explicit mapping keeps fixture writes behind the owned runner.
+    const mode = ownedModes[name]
+    if (mode) {
+      const dispatcher = `smoke:${mode}-owned`
+      return pkg.scripts[dispatcher] === `bash scripts/repair-smoke-ephemeral.sh --${mode}` &&
+        ownedRunner.split('\n').some(line => line.trim() === `run_smoke ${name}`) &&
+        reachable.some(entry => entry.command === `npm run ${dispatcher}` &&
+          (name !== 'smoke:change-records-regressions' || entry.env?.FLOWCUBE_CHANGE_REGRESSIONS === '1'))
+    }
+    const files = pkg.scripts[name].match(/tests\/[\w./-]+\.js/g) || []
+    return files.length > 0 && files.every(file => directTestFiles.has(file))
   }
 
   const testScripts = Object.keys(pkg.scripts).filter(k => /^(smoke|test):/.test(k))
