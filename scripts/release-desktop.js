@@ -10,7 +10,7 @@ const DOWNLOAD_ROOT = path.resolve(process.env.FLOWCUBE_DOWNLOADS_ROOT || proces
 const LEGACY_BACKEND_DOWNLOADS = path.join(ROOT, 'backend', 'downloads')
 
 function usage() {
-  console.error('Usage: node scripts/release-desktop.js <version> [--dry-run] [--rollback] [--manifest-only] [--overwrite] [--artifact=/path/to/installer.exe] [--notes="..."]')
+  console.error('Usage: node scripts/release-desktop.js <version> [--dry-run] [--rollback] [--manifest-only] [--source-sha=<commit>] [--sha256=<digest>] [--artifact=/path/to/installer.exe] [--notes="..."]')
   process.exit(1)
 }
 
@@ -27,7 +27,8 @@ if (!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(version)) {
 const dryRun = args.includes('--dry-run')
 const rollback = args.includes('--rollback')
 const manifestOnly = args.includes('--manifest-only')
-const overwrite = args.includes('--overwrite') || process.env.FLOWCUBE_RELEASE_OVERWRITE === '1'
+const sourceSha = args.find(arg => arg.startsWith('--source-sha='))?.slice('--source-sha='.length)
+const expectedDigest = args.find(arg => arg.startsWith('--sha256='))?.slice('--sha256='.length)
 const notesArg = args.find((arg) => arg.startsWith('--notes='))
 const artifactArg = args.find((arg) => arg.startsWith('--artifact='))
 function readReleaseNotes() {
@@ -120,16 +121,33 @@ function copyExclusive(from, to) {
 function writeJsonAtomic(filePath, data) {
   const tmp = `${filePath}.tmp-${process.pid}`
   fs.writeFileSync(tmp, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+  fs.chmodSync(tmp, 0o644)
   fs.renameSync(tmp, filePath)
 }
 
-function ensureNoExistingVersion() {
-  if (fs.existsSync(versionDir)) {
-    if (overwrite) {
-      log(`版本目录已存在，将覆盖: ${versionDir}`)
-      return
-    }
-    fail(`版本目录已存在，拒绝覆盖: ${versionDir}`)
+function copyInstaller(from, to) {
+  copyExclusive(from, to)
+  fs.chmodSync(to, 0o644)
+}
+
+function createPublicDirectory(dir) {
+  if (fs.mkdirSync(dir, { recursive: true })) fs.chmodSync(dir, 0o755)
+}
+
+function switchCurrent(installer, latest) {
+  createPublicDirectory(currentDir)
+  const staged = fs.mkdtempSync(path.join(currentDir, '.installer-'))
+  try {
+    const temporary = path.join(staged, 'setup.exe')
+    copyInstaller(installer, temporary)
+    fs.renameSync(temporary, currentExe)
+    const versionFile = path.join(staged, 'version.txt')
+    fs.writeFileSync(versionFile, `${latest.version}\n`, 'utf8')
+    fs.chmodSync(versionFile, 0o644)
+    fs.renameSync(versionFile, currentVersion)
+    writeJsonAtomic(latestPath, latest)
+  } finally {
+    fs.rmSync(staged, { recursive: true, force: true })
   }
 }
 
@@ -155,20 +173,20 @@ function loadExistingVersionMetadata() {
     fail(`回滚目标缺少 metadata.json: ${targetMetadata}`)
   }
   const metadata = JSON.parse(fs.readFileSync(targetMetadata, 'utf8'))
-  const existingFileName = String(metadata.fileName || '').trim()
-  if (!existingFileName) fail(`metadata.json 缺少 fileName: ${targetMetadata}`)
-  const existingExe = path.join(versionDir, existingFileName)
-  if (!fs.existsSync(existingExe)) fail(`回滚目标安装包不存在: ${existingExe}`)
-  return { metadata, existingExe, existingFileName }
+  if (metadata.fileName !== fileName || metadata.version !== version) fail('历史版本身份无效')
+  if (!fs.existsSync(targetExe)) fail(`回滚目标安装包不存在: ${targetExe}`)
+  if (fileSha256(targetExe) !== metadata.sha256) fail('历史安装包摘要与记录不一致')
+  return { metadata, existingExe: targetExe }
 }
 
 if (rollback) {
-  const { metadata, existingExe, existingFileName } = loadExistingVersionMetadata()
+  const { metadata, existingExe } = loadExistingVersionMetadata()
   const publishedAt = new Date().toISOString()
   const latest = {
     version,
-    url: `/versions/${tag}/${existingFileName}`,
-    sha256: metadata.sha256 || fileSha256(existingExe),
+    url: `/versions/${tag}/${fileName}`,
+    sha256: metadata.sha256,
+    sourceSha: metadata.sourceSha,
     notes: metadata.notes || '',
     publishedAt,
   }
@@ -183,10 +201,7 @@ if (rollback) {
     log(`将更新: ${currentVersion}`)
     process.exit(0)
   }
-  fs.mkdirSync(currentDir, { recursive: true })
-  writeJsonAtomic(latestPath, latest)
-  fs.copyFileSync(existingExe, currentExe)
-  fs.writeFileSync(currentVersion, `${version}\n`, 'utf8')
+  switchCurrent(existingExe, latest)
   log(`已回滚 current/latest 到版本: ${version}`)
   process.exit(0)
 }
@@ -207,76 +222,116 @@ const artifactStat = fs.statSync(artifact)
 if (!artifactStat.isFile()) fail(`安装包路径不是文件: ${artifact}`)
 if (!artifact.toLowerCase().endsWith('.exe')) fail(`只允许发布 Windows installer .exe: ${artifact}`)
 
-if (manifestOnly) {
-  ensureManifestOnlyTarget(artifact)
-} else {
-  ensureNoExistingVersion()
+if (manifestOnly) ensureManifestOnlyTarget(artifact)
+if (!/^[a-f0-9]{40}$/.test(sourceSha || '')) fail('必须提供原构建完整提交 --source-sha')
+if (!/^[a-f0-9]{64}$/.test(expectedDigest || '')) fail('必须提供原构建 --sha256')
+const sha256 = fileSha256(artifact)
+if (sha256 !== expectedDigest || artifactStat.size === 0) fail('安装包摘要与原构建不一致，或文件为空')
+
+function matchingMetadata() {
+  const exists = fs.existsSync(versionDir)
+  if (!exists) return null
+  const metadata = fs.existsSync(targetMetadata) ? JSON.parse(fs.readFileSync(targetMetadata, 'utf8')) : null
+  if (metadata && (metadata.version !== version || metadata.fileName !== fileName ||
+      metadata.sha256 !== sha256 || metadata.size !== artifactStat.size)) {
+    fail('同版服务器安装包的摘要或身份不一致')
+  }
+  if (metadata?.sourceSha && metadata.sourceSha !== sourceSha) fail('同版服务器安装包的来源提交不一致')
+  if (fs.existsSync(targetExe)) {
+    if (fileSha256(targetExe) !== sha256) fail('同版服务器安装包的实际摘要不一致')
+  } else if (!metadata) {
+    fail('同版目录缺少可核验的安装包身份')
+  }
+  return metadata
 }
 
-const publishedAt = new Date().toISOString()
-const sha256 = fileSha256(artifact)
+const previous = fs.existsSync(latestPath) ? JSON.parse(fs.readFileSync(latestPath, 'utf8')) : null
+// A late retry must not promote a historical installer over a newer release.
+const stable = /^\d+\.\d+\.\d+$/
+if (stable.test(version) && stable.test(previous?.version || '')) {
+  const parts = version.split('.').map(BigInt)
+  const difference = previous.version.split('.').map(BigInt).map((part, index) => part - parts[index]).find(delta => delta !== 0n)
+  if (difference > 0n) fail(`当前版本 ${previous.version} 更新，拒绝将重试发布成降级`)
+}
+const canonicalUrl = `/versions/${tag}/${fileName}`
+if (previous?.version === version && (previous.sha256 !== sha256 || previous.url !== canonicalUrl ||
+    (previous.sourceSha && previous.sourceSha !== sourceSha))) {
+  fail('同版 latest.json 的摘要、路径或来源提交不一致')
+}
+const existing = matchingMetadata()
+const publishedAt = existing?.createdAt || (previous?.version === version ? previous.publishedAt : null) || new Date().toISOString()
 const metadata = {
   version,
   fileName,
   size: artifactStat.size,
   sha256,
+  sourceSha,
   createdAt: publishedAt,
-  notes,
+  notes: existing?.notes ?? notes,
 }
 const latest = {
   version,
-  url: `/versions/${tag}/${fileName}`,
+  url: canonicalUrl,
   sha256,
-  notes,
+  sourceSha,
+  notes: metadata.notes,
   publishedAt,
 }
 assertCanonicalManifestUrl(latest.url)
 
-log(`下载根目录: ${DOWNLOAD_ROOT}`)
-log(`版本目录: ${versionDir}`)
-log(`安装包来源: ${artifact}`)
-log(`发布文件名: ${fileName}`)
-log(`大小: ${artifactStat.size} bytes`)
-log(`sha256: ${sha256}`)
+log(`安装包身份：${tag} ${sourceSha} ${sha256}`)
 if (dryRun) {
-  log(manifestOnly
-    ? 'dry-run: manifest-only 不复制安装包，仅校验并生成 metadata/latest/current'
-    : 'dry-run: 不创建目录、不复制文件、不更新 latest/current')
-  if (!manifestOnly) {
-    log(`将创建: ${versionDir}`)
-    log(`将复制: ${artifact} -> ${targetExe}`)
-  }
-  log(`将写入: ${targetMetadata}`)
-  log(`将更新: ${latestPath}`)
-  log(`将更新: ${currentExe}`)
-  log(`将更新: ${currentVersion}`)
-  log(`将确保隔离目录存在: ${quarantineDir}/unknown-version, duplicated, old-structure-backup`)
+  log('dry-run: 版本身份核对通过')
   process.exit(0)
 }
 
-fs.mkdirSync(path.join(DOWNLOAD_ROOT, 'versions'), { recursive: true })
-if (!manifestOnly) {
-  if (overwrite && fs.existsSync(versionDir)) {
-    fs.rmSync(versionDir, { recursive: true, force: true })
+createPublicDirectory(path.join(DOWNLOAD_ROOT, 'versions'))
+if (!fs.existsSync(versionDir)) {
+  const stagingRoot = path.join(DOWNLOAD_ROOT, '.desktop-staging')
+  fs.mkdirSync(stagingRoot, { recursive: true, mode: 0o700 })
+  const staged = fs.mkdtempSync(path.join(stagingRoot, 'version-'))
+  try {
+    const stagedInstaller = path.join(staged, fileName)
+    copyInstaller(artifact, stagedInstaller)
+    if (fileSha256(stagedInstaller) !== sha256) throw Error('服务器暂存包摘要与原构建不一致')
+    writeJsonAtomic(path.join(staged, 'metadata.json'), metadata)
+    fs.chmodSync(staged, 0o755)
+    try {
+      fs.renameSync(staged, versionDir)
+    } catch (error) {
+      if (error.code !== 'EEXIST' && error.code !== 'ENOTEMPTY') throw error
+      if (!matchingMetadata()) throw error
+    }
+  } finally {
+    fs.rmSync(staged, { recursive: true, force: true })
   }
-  fs.mkdirSync(versionDir, { recursive: false })
+} else {
+  // 保留的旧版记录也用于校验磁盘保留期后恢复的原包。
+  if (!fs.existsSync(targetExe)) {
+    const stagingRoot = path.join(DOWNLOAD_ROOT, '.desktop-staging')
+    fs.mkdirSync(stagingRoot, { recursive: true, mode: 0o700 })
+    const staged = fs.mkdtempSync(path.join(stagingRoot, 'installer-'))
+    try {
+      const temporary = path.join(staged, fileName)
+      copyInstaller(artifact, temporary)
+      if (fileSha256(temporary) !== sha256) throw Error('服务器暂存包摘要与原构建不一致')
+      try {
+        fs.linkSync(temporary, targetExe)
+      } catch (error) {
+        if (error.code !== 'EEXIST' || fileSha256(targetExe) !== sha256) throw error
+      }
+    } finally {
+      fs.rmSync(staged, { recursive: true, force: true })
+    }
+  }
+  if (!existing?.sourceSha) writeJsonAtomic(targetMetadata, metadata)
 }
-fs.mkdirSync(currentDir, { recursive: true })
-fs.mkdirSync(path.join(quarantineDir, 'unknown-version'), { recursive: true })
-fs.mkdirSync(path.join(quarantineDir, 'duplicated'), { recursive: true })
-fs.mkdirSync(path.join(quarantineDir, 'old-structure-backup'), { recursive: true })
-
-if (!manifestOnly) {
-  copyExclusive(artifact, targetExe)
+for (const folder of ['unknown-version', 'duplicated', 'old-structure-backup']) {
+  fs.mkdirSync(path.join(quarantineDir, folder), { recursive: true })
 }
-writeJsonAtomic(targetMetadata, metadata)
-writeJsonAtomic(latestPath, latest)
-fs.copyFileSync(targetExe, currentExe)
-fs.writeFileSync(currentVersion, `${version}\n`, 'utf8')
-
-log(manifestOnly ? `已补齐 manifest: ${version}` : `已发布版本: ${version}`)
-log(`latest.json -> ${latest.url}`)
-log('历史版本未覆盖；current 指针已更新，可通过重写 latest/current 回滚。')
+if (fileSha256(targetExe) !== sha256) fail('服务器公开包摘要与原构建不一致')
+switchCurrent(targetExe, latest)
+log(`已发布版本：${version}，latest.json → ${latest.url}`)
 
 // /versions 保留策略（2026-08-22）：桌面安装包每版 100MB+，磁盘有限。
 // 发布成功后清理历史目录，只保留最近 N 版（默认 5，FLOWCUBE_VERSIONS_KEEP 可覆盖），
@@ -287,7 +342,8 @@ function pruneVersions() {
   const versionsDir = path.join(DOWNLOAD_ROOT, 'versions')
   if (!fs.existsSync(versionsDir)) return
   const entries = fs.readdirSync(versionsDir)
-    .filter((name) => /^v\d+\.\d+\.\d+/.test(name))
+    .filter(name => /^v\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(name))
+    .filter(name => fs.existsSync(path.join(versionsDir, name, `FlowCube-Setup-${name.slice(1)}.exe`)))
     .sort((a, b) => {
       const parse = (s) => s.replace(/^v/, '').split('.').map(Number)
       const [a1, a2, a3] = parse(a)
@@ -300,10 +356,14 @@ function pruneVersions() {
     if (name === `v${version}`) continue
     if (keepNames.size < keep + 1) keepNames.add(name)
     else {
-      const target = path.join(versionsDir, name)
-      if (fs.existsSync(target)) {
-        fs.rmSync(target, { recursive: true, force: true })
-        log(`清理历史版本: ${name}`)
+      const info = path.join(versionsDir, name, 'metadata.json')
+      if (!fs.existsSync(info)) continue
+      const metadata = JSON.parse(fs.readFileSync(info, 'utf8'))
+      const oldFile = path.join(versionsDir, name, `FlowCube-Setup-${name.slice(1)}.exe`)
+      if (metadata.sourceSha && /^[a-f0-9]{64}$/.test(metadata.sha256 || '') &&
+          metadata.version === name.slice(1) && metadata.fileName === path.basename(oldFile)) {
+        fs.unlinkSync(oldFile)
+        log(`清理历史安装包并保留版本身份: ${name}`)
       }
     }
   }

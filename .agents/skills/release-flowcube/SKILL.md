@@ -34,8 +34,9 @@ description: >-
   ├─ push main，等同 SHA 的 Tests / Security / Browser / PDA / 桌面验证成功
   └─ 推送 v<version> tag → CI: Build Desktop Installer（仅 tag 触发发布）
        ├─ 构建 Windows exe（NSIS 3.0.4.1）并保存原始 Actions artifact
-       ├─ 服务器生成 latest.json，记录版本、地址、摘要和更新内容
-       └─ 核对 GitHub Release 附件并转正草稿 → 线上完整核验
+       ├─ 核对两处既有发布身份，准备 GitHub 草稿和附件
+       ├─ 服务器生成 latest.json，记录版本、来源提交、地址、摘要和更新内容
+       └─ 回读公开清单与实际 EXE，核对 GitHub 附件后转正草稿
             └─ 桌面轮询 /api/app-update/latest，发现更高版本后提示更新
 ```
 
@@ -193,14 +194,9 @@ gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<完整的40位发�
 3. **CI 构建失败**：`gh run list` 看 `Build Desktop Installer` 是否 success；失败常见于 tag 与 `desktop/package.json` 不一致、或 NSIS 校验失败。
 4. **latest.json 没更新**：`curl /latest.json` 看 version 是否真的变了。没变说明服务器发布步骤没跑（多半是 SSH/部署配置缺失，看该 run 日志）。
 5. **桌面端侧诊断**：在桌面端设 `FLOWCUBE_UPDATE_DIAG=1` 启动，会强制走一次检查并把接口返回、解析出的下载地址全部打日志 + 弹窗，用于定位是「没拿到 manifest」还是「版本判断没过」还是「下载地址无效」。调试还可用 `FORCE_UPDATE=1` 跳过版本比较强制弹窗。
-6. **GitHub Release 里没有安装包**：看 run 的 `Upload EXE to Release` 日志。该步骤走
-   `scripts/publish-release-asset.cjs`（带超时 + 重试 + 落地校验），GitHub 附件存储偶发
-   `HTTP 500 Error saving asset`，脚本会自动重试并在校验大小后才把 Release 转正；
-   若最终仍失败，日志里会有明确原因，Release 会停在草稿状态（不会出现"看起来发布了却没有包"）。
-   **先区分缺附件还是仅草稿未转正**。若官网包与 GitHub 附件已存在，优先用下面的原包恢复入口，不重传附件。
-   真正缺附件时：从服务器 `/versions/v<版本>/` 取回 CI 构建的同一份 exe（复算 sha256 与 latest.json 一致）
-   后 `node scripts/publish-release-asset.cjs --tag v<版本> --version <版本> --file <exe>`；
-   **不要在本机重新构建 exe**，重跑 tag 构建会让 latest.json 的新摘要与已传附件对不上。
+6. **GitHub Release 里没有安装包**：查 `Publish EXE to canonical download directory` 的预检、草稿准备、服务器写入和转正阶段。发布来源由 tag、原始完整提交和 EXE 的 SHA256 绑定。未发布完时保留原运行和 artifact ID。
+   - 服务器或 GitHub 任一环节尚未收尾，运行 **Build Desktop Installer** 的手动恢复，提供原 `source_run_id`、`source_artifact_id`，`release_tag` 和 `checkout_ref` 都填原 tag，并勾选附件发布。工作流先核同 SHA 门禁，直接复用原 EXE。
+   - 只有草稿尚未转正时可走下面的恢复入口。两种恢复均核对现有摘要，摘要冲突或原产物已过期时停止。
 
 ### 草稿收尾失败：复用原包恢复
 

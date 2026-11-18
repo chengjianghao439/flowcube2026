@@ -320,7 +320,8 @@ test('桌面发布必须清理服务器侧中转目录（防 /tmp 长期累积�
   const steps = Object.values(workflow.jobs).flatMap(j => j.steps || [])
   const step = steps.find(s => s.name === 'Publish EXE to canonical download directory')
   assert.ok(step && step.run, '找不到「Publish EXE to canonical download directory」步骤')
-  const run = step.run
+  assert.match(step.run, /bash scripts\/publish-desktop-workflow\.sh/)
+  const run = fs.readFileSync(path.join(root, 'scripts/publish-desktop-workflow.sh'), 'utf8')
   assert.match(run, /remote_tmp="\/tmp\/flowcube-desktop-release\/\$\{tag\}"/, '中转目录路径变了，需同步本守卫与清理逻辑')
   assert.match(run, /trap\s+cleanup_remote_tmp\s+EXIT/, '必须用 EXIT trap 保证失败路径也清理中转目录')
   assert.match(run, /rm -rf '\$remote_tmp'/, 'cleanup_remote_tmp 必须真的删除远端中转目录')

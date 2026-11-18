@@ -19,6 +19,14 @@ name: Build Desktop Installer
         description: 仅支持 main、main 历史中的完整 SHA 或 v* 版本 tag；运行分支必须为 main。
         required: false
         type: string
+      source_run_id:
+        description: 恢复发布时填原 tag 构建的 run ID，配合 source_artifact_id 复用原安装包。
+        required: false
+        type: string
+      source_artifact_id:
+        description: 原 FlowCube-Desktop-Setup 的精确 artifact ID。恢复时须同时填写 release_tag、checkout_ref 并勾选附件发布。
+        required: false
+        type: string
   push:
     branches:
       - main
@@ -37,9 +45,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: read
     outputs:
       sha: ${{ steps.target.outputs.sha }}
       main_sha: ${{ steps.target.outputs.main_sha }}
+      recovery_run: ${{ steps.recovery.outputs.run }}
+      recovery_artifact: ${{ steps.recovery.outputs.artifact }}
+      recovery_tag: ${{ steps.recovery.outputs.tag }}
     steps:
       - name: Checkout trusted target resolver
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
@@ -52,7 +64,50 @@ jobs:
         env:
           RELEASE_CHECKOUT_REF: ${{ github.event.inputs.checkout_ref }}
         run: node scripts/resolve-release-target.cjs
+      - name: Verify original Windows artifact for recovery
+        id: recovery
+        shell: bash
+        env:
+          SOURCE_RUN: ${{ inputs.source_run_id }}
+          SOURCE_ARTIFACT: ${{ inputs.source_artifact_id }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          CHECKOUT_REF: ${{ inputs.checkout_ref }}
+          ATTACH: ${{ inputs.attach_to_github_release }}
+          RELEASE_SHA: ${{ steps.target.outputs.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SOURCE_RUN" && -z "$SOURCE_ARTIFACT" ]]; then exit 0; fi
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ && "$SOURCE_ARTIFACT" =~ ^[0-9]+$ ]]
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ && "$CHECKOUT_REF" = "$RELEASE_TAG" && "$ATTACH" = true ]]
+          [[ "$(git rev-parse "${RELEASE_TAG}^{commit}")" = "$RELEASE_SHA" ]]
+          node <<'JS'
+          const { validateRecoveryRun } = require('./scripts/publish-release-asset.cjs')
+          const { GITHUB_REPOSITORY, GITHUB_TOKEN, RELEASE_TAG, RELEASE_SHA, SOURCE_RUN, SOURCE_ARTIFACT } = process.env
+          async function read(api) {
+            const response = await fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/${api}`, {
+              headers: { Authorization: `Bearer ${GITHUB_TOKEN}`, Accept: 'application/vnd.github+json' },
+              signal: AbortSignal.timeout(20000),
+            })
+            if (!response.ok) throw Error(`无法核对恢复来源 HTTP ${response.status}`)
+            return response.json()
+          }
+          ;(async () => {
+            validateRecoveryRun(await read(`runs/${SOURCE_RUN}`), { sha: RELEASE_SHA, tag: RELEASE_TAG })
+            const artifact = await read(`artifacts/${SOURCE_ARTIFACT}`)
+            if (artifact.expired || artifact.name !== 'FlowCube-Desktop-Setup' ||
+                String(artifact.workflow_run?.id) !== SOURCE_RUN || artifact.workflow_run?.head_sha !== RELEASE_SHA) {
+              throw Error('原桌面产物不属于所选 tag 构建，或已经过期')
+            }
+          })().catch(error => { console.error(error.message); process.exitCode = 1 })
+          JS
+          {
+            echo "run=$SOURCE_RUN"
+            echo "artifact=$SOURCE_ARTIFACT"
+            echo "tag=$RELEASE_TAG"
+          } >> "$GITHUB_OUTPUT"
   build:
+    if: needs.resolve-release-target.outputs.recovery_run == ''
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -509,7 +564,7 @@ jobs:
     needs:
       - resolve-release-target
       - build
-    if: github.ref_type == 'tag' || github.event_name == 'workflow_dispatch'
+    if: ${{ !cancelled() && needs.resolve-release-target.result == 'success' && (needs.build.result == 'success' || needs.resolve-release-target.outputs.recovery_run != '') && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -521,22 +576,44 @@ jobs:
           ref: ${{ needs.resolve-release-target.outputs.main_sha }}
           persist-credentials: false
       - name: Download exact installer artifact
+        if: needs.resolve-release-target.outputs.recovery_run == ''
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           artifact-ids: ${{ needs.build.outputs.artifact_id }}
           path: desktop/release
           merge-multiple: true
+      - name: Download exact original installer for recovery
+        if: needs.resolve-release-target.outputs.recovery_run != ''
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          artifact-ids: ${{ needs.resolve-release-target.outputs.recovery_artifact }}
+          run-id: ${{ needs.resolve-release-target.outputs.recovery_run }}
+          github-token: ${{ github.token }}
+          path: desktop/release
+          merge-multiple: true
       - name: Verify installer SHA, run and bytes
+        id: artifact
+        shell: bash
         env:
           TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
-        run: node scripts/release-artifact-manifest.cjs verify desktop/release .exe
+          ORIGINAL_RUN_ID: ${{ needs.resolve-release-target.outputs.recovery_run || github.run_id }}
+        run: |-
+          set -euo pipefail
+          node <<'JS'
+          const fs = require('node:fs')
+          const { verifyArtifact } = require('./scripts/release-artifact-manifest.cjs')
+          const artifact = verifyArtifact('desktop/release', '.exe', process.env.TARGET_SHA, process.env.ORIGINAL_RUN_ID)
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `file=desktop/release/${artifact.file}\nsha256=${artifact.sha256}\n`)
+          JS
       - name: Resolve verified release version
         id: version
         env:
           VERSION: ${{ needs.build.outputs.version }}
           TAG: ${{ needs.build.outputs.tag }}
+          RECOVERY_TAG: ${{ needs.resolve-release-target.outputs.recovery_tag }}
         run: |-
           set -euo pipefail
+          if [ -n "$RECOVERY_TAG" ]; then VERSION="${RECOVERY_TAG#v}"; TAG="$RECOVERY_TAG"; fi
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "$TAG" = "v$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
@@ -582,15 +659,13 @@ jobs:
           echo "server_ssh_port=$SERVER_SSH_PORT" >> "$GITHUB_OUTPUT"
           echo "server_app_path=$SERVER_APP_PATH" >> "$GITHUB_OUTPUT"
           echo "server_downloads_path=$SERVER_DOWNLOADS_PATH" >> "$GITHUB_OUTPUT"
-      - name: Detect SSH deploy (SSH_PRIVATE_KEY set)
-        id: ssh_deploy
+      - name: Require SSH deploy
         shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
-          if [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          [ -n "$SSH_PRIVATE_KEY" ] || { echo '::error::桌面发布需要服务器 SSH 配置'; exit 1; }
       - name: Wait for checks before publishing installer
         if: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
         timeout-minutes: 30
@@ -600,7 +675,6 @@ jobs:
           TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
         run: GITHUB_SHA="$TARGET_SHA" node scripts/wait-release-checks.js
       - name: Setup SSH agent
-        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -617,7 +691,6 @@ jobs:
           ssh-add "$KEY_FILE"
       - name: Add SSH known_hosts
         id: ssh_trust
-        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
         env:
           FLOWCUBE_SSH_HOST: ${{ steps.deploy_config.outputs.server_host }}
@@ -625,110 +698,29 @@ jobs:
           FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
         run: bash scripts/setup-ci-ssh-trust.sh
       - name: Publish EXE to canonical download directory
-        if: ${{ (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && steps.ssh_deploy.outputs.enabled == 'true' && steps.deploy_config.outputs.server_deploy_configured == 'true' }}
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-          DEPLOY_ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+          DEPLOY_ARTIFACT_ID: ${{ needs.resolve-release-target.outputs.recovery_artifact || needs.build.outputs.artifact_id }}
+          TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          DESKTOP_ARTIFACT: ${{ steps.artifact.outputs.file }}
+          DESKTOP_ARTIFACT_SHA: ${{ steps.artifact.outputs.sha256 }}
+          ATTACH_DESKTOP_RELEASE: ${{ github.ref_type == 'tag' || inputs.attach_to_github_release }}
+          ERP_ORIGIN: ${{ steps.deploy_config.outputs.erp_origin }}
+          SERVER_HOST: ${{ steps.deploy_config.outputs.server_host }}
+          SERVER_USER: ${{ steps.deploy_config.outputs.server_user }}
+          SERVER_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
+          SERVER_DOWNLOADS_PATH: ${{ steps.deploy_config.outputs.server_downloads_path }}
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          files=(desktop/release/*.exe)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "ERROR: desktop/release 下未找到 .exe"
-            exit 1
-          fi
-          if [ "${#files[@]}" -ne 1 ]; then
-            echo "ERROR: desktop/release 下发现多个 .exe，拒绝自动选择。"
-            printf ' - %s\n' "${files[@]}"
-            exit 1
-          fi
-
-          version="${{ steps.version.outputs.version }}"
-          tag="${{ steps.version.outputs.tag }}"
           notes_file="desktop/release/releaseNotes.md"
           if [ -f "$notes_file" ]; then
-            notes_b64="$(node -e "process.stdout.write(Buffer.from(require('fs').readFileSync(process.argv[1], 'utf8')).toString('base64'))" "$notes_file")"
+            RELEASE_NOTES_B64="$(node -e "process.stdout.write(Buffer.from(require('fs').readFileSync(process.argv[1], 'utf8')).toString('base64'))" "$notes_file")"
           else
-            notes_b64="$(node -e "process.stdout.write(Buffer.from(process.argv[1]).toString('base64'))" "极序 Flow v${version} 已发布，包含本次 main 分支更新。")"
+            RELEASE_NOTES_B64="$(node -e "process.stdout.write(Buffer.from(process.argv[1]).toString('base64'))" "极序 Flow v${RELEASE_VERSION} 已发布，包含本次 main 分支更新。")"
           fi
-          app_path="${{ steps.deploy_config.outputs.server_app_path }}"
-          downloads_path="${{ steps.deploy_config.outputs.server_downloads_path }}"
-          remote_tmp="/tmp/flowcube-desktop-release/${tag}"
-          remote_artifact="${remote_tmp}/$(basename "${files[0]}")"
-          ssh_target="${{ steps.deploy_config.outputs.server_user }}@${{ steps.deploy_config.outputs.server_host }}"
-          ssh_port="${{ steps.deploy_config.outputs.server_ssh_port }}"
-
-          # 远端中转目录只服务本次上传（release-desktop.js 以只读方式挂载它），因此在**任何退出路径**上
-          # 都必须删掉——包括 scp 或发布中途失败。2026-09-19 实测：此前从不清理，v0.9.13–v0.9.25 在
-          # 服务器 /tmp 累积到 1.3G，而 /tmp 与 /opt/flowcube 同处根分区，把上传前的 6144MB 余量门禁
-          # 一步步吃到只剩 24MB，连续 4 轮部署在上传任何字节之前被拒绝。清理失败只告警，不能反过来把
-          # 已经完成的权威发布判成失败。
-          cleanup_remote_tmp() {
-            ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" \
-              "rm -rf '$remote_tmp'" >/dev/null 2>&1 \
-              || echo "::warning::远端中转目录清理失败，请手工检查 $remote_tmp"
-          }
-          trap cleanup_remote_tmp EXIT
-
-          echo "=== 创建远端临时目录: ${remote_tmp} ==="
-          ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" "mkdir -p '$remote_tmp'"
-
-          echo "=== 上传构建产物到远端临时目录 ==="
-          bash scripts/transfer-release-asset.sh "${files[0]}" "$ssh_target" "$ssh_port" "$remote_artifact"
-
-          echo "=== 通过 scripts/release-desktop.js 发布到 ${downloads_path} ==="
-          ssh -p "$ssh_port" -o StrictHostKeyChecking=yes -o BatchMode=yes "$ssh_target" \
-            "cd '$app_path' && docker run --rm --user 0:0 \
-              -v '$app_path/scripts:/release-scripts:ro' \
-              -v '$downloads_path:$downloads_path' \
-              -v '$remote_tmp:$remote_tmp:ro' \
-              -e FLOWCUBE_DOWNLOADS_ROOT='$downloads_path' \
-              -e FLOWCUBE_RELEASE_NOTES_B64='$notes_b64' \
-              flowcube-backend node /release-scripts/release-desktop.js '$version' --overwrite --artifact='$remote_artifact'"
-
-          echo "=== 发布完成；权威入口: /latest.json，安装包路径: /versions/${tag}/FlowCube-Setup-${version}.exe ==="
-      - name: Upload EXE to Release
-        if: ${{ github.ref_type == 'tag' }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          tag="${{ steps.version.outputs.tag }}"
-          version="${{ steps.version.outputs.version }}"
-          shopt -s nullglob
-          files=(desktop/release/*.exe)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "ERROR: desktop/release 下未找到 .exe"
-            exit 1
-          fi
-          if [ "${#files[@]}" -ne 1 ]; then
-            echo "ERROR: desktop/release 下发现多个 .exe，拒绝自动选择。"
-            printf ' - %s\n' "${files[@]}"
-            exit 1
-          fi
-          node scripts/publish-release-asset.cjs --tag "$tag" --version "$version" --file "${files[0]}"
-      - name: Upload EXE to existing Release (workflow_dispatch)
-        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.attach_to_github_release == 'true' && github.event.inputs.release_tag != '' }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          release_tag="${{ steps.version.outputs.tag }}"
-          version="${{ steps.version.outputs.version }}"
-          shopt -s nullglob
-          files=(desktop/release/*.exe)
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "ERROR: desktop/release 下未找到 .exe"
-            exit 1
-          fi
-          if [ "${#files[@]}" -ne 1 ]; then
-            echo "ERROR: desktop/release 下发现多个 .exe，拒绝自动选择。"
-            printf ' - %s\n' "${files[@]}"
-            exit 1
-          fi
-          node scripts/publish-release-asset.cjs --tag "$release_tag" --version "$version" --file "${files[0]}"
+          export RELEASE_NOTES_B64
+          bash scripts/publish-desktop-workflow.sh

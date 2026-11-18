@@ -13,7 +13,7 @@
 
 - 触发：`push` 到 `v*` **tag**（推荐发版路径）、或 `push` 到 `main`（验证构建）、或 Actions 里手动运行。手动发布必须使用工作流的发布参数，输入版本匹配实际检出 package；关联 tag 时还须核对其 SHA。
 - Runner：`windows-latest`。
-- 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ 固定下载 **NSIS 3.0.4.1** → `dist:win`（electron-builder NSIS）→ 校验产物内部为 **`Nullsoft Install System v3.04`** → 将 `desktop/release/*.exe` 上传 **GitHub Release**（**仅 tag 推送**）→ 通过服务器 `scripts/release-desktop.js` 发布到 canonical 下载目录。
+- 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ 固定下载 **NSIS 3.0.4.1** → `dist:win`（electron-builder NSIS）→ 校验产物内部为 **`Nullsoft Install System v3.04`** → 核对两处已有发布身份 → 上传到 GitHub Release 草稿 → 更新服务器规范下载目录 → 从公开地址回读同一 EXE 后转正草稿。
 - Release 附件上传走 `scripts/publish-release-asset.cjs`（不再用 `gh release upload`）：GitHub 附件存储会间歇性返回 `HTTP 500 Error saving asset`（2026-09-18 v0.9.20 上传多次挂起 15 分钟以上即此原因，gh CLI 不超时、不重试、不校验，中断还会留下没有附件的**草稿** Release）。脚本流程是「确保 Release 存在（缺则建草稿）→ 删同名附件 → 默认 5 次尝试、每次 10 分钟超时、失败 10 秒后重试 → 校验远端附件大小 → 才 `draft=false` + latest」，任何一步失败都以非零退出并打印 `::error::`。补传用同一脚本并传入 `--tag/--version/--file`，文件必须取自服务器 `/versions/v<版本>/` 的 CI 构建包（先复算 sha256 与 `latest.json` 一致）；回归见 `npm run test:release-tooling`。
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）、`actions: read`（读取待发布实际 SHA 的 Tests 与 Security Scan 结果）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
@@ -50,7 +50,9 @@
 发布命令：
 
 ```bash
-node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.exe
+node scripts/release-desktop.js x.x.x \
+  --artifact=/path/to/FlowCube-Setup-x.x.x.exe \
+  --source-sha=<原构建完整提交> --sha256=<原构建安装包摘要>
 ```
 
 规则：
@@ -60,6 +62,12 @@ node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.e
 - 当前安装包统一通过 `/current/FlowCube-Setup.exe` 暴露。
 - 不允许手工复制安装包到发布目录；必须使用 `scripts/release-desktop.js`，由脚本生成 `metadata.json`、`latest.json` 和 `current/version.txt`。
 - `backend/downloads` 已废弃，不再参与构建、部署或更新链。
+
+同一版本以原构建提交和 Windows EXE 的 SHA256 绑定。工作流先只读核对 GitHub tag、同版草稿/附件以及服务器的同版元数据和实际文件。两处均通过才准备草稿附件，再发布服务器文件与 `latest.json`。随后通过可信 HTTPS 实际下载规范路径的 EXE，校验文件与 GitHub 已上传附件的摘要，再转正 Release。已发布同摘要附件重用；同版本异摘要或异提交在公开文件更改前报错。既有旧版本元数据缺提交时，服务器在已核原字节及来源后补录；磁盘保留期只回收已绑定的旧安装包字节，元数据留作身份核对。
+
+发生中断时保留原 run、artifact ID、tag、完整提交和摘要。后端部署完成且同 SHA 检查通过后，在 **Build Desktop Installer** 手动入口填写原 `source_run_id` 和原 `source_artifact_id`，`release_tag` 和 `checkout_ref` 都填同一个原始 tag，并选择发布 GitHub 附件。恢复 job 直接下载原 artifact、校验来源与摘要，复用同一发布步骤。官网已可下载原包且草稿附件齐全时，可用 **Recover Release Asset** 只核线上与转正。原包不可获取时保留现场并停止同版发布。
+
+正式构建、独立 SSH 传输及真实 Windows 安装和更新各自留证。服务器中转须用已验主机键，下载目录里的可公开 EXE 应由运行用户可读。离线合成测试覆盖两处摘要冲突、草稿及服务器中断、响应丢失和字节校验。
 
 ### `/downloads` 兼容别名退场计划
 

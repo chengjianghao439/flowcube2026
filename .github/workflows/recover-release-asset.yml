@@ -17,6 +17,10 @@ on:
         default: 'https://jixuflow.com'
         type: string
 
+concurrency:
+  group: flowcube-server-deploy
+  cancel-in-progress: false
+
 permissions:
   contents: write
   actions: read
@@ -72,11 +76,15 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
           GH_TOKEN: ${{ github.token }}
           ERP_ORIGIN: ${{ inputs.erp_origin }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
         run: |
           set -euo pipefail
           shopt -s nullglob
           files=(recovered-release/*.exe)
           [ "${#files[@]}" -eq 1 ]
+          RELEASE_SHA="$(git rev-parse --verify "${RELEASE_TAG}^{commit}")"
+          TARGET_SHA="$RELEASE_SHA" GITHUB_RUN_ID="$SOURCE_RUN_ID" node scripts/release-artifact-manifest.cjs verify recovered-release .exe
+          DIGEST="$(node -p "require('./recovered-release/release-provenance.json').sha256")"
           node scripts/publish-release-asset.cjs --tag "$RELEASE_TAG" --version "${RELEASE_TAG#v}" \
-            --file "${files[0]}" --complete-existing 1 --origin "$ERP_ORIGIN"
+            --source-sha "$RELEASE_SHA" --sha256 "$DIGEST" --file "${files[0]}" --complete-existing 1 --origin "$ERP_ORIGIN"
           node scripts/verify-live-release.cjs --origin "$ERP_ORIGIN"

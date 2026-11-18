@@ -67,23 +67,75 @@ for (const scenario of ['changed-head', 'changed-version', 'same']) {
   })
 }
 
-test('桌面 Release 附件失败不能被 continue-on-error 伪装为完整发版成功', () => {
+test('桌面发布不可绕过门禁，恢复从指定原运行取得实际产物', () => {
   const fs = require('node:fs'), path = require('node:path')
   const root = path.resolve(__dirname, '..')
   const yaml = require(path.join(root, 'frontend/node_modules/js-yaml'))
   const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-desktop.yml'), 'utf8'))
   const verify = workflow => {
-    const publishSteps = workflow.jobs.publish.steps.filter(s => /publish-release-asset\.cjs/.test(s.run || ''))
-    assert.equal(publishSteps.length, 2, 'tag and manual publishing must retain the same fail-closed asset uploader')
+    const steps = workflow.jobs.publish.steps
+    const gate = steps.findIndex(step => step.name === 'Wait for checks before publishing installer')
+    const publish = steps.findIndex(step => /bash scripts\/publish-desktop-workflow\.sh/.test(step.run || ''))
+    assert.ok(gate >= 0 && gate < publish)
     assert.notEqual(workflow.jobs.publish['continue-on-error'], true)
-    for (const step of publishSteps) assert.notEqual(step['continue-on-error'], true)
+    assert.equal(steps[publish].if, undefined)
+    for (const i of [gate, publish]) assert.notEqual(steps[i]['continue-on-error'], true)
+    const recover = steps.find(step => step.name === 'Download exact original installer for recovery')
+    assert.match(recover.with['artifact-ids'], /outputs\.recovery_artifact/)
+    assert.match(recover.with['run-id'], /outputs\.recovery_run/)
+    assert.match(workflow.jobs.build.if, /recovery_run == ''/)
     assert.ok(workflow.jobs.publish.needs.includes('build'))
     assert.equal(workflow.jobs.build.permissions.contents, 'read')
   }
   verify(wf)
   const broken = structuredClone(wf)
-  broken.jobs.publish.steps.find(s => /publish-release-asset\.cjs/.test(s.run || ''))['continue-on-error'] = true
+  broken.jobs.publish.steps.find(step => /bash scripts\/publish-desktop-workflow\.sh/.test(step.run || ''))['continue-on-error'] = true
   assert.throws(() => verify(broken))
+})
+
+test('桌面发布两侧均预检，阶段失败只保留原包并收尾本次中转', t => {
+  const fs = require('node:fs'), path = require('node:path'), os = require('node:os')
+  const { spawnSync } = require('node:child_process')
+  const root = path.resolve(__dirname, '..')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-desktop-order-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  fs.mkdirSync(path.join(dir, 'scripts'))
+  const log = path.join(dir, 'stages')
+  const stub = (name, body) => fs.writeFileSync(path.join(dir, name), '#!/bin/bash\n' + body, { mode: 0o755 })
+  const event = 'printf "%s\\n" "$stage" >> "$EVENT_LOG"\n[ "$stage" != "$FAIL_AT" ]\n'
+  stub('timeout', 'shift 3\nexec "$@"\n')
+  stub('node', 'case "$*" in *--check-only*) stage=github-check;; *--prepare-only*) stage=draft;; *) stage=public-github;; esac\n' + event)
+  stub('scp', 'stage=scp\n' + event)
+  stub('scripts/transfer-release-asset.sh', 'stage=transfer\n' + event)
+  stub('ssh', [
+    'case "$*" in',
+    '  *"rm -rf"*) stage=cleanup;;',
+    '  *"-O exit"*) exit 0;;',
+    '  *"--dry-run"*) stage=server-check;;',
+    '  *"docker run"*) stage=public-server;;',
+    '  *"mkdir -p"*) stage=mkdir;;',
+    '  *) exit 33;;',
+    'esac',
+    event,
+  ].join('\n'))
+  const order = ['github-check', 'mkdir', 'scp', 'transfer', 'server-check', 'draft', 'public-server', 'public-github']
+  for (const failAt of ['', 'github-check', 'server-check', 'draft', 'public-server', 'public-github']) {
+    fs.writeFileSync(log, '')
+    const result = spawnSync('bash', [path.join(root, 'scripts/publish-desktop-workflow.sh')], {
+      cwd: dir, encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, PATH: dir + ':' + process.env.PATH, EVENT_LOG: log, FAIL_AT: failAt,
+        RELEASE_VERSION: '1.2.3', RELEASE_TAG: 'v1.2.3', TARGET_SHA: 'a'.repeat(40),
+        DESKTOP_ARTIFACT: 'fixture.exe', DESKTOP_ARTIFACT_SHA: 'b'.repeat(64),
+        SERVER_HOST: 'fixture.invalid', SERVER_USER: 'fixture', SERVER_SSH_PORT: '22',
+        SERVER_DOWNLOADS_PATH: '/isolated/downloads', RUNNER_TEMP: dir,
+        ATTACH_DESKTOP_RELEASE: 'true', ERP_ORIGIN: 'https://fixture.invalid',
+      },
+    })
+    assert.equal(result.status, failAt ? 1 : 0, result.stderr)
+    const expected = failAt ? order.slice(0, order.indexOf(failAt) + 1) : order
+    assert.deepEqual(fs.readFileSync(log, 'utf8').trim().split('\n'),
+      [...expected, ...(failAt === 'github-check' ? [] : ['cleanup'])])
+  }
 })
 
 test('PDA 发布检查覆盖每次 main 推送，不能被源码路径过滤漏掉', () => {
