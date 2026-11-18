@@ -17,7 +17,7 @@ const dir = path.resolve(__dirname, '../backend/src/database')
 const sql = fs.readFileSync(path.join(dir, filename), 'utf8')
 function runner(cfg, createConnection) {
   const file = path.join(dir, 'migrate.js'), m = { exports: {} }
-  const deps = { fs: { ...fs, readdirSync: () => [filename] }, path,
+  const deps = { 'node:crypto': require('node:crypto'), fs: { ...fs, readdirSync: () => [filename] }, path,
     'mysql2/promise': { createConnection }, '../config/env': { env: { DB_HOST: cfg.host, DB_PORT: cfg.port, DB_USER: cfg.user, DB_PASSWORD: cfg.password, DB_NAME: cfg.database } }, './sqlStatements': { splitSqlStatements } }
   vm.runInNewContext(fs.readFileSync(file, 'utf8'), { module: m, __dirname: dir, console: { log() {}, warn() {}, error() {} }, require(n) { assert.ok(Object.hasOwn(deps, n), n); return deps[n] } }, { filename: file })
   return m.exports

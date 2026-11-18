@@ -149,7 +149,7 @@ async function runMigrations({ checkGapsOnly = false, through, connection, migra
   const conn = connection || await createMigrationConnection()
   const execute = async () => {
     try {
-      return await migrateDatabase(conn, files, through)
+      return await migrateDatabase(conn, files, through, !connection)
     } catch (error) {
       if (!connection) {
         try { await conn.rollback() } catch (rollbackError) { error.rollbackError = rollbackError }
@@ -180,7 +180,7 @@ function createMigrationConnection() {
   })
 }
 
-async function migrateDatabase(conn, files, through) {
+async function migrateDatabase(conn, files, through, ownsConnection) {
   // 先确保迁移记录表存在
   await conn.query(`
     CREATE TABLE IF NOT EXISTS db_migrations (
@@ -237,7 +237,23 @@ async function migrateDatabase(conn, files, through) {
     // 结尾分号一起写进 ACTION_STATEMENT，导出成无法导入的 `... ); */;;`（见
     // sqlStatements.js 说明与 2026-09-14 备份恢复演练事故）。
     await conn.query('INSERT INTO db_migration_attempts (id, filename) VALUES (1, ?)', [file])
-    await executeMigrationStatements(conn, sql, file, { recordMigration: true })
+    try {
+      await executeMigrationStatements(conn, sql, file, { recordMigration: true })
+    } catch (error) {
+      // The immutable 296 diagnostics both precede COMMIT; all preceding
+      // durable writes are in its one InnoDB transaction. Only our own
+      // connection can prove rollback before clearing the attempt.
+      if (ownsConnection && error.code === 'MIGRATION_PREFLIGHT_FAILED' && file === '296_qa_role_permissions.sql'
+        && require('node:crypto').createHash('sha256').update(sql).digest('hex') === '26a65f8a0e29a56223d7808d9535666349231f8df66096ec7f434bec2221a3a7') {
+        try {
+          await conn.rollback()
+          await conn.query('DELETE FROM db_migration_attempts WHERE id = 1 AND filename = ?', [file])
+        } catch (reconcileError) {
+          error.migrationReconcileError = reconcileError
+        }
+      }
+      throw error
+    }
     await conn.query('DELETE FROM db_migration_attempts WHERE id = 1')
     console.log(`[Migrate] ✓ ${file}`)
     ran++

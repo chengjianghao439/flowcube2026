@@ -16,6 +16,7 @@ const migrationLockResult = sql => {
 function runner(conn, sql, files = [filename]) {
   const file = path.join(root, 'backend/src/database/migrate.js'), module_ = { exports: {} }
   const deps = {
+    'node:crypto': require('node:crypto'),
     fs: { readdirSync: () => files, readFileSync: () => sql }, path,
     'mysql2/promise': { createConnection: async () => conn },
     '../config/env': { env: {} }, './sqlStatements': { splitSqlStatements },
