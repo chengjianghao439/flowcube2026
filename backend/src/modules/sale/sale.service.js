@@ -508,90 +508,63 @@ function mapTimeline(rows, order) {
 
 async function findAll({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, startDate=null, endDate=null, remark=null, operatorId=null, scopeWarehouseIds=null, focus=null }) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
-  const params=[]
-  const countParams=[]
-  let cond=''
-  let countCond=''
+  const params = []
+  let where = 'so.deleted_at IS NULL'
   if (keyword) {
     const like = `%${keyword}%`
-    cond += ' AND (so.order_no LIKE ? OR so.customer_name LIKE ?)'
-    countCond += ' AND (order_no LIKE ? OR customer_name LIKE ?)'
+    where += ' AND (so.order_no LIKE ? OR so.customer_name LIKE ?)'
     params.push(like, like)
-    countParams.push(like, like)
   }
   if (productId) {
-    cond += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = so.id AND soi.product_id = ?)'
-    countCond += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = sale_orders.id AND soi.product_id = ?)'
+    where += ' AND EXISTS (SELECT 1 FROM sale_order_items soi WHERE soi.order_id = so.id AND soi.product_id = ?)'
     params.push(productId)
-    countParams.push(productId)
   }
   if (customerId) {
-    cond += ' AND so.customer_id=?'
-    countCond += ' AND customer_id=?'
+    where += ' AND so.customer_id=?'
     params.push(customerId)
-    countParams.push(customerId)
   }
   if (warehouseId) {
-    cond += ' AND so.warehouse_id=?'
-    countCond += ' AND warehouse_id=?'
+    where += ' AND so.warehouse_id=?'
     params.push(warehouseId)
-    countParams.push(warehouseId)
   }
   if (startDate) {
-    // 半开区间写法（DATE(col)>=? 会废掉 (status,created_at) 索引）：start 从当天 00:00 起
-    cond += ' AND so.created_at >= ?'
-    countCond += ' AND created_at >= ?'
+    // 用半开区间保留 created_at 的索引范围查询。
+    where += ' AND so.created_at >= ?'
     params.push(`${startDate} 00:00:00`)
-    countParams.push(`${startDate} 00:00:00`)
   }
   if (endDate) {
-    cond += ' AND so.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
-    countCond += ' AND created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+    where += ' AND so.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
     params.push(endDate)
-    countParams.push(endDate)
   }
   if (remark) {
-    cond += ' AND so.remark LIKE ?'
-    countCond += ' AND remark LIKE ?'
+    where += ' AND so.remark LIKE ?'
     params.push(`%${remark}%`)
-    countParams.push(`%${remark}%`)
   }
   if (operatorId) {
-    cond += ' AND so.operator_id=?'
-    countCond += ' AND operator_id=?'
+    where += ' AND so.operator_id=?'
     params.push(operatorId)
-    countParams.push(operatorId)
   }
   const scope = scopeFilter(scopeWarehouseIds, 'so.warehouse_id')
-  if (scope.sql) {
-    cond += scope.sql
-    countCond += scopeFilter(scopeWarehouseIds, 'warehouse_id').sql
-    params.push(...scope.params)
-    countParams.push(...scope.params)
-  }
+  where += scope.sql
+  params.push(...scope.params)
   if (Array.isArray(scopeWarehouseIds) && scopeWarehouseIds.length) {
-    cond += ' AND NOT EXISTS (SELECT 1 FROM sale_order_items soi_scope WHERE soi_scope.order_id=so.id AND soi_scope.warehouse_id NOT IN (?))'
-    countCond += ' AND NOT EXISTS (SELECT 1 FROM sale_order_items soi_scope WHERE soi_scope.order_id=sale_orders.id AND soi_scope.warehouse_id NOT IN (?))'
+    where += ' AND NOT EXISTS (SELECT 1 FROM sale_order_items soi_scope WHERE soi_scope.order_id=so.id AND soi_scope.warehouse_id NOT IN (?))'
     params.push(scopeWarehouseIds)
-    countParams.push(scopeWarehouseIds)
   }
-  const pendingTask = alias => `EXISTS (SELECT 1 FROM warehouse_tasks focus_task WHERE focus_task.sale_order_id=${alias}.id AND focus_task.deleted_at IS NULL AND (focus_task.cancel_requested_at IS NOT NULL OR focus_task.adjustment_requested_at IS NOT NULL))`
-  const pendingCredit = alias => `EXISTS (SELECT 1 FROM sale_credit_overrides focus_credit WHERE focus_credit.sale_order_id=${alias}.id AND focus_credit.deleted_at IS NULL AND focus_credit.status=2)`
-  if (focus === 'pending') {
-    cond += ` AND (so.status IN (1,2,3,6) OR ${pendingTask('so')})`
-    countCond += ` AND (status IN (1,2,3,6) OR ${pendingTask('sale_orders')})`
-  }
-  const orderSql = focus === 'pending' ? `CASE WHEN ${pendingTask('so')} THEN 0 WHEN ${pendingCredit('so')} THEN 1 ELSE 2 END, so.created_at ASC,so.id ASC` : 'so.created_at DESC,so.id DESC'
+  const pendingTask = 'EXISTS (SELECT 1 FROM warehouse_tasks focus_task WHERE focus_task.sale_order_id=so.id AND focus_task.deleted_at IS NULL AND (focus_task.cancel_requested_at IS NOT NULL OR focus_task.adjustment_requested_at IS NOT NULL))'
+  const pendingCredit = 'EXISTS (SELECT 1 FROM sale_credit_overrides focus_credit WHERE focus_credit.sale_order_id=so.id AND focus_credit.deleted_at IS NULL AND focus_credit.status=2)'
+  if (focus === 'pending') where += ` AND (so.status IN (1,2,3,6) OR ${pendingTask})`
+  const orderSql = focus === 'pending'
+    ? `CASE WHEN ${pendingTask} THEN 0 WHEN ${pendingCredit} THEN 1 ELSE 2 END, so.created_at ASC,so.id ASC`
+    : 'so.created_at DESC,so.id DESC'
+
+  // 状态分布用于状态栏，按基础条件统计；当前选定状态只用于列表和分页总数。
   const [statusRows] = await pool.query(
-    `SELECT so.status, COUNT(*) AS count FROM sale_orders so WHERE so.deleted_at IS NULL ${cond} GROUP BY so.status`, params,
+    `SELECT so.status, COUNT(*) AS count FROM sale_orders so WHERE ${where} GROUP BY so.status`, params,
   )
   const statusCounts = Object.fromEntries(statusRows.map(r => [String(r.status), Number(r.count)]))
-  if (status) {
-    cond += ' AND so.status=?'
-    countCond += ' AND status=?'
-    params.push(status)
-    countParams.push(status)
-  }
+  const filteredWhere = status ? `${where} AND so.status=?` : where
+  const filteredParams = status ? [...params, status] : params
   // 两段式列表查询（性能）：itemAggJoin 是对整张 sale_order_items 的全量 GROUP BY 派生表，
   // 直接 LEFT JOIN 时每翻一页都全表重建一次。改为先分页取本页订单 id，再对
   // 本页 id 做 IN 聚合，明细表走 idx_order_id，翻页成本与数据总量解耦。
@@ -600,9 +573,9 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
      FROM sale_orders so
      ${latestWarehouseTaskJoin}
      ${paymentJoin}
-     WHERE so.deleted_at IS NULL ${cond}
+     WHERE ${filteredWhere}
      ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
-    [...params, ps, offset],
+    [...filteredParams, ps, offset],
   )
   const pageIds = pageRows.map(r => r.id)
   const aggMap = new Map()
@@ -620,7 +593,7 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
     for (const a of aggRows) aggMap.set(Number(a.order_id), a)
   }
   const rows = pageRows.map(r => ({ ...r, ...(aggMap.get(r.id) || {}) }))
-  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders WHERE deleted_at IS NULL ${countCond}`,countParams)
+  const [[{total}]] = await pool.query(`SELECT COUNT(*) AS total FROM sale_orders so WHERE ${filteredWhere}`, filteredParams)
   const presentation = await loadSalePresentation(pool, pageIds)
   return { list:rows.map(r => ({ ...fmt(r), ...presentation.get(Number(r.id)) })), statusCounts, pagination:{page, pageSize: ps, total} }
 }

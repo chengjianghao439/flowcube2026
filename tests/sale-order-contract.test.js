@@ -172,3 +172,83 @@ test('按数量发货只派发请求量并拒绝超过已占未发量', () => {
   assert.throws(() => selectDispatchRows(rows, { items: [{ id: 3, qty: 1 }, { id: 3, qty: 1 }] }), /重复/)
   assert.throws(() => selectDispatchRows(rows, { items: [{ id: 3, qty: 1 }, { id: 99, qty: 1 }] }), /不存在或不可发货/)
 })
+
+function saleListFixture({ pageRows = [], statusRows = [], total = 0 } = {}) {
+  const { readFileSync } = require('node:fs')
+  const { resolve } = require('node:path')
+  const { runInNewContext } = require('node:vm')
+  const base = resolve(__dirname, '../backend/src')
+  function load(file, modules) {
+    const filename = resolve(base, file), module = { exports: {} }
+    runInNewContext(readFileSync(filename, 'utf8'), { module, require: id => modules[id] || {} }, { filename })
+    return module.exports
+  }
+  const calls = []
+  const pool = { async query(rawSql, params) {
+    const sql = rawSql.replace(/\s+/g, ' ').trim()
+    calls.push({ sql, params: structuredClone(params) })
+    if (sql.startsWith('SELECT so.status, COUNT(*)')) return [statusRows]
+    if (sql.startsWith('SELECT so.*,')) return [pageRows]
+    if (sql.startsWith('SELECT order_id, SUM(quantity)')) return [[]]
+    if (sql.startsWith('SELECT COUNT(*) AS total')) return [[{ total }]]
+    throw new Error('意外的销售查询 ' + sql)
+  } }
+  const svc = load('modules/sale/sale.service.js', {
+    '../../config/db': { pool },
+    '../../utils/warehouseScope': load('utils/warehouseScope.js', {}),
+    '../../utils/pagination': require('../backend/src/utils/pagination'),
+    '../../constants/saleOrderStatus': require('../backend/src/constants/saleOrderStatus'),
+    '../../constants/settlementType': require('../backend/src/constants/settlementType'),
+    './sale.presentation': { loadSalePresentation: async () => new Map() },
+  })
+  return { calls, svc }
+}
+
+test('销售列表、分页总数共用精确筛选，状态分布应用同一基础筛选但排除当前状态', async () => {
+  const { calls, svc } = saleListFixture({
+    pageRows: [{ id: 19, status: 1, total_amount: 20 }],
+    statusRows: [{ status: 1, count: '2' }, { status: 6, count: '3' }],
+    total: 2,
+  })
+  const data = await svc.findAll({
+    page: 2, pageSize: 1, keyword: '合成', productId: 12, customerId: 13, warehouseId: 3,
+    startDate: '2026-01-01', endDate: '2026-01-17', remark: '测试', operatorId: 7,
+    scopeWarehouseIds: [3, 4], focus: 'pending', status: 1,
+  })
+  const [stats, page, aggregation, count] = calls
+  const getWhere = sql => sql.match(/ WHERE (so\.deleted_at IS NULL .+?)(?: GROUP BY so\.status| ORDER BY CASE|$)/)?.[1]
+  assert.equal(getWhere(page.sql), getWhere(count.sql), '列表和总数必须复用相同谓词和订单别名')
+  const base = getWhere(stats.sql)
+  assert.equal(getWhere(page.sql), base + ' AND so.status=?')
+  assert.match(base, /so\.order_no LIKE \? OR so\.customer_name LIKE \?/)
+  assert.match(base, /soi\.order_id = so\.id AND soi\.product_id = \?/)
+  assert.match(base, /so\.customer_id=\? AND so\.warehouse_id=\?/)
+  assert.match(base, /so\.created_at >= \? AND so\.created_at < DATE_ADD\(\?, INTERVAL 1 DAY\)/)
+  assert.match(base, /so\.remark LIKE \? AND so\.operator_id=\?/)
+  assert.match(base, /so\.warehouse_id IN \(\?\).*soi_scope\.warehouse_id NOT IN \(\?\)/)
+  assert.match(base, /so\.status IN \(1,2,3,6\).*focus_task\.cancel_requested_at IS NOT NULL OR focus_task\.adjustment_requested_at IS NOT NULL/)
+  assert.match(page.sql, /ORDER BY CASE WHEN EXISTS .*focus_task.*THEN 0 WHEN EXISTS .*focus_credit.*THEN 1 ELSE 2 END, so\.created_at ASC,so\.id ASC LIMIT \? OFFSET \?/)
+  assert.doesNotMatch(count.sql, /LEFT JOIN|LIMIT/)
+  assert.deepEqual(stats.params, ['%合成%', '%合成%', 12, 13, 3, '2026-01-01 00:00:00', '2026-01-17', '%测试%', 7, [3, 4], [3, 4]])
+  assert.deepEqual(count.params, [...stats.params, 1])
+  assert.deepEqual(page.params, [...count.params, 1, 1])
+  assert.deepEqual(aggregation.params, [[19]])
+  assert.deepEqual(structuredClone(data.statusCounts), { 1: 2, 6: 3 })
+  assert.deepEqual(structuredClone(data.pagination), { page: 2, pageSize: 1, total: 2 })
+})
+
+test('销售空仓范围覆盖列表、总数和状态，未限仓只按原条件查询', async () => {
+  for (const scopeWarehouseIds of [[], null]) {
+    const { calls, svc } = saleListFixture()
+    const data = await svc.findAll({ scopeWarehouseIds })
+    assert.equal(calls.length, 3, '空页不触发明细聚合')
+    for (const { sql } of calls) {
+      assert.equal(sql.includes('AND 1=0'), Array.isArray(scopeWarehouseIds))
+      assert.doesNotMatch(sql, /IN \(\?\)|focus_task/)
+    }
+    assert.match(calls[1].sql, /ORDER BY so\.created_at DESC,so\.id DESC LIMIT \? OFFSET \?/)
+    assert.equal(data.list.length, 0)
+    assert.equal(data.pagination.total, 0)
+    assert.deepEqual(structuredClone(data.statusCounts), {})
+  }
+})
