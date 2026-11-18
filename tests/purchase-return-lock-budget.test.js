@@ -98,13 +98,24 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
   const locksPath = 'modules/returns/returns.purchase-lock.js'
   const locks = fs.existsSync(path.join(base, locksPath)) ? load(locksPath, { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, '../../utils/statusTransition': transition }) : {}
   const taskSvc = { createForPurchaseReturn: async data => { assert.equal(data.conn, conn); events.push('createWT'); return { taskId: 31, taskNo: 'WT31' } }, cancel: async (id, opts) => { cancelOptions.push(opts); assert.equal(opts.conn, conn); const task = wt.find(t => t.id === id); if (pendingCancel) task.cancel_requested_at = 'pending'; else task.status = 8 } }
+  const returnEvents = { RETURN_EVENT: {}, record: async actual => assert.equal(actual, conn) }
+  const returnHelpers = {
+    genNo: async () => 'PR11',
+    assertReturnPaymentHeadroom: async (actual, data) => { assert.equal(actual, conn); headroomInputs.push(data) },
+    adjustPaymentRecordForReturn: async () => events.push('AP'),
+  }
+  const shipment = load('modules/returns/returns.shipment-command.js', {
+    '../../utils/AppError': AppError, '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status,
+    '../../constants/returnTaskStatus': require('../backend/src/constants/returnTaskStatus'), '../../engine/containerEngine': {},
+    '../../utils/requestContext': { getRequestId: () => null }, './return-events.service': returnEvents, './returns.helpers': returnHelpers,
+  })
   const returns = load('modules/returns/returns-purchase.service.js', {
     '../refunds/supplier-refunds.pr-gate': { assertNoPendingRefund: async () => ({ received: false }) },
     '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../utils/statusTransition': transition, '../../constants/documentStatusRules': status,
-    './return-events.service': { RETURN_EVENT: {}, record: async actual => assert.equal(actual, conn) },
+    './return-events.service': returnEvents, './returns.shipment-command': shipment,
     '../../constants/warehouseTaskStatus': warehouseStatus, '../../utils/requestContext': { getRequestId: () => null }, '../../utils/operationRequest': request,
-    './returns.helpers': { genNo: async () => 'PR11', assertReturnPaymentHeadroom: async (actual, data) => { assert.equal(actual, conn); headroomInputs.push(data) }, adjustPaymentRecordForReturn: async () => events.push('AP') },
+    './returns.helpers': returnHelpers,
     '../../utils/warehouseScope': scope, '../../utils/unitConversion': { foldEntryItems: async (_conn, items) => items.map(i => ({ ...i, entryQty: i.quantity, conversionRate: 1 })) }, '../../utils/pagination': {},
     './returns.purchase-lock': locks, '../warehouse-tasks/warehouse-tasks.service': taskSvc,
   })
@@ -117,7 +128,7 @@ function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR =
     '../../engine/containerEngine': { unlockContainersByTask: async () => {} }, '../../utils/statusTransition': transition, '../../utils/creditExposure': {}, '../credit-overrides/credit-overrides.service': { hasApprovedOverride: async () => { throw Error('purchase return must not request sale credit approval') } }, '../../constants/warehouseTaskStatus': warehouseStatus,
     './warehouse-task-events.service': { WT_EVENT: {}, record: async () => {} }, '../../utils/operationRequest': request, '../sale/sale.contracts': {},
     './warehouse-tasks.helpers': { assertTaskScope: row => scope.assertInScope([8], row.warehouse_id), assertTaskPickScanClosure: async () => {}, logSideEffectFailure: () => {} }, './warehouse-tasks.query': {},
-    '../returns/returns.purchase-lock': locks, '../returns/returns-purchase.service': returns,
+    '../returns/returns.purchase-lock': locks, '../returns/returns.shipment-command': shipment,
   })
   const sources = load('modules/inbound-tasks/inbound-purchase-source.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope })
   // These source additions are explicit boundaries; unknown imports/SQL still fail closed.

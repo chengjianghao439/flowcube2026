@@ -12,7 +12,7 @@ const { queueReturnLabels } = require('./return-tasks.labels')
 const PENDING_QA = 5
 const REJECTED = CONTAINER_STATUS.REJECTED
 
-const RT_STATUS = { PENDING_RECEIVE: 1, RECEIVING: 2, PENDING_CHECK: 3, PENDING_PUTAWAY: 4, COMPLETED: 5, CANCELLED: 6, REVERSING: 7 }
+const { RT_STATUS } = require('../../constants/returnTaskStatus')
 const RT_STATUS_NAME = { 1: '待收货', 2: '收货中', 3: '待质检', 4: '待上架', 5: '已完成', 6: '已取消', 7: '反向处理中' }
 
 /**

@@ -57,3 +57,37 @@ test('迁移只改变新商品默认及增加空快照，不批量重写存量�
   assert.doesNotMatch(sql, /\bUPDATE\s+(?:product_items|sale_order_items|warehouse_task_items)\b/i)
   assert.match(sql, /information_schema\.COLUMNS/)
 })
+
+test('销售派发及出库回写只调用同连接的领域命令', () => {
+  const modules = path.join(__dirname, '../backend/src/modules')
+  const read = relative => fs.readFileSync(path.join(modules, relative), 'utf8')
+  const sale = read('sale/sale.service.js').split('async function ship(')[1].split('async function releaseStock(')[0]
+  const warehouse = read('warehouse-tasks/warehouse-tasks.ship.js')
+  assert.match(sale, /warehouse-tasks\.sale-dispatch-command/)
+  assert.doesNotMatch(sale, /warehouse-tasks\.service/)
+  assert.doesNotMatch(warehouse, /\.\.\/(?:sale\/sale|returns\/returns-(?:sale|purchase))\.service/)
+  assert.doesNotMatch(warehouse, /UPDATE sale_order_items/)
+  const sources = path.dirname(modules)
+  const facadeNames = new Set([
+    'sale.service.js', 'returns-sale.service.js', 'returns-purchase.service.js', 'return-tasks.service.js',
+    'warehouse-tasks.service.js', 'warehouse-tasks.command.js', 'warehouse-tasks.ship.js',
+  ])
+  for (const file of ['warehouse-tasks/warehouse-tasks.sale-dispatch-command.js', 'sale/sale.shipment-command.js', 'returns/returns.shipment-command.js']) {
+    const command = read(file)
+    assert.doesNotMatch(command, /(?:config\/db|getConnection|beginTransaction|\.(?:commit|rollback|release)\()/)
+    const pending = [path.join(modules, file)], inspected = new Set()
+    while (pending.length) {
+      const current = pending.pop()
+      if (inspected.has(current)) continue
+      inspected.add(current)
+      assert.ok(!facadeNames.has(path.basename(current)), `${file} must not reach ${path.relative(sources, current)}`)
+      const code = fs.readFileSync(current, 'utf8').split('\n').filter(line => !line.trimStart().startsWith('//')).join('\n')
+      for (const [, imported] of code.matchAll(/\brequire\(['"](\.[^'"]+)['"]\)/g)) {
+        const location = path.resolve(path.dirname(current), imported)
+        const resolved = [location, location + '.js', path.join(location, 'index.js')]
+          .find(candidate => candidate.endsWith('.js') && fs.existsSync(candidate))
+        if (resolved?.startsWith(sources + path.sep)) pending.push(resolved)
+      }
+    }
+  }
+})

@@ -29,6 +29,7 @@
  *   node tests/sale-return-cancel-guard.smoke.test.js
  */
 
+const assert = require('node:assert/strict')
 const {
   createLogger, prepareSmokeContext, dbQuery, login, randomRef,
 } = require('./helpers/smokeTestKit')
@@ -40,6 +41,79 @@ const { RT_STATUS } = require('../backend/src/modules/return-tasks/return-tasks.
 const SEED_QTY = 100
 const SALE_QTY = 10
 const UNIT_PRICE = 15
+
+async function shipAndProveReceiptAtomicity(ctx, { taskId, saleId, returnId, returnTaskId, productId, warehouseId, token, headers }) {
+  const appPool = require('../backend/src/config/db').pool
+  const originalGet = appPool.getConnection
+  const key = randomRef('SHIP-ROLLBACK')
+  const path = `/api/warehouse-tasks/${taskId}/ship`
+  const request = () => ctx.http.put(path, { token, headers: { ...headers, 'X-Request-Key': key } })
+
+  async function capture(reader) {
+    const [[task]] = await reader.query('SELECT status,shipped_at FROM warehouse_tasks WHERE id=?', [taskId])
+    const [[sale]] = await reader.query('SELECT status FROM sale_orders WHERE id=?', [saleId])
+    const [items] = await reader.query('SELECT shipped_qty,cost_snapshot FROM sale_order_items WHERE order_id=? ORDER BY id', [saleId])
+    const [receivable] = await reader.query('SELECT total_amount,paid_amount,balance FROM payment_records WHERE type=2 AND order_id=?', [saleId])
+    const [[stock]] = await reader.query('SELECT quantity,reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=?', [productId,warehouseId])
+    const [containers] = await reader.query('SELECT id,remaining_qty,status,locked_by_task_id FROM inventory_containers WHERE product_id=? AND warehouse_id=? ORDER BY id', [productId,warehouseId])
+    const [[{ movements }]] = await reader.query("SELECT COUNT(*) AS movements FROM inventory_logs WHERE ref_type='warehouse_task' AND ref_id=?", [taskId])
+    const [receipt] = await reader.query('SELECT status,response_json FROM operation_requests WHERE request_key=? AND action=?',
+      [key, `warehouse.ship.${taskId}`])
+    const [[returnOrder]] = returnId ? await reader.query('SELECT status FROM sale_returns WHERE id=?', [returnId]) : [[]]
+    const [[returnTask]] = returnTaskId ? await reader.query('SELECT status FROM return_tasks WHERE id=?', [returnTaskId]) : [[]]
+    return { task, sale, items, receivable, stock, containers, movements, receipt, returnOrder, returnTask }
+  }
+
+  const before = await capture(ctx.pool)
+  let beforeFailedReceipt
+  appPool.getConnection = async (...args) => {
+    const conn = await originalGet.apply(appPool, args)
+    const originalQuery = conn.query
+    const originalRelease = conn.release
+    conn.query = async (sql, params) => {
+      if (typeof sql === 'string' && /UPDATE operation_requests/.test(sql)
+        && params?.[3] === 'warehouse_task' && params[4] === Number(taskId)) {
+        beforeFailedReceipt = await capture(conn)
+        throw new Error('合成出库回执写入失败')
+      }
+      return originalQuery.call(conn, sql, params)
+    }
+    conn.release = () => {
+      conn.query = originalQuery
+      conn.release = originalRelease
+      return originalRelease.call(conn)
+    }
+    return conn
+  }
+  let failed
+  try { failed = await request() } finally { appPool.getConnection = originalGet }
+
+  assert.equal(failed.status, 500)
+  assert.equal(beforeFailedReceipt?.task.status, 7, '故障发生在库存和任务状态已经写入后')
+  assert.ok(Number(beforeFailedReceipt.movements) > Number(before.movements))
+  assert.notDeepEqual(beforeFailedReceipt.containers, before.containers)
+  assert.notDeepEqual(beforeFailedReceipt.stock, before.stock)
+  if (returnId) {
+    assert.equal(beforeFailedReceipt.returnOrder.status, 4)
+    assert.equal(beforeFailedReceipt.returnTask.status, RT_STATUS.CANCELLED)
+    assert.deepEqual(beforeFailedReceipt.receivable, before.receivable)
+  } else {
+    assert.equal(beforeFailedReceipt.sale.status, 4)
+    assert.notDeepEqual(beforeFailedReceipt.items, before.items)
+    assert.notDeepEqual(beforeFailedReceipt.receivable, before.receivable)
+  }
+  assert.deepEqual(await capture(ctx.pool), before, '回执失败必须回滚库存、出库单、单据和账款')
+
+  const success = await request()
+  assert.equal(success.status, 200, JSON.stringify(success.data))
+  const committed = await capture(ctx.pool)
+  assert.equal(committed.receipt.length, 1)
+  const replay = await request()
+  assert.equal(replay.status, 200, JSON.stringify(replay.data))
+  assert.deepEqual(replay.data.data, success.data.data, '同键重放返回原始出库回执')
+  assert.deepEqual(await capture(ctx.pool), committed, '重放不得重复扣库存或改变业务事实')
+  return success
+}
 
 const money = v => `¥${Number(v ?? 0).toFixed(2)}`
 
@@ -235,7 +309,9 @@ async function shipSale(ctx, token, { product, seed, qty }) {
   const packDone = await http.put(`/api/warehouse-tasks/${taskId}/pack-done`, { token, headers: H })
   if (!packDone.ok) throw new Error(`pack-done 失败: ${JSON.stringify(packDone.data)}`)
 
-  const shipDone = await http.put(`/api/warehouse-tasks/${taskId}/ship`, { token, headers: H })
+  const shipDone = await shipAndProveReceiptAtomicity(ctx, {
+    taskId, saleId, productId: product.id, warehouseId: warehouse.id, token, headers: H,
+  })
   if (!shipDone.ok) throw new Error(`出库失败: ${JSON.stringify(shipDone.data)}`)
 
   const [taskAfter] = await dbQuery(pool, 'SELECT status FROM warehouse_tasks WHERE id=?', [taskId])
@@ -499,8 +575,9 @@ async function main() {
     const foreignBeforeShip = await containerOf(pool, foreign.containerId)
 
     step = 'B:ship'
-    const shipRev = await http.put(`/api/warehouse-tasks/${revTask.id}/ship`, {
-      token, headers: ctx.pdaHeaders(),
+    const shipRev = await shipAndProveReceiptAtomicity(ctx, {
+      taskId: revTask.id, saleId: saleA.saleId, returnId: retA.srId, returnTaskId: retA.srTaskId,
+      productId: product.id, warehouseId: warehouse.id, token, headers: ctx.pdaHeaders(),
     })
     log.assert('★ 返货出库成功', shipRev.ok,
       `HTTP ${shipRev.status} ${JSON.stringify(shipRev.data).slice(0, 200)}`)

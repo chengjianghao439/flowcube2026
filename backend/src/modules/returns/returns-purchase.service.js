@@ -1,12 +1,12 @@
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
-const { lockStatusRow, compareAndSetStatus } = require('../../utils/statusTransition')
+const { compareAndSetStatus } = require('../../utils/statusTransition')
 const { assertStatusAction } = require('../../constants/documentStatusRules')
 const { RETURN_EVENT, record: recordReturnEvent } = require('./return-events.service')
 const { WT_STATUS_NAME, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskStatus')
 const { getRequestId } = require('../../utils/requestContext')
 const { beginCreationOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
-const { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom } = require('./returns.helpers')
+const { genNo, assertReturnPaymentHeadroom } = require('./returns.helpers')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { foldEntryItems } = require('../../utils/unitConversion')  // 多单位折算（文档03 Phase4a，退货按箱）
 const { normalizePagination } = require('../../utils/pagination')
@@ -436,72 +436,8 @@ async function cancelPR(id, operator = null, scopeWarehouseIds = null) {
   }
 }
 
-/**
- * 采购退货出库完成回调（由 WT ship 事务内调用）
- * 容器扣减已在 moveStock 中完成，此处仅做退货单状态同步和账款冲减
- */
-async function syncPurchaseReturnShipped(conn, returnId, { taskId, taskNo, operator, lockedPurchaseReturn }) {
-  const retRow = lockedPurchaseReturn?.row || await lockStatusRow(conn, {
-    table: 'purchase_returns',
-    id: returnId,
-    columns: 'id, return_no, purchase_order_id, purchase_order_no, supplier_id, warehouse_id, status',
-    entityName: '采购退货单',
-  })
-  if (Number(retRow.status) !== 2) {
-    throw new AppError(`采购退货单状态异常（当前非已确认），无法完成出库`, 409)
-  }
-  const rule = assertStatusAction('purchaseReturn', 'execute', retRow.status)
-
-  // 账款冲减：从应付账款中减去退货金额
-  let fact = null
-  let totalAmount
-  if (retRow.purchase_order_id) {
-    if (!lockedPurchaseReturn?.cashFact || !lockedPurchaseReturn?.po) purchaseCash.review('采购退货执行缺少库存前锁定来源证明')
-    fact = lockedPurchaseReturn.cashFact
-    totalAmount = cash.cashNumber(cash.storedCashCents(fact.credit))
-  } else {
-    const [items] = await conn.query('SELECT quantity, unit_price, amount FROM purchase_return_items WHERE return_id=? ORDER BY id', [returnId])
-    totalAmount = cash.cashNumber(cash.sumCashCents(items.map(i => cash.cashNumber(cash.storedCashCents(i.amount,'原非来源退货行额')))))
-    if (items.some(i => cash.storedCashCents(i.amount) !== cash.productCents(i.quantity,i.unit_price))) purchaseCash.review('非来源退货金额与原量价不一致')
-  }
-  if (retRow.purchase_order_id && totalAmount > 0) {
-    await adjustPaymentRecordForReturn(conn, {
-      recordType: 1,
-      orderId: Number(retRow.purchase_order_id),
-      orderNo: retRow.purchase_order_no,
-      returnNo: retRow.return_no,
-      returnType: 'purchase',
-      amount: Number(totalAmount),
-      operator: operator || {},
-      ...(fact && lockedPurchaseReturn.po.cash_basis ? { purchaseCashProjection: { snapshot: lockedPurchaseReturn.po.cash_basis, fact } } : {}),
-    })
-  }
-
-  await compareAndSetStatus(conn, {
-    table: 'purchase_returns',
-    id: returnId,
-    fromStatus: rule.from,
-    toStatus: rule.to,
-    entityName: '采购退货单',
-  })
-
-  await recordReturnEvent(conn, {
-    returnType: 'purchase',
-    returnId: Number(retRow.id),
-    returnNo: retRow.return_no,
-    eventType: RETURN_EVENT.EXECUTED,
-    title: '采购退货出库完成',
-    description: `仓库任务 ${taskNo} 已出库，退货单自动完成`,
-    operatorId: operator?.userId ?? null,
-    operatorName: operator?.realName ?? null,
-    requestId: getRequestId(),
-    payload: {
-      taskId,
-      taskNo,
-      totalAmount: Number(totalAmount),
-      inventoryDirection: 'out',
-    },
-  })
+async function syncPurchaseReturnShipped(conn, returnId, options) {
+  return require('./returns.shipment-command').syncPurchaseReturnShipped(conn, returnId, options)
 }
 
 module.exports = {

@@ -29,6 +29,7 @@ function creation({ late = false, replay = false, rollbackFails = false, pending
     },
   }
   const svc = load('modules/sale/sale.service.js', {
+    './sale.events': require('../backend/src/modules/sale/sale.events'),
     '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../utils/warehouseScope': storedReplay ? realScope : { assertInScope: () => {} }, '../../constants/settlementType': { SETTLEMENT_TYPE: { CASH: 1 } },
     './sale.commercial-store': { assertRequestKey: () => {} }, './sale.items': { insertSaleItems: async () => {} },

@@ -62,7 +62,8 @@ async function assertCreditWithinLimit(conn, customerId, thisOrderAmount, operat
 }
 
 /**
- * 执行出库（6→7）：扣减库存 + 更新销售单状态 + 生成应收账款
+ * 调用方持有事务。仓库扣库存和更新任务，销售与退货命令回写各自单据。
+ * 仓库出库回执最后写入，仍由公开 ship 入口提交。
  */
 async function shipWithinTransaction(conn, id, operator, saleData, { requestKey, scopeWarehouseIds = null, pdaWarehouseId = null, taskIdentity, purchaseReturnIdentity } = {}) {
   const saleOrderId = saleData?.saleOrderId ?? null
@@ -247,8 +248,8 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   }
 
   if (!isReturnOut && saleOrderId && !commercialShipment) {
-    const saleSvc = require('../sale/sale.service')
-    await saleSvc.syncShippedByWarehouseTaskWithinTransaction(conn, saleOrderId, {
+    const { recordShippedWarehouseTask } = require('../sale/sale.shipment-command')
+    await recordShippedWarehouseTask(conn, saleOrderId, {
       taskId: Number(id),
       taskNo: taskRow.task_no,
       ordinaryReturnContext,
@@ -257,8 +258,8 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
 
   // 采购退货出库完成：同步退货单状态 + 冲减应付账款
   if (isPurchaseReturn && taskRow.return_id) {
-    const returnSvc = require('../returns/returns-purchase.service')
-    await returnSvc.syncPurchaseReturnShipped(conn, Number(taskRow.return_id), {
+    const { syncPurchaseReturnShipped } = require('../returns/returns.shipment-command')
+    await syncPurchaseReturnShipped(conn, Number(taskRow.return_id), {
       taskId: Number(id),
       taskNo: taskRow.task_no,
       operator,
@@ -269,8 +270,8 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   // 销售退货返货出库完成：把退货任务收口、必要时把退货单转为已取消。
   // 注意这里**不动任何账款**——见函数头注释与设计文档 §一。
   if (isSaleReturnReverse && taskRow.return_id) {
-    const saleReturnSvc = require('../returns/returns-sale.service')
-    await saleReturnSvc.syncSaleReturnReversedWithinTransaction(conn, Number(taskRow.return_id), {
+    const { syncSaleReturnReversedWithinTransaction } = require('../returns/returns.shipment-command')
+    await syncSaleReturnReversedWithinTransaction(conn, Number(taskRow.return_id), {
       taskId: Number(id),
       taskNo: taskRow.task_no,
     })
@@ -291,24 +292,12 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   await unlockContainersByTask(conn, id)
 
   if (!isReturnOut) {
-    // COGS 成本快照：本任务所发物料行仅在首次 cost_snapshot 为空时固化；
-    // 已有快照保持。利润分析用原销售行快照口径，避免改进价导致历史毛利漂移。
-    for (const item of items) {
-      await conn.query(
-        `UPDATE sale_order_items soi
-         JOIN product_items p ON p.id = soi.product_id
-         SET soi.cost_snapshot = COALESCE(p.avg_cost, NULLIF(p.cost_price, 0))
-         WHERE soi.order_id = ? AND soi.product_id = ? AND soi.warehouse_id = ? AND soi.cost_snapshot IS NULL`,
-        [saleOrderId, item.productId, warehouseId],
-      )
-    }
-    // 应收由 syncShippedByWarehouseTaskWithinTransaction 全量重算（按 shipped_qty 汇总，
-    // 分批增量幂等，见 sale.service.recomputeSaleReceivable），此处不再单独生成。
+    await require('../sale/sale.shipment-command').snapshotShippedCosts(conn, saleOrderId, warehouseId, items)
   }
 
   if (commercialShipment) {
     await require('../sale/sale.commercial-money').confirmShipment(conn,commercialShipment)
-    await require('../sale/sale.service').syncShippedByWarehouseTaskWithinTransaction(conn,saleOrderId,{taskId:Number(id),taskNo:taskRow.task_no})
+    await require('../sale/sale.shipment-command').recordShippedWarehouseTask(conn,saleOrderId,{taskId:Number(id),taskNo:taskRow.task_no})
   }
 
   try {

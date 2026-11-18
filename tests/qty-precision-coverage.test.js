@@ -57,6 +57,7 @@ const DIRECT = [
   'backend/src/modules/packages/packages.service.js',
   'backend/src/modules/warehouse-tasks/warehouse-tasks.ship.js',
   'backend/src/modules/warehouse-tasks/warehouse-tasks.command.js',
+  'backend/src/modules/warehouse-tasks/warehouse-tasks.sale-dispatch-command.js',
   'backend/src/modules/return-tasks/return-tasks.service.js',
   'backend/src/modules/scan-logs/scan-logs.service.js',
 ]
@@ -96,7 +97,8 @@ const DIRECT_ENTRY_POINTS = new Map([
   ['backend/src/modules/disposal/disposal.service.js', ['create', 'update']],
   ['backend/src/modules/inbound-tasks/inbound-tasks.command.js', ['receive', 'createManualTask']],
   ['backend/src/modules/packages/packages.service.js', ['addItem', 'removeItem'].map(name => ({ name, guard: 'assertTaskShipmentQuantity' }))],
-  ['backend/src/modules/warehouse-tasks/warehouse-tasks.command.js', ['createForSaleOrder','createForPurchaseReturn','createForSaleReturnReverse']],
+  ['backend/src/modules/warehouse-tasks/warehouse-tasks.command.js', ['createForPurchaseReturn','createForSaleReturnReverse']],
+  ['backend/src/modules/warehouse-tasks/warehouse-tasks.sale-dispatch-command.js', ['createForSaleOrder']],
   ['backend/src/modules/warehouse-tasks/warehouse-tasks.ship.js', [{ name: 'shipWithinTransaction', guard: 'assertQtyPrecision' }]],
   ['backend/src/modules/return-tasks/return-tasks.service.js', ['create','receive', 'check']],
   ['backend/src/modules/scan-logs/scan-logs.service.js', ['createScanLog']],
