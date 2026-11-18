@@ -89,22 +89,22 @@ export const getPdaAnomalyApi = (params: { startDate?: string; endDate?: string 
 
 // ── 仓库运营看板 ──────────────────────────────────────────────────────────────
 export interface WarehouseOpsSummary {
-  shippedToday: number
-  pickingNow:   number
-  inboundToday: number
-  scanCount:    number
-  pickQty:      number
-  errorCount:   number
-  undoCount:    number
-  errorRate:    string
+  shippedToday: number | null
+  pickingNow:   number | null
+  inboundToday: number | null
+  scanCount:    number | null
+  pickQty:      number | null
+  errorCount:   number | null
+  undoCount:    number | null
+  errorRate:    string | null
 }
 export interface OpsOperator {
   operatorId:   number
   operatorName: string
   scanCount:    number
   pickQty:      number
-  errorCount:   number
-  errorRate:    string
+  errorCount:   number | null
+  errorRate:    string | null
   durationMin:  number | null
   efficiency:   string | null
 }
@@ -113,12 +113,15 @@ export interface FlowBottleneck {
   label:  string
   count:  number
 }
+export type WarehouseOpsMetric = keyof WarehouseOpsSummary | 'operators' | 'operatorErrors' | 'flowBottleneck' | 'hourlyTrend' | 'recentErrors'
+
 export interface WarehouseOpsData {
+  unavailableMetrics: WarehouseOpsMetric[]
   summary:        WarehouseOpsSummary
-  operators:      OpsOperator[]
-  flowBottleneck: FlowBottleneck[]
-  hourlyTrend:    { hour: string; count: number }[]
-  recentErrors:   { id: number; taskId: number; barcode: string; reason: string; operatorName: string; createdAt: string }[]
+  operators:      OpsOperator[] | null
+  flowBottleneck: FlowBottleneck[] | null
+  hourlyTrend:    { hour: string; count: number }[] | null
+  recentErrors:   { id: number; taskId: number; barcode: string; reason: string; operatorName: string; createdAt: string }[] | null
 }
 
 export const getWarehouseOpsApi = () =>

@@ -100,62 +100,70 @@ async function warehouseOps(scopeWarehouseIds = null) {
     recentErrors,
   } = await fetchWarehouseOpsRows(scopeWarehouseIds)
 
-  const totalScans = Number(scanSummary.scan_count)
-  const totalErrors = Number(errSummary.error_count)
-  const errorRate = totalScans > 0 ? `${(totalErrors / totalScans * 100).toFixed(1)}%` : '0%'
+  const count = (row, key) => row === null ? null : Number(row[key] ?? 0)
+  const totalScans = count(scanSummary, 'scan_count')
+  const totalErrors = count(errSummary, 'error_count')
+  const rate = (scans, errors) => scans === null || errors === null ? null
+    : scans > 0 ? `${(errors / scans * 100).toFixed(1)}%` : '0%'
+  const errorRate = rate(totalScans, totalErrors)
 
-  const errOpMap = Object.fromEntries(errByOp.map(r => [r.operatorId, Number(r.errCount)]))
-  const operators = byOperator.map(r => {
+  const errOpMap = errByOp && Object.fromEntries(errByOp.map(r => [r.operatorId, Number(r.errCount)]))
+  const operators = byOperator?.map(r => {
     const first = r.firstScan ? new Date(r.firstScan) : null
     const last = r.lastScan ? new Date(r.lastScan) : null
     const durationMin = (first && last) ? Math.round((last - first) / 60000) : null
     const sc = Number(r.scanCount)
-    const ec = errOpMap[r.operatorId] ?? 0
+    const ec = errOpMap === null ? null : (errOpMap[r.operatorId] ?? 0)
     return {
       operatorId: r.operatorId,
       operatorName: r.operatorName || '未知',
       scanCount: sc,
       pickQty: Number(r.pickQty),
       errorCount: ec,
-      errorRate: sc > 0 ? `${(ec / sc * 100).toFixed(1)}%` : '0%',
+      errorRate: rate(sc, ec),
       durationMin,
       efficiency: (durationMin && durationMin > 0) ? (Number(r.pickQty) / durationMin).toFixed(1) : null,
     }
-  })
+  }) ?? null
 
-  const flowBottleneck = WT_STATUS_ACTIVE.map(s => ({
+  const flowBottleneck = flowRows && WT_STATUS_ACTIVE.map(s => ({
     status: s,
     label: WT_STATUS_NAME[s],
     count: Number(flowRows.find(r => r.status === s)?.cnt ?? 0),
   }))
 
-  const hourlyTrend = Array.from({ length: 24 }, (_, h) => ({
+  const hourlyTrend = hourlyRows && Array.from({ length: 24 }, (_, h) => ({
     hour: `${String(h).padStart(2, '0')}:00`,
     count: Number(hourlyRows.find(r => r.hr === h)?.cnt ?? 0),
   })).filter((_, h) => h >= 6 && h <= 22)
 
+  const summary = {
+    shippedToday: count(todayShipped, 'shipped_count'),
+    pickingNow: count(todayPicking, 'picking_count'),
+    inboundToday: count(todayInbound, 'inbound_count'),
+    scanCount: totalScans,
+    pickQty: count(scanSummary, 'pick_qty'),
+    errorCount: totalErrors,
+    undoCount: count(undoSummary, 'undo_count'),
+    errorRate,
+  }
+  const unavailableMetrics = Object.entries({
+    ...summary, operators, operatorErrors: errOpMap, flowBottleneck, hourlyTrend, recentErrors,
+  }).filter(([, value]) => value === null).map(([metric]) => metric)
   return {
-    summary: {
-      shippedToday: Number(todayShipped.shipped_count),
-      pickingNow: Number(todayPicking.picking_count),
-      inboundToday: Number(todayInbound.inbound_count),
-      scanCount: totalScans,
-      pickQty: Number(scanSummary.pick_qty),
-      errorCount: totalErrors,
-      undoCount: Number(undoSummary.undo_count),
-      errorRate,
-    },
+    summary,
+    unavailableMetrics,
     operators,
     flowBottleneck,
     hourlyTrend,
-    recentErrors: recentErrors.map(r => ({
+    recentErrors: recentErrors?.map(r => ({
       id: r.id,
       taskId: r.taskId,
       barcode: r.barcode,
       reason: r.reason,
       operatorName: r.operatorName,
       createdAt: r.createdAt,
-    })),
+    })) ?? null,
   }
 }
 

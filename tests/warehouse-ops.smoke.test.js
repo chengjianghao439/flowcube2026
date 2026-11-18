@@ -174,6 +174,27 @@ async function main() {
     log.assert('真实 HTTP 无报表权限返回 403', (await request(users[1])).status === 403)
     const allowed = await request(users[0])
     log.assert('真实 HTTP 从数据库用户范围传至报表四指标', allowed.status === 200 && allowed.body.data?.summary.errorCount === 12 && allowed.body.data?.summary.undoCount === 2 && allowed.body.data?.operators[0]?.errorCount === 12 && allowed.body.data?.recentErrors.every(r => r.taskId === a))
+    const originalQuery = pool.query
+    const singleFailureSql = /AS shipped_count/
+    const multipleFailureSql = /AS shipped_count|AS errCount|AS hr, COUNT/
+    async function responseWithFailedReads(pattern) {
+      pool.query = (sql, params) => typeof sql === 'string' && pattern.test(sql)
+        ? Promise.reject(new Error('合成报表取数失败'))
+        : originalQuery.call(pool, sql, params)
+      try { return await request(users[0]) } finally { pool.query = originalQuery }
+    }
+    const partial = await responseWithFailedReads(singleFailureSql)
+    log.assert('真实 HTTP 单项失败只标记今日出库，其他成功指标保留',
+      partial.status === 200 && partial.body.data.summary.shippedToday === null && partial.body.data.summary.scanCount === 2
+      && partial.body.data.unavailableMetrics?.join(',') === 'shippedToday')
+    const multi = await responseWithFailedReads(multipleFailureSql)
+    log.assert('真实 HTTP 多项失败区分人员错误、趋势和出库，仍保留成功取数',
+      multi.status === 200 && multi.body.data.hourlyTrend === null && multi.body.data.operators[0].errorCount === null
+      && multi.body.data.summary.errorCount === 12 && multi.body.data.unavailableMetrics?.join(',') === 'shippedToday,operatorErrors,hourlyTrend')
+    const recovered = await request(users[0])
+    log.assert('真实 HTTP 恢复后自动移除降级状态',
+      recovered.status === 200 && recovered.body.data.summary.shippedToday === 3 && recovered.body.data.unavailableMetrics?.length === 0)
+    log.assert('取数成功的真实零保持零', empty.summary.shippedToday === 0 && empty.unavailableMetrics?.length === 0)
     await pool.query('INSERT INTO sys_role_permissions (role_id,permission) VALUES (?,?)', [roles[0], PERMISSIONS.SCAN_LOG_VIEW])
     require('../backend/src/middleware/loadRolePermissions').clearRolePermissionsCache(roles[0])
     const scanUrl = endpoint.replace('/reports/warehouse-ops', '/scan-logs')

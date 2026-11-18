@@ -39,7 +39,7 @@ export function KpiShippedToday() {
 }
 export function KpiScanToday() {
   const { data, isLoading, error, refetch } = useWarehouseOps()
-  return <StatTile label="今日扫码量" value={data?.summary.scanCount ?? '—'} hint={data ? `拣货 ${data.summary.pickQty.toFixed(0)} 件` : '次扫描操作'} icon={ScanLine} tone="info" loading={isLoading} error={error} onRetry={() => void refetch()} />
+  return <StatTile label="今日扫码量" value={data?.summary.scanCount ?? '—'} hint={data?.summary.pickQty == null ? '次扫描操作' : `拣货 ${data.summary.pickQty.toFixed(0)} 件`} icon={ScanLine} tone="info" loading={isLoading} error={error} onRetry={() => void refetch()} />
 }
 
 // —— 账款 / 资金（payment.view / finance.account.view）——

@@ -21,21 +21,20 @@ async function fetchMany(sql, params = [], conn = pool) {
   return rows || []
 }
 
-async function fetchOptional(metricName, promise, fallback) {
+async function fetchOptional(metricName, promise) {
   try {
     return await promise
   } catch (e) {
     logger.warn(
-      '报表可选指标查询失败，已返回明确降级值',
+      '报表可选指标查询失败，已标记为不可用',
       {
         metricName,
         degradation: 'report_metric_fallback',
-        fallback,
         error: e?.message || String(e),
       },
       'Reports',
     )
-    return fallback
+    return null
   }
 }
 
@@ -368,37 +367,37 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
        AND COALESCE(wt.shipped_at, wt.updated_at) >= ?
        AND COALESCE(wt.shipped_at, wt.updated_at) < DATE_ADD(?, INTERVAL 1 DAY)${wtWh.sql}`,
     [WT_STATUS.SHIPPED, today, today, ...wtWh.params],
-  ), { shipped_count: 0 })
+  ))
   const todayPicking = await fetchOptional('warehouseOps.todayPicking', fetchOne(
     `SELECT COUNT(*) AS picking_count
      FROM warehouse_tasks wt WHERE wt.deleted_at IS NULL AND wt.status = ?${wtWh.sql}`,
     [WT_STATUS.PICKING, ...wtWh.params],
-  ), { picking_count: 0 })
+  ))
   const todayInbound = await fetchOptional('warehouseOps.todayInbound', fetchOne(
     `SELECT COUNT(*) AS inbound_count
      FROM inbound_tasks it
      WHERE it.deleted_at IS NULL AND it.status = ? AND it.updated_at >= ? AND it.updated_at < DATE_ADD(?, INTERVAL 1 DAY)${itWh.sql}`,
     [getStatusRule('inboundTask', 'finish').to, today, today, ...itWh.params],
-  ), { inbound_count: 0 })
+  ))
   const scanSummary = await fetchOptional('warehouseOps.scanSummary', fetchOne(
     `SELECT COUNT(*) AS scan_count, COALESCE(SUM(qty),0) AS pick_qty
      FROM scan_logs sl
      ${slJoin}
      WHERE sl.scanned_at >= ? AND sl.scanned_at < DATE_ADD(?, INTERVAL 1 DAY)`,
     [...slParams, today, today],
-  ), { scan_count: 0, pick_qty: 0 })
+  ))
   const errSummary = await fetchOptional('warehouseOps.errSummary', fetchOne(
     `SELECT COUNT(*) AS error_count
      FROM pda_error_logs el ${logJoin('el')}
      WHERE el.created_at >= ? AND el.created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
     [...slParams, today, today],
-  ), { error_count: 0 })
+  ))
   const undoSummary = await fetchOptional('warehouseOps.undoSummary', fetchOne(
     `SELECT COUNT(*) AS undo_count
      FROM pda_undo_logs ul ${logJoin('ul')}
      WHERE ul.created_at >= ? AND ul.created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
     [...slParams, today, today],
-  ), { undo_count: 0 })
+  ))
   const byOperator = await fetchOptional('warehouseOps.byOperator', fetchMany(
     `SELECT
        sl.operator_id AS operatorId,
@@ -413,21 +412,21 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
      GROUP BY sl.operator_id, sl.operator_name
      ORDER BY scanCount DESC LIMIT 20`,
     [...slParams, today, today],
-  ), [])
+  ))
   const errByOp = await fetchOptional('warehouseOps.errByOp', fetchMany(
     `SELECT el.operator_id AS operatorId, COUNT(*) AS errCount
      FROM pda_error_logs el ${logJoin('el')}
      WHERE el.created_at >= ? AND el.created_at < DATE_ADD(?, INTERVAL 1 DAY)
      GROUP BY el.operator_id`,
     [...slParams, today, today],
-  ), [])
+  ))
   const flowRows = await fetchOptional('warehouseOps.flowRows', fetchMany(
     `SELECT status, COUNT(*) AS cnt
      FROM warehouse_tasks wt
      WHERE wt.deleted_at IS NULL AND wt.status IN (?)${wtWh.sql}
      GROUP BY status`,
     [WT_STATUS_ACTIVE, ...wtWh.params],
-  ), [])
+  ))
   const hourlyRows = await fetchOptional('warehouseOps.hourlyRows', fetchMany(
     `SELECT HOUR(sl.scanned_at) AS hr, COUNT(*) AS cnt
      FROM scan_logs sl
@@ -435,14 +434,14 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
      WHERE sl.scanned_at >= ? AND sl.scanned_at < DATE_ADD(?, INTERVAL 1 DAY)
      GROUP BY HOUR(sl.scanned_at) ORDER BY hr ASC`,
     [...slParams, today, today],
-  ), [])
+  ))
   const recentErrors = await fetchOptional('warehouseOps.recentErrors', fetchMany(
     `SELECT el.id, el.task_id AS taskId, el.barcode, el.reason, el.operator_name AS operatorName, el.created_at AS createdAt
      FROM pda_error_logs el ${logJoin('el')}
      WHERE el.created_at >= ? AND el.created_at < DATE_ADD(?, INTERVAL 1 DAY)
      ORDER BY el.created_at DESC, el.id DESC LIMIT 10`,
     [...slParams, today, today],
-  ), [])
+  ))
   return {
     today,
     todayShipped,

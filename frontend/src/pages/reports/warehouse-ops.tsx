@@ -16,7 +16,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { WT_STATUS } from '@/generated/status'
-import type { OpsOperator, FlowBottleneck } from '@/api/reports'
+import type { OpsOperator, FlowBottleneck, WarehouseOpsMetric } from '@/api/reports'
 import { CompactColumnChart } from '@/components/shared/CompactColumnChart'
 import { ReportMeter } from '@/components/shared/ReportMeter'
 import { CHART_TONES } from '@/components/dashboard/chartTheme'
@@ -46,6 +46,26 @@ function FlowBar({ items }: { items: FlowBottleneck[] }) {
   )
 }
 
+const metricLabels: Record<WarehouseOpsMetric, string> = {
+  shippedToday: '今日出库',
+  pickingNow: '拣货中任务',
+  inboundToday: '今日入库',
+  scanCount: '今日扫码',
+  pickQty: '拣货数量',
+  errorCount: '扫码错误',
+  undoCount: '撤销次数',
+  errorRate: '扫码错误率',
+  operators: '人员效率',
+  operatorErrors: '人员扫码错误',
+  flowBottleneck: '流程瓶颈',
+  hourlyTrend: '作业趋势',
+  recentErrors: '最新异常',
+}
+
+function UnavailablePanel() {
+  return <p className="py-6 text-center text-sm text-muted-foreground">暂不可用</p>
+}
+
 // ── 主组件 ──────────────────────────────────────────────────────────────────
 export default function WarehouseOpsPage() {
   const navigate = useNavigate()
@@ -56,9 +76,12 @@ export default function WarehouseOpsPage() {
     intervalMs: 60_000,   // 每分钟自动刷新
   })
 
-  const { data, isLoading, isError, error, dataUpdatedAt, refetch } = warehouseOpsQ
+  const { data, isLoading, isError, isFetching, error, dataUpdatedAt, refetch } = warehouseOpsQ
 
-  const s  = data?.summary
+  const summary = data?.summary
+  const unavailable = (data?.unavailableMetrics ?? []).map(metric => metricLabels[metric]).join('、')
+  const errorCount = summary?.errorCount ?? 0
+  const undoCount = summary?.undoCount ?? 0
   const updatedTime = dataUpdatedAt
     ? formatDisplayDateTime(new Date(dataUpdatedAt))
     : '--'
@@ -83,8 +106,8 @@ export default function WarehouseOpsPage() {
             <Button size="sm" variant="outline" onClick={() => openPath('/reports/pda-anomaly', 'PDA 异常分析')}>
               查看异常分析
             </Button>
-            <Button size="sm" variant="outline" onClick={() => refetch()}>
-              立即刷新
+            <Button size="sm" variant="outline" disabled={isFetching} onClick={() => void refetch()}>
+              {isFetching ? '刷新中…' : '立即刷新'}
             </Button>
           </div>
         )}
@@ -102,16 +125,23 @@ export default function WarehouseOpsPage() {
 
       {isLoading && <div className="flex h-40 items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}
 
-      {!isLoading && data && !isError && (<>
+      {data && (
+        <div role="status" className={unavailable || isError ? 'text-sm text-muted-foreground' : 'sr-only'}>
+          {isError ? '刷新失败，显示上次取得的数据。' : null}
+          {unavailable ? `暂不可用：${unavailable}。页面会自动刷新。` : null}
+        </div>
+      )}
+
+      {!isLoading && data && (<>
 
         {/* 今日核心指标 */}
         <div className="fc-ops-metrics grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <StatTile icon={Truck} label="今日出库单数" value={s?.shippedToday ?? 0} hint="已完成出库" tone="success" />
-          <StatTile icon={Layers} label="拣货中任务" value={s?.pickingNow ?? 0} hint="进行中" />
-          <StatTile icon={PackageOpen} label="今日入库单数" value={s?.inboundToday ?? 0} hint="已全部上架完成" />
-          <StatTile icon={BarChart3} label="今日扫码" value={s?.scanCount ?? 0} hint={`拣货 ${s?.pickQty ?? 0} 件`} />
-          <StatTile icon={AlertTriangle} label="扫码错误" value={s?.errorCount ?? 0} hint={`错误率 ${s?.errorRate}`} tone={(s?.errorCount ?? 0) > 0 ? 'danger' : 'primary'} accent={(s?.errorCount ?? 0) > 0} />
-          <StatTile icon={Undo2} label="撤销次数" value={s?.undoCount ?? 0} hint="今日" tone={(s?.undoCount ?? 0) > 5 ? 'warning' : 'primary'} accent={(s?.undoCount ?? 0) > 5} />
+          <StatTile icon={Truck} label="今日出库单数" value={summary?.shippedToday ?? '暂不可用'} hint="已完成出库" tone="success" />
+          <StatTile icon={Layers} label="拣货中任务" value={summary?.pickingNow ?? '暂不可用'} hint="进行中" />
+          <StatTile icon={PackageOpen} label="今日入库单数" value={summary?.inboundToday ?? '暂不可用'} hint="已全部上架完成" />
+          <StatTile icon={BarChart3} label="今日扫码" value={summary?.scanCount ?? '暂不可用'} hint={summary?.pickQty == null ? undefined : `拣货 ${summary.pickQty} 件`} />
+          <StatTile icon={AlertTriangle} label="扫码错误" value={summary?.errorCount ?? '暂不可用'} hint={summary?.errorRate == null ? undefined : `错误率 ${summary.errorRate}`} tone={errorCount > 0 ? 'danger' : 'primary'} accent={errorCount > 0} />
+          <StatTile icon={Undo2} label="撤销次数" value={summary?.undoCount ?? '暂不可用'} hint="今日" tone={undoCount > 5 ? 'warning' : 'primary'} accent={undoCount > 5} />
         </div>
 
         <div className="grid grid-cols-1 items-start xl:grid-cols-[1.2fr_1fr] gap-4">
@@ -119,33 +149,35 @@ export default function WarehouseOpsPage() {
             title="流程瓶颈分析"
             description="各步骤任务堆积量"
             helper="查看待拣货、拣货、分拣、复核、打包和待出库任务的积压"
-            empty={data.flowBottleneck.length === 0}
+            empty={data.flowBottleneck?.length === 0}
             emptyTitle="暂无流程瓶颈数据"
             emptyDescription="暂无流程堆积"
           >
-            <FlowBar items={data.flowBottleneck} />
+            {data.flowBottleneck ? <FlowBar items={data.flowBottleneck} /> : <UnavailablePanel />}
           </ReportPanel>
 
           <ReportPanel
             title="今日作业趋势"
             description="每小时扫码量"
             helper="查看今日各时段繁忙程度"
-            empty={data.hourlyTrend.length === 0}
+            empty={data.hourlyTrend?.length === 0}
             emptyTitle="暂无作业趋势"
             emptyDescription="暂无扫码趋势"
           >
-            <CompactColumnChart rows={data.hourlyTrend.map(row => ({ label: row.hour, value: row.count }))} label="扫码次数" />
+            {data.hourlyTrend
+              ? <CompactColumnChart rows={data.hourlyTrend.map(row => ({ label: row.hour, value: row.count }))} label="扫码次数" />
+              : <UnavailablePanel />}
           </ReportPanel>
 
           <ReportPanel
             title="今日人员效率"
             description="按人员展示扫码、错误和效率"
             helper="查看每个操作员的拣货表现"
-            empty={data.operators.length === 0}
+            empty={data.operators?.length === 0}
             emptyTitle="暂无今日人员数据"
             emptyDescription="暂无人员效率数据"
           >
-            <div className="space-y-3">
+            {data.operators ? <div className="space-y-3">
               {data.operators.map((op: OpsOperator) => (
                 <div key={op.operatorId} className="flex items-center gap-3">
                   <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
@@ -158,7 +190,7 @@ export default function WarehouseOpsPage() {
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground">扫码 {op.scanCount}</span>
-                      {op.errorCount > 0 && (
+                      {op.errorCount != null && op.errorCount > 0 && (
                         <span className="text-xs text-red-500">错误 {op.errorCount}（{op.errorRate}）</span>
                       )}
                       {op.efficiency && (
@@ -168,18 +200,18 @@ export default function WarehouseOpsPage() {
                   </div>
                 </div>
               ))}
-            </div>
+            </div> : <UnavailablePanel />}
           </ReportPanel>
 
           <ReportPanel
             title="最新异常记录"
             description="最近 10 条异常日志（今日）"
             helper="关注扫码错误、撤销和条码问题；按日期/原因/条码的完整分析在「PDA 异常分析」"
-            empty={data.recentErrors.length === 0}
+            empty={data.recentErrors?.length === 0}
             emptyTitle="暂无异常记录"
             emptyDescription="暂无异常日志"
           >
-            <div className="space-y-2">
+            {data.recentErrors ? <div className="space-y-2">
               {data.recentErrors.slice(0, 6).map(e => (
                 <div key={e.id} className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
                   <AlertTriangle className="size-4 text-red-400 shrink-0 mt-0.5" />
@@ -189,7 +221,7 @@ export default function WarehouseOpsPage() {
                   </div>
                 </div>
               ))}
-            </div>
+            </div> : <UnavailablePanel />}
           </ReportPanel>
         </div>
       </>)}
