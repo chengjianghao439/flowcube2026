@@ -15,9 +15,19 @@ cleanup() {
     "rm -f '$helper' '$destination.relay.pending' '$destination.relay.partial' '$destination.relay'" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
+make_verified_exe_readable() {
+  if [[ "$base" == *.exe ]]; then
+    # The verified installer is a release asset. A private relay umask may leave
+    # it at 0600, which the container's publishing user cannot read.
+    local command
+    printf -v command 'test -f %q && test ! -L %q && chmod 0644 %q' "$destination" "$destination" "$destination"
+    timeout -k 5 30 ssh "${opts[@]}" -p "$port" "$target" "$command"
+  fi
+}
 printf -v receive_command '%q ' python3 "$helper" "$destination" "$sha" "$bytes" "$base"
 if [ -n "${DEPLOY_ARTIFACT_ID:-}" ] && timeout -k 5 30 scp "${opts[@]}" -P "$port" scripts/receive-deploy-artifact.py "$target:$helper"; then
   if node scripts/deploy-artifact-url.js | timeout -k 10 1100 ssh "${opts[@]}" -p "$port" "$target" "$receive_command"; then
+    make_verified_exe_readable
     exit 0
   fi
 fi
@@ -26,3 +36,4 @@ timeout -k 10 1800 scp "${opts[@]}" -P "$port" "$file" "$target:$destination"
 # SCP 也核对同一 runner 摘要，不仅依赖传输协议成功。
 printf -v verify_command "test \"\$(sha256sum %q | cut -d ' ' -f1)\" = %q" "$destination" "$sha"
 timeout -k 5 120 ssh "${opts[@]}" -p "$port" "$target" "$verify_command"
+make_verified_exe_readable

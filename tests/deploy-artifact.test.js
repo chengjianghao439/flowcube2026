@@ -200,10 +200,13 @@ with tempfile.TemporaryDirectory() as d:
 })
 
 // 直接运行 workflow 的传输分支；仅替换网络命令，不复制 if/else 实现。
-for (const scenario of ['https', 'fallback', 'fallback-failed', 'bad-checksum']) {
-  test(`APK/EXE 共用传输器：${scenario}，摘要与清理不省略`, () => {
+for (const scenario of ['https', 'fallback', 'fallback-failed', 'bad-checksum', 'apk', 'unreadable-exe']) {
+  test(`APK/EXE 共用传输器：${scenario}，先核摘要再准备已验证的安装包`, () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-package-transfer-'))
-    const artifact = path.join(dir, 'fixture.exe')
+    const name = scenario === 'apk' ? 'fixture.apk' : 'fixture.exe'
+    const artifact = path.join(dir, name)
+    const staged = path.join(dir, 'staged')
+    const destination = '/tmp/' + name
     fs.writeFileSync(artifact, 'fixture-package')
     const put = (name, code) => fs.writeFileSync(path.join(dir, name), '#!/usr/bin/env bash\n' + code, { mode: 0o755 })
     put('timeout', 'shift 3; exec "$@"\n')
@@ -211,22 +214,46 @@ for (const scenario of ['https', 'fallback', 'fallback-failed', 'bad-checksum'])
     put('ssh', `printf '%s\\n' "$*" >> "$EVENT_LOG"
 if [[ "$*" == *python3* ]]; then
  IFS= read -r signed; [[ "$signed" == *private-signed-url ]] || exit 8
- [[ "$SCENARIO" == https ]] && exit 0; exit 1
+ if [[ "$SCENARIO" == https || "$SCENARIO" == apk || "$SCENARIO" == unreadable-exe ]]; then
+  (umask 077; cat "$FIXTURE_FILE" > "$STAGED_FILE")
+  exit 0
+ fi
+ exit 1
 fi
 if [[ "$*" == *sha256sum* && "$SCENARIO" == bad-checksum ]]; then exit 1; fi
+remote="\${!#}"
+if [[ "$remote" == *chmod* ]]; then
+ [[ "$SCENARIO" != unreadable-exe ]] || exit 24
+ bash -c "\${remote//"$DESTINATION"/"$STAGED_FILE"}"
+ exit $?
+fi
 exit 0\n`)
     put('scp', `printf '%s\\n' "$*" >> "$EVENT_LOG"
-if [[ "$*" == *fixture.exe* && "$SCENARIO" == fallback-failed ]]; then exit 23; fi
+if [[ "$*" == *fixture.exe* ]]; then
+ [[ "$SCENARIO" != fallback-failed ]] || exit 23
+ (umask 077; cat "$FIXTURE_FILE" > "$STAGED_FILE")
+fi
 exit 0\n`)
     try {
-      const r = spawnSync('bash', ['scripts/transfer-release-asset.sh', artifact, 'fixture', '22', '/tmp/fixture.exe'], {
+      const r = spawnSync('bash', ['scripts/transfer-release-asset.sh', artifact, 'fixture', '22', destination], {
         cwd: root, encoding: 'utf8', timeout: 5000, env: { ...process.env, PATH: dir + ':' + process.env.PATH,
-          SCENARIO: scenario, EVENT_LOG: path.join(dir, 'events'), GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1', DEPLOY_ARTIFACT_ID: '456' },
+          SCENARIO: scenario, EVENT_LOG: path.join(dir, 'events'), FIXTURE_FILE: artifact, STAGED_FILE: staged,
+          DESTINATION: destination, GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1', DEPLOY_ARTIFACT_ID: '456' },
       })
-      assert.equal(r.status, scenario === 'fallback-failed' ? 23 : scenario === 'bad-checksum' ? 1 : 0, r.stdout + r.stderr)
+      const expectedStatus = { 'fallback-failed': 23, 'bad-checksum': 1, 'unreadable-exe': 24 }[scenario] ?? 0
+      assert.equal(r.status, expectedStatus, r.stdout + r.stderr)
+      if (['https', 'fallback'].includes(scenario)) {
+        assert.equal(fs.statSync(staged).mode & 0o777, 0o644, '只将已核验的 EXE 设为发布进程可读')
+        assert.equal(fs.readFileSync(staged, 'utf8'), 'fixture-package')
+      }
+      if (['apk', 'bad-checksum', 'unreadable-exe'].includes(scenario)) {
+        assert.equal(fs.statSync(staged).mode & 0o777, 0o600)
+      }
       const events = fs.readFileSync(path.join(dir, 'events'), 'utf8')
       assert.match(events, /rm -f.*relay\.pending.*relay\.partial/)
       if (scenario === 'fallback' || scenario === 'bad-checksum') assert.match(events, /sha256sum/)
+      if (scenario === 'fallback') assert.ok(events.indexOf('sha256sum') < events.indexOf('chmod'))
+      if (['fallback-failed', 'bad-checksum', 'apk'].includes(scenario)) assert.doesNotMatch(events, /chmod/)
       assert.doesNotMatch(r.stdout + r.stderr + events, /private-signed-url/)
     } finally { fs.rmSync(dir, { recursive: true, force: true }) }
   })

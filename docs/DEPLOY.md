@@ -108,6 +108,10 @@ backend/apk/FlowCubePDA-<code>-<sha>.apk # 已发布不可变安装包，不提�
 
 发布 PDA 时必须同时提升 `versionCode` 和 `versionName`，并保持目标 `version.json` 一致。新发布器拒绝同号不同内容；相同包重试幂等。首次升级部署链时，在 git reset 前保存旧清单为 published-version.json，避免先宣传新版本再收到 APK。API 保留无发布清单的旧部署回退，并可按旧下载 URL 的 code/摘要继续提供原包。
 
+## Windows 安装包中转权限
+
+HTTPS、可信中转与 SCP 均先通过原有验包，再将本次暂存的 Windows EXE 设为 0644。权限调整只针对已验包的普通文件，失败时中止后续发布。中转仍使用原构建产物，安装包内容和 Android APK 的传输策略保持原规则。模拟私有 umask、校验失败和权限调整失败的回归使用 `node --test tests/deploy-artifact.test.js`。换机时应另核工具、可信 SSH 主机键、原运行与安装包摘要，再在隔离目的地验证读取权限。
+
 ## 桌面端发布目录结构
 
 ```text
@@ -245,6 +249,12 @@ DEPLOY_IMAGE_SHA256=<该CI归档的SHA256> bash scripts/server-update.sh
 发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。迁移前以固定完整 SHA 的候选镜像、Compose 实际迁移账户运行独立只读 helper（覆盖配置锁定 image/read_only，使用 pull_policy: never 并以 !reset 清除继承 build，兼容 Compose 2.27.0 run 无 --pull 参数，以 node 用户和 node entrypoint 执行，不启动应用或迁移器）。读取候选 SQL 和 db_migrations 求待执行集合；没有待执行触发器/函数时，不因 trust=0 拒绝。有相关待执行 SQL（含动态字符串及 ALTER FUNCTION）时，先核实际迁移数据库的 TRIGGER、CREATE ROUTINE 或 ALTER ROUTINE 权限，再核已有 log_bin=0、trust=1 或迁移账户全局 SUPER/ALL 之一；未知或查询失败在应用标签改变、停写和迁移之前拒绝。显式 DEFINER 身份未证明时拒绝；binlog 开启且 trust 关闭时，无法可靠证明函数声明的 CREATE/ALTER FUNCTION 保守拒绝。发布脚本不执行任何 SET GLOBAL，不修改或恢复数据库全局参数和权限；原 schema 权限与迁移器完整检查继续生效。现有备份/归属、镜像 revision、目标写入契约、迁移器、健康及页面门禁保持；不自动 image prune。
 
 应急恢复先核实迁移记录、触发器完整性及目标镜像的数据库契约。优先通过新提交修复并重新运行正式发布流程；不得只恢复旧提交后启动不兼容代码，也不得在生产重新编译。0.13.5的288–292数量/退货/资金证明要求实际旧后端具备 `io.flowcube.quantity-return-cash-contract=1` 及原240契约；0.13.4缺新标签，进入迁移窗口后失败保持停写并向前恢复，重试不凭已有迁移记录自动放行。新增可空字段不构成语义兼容证明，详见 `docs/print-deploy-ops.md`。
+
+## MySQL 8.4 升级与恢复演练
+
+2026-11-18 在回环、专属命名卷和合成业务数据上演练。源端使用 Compose 固定摘要的 MySQL 8.0.46，正常关机后用 MySQL 8.4.13 启动同一测试卷。另将升级前逻辑备份导入独立空白 8.4.13，停着原测试实例，重启应用指向恢复副本。两条路径都用普通数据库账号和真实 HTTP 验证登录、销售单详情和对账报表。三阶段的 297 条迁移记录、166 个表和视图、4 个触发器、19 张销售单、24 条账款记录及 5 个库存维度的检测摘要一致。源和恢复实例的 UUID 不同，升级保留源 UUID。应用验收基线为 `5a71f25`，合成数据由现有 MySQL 夹具和 `smoke:sale-commercial-lifecycle` 生成。
+
+演练使用 arm64 镜像和 `caching_sha2_password` 账号。正式升级还要在授权下评估实际生产镜像平台、账户插件、数据库大小、维护窗口、备份耗时和切换步骤。如实际账户依赖旧插件，先验证账号迁移路径。失败时保全升级前备份与源副本，切换方案不得把 8.4 已升级的数据目录交给 8.0。 [MySQL 升级路径](https://dev.mysql.com/doc/refman/8.4/en/upgrade-paths.html) · [升级前检查](https://dev.mysql.com/doc/refman/8.4/en/upgrade-prerequisites.html)
 
 ## 发布成功后的镜像与磁盘收尾
 
