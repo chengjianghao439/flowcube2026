@@ -338,7 +338,6 @@ apiClient.interceptors.response.use(
 
     if (
       cfg
-      && (cfg.method === 'get' || cfg.method === 'head')
       && status == null
       && (transportCode === 'ERR_NETWORK' || rawMsg === 'Network Error')
     ) {

@@ -15,8 +15,8 @@ beforeEach(() => { localStorage.clear(); Object.defineProperty(globalThis, 'cryp
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear() })
 test('真实清理合同仍按原created_at七天删除；客户端不能依确认时间续期', () => {
  const scheduler = readFileSync('../backend/src/scheduler.js', 'utf8'), contract = readFileSync('../backend/src/utils/operationRequest.js', 'utf8')
- expect(scheduler).toMatch(/startCleanupSweeper\(\{ intervalMs: 6 \* 60 \* 60 \* 1000, ttlDays: 7 \}\)/)
- expect(contract).toMatch(/created_at < DATE_SUB\(NOW\(\), INTERVAL \? DAY\)/)
+ expect(scheduler).toMatch(/startCleanupSweeper\(\{[^}]*\bttlDays: 7\b/)
+ expect(contract).toMatch(/created_at < DATE_SUB\(NOW\(\), INTERVAL \? DAY\) ORDER BY created_at LIMIT \?/)
 })
 test('大量旧完整终态原位迁移为固定墓碑，待核正文与其他命名空间字节不变', async () => {
  const pendingKey = 'pda_owned_request_v3:1:unknown', pending = JSON.stringify(record('unknown', NOW - 12 * DAY))

@@ -51,6 +51,8 @@ const ALLOWLIST = new Map([
     '同上：取号撞号重试'],
   ['backend/src/modules/import/import.service.js::for (let index = 0; index < dataRows.length; index += 1) {',
     '逐行导入：每行都要独立校验+建档，属批量写入路径而非只读列表'],
+  ['backend/src/modules/import/import.service.js::for (const { row, rowNumber } of dataRows) {',
+    '主数据写入逐行检查已提交的名称与编码，使同一文件内的重复项保留原行级错误'],
   ['backend/src/modules/inventory/inventory.service.js::for (const [sourceType, ids] of byType) {',
     '按维度分组后每组一次查询——这正是 N+1 的修法本身'],
   ['backend/src/modules/document-activity/document-activity.service.js::for (const [type, idSet] of byType) {',
