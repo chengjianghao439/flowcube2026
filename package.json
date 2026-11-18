@@ -169,7 +169,7 @@
     "smoke:prelaunch-finance": "node tests/prelaunch-finance.smoke.test.js",
     "smoke:prelaunch-scope-export": "node tests/prelaunch-scope-export.smoke.test.js",
     "smoke:prelaunch-hr": "node tests/prelaunch-hr.smoke.test.js",
-    "test:prelaunch-runtime": "node --test tests/prelaunch-runtime-ops.test.js tests/export-rows.test.js",
+    "test:prelaunch-runtime": "node --test tests/prelaunch-runtime-ops.test.js tests/export-rows.test.js tests/runtime-maintenance.test.js",
     "smoke:round2-transfer": "node tests/round2-transfer.smoke.test.js",
     "smoke:round2-payroll": "node tests/round2-payroll.smoke.test.js",
     "smoke:round2-runtime": "node tests/round2-runtime.smoke.test.js",

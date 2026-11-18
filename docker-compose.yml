@@ -91,6 +91,7 @@ services:
       AGENT_DATA_DIR: /var/lib/flowcube/assistant
       # 日志集中检索（P2-12）：起 observability profile 后填 loki 服务地址即可接入
       LOKI_URL: ${LOKI_URL:-}
+      LOGISTICS_WORKER_ENABLED: ${LOGISTICS_WORKER_ENABLED:-1}
       # 官方快递连接仅注入后端；从根目录私有 .env 读取，不能进入 Vite 构建。
       WAYBILL_SF_MAIN_APP_ID: ${WAYBILL_SF_MAIN_APP_ID:-}
       WAYBILL_SF_MAIN_APP_KEY: ${WAYBILL_SF_MAIN_APP_KEY:-}

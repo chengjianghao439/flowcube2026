@@ -14,15 +14,27 @@ const SLOW_MS = parseInt(process.env.SLOW_API_MS || '800', 10)
 const { getRequestContext } = require('./requestContext')
 
 // ── 日志集中检索（P2-12）：配置 LOKI_URL 时把 warn/error 级日志异步推送到 Grafana Loki ──
-// fire-and-forget：推送失败只记一条 console.error，绝不阻塞/影响业务。未配置则完全无副作用。
+// 推送失败在本地输出限频诊断，业务无需等待。未配置则完全无副作用。
 const LOKI_URL = String(process.env.LOKI_URL || '').trim()
 const LOKI_LABELS = { app: 'flowcube-backend', env: process.env.NODE_ENV || 'development' }
+let lastLokiFailureAt = -Infinity
+function reportLokiFailure(reason) {
+  const now = Date.now()
+  if (now - lastLokiFailureAt < 60_000) return
+  lastLokiFailureAt = now
+  console.error('[logger] loki push failed:', reason)
+}
+
 function pushToLoki(level, msg, meta) {
   if (!LOKI_URL) return
   const line = JSON.stringify({ level, msg, meta: meta || {}, requestId: (getRequestContext() || {}).requestId || null })
   const body = JSON.stringify({ streams: [{ stream: LOKI_LABELS, values: [[String(Date.now() * 1000000), line]] }] })
   fetch(LOKI_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(2000) })
-    .catch((e) => console.error('[logger] loki push failed:', e?.message || String(e)))
+    .then(response => {
+      if (!response.ok) reportLokiFailure(`HTTP ${response.status}`)
+      return response.body?.cancel()
+    })
+    .catch(error => reportLokiFailure(error?.name || 'network error'))
 }
 function emit(level, msg, meta, module_) {
   if (level === 'warn' || level === 'error') pushToLoki(level, `[${module_}] ${msg}`, meta)
