@@ -138,6 +138,11 @@ QA数量从完整 RTI FOR UPDATE 当前读直接取得，不能先锁ID再用普
 退款证据只保存本次真实 QA 执行量与 immutable 金额，不维护另一可写库存数量台账。源预算与派发数量不会因退货改写；库存唯一源仍 ACTIVE 容器，缓存仍仅 syncStockFromContainers。kit 取消时，已拣待归还预占留到正常 PDA 实物返库，销售服务根据锁定的订单模型决定预占处理。
 
 C2规格复审补充：销售退货receive、QA完成与putaway完成三处门控必须按task锁之后，对完整RTI `ORDER BY id FOR UPDATE`当前读，再分别计算expected−received、received−checked、checked−rejected−putaway。不能用普通MVCC SUM，也不能只给聚合字面追加锁而假定所有事实已当前读。两位数量转百分整数差值，无浮点残量且不clamp真实剩量；source→SR→RT→库存维度→容器→payment既有执行锁序不改。普通销售RT采用同一当前读可靠性修正，采购退货不经过此销售RT链。
+
+### 销售取消与 PDA 首次拣货
+
+销售取消仅对本次事务使用 `READ COMMITTED`。销售取消锁销售单后可能先读销售明细，PDA 首拣则持仓库任务锁提交拣货流水和容器锁。取消取得同一任务锁后，读取当时已提交的容器锁来决定是否待归还。已拣容器继续锁在原任务下，直到 PDA 扫码归还。取消继续用原库存维度与容器写锁顺序，连接池默认隔离级别不变。
+
 ### C2 散件取消的预占归还事实（2026-10-01品质复审）
 
 套单取消/逐容器归还读取本任务、本容器的当前有效PICK明细，`COALESCE(scan_purpose,1)=1`沿用历史NULL拣货口径，CHECK与CANCEL_RETURN不计入；合法改单会调整或删除原PICK记录，后续读其当前值。数量按百分整数累加，不新增数量台账。任务、明细、商品、仓库、容器锁归属及ACTIVE状态必须闭合；缺PICK或待归还量大于本单预占显式409，不用min/cap借用其他单份额。

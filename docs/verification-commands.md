@@ -361,6 +361,10 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 
 独立规格再审结论为接受：`/tmp/c2-respec-scope-green.log`、`/tmp/c2-respec-create-scope-green.log` 各自真实复验范围不足的旧更新重放/新保存/原创建重放403，以及完整范围合法重放；`/tmp/c2-respec-rr-multicomponent-green.log` 按原旧RR快照及来源等待交错取得RT5/SR3/两条退款回执/AR0；`/tmp/c2-respec-rr-qa-green.log` 另验质检交错推进RT4，随后真实HTTP上架RT5/AR0。四脚本自然exit0，受影响纯测试20/20、diff检查通过，独立精确资源已收尾；原失败SR156/RT154保留审计。此结论只覆盖后端规格，品质审查和页面验收继续后置。
 
+### 销售取消与 PDA 首拣双连接回归
+
+`npm run smoke:sale-commercial-partial-cancel` 在独立 MySQL 8 上通过真实 HTTP 调用销售取消和 PDA 散拣。取消读完销售明细后暂停，第二个连接提交首拣。测试核实流水和容器锁已经落库后放行取消，断言任务进入待归还、原容器仍锁定、再次拣货被拒，并在 PDA 扫码归还后才关任务、解锁容器。原有顺序取消、重复请求、套单预占和仓库范围用例继续在同一个 CI MySQL 步骤执行。
+
 ### C2 独立品质P1：散件取消逐容器份额（2026-10-01）
 
 `npm run smoke:sale-commercial-partial-cancel` 新增实际 Tests CI MySQL step，独立脚本 `tests/sale-commercial-partial-cancel.smoke.test.js` 自建精确夹具，通过采购→PDA收货/上架→正式套单创建/占库/派发→正常散拣→取消→逐容器PDA归还，不强写状态。新 `tests/sale-commercial-cancellation.test.js` 三例加入 `test:sale-commercial`，覆盖当前PICK来源、锁序与缺来源/错误item/超本单预占拒绝。没有新迁移，270–275未改；原品质审查夹具未修改。

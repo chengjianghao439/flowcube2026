@@ -1927,6 +1927,9 @@ async function cancel(id, operator, scopeWarehouseIds = null, requestKey = null,
   normalizeReason(commercialInput.changeReason)
   const conn = await pool.getConnection()
   try {
+    // PDA 首拣锁仓库任务，不锁销售单。取消取得任务锁后必须看见此前已提交的容器锁。
+    // 只设置本次事务，避免沿用事务前段的快照，也无需在库存维度前加容器行锁。
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
     const orderRow = await lockStatusRow(conn, { table: 'sale_orders', id, entityName: '销售单' })
     assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')

@@ -81,15 +81,64 @@ async function scenario(name,target,baseQty,packages,picks,otherQty){
  await http('/sale/'+other.id+'/cancel',{})
  if(evidence.finalStatus===8){assert.equal(wt.sorting_bin_id,null);const current=await http('/sale/'+so.id,undefined,{method:'GET'});assert.equal(current.items[0].reservedQty,0);assert.equal(current.totalAmount,target*10)}
 }
-async function ordinaryScenario(){
- const productId=await ins("INSERT INTO product_items(code,name,unit,sale_price_a,cost_price,allow_decimal_qty) VALUES (?,?,'个',10,1,0)",[ref+'-ordinary',ref+'-ordinary']);f.products.push(productId)
+async function cancelDuringFirstPick({ saleId, taskId, cancel, pick }) {
+  const getConnection = pool.getConnection
+  const saleRead = Promise.withResolvers()
+  const resume = Promise.withResolvers()
+  let pickConnectionId
+  let timeout
+
+  // Pause after the real sale read, before cancel attempts the task row lock.
+  // The scanner and cancellation still run their normal HTTP and SQL paths.
+  pool.getConnection = async function (...args) {
+    const conn = await getConnection.apply(this, args)
+    const query = conn.query.bind(conn)
+    conn.query = async (sql, params) => {
+      const result = await query(sql, params)
+      if (sql === 'SELECT warehouse_id FROM sale_order_items WHERE order_id=?' && Number(params?.[0]) === saleId) {
+        saleRead.resolve(conn.threadId)
+        await resume.promise
+      }
+      if (typeof sql === 'string' && /^\s*INSERT INTO scan_logs\b/.test(sql) && Number(params?.[0]) === taskId) {
+        pickConnectionId = conn.threadId
+      }
+      return result
+    }
+    return conn
+  }
+
+  const cancellation = cancel()
+  try {
+    const cancelConnectionId = await Promise.race([
+      saleRead.promise,
+      cancellation.then(() => { throw new Error('取消请求在到达销售明细读屏障前已完成') }),
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('超时等待取消请求读取销售明细')), 10000)
+      }),
+    ])
+    const before = await pick()
+    assert.ok(Number.isInteger(cancelConnectionId) && Number.isInteger(pickConnectionId))
+    assert.notEqual(cancelConnectionId, pickConnectionId, '取消与首次拣货必须使用两个 MySQL 连接')
+    resume.resolve()
+    return { before, first: await cancellation }
+  } finally {
+    clearTimeout(timeout)
+    resume.resolve()
+    try { await cancellation.catch(() => {}) }
+    finally { pool.getConnection = getConnection }
+  }
+}
+
+async function ordinaryScenario({ concurrentFirstPick = false } = {}){
+ const name = concurrentFirstPick ? 'ordinary-concurrent-first-pick' : 'ordinary'
+ const sku = ref + (concurrentFirstPick ? '-pick-race' : '-ordinary')
+ const productId=await ins("INSERT INTO product_items(code,name,unit,sale_price_a,cost_price,allow_decimal_qty) VALUES (?,?,'个',10,1,0)",[sku,sku]);f.products.push(productId)
  const [container]=await supply(productId,[10])
- const sale=await http('/sale',{customerId:f.customerId,customerName:ref,warehouseId:f.warehouseId,warehouseName:ref,items:[{productId,productCode:ref+'-ordinary',productName:ref,unit:'个',quantity:5,unitPrice:10,priceSource:'manual'}]},{expect:201});f.sales.push(sale.id)
+ const sale=await http('/sale',{customerId:f.customerId,customerName:ref,warehouseId:f.warehouseId,warehouseName:ref,items:[{productId,productCode:sku,productName:ref,unit:'个',quantity:5,unitPrice:10,priceSource:'manual'}]},{expect:201});f.sales.push(sale.id)
  await http('/sale/'+sale.id+'/reserve',{})
  await http('/sale/'+sale.id+'/ship',{})
  const tasks=await q('SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND deleted_at IS NULL ORDER BY id',[sale.id]);assert.equal(tasks.length,1)
  const taskId=Number(tasks[0].id),task=await http('/warehouse-tasks/'+taskId,undefined,{method:'GET'})
- await http('/scan-logs',{taskId,itemId:task.items[0].id,containerId:Number(container.id),barcode:container.barcode,productId,qty:1,scanMode:'散件'},{expect:201,device:true})
  const salesCancel = '/sale/' + sale.id + '/cancel'
  const warehouseCancel = '/warehouse-tasks/' + taskId + '/cancel'
  const cancelKey = randomUUID()
@@ -105,14 +154,44 @@ async function ordinaryScenario(){
   return { order, item, task, stock, physical, saleEvent, taskEvent, reservation: await reserveQty(sale.id) }
  }
 
- const before = await cancelState()
- await http(warehouseCancel, {}, { method: 'PUT', expect: 409, code: 'SALE_ORDER_CANCEL_REQUIRED' })
- assert.deepEqual(await cancelState(), before, 'the warehouse entry point must leave all sales facts untouched')
+ async function assertWarehouseCancelRefused(state) {
+  await http(warehouseCancel, {}, { method: 'PUT', expect: 409, code: 'SALE_ORDER_CANCEL_REQUIRED' })
+  assert.deepEqual(await cancelState(), state, 'the warehouse entry point must leave all sales facts untouched')
+ }
 
- const first = await http(salesCancel, cancelBody, { key: cancelKey })
+ const pickBody = {
+  taskId, itemId:task.items[0].id, containerId:Number(container.id), barcode:container.barcode, productId, qty:1, scanMode:'散件',
+ }
+ async function pick() {
+  const scan = await http('/scan-logs', pickBody, { expect:201, device:true })
+  const [saved] = await q('SELECT task_id, container_id, qty, scan_purpose FROM scan_logs WHERE id=?', [scan.id])
+  assert.deepEqual(
+   [Number(saved.task_id), Number(saved.container_id), Number(saved.qty), Number(saved.scan_purpose)],
+   [taskId, Number(container.id), 1, 1],
+   '首次拣货流水必须在取消继续前提交',
+  )
+  const state = await cancelState()
+  assert.equal(Number(state.physical.locked_by_task_id), taskId, '首次拣货必须已锁住容器')
+  return state
+ }
+
+ const cancel = () => http(salesCancel, cancelBody, { key: cancelKey })
+ let before, first
+ if (concurrentFirstPick) {
+  const unpicked = await cancelState()
+  assert.equal(unpicked.physical.locked_by_task_id, null)
+  await assertWarehouseCancelRefused(unpicked)
+  const interleaved = await cancelDuringFirstPick({ saleId:Number(sale.id), taskId, cancel, pick })
+  before = interleaved.before
+  first = interleaved.first
+ } else {
+  before = await pick()
+  await assertWarehouseCancelRefused(before)
+  first = await cancel()
+ }
  const pending = await cancelState()
  assert.equal(Number(pending.order.status), 5)
- assert.equal(Number(pending.task.status), Number(before.task.status))
+ assert.equal(Number(pending.task.status), Number(before.task.status), name + '：已提交的首拣必须先进入待归还')
  assert.ok(pending.task.cancel_requested_at)
  assert.deepEqual(pending.physical, before.physical, 'picked goods stay locked until scanned back')
  assert.equal(units(pending.stock.quantity), units(before.stock.quantity))
@@ -121,12 +200,14 @@ async function ordinaryScenario(){
  assert.deepEqual(await http(salesCancel, cancelBody, { key: cancelKey }), first)
  await http(salesCancel, cancelBody, { expect: 400 })
  await http(warehouseCancel, {}, { method: 'PUT', expect: 409 })
- assert.deepEqual(await cancelState(), pending, 'repeated cancel must not write a second event or release stock again')
+ await http('/scan-logs', pickBody, { expect:409, device:true })
+ assert.deepEqual(await cancelState(), pending, 'repeated cancel and later picks cannot change the pending return')
 
  const dto=await http('/warehouse-tasks/'+taskId+'/cancel-return-detail',undefined,{method:'GET'});assert.equal(dto.containers[0].qty,10);assert.equal(Object.hasOwn(dto.containers[0],'taskReturnQty'),false);assert.equal(Object.hasOwn(await http('/sale/'+sale.id,undefined,{method:'GET'}),'commercialGroups'),false);assert.equal(await reserveQty(sale.id),0,'ordinary cancellation retains original immediate release policy')
  const body={taskId,containerId:Number(container.id),barcode:container.barcode,locationId:f.locationId},key=randomUUID(),result=await http('/scan-logs/cancel-return',body,{expect:201,device:true,key});assert.deepEqual(await http('/scan-logs/cancel-return',body,{expect:201,device:true,key}),result)
  const [wt]=await q('SELECT status FROM warehouse_tasks WHERE id=?',[taskId]),[c]=await q('SELECT locked_by_task_id,remaining_qty FROM inventory_containers WHERE id=?',[container.id]),[scan]=await q('SELECT COUNT(*) count,SUM(qty) qty FROM scan_logs WHERE task_id=? AND scan_purpose=3',[taskId]);assert.equal(Number(wt.status),8);assert.equal(c.locked_by_task_id,null);assert.equal(Number(c.remaining_qty),10);assert.equal(Number(scan.count),1);assert.equal(Number(scan.qty),10,'ordinary return scan keeps original container remainder quantity')
- f.cases.push({name:'ordinary',saleId:sale.id,taskId,containers:[container],afterCancelReserved:0,finalStatus:8});console.log('[PASS ordinary] warehouse refused without writes, sales cancel replayed once, new key refused, immediate reservation release, return scan10, WT8/lock0/stock10')
+ f.cases.push({name,saleId:sale.id,taskId,containers:[container],afterCancelReserved:0,finalStatus:8})
+ console.log(`[PASS ${name}] first PICK saved, container held until PDA return, cancellation replayed once, reservation released, return scan10, WT8/lock0/stock10`)
 }
 async function scopeScenario(){
  f.headWarehouseId=await ins('INSERT INTO inventory_warehouses(code,name) VALUES (?,?)',[ref+'-head',ref+'-head'])
@@ -197,7 +278,14 @@ async function main(){
  const secret=randomUUID();f.deviceId=await ins("INSERT INTO pda_devices(device_code,device_name,warehouse_id,status,secret_hash) VALUES (?,?,?,'active',?)",[ref,ref,f.warehouseId,require('../backend/node_modules/bcryptjs').hashSync(secret,4)])
  const session=await require('../backend/src/modules/pda/pda.sessions.service').createSession({deviceCode:ref,deviceSecret:secret,userId:f.userId});pda={'X-Client':'pda','X-PDA-Session':session.sessionToken}
  server=await new Promise((resolve,reject)=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));s.once('error',reject)})
- if(process.env.KIT_CANCEL_SLICE!=='scope'){await scenario('single',5,1,[10],[1],1);await scenario('multiple',2,1,[2,3],[1,1],1);await scenario('decimal',3,.1,[1,2],[.1,.2],.1);await scenario('equal',2,1,[2,1],[2],1);await ordinaryScenario()}
+ if (process.env.KIT_CANCEL_SLICE !== 'scope') {
+  await ordinaryScenario({ concurrentFirstPick: true })
+  await ordinaryScenario()
+  await scenario('single',5,1,[10],[1],1)
+  await scenario('multiple',2,1,[2,3],[1,1],1)
+  await scenario('decimal',3,.1,[1,2],[.1,.2],.1)
+  await scenario('equal',2,1,[2,1],[2],1)
+ }
  await scopeScenario()
  assert.deepEqual(violations,[],'actual PICK quantities preserve and release exactly each pending container share')
  console.log('[PASS] single reserve5/PICK1/container10, two containers PICK1 each and decimal .1/.2: exact own pending reservations, same-key cancel/return once, other order preserved, WT8/locks0/reserves0, stock unchanged')
