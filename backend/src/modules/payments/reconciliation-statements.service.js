@@ -274,7 +274,7 @@ async function findAll({
   page = 1, pageSize = 20, type = '', status = '', keyword = '',
   statementNo = '', partyName = '', customerId = null, partyId = null,
   startDate = '', endDate = '', minAmount = '', maxAmount = '',
-} = {}) {
+} = {}, conn = pool) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['s.deleted_at IS NULL']
   const params = []
@@ -322,7 +322,7 @@ async function findAll({
   if (maxAmount !== '' && maxAmount != null) { conds.push('s.total_amount<=?'); params.push(Number(maxAmount)) }
   const where = `WHERE ${conds.join(' AND ')}`
 
-  const [rows] = await pool.query(
+  const [rows] = await conn.query(
     `SELECT s.*, (SELECT COUNT(*) FROM reconciliation_statement_items i WHERE i.statement_id = s.id) AS item_count,
             COALESCE(agg.real_total, 0) AS real_total, COALESCE(agg.real_paid, 0) AS real_paid,
             COALESCE(agg.pending_payable_count, 0) AS pending_payable_count
@@ -340,7 +340,7 @@ async function findAll({
       ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?`,
     [...params, ps, offset],
   )
-  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM reconciliation_statements s ${where}`, params)
+  const [[{ total }]] = await conn.query(`SELECT COUNT(*) AS total FROM reconciliation_statements s ${where}`, params)
   // 列表金额改用下属账款实时汇总，与详情(findById 明细 JOIN payment_records)口径统一：退货冲减/分批
   // 补应收会改下属账款 total_amount/paid_amount，但这些路径不触发 refreshSettlement，存储在
   // reconciliation_statements 上的投影会过期，导致列表总额与详情对不上、导出的对账额与系统实时值不符。

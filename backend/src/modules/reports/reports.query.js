@@ -11,13 +11,13 @@ const { WT_STATUS, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskSt
 const { getStatusRule } = require('../../constants/documentStatusRules')
 const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 
-async function fetchOne(sql, params = []) {
-  const [[row]] = await pool.query(sql, params)
+async function fetchOne(sql, params = [], conn = pool) {
+  const [[row]] = await conn.query(sql, params)
   return row || {}
 }
 
-async function fetchMany(sql, params = []) {
-  const [rows] = await pool.query(sql, params)
+async function fetchMany(sql, params = [], conn = pool) {
+  const [rows] = await conn.query(sql, params)
   return rows || []
 }
 
@@ -552,7 +552,7 @@ async function fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds = null, ba
   }
 }
 
-async function fetchReconciliationRows({ type = 1, startDate = null, endDate = null, keyword = '', orderNo = '', partyName = '', status = null, settlementTypes = null, minAmount = '', maxAmount = '', dueStart = '', dueEnd = '', page = 1, pageSize = 20, scopeWarehouseIds = null } = {}) {
+async function fetchReconciliationRows({ type = 1, startDate = null, endDate = null, keyword = '', orderNo = '', partyName = '', status = null, settlementTypes = null, minAmount = '', maxAmount = '', dueStart = '', dueEnd = '', page = 1, pageSize = 20, scopeWarehouseIds = null } = {}, conn = pool, businessDate) {
   if (![page, pageSize].every(v => Number.isSafeInteger(Number(v)) && Number(v) > 0)) throw new AppError('分页参数无效', 400)
   const { page: pageNum, pageSize: pageSizeNum, offset } = normalizePagination({ page, pageSize: Math.min(200, Number(pageSize)) })
   if (!Number.isSafeInteger(offset)) throw new AppError('分页参数无效', 400)
@@ -603,6 +603,9 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
   if (dueStart) { conds.push('pr.due_date >= ?'); params.push(dueStart) }
   if (dueEnd)   { conds.push('pr.due_date <= ?'); params.push(dueEnd) }
   const where = `WHERE ${conds.join(' AND ')}`
+  // An export can cross midnight. Freeze its overdue sort key with the same business day on every page.
+  const todaySql = businessDate ? '?' : 'CURDATE()'
+  const todayParams = businessDate ? [businessDate] : []
 
   const summaryRow = await fetchOne(
     `SELECT
@@ -610,14 +613,14 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
        COALESCE(SUM(pr.total_amount), 0) AS totalAmount,
        COALESCE(SUM(pr.paid_amount), 0) AS paidAmount,
        COALESCE(SUM(pr.balance), 0) AS balance,
-       COALESCE(SUM(CASE WHEN pr.status IN (1,2) AND pr.due_date IS NOT NULL AND pr.due_date < CURDATE() THEN 1 ELSE 0 END), 0) AS overdueCount,
+       COALESCE(SUM(CASE WHEN pr.status IN (1,2) AND pr.due_date IS NOT NULL AND pr.due_date < ${todaySql} THEN 1 ELSE 0 END), 0) AS overdueCount,
        COALESCE(SUM(CASE WHEN pr.status IN (1,2) THEN 1 ELSE 0 END), 0) AS pendingCount
      FROM payment_records pr
      ${where}`,
-    params,
+    [...todayParams, ...params], conn,
   )
 
-  const countRow = await fetchOne(`SELECT COUNT(*) AS total FROM payment_records pr ${where}`, params)
+  const countRow = await fetchOne(`SELECT COUNT(*) AS total FROM payment_records pr ${where}`, params, conn)
 
   const rows = await fetchMany(
     `SELECT
@@ -675,13 +678,13 @@ async function fetchReconciliationRows({ type = 1, startDate = null, endDate = n
      ${where}
      ORDER BY
        CASE WHEN pr.status IN (1, 2) THEN 0 ELSE 1 END ASC,
-       CASE WHEN pr.status IN (1, 2) AND pr.due_date IS NOT NULL AND pr.due_date < CURDATE() THEN 0 ELSE 1 END ASC,
+       CASE WHEN pr.status IN (1, 2) AND pr.due_date IS NOT NULL AND pr.due_date < ${todaySql} THEN 0 ELSE 1 END ASC,
        CASE WHEN pr.due_date IS NULL THEN 1 ELSE 0 END ASC,
        pr.due_date ASC,
        pr.created_at DESC,
        pr.id DESC
      LIMIT ? OFFSET ?`,
-    [...params, pageSizeNum, offset],
+    [...params, ...todayParams, pageSizeNum, offset], conn,
   )
 
   return { typeNum, pageNum, pageSizeNum, summaryRow, countRow, rows }

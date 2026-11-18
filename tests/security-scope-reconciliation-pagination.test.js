@@ -66,17 +66,19 @@ test('reconciliation controller forwards trusted scope and public pagination', a
   assert.equal(Number(options.pageSize), 75)
 })
 test('reconciliation export preserves scope/filters and collects all bounded report pages', async () => {
+  const conn = { query: async () => {}, commit: async () => {}, release() {} }
   const calls = [], file = 'backend/src/modules/export/export.service.js', filename = path.join(root, file), real = createRequire(filename)
   const source = fs.readFileSync(filename, 'utf8'), module = { exports: {} }
   vm.runInNewContext(source, { module, require: n => {
-    if (n === '../reports/reports.service') return { reconciliationReport: async q => {
+    if (n === '../reports/reports.service') return { reconciliationReport: async (q, source) => {
+      assert.equal(source, conn)
       calls.push(q)
       const start = (q.page - 1) * 200
       return { type: 2, pagination: { total: 450 }, list: Array.from({ length: Math.min(200, 450 - start) }, (_, i) => ({ id: start + i + 1 })) }
     } }
     if (n.startsWith('../') && !n.startsWith('../../')) return {}
     if (n.startsWith('../') && n.endsWith('.service')) return {}
-    if (n === '../../config/db') return { pool: {} }
+    if (n === '../../config/db') return { pool: { getConnection: async () => conn } }
     if (n === '../../utils/warehouseScope') return {}
     return real(n)
   } }, { filename })

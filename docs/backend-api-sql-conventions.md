@@ -144,7 +144,7 @@ C2仓库执行归还接点：`POST /scan-logs/cancel-return` 的kit分支用SO X
 
 运单、运费账单/结算、费用报销与库龄服务在 SQL 前核分页参数为正安全整数，再用 `normalizePagination` 将单批行数夹到 500；不接受非整数、非有限值或不安全 offset。对账报表保持单批 200，并采用相同的整数/offset 校验。校验放在 service 边界，不能只相信 controller 的数值转换。
 
-对账导出使用既有 `collectExportRows` 收齐多个有界报表批次，保留全部筛选与仓库授权范围；总量超 `EXPORT_MAX_ROWS` 或分页期间数据数量/身份发生变化时拒绝。不能向公共查询传很大 pageSize 并把被夹到 200 的结果当完整导出。回归与 CI 接线指针见 `docs/security-scope-remediation-2026-10-06.md`。
+账款、对账报表与对账单列表导出通过 `collectSnapshotExportRows` 在同一 MySQL 只读 REPEATABLE READ 快照收齐有界批次。计数、仓库授权谓词、筛选和金额读取共用连接，报表逾期排序固定为开始时的北京时间业务日。总行数超 `EXPORT_MAX_ROWS`、页不完整或重复行直接拒绝，数据库中断回滚，不输出半份文件。公共列表分页上限和其他导出共用的 `collectExportRows` 行为保留。回归见 `tests/export-rows.test.js`、`npm run smoke:payments-default-scope`。
 
 
 ### 审批待办的只读授权概要（2026-10-04）

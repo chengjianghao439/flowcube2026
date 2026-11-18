@@ -29,4 +29,27 @@ async function collectExportRows(findPage, query = {}) {
   }
 }
 
-module.exports = { collectExportRows, assertExportLimit, EXPORT_MAX_ROWS }
+/** Export every bounded page through the same read-only snapshot. */
+async function collectSnapshotExportRows(pool, findPage, query) {
+  const conn = await pool.getConnection()
+  let reusable = true
+  try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')
+    await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY')
+    const result = await collectExportRows(options => findPage(options, conn), query)
+    await conn.commit()
+    return result
+  } catch (error) {
+    try {
+      await conn.rollback()
+    } catch {
+      reusable = false
+      conn.destroy()
+    }
+    throw error
+  } finally {
+    if (reusable) conn.release()
+  }
+}
+
+module.exports = { collectExportRows, collectSnapshotExportRows, assertExportLimit, EXPORT_MAX_ROWS }

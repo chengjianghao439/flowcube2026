@@ -98,7 +98,11 @@ for (const testCase of CASES) {
 
     const received = []
     const original = service.findAll
-    service.findAll = async (query) => {
+    const { pool } = require(offlineDbPath)
+    const connection = { query: async () => {}, commit: async () => {}, release() {} }
+    pool.getConnection = async () => connection
+    service.findAll = async (query, conn) => {
+      if (['getPaymentsExportPayload', 'getStatementsExportPayload'].includes(testCase.exportMethod)) assert.equal(conn, connection)
       received.push(query)
       return { list: [], pagination: { total: 0 } }
     }
@@ -109,6 +113,7 @@ for (const testCase of CASES) {
       await exportService[testCase.exportMethod](query)
     } finally {
       service.findAll = original
+      pool.getConnection = unexpectedDbCall
     }
 
     assert.equal(received.length, 1, `${testCase.name}：导出应恰好调用一次列表接口`)
@@ -164,6 +169,8 @@ test('空串与 null 的筛选不应被当成非法值导致导出报错', async
   const service = require(path.resolve(__dirname, '../backend/src/modules/payments/reconciliation-statements.service'))
   const original = service.findAll
   const received = []
+  const { pool } = require(offlineDbPath)
+  pool.getConnection = async () => ({ query: async () => {}, commit: async () => {}, release() {} })
   service.findAll = async (query) => {
     received.push(query)
     return { list: [], pagination: { total: 0 } }
@@ -177,6 +184,7 @@ test('空串与 null 的筛选不应被当成非法值导致导出报错', async
     })
   } finally {
     service.findAll = original
+    pool.getConnection = unexpectedDbCall
   }
   assert.equal(received.length, 1)
   const passed = received[0]

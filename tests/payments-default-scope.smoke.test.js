@@ -69,6 +69,52 @@ test('按单登记未结清查询：历史未付、部分付款、结清切换�
       assert.equal(statement.totalAmount,200.2468); assert.equal(statement.settledAmount,60.0246); assert.equal(statement.balance,140.2222); assert.equal(statement.balance.toFixed(4),'140.2222')
       assert.equal(receipt.settlements[0].orderBalance,70.1111)
     })
+    await t.test('账款及对账导出分页均使用开始时的成员及余额', async () => {
+      const reports = require('../backend/src/modules/reports/reports.service')
+      const label = `SNAP-${randomUUID().slice(0,8)}`
+      const rows = Array.from({ length: 502 }, (_, i) => [1, `${label}-${i}`,
+        i === 501 ? '候补行' : label, 100, 0, 100, 1, 2, '2025-07-01'])
+      const [result] = await pool.query(
+        'INSERT INTO payment_records(type,order_no,party_name,total_amount,paid_amount,balance,status,settlement_type,created_at) VALUES ?', [rows],
+      )
+      assert.equal(result.affectedRows, 502)
+      const [inserted] = await pool.query('SELECT id,order_no FROM payment_records WHERE order_no LIKE ? ORDER BY id', [`${label}-%`])
+      ids.push(...inserted.map(r => r.id))
+      const original = inserted[0].id, substitute = inserted[501].id, revalued = inserted[1].id
+
+      for (const [service, method, exportMethod] of [
+        [payments, 'findAll', 'getPaymentsExportPayload'],
+        [reports, 'reconciliationReport', 'getReconciliationExportPayload'],
+      ]) {
+        const find = service[method]
+        const writer = await pool.getConnection()
+        service[method] = async (...args) => {
+          const page = await find(...args)
+          if (args[0].page === 1) {
+            await writer.beginTransaction()
+            await writer.query('UPDATE payment_records SET party_name=? WHERE id=?', ['已移出范围', original])
+            await writer.query('UPDATE payment_records SET party_name=? WHERE id=?', [label, substitute])
+            await writer.query('UPDATE payment_records SET paid_amount=65,balance=35 WHERE id=?', [revalued])
+            await writer.commit()
+          }
+          return page
+        }
+        try {
+          const exported = await exportsService[exportMethod]({ type: 1, partyName: label })
+          assert.equal(exported.rows.length, 501)
+          assert.deepEqual(exported.rows.map(row => row.orderNo), inserted.slice(0, 501).map(row => row.order_no).reverse())
+          assert.equal(exported.rows.find(row => row.orderNo === inserted[1].order_no).balance, 100)
+        } finally {
+          service[method] = find
+          try {
+            await writer.rollback()
+            await writer.query('UPDATE payment_records SET party_name=? WHERE id=?', [label, original])
+            await writer.query('UPDATE payment_records SET party_name=? WHERE id=?', ['候补行', substitute])
+            await writer.query('UPDATE payment_records SET paid_amount=0,balance=100 WHERE id=?', [revalued])
+          } finally { writer.release() }
+        }
+      }
+    })
   } finally {
     if (receiptIds.length) await pool.query('DELETE FROM payment_entries WHERE receipt_id IN (?)',[receiptIds])
     if (statementIds.length) {

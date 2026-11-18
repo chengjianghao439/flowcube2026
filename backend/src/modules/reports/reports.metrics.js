@@ -248,8 +248,8 @@ async function roleWorkbench(scopeWarehouseIds = null, batch = {}) {
   }
 }
 
-async function reconciliationReport(params = {}) {
-  const { typeNum, pageNum, pageSizeNum, summaryRow, countRow, rows } = await fetchReconciliationRows(params)
+async function reconciliationReport(params = {}, conn, businessDate) {
+  const { typeNum, pageNum, pageSizeNum, summaryRow, countRow, rows } = await fetchReconciliationRows(params, conn, businessDate)
   const list = rows.map(row => ({
     id: Number(row.id),
     type: Number(row.type),

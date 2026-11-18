@@ -1,5 +1,5 @@
 const { pool } = require('../../config/db')
-const { collectExportRows, assertExportLimit, EXPORT_MAX_ROWS } = require('../../utils/exportRows')
+const { collectExportRows, collectSnapshotExportRows, assertExportLimit, EXPORT_MAX_ROWS } = require('../../utils/exportRows')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const reportsService = require('../reports/reports.service')
 const { ymd } = require('../../utils/excelExport')
@@ -168,7 +168,9 @@ async function getReconciliationExportPayload(query) {
     dueEnd: query.dueEnd || '',
     scopeWarehouseIds: query.scopeWarehouseIds ?? null,
   }
-  const data = await collectExportRows(options => reportsService.reconciliationReport(options), authorizedQuery)
+  const businessDate = beijingTodayYmd()
+  const data = await collectSnapshotExportRows(pool,
+    (options, conn) => reportsService.reconciliationReport(options, conn, businessDate), authorizedQuery)
   data.type = Number(authorizedQuery.type) === 2 ? 2 : 1
   const sheetName = data.type === 1 ? '供应商对账单' : '客户对账单'
   return {
@@ -464,7 +466,7 @@ async function getSaleReturnsExportPayload(query = {}) {
 
 /** 账款列表：按页面范围（现结或月结）导出，列与页面一致 */
 async function getPaymentsExportPayload(query) {
-  const data = await collectExportRows(paymentsService.findAll, {
+  const data = await collectSnapshotExportRows(pool, paymentsService.findAll, {
     type: query.type || '',
     status: query.status || '',
     keyword: query.keyword || '',
@@ -570,7 +572,7 @@ async function getStatementsExportPayload(query) {
   // type/status/keyword，页面上按往来方/单号/日期/金额区间筛选后导出会拿到未过滤的全量，
   // 把其他往来方的账款一并交出——同一文件里的 getPaymentsExportPayload 在 2026-09-18 审计
   // 已修过同类问题，本案是同根因的漏网实例。
-  const data = await collectExportRows(statementsService.findAll, {
+  const data = await collectSnapshotExportRows(pool, statementsService.findAll, {
     type: query.type || '',
     status: query.status || '',
     keyword: query.keyword || '',

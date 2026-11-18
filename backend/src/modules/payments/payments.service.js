@@ -63,7 +63,7 @@ async function findAll({
   orderNo = '', partyName = '', partyId = null,
   confirmStatus = '', startDate = '', endDate = '', dueStart = '', dueEnd = '',
   minAmount = '', maxAmount = '',
-} = {}) {
+} = {}, conn = pool) {
   const { page: normalizedPage, pageSize: normalizedPageSize, offset } = normalizePagination({ page, pageSize })
   const conds = []
   const params = []
@@ -117,12 +117,12 @@ async function findAll({
   }
 
   const where = conds.length ? `WHERE ${conds.join(' AND ')}` : ''
-  const [rows] = await pool.query(
+  const [rows] = await conn.query(
     `SELECT pr.* FROM payment_records pr ${where} ORDER BY pr.created_at DESC, pr.id DESC LIMIT ? OFFSET ?`,
     [...params, normalizedPageSize, offset],
   )
-  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM payment_records pr ${where}`, params)
-  const [[summary]] = await pool.query(
+  const [[{ total }]] = await conn.query(`SELECT COUNT(*) AS total FROM payment_records pr ${where}`, params)
+  const [[summary]] = await conn.query(
     `SELECT COALESCE(SUM(pr.total_amount),0) AS totalAmount,
             COALESCE(SUM(pr.paid_amount),0) AS paidAmount,
             COALESCE(SUM(pr.balance),0) AS balance

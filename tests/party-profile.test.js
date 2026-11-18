@@ -396,7 +396,10 @@ test('master/order/credit/party exports preserve full names and opt into wrappin
   const source = fs.readFileSync(path.join(root, filename), 'utf8')
   const profile = { id: 1, code: 'TEST', ...full, customerName: full.name, partyName: full.name, totalAmount: 7, settlementTypeName: '月结', paymentTermsDays: 60, leadTimeDays: 7, isActive: true, creditLimit: 0 }
   const stubs = {
-    '../../config/db': { pool: { query: async () => [[{ customer_name: full.name, supplier_name: full.name, party_name: full.name }]] } },
+    '../../config/db': { pool: {
+      query: async () => [[{ customer_name: full.name, supplier_name: full.name, party_name: full.name }]],
+      getConnection: async () => ({ query: async () => {}, commit: async () => {}, release() {} }),
+    } },
     '../../utils/warehouseScope': { scopeFilter: () => ({ sql: '', params: [] }), transferScopeFilter: noop },
   }
   for (const match of source.matchAll(/require\('([^']+)'\)/g)) {
