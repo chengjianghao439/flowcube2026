@@ -6,8 +6,6 @@ const template = require('./print-jobs.template')
 const labelCommand = require('./print-jobs.label-command')
 const { STATUS, parseListStatus, EXPIRE_MESSAGE, isStalledErrorMessage } = require('./print-jobs.status')
 
-dispatch.startPrintJobSweeper()
-
 /**
  * @deprecated 打印域兼容门面。
  * 新代码应按职责直接依赖：

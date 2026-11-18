@@ -4,7 +4,6 @@ const { configureTestEnvironment, validateTestEnvironment } = require('./helpers
 configureTestEnvironment()
 validateTestEnvironment()
 const { pool } = require('../backend/src/config/db')
-require('../backend/src/modules/print-jobs/print-jobs.dispatch').startPrintJobSweeper = () => {}
 const carriers = require('../backend/src/modules/carriers/carriers.service')
 const binding = require('../backend/src/modules/carriers/carriers.binding').createBindingService({ pool })
 const sales = require('../backend/src/modules/sale/sale.service')

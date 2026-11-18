@@ -8,7 +8,6 @@ async function main() {
   const transaction = { query: (...args) => conn.query(...args), beginTransaction: () => conn.query('SAVEPOINT fulfillment_service'), commit: () => conn.query('RELEASE SAVEPOINT fulfillment_service'), rollback: () => conn.query('ROLLBACK TO SAVEPOINT fulfillment_service'), release() {} }
   require.cache[require.resolve('../backend/src/config/db')] = { exports: { pool: { query: (...args) => conn.query(...args), getConnection: async () => transaction } } }
   const service = require('../backend/src/modules/fulfillment/fulfillment.service')
-  require('../backend/src/modules/print-jobs/print-jobs.dispatch').startPrintJobSweeper = () => {}
   const sales = require('../backend/src/modules/sale/sale.service')
   const { syncDocument } = require('../backend/src/modules/fulfillment/fulfillment.worker')
   const { purchaseImpacts } = require('../backend/src/modules/fulfillment/fulfillment.delivery')

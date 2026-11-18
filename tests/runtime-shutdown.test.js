@@ -95,8 +95,32 @@ test('启动检查未完成时收到信号：不再 listen/启动 scheduler，�
   assert.deepEqual(f.exits, [0]); assert.equal(f.events.filter(x => x === 'pool').length, 1)
   assert.ok(!f.events.includes('listen')); assert.ok(!f.events.includes('scheduler'))
 })
+test('打印清扫在数据库探活后启动，重复退出信号仅停止一次并等待在途清扫', async () => {
+  const f = fixture('print-startup')
+  await flush()
+  assert.ok(!f.events.includes('print-start'))
+  f.startup.resolve()
+  await flush()
+  assert.equal(f.events.filter(event => event === 'print-start').length, 1)
+  assert.equal(f.events.filter(event => event === 'print-tick').length, 1)
+
+  f.process.emit('SIGTERM')
+  f.process.emit('SIGINT')
+  f.http.resolve()
+  f.worker.resolve()
+  await flush()
+  assert.equal(f.clock.cleared.length, 2)
+  assert.ok(!f.events.includes('pool'))
+  for (const timer of f.clock.cleared) await timer.tick()
+  assert.equal(f.events.filter(event => event === 'print-tick').length, 1)
+  f.printWork.resolve()
+  await flush()
+  assert.deepEqual(f.exits, [0])
+  assert.equal(f.events.filter(event => event === 'pool').length, 1)
+})
 test('启动失败和关池失败明确非零，生产 operational rejection 保留原契约', async () => {
   const failed = fixture('startup'); failed.startup.reject(new Error('synthetic startup')); await flush(); assert.deepEqual(failed.exits, [1])
+  assert.ok(!failed.events.includes('print-start'))
   const pool = fixture('pool-fails'); await flush(); pool.process.emit('SIGTERM'); pool.http.resolve(); pool.worker.resolve(); await flush(); assert.deepEqual(pool.exits, [1])
   const operational = fixture(); await flush(); operational.process.emit('unhandledRejection', Object.assign(new Error('operational'), { isOperational: true })); await flush()
   assert.equal(operational.runtime.isDraining(), false)
@@ -140,6 +164,21 @@ test('幂等清理即时工作也必须排空，重复启动不叠加且不改�
   runtime.beginDrain(); runtime.stopTasks(); let finished = false
   const drain = runtime.waitForTasks().then(() => { finished = true }); await flush(); assert.equal(finished, false)
   work.resolve([{}]); await drain; assert.equal(finished, true)
+})
+test('导入打印服务门面不会启动清扫；显式禁用与零间隔亦不启动', async () => {
+  for (const env of [{}, { DISABLE_PRINT_JOB_SWEEPER: '1' }, { PRINT_JOB_SWEEP_MS: '0' }]) {
+    const clock = timers(), runtime = createRuntimeLifecycle(clock), sqls = []
+    const dispatch = loadWithRuntime('backend/src/modules/print-jobs/print-jobs.dispatch.js', runtime, {
+      '../../config/db': { pool: { async query(sql) { sqls.push(sql); return [{ affectedRows: 0 }] } } },
+      './print-jobs.status': { STATUS: {}, clientOfflineReclaimSeconds: () => 60 },
+    }, env)
+    loadWithRuntime('backend/src/modules/print-jobs/print-jobs.service.js', runtime, { './print-jobs.dispatch': dispatch })
+    assert.equal(clock.ticks.length, 0, '导入服务不应添加 timer')
+    if (Object.keys(env).length) dispatch.startPrintJobSweeper()
+    await flush()
+    assert.equal(clock.ticks.length, 0)
+    assert.deepEqual(sqls, [])
+  }
 })
 test('打印三支清理并行工作全部结束才能排空，一支失败不提前关池，重复 start 不叠加', async () => {
   const clock = timers(), runtime = createRuntimeLifecycle(clock), works = [deferred(), deferred(), deferred()], sqls = []

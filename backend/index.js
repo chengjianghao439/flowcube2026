@@ -5,6 +5,7 @@ const app    = require('./src/app')
 const logger = require('./src/utils/logger')
 const { pool, testConnection } = require('./src/config/db')
 const { startScheduler } = require('./src/scheduler')
+const { startPrintJobSweeper } = require('./src/modules/print-jobs/print-jobs.dispatch')
 const { env } = require('./src/config/env')
 const { lifecycle } = require('./src/utils/runtimeLifecycle')
 const { httpDrain } = require('./src/utils/httpDrain')
@@ -65,6 +66,7 @@ async function bootstrap() {
   server.on('error', err => { void gracefulShutdown('serverError', err, 1) })
   logger.info('数据库迁移已改为显式执行：请在部署前运行 `npm run migrate`', {}, 'Server')
   startScheduler()
+  startPrintJobSweeper()
 }
 
 startup = bootstrap()

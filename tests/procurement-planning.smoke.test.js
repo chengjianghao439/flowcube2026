@@ -2,8 +2,6 @@
 require('./helpers/testEnvironment').configureTestEnvironment()
 const test = require('node:test'), assert = require('node:assert/strict'), crypto = require('node:crypto')
 const { pool } = require('../backend/src/config/db')
-// This domain regression does not run background print dispatch or retention deletion.
-require('../backend/src/modules/print-jobs/print-jobs.dispatch').startPrintJobSweeper = () => {}
 const plan = require('../backend/src/modules/procurement/procurement.service')
 const policies = require('../backend/src/modules/procurement/procurement.policies')
 const { getSupplyRows } = require('../backend/src/modules/inventory/inventory.procurement')
