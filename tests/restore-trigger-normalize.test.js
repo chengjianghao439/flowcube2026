@@ -43,11 +43,23 @@ function runRestore({ importFails = false, notify = false } = {}) {
   fs.writeFileSync(path.join(bin, 'docker'), `#!${process.execPath}
 const fs = require('node:fs');
 const args = process.argv.slice(2);
-if (args[0] === 'run') { console.log('fixture-container'); process.exit(0); }
+if (args[0] === 'run') { console.log('a'.repeat(64)); process.exit(0); }
+if (args[0] === 'inspect') { console.log('sha256:' + 'b'.repeat(64)); process.exit(0); }
+if (args[0] === 'volume') {
+  const file = process.env.PROBE_VOLUME_STATE;
+  if (args[1] === 'create') fs.writeFileSync(file, args.filter(a => a.startsWith('io.flowcube.')).map(a => a.split('=')[1]).join(' '));
+  if (args[1] === 'inspect') {
+    if (!fs.existsSync(file)) process.exit(1);
+    console.log(fs.readFileSync(file, 'utf8'));
+  }
+  if (args[1] === 'rm') fs.unlinkSync(file);
+  process.exit(0);
+}
 if (args[0] === 'rm') process.exit(0);
 if (args[0] === 'exec') {
   const joined = args.join(' ');
   if (joined.includes('SELECT 1')) process.exit(0);
+  if (joined.includes('@@server_uuid')) { console.log('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee 8.0.46'); process.exit(0); }
   if (args.includes('-i')) {
     let data = '';
     process.stdin.setEncoding('utf8');
@@ -70,6 +82,8 @@ if (args[0] === 'exec') {
 process.exit(0);
 `, { mode: 0o755 })
 
+  fs.writeFileSync(path.join(bin, 'flock'), '#!/bin/bash\nexit 0\n', { mode: 0o755 })
+
   // 记录钉钉请求体，验证告警文本能被拼成合法 JSON。
   fs.writeFileSync(path.join(bin, 'curl'), `#!${process.execPath}
 const fs = require('node:fs');
@@ -86,6 +100,7 @@ process.exit(0);
       PATH: bin + ':' + process.env.PATH,
       PROJECT_DIR: dir,
       PROBE_STDIN_FILE: stdinFile,
+      PROBE_VOLUME_STATE: path.join(dir, 'volume'),
       PROBE_CURL_FILE: curlFile,
       PROBE_IMPORT_FAILS: importFails ? '1' : '0',
       MIN_TABLES: '5',

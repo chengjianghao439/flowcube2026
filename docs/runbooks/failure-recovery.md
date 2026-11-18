@@ -49,38 +49,11 @@ docker compose logs mysql | tail -100
 
 ### 数据损坏恢复（用备份）
 
-恢复策略（按优先级，从代价小到大）：
-
-1. **容器内 InnoDB 自恢复**：MySQL 启动时自动跑 redo log 恢复，通常自己就好。先给足时间（大库可能几分钟），
-   别急着做任何删除。
-2. **用最近一次备份重建**（每日 02:00 自动备份，保留 14 天，见 backup-db.sh）：
-   ```bash
-   # 停掉后端避免写入半残库
-   docker compose stop backend
-   # 找到最新有效备份（体积 ≥1KB 且 gzip 完好）
-   ls -lt /opt/flowcube/backups/flowcube_*.sql.gz | head -5
-   # 稳妥做法：先让临时容器把备份导入，验证无误再切生产（restore-check.sh 就是干这个的）
-   bash scripts/restore-check.sh <最新备份>        # 通过 = 备份可恢复
-   # 替换数据卷（先备份坏卷，万一新库还有问题可回查现场）
-   docker compose stop mysql
-   docker volume rm flowcube_mysql_data            # 注意：volume 名以 docker volume ls 实测为准
-   docker compose up -d mysql                      # 空卷首次启动会建空库（不会自动跑迁移！）
-   docker compose exec -T backend npm run migrate  # 手动补齐表结构（部署链路才会自动迁移）
-   # 再导入备份数据（注意先建好表结构再灌数据，或用含 CREATE TABLE 的完整备份）
-   # 备份由 mysqldump 导出，触发器函数体可能残留结尾分号（2026-09-14 事故，见
-   # docs/backup-restore-trigger-terminator-2026-09-14.md），必须按 restore-check.sh
-   # 的同一口径规范化，否则导入会在 `... ); */;;` 处报 1064 并中断。
-   gunzip -c /opt/flowcube/backups/flowcube_XXX.sql.gz \
-     | sed 's|;[[:space:]]*\*/;;[[:space:]]*$| */;;|' \
-     | docker exec -i flowcube-mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" <库名>
-   # 启动后端并验证
-   docker compose up -d backend
-   curl -fsS http://127.0.0.1:3000/api/health
-   ```
-   > ⚠️ **恢复后必须跑一致性检查**：`docker compose exec backend npm run resync:inventory-stock`
-   > 与 `GET /api/inventory/check-consistency`（缓存列可能滞后），确认库存缓存与容器一致再放业务。
-
-3. **实在没有可用备份**：联系开发从最近一次 `restore-check` 记录 / 服务器 MySQL 的 binlog 尽力找回。
+1. **先隔离写入、保留原实例。** 可用时让 InnoDB 完成常规 redo 恢复。遇到疑似数据损坏、迁移失败或目标不明，停止业务入口及后端、调度器和独立写入进程，核对应用确实停写。按部署锁和事故窗口同步执行，保留原 MySQL 容器、挂载和数据卷、日志、实际镜像、当前业务和迁移状态。疑似坏盘优先保留证据并交数据库管理员处置。
+2. **记录实际来源。** 使用部署实际的 Compose 项目和覆盖配置，`docker compose ps -a -q mysql` 可定位停止的容器。用 `docker inspect --format '{{.Id}} {{.Image}} {{json .Mounts}}' <容器ID>` 记录容器 ID、镜像 ID、挂到 `/var/lib/mysql` 的卷名或 bind mount 路径。对该镜像查 RepoDigest、架构和已验证的可取回副本；可连接时通过受保护的已认证会话记录 `SELECT @@server_uuid, VERSION(), DATABASE();`。对照备份回执的 SHA256、源 UUID、版本、库名与迁移状态，记录备份起止或可证明的业务数据截止时间。文件修改时间仅用于判断新鲜度。源不可查时记录不确定项。
+3. **先做独立演练，再另建可保留的恢复目标。** `RESTORE_IMAGE=<已核实镜像> bash scripts/restore-check.sh <备份.sql.gz>` 在关网临时容器导入并核表数及关键表行数，运行结束清理其专属测试卷。需要业务验收或接管时，另以新 Compose 项目、新的持久卷和隔离网络创建 MySQL，核对其挂载与源卷不同、UUID 与源实例不同，核对实际镜像 ID 和版本。仅将此卷挂到恢复实例。用授权的恢复账号先建无对象的目标 schema，再把完整逻辑备份导入一次，保留归档原件。导入在启用 `pipefail` 的管道中使用 [restore-check.sh](../../scripts/restore-check.sh) 同样的触发器终止符规范化，MySQL 出错即停止。确认导入之前无需先建业务表或补迁移。备份缺失或验证失败时，另核对可用的历史备份、异地副本或可验证的 binlog 时间点。
+4. **按库的来源选择入口。** 已有库用标准 migrate，保留其迁移和业务事实。零对象的首次安装才执行 `bootstrap-new-database.js`，从经批准的种子建立迁移 296 所需的 13 角色基线。完整备份导入后属于已有库，先核源对应的迁移回执、实际表与触发器、296 角色修订和候选镜像写入契约，再按需在隔离副本执行标准 migrate。遇到 296 严格基线失败或任何部分 DDL，保持停写，保留失败 SQL、回执及现场，交负责人确认后向前修复。详细入口见 [部署说明](../DEPLOY.md#数据库入口与独立恢复)。 候选迁移器报 `MIGRATION_ATTEMPT_UNRECONCILED` 时，记录 `db_migration_attempts` 的文件名、开始时间与迁移前备份。在独立副本比对实际 DDL、数据和回执，按核准方案向前处理。禁止盲目重跑或手工改回执。
+5. **在原实例停止的情况下验收恢复实例。** 使用只接恢复库的隔离应用验证登录、销售单详情、容器余量与库存缓存一致性、对账导出及金额，保存对照结果。记录事故停写、导入起止、业务验证完成和服务恢复时间，并记录备份覆盖到的数据时间与可能遗漏的区间。库存有差异先留证，不在验收中自动同步缓存。通过检查并经负责人确认切换后，先核应用实际连接的身份、`/api/ready` 以及用户侧只读业务，再解除停写。原卷、原镜像和备份保留到故障复盘和单独的清理确认。
 
 ---
 
@@ -196,8 +169,8 @@ cat /proc/pressure/io
 - [ ] `curl -fsS http://127.0.0.1:3000/api/health` 与 `https://jixuflow.com/api/health` 都 200
 - [ ] `docker compose ps` 三容器（mysql / backend / frontend）均 Up，重启计数不再增长
 - [ ] monitor 推送了「✅ 服务已恢复正常」钉钉（说明本轮异常已全部解除；状态文件当前观察为空且推送已确认）
-- [ ] 若涉及库存：跑 `resync:inventory-stock` 或 `GET /api/inventory/check-consistency`
-- [ ] 若涉及备份恢复：`bash scripts/restore-check.sh` 通过（备份文件时间 + 导入 + 表数 + 关键表行数）。自动选最新文件时默认最多 48 小时，可用 `BACKUP_MAX_AGE_HOURS` 调整；显式传入历史文件时仅提示过期并验证其恢复能力。销售单多久没有新增与备份是否新鲜无关。
+- [ ] 若涉及库存：用 `GET /api/inventory/check-consistency` 核对容器余量与库存缓存，记录差异并经确认后处理。
+- [ ] 若涉及备份恢复：`bash scripts/restore-check.sh` 通过（备份文件时间 + 导入 + 表数 + 关键表行数），并有原实例停止后独立恢复目标的业务验收记录。自动选最新文件时默认最多 48 小时，可用 `BACKUP_MAX_AGE_HOURS` 调整；显式传入历史文件时仅提示过期并验证其恢复能力。销售单多久没有新增与备份是否新鲜无关。
 - [ ] 若动过证书：`echo | openssl s_client -servername jixuflow.com -connect jixuflow.com:443 2>/dev/null | openssl x509 -noout -enddate`
 
 ### 2026-10-13 云端第二批恢复补验与容量边界

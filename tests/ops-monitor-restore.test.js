@@ -28,6 +28,10 @@ function runOps(script, scenario, { ageHours = 0, explicit = false, corrupt = fa
   const slowLog = path.join(dir, 'slow.log')
   fs.writeFileSync(slowLog, slowHours.map(hours =>
     `# Time: ${new Date(Date.now() - hours * 3600000).toISOString()}\n`).join(''))
+  const volumeState = path.join(dir, 'volume.json')
+  if (scenario === 'foreign-volume' || scenario === 'owned-volume') {
+    fs.writeFileSync(volumeState, JSON.stringify(scenario === 'owned-volume' ? 'restore-check flowcube-restore-check-777' : 'other-project'))
+  }
   const mock = `#!${process.execPath}
 const fs = require('node:fs'), path = require('node:path'), { spawnSync } = require('node:child_process');
 const cmd = path.basename(process.argv[1]), args = process.argv.slice(2), s = process.env.OPS_TEST_SCENARIO;
@@ -48,7 +52,17 @@ if (cmd === 'sleep') process.exit(0);
 if (cmd === 'docker') {
  const a = args.join(' ');
  if (args[0] === 'compose') console.log('flowcube-' + args.at(-1));
- else if (args[0] === 'inspect') console.log(a.includes('.Name') ? '/' + args.at(-1) : a.includes('RestartCount') ? '0' : 'running');
+ else if (args[0] === 'volume') {
+   const state = process.env.OPS_TEST_VOLUME_STATE;
+   if (args[1] === 'inspect') {
+     if (!fs.existsSync(state)) process.exit(1);
+     console.log(JSON.parse(fs.readFileSync(state, 'utf8')));
+   } else if (args[1] === 'create') {
+     if (!fs.existsSync(state)) fs.writeFileSync(state, JSON.stringify(args.filter(a => a.startsWith('io.flowcube.')).map(a => a.split('=')[1]).join(' ')));
+   } else if (args[1] === 'rm' && fs.existsSync(state)) fs.unlinkSync(state);
+ }
+ else if (args[0] === 'run') console.log('a'.repeat(64));
+ else if (args[0] === 'inspect') console.log(a.includes('.Image') ? 'sha256:' + 'b'.repeat(64) : a.includes('.Name') ? '/' + args.at(-1) : a.includes('RestartCount') ? '0' : 'running');
  else if (args[0] === 'exec') {
    if (args.includes('-i')) { fs.readFileSync(0); process.exit(s === 'import-fails' ? 1 : 0); }
    if (a.includes('Threads_connected')) {
@@ -65,6 +79,7 @@ if (cmd === 'docker') {
      }
      console.log((fs.readFileSync(process.env.OPS_TEST_SLOW_LOG, 'utf8').match(/^# Time:/gm) || []).length);
    }
+   else if (a.includes('@@server_uuid')) console.log('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee 8.0.46');
    else if (a.includes('TIMESTAMPDIFF')) console.log('668');
    else if (a.includes('information_schema.tables')) console.log(s === 'missing-tables' ? '2' : '135');
    else if (a.includes('COUNT(*)')) console.log('7');
@@ -81,7 +96,7 @@ process.exit(0);
   const env = { ...process.env, PATH: bin + ':' + process.env.PATH, PROJECT_DIR: dir,
     BACKUP_DIR: path.join(dir, 'backups'), STATE_FILE: state, DINGTALK_WEBHOOK: '',
     MIN_TABLES: '130', MIN_ROWS: '1', MIN_BYTES: '1', BACKUP_MAX_AGE_HOURS: '48',
-    OPS_TEST_SCENARIO: scenario, OPS_TEST_LOG: log, OPS_TEST_SLOW_LOG: slowLog }
+    OPS_TEST_SCENARIO: scenario, OPS_TEST_LOG: log, OPS_TEST_SLOW_LOG: slowLog, OPS_TEST_VOLUME_STATE: volumeState }
   if (previousMonitorState) fs.writeFileSync(state, previousMonitorState)
   try {
     const result = spawnSync('bash', [path.join(dir, 'scripts', script), ...(explicit ? [backup] : [])],
@@ -196,29 +211,32 @@ test('钉钉告警失败必须非 0 返回，不得静默吞掉', () => {
   assert.equal(lines[2], 'abc', 'json_escape 必须剥离会破坏 JSON 的引号与反斜杠')
 })
 
-// 2026-09-19 查明：恢复演练用 `docker run` 起临时 MySQL，却没有挂载具名卷——`mysql:8.0` 镜像声明了
-// `VOLUME /var/lib/mysql`，Docker 于是自动创建**匿名卷**。脚本本来就有 `trap cleanup EXIT` 与
-// `docker rm -f -v`，但 SIGKILL / 机器重启 / OOM 会绕过 trap，而匿名卷无法按名字回收，于是长期堆积：
-// 2026-08-10、08-25、09-01（每周一的自动演练）各留下一个含**完整业务表**的 `flowcube_restore_check` 卷，
-// 合计 769MB，直到 2026-09-19 排查磁盘时才被发现并清理。现改为具名卷 + 启动前幂等清理，使异常中断自愈。
-// 反向验证：去掉启动前清理、退回不挂卷（匿名卷）写法，本断言都必须失败。
-test('恢复演练的临时数据卷必须具名，且启动前幂等清理（防匿名卷因 SIGKILL 累积）', () => {
-  const src = fs.readFileSync(path.join(root, 'scripts/restore-check.sh'), 'utf8')
-  assert.match(src, /RESTORE_VOLUME="\$\{RESTORE_VOLUME:-flowcube_restore_check_tmp\}/, '必须使用具名卷')
-  assert.match(src, /-v "\$RESTORE_VOLUME:\/var\/lib\/mysql"/, '必须把具名卷挂到 /var/lib/mysql（否则镜像会建匿名卷）')
-  assert.match(
-    src,
-    /DOCKER_COMMAND_TIMEOUT=15 docker volume rm -f "\$RESTORE_VOLUME" >\/dev\/null 2>&1 \|\| true/,
-    '必须在启动容器前幂等清理同名残留卷',
-  )
-  // 必须限定在 cleanup 函数体内匹配：`[^]*?` 会跨过 `}` 一直匹配到下面「启动前清理」那一行，
-  // 于是删掉 cleanup 里的删卷也能通过（反向验证时正是这样漏过的）。`[^}]*?` 不会跨出函数体。
-  assert.match(
-    src,
-    /cleanup\(\) \{[^}]*?docker volume rm -f "\$RESTORE_VOLUME"/,
-    'cleanup 必须显式删具名卷（rm -f -v 对具名卷无效）',
-  )
-  const pre = src.indexOf('DOCKER_COMMAND_TIMEOUT=15 docker volume rm -f "$RESTORE_VOLUME"')
-  const run = src.indexOf('docker run -d --name "$CONTAINER"')
-  assert.ok(pre > 0 && pre < run, '幂等清理必须发生在 docker run 之前')
+test('恢复演练拒绝同名非演练卷，并保留该卷及其挂载', () => {
+  const result = runOps('restore-check.sh', 'foreign-volume', { explicit: true })
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.match(result.stderr, /归属/)
+  assert.ok(!result.commands.some(c => c[0] === 'docker' && (c[1] === 'run' || c[1] === 'rm' ||
+    (c[1] === 'volume' && ['rm', 'create'].includes(c[2])))))
+})
+
+test('恢复演练只回收本脚本的具名卷并重新创建，结束回收同一卷', () => {
+  const result = runOps('restore-check.sh', 'owned-volume', { explicit: true })
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  const commands = result.commands.filter(c => c[0] === 'docker')
+  const volume = 'flowcube_restore_check_tmp'
+  const operations = commands.filter(c => c[1] === 'volume' && c.at(-1) === volume).map(c => c[2])
+  assert.deepEqual(operations, ['inspect', 'rm', 'create', 'inspect', 'inspect', 'rm'])
+  const start = commands.findIndex(c => c[1] === 'run')
+  assert.ok(start > commands.findIndex(c => c[1] === 'volume' && c[2] === 'create'))
+  assert.ok(commands[start].includes(volume + ':/var/lib/mysql'))
+  assert.ok(commands[start].includes('none'))
+  assert.ok(commands.some(c => c[1] === 'rm' && c.at(-1) === 'a'.repeat(64)))
+  assert.match(result.stdout, /aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee 8\.0\.46/)
+})
+
+test('恢复演练遇到同一个具名卷的运行锁时退出，避免改动另一轮演练', () => {
+  const result = runOps('restore-check.sh', 'busy', { explicit: true })
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.match(result.stderr, /演练.*进行/)
+  assert.ok(!result.commands.some(c => c[0] === 'docker'))
 })

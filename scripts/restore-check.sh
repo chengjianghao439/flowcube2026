@@ -2,8 +2,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # FlowCube 备份恢复演练脚本（审计 4.5）
 #
-# 取最新备份在「临时 MySQL 容器」中完整导入，校验表数与关键表行数，
-# 作为「备份真的能恢复」的证明。只读操作，不影响生产库。
+# 在关网、独立具名卷的临时 MySQL 容器导入备份，并校验表数与关键表行数。
+# 只读备份文件，不接触源库或已保留的恢复目标，也不执行业务切换。
 #
 # 导入前会规范化 mysqldump 对触发器函数体的已知导出缺陷（2026-09-14 事故）：
 # 函数体残留的结尾分号会被导出成 `... ); */;;`，直接导入必然 1064。这里只在
@@ -14,7 +14,8 @@
 #   bash scripts/restore-check.sh <file.sql.gz> # 校验指定备份
 #
 # 环境变量：
-#   RESTORE_IMAGE   临时 MySQL 镜像（默认 mysql:8.0）
+#   RESTORE_IMAGE   临时 MySQL 镜像（默认 mysql:8.0；复盘时指定已验证的 digest 或镜像 ID）
+#   RESTORE_VOLUME  临时演练卷（默认 flowcube_restore_check_tmp；拒绝非演练归属）
 #   RESTORE_DB      校验用库名（默认 flowcube_restore_check，用完即删）
 #   RESTORE_TIMEOUT_SECONDS 整个演练时限（默认 900 秒，超时清理容器）
 #   RESTORE_MEMORY / RESTORE_CPUS / RESTORE_PIDS 默认 768m / 1 / 256
@@ -48,15 +49,14 @@ PROJECT_DIR="${PROJECT_DIR:-/opt/flowcube}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/flowcube/backups}"
 RESTORE_IMAGE="${RESTORE_IMAGE:-mysql:8.0}"
 RESTORE_DB="${RESTORE_DB:-flowcube_restore_check}"
-# 临时数据卷用**具名**卷（而不是让 mysql 镜像自动建匿名卷）：名字固定，才能在每次演练启动时幂等
-# 清掉上次异常中断留下的残留。2026-09-19 查明：匿名卷一旦因 SIGKILL / 机器重启 / OOM 绕过 trap，
-# 就会以 64 位 hex 名长期堆积——2026-08-10、08-25、09-01 各残留一个含完整业务表的
-# flowcube_restore_check 卷，共 769MB。
+# 具名演练卷用于回收上次 SIGKILL / 机器重启等留下的本脚本残留。
+# 已存在而无归属标签的卷需要人工核对，避免回收源卷或另建的切换候选卷。
 RESTORE_VOLUME="${RESTORE_VOLUME:-flowcube_restore_check_tmp}"
 RESTORE_MEMORY="${RESTORE_MEMORY:-768m}"
 RESTORE_CPUS="${RESTORE_CPUS:-1}"
 RESTORE_PIDS="${RESTORE_PIDS:-256}"
 MIN_TABLES="${MIN_TABLES:-}"
+[[ "$RESTORE_VOLUME" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]+$ ]] || { echo 'RESTORE_VOLUME 格式不合法' >&2; exit 1; }
 [[ "$RESTORE_DB" =~ ^[A-Za-z0-9_]+$ ]] || { echo 'RESTORE_DB 只能包含字母、数字和下划线' >&2; exit 1; }
 [[ "$RESTORE_MEMORY" =~ ^[1-9][0-9]*[mMgG]$ ]] || { echo 'RESTORE_MEMORY 必须带 m/g 容量单位' >&2; exit 1; }
 [[ "$RESTORE_CPUS" =~ ^[0-9]+([.][0-9]+)?$ && ! "$RESTORE_CPUS" =~ ^0+([.]0+)?$ ]] || { echo 'RESTORE_CPUS 必须为正数' >&2; exit 1; }
@@ -132,40 +132,70 @@ if [ "$AGE_SECONDS" -gt $(( BACKUP_MAX_AGE_HOURS * 3600 )) ]; then
   echo "[$(ts)] [WARN] 指定的历史备份已超过新鲜度阈值，本次仅验证其恢复能力"
 fi
 
-# 起一个临时 MySQL 容器（随机名防冲突），用 root 密码导入
+# 同一宿主和卷只允许一轮演练。使用追加模式打开锁文件，结束由进程释放锁。
+type -P flock >/dev/null || fail "恢复演练需要 flock"
+exec 8>>"/tmp/flowcube-restore-check.$RESTORE_VOLUME.lock"
+if ! flock -n 8; then
+  echo "[$(ts)] [ERROR] 该卷的另一轮演练正在进行：$RESTORE_VOLUME" >&2
+  exit 1
+fi
+
 CONTAINER="flowcube-restore-check-$$"
+VOLUME_TAG='{{index .Labels "io.flowcube.purpose"}} {{index .Labels "io.flowcube.restore.container"}}'
+OWNED_VOLUME=0
+OWNED_TAG="restore-check $CONTAINER"
+volume_owner() {
+  docker volume inspect --format "$VOLUME_TAG" "$RESTORE_VOLUME"
+}
 cleanup() {
-  # 数据目录是**具名**卷（见 RESTORE_VOLUME）：`docker rm -f -v` 只删匿名卷、对具名卷无效，
-  # 因此必须再显式删卷，否则成功路径也会把整个恢复库留在盘上。
-  DOCKER_COMMAND_TIMEOUT=5 docker rm -f -v "$CONTAINER" >/dev/null 2>&1 \
-    || echo "[WARN] 临时恢复容器清理失败，请检查 $CONTAINER" >&2
-  DOCKER_COMMAND_TIMEOUT=10 docker volume rm -f "$RESTORE_VOLUME" >/dev/null 2>&1 \
-    || echo "[WARN] 临时恢复数据卷清理失败，请检查 $RESTORE_VOLUME" >&2
-  [ -n "${IMPORT_LOG:-}" ] && rm -f "$IMPORT_LOG"
+  if [ "$OWNED_VOLUME" = 1 ]; then
+    if [[ "${CONTAINER_ID:-}" =~ ^[a-f0-9]{64}$ ]]; then
+      DOCKER_COMMAND_TIMEOUT=5 docker rm -f -v "$CONTAINER_ID" >/dev/null 2>&1 \
+        || echo "[WARN] 临时恢复容器清理失败，请检查 $CONTAINER_ID" >&2
+    fi
+    if [ "$(DOCKER_COMMAND_TIMEOUT=5 volume_owner 2>/dev/null)" = "$OWNED_TAG" ]; then
+      DOCKER_COMMAND_TIMEOUT=5 docker volume rm "$RESTORE_VOLUME" >/dev/null 2>&1 \
+        || echo "[WARN] 临时恢复数据卷清理失败，请检查 $RESTORE_VOLUME" >&2
+    else
+      echo "[WARN] 临时恢复数据卷归属无法确认，保留 $RESTORE_VOLUME" >&2
+    fi
+  fi
+  if [ -n "${IMPORT_LOG:-}" ]; then rm -f "$IMPORT_LOG"; fi
 }
 trap cleanup EXIT
 trap 'exit 124' TERM
 trap 'exit 130' INT
 
-# 启动前先清掉同名卷：上一次演练若被 SIGKILL / 机器重启 / OOM 杀掉，trap 不会执行、卷会留下；
-# 这里幂等清理让它自愈，异常中断也不再累积（旧写法用匿名卷，根本无法按名字回收）。
-echo "[$(ts)] [INFO] 清理可能残留的临时数据卷 $RESTORE_VOLUME ..."
-DOCKER_COMMAND_TIMEOUT=15 docker volume rm -f "$RESTORE_VOLUME" >/dev/null 2>&1 || true
+if existing_owner=$(volume_owner 2>/dev/null); then
+  [[ "$existing_owner" =~ ^restore-check\ flowcube-restore-check-[0-9]+$ ]] \
+    || fail "同名卷归属并非恢复演练，保留 $RESTORE_VOLUME"
+  echo "[$(ts)] [INFO] 清理前次临时恢复卷 $RESTORE_VOLUME ..."
+  DOCKER_COMMAND_TIMEOUT=15 docker volume rm "$RESTORE_VOLUME" >/dev/null \
+    || fail "前次演练卷仍被引用或无法清理，保留 $RESTORE_VOLUME"
+fi
+docker volume create --label io.flowcube.purpose=restore-check \
+  --label "io.flowcube.restore.container=$CONTAINER" "$RESTORE_VOLUME" >/dev/null \
+  || fail "无法创建临时演练卷 $RESTORE_VOLUME"
+[ "$(volume_owner)" = "$OWNED_TAG" ] || fail "无法核对新卷归属，保留 $RESTORE_VOLUME"
+OWNED_VOLUME=1
 
 echo "[$(ts)] [INFO] 启动临时 MySQL 容器 $CONTAINER ..."
-docker run -d --name "$CONTAINER" \
+CONTAINER_ID=$(docker run -d --name "$CONTAINER" \
   --network none --memory "$RESTORE_MEMORY" --memory-swap "$RESTORE_MEMORY" \
   --cpus "$RESTORE_CPUS" --pids-limit "$RESTORE_PIDS" \
   -v "$RESTORE_VOLUME:/var/lib/mysql" \
   -e MYSQL_ROOT_PASSWORD=restore_check_pw \
   -e MYSQL_DATABASE="$RESTORE_DB" \
-  "$RESTORE_IMAGE" >/dev/null
+  "$RESTORE_IMAGE") || fail "无法启动临时 MySQL 容器 $CONTAINER"
+[[ "$CONTAINER_ID" =~ ^[a-f0-9]{64}$ ]] || fail "临时 MySQL 容器身份无效"
+IMAGE_ID=$(docker inspect --format '{{.Image}}' "$CONTAINER_ID") || fail "无法核对临时 MySQL 镜像"
+[[ "$IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ ]] || fail "临时 MySQL 镜像身份无效"
 
 # 等待容器就绪：mysqladmin ping 通过后还要确认能实际执行建库
 # （MySQL 8.0 首次启动做初始化，ping 可能在 init 完成前就应答）
 ready=0
 for i in $(seq 1 60); do
-  if docker exec "$CONTAINER" mysql -uroot -prestore_check_pw \
+  if docker exec "$CONTAINER_ID" mysql -h 127.0.0.1 -uroot -prestore_check_pw \
       -e "SELECT 1" >/dev/null 2>&1; then
     ready=1
     break
@@ -174,18 +204,22 @@ for i in $(seq 1 60); do
   sleep 2
 done
 [ "$ready" = "1" ] && echo "[$(ts)] [INFO] 临时 MySQL 已就绪"
+DB_IDENTITY=$(docker exec "$CONTAINER_ID" mysql -uroot -prestore_check_pw -N -e 'SELECT @@server_uuid, VERSION()' 2>/dev/null) \
+  || fail "无法核对演练 MySQL 实例身份"
+[[ "$DB_IDENTITY" =~ ^[[:xdigit:]-]{36}[[:space:]]+[^[:space:]]+$ ]] || fail "演练 MySQL 实例身份无效"
+echo "[$(ts)] [INFO] 演练目标：容器 ${CONTAINER_ID}，数据卷 ${RESTORE_VOLUME}，镜像 ${IMAGE_ID}，MySQL UUID 和版本 $DB_IDENTITY"
 
 echo "[$(ts)] [INFO] 解压并导入备份到 $RESTORE_DB ..."
 # 备份是 mysqldump 单库输出（不含 CREATE DATABASE/USE，见 backup-db.sh），
 # 须显式指定目标库；先建库确保存在（幂等），再导入。
-docker exec "$CONTAINER" \
+docker exec "$CONTAINER_ID" \
   mysql -uroot -prestore_check_pw -e "CREATE DATABASE IF NOT EXISTS \`$RESTORE_DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci" >/dev/null 2>&1
 # 导入失败时要拿到真实原因：旧写法把 stderr 丢进 /dev/null，只报「备份可能损坏」，
 # 让一份完好的备份被误判（2026-09-14）。这里落盘再透出，区分文件损坏与语法问题。
 IMPORT_LOG="$(mktemp)"
 set +e
 { gunzip -c "$FILE" | normalize_trigger_terminators \
-  | DOCKER_COMMAND_TIMEOUT="$RESTORE_TIMEOUT_SECONDS" docker exec -i "$CONTAINER" \
+  | DOCKER_COMMAND_TIMEOUT="$RESTORE_TIMEOUT_SECONDS" docker exec -i "$CONTAINER_ID" \
       mysql -uroot -prestore_check_pw "$RESTORE_DB" >/dev/null; } 2>"$IMPORT_LOG"
 IMPORT_RC=$?
 set -e
@@ -202,7 +236,7 @@ if [ "$IMPORT_RC" -ne 0 ]; then
 fi
 
 # 校验表数
-TABLES=$(docker exec "$CONTAINER" \
+TABLES=$(docker exec "$CONTAINER_ID" \
   mysql -uroot -prestore_check_pw -N -e \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$RESTORE_DB'" 2>/dev/null | tr -d ' ')
 
