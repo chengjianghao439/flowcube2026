@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           fetch-depth: 0
-          ref: 8e230e35cc82214883e88d6ea7e47b6c1d1869e8
+          ref: 3c63bffd88a6fd070409fac2b17e5d1571972665
           persist-credentials: false
       - name: Run pinned Gitleaks (Docker)
         run: |-
@@ -54,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: 8e230e35cc82214883e88d6ea7e47b6c1d1869e8
+          ref: 3c63bffd88a6fd070409fac2b17e5d1571972665
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -77,7 +77,7 @@ jobs:
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
-          ref: 8e230e35cc82214883e88d6ea7e47b6c1d1869e8
+          ref: 3c63bffd88a6fd070409fac2b17e5d1571972665
           persist-credentials: false
       - name: Check for tracked secrets
         run: |
