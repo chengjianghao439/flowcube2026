@@ -12,10 +12,10 @@ const importDir = path.resolve(__dirname, '../backend/src/modules/import')
 const options = { fileBuffer: Buffer.from('fixture stock A and B'), originalName: 'opening.csv', operator: { userId: 11 }, scopeWarehouseIds: [1], requestKey: 'fixture-key' }
 const batchRows = [['code', 'warehouse', 'qty'], ['A', 1, 10], ['B', 1, 7]]
 
-function fixture() {
+function fixture({ inputRows = batchRows, failSecondConnection = true, rejectFirstMovement = false } = {}) {
   const stock = new Map([['A', 0], ['B', 0]])
   const runs = new Map(), rows = new Map(), movements = []
-  let batches = 0, failNext = false
+  let batches = 0, failNext = false, movementAttempts = 0
   const batchKey = (userId, requestKey) => JSON.stringify([userId, requestKey])
   const rowKey = (batchId, index) => JSON.stringify([batchId, index])
   async function query(sql, values = []) {
@@ -28,7 +28,12 @@ function fixture() {
       return [{ affectedRows: 1 }]
     }
     if (normalized.startsWith('SELECT row_index, applied')) return [[...rows.values()].filter(r => r.batch_id === values[0])]
-    if (normalized.startsWith('SELECT id, name, unit FROM product_items')) return [[{ id: values[0], name: values[0], unit: '件' }]]
+    if (normalized.startsWith('SELECT id, name, unit FROM product_items')) return [stock.has(values[0]) ? [{ id: values[0], name: values[0], unit: '件' }] : []]
+    if (normalized.startsWith('SET TRANSACTION ISOLATION LEVEL')) return [[]]
+    if (normalized.startsWith('SELECT 1 FROM inventory_stock_import_rows')) {
+      const [batchId, productId, warehouseId, index] = values
+      return [[...rows.values()].filter(row => row.batch_id === batchId && row.productId === productId && row.warehouseId === warehouseId && row.row_index > index && row.applied)]
+    }
     if (normalized.startsWith('SELECT id FROM inventory_warehouses')) return [[{ id: 1 }]]
     if (normalized.startsWith('SELECT applied FROM inventory_stock_import_rows')) {
       const row = rows.get(rowKey(...values))
@@ -37,11 +42,15 @@ function fixture() {
     if (normalized.startsWith('INSERT INTO inventory_stock_import_rows')) {
       const [batchId, index, message] = values
       const key = rowKey(batchId, index)
+      if (message?.length > 500) throw Error('fixture error summary exceeds VARCHAR capacity')
       if (!rows.has(key)) rows.set(key, { batch_id: batchId, row_index: index, applied: 0, error_message: message || null })
+      else if (message && !rows.get(key).applied) rows.get(key).error_message = message
       return [{ affectedRows: 1 }]
     }
     if (normalized.startsWith('UPDATE inventory_stock_import_rows')) {
-      const row = rows.get(rowKey(...values))
+      const [batchId, index] = values.length === 2 ? values : values.slice(2)
+      const row = rows.get(rowKey(batchId, index))
+      if (values.length === 4) [row.productId, row.warehouseId] = values
       row.applied = 1
       row.error_message = null
       return [{ affectedRows: 1 }]
@@ -70,17 +79,18 @@ function fixture() {
     'node:crypto': crypto,
     '../../config/db': { pool },
     '../../utils/AppError': AppError,
-    './importBudget': { parseBudgetedRows: async () => batchRows },
+    './importBudget': { parseBudgetedRows: async () => inputRows },
     '../../utils/qtyPrecision': { assertQtyPrecision: async () => {} },
     '../../engine/inventoryEngine': { MOVE_TYPE: { STOCKCHECK: 'fixture' }, writeInventoryLog: async () => {} },
     '../../engine/containerEngine': {
       SOURCE_TYPE: { IMPORT: 'fixture' },
       async getStockProjection(_connection, params) { return { quantity: stock.get(params.productId) } },
       async adjustContainerStock(connection, params) {
+        if (++movementAttempts === 1 && rejectFirstMovement) throw Error('first movement transient failure')
         const before = stock.get(params.productId)
         const after = before + params.qty
         connection.movement = { code: params.productId, after, batch: params.sourceRefId }
-        if (movements.length === 0) failNext = true
+        if (failSecondConnection && movements.length === 0) failNext = true
         return { before, after, createdContainerId: 1, primaryDeductContainerId: 1 }
       },
     },
@@ -124,4 +134,33 @@ test('部分成功后可查询进度；同键换文件或权限缩小时拒绝�
   await assert.rejects(service.importStock({ ...options, scopeWarehouseIds: [] }), { code: 'WAREHOUSE_SCOPE_DENIED' })
   assert.equal(stock.get('B'), 0)
   assert.equal(movements.length, 1)
+})
+
+
+test('补跑较早的同商品同仓行时，保留较晚行已经提交的库存目标', async () => {
+  const { service, stock, movements } = fixture({
+    inputRows: [batchRows[0], ['A', 1, 10], ['A', 1, 15]],
+    failSecondConnection: false,
+    rejectFirstMovement: true,
+  })
+  const first = await service.importStock(options)
+  assert.equal(first.data.success, 1)
+  assert.equal(stock.get('A'), 15)
+  const retry = await service.importStock(options)
+  assert.equal(retry.data.success, 2)
+  assert.equal(stock.get('A'), 15)
+  assert.equal(movements.length, 1)
+})
+
+test('超长编码的可读失败摘要有界，后续合法行仍正常入库', async () => {
+  const { service, stock } = fixture({
+    inputRows: [batchRows[0], ['x'.repeat(1800), 1, 10], batchRows[2]],
+    failSecondConnection: false,
+  })
+  const result = await service.importStock(options)
+  assert.equal(result.data.success, 1)
+  assert.equal(stock.get('B'), 7)
+  assert.equal(result.data.errors.length, 1)
+  assert.match(result.data.errors[0], /第2行/)
+  assert(result.data.errors[0].length <= 500)
 })

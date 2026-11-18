@@ -87,19 +87,31 @@ async function claimRow(conn, batchId, rowIndex) {
   return Boolean(row.applied)
 }
 
-async function completeRow(conn, batchId, rowIndex) {
+async function hasLaterAppliedRow(conn, batchId, rowIndex, productId, warehouseId) {
+  const [[later]] = await conn.query(
+    `SELECT 1 FROM inventory_stock_import_rows
+      WHERE batch_id=? AND product_id=? AND warehouse_id=? AND row_index>? AND applied=1 LIMIT 1`,
+    [batchId, productId, warehouseId, rowIndex],
+  )
+  return Boolean(later)
+}
+
+async function completeRow(conn, batchId, rowIndex, productId, warehouseId) {
   await conn.query(
-    'UPDATE inventory_stock_import_rows SET applied=1, error_message=NULL WHERE batch_id=? AND row_index=?',
-    [batchId, rowIndex],
+    `UPDATE inventory_stock_import_rows SET applied=1, error_message=NULL, product_id=?, warehouse_id=?
+      WHERE batch_id=? AND row_index=?`,
+    [productId, warehouseId, batchId, rowIndex],
   )
   await conn.query('UPDATE inventory_import_batches SET row_count=row_count+1 WHERE id=?', [batchId])
 }
 
 async function recordRowFailure(batchId, rowIndex, message) {
+  const characters = Array.from(message)
+  const summary = characters.length > 500 ? characters.slice(0, 499).join('') + '…' : message
   await pool.query(
     `INSERT INTO inventory_stock_import_rows (batch_id, row_index, error_message) VALUES (?, ?, ?)
      ON DUPLICATE KEY UPDATE error_message=IF(applied=1, error_message, ?)`,
-    [batchId, rowIndex, message, message],
+    [batchId, rowIndex, summary, summary],
   )
 }
 
@@ -119,4 +131,4 @@ async function getStockImportStatus({ requestKey, operator, scopeWarehouseIds })
   return readProgress({ ...run, requestKey: key })
 }
 
-module.exports = { openStockImportRun, getStockImportStatus, readProgress, claimRow, completeRow, recordRowFailure }
+module.exports = { openStockImportRun, getStockImportStatus, readProgress, claimRow, hasLaterAppliedRow, completeRow, recordRowFailure }

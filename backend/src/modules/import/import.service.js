@@ -9,7 +9,7 @@ const { adjustContainerStock, SOURCE_TYPE, getStockProjection } = require('../..
 const { SETTLEMENT_TYPE, normalizeTermsDays } = require('../../constants/settlementType')
 const { normalizePartyProfile } = require('../../utils/partyProfile')
 const { scopeFilter } = require('../../utils/warehouseScope')
-const { openStockImportRun, getStockImportStatus, readProgress, claimRow, completeRow, recordRowFailure } = require('./stockImportBatches')
+const { openStockImportRun, getStockImportStatus, readProgress, claimRow, hasLaterAppliedRow, completeRow, recordRowFailure } = require('./stockImportBatches')
 
 // 仅导入入口使用严格枚举；历史记录读取仍由 settlementType.normalizeSettlementType 兼容旧值。
 function parseImportedSettlementType(value) {
@@ -183,6 +183,7 @@ async function importSingleStockRow({
 
   const connection = await pool.getConnection()
   try {
+    await connection.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await connection.beginTransaction()
     if (await claimRow(connection, batchId, rowIndex)) {
       await connection.commit()
@@ -219,8 +220,10 @@ async function importSingleStockRow({
       lock: true,
     })
     const diff = Math.round((target - current) * 100) / 100
-    if (diff === 0) {
-      await completeRow(connection, batchId, rowIndex)
+    // The stock dimension is locked. A later committed row in this batch
+    // supersedes this earlier target without discarding any intervening stock movement.
+    if (diff === 0 || await hasLaterAppliedRow(connection, batchId, rowIndex, product.id, Number(warehouseId))) {
+      await completeRow(connection, batchId, rowIndex, product.id, Number(warehouseId))
       await connection.commit()
       return { ok: true }
     }
@@ -259,7 +262,7 @@ async function importSingleStockRow({
       operatorName,
     })
 
-    await completeRow(connection, batchId, rowIndex)
+    await completeRow(connection, batchId, rowIndex, product.id, Number(warehouseId))
     await connection.commit()
     return { ok: true }
   } catch (error) {
