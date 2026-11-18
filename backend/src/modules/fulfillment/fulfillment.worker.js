@@ -2,6 +2,8 @@ const { pool } = require('../../config/db')
 const { definitions, eligibleOwners } = require('./fulfillment.access')
 const { detect } = require('./fulfillment.detect')
 const { event } = require('./fulfillment.events')
+const { fulfillmentFallback } = require('./fulfillment.fallback')
+const logger = require('../../utils/logger')
 
 async function syncDocument(type, id) {
   const conn = await pool.getConnection()
@@ -34,19 +36,17 @@ async function syncDocument(type, id) {
     await conn.commit()
   } catch (error) { await conn.rollback(); throw error } finally { conn.release() }
 }
-const cursors = {}
 const activeStatuses = { sale: '1,2,3,6', purchase: '2,5', inbound: '1,2,3', transfer: '2,3' }
-async function runFulfillmentSync() {
-  // 每轮每类最多 25 单，游标前进，避免一次任务长期占用连接池。GET 保持纯读取。
-  for (const [type, def] of Object.entries(definitions)) {
-    const [rows] = await pool.query(`SELECT d.id FROM ${def.table} d WHERE d.id>? AND
-      ((d.deleted_at IS NULL AND d.status IN (${activeStatuses[type]})) OR EXISTS(SELECT 1 FROM order_fulfillment_issues i WHERE i.document_type=? AND i.document_id=d.id AND i.status<>'resolved'))
-      ORDER BY d.id LIMIT 25`, [cursors[type] || 0, type])
-    for (const row of rows) {
-      try { await syncDocument(type, row.id) } catch (error) { require('../../utils/logger').error('履约事项同步失败', error, { type, documentId: row.id }, 'Fulfillment') }
-      cursors[type] = row.id
-    }
-    if (rows.length < 25) cursors[type] = 0
-  }
+async function listFallbackDocuments(type, cursor, limit) {
+  const [rows] = await pool.query(`SELECT d.id FROM ${definitions[type].table} d WHERE d.id>? AND
+    ((d.deleted_at IS NULL AND d.status IN (${activeStatuses[type]})) OR EXISTS(SELECT 1 FROM order_fulfillment_issues i WHERE i.document_type=? AND i.document_id=d.id AND i.status<>'resolved'))
+    ORDER BY d.id LIMIT ?`, [cursor, type, limit])
+  return rows
 }
+const runFulfillmentSync = () => fulfillmentFallback.run({
+  types: Object.keys(definitions),
+  list: listFallbackDocuments,
+  sync: syncDocument,
+  onFailure: (error, type, documentId) => logger.error('履约事项补扫失败', error, { type, documentId }, 'Fulfillment'),
+})
 module.exports = { syncDocument, runFulfillmentSync }

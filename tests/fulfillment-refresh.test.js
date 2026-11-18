@@ -171,3 +171,41 @@ test('展开期间收到依赖通知保留一次自身复检，不重跑依赖�
   assert.deepEqual(cursors, [{ cursor: 0, expand: true }, { cursor: 25, expand: true }, { cursor: 0, expand: false }])
   assert.equal(queue.stats().pending, 0)
 })
+
+test('周期补扫恢复溢出和重启后的遗漏，并报告分段进度及失败', async () => {
+  const { createFallbackScanner } = require('../backend/src/modules/fulfillment/fulfillment.fallback')
+  let now = 100
+  const ids = Array.from({ length: 26 }, (_, i) => i + 1)
+  const synced = new Set()
+  const queue = refresh.createRefreshQueue({ capacity: 1, process: async job => synced.add(job.id) })
+  queue.notify('sale', 1)
+  assert.equal(queue.notify('sale', 26), false)
+  await queue.run()
+
+  let fail = true
+  const take = () => createFallbackScanner(() => now)
+  const scan = take()
+  const options = {
+    types: ['sale'],
+    list: async (_type, after, limit) => ids.filter(id => id > after).slice(0, limit).map(id => ({ id })),
+    sync: async (_type, id) => {
+      if (fail && id === 4) throw Error('private SQL trace')
+      synced.add(id)
+    },
+  }
+  await scan.run(options)
+  assert.equal(scan.stats().types.sale.cursor, 25)
+  assert.equal(scan.stats().types.sale.more, true)
+  assert.equal(scan.stats().failures, 1)
+  assert.equal(scan.stats().lastSuccessfulAt, null)
+  assert.doesNotMatch(JSON.stringify(scan.stats()), /private SQL trace/)
+  fail = false
+  now = 300
+  const afterRestart = take()
+  await afterRestart.run(options)
+  now = 400
+  await afterRestart.run(options)
+  assert.deepEqual([...synced].sort((a, b) => a - b), ids)
+  assert.equal(afterRestart.stats().types.sale.lastSweepCompletedAt, 400)
+  assert.equal(afterRestart.stats().lastSuccessfulAt, 400)
+})

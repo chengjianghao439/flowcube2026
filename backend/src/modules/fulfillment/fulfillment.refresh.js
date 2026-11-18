@@ -1,5 +1,6 @@
 const { createRefreshQueue, createCommitNotifier } = require('./fulfillment.refresh-queue')
 const AppError = require('../../utils/AppError')
+const { fulfillmentFallback } = require('./fulfillment.fallback')
 const DEPENDENCY_BATCH = 25
 // 候选供应也会改变可发日期；按商品+仓库关联，不能只依赖可能已释放的绑定。
 const sources = {
@@ -67,7 +68,7 @@ const queue = createRefreshQueue({ process: job => createRefreshProcessor({
 })(job) })
 let snapshotOverflow = 0
 const commitFulfillment = createCommitNotifier(queue.notify, () => { snapshotOverflow++ })
-const getRefreshStats = () => ({ ...queue.stats(), snapshotOverflow })
+const getRefreshStats = () => ({ ...queue.stats(), snapshotOverflow, fallback: fulfillmentFallback.stats() })
 function getRefreshStatus(user) {
   if (Number(user?.roleId) !== 1) throw new AppError('仅管理员可查看履约同步诊断', 403)
   return getRefreshStats()
