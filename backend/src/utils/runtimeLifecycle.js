@@ -2,13 +2,16 @@
 const { errorResponse } = require('./response')
 
 /** One process-wide owner for periodic work, including module-load sweepers. */
-function createRuntimeLifecycle({ setIntervalFn = setInterval, clearIntervalFn = clearInterval } = {}) {
+function createRuntimeLifecycle({
+  setIntervalFn = setInterval, clearIntervalFn = clearInterval,
+  setTimeoutFn = setTimeout, clearTimeoutFn = clearTimeout,
+} = {}) {
   let draining = false
   const tasks = new Map(), active = new Set()
   return {
     isDraining: () => draining,
     beginDrain() { draining = true },
-    startTask(name, fn, intervalMs, { immediate = false, onError = error => console.error(`[${name}]`, error) } = {}) {
+    startTask(name, fn, intervalMs, { immediate = false, initialDelayMs = 0, onError = error => console.error(`[${name}]`, error) } = {}) {
       if (draining || tasks.has(name)) return
       let running = false
       const tick = () => {
@@ -23,14 +26,26 @@ function createRuntimeLifecycle({ setIntervalFn = setInterval, clearIntervalFn =
         void work.catch(() => {})
         return work
       }
-      const timer = setIntervalFn(tick, intervalMs)
-      timer.unref?.()
-      tasks.set(name, timer)
-      if (immediate) void tick()
+      const task = {}
+      tasks.set(name, task)
+      const start = () => {
+        if (draining || tasks.get(name) !== task) return
+        const timer = setIntervalFn(tick, intervalMs)
+        timer.unref?.()
+        task.cancel = () => clearIntervalFn(timer)
+        if (immediate) void tick()
+      }
+      if (initialDelayMs > 0) {
+        const timer = setTimeoutFn(start, initialDelayMs)
+        timer.unref?.()
+        task.cancel = () => clearTimeoutFn(timer)
+      } else {
+        start()
+      }
     },
     stopTasks() {
       draining = true
-      for (const timer of tasks.values()) clearIntervalFn(timer)
+      for (const task of tasks.values()) task.cancel?.()
       tasks.clear()
     },
     async waitForTasks() {

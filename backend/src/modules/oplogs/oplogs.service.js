@@ -1,3 +1,4 @@
+const { cleanupRetentionRows } = require('../../utils/retentionCleanup')
 const { pool } = require('../../config/db')
 const { normalizePagination } = require('../../utils/pagination')
 
@@ -46,14 +47,17 @@ const findAll = async ({ page, pageSize, keyword, module: mod, startDate = '', e
  * 清理 30 天前的操作日志（2026-08-22 加固）：改分批删除——一次性 DELETE 全量
  * 30 天前记录会在高并发下长事务 + 锁大量行，分批（每批 2000 行）循环直到删完。
  */
-const clearOld = async () => {
+const deleteOld = limit => pool.query(
+  'DELETE FROM operation_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT ?',
+  [limit],
+)
+
+const clearOld = async ({ scheduled = false } = {}) => {
+  if (scheduled) return cleanupRetentionRows(deleteOld)
   const BATCH = 2000
   let deleted = 0
   for (;;) {
-    const [r] = await pool.query(
-      'DELETE FROM operation_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY) LIMIT ?',
-      [BATCH],
-    )
+    const [r] = await deleteOld(BATCH)
     deleted += r.affectedRows
     if (r.affectedRows < BATCH) break
   }

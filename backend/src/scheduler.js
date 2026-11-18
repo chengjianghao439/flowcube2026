@@ -5,6 +5,9 @@
 const { lifecycle } = require('./utils/runtimeLifecycle')
 const { startCleanupSweeper } = require('./utils/operationRequest')
 const { pool } = require('./config/db')
+const { cleanupRetentionRows } = require('./utils/retentionCleanup')
+
+const RETENTION_INTERVAL_MS = 15 * 60 * 1000
 const logger = require('./utils/logger')
 const { beijingTodayYmd } = require('./utils/backendTime')
 const { runWithRequestContext } = require('./utils/requestContext')
@@ -27,8 +30,9 @@ const bool = (name, def) => {
  * 2026-08-22 加固：每轮 tick 注入 scheduler:<name> 的 requestId 上下文，
  * 让 worker 内所有 logger 输出可追溯到具体调度任务。
  */
-function startWorker(name, fn, intervalMs) {
+function startWorker(name, fn, intervalMs, options = {}) {
   lifecycle.startTask(`scheduler:${name}`, () => runWithRequestContext({ requestId: `scheduler:${name}` }, fn), intervalMs, {
+    ...options,
     onError: e => logger.error(`[scheduler] ${name} 执行异常`, e, {}, 'Scheduler'),
   })
 }
@@ -39,8 +43,7 @@ function startScheduler() {
   const { runFulfillmentRefresh } = require('./modules/fulfillment/fulfillment.refresh')
   startWorker('order-fulfillment-refresh', runFulfillmentRefresh, 1000)
 
-  // 每 6 小时清理超过 7 天的 operation_requests 记录
-  startCleanupSweeper({ intervalMs: 6 * 60 * 60 * 1000, ttlDays: 7 })
+  startCleanupSweeper({ intervalMs: 60 * 1000, ttlDays: 7 })
 
   // 跨期补录的调整凭证自动补齐（2026-09-26 一致性审查 · 任务 7）。
   // 补录执行分两步：业务写入在业务事务内，调整凭证要全期间重算、只能在其后单独做。凭证这一步
@@ -56,32 +59,33 @@ function startScheduler() {
     }
   }, num('BACKFILL_VOUCHER_RETRY_INTERVAL_MS', 10 * 60 * 1000))
 
-  // 操作日志（operation_logs）无界增长修复：每 6 小时清理 30 天前的记录。
-  // 此前 clearOld 只有手动触发（OPLOGS_CLEAR_TTL_DAYS 可调），日志表会无限膨胀。
+  // 默认小批轮转，错开初次运行；保留时间与历史规则一致。
   const { clearOld: clearOpLogs } = require('./modules/oplogs/oplogs.service')
-  startWorker('oplogs-cleanup', clearOpLogs, num('OPLOGS_CLEAN_INTERVAL_MS', 6 * 60 * 60 * 1000))
+  startWorker('oplogs-cleanup', () => clearOpLogs({ scheduled: true }),
+    num('OPLOGS_CLEAN_INTERVAL_MS', RETENTION_INTERVAL_MS), { initialDelayMs: 30_000, immediate: true })
 
-  // 扫码流水 / 库存流水：无界增长修复。报表只查短期窗口（PDA 性能查 6 天、仓库运营查当天、
-  // 库存周转查日期区间），180 天前的流水无业务展示用途，定期清理。
-  // SCAN_LOG_TTL_DAYS / INVENTORY_LOG_TTL_DAYS 可调，默认 180 天。
-  startWorker('scan-log-cleanup', async () => {
-    const days = num('SCAN_LOG_TTL_DAYS', 180)
-    await pool.query('DELETE FROM scan_logs WHERE scanned_at < DATE_SUB(NOW(), INTERVAL ? DAY)', [days])
-  }, num('SCAN_LOG_CLEAN_INTERVAL_MS', 6 * 60 * 60 * 1000))
-  startWorker('inventory-log-cleanup', async () => {
-    const days = num('INVENTORY_LOG_TTL_DAYS', 180)
-    await pool.query('DELETE FROM inventory_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)', [days])
-  }, num('INVENTORY_LOG_CLEAN_INTERVAL_MS', 6 * 60 * 60 * 1000))
+  startWorker('scan-log-cleanup', () => cleanupRetentionRows(limit => pool.query(
+    'DELETE FROM scan_logs WHERE scanned_at < DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY scanned_at LIMIT ?',
+    [num('SCAN_LOG_TTL_DAYS', 180), limit],
+  )), num('SCAN_LOG_CLEAN_INTERVAL_MS', RETENTION_INTERVAL_MS), { initialDelayMs: 60_000, immediate: true })
 
-  // 事件时间线表 + 物流轨迹（2026-08-22 扫描）：此前无任何 TTL，随业务量无界增长。
-  // 事件表按 180 天清理（与流水一致）；EVENT_LOG_TTL_DAYS 可调。
+  startWorker('inventory-log-cleanup', () => cleanupRetentionRows(limit => pool.query(
+    'DELETE FROM inventory_logs WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY created_at LIMIT ?',
+    [num('INVENTORY_LOG_TTL_DAYS', 180), limit],
+  )), num('INVENTORY_LOG_CLEAN_INTERVAL_MS', RETENTION_INTERVAL_MS), { initialDelayMs: 90_000, immediate: true })
+
+  const eventRetention = [
+    'DELETE FROM warehouse_task_events WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY created_at LIMIT ?',
+    'DELETE FROM sale_order_events WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY created_at LIMIT ?',
+    'DELETE FROM inbound_task_events WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY created_at LIMIT ?',
+    'DELETE FROM logistics_tracking_events WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY created_at LIMIT ?',
+  ]
+  let nextEventTable = 0
   startWorker('event-log-cleanup', async () => {
-    const days = num('EVENT_LOG_TTL_DAYS', 180)
-    const tables = ['warehouse_task_events', 'sale_order_events', 'inbound_task_events', 'logistics_tracking_events']
-    for (const t of tables) {
-      await pool.query(`DELETE FROM \`${t}\` WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`, [days])
-    }
-  }, num('EVENT_LOG_CLEAN_INTERVAL_MS', 6 * 60 * 60 * 1000))
+    const statement = eventRetention[nextEventTable]
+    nextEventTable = (nextEventTable + 1) % eventRetention.length
+    await cleanupRetentionRows(limit => pool.query(statement, [num('EVENT_LOG_TTL_DAYS', 180), limit]))
+  }, num('EVENT_LOG_CLEAN_INTERVAL_MS', RETENTION_INTERVAL_MS), { initialDelayMs: 120_000, immediate: true })
 
   // PDA 设备会话 TTL（2026-08-22 扫描）：过期/吊销会话无清理任务，表随设备数缓慢膨胀。
   // 已撤销从撤销时刻、未撤销从过期时刻保留 30 天；未到期的有效会话不清理。
@@ -106,7 +110,7 @@ function startScheduler() {
   // 保留 180 天（与 scan_logs 一致），异常查询只查短期窗口。
   startWorker('pda-anomaly-log-cleanup', async () => {
     for (const t of ['pda_error_logs', 'pda_undo_logs']) {
-      await pool.query(`DELETE FROM \`${t}\` WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY)`)
+      await cleanupRetentionRows(limit => pool.query(`DELETE FROM \`${t}\` WHERE created_at < DATE_SUB(NOW(), INTERVAL 180 DAY) ORDER BY created_at LIMIT ?`, [limit]))
     }
   }, num('PDA_ANOMALY_LOG_CLEAN_INTERVAL_MS', 24 * 60 * 60 * 1000))
 

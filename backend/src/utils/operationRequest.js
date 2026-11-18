@@ -331,13 +331,11 @@ async function findScopedOperationRequests({ requestKey, baseAction, userId }) {
  */
 async function cleanupExpiredRequests({ ttlDays = 7 } = {}) {
   try {
-    const [r] = await pool.query(
-      'DELETE FROM operation_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)',
-      [ttlDays],
+    const [{ affectedRows }] = await pool.query(
+      'DELETE FROM operation_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY created_at LIMIT ?',
+      [ttlDays, 500],
     )
-    if (r.affectedRows > 0) {
-      // 静默清理，不打印日志避免启动期噪音
-    }
+    return affectedRows
   } catch (e) {
     // 表可能不存在，静默忽略
     if (e.code !== 'ER_NO_SUCH_TABLE') {

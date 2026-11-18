@@ -383,8 +383,8 @@ test('F4 幂等清理使用真实生命周期：即时执行、不重入、排�
   const runtimeTimers = { ...clock, setIntervalFn(tick, ms) { intervals.push(ms); return clock.setIntervalFn(tick) } }
   const f = await f4.fixture('4.0000', { runtimeTimers }), originalQuery = f.f.conn.query
   f.f.conn.query = (sql, args) => {
-    assert.equal(sql, 'DELETE FROM operation_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)')
-    assert.deepEqual(Array.from(args), [7])
+    assert.equal(sql, 'DELETE FROM operation_requests WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY) ORDER BY created_at LIMIT ?')
+    assert.deepEqual(Array.from(args), [7, 500])
     queries.push(sql)
     return work.promise
   }
