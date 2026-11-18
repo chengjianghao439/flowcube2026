@@ -8,7 +8,7 @@ const vm = require('node:vm')
 
 const root = path.join(__dirname, '..')
 const manifest = require('../package.json')
-const range = '^22.12.0'
+const range = '^22.13.0'
 
 test('项目 npm 包及锁文件声明同一 Node 版本范围', () => {
   for (const dir of ['.', 'backend', 'frontend', 'desktop', 'agent', 'scripts/browser-smoke']) {
@@ -20,11 +20,11 @@ test('项目 npm 包及锁文件声明同一 Node 版本范围', () => {
   assert.equal(fs.readFileSync(path.join(root, '.nvmrc'), 'utf8').trim(), '22')
 })
 
-test('开发与 CI 运行同一个 Node 预检，接受 22.12 及之后的 22.x', () => {
+test('开发与 CI 运行同一个 Node 预检，接受 22.13 及之后的 22.x', () => {
   const source = fs.readFileSync(path.join(root, 'scripts/check-node-version.cjs'), 'utf8')
   for (const [node, exitCode] of [
-    ['22.12.0', undefined], ['22.12.1', undefined], ['22.23.2', undefined],
-    ['20.19.0', 1], ['22.11.9', 1], ['23.0.0', 1], ['26.0.0', 1],
+    ['22.13.0', undefined], ['22.13.1', undefined], ['22.23.2', undefined],
+    ['20.19.0', 1], ['22.12.9', 1], ['23.0.0', 1], ['26.0.0', 1],
   ]) {
     const process = { versions: { node } }
     vm.runInNewContext(source, {
@@ -42,6 +42,7 @@ test('开发与 CI 运行同一个 Node 预检，接受 22.12 及之后的 22.x'
     assert.match(fs.readFileSync(path.join(root, 'scripts', script), 'utf8'), /node .*check-node-version\.cjs/)
   }
   const workflow = fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8')
-  assert.match(workflow, /node-version-file:\s*['"]?\.nvmrc/)
-  assert.match(workflow, /npm run test:node-version/)
+  const staticJob = workflow.split(/^  static:/m)[1].split(/^  [\w-]+:/m)[0]
+  assert.match(staticJob, /node-version:\s*['"]22\.13\.0['"]/)
+  assert.match(staticJob, /npm run test:node-version/)
 })

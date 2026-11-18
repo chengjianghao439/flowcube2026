@@ -4,7 +4,7 @@
   "version": "0.14.3",
   "type": "module",
   "engines": {
-    "node": "^22.12.0"
+    "node": "^22.13.0"
   },
   "scripts": {
     "dev": "cross-env VITE_ELECTRON=1 vite",

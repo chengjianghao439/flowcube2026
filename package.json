@@ -2,7 +2,7 @@
   "name": "flowcube",
   "private": true,
   "engines": {
-    "node": "^22.12.0"
+    "node": "^22.13.0"
   },
   "description": "仓库根脚本（tag / 工具），业务包见 frontend、desktop、backend",
   "scripts": {

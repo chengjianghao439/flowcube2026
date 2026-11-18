@@ -60,7 +60,7 @@
 
 本机另安装官方 `chrome-devtools-mcp` 的独立 CLI，供用户授权切换工具时排查 CUA 浏览器读取故障；不依赖 Codex 重载 MCP。使用任务专属 `--sessionId`，结束时 `stop` 并用 `status` 核验；连接用户现有 Chrome 前按当前工具权限规则确认调试访问，完成后恢复本次开启的调试设置。安装路径、版本和实测范围见 `docs/local-tooling-2026-09-04.md`，不能把公开首页测试当作已登录控制台验收。
 
-根目录 `.nvmrc` 选择 Node 22，根包及各子包声明支持 `^22.12.0`。开发命令及工作树安装脚本共用版本预检，Tests 静态作业读取 `.nvmrc` 并运行 `npm run test:node-version` 校对范围、清单和锁文件。`.nvmrc` 需由版本管理器加载。`dev:pda` 默认使用 5174，ERP 默认使用 5173，实际地址以 Vite 输出为准。
+根目录 `.nvmrc` 选择 Node 22，根包及各子包声明支持 `^22.13.0`，覆盖锁定的 ESLint 依赖下限。开发命令及工作树安装脚本共用版本预检，Tests 静态作业固定在最低的 Node `22.13.0` 上安装和校验，并运行 `npm run test:node-version` 校对范围、清单和锁文件。`.nvmrc` 需由版本管理器加载。`dev:pda` 默认使用 5174，ERP 默认使用 5173，实际地址以 Vite 输出为准。
 
 本机 Codex 个人设置已将 Claude 专用变量移出通用 shell 注入，并通过私有凭据文件/`http_headers_helper` 提供 GitHub MCP 认证；不把这些文件纳入仓库。个人设置备份、实际验证与需要用户完成的界面操作见 `docs/codex-local-setup-2026-09-04.md`。模型提供方（DeepSeek 官方 API / 官方 ChatGPT 登录）的配置、上下文边界与兼容性差异见 `docs/codex-model-provider-2026-09-17.md`。文件已修改不等于当前任务连接已重载；完成任务后重启应用。中文版“常规 → 跟进处理方式 → 调整方向”和“环境”的界面步骤由用户操作，不用其他手段绕过电脑控制工具对 Codex 自身的限制。
 
