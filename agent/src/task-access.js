@@ -79,10 +79,12 @@ export function safeTaskView(task) {
 
 export function listTaskViews(store, actor) {
   const tasks = [];
-  for (const task of [...store.tasks.values()].sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))) {
-    try { assertTaskAccess(task, actor); } catch (error) { if ([403, 404].includes(error.status)) continue; throw error; }
-    tasks.push(safeTaskView(task));
-    if (tasks.length === 30) break;
+  for (const page of store.pagesForActor(actor)) {
+    for (const task of page) {
+      try { assertTaskAccess(task, actor); } catch (error) { if ([403, 404].includes(error.status)) continue; throw error; }
+      tasks.push(safeTaskView(task));
+      if (tasks.length === 30) return tasks;
+    }
   }
   return tasks;
 }
@@ -92,7 +94,7 @@ export function rememberOutput(store, out) {
     out.task.reply = safeValue(out.reply, out.task.requestKey);
     out.task.updatedAt = new Date().toISOString();
     if (out.candidates !== undefined) out.task.candidates = out.candidates;
-    store.save();
+    store.save(out.task);
   }
   return out;
 }

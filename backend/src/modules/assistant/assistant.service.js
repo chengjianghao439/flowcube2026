@@ -29,7 +29,10 @@ function currentActor(req) {
 function createAssistantService({ dataDir = process.env.AGENT_DATA_DIR || (existsSync(sourceRuntime) ? path.resolve(__dirname, '../../../../agent/data') : '/var/lib/flowcube/assistant'), loadRuntime = loadRuntimeModule } = {}) {
   let pending
   async function runtime() {
-    if (!pending) pending = Promise.resolve().then(loadRuntime).then(module => ({ module, runtime: module.createAgentRuntime({ dataDir }) }))
+    if (!pending) pending = Promise.resolve().then(loadRuntime).then(async module => {
+      const store = await module.openTaskStore(dataDir)
+      return { module, runtime: module.createAgentRuntime({ dataDir, store }) }
+    })
       .catch(error => { pending = null; throw error })
     return pending
   }

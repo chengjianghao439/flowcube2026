@@ -2,8 +2,8 @@
 import { createServer } from 'node:http';
 import { config } from './config.js';
 import { buildHealth, plannerMode } from './health.js';
-import { createAgentRuntime, FlowClient } from './runtime.js';
-const runtime = createAgentRuntime();
+import { createAgentRuntime, FlowClient, openTaskStore } from './runtime.js';
+const runtime = createAgentRuntime({ store: await openTaskStore() });
 const failure = (status, message) => Object.assign(new Error(message), { status });
 async function resolveActor(client, token) {
   if (!token) throw failure(401, '请先登录极序 Flow');

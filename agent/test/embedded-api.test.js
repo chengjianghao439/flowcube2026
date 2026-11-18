@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -162,7 +162,9 @@ test('正文伪造actor、token、权限和scope无效，持久化不含凭据',
   assert.equal((await f.request(`/tasks/${id}`, { id: 12 })).status, 403);
   assert.equal((await f.request('/tasks', { id: 12 })).body.data.tasks.length, 0);
   assert.equal((await f.request('/tasks')).body.data.tasks[0].id, id);
-  const persisted = await readFile(join(f.directory, 'tasks.json'), 'utf8');
+  const directory = join(f.directory, 'tasks-v2');
+  assert.deepEqual((await readdir(directory)).filter(name => /^[\w-]+\.json$/.test(name)), [`${id}.json`]);
+  const persisted = await readFile(join(directory, `${id}.json`), 'utf8');
   assert.equal(JSON.parse(persisted).some(task => task.graph === 'G-chat'), false);
   assert.equal(JSON.parse(persisted)[0].actor.id, 11);
   assert.doesNotMatch(persisted, /SYNTHETIC-BODY-TOKEN|Authorization|synthetic-assistant-jwt|familyId/);
@@ -194,7 +196,11 @@ test('并行首次请求只建立一个运行实例，各用户任务不会互�
   assert.ok(results.every(out => out.status === 200));
   assert.equal(f.loads(), 1);
   for (const id of [11, 12]) assert.equal((await f.request('/tasks', { id })).body.data.tasks.length, 1);
-  assert.equal(JSON.parse(await readFile(join(f.directory, 'tasks.json'), 'utf8')).length, 2);
+  const directory = join(f.directory, 'tasks-v2');
+  const files = (await readdir(directory)).filter(name => /^[\w-]+\.json$/.test(name));
+  assert.deepEqual(files.sort(), results.map(out => `${out.body.data.task.id}.json`).sort());
+  const owners = await Promise.all(files.map(async name => JSON.parse(await readFile(join(directory, name), 'utf8'))[0].actor.id));
+  assert.deepEqual(owners.sort(), [11, 12]);
 }));
 test('正式任务重启恢复本人记录且原键恢复不重新发写入', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'xiaoman-embedded-restore-'));

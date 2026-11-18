@@ -17,6 +17,10 @@ function response(out) {
     candidates: view?.candidates ?? out.candidates, diffs: out.diffs };
 }
 
+export function openTaskStore(dataDir = config.dataDir) {
+  return TaskStore.open(join(dataDir, 'tasks.json'));
+}
+
 export function createAgentRuntime({ dataDir = config.dataDir, store = new TaskStore(join(dataDir, 'tasks.json')), messageOptions = {} } = {}) {
   const executing = new Set();
   return {
