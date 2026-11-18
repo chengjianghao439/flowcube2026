@@ -17,7 +17,7 @@ import PdaFillPage from './fill'
 vi.mock('@/hooks/useNetworkStatus', () => ({ useNetworkStatus: () => 'online' }))
 vi.mock('@/hooks/usePdaTodoCounts', () => ({ usePdaTodoCounts: () => ({ data: {} }) }))
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), warning: vi.fn(), success: vi.fn() } }))
-vi.mock('@/lib/pdaDeviceBinding', () => ({ getDeviceCredential: () => ({ deviceCode: 'offline-device' }), getDeviceSession: () => ({ token: 'offline-ticket' }) }))
+vi.mock('@/lib/pdaDeviceBinding', () => ({ getDeviceCredential: () => ({ deviceCode: 'offline-device' }), getDeviceBindingGeneration: () => 0, getDeviceSession: () => ({ token: 'offline-ticket' }) }))
 const scans = new Set<(barcode: string) => void>()
 vi.mock('@/components/pda/PdaScanner', () => ({ default: function OfflineScanner({ onScan, disabled }: { onScan: (code: string) => void; disabled?: boolean }) {
   useEffect(() => { scans.add(onScan); return () => { scans.delete(onScan) } }, [onScan])

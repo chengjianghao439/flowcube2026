@@ -24,6 +24,7 @@ const device = vi.hoisted(() => ({ bound: true }))
 vi.mock('@/hooks/useNetworkStatus', () => ({ useNetworkStatus: () => 'online' }))
 vi.mock('@/lib/pdaDeviceBinding', () => ({
   getDeviceCredential: () => device.bound ? { deviceCode: 'manual-test-device' } : null,
+  getDeviceBindingGeneration: () => 0,
   getDeviceSession: () => device.bound ? { token: 'synthetic-device-ticket', warehouseId: 8 } : null,
 }))
 

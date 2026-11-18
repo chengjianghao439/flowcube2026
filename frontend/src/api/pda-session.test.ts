@@ -116,3 +116,97 @@ test('当前设备凭据被服务端明确拒绝时仍清理绑定', async () =>
   expect(getDeviceSession()).toBeNull()
   expect(getDeviceCredential()).toBeNull()
 })
+
+test('同一登录下旧设备心跳迟到成功，无法覆盖新绑定票据', async () => {
+  const gate = deferred()
+  transport = async config => {
+    if (config.url === '/pda/sessions/renew') {
+      await gate.promise
+      return ok(config, 'old-device-renewal')
+    }
+    return ok(config, 'new-binding-ticket')
+  }
+  const oldRenewal = renewDeviceSession()
+  await vi.waitFor(() => expect(calls.some(request => request.url === '/pda/sessions/renew')).toBe(true))
+  await saveDeviceCredential('new-device', 'fixture-new-device-key')
+  expect((await ensureDeviceSession())?.token).toBe('new-binding-ticket')
+  gate.release()
+  expect(await oldRenewal).toBeNull()
+  expect(getDeviceCredential()?.deviceCode).toBe('new-device')
+  expect(getDeviceSession()?.token).toBe('new-binding-ticket')
+})
+
+test('重新绑定同一设备后，旧代次迟到的凭据拒绝不能清除本次新绑定', async () => {
+  const gate = deferred()
+  let started = 0
+  transport = async config => {
+    if (++started === 1) {
+      await gate.promise
+      throw new AxiosError('inactive', 'ERR_BAD_REQUEST', config, undefined, {
+        ...ok(config, ''), status: 403, data: { code: 'PDA_DEVICE_NOT_ACTIVE' },
+      })
+    }
+    return ok(config, 'new-generation-ticket')
+  }
+  const oldEnsure = ensureDeviceSession()
+  await vi.waitFor(() => expect(started).toBe(1))
+  await saveDeviceCredential('test-device', 'local-adapter-only')
+  expect((await ensureDeviceSession())?.token).toBe('new-generation-ticket')
+  gate.release()
+  expect(await oldEnsure).toBeNull()
+  expect(getDeviceCredential()?.deviceCode).toBe('test-device')
+  expect(getDeviceSession()?.token).toBe('new-generation-ticket')
+})
+
+test('选择新绑定时立即停止携带旧票据', async () => {
+  const persisting = saveDeviceCredential('new-device', 'fixture-new-device-key')
+  expect(getDeviceSession()).toBeNull()
+  await persisting
+  expect(getDeviceCredential()?.deviceCode).toBe('new-device')
+})
+
+test('设备密钥错误由设备绑定处理，保留 ERP 登录且不触发令牌轮换', async () => {
+  transport = async config => {
+    throw new AxiosError('invalid device secret', 'ERR_BAD_REQUEST', config, undefined, {
+      ...ok(config, ''), status: 401, data: { code: 'PDA_DEVICE_SECRET_INVALID' },
+    })
+  }
+  const auth = useAuthStore.getState()
+  expect(await ensureDeviceSession()).toBeNull()
+  expect(getDeviceCredential()).toBeNull()
+  expect(calls.map(request => request.url)).toEqual(['/pda/sessions'])
+  expect(useAuthStore.getState()).toMatchObject({ token: auth.token, sessionGeneration: auth.sessionGeneration })
+})
+
+test('创建设备票据的普通 401 没有设备拒绝证据时保留绑定', async () => {
+  transport = async config => {
+    throw new AxiosError('upstream unauthorized', 'ERR_BAD_REQUEST', config, undefined, {
+      ...ok(config, ''), status: 401, data: {},
+    })
+  }
+  await ensureDeviceSession()
+  expect(getDeviceCredential()?.deviceCode).toBe('test-device')
+  expect(getDeviceSession()?.token).toBe('A-device')
+})
+
+test('旧绑定作业的设备拒绝晚到时不使用新绑定重发作业', async () => {
+  const { default: api } = await import('./client')
+  const gate = deferred()
+  transport = async config => {
+    if (config.url === '/warehouse-tasks/42/complete' && config.headers.get('X-PDA-Session') === 'A-device') {
+      await gate.promise
+      throw new AxiosError('old device ticket invalid', 'ERR_BAD_REQUEST', config, undefined, {
+        ...ok(config, ''), status: 403, data: { code: 'PDA_SESSION_REQUIRED' },
+      })
+    }
+    return ok(config, 'new-binding-ticket')
+  }
+  const oldWrite = api.post('/warehouse-tasks/42/complete', { qty: 5 }).catch(error => error)
+  await vi.waitFor(() => expect(calls).toHaveLength(1))
+  await saveDeviceCredential('new-device', 'fixture-new-device-key')
+  await ensureDeviceSession()
+  gate.release()
+  expect(axios.isCancel(await oldWrite)).toBe(true)
+  expect(calls.map(request => request.url)).toEqual(['/warehouse-tasks/42/complete', '/pda/sessions'])
+  expect(getDeviceSession()?.token).toBe('new-binding-ticket')
+})

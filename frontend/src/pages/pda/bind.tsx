@@ -8,7 +8,7 @@
  * 绑定后这台机器的每次作业都会带上设备身份：绑了仓库的设备扫别仓的单据会被直接拒绝，
  * 机器丢了也能在 ERP 里一键停用、立即吊销它手上的票据。
  */
-import { useState, useId } from 'react'
+import { useState, useId, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Camera } from 'lucide-react'
 import PdaHeader from '@/components/pda/PdaHeader'
@@ -23,6 +23,7 @@ import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCameraScanner } from '@/hooks/useCameraScanner'
 import { Capacitor } from '@capacitor/core'
 import {
+  getDeviceBindingGeneration,
   getDeviceCredential,
   getDeviceSession,
   saveDeviceCredential,
@@ -74,36 +75,37 @@ export default function PdaBindPage() {
   const [manualOpen, setManualOpen] = useState(false)
   const [binding, setBinding] = useState(false)
 
+  const bindingInProgress = useRef(false)
+
   async function bind(deviceCode: string, deviceSecret: string) {
+    if (bindingInProgress.current) return
+    bindingInProgress.current = true
     setBinding(true)
-    await saveDeviceCredential(deviceCode, deviceSecret)
+    const saving = saveDeviceCredential(deviceCode, deviceSecret)
+    const generation = getDeviceBindingGeneration()
+    setCredential(getDeviceCredential())
+    setSession(null)
     try {
+      await saving
+      if (generation !== getDeviceBindingGeneration()) return
       const created = await ensureDeviceSession()
+      const currentCredential = getDeviceCredential()
+      setCredential(currentCredential)
+      setSession(getDeviceSession())
       if (!created) {
-        // 2026-08-28 区分失败原因（此前一律清空重扫并提示密钥无效，网络问题被误导）：
-        // ensureDeviceSession 内部已判——业务拒绝（401/403/特定 code）会连凭据一起清掉；
-        // 网络/基址失败保留凭据。这里以「凭据是否还在」为唯一判据：
-        const stillHas = getDeviceCredential()
-        if (stillHas) {
-          // 凭据还在 = 网络/基址问题（服务器不可达、baseURL 被误覆盖），
-          // 凭据没有错，不要清——用户只需修好网络/地址后重试
+        if (currentCredential) {
           err('连不上服务器，无需重新扫码；请检查网络后重试')
         } else {
-          // 凭据被清 = 密钥确实无效/设备被停用，引导重新生成
-          setCredential(null)
-          setSession(null)
           err('绑定失败：设备码或密钥无效，也可能该设备已被停用，请让管理员确认后重新生成二维码')
         }
         return
       }
-      setCredential(getDeviceCredential())
-      setSession(created)
-      // 绑定成功后立刻清空并收起手动输入区：64 位密钥是设备身份凭据，留在屏幕上
-      // 属于旁观泄露风险（2026-09-17 验收 ISSUE-005）。
+      // 已使用的设备密钥无需继续显示。
       setManual({ code: '', secret: '' })
       setManualOpen(false)
       ok('设备绑定成功')
     } finally {
+      bindingInProgress.current = false
       setBinding(false)
     }
   }
@@ -154,7 +156,7 @@ export default function PdaBindPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-3">
         {credential ? (
           <PdaCard active className="space-y-2">
-            <div className="text-base font-semibold text-success-ink">本机已绑定</div>
+            <div className="text-base font-semibold">{session ? '本机已绑定' : '本机已保存设备信息'}</div>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">设备码</span>
@@ -178,7 +180,7 @@ export default function PdaBindPage() {
                 <SoftStatusLabel label={session ? '有效' : '需重新登录以获取'} tone={session ? 'success' : 'danger'} />
               </div>
             </div>
-            <Button size="lg" variant="outline" className="px-3 w-full" onClick={handleUnbind}>解除绑定</Button>
+            <Button size="lg" variant="outline" className="px-3 w-full" onClick={handleUnbind} disabled={binding}>解除绑定</Button>
           </PdaCard>
         ) : (
           <PdaCard className="space-y-2">

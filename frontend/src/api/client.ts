@@ -19,11 +19,12 @@ import {
 } from '@/config/api'
 import { getHashRouterWindowLocation } from '@/router/hashLocation'
 import { resolveApiErrorMessage } from '@/utils/displayFormatters'
-import { getDeviceSession } from '@/lib/pdaDeviceBinding'
+import { getDeviceBindingGeneration, getDeviceSession } from '@/lib/pdaDeviceBinding'
 import { ensureDeviceSession, renewDeviceSession } from './pda-session'
 
 /** 标记已为设备票据失效重试过一次，防止无限换票循环 */
 type RetriableConfig = InternalAxiosRequestConfig & { __pdaSessionRetried?: boolean }
+const isDeviceSessionRoute = (url = '') => /^\/pda\/sessions(?:\/renew)?(?:[?]|$)/.test(url)
 
 /**
  * 用 refresh token 换新 access（2026-08-21 权衡修复）。
@@ -179,12 +180,20 @@ declare module 'axios' {
     _companyScopeId?: number
     /** 首次派发的登录会话；正常令牌轮换不改变归属。禁止持久化。 */
     _authSessionGeneration?: number
+    /** PDA 作业与换票均绑定原设备代次。 */
+    _pdaBindingGeneration?: number
   }
 }
 
 function assertCurrentAuthSession(config?: AxiosRequestConfig): void {
   if (config?._authSessionGeneration != null && config._authSessionGeneration !== useAuthStore.getState().sessionGeneration) {
     throw new axios.CanceledError('登录状态已变化，请重新操作')
+  }
+}
+
+function assertCurrentPdaBinding(config?: AxiosRequestConfig): void {
+  if (config?._pdaBindingGeneration != null && config._pdaBindingGeneration !== getDeviceBindingGeneration()) {
+    throw new axios.CanceledError('设备绑定已变化，请重新操作')
   }
 }
 
@@ -238,6 +247,7 @@ const apiClient = axios.create({
 })
 
 const apiBaseURLListeners = new Set<() => void>()
+export function getApiClientBaseRevision(): number { return apiBaseRevision }
 export function getApiClientBaseURL(): string | undefined { return apiClient.defaults.baseURL }
 export function subscribeApiClientBaseURL(listener: () => void): () => void {
   apiBaseURLListeners.add(listener)
@@ -254,6 +264,7 @@ export function setApiClientBaseURL(baseURL: string | undefined): void {
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     assertCurrentAuthSession(config)
+    assertCurrentPdaBinding(config)
     const { token, sessionGeneration } = useAuthStore.getState()
     config._authSessionGeneration ??= sessionGeneration
     if (token) {
@@ -263,7 +274,11 @@ apiClient.interceptors.request.use(
     // 放在全局拦截器而不是逐个接口手加——设备身份要覆盖所有 PDA 作业请求，
     // 漏一个接口就等于那条路径上的跨仓拦截失效（X-Client 就是逐个手加的，很容易漏）。
     const deviceSession = getDeviceSession()
-    if (deviceSession?.token) {
+    const isPdaPage = typeof window !== 'undefined' && /^\/pda(?:\/|$)/.test(getHashRouterWindowLocation().pathname)
+    if (deviceSession?.token || IS_CAPACITOR_PDA || isPdaPage || isDeviceSessionRoute(config.url)) {
+      config._pdaBindingGeneration ??= getDeviceBindingGeneration()
+    }
+    if (deviceSession?.token && !(isDeviceSessionRoute(config.url) && config.headers.has('X-PDA-Session'))) {
       config.headers['X-PDA-Session'] = deviceSession.token
     }
     // 会计账套（文档10 多账套）：当前账套 id 注入头，后端 companyScope 中间件解析。
@@ -297,13 +312,15 @@ function maybeRenewPdaSession() {
 apiClient.interceptors.response.use(
   (response) => {
     assertCurrentAuthSession(response.config)
+    assertCurrentPdaBinding(response.config)
     if (response.config._companyScopeId != null && response.config._companyScopeId !== useCompanyStore.getState().companyId) throw new axios.CanceledError('账套已切换，忽略旧结果')
-    maybeRenewPdaSession()
+    if (!isDeviceSessionRoute(response.config.url)) maybeRenewPdaSession()
     return response
   },
   async (error: AxiosError<ApiErrorResponse<PrintQuotaErrorPayload>>) => {
     if (axios.isCancel(error)) return Promise.reject(error)
     assertCurrentAuthSession(error.config)
+    assertCurrentPdaBinding(error.config)
     if (error.config?._companyScopeId != null && error.config._companyScopeId !== useCompanyStore.getState().companyId) return Promise.reject(new axios.CanceledError('账套已切换，忽略旧结果'))
     // 二进制下载的业务错误仍是 JSON，恢复统一错误语义和续期流程。
     if (typeof Blob !== 'undefined' && error.response?.data instanceof Blob) {
@@ -337,6 +354,7 @@ apiClient.interceptors.response.use(
     if (
       cfg
       && cfg.automaticReplay !== false
+      && !isDeviceSessionRoute(cfg.url)
       && status === 403
       && error.response?.data?.code === 'PDA_SESSION_REQUIRED'
       && !(cfg as RetriableConfig).__pdaSessionRetried
@@ -344,6 +362,7 @@ apiClient.interceptors.response.use(
       assertCurrentAuthSession(cfg)
       const renewed = await ensureDeviceSession()
       assertCurrentAuthSession(cfg)
+      assertCurrentPdaBinding(cfg)
       if (renewed?.token) {
         ;(cfg as RetriableConfig).__pdaSessionRetried = true
         cfg.headers = cfg.headers ?? {}
@@ -384,7 +403,8 @@ apiClient.interceptors.response.use(
     })
 
     // 打印工作站凭据由桌面端单独管理；其失效交给打印桥处理，保留ERP登录会话。
-    if (status === 401 && businessCode === 'PRINT_CLIENT_CREDENTIAL_INVALID') {
+    if (status === 401 && (businessCode === 'PRINT_CLIENT_CREDENTIAL_INVALID'
+      || (isDeviceSessionRoute(cfg?.url) && businessCode?.startsWith('PDA_')))) {
       return Promise.reject(structuredError)
     }
 
@@ -394,7 +414,8 @@ apiClient.interceptors.response.use(
       const config401 = cfg as InternalAxiosRequestConfig & { __authRefreshed?: boolean }
       const before = useAuthStore.getState()
       const revoked = businessCode != null && revokedAccessCodes.has(businessCode)
-      const canRenew = businessCode == null || businessCode === 'AUTH_TOKEN_EXPIRED' || businessCode === 'AUTH_TOKEN_INVALID'
+      const canRenew = (businessCode == null && !isDeviceSessionRoute(config401.url))
+        || businessCode === 'AUTH_TOKEN_EXPIRED' || businessCode === 'AUTH_TOKEN_INVALID'
       if ((revoked || canRenew) && before.token && config401.headers.get('Authorization') !== `Bearer ${before.token}`) {
         if (config401.__authRefreshed) return Promise.reject(structuredError)
         config401.__authRefreshed = true

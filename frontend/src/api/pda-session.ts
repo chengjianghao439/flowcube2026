@@ -1,9 +1,11 @@
 import { isCancel } from 'axios'
-import { payloadClient as client } from './client'
+import { getApiClientBaseURL, getApiClientBaseRevision, payloadClient as client } from './client'
 import { useAuthStore } from '@/store/authStore'
 import {
+  getDeviceBindingGeneration,
   getDeviceCredential,
   getDeviceSession,
+  getDeviceSessionRevision,
   saveDeviceSession,
   clearDeviceSession,
   clearDeviceBinding,
@@ -18,90 +20,79 @@ interface CreateSessionResponse {
   warehouse_name?: string | null
 }
 
-/**
- * 用本机存的设备凭据换一张会话票据。
- *
- * 登录成功后调用一次；票据失效（过期/被吊销/设备被停用）时再自动调一次。
- * 未绑定设备时直接返回 null——此时后端若处于观察模式仍可作业，处于强制模式则会
- * 明确提示去绑定，两种情况都不该在这里抛错打断登录流程。
- *
- * 2026-08-28 区分失败原因（此前一律静默 null，绑定页误报「密钥无效」）：
- *   - 网络/传输层错误（ERR_NETWORK/无响应/超时）→ 可能 baseURL 被误覆盖（旧 bug）
- *     或真网络问题，凭据**保留**（不是凭据的错），返回 null 且挂 warning 供诊断；
- *   - 业务拒绝（401 PADA_DEVICE_SECRET_INVALID / 403 PDA_DEVICE_NOT_ACTIVE 等）→
- *     凭据确实无效，走 clearDeviceBinding 提示重新生成二维码。
- */
+const rejectedDeviceCredential = new Set(['PDA_DEVICE_SECRET_INVALID', 'PDA_DEVICE_NOT_ACTIVE', 'PDA_DEVICE_NOT_FOUND'])
+
+function captureBinding() {
+  const generation = getDeviceBindingGeneration()
+  const loginGeneration = useAuthStore.getState().sessionGeneration
+  const endpoint = getApiClientBaseURL()
+  const endpointRevision = getApiClientBaseRevision()
+  const session = getDeviceSession()
+  const sessionRevision = getDeviceSessionRevision()
+  const currentBinding = () => generation === getDeviceBindingGeneration()
+    && loginGeneration === useAuthStore.getState().sessionGeneration
+    && endpointRevision === getApiClientBaseRevision() && endpoint === getApiClientBaseURL()
+  return {
+    session,
+    options: { baseURL: endpoint, skipGlobalError: true, _pdaBindingGeneration: generation, _authSessionGeneration: loginGeneration },
+    currentBinding,
+    currentSession: () => currentBinding() && getDeviceSessionRevision() === sessionRevision,
+  }
+}
+
+function fromResponse(data: CreateSessionResponse): PdaDeviceSession {
+  return {
+    token: data.session_token,
+    warehouseId: data.warehouse_id ?? null,
+    warehouseName: data.warehouse_name ?? null,
+    expiresAt: data.expires_at ?? null,
+    scopes: Array.isArray(data.scopes) ? data.scopes : [],
+  }
+}
+
+/** 使用当前绑定凭据换票。明确拒绝当前设备凭据时清除绑定，网络错误保留凭据。 */
 export async function ensureDeviceSession(): Promise<PdaDeviceSession | null> {
   const credential = getDeviceCredential()
   if (!credential) return null
+  const binding = captureBinding()
   try {
     const data = await client.post<CreateSessionResponse>(
       '/pda/sessions',
       { device_code: credential.deviceCode, device_secret: credential.deviceSecret },
-      { skipGlobalError: true },
+      binding.options,
     )
-    if (!data?.session_token) return null
-    const session: PdaDeviceSession = {
-      token: data.session_token,
-      warehouseId: data.warehouse_id ?? null,
-      warehouseName: data.warehouse_name ?? null,
-      expiresAt: data.expires_at ?? null,
-      scopes: Array.isArray(data.scopes) ? data.scopes : [],
-    }
+    if (!data?.session_token || !binding.currentSession()) return null
+    const session = fromResponse(data)
     await saveDeviceSession(session)
-    return session
-  } catch (e) {
-    // 先判业务拒绝：凭据确实是错的（或设备被停用）→ 连凭据一起清掉，
-    // 否则用户会保留一份必错的凭据，后续每个请求都失败更难排查。
-    const status = (e as { status?: number })?.status
-    const code = (e as { code?: string | null })?.code
-    const businessRejected = status === 401 || status === 403
-      || code === 'PDA_DEVICE_SECRET_INVALID' || code === 'PDA_DEVICE_NOT_ACTIVE'
-      || code === 'PDA_DEVICE_NOT_FOUND'
-    if (businessRejected) {
+    return binding.currentBinding() && getDeviceSession() === session ? session : null
+  } catch (error) {
+    if (isCancel(error) || !binding.currentSession()) return null
+    const code = (error as { code?: string | null })?.code
+    if (code && rejectedDeviceCredential.has(code)) {
       await clearDeviceBinding()
-      return null
+    } else {
+      console.warn('[device-session] 暂时无法取得设备票据', code ?? 'UNKNOWN')
     }
-    // 网络/传输层失败：不是凭据的错，保留凭据与票据，避免误清后用户还得重扫。
-    // baseURL 若被误覆盖成 WebView localhost（2026-08-28 修复前），这里会失败——
-    // 暴露原错误让绑定页/控制台可诊断，而不是把用户引导去「重新生成二维码」。
-    console.warn('[device-session] 换票失败（网络/基址）：', e)
     return null
   }
 }
 
-/**
- * 心跳续期（2026-08-21 审计修复）：用现有票据换新票据，把 7 天 TTL 的失效窗口
- * 在活跃使用期间持续顺延；设备长期不用自然过期，需重新扫码或凭据换票。
- * 静默失败：当前会话的当前票据失效时清掉旧票据，后续请求会走 403 自动换票路径。
- * 取消及已被新登录/新票据替代的心跳不再清理设备状态。
- */
+/** 心跳只更新原登录、原绑定及原票据。失败只允许清理仍是本次请求持有的旧票据。 */
 export async function renewDeviceSession(): Promise<PdaDeviceSession | null> {
-  const session = getDeviceSession()
-  if (!session?.token) return null
-  const sessionGeneration = useAuthStore.getState().sessionGeneration
+  const binding = captureBinding()
+  if (!binding.session?.token) return null
   try {
     const data = await client.post<CreateSessionResponse>(
       '/pda/sessions/renew',
       {},
-      { skipGlobalError: true, headers: { 'X-PDA-Session': session.token } },
+      { ...binding.options, headers: { 'X-PDA-Session': binding.session.token } },
     )
-    if (!data?.session_token) return null
-    const renewed: PdaDeviceSession = {
-      token: data.session_token,
-      warehouseId: data.warehouse_id ?? null,
-      warehouseName: data.warehouse_name ?? null,
-      expiresAt: data.expires_at ?? null,
-      scopes: Array.isArray(data.scopes) ? data.scopes : [],
-    }
-    await saveDeviceSession(renewed)
-    return renewed
+    if (!data?.session_token || !binding.currentSession()) return null
+    const session = fromResponse(data)
+    await saveDeviceSession(session)
+    return binding.currentBinding() && getDeviceSession() === session ? session : null
   } catch (error) {
-    if (!isCancel(error)
-      && useAuthStore.getState().sessionGeneration === sessionGeneration
-      && getDeviceSession()?.token === session.token) {
-      await clearDeviceSession()
-    }
+    if (!isCancel(error) && binding.currentSession()) await clearDeviceSession()
     return null
   }
 }

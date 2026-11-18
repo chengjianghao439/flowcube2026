@@ -15,6 +15,7 @@ vi.mock('@/hooks/usePdaSplitRecovery', () => ({ usePdaSplitRecovery: () => ({ re
 vi.mock('@/lib/pdaSplitRecovery', () => ({ splitEndpoint: () => '/api' }))
 vi.mock('@/lib/pdaDeviceBinding', () => ({
   getDeviceCredential: () => ({ deviceCode: 'PDA-TEST' }),
+  getDeviceBindingGeneration: () => 0,
   getDeviceSession: () => ({ token: 'test' }),
 }))
 vi.mock('@/lib/authSession', () => ({ performSessionLogout: vi.fn() }))

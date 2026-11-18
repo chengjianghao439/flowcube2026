@@ -34,11 +34,28 @@ export interface PdaDeviceSession {
 }
 
 // ── 内存缓存（同步 getter 的数据源）──────────────────────────────────────
+let bindingGeneration = 0
+let sessionRevision = 0
+let persistence = Promise.resolve()
 let cachedCredential: PdaDeviceCredential | null = null
 let cachedSession: PdaDeviceSession | null = null
 let hydrated = false
 let hydrationFailed = false
 let hydrationPromise: Promise<boolean> | null = null
+
+export function getDeviceBindingGeneration(): number {
+  return bindingGeneration
+}
+
+export function getDeviceSessionRevision(): number {
+  return sessionRevision
+}
+
+function persistChange(action: () => Promise<void>): Promise<void> {
+  // 原生桥接写按调用顺序完成，较旧的异步操作不会回写掉较新的绑定。
+  persistence = persistence.then(action).catch(() => { /* 保留当前内存状态。 */ })
+  return persistence
+}
 
 function parse<T>(raw: string | null): T | null {
   if (!raw) return null
@@ -56,6 +73,7 @@ function parse<T>(raw: string | null): T | null {
 export function initDeviceBinding(): Promise<boolean> {
   if (hydrated) return Promise.resolve(!hydrationFailed)
   if (hydrationPromise) return hydrationPromise
+  const generation = bindingGeneration
   hydrationPromise = (async () => {
     try {
       const [credRaw, sessRaw] = await Promise.all([
@@ -65,11 +83,14 @@ export function initDeviceBinding(): Promise<boolean> {
       const credential = parse<PdaDeviceCredential>(credRaw)
       const session = parse<PdaDeviceSession>(sessRaw)
       if ((credRaw && !credential) || (sessRaw && !session)) throw new Error('设备信息损坏')
-      cachedCredential = credential
-      cachedSession = session
+      if (generation === bindingGeneration) {
+        cachedCredential = credential
+        cachedSession = credential ? session : null
+      }
       hydrationFailed = false
       return true
     } catch {
+      if (generation !== bindingGeneration) return true
       cachedCredential = null
       cachedSession = null
       hydrationFailed = true
@@ -87,28 +108,32 @@ export function getDeviceCredential(): PdaDeviceCredential | null {
   return cachedCredential
 }
 
-export async function saveDeviceCredential(deviceCode: string, deviceSecret: string) {
+export function saveDeviceCredential(deviceCode: string, deviceSecret: string) {
   const payload: PdaDeviceCredential = {
     deviceCode: deviceCode.trim(),
     deviceSecret: deviceSecret.trim(),
     boundAt: new Date().toISOString(),
   }
+  bindingGeneration++
+  sessionRevision++
   cachedCredential = payload
-  try {
+  cachedSession = null
+  return persistChange(async () => {
+    await secureStorage.removeItem(SESSION_KEY)
     await secureStorage.setItem(CREDENTIAL_KEY, JSON.stringify(payload))
-  } catch {
-    // 加密存储失败时仍保留内存态（本次会话可用），下次启动需重新绑定
-  }
+  })
 }
 
 /** 解绑：凭据和票据一起清掉，回到未绑定状态 */
-export async function clearDeviceBinding() {
+export function clearDeviceBinding() {
+  bindingGeneration++
+  sessionRevision++
   cachedCredential = null
   cachedSession = null
-  try {
+  return persistChange(async () => {
     await secureStorage.removeItem(CREDENTIAL_KEY)
     await secureStorage.removeItem(SESSION_KEY)
-  } catch { /* ignore */ }
+  })
 }
 
 export function getDeviceSession(): PdaDeviceSession | null {
@@ -118,20 +143,16 @@ export function getDeviceSession(): PdaDeviceSession | null {
   return cachedSession
 }
 
-export async function saveDeviceSession(session: PdaDeviceSession) {
+export function saveDeviceSession(session: PdaDeviceSession) {
+  sessionRevision++
   cachedSession = session
-  try {
-    await secureStorage.setItem(SESSION_KEY, JSON.stringify(session))
-  } catch {
-    // 内存态保留
-  }
+  return persistChange(() => secureStorage.setItem(SESSION_KEY, JSON.stringify(session)))
 }
 
-export async function clearDeviceSession() {
+export function clearDeviceSession() {
+  sessionRevision++
   cachedSession = null
-  try {
-    await secureStorage.removeItem(SESSION_KEY)
-  } catch { /* ignore */ }
+  return persistChange(() => secureStorage.removeItem(SESSION_KEY))
 }
 
 /**
