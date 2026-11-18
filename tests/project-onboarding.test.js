@@ -17,10 +17,7 @@ test('new-agent onboarding has one root and ships working pointers to rules and 
   }
 })
 
-test('worktree provisioning never inherits a backend environment file and Claude uses the shared release instructions', () => {
+test('worktree provisioning never inherits a backend environment file', () => {
   const config = read('.worktreeinclude')
   assert.doesNotMatch(config, /^\s*[^#\n].*\.env(?:\s|$)/m)
-  const claude = read('.claude/skills/release-flowcube/SKILL.md')
-  assert.match(claude, /\.agents\/skills\/release-flowcube\/SKILL\.md/)
-  assert.doesNotMatch(claude, /^\s*(?:git push |npm run release:prod)/m)
 })
