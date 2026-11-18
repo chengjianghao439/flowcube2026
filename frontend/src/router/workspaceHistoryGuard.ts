@@ -1,5 +1,5 @@
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
-import { getWorkspaceFullPath as getFullPath, buildWorkspaceTabRegistrationFromPath } from './workspaceRouteMeta'
+import { getWorkspaceFullPath as getFullPath } from './workspaceRouteMeta'
 import { getHashRouterWindowLocation } from './hashLocation'
 import { canOpenWorkspacePath, WORKSPACE_CAPACITY_MESSAGE } from '@/store/workspaceStore'
 import { toast } from '@/lib/toast'
@@ -79,8 +79,7 @@ function createWorkspaceHistoryGuard() {
       restore(target)
       return
     }
-    const activeKey = buildWorkspaceTabRegistrationFromPath(current.path).key
-    if (!useDirtyGuardStore.getState().isTabDirty(activeKey)) return
+    if (!useDirtyGuardStore.getState().isTabDirty(current.path)) return
     event.stopImmediatePropagation()
     const currentIndex = indexOf(current), targetIndex = indexOf(target)
     blocked = {

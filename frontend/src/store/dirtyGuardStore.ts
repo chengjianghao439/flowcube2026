@@ -2,7 +2,7 @@
  * dirtyGuardStore — 全系统未保存变更保护（Dirty Form Guard）状态中心
  *
  * 职责：
- * - 维护 tabPath → isDirty 映射表
+ * - 按规范标签键保留每个表单的未保存登记
  * - 驱动全局确认弹窗（DirtyGuardDialog）的显示/隐藏
  * - 提供 bypassNextBlock 标志，防止 Layer1（UI 层）已确认后 Layer2（useBlocker）再次弹窗
  *
@@ -11,6 +11,7 @@
 
 import { create } from 'zustand'
 import { isElectronRuntime } from '@/lib/platform'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 
 interface PendingConfirm {
   message: string
@@ -18,9 +19,13 @@ interface PendingConfirm {
   onCancel: () => void
 }
 
+type DirtySource = symbol | string
+
+const tabKeyFor = (path: string) => buildWorkspaceTabRegistrationFromPath(path).key
+
 interface DirtyGuardState {
-  /** tabPath → isDirty 映射 */
-  dirtyTabs: Record<string, boolean>
+  /** 规范标签键 → 仍有未保存变更的表单来源。 */
+  dirtyTabs: Record<string, ReadonlySet<DirtySource>>
 
   /**
    * 当前待用户确认的弹窗配置。
@@ -37,8 +42,8 @@ interface DirtyGuardState {
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
-  /** 注册或更新某个 tab 的脏状态 */
-  setDirty: (path: string, isDirty: boolean) => void
+  /** 更新同一表单来源；无来源参数时按输入路径单独登记。 */
+  setDirty: (path: string, isDirty: boolean, source?: DirtySource) => void
 
   /** 查询某个 tab 是否有未保存变更 */
   isTabDirty: (path: string) => boolean
@@ -63,12 +68,25 @@ export const useDirtyGuardStore = create<DirtyGuardState>((set, get) => ({
   pendingConfirm: null,
   bypassNextBlock: false,
 
-  setDirty: (path, isDirty) =>
-    set(s => ({ dirtyTabs: { ...s.dirtyTabs, [path]: isDirty } })),
+  setDirty: (path, isDirty, source = path) => {
+    if (!path) return
+    const key = tabKeyFor(path)
+    set(state => {
+      const registered = state.dirtyTabs[key]
+      if ((registered?.has(source) ?? false) === isDirty) return state
+      const next = new Set(registered)
+      if (isDirty) next.add(source)
+      else next.delete(source)
+      const dirtyTabs = { ...state.dirtyTabs }
+      if (next.size) dirtyTabs[key] = next
+      else delete dirtyTabs[key]
+      return { dirtyTabs }
+    })
+  },
 
-  isTabDirty: (path) => !!get().dirtyTabs[path],
+  isTabDirty: (path) => Boolean(path && get().dirtyTabs[tabKeyFor(path)]),
 
-  hasAnyDirtyIn: (paths) => paths.some(p => !!get().dirtyTabs[p]),
+  hasAnyDirtyIn: (paths) => paths.some(get().isTabDirty),
 
   showConfirm: (message, onConfirm, onCancel = () => {}) => {
     if (

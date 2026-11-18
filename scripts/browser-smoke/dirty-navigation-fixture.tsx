@@ -52,10 +52,11 @@ async function run() {
   history.forward()
   await waitFor(() => route() === '/sale/new?draft=abc')
   assert(JSON.stringify(history.state) === beforeState, '确认后前进历史丢失')
-  navigate('/products?keyword=abc', { state: { view: 'products' } })
-  await waitFor(() => route() === '/products?keyword=abc')
-  useDirtyGuardStore.getState().setDirty('/products', true)
-  const productsUrl = window.location.href
+  const fulfillmentPath = '/sale/1?focus=fulfillment'
+  navigate(fulfillmentPath, { state: { view: 'fulfillment' } })
+  await waitFor(() => route() === fulfillmentPath)
+  useDirtyGuardStore.getState().setDirty(fulfillmentPath, true)
+  const fulfillmentUrl = window.location.href
   history.go(-2)
   await waitFor(() => !!useDirtyGuardStore.getState().pendingConfirm)
   // 在第二次后退的恢复仍排队时确认，不能从错误的历史位置继续遍历。
@@ -63,17 +64,17 @@ async function run() {
   history.back()
   await waitFor(() => route() === '/dashboard?from=list')
   history.go(2)
-  await waitFor(() => route() === '/products?keyword=abc')
-  const productState = JSON.stringify(history.state)
+  await waitFor(() => route() === fulfillmentPath)
+  const fulfillmentState = JSON.stringify(history.state)
   history.replaceState({ external: true }, '', '#/dashboard?from=external')
   window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }))
-  assert(window.location.href === productsUrl, '无 idx 时未保留完整 file 地址')
-  assert(JSON.stringify(history.state) === productState, '无 idx 时当前 state 丢失')
-  assert(route() === '/products?keyword=abc', '无 idx 时绕过确认')
+  assert(window.location.href === fulfillmentUrl, '无 idx 时未保留完整 file 地址')
+  assert(JSON.stringify(history.state) === fulfillmentState, '无 idx 时当前 state 丢失')
+  assert(route() === fulfillmentPath, '无 idx 时绕过确认')
   useDirtyGuardStore.getState().resolveConfirm(true)
   await waitFor(() => route() === '/dashboard?from=external')
   assert(errors.length === 0, errors.join('; '))
-  return { status: 'passed', checks: ['file document URL/query', 'HashRouter capture order', 'history state', 'cancel/retry', 'confirm/back/forward', 'repeated/multi-step back', 'external state without idx'], errors }
+  return { status: 'passed', checks: ['file document URL/query', 'HashRouter capture order', 'history state', 'cancel/retry', 'confirm/back/forward', 'repeated/multi-step back from dirty fulfillment URL', 'external state without idx'], errors }
 }
 run().then(result => { window.__navigationResult = result }).catch(error => {
   window.__navigationResult = { status: 'failed', message: error.message, errors }

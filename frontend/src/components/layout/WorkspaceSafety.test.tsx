@@ -22,9 +22,16 @@ vi.mock('@/components/shared/GlobalConfirmDialog', () => ({ GlobalConfirmDialog:
 vi.mock('@/components/shared/AppToast', () => ({ AppToast: () => null }))
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
+function SecondaryDraft({ path }: { path: string }) {
+  const [draft, setDraft] = useState('')
+  useDirtyGuard(path, Boolean(draft))
+  return <input aria-label={`另一草稿 ${path}`} value={draft} onChange={event => setDraft(event.target.value)} />
+}
+
 function SyntheticPage() {
   const path = useContext(TabPathContext)
   const [draft, setDraft] = useState('')
+  const [secondaryOpen, setSecondaryOpen] = useState(false)
   const [late, setLate] = useState('')
   const [filter, setFilter] = useState('原筛选')
   useDirtyGuard(path, !!draft)
@@ -36,6 +43,8 @@ function SyntheticPage() {
   return <section data-page={path}>
     <input aria-label={`草稿 ${path}`} value={draft} onChange={event => setDraft(event.target.value)} />
     <input aria-label={`筛选 ${path}`} value={filter} onChange={event => setFilter(event.target.value)} />
+    <button onClick={() => setSecondaryOpen(open => !open)}>{secondaryOpen ? '关闭另一表单' : '打开另一表单'}</button>
+    {secondaryOpen && <SecondaryDraft path={path} />}
     <output>{late}</output>
   </section>
 }
@@ -80,7 +89,7 @@ async function productMenu() {
 }
 beforeEach(() => {
   initializeWorkspaceHistoryGuard(); localStorage.clear()
-  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
+  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key, recentKeys: [HOME_TAB.key] })
   useDirtyGuardStore.setState({ dirtyTabs: {}, pendingConfirm: null, bypassNextBlock: false })
   pages.crashPath = ''; pages.crashValue = new Error('合成单页渲染错误'); pages.mounts.clear(); pages.unmounts.clear(); pages.update.clear()
   HTMLElement.prototype.scrollIntoView = vi.fn(); vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -332,4 +341,120 @@ test('capacity-blocked browser back restores the actual original history entry a
   })
   expect(window.location.href).toBe(before.url); expect(window.history.state).toEqual(before.state)
   expect(input('/sale/1')).toBe(original)
+})
+
+const fulfillmentPath = '/sale/1?focus=fulfillment'
+const visibleDirtyMark = () => [...host.querySelectorAll<HTMLElement>('[role="tab"]')]
+  .find(tab => tab.textContent === '销售单 #1')?.querySelector('[title="有未保存的更改"]')
+const confirmButton = (name: string) => [...document.body.querySelectorAll('button')]
+  .find(button => button.textContent === name)
+
+async function chooseConfirmation(name: '继续编辑' | '放弃本次修改') {
+  const button = confirmButton(name)
+  expect(button).toBeDefined()
+  await act(async () => button!.click())
+}
+
+test.each(['单独关闭', '关闭其他标签', '关闭全部标签'])('切到另一标签后%s仍保护履约入口打开的销售草稿', async method => {
+  await mount(fulfillmentPath)
+  await enter(fulfillmentPath, '待核对履约的销售草稿')
+  const original = input(fulfillmentPath)!
+  await open('/sale/2')
+  expect(route()).toBe('/sale/2')
+  expect(useDirtyGuardStore.getState().pendingConfirm).toBeNull()
+
+  const attemptClose = async () => {
+    if (method === '单独关闭') {
+      const close = host.querySelector<HTMLButtonElement>('button[aria-label="关闭 销售单 #1"]')!
+      await act(async () => close.click())
+    } else {
+      const menu = host.querySelector<HTMLButtonElement>('button[aria-label="标签操作"]')!
+      if (menu.getAttribute('aria-expanded') !== 'true') await act(async () => menu.click())
+      await click(method, 'menuitem')
+    }
+  }
+
+  await attemptClose()
+  await chooseConfirmation('继续编辑')
+  expect(route()).toBe('/sale/2')
+  expect(input(fulfillmentPath)).toBe(original)
+  expect(original.value).toBe('待核对履约的销售草稿')
+  expect(visibleDirtyMark()).toBeTruthy()
+  await attemptClose()
+  await chooseConfirmation('放弃本次修改')
+  expect(input(fulfillmentPath)).toBeNull()
+  expect(useDirtyGuardStore.getState().isTabDirty(fulfillmentPath)).toBe(false)
+  expect(route()).toBe(method === '关闭全部标签' ? '/dashboard' : '/sale/2')
+})
+
+test('同一履约路径下打开、保存和卸载一个表单不会清除另一个表单的草稿保护', async () => {
+  await mount(fulfillmentPath)
+  await enter(fulfillmentPath, '第一份草稿')
+  await click('打开另一表单')
+  expect(useDirtyGuardStore.getState().isTabDirty(fulfillmentPath)).toBe(true)
+
+  await enter(fulfillmentPath, '第二份草稿', '另一草稿')
+  await enter(fulfillmentPath, '')
+  expect(useDirtyGuardStore.getState().isTabDirty(fulfillmentPath)).toBe(true)
+  expect(input(fulfillmentPath, '另一草稿')!.value).toBe('第二份草稿')
+
+  await enter(fulfillmentPath, '再次编辑第一份草稿')
+  await click('关闭另一表单')
+  expect(useDirtyGuardStore.getState().isTabDirty(fulfillmentPath)).toBe(true)
+  expect(input(fulfillmentPath)!.value).toBe('再次编辑第一份草稿')
+
+  await enter(fulfillmentPath, '')
+  expect(useDirtyGuardStore.getState().isTabDirty(fulfillmentPath)).toBe(false)
+  expect(visibleDirtyMark()).toBeNull()
+})
+
+test('履约销售标签最早访问且仍有草稿时，容量淘汰下一个干净标签', async () => {
+  await mount(fulfillmentPath)
+  await enter(fulfillmentPath, '容量淘汰须保留')
+  const original = input(fulfillmentPath)!
+  await act(async () => {
+    for (let id = 2; id < MAX_WORKSPACE_TABS; id++) {
+      useWorkspaceStore.getState().addTab({ key: `/sale/${id}`, path: `/sale/${id}`, title: `SO-${id}` })
+    }
+  })
+  await open('/sale/3')
+  await productMenu()
+  const keys = useWorkspaceStore.getState().tabs.map(tab => tab.key)
+  expect(keys).toHaveLength(MAX_WORKSPACE_TABS)
+  expect(keys).toContain('/sale/1')
+  expect(keys).not.toContain('/sale/2')
+  expect(input(fulfillmentPath)).toBe(original)
+  expect(original.value).toBe('容量淘汰须保留')
+})
+
+test('浏览器回到带履约参数的草稿后，再次后退须确认且取消恢复原历史条目', async () => {
+  await mount('/sale?keyword=original')
+  await open(fulfillmentPath)
+  const originalEntry = { url: window.location.href, state: window.history.state }
+  await enter(fulfillmentPath, '履约详情未保存')
+  const original = input(fulfillmentPath)!
+  await open('/sale/2')
+
+  await act(async () => window.history.back())
+  await vi.waitFor(() => expect(route()).toBe(fulfillmentPath))
+  expect(useDirtyGuardStore.getState().pendingConfirm).toBeNull()
+  expect(input(fulfillmentPath)).toBe(original)
+
+  await act(async () => window.history.back())
+  await vi.waitFor(() => expect(confirmButton('继续编辑')).toBeDefined())
+  expect(route()).toBe(fulfillmentPath)
+  expect(window.location.href).toBe(originalEntry.url)
+  expect(window.history.state).toEqual(originalEntry.state)
+  await chooseConfirmation('继续编辑')
+  expect(input(fulfillmentPath)).toBe(original)
+  expect(original.value).toBe('履约详情未保存')
+
+  await act(async () => window.history.back())
+  await vi.waitFor(() => expect(confirmButton('放弃本次修改')).toBeDefined())
+  await chooseConfirmation('放弃本次修改')
+  await vi.waitFor(() => expect(route()).toBe('/sale?keyword=original'))
+  await act(async () => window.history.forward())
+  await vi.waitFor(() => expect(route()).toBe(fulfillmentPath))
+  expect(window.history.state).toEqual(originalEntry.state)
+  expect(input(fulfillmentPath)).toBe(original)
 })

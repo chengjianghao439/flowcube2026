@@ -96,22 +96,22 @@ export function WorkspaceTabs() {
   }, [menuOpen])
 
   /**
-   * 脏状态守卫：检查 dirtyPaths 中是否有 dirty tab。
+   * 脏状态守卫：检查 dirtyKeys 中是否有 dirty tab。
    * - 无 dirty → 直接执行 proceed
    * - 有 dirty → 弹确认框，用户确认后执行 proceed
    *
-   * @param dirtyPaths    要检查的 tabKey 数组
+   * @param dirtyKeys    要检查的 tabKey 数组
    * @param proceed       确认后执行的动作
    * @param willNavigate  是否会触发路径变化（决定是否设置 bypassNextBlock）
    */
   function guardedAction(
-    dirtyPaths: string[],
+    dirtyKeys: string[],
     proceed: () => void,
     willNavigate = true,
   ) {
     const target = document.activeElement instanceof HTMLElement ? document.activeElement : null
     confirmDirtyLeave({
-      dirtyKeys: dirtyPaths,
+      dirtyKeys,
       willNavigate,
       proceed,
     })
@@ -233,7 +233,7 @@ export function WorkspaceTabs() {
           aria-owns={tabs.map(tab => tabId(tab.key)).join(' ')} className="contents" />
         {tabs.map(tab => {
           const isActive = activeKey === tab.key
-          const isDirty  = !!dirtyTabs[tab.key]
+          const isDirty  = Boolean(dirtyTabs[tab.key]?.size)
           return (
             <div
               key={tab.key}

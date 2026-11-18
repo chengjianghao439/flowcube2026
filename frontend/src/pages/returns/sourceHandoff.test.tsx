@@ -235,7 +235,7 @@ test.each(['sale', 'purchase'])('%s same source canonical key keeps dirty state 
   const registered = buildWorkspaceTabRegistrationFromPath(pathFor(kind) + '&unused=yes')
   useWorkspaceStore.getState().addTab({ ...registered, title: '原单退货' })
   await page(kind, registered.path, async host => {
-    expect(useDirtyGuardStore.getState().dirtyTabs[registered.key]).toBe(true)
+    expect(useDirtyGuardStore.getState().isTabDirty(registered.key)).toBe(true)
     mocks.create.mockResolvedValueOnce({ id: 90, returnNo: 'R90' })
     await click(host, '创建退货单')
     expect(useWorkspaceStore.getState().tabs.find(t => t.key === registered.key)).toBeUndefined()
@@ -415,7 +415,7 @@ test.each([['sale', false, 'response'], ['purchase', false, 'response'], ['sale'
     const create = [...active().querySelectorAll('button')].find(button => button.textContent === '创建退货单')!
     expect(create.disabled).toBe(true); await act(async () => create.click()); expect(mocks.create).toHaveBeenCalledTimes(1)
     expect(mocks.create.mock.calls[0][1]).toBe(originalKey)
-    expect(useDirtyGuardStore.getState().dirtyTabs[buildWorkspaceTabRegistrationFromPath(a).key]).not.toBe(true)
+    expect(useDirtyGuardStore.getState().isTabDirty(a)).not.toBe(true)
     await click(active(), '查看已创建退货单'); expect(useWorkspaceStore.getState().activeKey).toBe(`/returns/${kind}/90`)
   } finally { act(() => root.unmount()); cache.clear(); host.remove(); disposeWorkspaceHistoryGuard() }
 })
@@ -443,6 +443,6 @@ test.each([['sale', false], ['purchase', false], ['sale', true]] as const)('%s k
     expect(useWorkspaceStore.getState().activeKey).toBe(`/returns/${kind}/90`); expect(useWorkspaceStore.getState().tabs).toHaveLength(MAX_WORKSPACE_TABS)
     expect(useWorkspaceStore.getState().tabs.some(t => t.key === buildWorkspaceTabRegistrationFromPath(a).key)).toBe(false)
     await open(b); expect(active().querySelector('input[placeholder="选填"]')).toBe(inputB); expect(inputB.value).toBe('最旧但未保存的B')
-    expect(useDirtyGuardStore.getState().dirtyTabs[buildWorkspaceTabRegistrationFromPath(b).key]).toBe(true)
+    expect(useDirtyGuardStore.getState().isTabDirty(b)).toBe(true)
   } finally { act(() => root.unmount()); cache.clear(); host.remove(); disposeWorkspaceHistoryGuard() }
 })

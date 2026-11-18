@@ -59,16 +59,10 @@ function visitedKeys(tabs: WorkspaceTab[], recentKeys: string[], activeKey: stri
   return [...tabs.filter(tab => tab.key !== activeKey && !known.has(tab.key)).map(tab => tab.key), ...recent, ...(keys.has(activeKey) ? [activeKey] : [])]
 }
 
-/** 脏登记可能带 query 或合并页子路径，按原路由身份保护整个标签。 */
-function isDirtyTab(tab: WorkspaceTab) {
-  return Object.entries(useDirtyGuardStore.getState().dirtyTabs).some(([path, dirty]) => (
-    dirty && buildWorkspaceTabRegistrationFromPath(path).key === tab.key
-  ))
-}
-
 function evictionCandidates(tabs: WorkspaceTab[], recentKeys: string[]) {
   const ordered = visitedKeys(tabs, recentKeys, '')
-  return ordered.map(key => tabs.find(item => item.key === key)).filter((item): item is WorkspaceTab => !!item && item.closable && !isDirtyTab(item))
+  const { isTabDirty } = useDirtyGuardStore.getState()
+  return ordered.map(key => tabs.find(item => item.key === key)).filter((item): item is WorkspaceTab => !!item && item.closable && !isTabDirty(item.key))
 }
 
 function admitTab(tabs: WorkspaceTab[], recentKeys: string[], tab: WorkspaceTab): WorkspaceTab[] | null {

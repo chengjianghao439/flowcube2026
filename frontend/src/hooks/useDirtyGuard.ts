@@ -16,26 +16,20 @@
  * @param isDirty  表单是否有未保存变更
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { consumeAllowUnloadOnce } from '@/lib/electronUnloadGate'
 
 export function useDirtyGuard(tabPath: string, isDirty: boolean) {
   const setDirty = useDirtyGuardStore(s => s.setDirty)
 
-  // 同步脏状态到全局 store
-  useEffect(() => {
-    if (!tabPath) return
-    setDirty(tabPath, isDirty)
-  }, [tabPath, isDirty, setDirty])
+  const [source] = useState(() => Symbol())
 
-  // 组件卸载时清除（Tab 被关闭后解除保护）
   useEffect(() => {
-    if (!tabPath) return
-    return () => {
-      setDirty(tabPath, false)
-    }
-  }, [tabPath, setDirty])
+    if (!tabPath || !isDirty) return
+    setDirty(tabPath, true, source)
+    return () => setDirty(tabPath, false, source)
+  }, [tabPath, isDirty, setDirty, source])
 
   // 浏览器刷新 / 关闭标签页保护（Electron 内主进程退出确认后会 dispatch 事件放行一次，避免二次原生离开提示）
   useEffect(() => {
