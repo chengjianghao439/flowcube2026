@@ -18,6 +18,11 @@ function bootstrap(objects = [], failure) {
     'mysql2/promise': { async createConnection() { calls.push(['connect']); return conn } },
     '../config/env': { env: {} },
     './migrate': {
+      async withMigrationLock(connection, execute) {
+        assert.equal(connection, conn)
+        calls.push(['lock'])
+        try { return await execute('boot-lock') } finally { calls.push(['unlock']) }
+      },
       async runMigrations(options) { calls.push(['migrate', options]); if (failure) throw failure },
       async executeMigrationStatements(connection, sql, filename, options) { calls.push(['bootstrap', { connection, sql, filename, options }]) },
     },
@@ -36,7 +41,7 @@ for (const objectType of ['BASE TABLE', 'VIEW', 'PROCEDURE', 'FUNCTION', 'TRIGGE
       assert.match(error.message, /新建空库/)
       return true
     })
-    assert.deepEqual(f.calls.map(c => c[0]), ['connect', 'query', 'rollback', 'end'])
+    assert.deepEqual(f.calls.map(c => c[0]), ['connect', 'lock', 'query', 'rollback', 'unlock', 'end'])
     const sql = f.calls.find(c => c[0] === 'query')[1]
     for (const table of ['TABLES', 'ROUTINES', 'TRIGGERS', 'EVENTS']) assert.ok(sql.includes(`information_schema.${table}`), table)
   })
@@ -44,18 +49,20 @@ for (const objectType of ['BASE TABLE', 'VIEW', 'PROCEDURE', 'FUNCTION', 'TRIGGE
 test('空库同一连接依次执行001—295、新初始化SQL、普通全部迁移；连接由入口收尾', async () => {
   const f = bootstrap()
   await f.run()
-  assert.deepEqual(f.calls.map(c => c[0]), ['connect', 'query', 'migrate', 'bootstrap', 'migrate', 'end'])
+  assert.deepEqual(f.calls.map(c => c[0]), ['connect', 'lock', 'query', 'migrate', 'bootstrap', 'migrate', 'unlock', 'end'])
   const migrations = f.calls.filter(c => c[0] === 'migrate')
   assert.equal(migrations[0][1].through, '295_role_duties_approval.sql')
   assert.equal(migrations[1][1].through, undefined, '296 must run as ordinary strict migration')
   assert.equal(migrations[0][1].connection, f.conn)
   assert.equal(migrations[1][1].connection, f.conn)
+  assert.equal(migrations[0][1].migrationLock, 'boot-lock')
+  assert.equal(migrations[1][1].migrationLock, 'boot-lock')
   assert.match(f.calls.find(c => c[0] === 'bootstrap')[1].filename, /bootstrap/)
 })
 test('历史迁移失败即停，保留原错误并关闭连接，不装载新角色', async () => {
   const failure = new Error('migration failed'), f = bootstrap([], failure)
   await assert.rejects(f.run(), error => error === failure)
-  assert.deepEqual(f.calls.map(c => c[0]), ['connect', 'query', 'migrate', 'rollback', 'end'])
+  assert.deepEqual(f.calls.map(c => c[0]), ['connect', 'lock', 'query', 'migrate', 'rollback', 'unlock', 'end'])
 })
 test('正式初始化不引用测试夹具，SQL放子目录不混入普通编号迁移', () => {
   const source = fs.readFileSync(path.join(root, 'backend/src/database/bootstrapNewDatabase.js'), 'utf8')

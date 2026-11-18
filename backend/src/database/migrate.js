@@ -77,7 +77,46 @@ async function executeMigrationStatements(conn, sql, filename, { recordMigration
   if (recordMigration) await conn.query('INSERT INTO db_migrations (filename) VALUES (?)', [filename])
 }
 
-async function runMigrations({ checkGapsOnly = false, through, connection } = {}) {
+// Lock identity is derived from the selected schema on this MySQL server. Keeping
+// the lease on the execution connection also releases it on process/connection loss.
+const migrationLocks = new WeakMap()
+
+async function withMigrationLock(conn, run) {
+  if (migrationLocks.has(conn)) {
+    throw Object.assign(new Error('该数据库连接已有迁移正在执行'), { code: 'MIGRATION_CONNECTION_BUSY' })
+  }
+  const lock = {}
+  migrationLocks.set(conn, lock)
+  try {
+    const [[row]] = await conn.query(
+      `SELECT lockName, GET_LOCK(lockName, 60) AS acquired
+         FROM (SELECT CONCAT('flowcube:migrate:', LEFT(SHA2(LOWER(DATABASE()), 256), 46)) AS lockName) target`,
+    )
+    if (Number(row?.acquired) !== 1) {
+      throw Object.assign(new Error('未取得数据库迁移锁，请核查同库迁移任务后再试'), { code: 'MIGRATION_LOCK_UNAVAILABLE' })
+    }
+
+    let failure
+    try {
+      return await run(lock)
+    } catch (error) {
+      failure = error
+      throw error
+    } finally {
+      try {
+        const [[result]] = await conn.query('SELECT RELEASE_LOCK(?) AS released', [row.lockName])
+        if (Number(result?.released) !== 1) throw new Error('数据库迁移锁未正常释放')
+      } catch (error) {
+        if (!failure) throw error
+        failure.migrationUnlockError = error
+      }
+    }
+  } finally {
+    migrationLocks.delete(conn)
+  }
+}
+
+async function runMigrations({ checkGapsOnly = false, through, connection, migrationLock } = {}) {
   // 扫描 SQL 文件（排除 migrate.js 自身）
   const dir = path.join(__dirname)
   const files = fs.readdirSync(dir)
@@ -107,70 +146,108 @@ async function runMigrations({ checkGapsOnly = false, through, connection } = {}
   // every migration, including strict production-baseline assertions.
   if (through !== undefined && !files.includes(through)) throw new Error(`未知迁移终点：${through}`)
 
+  const conn = connection || await createMigrationConnection()
+  const execute = async () => {
+    try {
+      return await migrateDatabase(conn, files, through)
+    } catch (error) {
+      if (!connection) {
+        try { await conn.rollback() } catch (rollbackError) { error.rollbackError = rollbackError }
+      }
+      throw error
+    }
+  }
+  try {
+    if (migrationLock) {
+      if (migrationLocks.get(conn) !== migrationLock) throw new Error('迁移锁与当前数据库连接不匹配')
+      return await execute()
+    }
+    return await withMigrationLock(conn, execute)
+  } finally {
+    if (!connection) await conn.end()
+  }
+}
+
+function createMigrationConnection() {
   const { env } = require('../config/env')
-  const cfg = {
+  return mysql2.createConnection({
     host: env.DB_HOST,
     port: env.DB_PORT,
     user: env.DB_USER,
     password: env.DB_PASSWORD,
     database: env.DB_NAME,
     multipleStatements: true,
+  })
+}
+
+async function migrateDatabase(conn, files, through) {
+  // 先确保迁移记录表存在
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS db_migrations (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      filename VARCHAR(200) NOT NULL,
+      executed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (id), UNIQUE KEY uk_file (filename)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `)
+
+  // Persist the attempt before DDL, which can commit independently of its receipt.
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS db_migration_attempts (
+      id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+      filename VARCHAR(200) NOT NULL,
+      started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `)
+  const [[attempt]] = await conn.query(
+    `SELECT attempt.filename, applied.id AS applied
+       FROM db_migration_attempts attempt
+       LEFT JOIN db_migrations applied ON applied.filename = attempt.filename
+      WHERE attempt.id = 1`,
+  )
+  if (attempt && attempt.applied == null) {
+    throw Object.assign(new Error(`迁移 ${attempt.filename} 已开始但缺少成功记录。请核对现有结构、数据与备份后按恢复手册处理。`), {
+      code: 'MIGRATION_ATTEMPT_UNRECONCILED',
+    })
   }
-  const conn = connection || await mysql2.createConnection(cfg)
-  try {
-    // 先确保迁移记录表存在
-    await conn.query(`
-      CREATE TABLE IF NOT EXISTS db_migrations (
-        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-        filename VARCHAR(200) NOT NULL,
-        executed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (id), UNIQUE KEY uk_file (filename)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    `)
+  if (attempt) await conn.query('DELETE FROM db_migration_attempts WHERE id = 1')
 
-    // 在结转数据写入前核实触发器创建权限，避免权限不足留下半次初始化。
-    const [ledgerMigrations] = await conn.query("SELECT filename FROM db_migrations WHERE filename IN ('238_party_ledger.sql','239_party_ledger_receipt_identity.sql','240_party_ledger_explicit_identity.sql')")
-    if (ledgerMigrations.length < 3 && files.includes('238_party_ledger.sql')) {
-      const [[flags]] = await conn.query('SELECT @@GLOBAL.log_bin binlog,@@GLOBAL.log_bin_trust_function_creators trusted')
-      if (Number(flags.binlog) && !Number(flags.trusted)) {
-        const [grants] = await conn.query('SHOW GRANTS')
-        const allowed = grants.some(row => /GRANT (?:ALL PRIVILEGES ON \*\.\*|[^\n]*\bSUPER\b)/i.test(String(Object.values(row)[0])))
-        if (!allowed) throw new Error('往来明细迁移需要已有的触发器创建条件：当前授权或数据库条件不足，请由管理员核实；部署脚本不会修改全局参数；未写入结转数据')
-      }
+  // 在结转数据写入前核实触发器创建权限，避免权限不足留下半次初始化。
+  const [ledgerMigrations] = await conn.query("SELECT filename FROM db_migrations WHERE filename IN ('238_party_ledger.sql','239_party_ledger_receipt_identity.sql','240_party_ledger_explicit_identity.sql')")
+  if (ledgerMigrations.length < 3 && files.includes('238_party_ledger.sql')) {
+    const [[flags]] = await conn.query('SELECT @@GLOBAL.log_bin binlog,@@GLOBAL.log_bin_trust_function_creators trusted')
+    if (Number(flags.binlog) && !Number(flags.trusted)) {
+      const [grants] = await conn.query('SHOW GRANTS')
+      const allowed = grants.some(row => /GRANT (?:ALL PRIVILEGES ON \*\.\*|[^\n]*\bSUPER\b)/i.test(String(Object.values(row)[0])))
+      if (!allowed) throw new Error('往来明细迁移需要已有的触发器创建条件：当前授权或数据库条件不足，请由管理员核实；部署脚本不会修改全局参数；未写入结转数据')
     }
+  }
 
-    // 先执行按编号排序的 SQL 建表迁移，保证基础表存在后再做增量 ALTER
-    let ran = 0
-    for (const file of files) {
-      if (through !== undefined && file > through) break
-      const [[existing]] = await conn.query(
-        'SELECT id FROM db_migrations WHERE filename=?', [file]
-      )
-      if (existing) continue
+  // 先执行按编号排序的 SQL 建表迁移，保证基础表存在后再做增量 ALTER
+  let ran = 0
+  for (const file of files) {
+    if (through !== undefined && file > through) break
+    const [[existing]] = await conn.query(
+      'SELECT id FROM db_migrations WHERE filename=?', [file]
+    )
+    if (existing) continue
 
-      const sql = fs.readFileSync(path.join(dir, file), 'utf8')
-      // 逐条执行：整文件当一条多语句发送时，非末条 CREATE TRIGGER 的函数体会把
-      // 结尾分号一起写进 ACTION_STATEMENT，导出成无法导入的 `... ); */;;`（见
-      // sqlStatements.js 说明与 2026-09-14 备份恢复演练事故）。
-      await executeMigrationStatements(conn, sql, file, { recordMigration: true })
-      console.log(`[Migrate] ✓ ${file}`)
-      ran++
-    }
+    const sql = fs.readFileSync(path.join(__dirname, file), 'utf8')
+    // 逐条执行：整文件当一条多语句发送时，非末条 CREATE TRIGGER 的函数体会把
+    // 结尾分号一起写进 ACTION_STATEMENT，导出成无法导入的 `... ); */;;`（见
+    // sqlStatements.js 说明与 2026-09-14 备份恢复演练事故）。
+    await conn.query('INSERT INTO db_migration_attempts (id, filename) VALUES (1, ?)', [file])
+    await executeMigrationStatements(conn, sql, file, { recordMigration: true })
+    await conn.query('DELETE FROM db_migration_attempts WHERE id = 1')
+    console.log(`[Migrate] ✓ ${file}`)
+    ran++
+  }
 
-    if (ran === 0) {
-      console.log('[Migrate] 所有迁移均已执行，无需更新')
-    } else {
-      console.log(`[Migrate] 完成，共执行 ${ran} 个迁移文件`)
-    }
-  } catch (error) {
-    // A borrowed connection's caller owns transaction cleanup and lifetime.
-    if (!connection) {
-      try { await conn.rollback() } catch (rollbackError) { error.rollbackError = rollbackError }
-    }
-    throw error
-  } finally {
-    if (!connection) await conn.end()
+  if (ran === 0) {
+    console.log('[Migrate] 所有迁移均已执行，无需更新')
+  } else {
+    console.log(`[Migrate] 完成，共执行 ${ran} 个迁移文件`)
   }
 }
 
-module.exports = { runMigrations, checkMigrationGaps, executeMigrationStatements }
+module.exports = { runMigrations, checkMigrationGaps, executeMigrationStatements, withMigrationLock }

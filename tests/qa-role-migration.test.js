@@ -8,6 +8,11 @@ const fixture = require('./fixtures/qa-roles-approved-20261021.json')
 const { splitSqlStatements } = require('../backend/src/database/sqlStatements')
 const root = path.resolve(__dirname, '..')
 const filename = '296_qa_role_permissions.sql'
+const migrationLockResult = sql => {
+  if (sql.includes('GET_LOCK(')) return [[{ acquired: 1, lockName: 'synthetic:lock' }]]
+  if (sql.includes('RELEASE_LOCK(')) return [[{ released: 1 }]]
+  return [[]]
+}
 function runner(conn, sql, files = [filename]) {
   const file = path.join(root, 'backend/src/database/migrate.js'), module_ = { exports: {} }
   const deps = {
@@ -22,7 +27,7 @@ test('迁移入口完整抛出全部诊断并回滚，不执行后续写入或�
   const diagnostics = fixture.roles.flatMap(r => r.before.map(p => ({ migration_error: `${r.id}/${r.code}/${r.name}: missing ${p}` })))
   const calls = []
   const conn = {
-    async query(sql) { calls.push(sql); return [sql === 'SELECT diagnostics' ? diagnostics : []] },
+    async query(sql) { calls.push(sql); return sql === 'SELECT diagnostics' ? [diagnostics] : migrationLockResult(sql) },
     async rollback() { calls.push('ROLLBACK') }, async end() { calls.push('END') },
   }
   await assert.rejects(runner(conn, 'START TRANSACTION; SELECT diagnostics; DELETE forbidden; COMMIT;').runMigrations(), error => {
@@ -38,7 +43,7 @@ test('迁移入口完整抛出全部诊断并回滚，不执行后续写入或�
 test('SQL错误也整体回滚，原始错误保持，不登记迁移', async () => {
   const calls = [], failure = new Error('synthetic SQL failure')
   const conn = {
-    async query(sql) { calls.push(sql); if (sql === 'DELETE mutation') throw failure; return [[]] },
+    async query(sql) { calls.push(sql); if (sql === 'DELETE mutation') throw failure; return migrationLockResult(sql) },
     async rollback() { calls.push('ROLLBACK') }, async end() { calls.push('END') },
   }
   await assert.rejects(runner(conn, 'START TRANSACTION; DELETE mutation; COMMIT;').runMigrations(), e => e === failure)
@@ -79,7 +84,7 @@ test('原始语句辅助函数仍不默认写入迁移记录', async () => {
 test('借用连接保持原顺序执行，由所有者统一回滚与关闭', async () => {
   const calls = [], failure = new Error('borrowed connection failure')
   const conn = {
-    async query(sql) { calls.push(sql); if (sql === 'DO fail') throw failure; return [[]] },
+    async query(sql) { calls.push(sql); if (sql === 'DO fail') throw failure; return migrationLockResult(sql) },
     async rollback() { calls.push('ROLLBACK') }, async end() { calls.push('END') },
   }
   await runner(conn, 'DO success;').runMigrations({ connection: conn })
@@ -120,7 +125,7 @@ test('新增296唯一且SQL执行前后都有全量失败守卫，沿原语句�
 
 test('显式迁移前缀只执行指定终点，默认仍执行全部，未知终点连库前报错', async () => {
   const calls = []
-  const conn = { async query(sql, params) { calls.push({ sql, params }); return [[]] }, async rollback() {}, async end() {} }
+  const conn = { async query(sql, params) { calls.push({ sql, params }); return migrationLockResult(sql) }, async rollback() {}, async end() {} }
   const files = ['295_role_duties_approval.sql', filename]
   await runner(conn, 'DO 1;', files).runMigrations({ through: files[0] })
   assert.deepEqual(calls.filter(c => c.sql.startsWith('INSERT INTO db_migrations')).map(c => c.params[0]), [files[0]])

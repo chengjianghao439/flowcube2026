@@ -15,7 +15,7 @@
  *
  * 用法：
  *   node scripts/schema-reconcile.js            # 全量对账，缺失/意外表不中断（warn）
- *   node scripts/schema-reconcile.js --strict   # 缺失表或活跃期唯一键不达标即 exit 1（可挂 CI 门禁）
+ *   node scripts/schema-reconcile.js --strict   # 缺表或关键索引、列定义错误即 exit 1
  */
 require('dotenv').config()
 const fs = require('fs')
@@ -27,7 +27,7 @@ const strict = process.argv.includes('--strict')
 
 /** 运行时自建表（代码里 CREATE TABLE IF NOT EXISTS，非迁移建的表）——对账时豁免。
  *  pda_error_logs / pda_undo_logs 已由迁移 293 正式声明，不再豁免。 */
-const KNOWN_RUNTIME_TABLES = new Set(['db_migrations'])
+const KNOWN_RUNTIME_TABLES = new Set(['db_migrations', 'db_migration_attempts'])
 
 /**
  * 「活跃期唯一键」契约：代码与业务真正依赖的唯一性，靠 active_unique_guard 生成列实现
@@ -43,6 +43,11 @@ const REQUIRED_ACTIVE_UNIQUES = [
   { table: 'sale_customers', index: 'uk_sale_customers_code_active', columns: ['code', 'active_unique_guard'] },
   { table: 'sys_users', index: 'uk_sys_users_username_active', columns: ['username', 'active_unique_guard'] },
 ]
+const OPERATION_REQUEST_IDENTITY = {
+  table: 'operation_requests',
+  index: 'uk_operation_requests_key',
+  columns: ['request_key', 'action', 'user_id'],
+}
 
 /** 从 SQL 文本提取 CREATE TABLE 的表名 */
 function extractTableNames(sql) {
@@ -104,10 +109,10 @@ async function main() {
   // 意外表：实际存在、但不在任何迁移声明里且非运行时自建表
   const unexpected = [...actualTables].filter(t => !declaredTables.has(t) && !KNOWN_RUNTIME_TABLES.has(t)).sort()
 
-  // ── ② 索引级对账：活跃期唯一键 ────────────────────────────────────────────
+  // ── ② 索引级对账：活跃主数据与操作回执唯一键 ──────────────────────────────
   const [indexRows] = await conn.query(
     `SELECT TABLE_NAME AS tbl, INDEX_NAME AS idx, NON_UNIQUE AS nonUnique,
-            GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS cols
+            GROUP_CONCAT(IF(SUB_PART IS NULL, COLUMN_NAME, CONCAT(COLUMN_NAME, '(', SUB_PART, ')')) ORDER BY SEQ_IN_INDEX) AS cols
        FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA = DATABASE()
       GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE`,
@@ -116,8 +121,10 @@ async function main() {
     `${String(r.tbl).toLowerCase()}.${String(r.idx)}`,
     { unique: Number(r.nonUnique) === 0, columns: String(r.cols || '').split(',') },
   ]))
+  const requiredUniques = [...REQUIRED_ACTIVE_UNIQUES]
+  if (executedSet.has('064_create_operation_requests.sql')) requiredUniques.push(OPERATION_REQUEST_IDENTITY)
   const uniqueProblems = []
-  for (const req of REQUIRED_ACTIVE_UNIQUES) {
+  for (const req of requiredUniques) {
     const found = indexMap.get(`${req.table}.${req.index}`)
     const want = req.columns.join(',')
     if (!found) uniqueProblems.push(`${req.table}.${req.index} 不存在（期望 UNIQUE(${want})）`)
@@ -130,7 +137,22 @@ async function main() {
     .map(r => `${String(r.tbl).toLowerCase()}.${String(r.idx)}(${r.cols})`)
     .sort()
 
-  const ok = missing.length === 0 && uniqueProblems.length === 0
+  const columnProblems = []
+  if (executedSet.has('292_cash_cents_execution_proofs.sql')) {
+    const [[column]] = await conn.query(
+      `SELECT DATA_TYPE AS dataType, COLUMN_TYPE AS columnType, IS_NULLABLE AS isNullable,
+              COLUMN_DEFAULT AS defaultValue, EXTRA AS extra
+         FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'payment_records' AND COLUMN_NAME = 'cash_projection'`,
+    )
+    if (!column) columnProblems.push('payment_records.cash_projection 不存在（期望 JSON NULL）')
+    else if (column.dataType !== 'json' || column.columnType !== 'json' || column.isNullable !== 'YES'
+      || column.defaultValue !== null || column.extra !== '') {
+      columnProblems.push('payment_records.cash_projection 列定义不符（期望 JSON NULL，默认 NULL，无额外属性）')
+    }
+  }
+  const ok = missing.length === 0 && uniqueProblems.length === 0 && columnProblems.length === 0
   console.log('═'.repeat(60))
   console.log('  Schema 对账')
   console.log('═'.repeat(60))
@@ -146,13 +168,13 @@ async function main() {
     for (const t of unexpected.slice(0, 20)) console.warn(`    - ${t}`)
     if (unexpected.length > 20) console.warn(`    ... 等 ${unexpected.length} 个`)
   }
-  // ② 活跃期唯一键
   if (uniqueProblems.length) {
-    console.error(`  ✗ 活跃期唯一键不达标 ${uniqueProblems.length} 处（软删后同码重建/活跃期唯一性会失效）：`)
+    console.error(`  ✗ 关键唯一键不达标 ${uniqueProblems.length} 处：`)
     for (const p of uniqueProblems) console.error(`    - ${p}`)
   } else {
-    console.log(`  [PASS] ${REQUIRED_ACTIVE_UNIQUES.length} 个活跃期唯一键全部存在且列序正确`)
+    console.log(`  [PASS] ${requiredUniques.length} 个关键唯一键全部存在且列序正确`)
   }
+  for (const p of columnProblems) console.error(`  ✗ ${p}`)
   if (legacyPairUniques.length) {
     console.warn(`  ⚠ 仍在使用旧式 (业务键, deleted_at) 唯一键 ${legacyPairUniques.length} 处——`
       + '对活跃行零约束（MySQL 里 NULL 互不相等），只会在同一秒软删两条同码行时撞车，建议按 075/248/252 的模板换成 active_unique_guard：')

@@ -60,6 +60,8 @@ routes/controller/service 分工及统一 `successResponse` / `AppError` 信封�
 - 操作日志页面和导出还传 `hidePrintPolling=1`，在列表与总数统计中排除历史成功打印机心跳和任务领取请求。失败请求继续显示，原始日志不删除；后端缺省查询仍可用于排障。`opLogger` 对新请求跳过成功心跳与空领取，实际领取、完成和失败回执仍按原规则记录。
 - 新迁移按当前最大编号新增，**不得修改已执行的迁移**，不得未经明确授权删除字段、兼容代码或迁移文件。编号冲突、幂等执行、回填与消费者兼容要一起考虑。
 - 迁移的历史重复例外按既有文件名核对。新增冲突在取得数据库连接或使用调用方连接前拒绝，离线编号检查入口为 `npm run test:migration-numbering`。并行任务提交前由集成人按最新基线复核编号。
+- 普通迁移和首次初始化在实际数据库连接上按 schema 互斥。首次初始化从空库检查到角色基线与严格迁移结束使用同一把锁。执行器在逐条派发 SQL 前写入 `db_migration_attempts`，成功回执仍由 `db_migrations` 保存。重跑遇到无成功回执的旧尝试即报告 `MIGRATION_ATTEMPT_UNRECONCILED`，在任何后续迁移前停止；保留原库和备份，按故障恢复手册比对实际结构和数据。成功回执已落库时可清掉残留的尝试记录。记录从新执行器开始生效，既有历史状态仍需单独核实。
+- `schema-reconcile.js --strict` 沿迁移记录核对操作回执唯一索引的名字、唯一性、完整列和列序，核对 `payment_records.cash_projection` 的 JSON 列形状。缺索引、错列序或错类型都会失败；回执索引仍由 `064_create_operation_requests.sql` 建立。
 - 新迁移若建临时表并按字符列连接或比较既有表，须显式对齐双方的 charset/collation；不能依赖本地测试库默认值。v0.11.0 角色预置迁移在 MySQL 8 默认 `utf8mb4_0900_ai_ci` 测试库与既有 `sys_roles.code` 的 `utf8mb4_unicode_ci` 比较时失败，修复见 `257_seed_job_role_presets.sql`。发布前在独立测试库用 CI 默认排序规则完整迁移，避免生产部署阶段才发现差异。
 - **迁移必须逐条执行**：`backend/src/database/migrate.js` 经 `sqlStatements.js` 切分后逐条 `query`。整文件当一条多语句发送时，非末条 `CREATE TRIGGER ... <单语句>;` 的函数体会把结尾分号一起写进 `ACTION_STATEMENT`，mysqldump 导出成 `... ); */;;`，导入必然 1064 且备份不可恢复（2026-09-14 事故，见 `docs/backup-restore-trigger-terminator-2026-09-14.md`）。新增触发器迁移后要确认函数体不残留结尾分号；`sqlStatements.js` 不支持 `DELIMITER`，需要时先扩展再写迁移。
 - 后端启动不自动迁移；本地显式 migrate。生产由部署脚本执行，不能把两者混为一谈。
