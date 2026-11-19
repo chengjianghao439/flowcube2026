@@ -4,7 +4,6 @@ The setup command for a project. One codebase crawl feeds everything it writes:
 
 - **PRODUCT.md** (strategic): root project file for register, target users, product purpose, brand personality, anti-references, strategic design principles. Answers "who/what/why".
 - **DESIGN.md** (visual): root project file for visual theme, color palette, typography, components, layout. Follows the [DESIGN.md format spec](https://raw.githubusercontent.com/google-labs-code/design.md/main/docs/spec.md). Answers "how it looks".
-- **`.impeccable/live/config.json`** (live mode): pre-configured so `{{command_prefix}}impeccable live` boots straight into variant mode with no first-time detour.
 
 It closes by pointing the user at the best command to run next. Every other impeccable command reads PRODUCT.md and DESIGN.md before doing any work.
 
@@ -135,27 +134,15 @@ If the user agrees, delegate to `/impeccable document` (it auto-detects scan vs 
 
 If the user prefers to skip, mention they can run `/impeccable document` any time later.
 
-## Step 6: Configure live mode (when code exists)
+## Step 6: Check live mode availability
 
-If the project has code with HTML entries and a dev server (the same "code exists" condition that puts `/impeccable document` in scan mode), pre-configure live mode now. You already identified the framework and the served HTML entry in Step 2, so this is nearly free, and it spares the user the first-time setup detour when they later run `/impeccable live`.
-
-**Skip this step for empty / pre-implementation projects** (nothing to inject into yet). Tell the user live mode will configure itself the first time they run it once there's code.
-
-**If `.impeccable/live/config.json` already exists, leave it untouched** and note that live mode is already configured.
-
-Otherwise:
-
-1. Write `.impeccable/live/config.json`. Choose `files` (the HTML entries the browser actually loads), `insertBefore`, and `commentSyntax` from the framework table in [live.md](live.md)'s **First-time setup** section, using the framework you found in Step 2. That table is canonical; do not restate it here. For multi-page static sites, prefer a glob (`["public/**/*.html"]`) over a literal list.
-2. Run `node {{scripts_path}}/detect-csp.mjs`. If it reports a patchable shape (`append-arrays` / `append-string`), use the **consent prompt template** from live.md before editing any source file. On decline, skip the patch. For `middleware` / `meta-tag` shapes, surface the detected files and ask the user to add `http://localhost:8400` to `script-src` and `connect-src` manually. For `null`, there's nothing to do.
-3. Set `cspChecked: true` in the config once CSP is handled (patched, declined, manual, or not needed). The schema and per-shape patch details live in live.md's First-time setup; follow it rather than duplicating.
-
-Writing the config file is harmless and needs no consent; only the CSP **source-file patch** requires a yes.
+This repository uses the text-only port. Continue to the starting-point recommendations in Step 7. The [skill entry](../SKILL.md) lists the supported workflows.
 
 ## Step 7: Recommend starting points, then wrap up
 
 Summarize tersely:
 - Register captured (brand / product)
-- What was written (PRODUCT.md, DESIGN.md, live config, or a subset)
+- What was written (PRODUCT.md, DESIGN.md, or a subset)
 - The 3-5 strategic principles from PRODUCT.md that will guide future work
 - If DESIGN.md or live config is pending, one line on how to set it up later
 
@@ -163,7 +150,6 @@ Then recommend the **best commands to run next**, drawn from what your Step 2 cr
 
 - **Build something new**: `/impeccable craft <feature>` (shape, then build end-to-end) or `/impeccable shape <feature>` (plan first). Lead with this for empty or early-stage projects.
 - **Improve what's there**: name the specific surface. `/impeccable critique <page>` for a scored UX review; `/impeccable audit <area>` for a11y / perf / responsive checks; `/impeccable polish <component>` for a pre-ship pass. When the crawl flagged a specific weakness, point the matching command at it: thin hierarchy or spacing → `layout`, flat or gray palette → `colorize`, missing error / empty states → `harden` or `onboard`, dull or unclear copy → `clarify`.
-- **Iterate visually**: `/impeccable live` (configured in Step 6) to pick elements in the browser and generate variants in place.
 
 The full command menu is one bare `/impeccable` away; keep this list short and pointed.
 

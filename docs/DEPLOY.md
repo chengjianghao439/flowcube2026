@@ -61,8 +61,7 @@ Compose 只向 backend 注入以下模型变量，不能传给 Vite 构建或写
 
 - `main` 是浏览器端和服务器端的唯一发布来源。
 - `desktop/package.json` 的 `version` 是桌面安装包 tag 的唯一来源。
-- 生产服务器信息放在仓库配置里，GitHub Actions 不再额外保存 `SERVER_HOST` / `SERVER_USER` / `SERVER_DOWNLOADS_PATH` 这类非敏感信息。
-- GitHub Actions 只保留敏感项：`SSH_PRIVATE_KEY`。
+- GitHub Actions 的部署拓扑使用发布工作流声明的仓库变量。密钥使用 Actions Secrets，包含 SSH、网页验收及 PDA 签名所需项，见[发布配置](RELEASE.md#需要的-actions-配置)。
 - 桌面端安装包必须通过 `scripts/release-desktop.js` 发布到 `/var/www/flowcube-downloads`，禁止手工复制到旧目录。
 
 ## 以后怎么发布
@@ -127,11 +126,7 @@ HTTPS、可信中转与 SCP 均先通过原有验包，再将本次暂存的 Win
   quarantine/
 ```
 
-手工应急发布时，只允许执行：
-
-```bash
-node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.exe
-```
+Windows 发布中断按[原构建产物恢复流程](RELEASE.md#桌面端发布规范)处理。使用原 tag、运行编号、产物编号、完整构建提交和 SHA-256，保留原失败记录。
 
 `latest.json` 是桌面更新权威入口。主进程从可信 HTTPS 清单获取并绑定 version、URL、sha256，下载及安装前各校验一次；无摘要或证书错误不能自动安装。根组件消费更新事件，订阅晚于检查时仍能显示待处理更新。`backend/downloads` 已废弃，仅保留废弃说明，不再用于发布。
 
@@ -140,7 +135,7 @@ node scripts/release-desktop.js x.x.x --artifact=/path/to/FlowCube-Setup-x.x.x.e
 - `/downloads/` 只用于旧客户端兼容，允许 GET/HEAD 静态访问旧 manifest 已下发的安装包路径。
 - 新客户端、新 manifest、新脚本一律使用 `/latest.json`、`/versions/`、`/current/`。
 - 生产 `docker-compose.yml` 默认挂载 `/var/www/flowcube-downloads`，不再 fallback 到 `./backend/downloads`。
-- 退场计划：目标 `v0.5.0` 后删除 alias；删除前必须确认连续 30 天无 `/downloads/` 访问，且所有受管客户端已升级到 `>=0.3.72`。
+- 下线前须确认连续 30 天没有 `/downloads/` 访问，且所有受管客户端已升级到 `>=0.3.72`。按实际访问记录和设备清单另行确认下线。
 
 ## 一次性初始化
 
@@ -168,15 +163,8 @@ chmod 600 ~/.ssh/authorized_keys
 
 ### 3. GitHub Actions 配置 Secret
 
-只需要一个：
-
-- `SSH_PRIVATE_KEY`
-
-填入内容：
-
-```bash
-cat ~/.ssh/flowcube_deploy_ed25519
-```
+通过获授权的 GitHub Secrets 设置入口配置 `SSH_PRIVATE_KEY`。录入时避免在终端或日志显示密钥内容。
+网页页面验收、PDA 签名及发布所需的其他配置以[发布配置](RELEASE.md#需要的-actions-配置)和对应工作流为准。
 
 ### 4. 本机连通性验证
 
@@ -356,13 +344,15 @@ Docker 部署沿用部署锁与停写边界，在核旧后端兼容性后、任�
 离线回归执行真实 shell/Node helper，以专属临时文件及假 Docker/SQL/容量/故障输出验证顺序和失败；`node --test tests/audit-deployment.test.js tests/deployment-resources.test.js` 已在既有 CI 入口可达。测试不证明真实 MySQL 快照一致性、生产磁盘性能、实际权限、信号后 daemon 状态或恢复成功；真实备份与恢复需另行授权验收，本轮未连接数据库或执行部署。
 
 
-### A41/A42 生命周期候选改进（2026-10-17，未发布）
+### A41/A42 生命周期与退出
+
+优雅退出和就绪判断已随 v0.13.6 合入发布代码。当前实现见[后端入口](../backend/index.js)和 [Compose](../docker-compose.yml)。下文离线测试边界记录的是初次验证。
 
 `SIGTERM` / `SIGINT` 及原有致命异常共用退出链：立即进入 draining，停止 HTTP 接入与全部已登记定时循环，再等在途 HTTP、后台工作和启动探测，最后 `pool.end()`。整个流程共用 25 秒截止；正常排空退出 0，超时、HTTP 关闭或关池失败退出非零；重复信号不重复关闭，退出中致命错误升级为失败。调度器、幂等回执即时/周期清理、打印三支并行清理及采购内存快照均统一登记，不再启动下一轮；履约提示仍沿现有可丢弃/有界队列策略，只等待当前工作，不在退出时无限清空。业务 SQL、TTL、权限和数量/金额口径未改。
 
 `/api/ready` 保留现有 2 秒探测、1 秒缓存、并发合并与响应信封；draining 在缓存前及在途探测后检查，返回 503 `NOT_READY`。健康存活接口保持原用途。新业务在 CORS 与健康接口之后、业务限流/正文解析之前返回 503 `SERVER_DRAINING` 并关闭连接；现有 CORS Origin=null 的显式批准开关及权限校验原样保留，不借此次改动开放来源。
 
-普通 Compose 后端候选补齐已有 prod 的 ready 健康检查，使用 127.0.0.1 避免 localhost 地址族差异，`stop_grace_period: 30s` 给应用 25 秒排空留出余量。此处只完成候选配置解析，不实际启用，不代表 Docker/生产信号、反代摘流或真实 MySQL 连接池验收。Docker 的 unhealthy 只标识健康状况，不能据此声称自动重启或业务写入已经完成。
+基础 Compose 后端已配置 ready 健康检查，使用 127.0.0.1 避免 localhost 地址族差异，`stop_grace_period: 30s` 给应用 25 秒排空留出余量。初次验收覆盖配置解析。生产信号、反代摘流及真实连接池验收以对应环境的运行证据为准。Docker 的 unhealthy 只标识健康状况，不能据此声称自动重启或业务写入已经完成。
 
 `npm run test:round2-runtime` 加入 `tests/runtime-shutdown.test.js`，沿现有 Tests CI 接线。新增用例在 VM 中执行实际入口/工具，所有 app、SQL 与调度任务依赖均为本地 fake；子进程信号只发给本测试创建的合成进程，不加载真实 dotenv/app/mysql2。覆盖 ready 缓存/在途竞态、停止与排空、不重入、重复信号、启动中退出、任务/HTTP/关池挂起、关池失败及超时非零；三支打印清理不能因一支失败而提前完成。反向破坏与审查证据见本轮独立核验报告。真实数据库、容器停止、生产、PDA、扫码及实际出纸均未验证；发版前仍须按现行完整门禁与正式授权执行。
 

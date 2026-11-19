@@ -12,6 +12,6 @@
 - [修改后](screens/after/dashboard-common-work-removal-1440.png)区块不存在，同一指标卡片上移、数据3保持，无页面横溢出。
 - [编辑/取消后的深色](screens/after/dashboard-common-work-removal-dark-1024.png)仍无此区块，原卡片保持；没有点击保存或触发业务写入。
 
-DOM记录见[dashboard-removal-observations.json](dashboard-removal-observations.json)，回归日志见[verification/dashboard-removal](verification/dashboard-removal/)。首次预览工作目录、夹具import扩展名和非布尔wait探针的设置错误已纠正；对应失败不计产品视觉结论，原始照片只保留成功挂载后的真实状态。
+DOM记录见[dashboard-removal-observations.json](dashboard-removal-observations.json)，回归日志见verification/dashboard-removal（原路径 `docs/design-audit-2026-10-08/verification/dashboard-removal`，本机留存）。首次预览工作目录、夹具import扩展名和非布尔wait探针的设置错误已纠正；对应失败不计产品视觉结论，原始照片只保留成功挂载后的真实状态。
 
 独立稳定浏览器`flowcube-dashboard-remove`已close/list确认退出；本任务Vite精确进程已停止，5188无监听；frontend临时HTML已核对自建源后删除。没有起API/数据库，不触及共享3307或生产。覆盖清单已按当前源码重生并通过两个check：145路由、1149候选用点、5516组件调用；本组件夹具不会新增全部业务页面通过数。未提交、推送或发布。

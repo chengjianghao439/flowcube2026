@@ -51,11 +51,16 @@
 
 ## GitHub 主线保护方案
 
-当前工作流将正式部署与代码合并分开，并提供两个 PR 聚合检查。主线规则的启用另行授权。发布入口见[发布说明](RELEASE.md)。
+2026-11-19 已在正式仓库启用规则，仅保护 `main`。所有改动必须走 PR，禁止强推和删除 `main`，绕过名单为空。PR 分支必须跟上最新的 `main`，且 GitHub Actions 的 `Tests PR Gate` 和 `Security Scan PR Gate` 必须通过。GitHub 强制审批数为 0，实际合并仍须用户明确授权。[正式规则集](https://github.com/chengjianghao439/flowcube2026/rules/27616515)
 
-1. **先验证合并和正式部署的分离。** 网页和 PDA 仅接受显式触发，通过完整 SHA 和本次运行编号绑定。合并到 `main` 只跑检查和桌面验证构建。先在非生产目标验证触发、同 SHA 门禁和原包中转。
-2. **确认必过检查可被选中。** 现有 Tests 和 Security Scan 分别提供 `Tests PR Gate`、`Security Scan PR Gate`。它们汇总各自的全部作业，失败、取消或跳过均不放行。先在非生产仓库的 `main` 验证失败和成功两个边界，再在正式仓库面向 `main` 的 PR 实际跑出检查。设置时选择 GitHub 显示的检查名称和 GitHub Actions 来源。
-3. **仅保护 `main`。** 在 GitHub 的 Settings → Rules → Rulesets 建一个分支规则，目标只匹配 `main`。要求通过 Pull Request，要求上述两个检查通过，要求分支合并前跟上主线，禁止强推和删除，普通 Agent 及自动化不设绕过。独立审阅人未落实前，GitHub 的强制审批数设为 0，由用户明确批准合并。落实独立审阅人后再评估改为 1。现有桌面发布标签沿原发布门禁处理。
-4. **演练通过后启用。** 先在非生产目标演练失败检查阻止合并、并发 PR 基线过期后重跑、绿灯后合并只触发检查、经授权发布才处理该 SHA。核实网页、PDA 与 Windows 仍能追溯同一已合入提交及原始产物，并记录遇阻时由谁处理。正式变更 GitHub 规则前再取得授权。
+### Agent 提交和合并 PR
 
-[GitHub Rulesets 支持的规则](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets) · [当前发布入口](../scripts/release-prod.sh) · [现有网页部署工作流](../.github/workflows/deploy-browser.yml)
+1. **提交 PR。** 从已核对的 `origin/main` 建任务分支，默认使用 `codex/` 前缀。按授权推送任务分支，创建目标为 `main` 的 PR。说明改动范围、验证结果、待验收项和对应的提交或运行链接。尚在开发或暂缓合并时使用草稿 PR。
+2. **分支落后时先更新。** GitHub 提供 **Update branch** 且能自动更新时，可按授权使用该按钮。需要本地处理时，先在任务工作树核对当前分支并保全未提交改动，再运行 `git fetch origin` 和 `git merge origin/main`。如有冲突，核对两边改动并复验受影响范围，再按授权将更新推回原 PR 的任务分支。
+3. **以最新提交的检查结果为准。** 更新分支后等两道门禁在新提交上重新运行并通过。检查尚未完成就等待。失败、取消或跳过时，查明原因并等门禁重新通过。申请合并时向用户提供当前提交和两道门禁的结果。执行合并前确认用户已明确授权、PR 已退出草稿、GitHub 显示可合并、分支仍跟上 `main`，且通过检查的提交仍是 PR 的最新提交。
+4. **部署另行授权。** 合并触发检查和桌面验证构建。网页、PDA 和桌面正式发布按授权执行，发布步骤和提交校验见[发布说明](RELEASE.md)。
+
+### 2026-11-19 演练记录
+
+- **红灯拦截与合并触发。** 两道门禁分别单独失败时，GitHub 两次返回 405 并拒绝合并。两道通过后才合入演练仓库的 `main`。合并提交 `b4c19e3` 只触发测试、安全扫描和桌面验证三个占位工作流，全部通过。[演练 PR #1](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/pull/1) · [测试红灯](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/actions/runs/44471564792/job/135382085345) · [安全扫描红灯](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/actions/runs/44471674469/job/135382444834) · [合并后测试](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/actions/runs/44471807045) · [合并后安全扫描](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/actions/runs/44471807052) · [合并后桌面验证](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/actions/runs/44471807044)
+- **落后主线与更新重跑。** 演练 PR #2 推进 `main` 后，已通过两道门禁的 PR #3 落后一个提交，GitHub 返回 405。更新分支后，GitHub 再次拒绝合并，提示两道检查都在等待结果。新提交 `c529454` 的两道检查都通过后，PR #3 才合入。[推进主线的 PR #2](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/pull/2) · [演练 PR #3](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/pull/3) · [重跑测试](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/actions/runs/44475497013/job/135395010042) · [重跑安全扫描](https://github.com/chengjianghao439/flowcube-main-protection-rehearsal-public-20261119/actions/runs/44475496929/job/135394961401)

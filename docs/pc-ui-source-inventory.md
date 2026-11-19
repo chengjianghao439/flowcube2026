@@ -1,4 +1,6 @@
-# PC UI 源码覆盖索引
+# PC UI 源码覆盖索引（历史快照）
+
+> 以下清单保留当时的路由、文件与覆盖数量。采购申请已退役。现行入口见[前端路由](../frontend/src/router/index.tsx)及[退役规则](frontend-pda-conventions.md#采购申请退役)。原始清单及链接见[生成时的提交](https://github.com/chengjianghao439/flowcube2026/blob/16d6435f7ca7d64db9641ede82df4c2b76c5c7b1/docs/pc-ui-source-inventory.md)。
 
 生成命令：`node scripts/pc-ui-inventory.cjs > docs/pc-ui-source-inventory.md`。
 
@@ -181,7 +183,7 @@
 | [components/shared/QueryChips.tsx](../frontend/src/components/shared/QueryChips.tsx) | — |
 | [components/shared/QueryErrorState.tsx](../frontend/src/components/shared/QueryErrorState.tsx) | — |
 | [components/shared/QueryFormLayout.tsx](../frontend/src/components/shared/QueryFormLayout.tsx) | — |
-| [components/shared/QueryPickerField.tsx](../frontend/src/components/shared/QueryPickerField.tsx) | — |
+| [components/shared/QueryPickerField.tsx](https://github.com/chengjianghao439/flowcube2026/blob/16d6435f7ca7d64db9641ede82df4c2b76c5c7b1/frontend/src/components/shared/QueryPickerField.tsx) | — |
 | [components/shared/ReceiptPanel.tsx](../frontend/src/components/shared/ReceiptPanel.tsx) | — |
 | [components/shared/RecordIdentity.tsx](../frontend/src/components/shared/RecordIdentity.tsx) | — |
 | [components/shared/ReportPanel.tsx](../frontend/src/components/shared/ReportPanel.tsx) | — |
@@ -271,7 +273,7 @@
 | [pages/login/index.tsx](../frontend/src/pages/login/index.tsx) | — |
 | [pages/logistics/DirectShipmentDialog.tsx](../frontend/src/pages/logistics/DirectShipmentDialog.tsx) | DialogContent:35 |
 | [pages/logistics/WaybillQueryDialog.tsx](../frontend/src/pages/logistics/WaybillQueryDialog.tsx) | AppDialog:53 |
-| [pages/logistics/components/TrackTimeline.tsx](../frontend/src/pages/logistics/components/TrackTimeline.tsx) | — |
+| [pages/logistics/components/TrackTimeline.tsx](https://github.com/chengjianghao439/flowcube2026/blob/16d6435f7ca7d64db9641ede82df4c2b76c5c7b1/frontend/src/pages/logistics/components/TrackTimeline.tsx) | — |
 | [pages/logistics/detail.tsx](../frontend/src/pages/logistics/detail.tsx) | DialogContent:151 |
 | [pages/logistics/freight-reconciliation.tsx](../frontend/src/pages/logistics/freight-reconciliation.tsx) | DialogContent:140 |
 | [pages/logistics/index.tsx](../frontend/src/pages/logistics/index.tsx) | DialogContent:179 |
@@ -285,7 +287,7 @@
 | [pages/picking-waves/WaveQueryDialog.tsx](../frontend/src/pages/picking-waves/WaveQueryDialog.tsx) | AppDialog:45 |
 | [pages/picking-waves/index.tsx](../frontend/src/pages/picking-waves/index.tsx) | DialogContent:263 |
 | [pages/plastic-boxes/index.tsx](../frontend/src/pages/plastic-boxes/index.tsx) | BaseCrudPage:54；DialogContent:154 |
-| [pages/portal/purchase-status.tsx](../frontend/src/pages/portal/purchase-status.tsx) | — |
+| [pages/portal/purchase-status.tsx](https://github.com/chengjianghao439/flowcube2026/blob/16d6435f7ca7d64db9641ede82df4c2b76c5c7b1/frontend/src/pages/portal/purchase-status.tsx) | — |
 | [pages/portal/statements.tsx](../frontend/src/pages/portal/statements.tsx) | — |
 | [pages/price-change/index.tsx](../frontend/src/pages/price-change/index.tsx) | DialogContent:176；DialogContent:219；ConfirmDialog:232 |
 | [pages/procurement/detail.tsx](../frontend/src/pages/procurement/detail.tsx) | — |
@@ -293,9 +295,9 @@
 | [pages/products/ProductQueryDialog.tsx](../frontend/src/pages/products/ProductQueryDialog.tsx) | AppDialog:43 |
 | [pages/products/form.tsx](../frontend/src/pages/products/form.tsx) | — |
 | [pages/products/index.tsx](../frontend/src/pages/products/index.tsx) | DialogContent:228；ConfirmDialog:263 |
-| [pages/purchase-requisitions/RequisitionQueryDialog.tsx](../frontend/src/pages/purchase-requisitions/RequisitionQueryDialog.tsx) | AppDialog:52 |
-| [pages/purchase-requisitions/form.tsx](../frontend/src/pages/purchase-requisitions/form.tsx) | DialogContent:377；DialogContent:392 |
-| [pages/purchase-requisitions/index.tsx](../frontend/src/pages/purchase-requisitions/index.tsx) | — |
+| [pages/purchase-requisitions/RequisitionQueryDialog.tsx](https://github.com/chengjianghao439/flowcube2026/blob/16d6435f7ca7d64db9641ede82df4c2b76c5c7b1/frontend/src/pages/purchase-requisitions/RequisitionQueryDialog.tsx) | AppDialog:52 |
+| [pages/purchase-requisitions/form.tsx](https://github.com/chengjianghao439/flowcube2026/blob/16d6435f7ca7d64db9641ede82df4c2b76c5c7b1/frontend/src/pages/purchase-requisitions/form.tsx) | DialogContent:377；DialogContent:392 |
+| [pages/purchase-requisitions/index.tsx](https://github.com/chengjianghao439/flowcube2026/blob/16d6435f7ca7d64db9641ede82df4c2b76c5c7b1/frontend/src/pages/purchase-requisitions/index.tsx) | — |
 | [pages/purchase/PurchaseQueryDialog.tsx](../frontend/src/pages/purchase/PurchaseQueryDialog.tsx) | AppDialog:65 |
 | [pages/purchase/form/index.tsx](../frontend/src/pages/purchase/form/index.tsx) | ConfirmDialog:740；DialogContent:756 |
 | [pages/purchase/index.tsx](../frontend/src/pages/purchase/index.tsx) | ConfirmDialog:368；DialogContent:389 |

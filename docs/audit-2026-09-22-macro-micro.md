@@ -158,7 +158,7 @@
 
 strict schema 日志有一个 `party_identity_names` “意外表”提示：核对迁移 239 后确认它是迁移创建的 VIEW，是识别范围造成的提示，未列为缺失表缺陷。测试通过不能覆盖未运行路径；命令数有不同批次与重跑，不把它们直接相加称为独立测试用例数。
 
-证据目录：[`output/audit-2026-09-22-macro-micro/`](../output/audit-2026-09-22-macro-micro/)。该目录受 git ignore 影响，原始日志和脚本当前仅保留在本机，**不随这份报告自动进入提交**。包含 `verification-summary.json`、`file-inventory.json`、扫描日志、构建产物及复现材料。此报告中的结果来自本次执行，不复用旧审计的通过数字。
+证据目录：`output/audit-2026-09-22-macro-micro/`（原路径 `output/audit-2026-09-22-macro-micro`，本机留存）。该目录受 git ignore 影响，原始日志和脚本当前仅保留在本机，**不随这份报告自动进入提交**。包含 `verification-summary.json`、`file-inventory.json`、扫描日志、构建产物及复现材料。此报告中的结果来自本次执行，不复用旧审计的通过数字。
 
 复现脚本要求本次专用测试库；不要指向生产或开发业务库。脚本调用真实 app/service，并在 finally 关闭自己的 HTTP server 和连接池。收尾时发现早期复现直接导入打印 service 会自动启动 sweeper，连接池关闭后仍留下定时器；已结束本次脚本的残留进程，并在最终脚本导入前设置 `DISABLE_PRINT_JOB_SWEEPER=1` 后重跑。最终复现不启动该定时器、实体打印客户端或浏览器会话。此处也提示打印模块可进一步显式管理启动/停止生命周期，不能把 import 当成无副作用操作。保留专用合成测试库用于复核，未清理或停止用户原有 MySQL/Colima。
 

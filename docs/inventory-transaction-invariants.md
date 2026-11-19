@@ -296,7 +296,9 @@ RF确认仅冻结退款本体/精确付款分配，不出入库；实际receive�
 
 `forceCloseInTransit`（`transfer.service.js`）把在途容器置 VOID 并清空 `transfer_order_id`，**不加库存、也不写 `inventory_logs`**——scanOut 时已从源仓扣减，货物按实际运输损耗核销。而撤回收货的候选集只查 ACTIVE/待上架/EMPTY 的容器，于是该容器同时脱离候选状态、摘掉在途标记，原有的在途 / 已不在任务仓 / 数量不等 / 任务锁四道守卫全部落空：撤回会把已核销的货当成「从未收货」作废并反冲采购应付，而源仓已扣、调拨单不会回退，账面既没有库存、也没有应付。
 
-守卫改为按**该收货单名下全部未删除容器**（不只是撤回候选集）是否存在 `ref_type='transfer'` 流水判定，即上面的 ③ 号守卫（`inbound-tasks.void.js`）。判据取「流水」而不是「状态是不是 VOID」：普通作废（出库耗尽、人工核销）没有调拨流水，不会被误伤。该查询用 `FOR SHARE` 当前读，避免漏掉本事务快照建立后提交的新流水；候选集之外的容器本事务只共享锁其流水行、不再请求其容器行锁，与写方只构成单向等待，不成环。回归 `tests/inbound-void-transferred-container.smoke.test.js` §E（异常了结后撤回 409、应付/任务/流水均无副作用）/ §F（VOID 但无调拨流水 → 照常放行）。
+2026-09-27 的初版守卫改为按**该收货单名下全部未删除容器**（不只是撤回候选集）是否存在 `ref_type='transfer'` 流水判定，即上面的 ③ 号守卫（`inbound-tasks.void.js`）。判据取「流水」而不是「状态是不是 VOID」：普通作废（出库耗尽、人工核销）没有调拨流水，不会被误伤。该查询用 `FOR SHARE` 当前读，避免漏掉本事务快照建立后提交的新流水；候选集之外的容器本事务只共享锁其流水行、不再请求其容器行锁，与写方只构成单向等待，不成环。回归 `tests/inbound-void-transferred-container.smoke.test.js` §E（异常了结后撤回 409、应付/任务/流水均无副作用）/ §F（VOID 但无调拨流水 → 照常放行）。
+
+现行实现包含永久标记及全部未删容器的共享读，见 [保留期与曾调拨事实](#2026-10-10保留期与曾调拨事实)。
 
 同路径另修一处**阻塞缺陷**：`forceCloseInTransit` 的容器查询在 `SELECT` 列表里带了 `inventory_containers` 上并不存在的 `product_name` 列，任何调用都 500 `DB_COLUMN_MISMATCH`（scanOut/scanIn 用 `SELECT *`，取到 `undefined` 后靠 `|| ''` 兜成空串，所以一直没暴露）。该列在本函数内并未使用，已从 SELECT 移除。
 

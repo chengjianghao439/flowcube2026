@@ -546,8 +546,8 @@ GUI：本轮独立预览标签在合成数据服务 127.0.0.1:5197 中检查销�
 | [purchase/form/index.tsx](../frontend/src/pages/purchase/form/index.tsx) · {isEdit ? '编辑采购单' : '新建采购单'} | 填写供应商、仓库与采购明细。 |
 | [purchase/form/index.tsx](../frontend/src/pages/purchase/form/index.tsx) · {order.orderNo} | 核对采购明细、金额与收货进度。 |
 | [purchase/index.tsx](../frontend/src/pages/purchase/index.tsx) · "采购订单" | 核对采购明细、收货与付款进度。 |
-| [purchase-requisitions/form.tsx](../frontend/src/pages/purchase-requisitions/form.tsx) · {isNew ? '新建采购申请单' : `采购申请单 ${detail?.requisitionNo ?? ''}`} | 核对申请仓库、到货日期与商品。 |
-| [purchase-requisitions/index.tsx](../frontend/src/pages/purchase-requisitions/index.tsx) · "采购申请" | 核对采购需求、审批与转单进度。 |
+| [purchase-requisitions/form.tsx](https://github.com/chengjianghao439/flowcube2026/blob/e1fe59bc2f0a42233e03b886c93cca031a83f41c/frontend/src/pages/purchase-requisitions/form.tsx) · {isNew ? '新建采购申请单' : `采购申请单 ${detail?.requisitionNo ?? ''}`} | 核对申请仓库、到货日期与商品。 |
+| [purchase-requisitions/index.tsx](https://github.com/chengjianghao439/flowcube2026/blob/e1fe59bc2f0a42233e03b886c93cca031a83f41c/frontend/src/pages/purchase-requisitions/index.tsx) · "采购申请" | 核对采购需求、审批与转单进度。 |
 | [racks/index.tsx](../frontend/src/pages/racks/index.tsx) · "货架管理" | 维护货架位置、条码与标签。 |
 | [refunds/index.tsx](../frontend/src/pages/refunds/index.tsx) · "退货退款单" | 核对销售退货退款与资金出账。 |
 | [reports/ReconciliationView.tsx](../frontend/src/pages/reports/ReconciliationView.tsx) · {copy.title} | type === 1 ? '按账期核对供应商应付账款。' : '按账期核对客户应收账款。' |

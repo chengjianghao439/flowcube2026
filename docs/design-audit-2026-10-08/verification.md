@@ -6,19 +6,19 @@
 
 | 检查 | 结果 | 日志 / 边界 |
 | --- | --- | --- |
-| 全前端`npm --prefix frontend run test:unit` | 260文件 / 1877用例通过 | [frontend-full.log](verification/frontend-full.log)，最后可见文案修正后再次执行；不是浏览器/业务提交验收 |
-| `tsc -p frontend/tsconfig.app.json --noEmit` | exit0 | [types.log](verification/types.log)；空输出需结合本轮工具观察到的退出0，不用根空壳tsconfig冒充通过 |
-| 前端lint | exit0，0错误 / 37警告 | [lint.log](verification/lint.log)；不声称警告已清零或全部属于历史基线 |
-| ERP与PDA build | 两端exit0 | [build-erp.log](verification/build-erp.log)、[build-pda.log](verification/build-pda.log)；没有Windows安装包、Android真机或生产部署 |
+| 全前端`npm --prefix frontend run test:unit` | 260文件 / 1877用例通过 | frontend-full.log（原路径 `docs/design-audit-2026-10-08/verification/frontend-full.log`，本机留存），最后可见文案修正后再次执行；不是浏览器/业务提交验收 |
+| `tsc -p frontend/tsconfig.app.json --noEmit` | exit0 | types.log（原路径 `docs/design-audit-2026-10-08/verification/types.log`，本机留存）；空输出需结合本轮工具观察到的退出0，不用根空壳tsconfig冒充通过 |
+| 前端lint | exit0，0错误 / 37警告 | lint.log（原路径 `docs/design-audit-2026-10-08/verification/lint.log`，本机留存）；不声称警告已清零或全部属于历史基线 |
+| ERP与PDA build | 两端exit0 | build-erp.log（原路径 `docs/design-audit-2026-10-08/verification/build-erp.log`，本机留存）、build-pda.log（原路径 `docs/design-audit-2026-10-08/verification/build-pda.log`，本机留存）；没有Windows安装包、Android真机或生产部署 |
 | 15项受影响项目守卫 | 全部exit0 | [guards.json](verification/guards.json)及各日志，含文案/标签/PDA扫码/刷新/日期/会话/轮询/API路由/写权限/权限/数量覆盖/查询循环/SQL标识符/占位/AGENTS文档；“正在读取”自然拦截后只改为“正在加载”并重验 |
-| SupplierRefund受影响后端8套件 | 300用例通过 | [supplier-refunds.log](verification/supplier-refunds.log)；金额、来源、权限、回执、未知结果和小额夹具；不是全后端套件 |
+| SupplierRefund受影响后端8套件 | 300用例通过 | supplier-refunds.log（原路径 `docs/design-audit-2026-10-08/verification/supplier-refunds.log`，本机留存）；金额、来源、权限、回执、未知结果和小额夹具；不是全后端套件 |
 | 客户退款限仓真实API | 自然SQL失败后9用例通过 | [a-backend-read.md](a-backend-read.md)、a-api-read-red/green；本批专属实例，不连接生产 |
-| 数量/扫码比较/执行/退款闸门 | 4套件49用例通过 | [business-preservation.log](verification/business-preservation.log)；没有改库存或状态机规则 |
-| 库存唯一事实源守卫 | 430后端源码扫描通过 | [stock-source.log](verification/stock-source.log)；不代替并发库存数据库smoke |
-| 受控弹窗/草稿/标签/日历 | 最终canonical5文件47用例通过；本轮描述增量7文件专项通过 | [aria-and-drafts.log](verification/aria-and-drafts.log)、shared-components-review；真实Radix嵌套/返回焦点，无stub或加长测试timeout；全前端最终回归已包含这些用例 |
+| 数量/扫码比较/执行/退款闸门 | 4套件49用例通过 | business-preservation.log（原路径 `docs/design-audit-2026-10-08/verification/business-preservation.log`，本机留存）；没有改库存或状态机规则 |
+| 库存唯一事实源守卫 | 430后端源码扫描通过 | stock-source.log（原路径 `docs/design-audit-2026-10-08/verification/stock-source.log`，本机留存）；不代替并发库存数据库smoke |
+| 受控弹窗/草稿/标签/日历 | 最终canonical5文件47用例通过；本轮描述增量7文件专项通过 | aria-and-drafts.log（原路径 `docs/design-audit-2026-10-08/verification/aria-and-drafts.log`，本机留存）、shared-components-review；真实Radix嵌套/返回焦点，无stub或加长测试timeout；全前端最终回归已包含这些用例 |
 | 比例表格/原像素布局 | 2文件30用例通过 | B报告及evidence-b；自然red保留，Chrome选择列反例后修正。旧像素保存、实际拖动、Escape取消、勾选保留另验 |
-| 最后占库文案专项 | 3文件16用例通过，单页lint0 | [final-copy-allocation.log](verification/final-copy-allocation.log)、[final-copy-lint.log](verification/final-copy-lint.log)；仅文案，没有修改数量、仓库、预览或原请求 |
-| Radix依赖配置 | Layer1.1.13 / FocusScope1.1.16，五类浮层共用deduped单例 | [radix-singletons.log](verification/radix-singletons.log)、[radix-compatibility.md](radix-compatibility.md)；1.1.19真实嵌套Dialog回归失败被保留，未以日期偶然rerender绿掩盖 |
+| 最后占库文案专项 | 3文件16用例通过，单页lint0 | final-copy-allocation.log（原路径 `docs/design-audit-2026-10-08/verification/final-copy-allocation.log`，本机留存）、final-copy-lint.log（原路径 `docs/design-audit-2026-10-08/verification/final-copy-lint.log`，本机留存）；仅文案，没有修改数量、仓库、预览或原请求 |
+| Radix依赖配置 | Layer1.1.13 / FocusScope1.1.16，五类浮层共用deduped单例 | radix-singletons.log（原路径 `docs/design-audit-2026-10-08/verification/radix-singletons.log`，本机留存）、[radix-compatibility.md](radix-compatibility.md)；1.1.19真实嵌套Dialog回归失败被保留，未以日期偶然rerender绿掩盖 |
 | 源码与证据清单 | inventory / merge-evidence一致性检查通过 | coverage的allowlist快照只证明清单新鲜，不能当作GUI版本或整个工作树指纹 |
 
 ## 实际页面复验
@@ -35,7 +35,7 @@
 
 [browser-cleanup-final.json](browser-cleanup-final.json)确认所有本任务命名浏览器退出。[runtime-cleanup-pre.json](runtime-cleanup-pre.json)先核本批label、容器ID、volume mount、端口、活进程身份，再正常logout本批合成认证(HTTP200)及停止服务；[runtime-cleanup-final.json](runtime-cleanup-final.json)确认专属容器/卷/归属文件删除、四端口无监听、API/Vite/runtime/runner不存在，私有合成认证目录移除。共享3307仍为同一ID、running且healthy，未清理或停用它。
 
-细粒度打印前提helper收尾收到401 `AUTH_TOKEN_EXPIRED`，wrapper退出1，见[runtime-helper-cleanup-failed.log](verification/runtime-helper-cleanup-failed.log)。**不能把该helper写成成功**；外层EXIT trap删除专属实例的结果经过独立精确资源核对，确认没有遗留容器/卷/服务。下一次长时间验收应在本批helper收尾前刷新其合法测试登录，随后再作最终认证撤销，避免把GUI当前token与helper捕获token混为一处。
+细粒度打印前提helper收尾收到401 `AUTH_TOKEN_EXPIRED`，wrapper退出1，见runtime-helper-cleanup-failed.log（原路径 `docs/design-audit-2026-10-08/verification/runtime-helper-cleanup-failed.log`，本机留存）。**不能把该helper写成成功**；外层EXIT trap删除专属实例的结果经过独立精确资源核对，确认没有遗留容器/卷/服务。下一次长时间验收应在本批helper收尾前刷新其合法测试登录，随后再作最终认证撤销，避免把GUI当前token与helper捕获token混为一处。
 
 持久化报告/JSON/选用日志完成凭据形状扫描，未发现JWT、Bearer正文或真实DB/JWT环境值。曾有工具原始网络输出回显本批合成header，没有保存进仓库；相关本批登录已撤销，整个专属实例与私有认证资料已移除。
 

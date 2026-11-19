@@ -3,14 +3,15 @@
 # FlowCube Docker 备份容器入口脚本
 #
 # 运行环境：alpine:3.19 + mysql-client
-# 调用方  ：docker-compose.backup.yml 中的 backup 服务
+# 调用方  ：历史独立 MySQL 备份容器，仓库现行 Compose 未接入此脚本
+# 现行入口：宿主 scripts/backup-db.sh，异地副本 scripts/offsite-backup.sh
 #
 # 流程：
 #   1. 立即执行一次备份（容器启动即备份，确认配置正确）
 #   2. 将 cron 任务写入 /etc/crontabs/root
 #   3. 启动 crond（前台运行，保持容器存活）
 #
-# 环境变量（由 docker-compose.backup.yml 注入）：
+# 历史容器环境变量（由调用方注入）：
 #   DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME
 #   KEEP_DAYS     保留天数（默认 7）
 #   BACKUP_CRON   cron 表达式（默认 "0 2 * * *"，每天 02:00）
