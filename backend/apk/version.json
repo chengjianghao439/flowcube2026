@@ -1,7 +1,7 @@
 {
-  "version": "0.14.3",
-  "versionCode": 163,
+  "version": "0.14.4",
+  "versionCode": 164,
   "filename": "app-release.apk",
-  "releaseNote": "- 销售、采购、收货、库存和报销列表更容易查看单号、状态、金额和常用操作。宽表支持键盘横向滚动，打开原单后返回可继续使用原筛选。",
-  "publishedAt": "2026-11-13T06:17:10.104Z"
+  "releaseNote": "- 修复整单取消和 PDA 同时首次拣货时的并发冲突。销售列表、总数和状态统计使用同一组筛选。",
+  "publishedAt": "2026-11-19T04:27:06.973Z"
 }

@@ -51,6 +51,8 @@
 
 生产只读预检当日确认 MySQL 8.0.46 健康，候选待执行的迁移为 298–300。核到了当日日常备份和最近一次自动恢复演练的通过记录。本候选尚未执行生产迁移和发布专用备份。依赖修复与真机验收按本轮决定搁置，PR #114 仍单独保留。
 
+2026-11-19，架构候选的独立安全扫描第二次运行通过，检出的仍是上方完整候选 SHA。PR #114 的两个门禁和 PR #115 的 Tests 与 Security Scan 均在各自原提交上通过。最终发布提交继续单独验收。 [架构候选重跑](https://github.com/chengjianghao439/flowcube2026/actions/runs/44227680430/attempts/2) · [PR #114](https://github.com/chengjianghao439/flowcube2026/pull/114) · [PR #115](https://github.com/chengjianghao439/flowcube2026/pull/115)
+
 ## 2026-11-18 记录的未完成事项
 
 接续时按链接核对公告、PR 和目标提交的最新结果。
