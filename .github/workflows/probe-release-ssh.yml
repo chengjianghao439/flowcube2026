@@ -1,0 +1,74 @@
+name: Probe release SSH (read-only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 三条探针使用正式发布 peer，避免同时让发布任务和探针占用同一个地址。
+concurrency:
+  group: flowcube-server-deploy
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    if: github.ref == 'refs/heads/main'
+    name: Probe ${{ matrix.channel }} SSH and SFTP
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: flowcube-release-${{ matrix.channel }}
+    strategy:
+      fail-fast: false
+      matrix:
+        channel: [web, pda, desktop]
+    concurrency:
+      group: flowcube-release-vpn-${{ matrix.channel }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout immutable probe and transport
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Resolve the release SSH target
+        id: deploy_config
+        shell: bash
+        env:
+          ERP_ORIGIN_VAR: ${{ vars.VITE_ERP_PRODUCTION_ORIGIN }}
+          SERVER_HOST_VAR: ${{ vars.FLOWCUBE_SERVER_HOST }}
+          SERVER_USER_VAR: ${{ vars.FLOWCUBE_SERVER_USER }}
+          SERVER_SSH_PORT_VAR: ${{ vars.FLOWCUBE_SERVER_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          if node scripts/read-deploy-config.js erpOrigin >/dev/null 2>&1; then
+            server_host="$(node scripts/read-deploy-config.js server.host)"
+            server_user="$(node scripts/read-deploy-config.js server.user)"
+            server_port="$(node scripts/read-deploy-config.js server.sshPort)"
+          else
+            server_host="${SERVER_HOST_VAR:-$(node -p 'new URL(process.env.ERP_ORIGIN_VAR).hostname')}"
+            server_user="${SERVER_USER_VAR:-root}"
+            server_port="${SERVER_SSH_PORT_VAR:-22}"
+          fi
+          printf 'server_host=%s\nserver_user=%s\nserver_ssh_port=%s\n' "$server_host" "$server_user" "$server_port" >> "$GITHUB_OUTPUT"
+      - name: Connect SSH over WireGuard
+        uses: ./.github/actions/release-ssh
+        with:
+          host: ${{ steps.deploy_config.outputs.server_host }}
+          port: ${{ steps.deploy_config.outputs.server_ssh_port }}
+          known-hosts: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
+          wireguard-endpoint: ${{ vars.FLOWCUBE_WG_ENDPOINT }}
+          wireguard-server-public-key: ${{ vars.FLOWCUBE_WG_SERVER_PUBLIC_KEY }}
+          wireguard-server-ip: ${{ vars.FLOWCUBE_WG_SERVER_IP }}
+          wireguard-client-ip: ${{ vars.FLOWCUBE_WG_CLIENT_IP }}
+          wireguard-private-key: ${{ secrets.FLOWCUBE_WG_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Check SSH session source and SFTP
+        shell: bash
+        env:
+          FLOWCUBE_SSH_HOST: ${{ steps.deploy_config.outputs.server_host }}
+          FLOWCUBE_SSH_USER: ${{ steps.deploy_config.outputs.server_user }}
+          FLOWCUBE_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
+          FLOWCUBE_WG_SERVER_IP: ${{ vars.FLOWCUBE_WG_SERVER_IP }}
+          FLOWCUBE_WG_CLIENT_IP: ${{ vars.FLOWCUBE_WG_CLIENT_IP }}
+        run: bash scripts/probe-release-ssh.sh

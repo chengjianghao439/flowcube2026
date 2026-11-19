@@ -23,6 +23,7 @@
 - 发版必须同步三端 + PDA 版本、本版说明与官网 `landing/updates.ts` → `npm run test:landing-updates`
 - `backend/downloads/` 已废弃，只允许 `.gitignore`/`README.md`（须在 CI 静态 job 真跑）→ `npm run release:check-downloads`
 - `smoke:*`/`test:*` 脚本必须 CI 可达；smoke 测试服务须 `app.listen(0, '127.0.0.1')`；部署预算须覆盖上传/合并/等锁/故障停写，PDA 等待不得提前超时；PDA 工作流「等部署」与「持组」不同 job；桌面发布清理服务器中转目录（`EXIT` trap）；部署磁盘预检失败必须打印余量；SSH `known_hosts` 必须使用独立核对的可信公钥，禁止在线盲信扫描；只读诊断 workflow 必须只读 → `node --test tests/deployment-resources.test.js`
+- 三端发布和只读探针必须复用同一套 WireGuard SSH 接线与对应的受保护环境，保留原 SSH 主机键核验 → `node --test tests/release-orchestration.test.js`
 - 恢复演练临时卷必须具名 + 启动前幂等清理；`dingtalk_send` 失败必须非 0 → `node --test tests/ops-monitor-restore.test.js`
 - 备份导入前只把触发器残留分号移出可执行注释 → `node --test tests/restore-trigger-normalize.test.js`
 - 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`
@@ -94,7 +95,7 @@ PDA 日志的接口和迁移离线契约在安装前端锁定 YAML 解析器的�
 
 架构整改的旧夹具同步复用库存导入批次模块和其内存数据库替身，覆盖客户、供应商的原导入路径。处置关联销售的取消回归核对事务开始前已设置本次读隔离级别。恢复超时与信号测试通过合成 Docker 命令核对当前容器 ID 和具名卷归属，再断言只清理本轮资源。
 
-GitHub 浏览器夹具任务的总时限为 15 分钟。系统依赖下载和安装占用原 8 分钟上限中的大部分，两次远端运行因此被取消。保留 Chromium、工作区返回保护、样式及登录等全部验收步骤。
+GitHub 浏览器夹具任务的总时限为 25 分钟。Playwright 和 agent-browser 分别安装系统依赖。因 runner 的区域 HTTP 镜像反复超时或返回 503，此作业的 APT 镜像列表直接指向 Ubuntu 官方 HTTPS 归档，沿用原发行套件与 APT 签名校验。保留 Chromium、工作区返回保护、样式及登录等全部验收步骤。
 
 迁移器写入中断记录后，专属测试库中的 CREATE、CONVERT、ADD INDEX 三种注入场景都先验证原入口拒绝重跑，保存部分结构、原数据及未完成记录。夹具确认本轮归属和已知中断点后才清除该项测试记录，再验幂等 DDL 收敛。生产中断仍走恢复手册的人工核对。
 

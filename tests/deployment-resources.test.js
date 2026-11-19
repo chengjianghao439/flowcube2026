@@ -33,9 +33,14 @@ test('A37 备份与回执共用有界窗口，部署与PDA预算覆盖新增时�
 // 反向验证：往远程脚本里加任一写操作命令、或删掉任一必需采集项，本断言都必须失败。
 // 反向验证：任一工作流改回网络采信或移除可信材料变量都会失败。
 test('SSH host identity comes only from pinned known_hosts', () => {
-  for (const f of ['deploy-browser.yml', 'server-diagnostics.yml', 'build-desktop.yml', 'build-pda-apk.yml']) {
+  const action = fs.readFileSync(path.join(root, '.github/actions/release-ssh/action.yml'), 'utf8')
+  const trust = fs.readFileSync(path.join(root, 'scripts/setup-ci-ssh-trust.sh'), 'utf8')
+    .replace(/^\s*#.*$/gm, '')
+  assert.match(action, /bash "\$scripts_dir\/setup-ci-ssh-trust\.sh"/)
+  assert.doesNotMatch(action + trust, /ssh-keyscan/)
+  for (const f of ['deploy-browser.yml', 'server-diagnostics.yml', 'build-desktop.yml', 'build-pda-apk.yml', 'probe-release-ssh.yml']) {
     const src = fs.readFileSync(path.join(root, '.github/workflows', f), 'utf8').replace(/^\s*#.*$/gm, '')
-    assert.match(src, /bash scripts\/setup-ci-ssh-trust\.sh/)
+    assert.match(src, /uses: \.\/\.github\/actions\/release-ssh/)
     assert.match(src, /FLOWCUBE_SSH_KNOWN_HOSTS/)
     assert.doesNotMatch(src, /ssh-keyscan/)
   }
@@ -45,15 +50,9 @@ test('SSH host identity comes only from pinned known_hosts', () => {
 // 1100s，随后复用同一连接的兜底命令再超时。只给后续 slave 加 -o 不改变 master。
 // 离线使用真实 OpenSSH 解析生成配置；删除任一保活项必须使本守卫失败。
 test('浏览器部署首次建立的 SSH master 必须具有有界保活', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/deploy-browser.yml'), 'utf8'))
-  const key = wf.jobs.deploy.steps.find(s => /ControlMaster/.test(s.run || ''))
-  const block = key.run.match(/cat >> ~\/\.ssh\/config <<EOF\n([\s\S]*?)\nEOF/)
-  assert.ok(block, '必须把保活写入创建 master 前的主机配置')
-  const config = block[1].replace(/\$\{\{[^}]+\}\}/g, 'fixture.invalid') + '\n'
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-ssh-master-'))
+  const file = path.join(dir, 'config')
   function verify(source) {
-    const file = path.join(dir, 'config')
     fs.writeFileSync(file, source)
     const r = spawnSync('ssh', ['-G', '-F', file, 'fixture.invalid'], { encoding: 'utf8', timeout: 5000 })
     assert.equal(r.status, 0, r.stderr)
@@ -66,6 +65,22 @@ test('浏览器部署首次建立的 SSH master 必须具有有界保活', () =>
     assert.equal(values.serveralivecountmax, '10', '失效连接必须有界退出')
   }
   try {
+    const keyPath = path.join(dir, 'host')
+    const key = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', keyPath], { encoding: 'utf8' })
+    assert.equal(key.status, 0, key.stderr)
+    const trust = spawnSync('bash', ['scripts/setup-ci-ssh-trust.sh', dir], {
+      cwd: root,
+      env: {
+        ...process.env,
+        FLOWCUBE_SSH_HOST: 'fixture.invalid',
+        FLOWCUBE_SSH_PORT: '22',
+        FLOWCUBE_SSH_KNOWN_HOSTS: 'fixture.invalid ' + fs.readFileSync(keyPath + '.pub', 'utf8'),
+        FLOWCUBE_WG_SERVER_IP: '10.203.85.1',
+      },
+      encoding: 'utf8',
+    })
+    assert.equal(trust.status, 0, trust.stderr)
+    const config = fs.readFileSync(file, 'utf8')
     verify(config)
     for (const key of ['ServerAliveInterval', 'ServerAliveCountMax']) {
       assert.throws(() => verify(config.replace(new RegExp('^\\s*' + key + '.*$', 'gm'), '')),
