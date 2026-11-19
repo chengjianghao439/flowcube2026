@@ -78,6 +78,62 @@ test('CI SSH 将公有目标固定到隧道，继续匹配原 SSH 主机键及�
   assert.notEqual(configure().status, 0)
 })
 
+test('隔离的 wg 只从 /etc/wireguard 读取私钥，命令结束后删除临时密钥', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-wg-key-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  fs.writeFileSync(path.join(dir, 'wg'), '#!/bin/sh\nexit 99\n', { mode: 0o755 })
+  fs.writeFileSync(path.join(dir, 'sudo'), `#!/usr/bin/env bash
+set -euo pipefail
+fixture_key="$FLOWCUBE_WG_TEST_DIR/key"
+case "$1" in
+  mkdir) [[ "$*" == 'mkdir -p -m 0700 -- /etc/wireguard' ]] ;;
+  mktemp)
+    [[ "$2" == /etc/wireguard/.flowcube-ci-key.XXXXXX ]]
+    : > "$fixture_key"
+    printf '/etc/wireguard/.flowcube-ci-key.test\\n'
+    ;;
+  tee)
+    [[ "$2" == /etc/wireguard/.flowcube-ci-key.test ]]
+    cat > "$fixture_key"
+    ;;
+  wg)
+    if [[ "$5" != /etc/wireguard/.flowcube-ci-key.test ]]; then
+      echo 'fopen: Permission denied' >&2
+      exit 1
+    fi
+    test -s "$fixture_key"
+    test "$FLOWCUBE_WG_TEST_RESULT" = ok
+    ;;
+  rm) unlink "$fixture_key" ;;
+  ip) printf '%s\\n' "$*" >> "$FLOWCUBE_WG_TEST_DIR/ip-log" ;;
+  *) exit 98 ;;
+esac
+`, { mode: 0o755 })
+
+  const privateKey = 'A'.repeat(43) + '='
+  for (const scenario of ['ok', 'fail']) {
+    const run = spawnSync('bash', ['scripts/setup-release-tunnel.sh'], {
+      cwd: root,
+      env: {
+        ...process.env,
+        PATH: dir + path.delimiter + process.env.PATH,
+        FLOWCUBE_WG_TEST_DIR: dir,
+        FLOWCUBE_WG_TEST_RESULT: scenario,
+        FLOWCUBE_WG_PRIVATE_KEY: privateKey,
+        FLOWCUBE_WG_SERVER_PUBLIC_KEY: 'B'.repeat(43) + '=',
+        FLOWCUBE_WG_SERVER_IP: '10.203.85.1',
+        FLOWCUBE_WG_CLIENT_IP: '10.203.85.11',
+        FLOWCUBE_WG_ENDPOINT: 'server.example.test:51820',
+      },
+      encoding: 'utf8',
+    })
+    assert.equal(run.status, scenario === 'ok' ? 0 : 1, run.stderr)
+    assert.ok(!(run.stdout + run.stderr).includes(privateKey))
+    assert.ok(!fs.existsSync(path.join(dir, 'key')))
+  }
+  assert.match(fs.readFileSync(path.join(dir, 'ip-log'), 'utf8'), /^ip link delete dev flowcube-wg$/m)
+})
+
 for (const [name, gateName] of [['test.yml', 'Tests PR Gate'], ['security-scan.yml', 'Security Scan PR Gate']]) {
   test(`${gateName} 覆盖所有作业，失败、取消、跳过或缺结果均失败`, () => {
     const jobs = workflow(name).jobs

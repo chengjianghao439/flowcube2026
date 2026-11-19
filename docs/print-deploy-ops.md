@@ -18,6 +18,7 @@
 
 - 网页、PDA 和桌面发布分别使用 `flowcube-release-web`、`flowcube-release-pda`、`flowcube-release-desktop`。各环境分别保存 `FLOWCUBE_WG_PRIVATE_KEY` 和 `FLOWCUBE_WG_CLIENT_IP`，允许 `main`，桌面另允许正式 `v*` tag。共用仓库变量为 `FLOWCUBE_WG_ENDPOINT`、`FLOWCUBE_WG_SERVER_PUBLIC_KEY` 和 `FLOWCUBE_WG_SERVER_IP`。Web 只读诊断共用网页 peer 和并发组。
 - 生产机通过 `wg-quick@flowcube-wg` 监听 UDP 51820。每个 peer 绑定各自固定的 IPv4 地址，隧道只允许到本机的 TCP 22，禁止转发。发布仍以原部署主机名/端口核对 SSH 主机公钥，目标地址由 SSH 配置绑定到隧道。
+- GitHub runner 从 `/etc/wireguard` 下的 root 专用临时文件加载私钥，兼容 Ubuntu 26.04 的 AppArmor 文件访问范围。隧道脚本退出时删除该文件。
 - 变更隧道、凭据或入站规则时，从 `main` 手动运行 [Probe release SSH](../.github/workflows/probe-release-ssh.yml)。三端探针使用各自的正式环境，检查 SSH 服务端报告的来源和目标地址，并试读 SFTP 当前目录。公网 22 收紧前先验证三端探针、管理 SSH 新连接和阿里云 VNC 救援，再在收紧后复测，并检查网站健康与就绪接口。
 - 正式中转继续使用已配置的 `flowcube-prod` SSH 别名。管理 peer 与发布 peer 各用自己的 WireGuard 凭据。若隧道不可用，从阿里云控制台 VNC 救援进入实例检查 `wg-quick@flowcube-wg`、防火墙和维护凭据，或在控制台为已核准的管理来源临时恢复 TCP 22。
 
