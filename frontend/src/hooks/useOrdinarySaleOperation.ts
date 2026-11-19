@@ -11,7 +11,7 @@ import type { ReserveItemOverride, ShipItemRequest } from '@/types/sale'
 
 export type OrdinarySaleKind = 'reserve' | 'release' | 'ship'
 export type OrdinarySaleBody = { items?: ReserveItemOverride[] | ShipItemRequest[] }
-export interface OrdinarySaleQuery {
+interface OrdinarySaleQuery {
   version: 1; userId: number; baseURL: string; saleId: number; kind: OrdinarySaleKind; action: string
   path: string; method: 'post'; requestKey: string; createdAt: number; bodyHash: string
 }
@@ -58,7 +58,7 @@ async function hash(body: OrdinarySaleBody) {
   return [...new Uint8Array(bytes)].map(n => n.toString(16).padStart(2,'0')).join('')
 }
 const permission = (kind: OrdinarySaleKind) => kind === 'reserve' ? PERMISSIONS.SALE_ORDER_RESERVE : kind === 'release' ? PERMISSIONS.SALE_ORDER_RELEASE : PERMISSIONS.SALE_ORDER_SHIP
-export function validOrdinarySaleResult(kind: OrdinarySaleKind, result: unknown, fromReceipt: boolean) {
+function validOrdinarySaleResult(kind: OrdinarySaleKind, result: unknown, fromReceipt: boolean) {
   if (kind !== 'ship') return result === null
   if (!fromReceipt && result === null) return true // Ordinary initial POST intentionally returns null.
   return object(result) && Array.isArray(result.tasks) && result.tasks.length > 0
@@ -66,7 +66,7 @@ export function validOrdinarySaleResult(kind: OrdinarySaleKind, result: unknown,
     && new Set(result.tasks.map(task => task.taskId)).size === result.tasks.length
     && typeof result.partial === 'boolean' && typeof result.remaining === 'number' && Number.isSafeInteger(result.remaining) && result.remaining >= 0 && result.partial === (result.remaining > 0)
 }
-export interface OrdinarySaleConfirmation { status: 'success' | 'failed'; data: unknown; query: OrdinarySaleQuery; queryOnly: boolean }
+interface OrdinarySaleConfirmation { status: 'success' | 'failed'; data: unknown; query: OrdinarySaleQuery; queryOnly: boolean }
 
 /** Query identity survives remount; only the submitting mount keeps the frozen body and can explicitly retry it. */
 export function useOrdinarySaleOperation(saleId: number, active = true) {

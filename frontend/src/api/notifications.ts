@@ -11,7 +11,7 @@ export interface NotificationItem {
   dedupeKey?: string
 }
 
-export interface NotificationData {
+interface NotificationData {
   total: number
   items: NotificationItem[]
   counts: Record<string, number>

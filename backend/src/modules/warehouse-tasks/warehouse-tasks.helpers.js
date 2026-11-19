@@ -288,7 +288,6 @@ const fmt = r => ({
 const genTaskNo = conn => generateDailyCode(conn, 'WT', 'warehouse_tasks', 'task_no')
 
 module.exports = {
-  PRIORITY,
   fmt,
   genTaskNo,
   logSideEffectFailure,

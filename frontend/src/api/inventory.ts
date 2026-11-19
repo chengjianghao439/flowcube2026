@@ -3,7 +3,7 @@ import type { ProcurementSupply } from './procurement-supply'
 import { payloadClient as apiClient } from './client'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { PaginatedData, QueryParams } from '@/types'
-import type { StockItem, InventoryLog, StockChangeParams, InventoryOverviewParams, InventoryOverviewResult, InventoryContainer } from '@/types/inventory'
+import type { InventoryLog, StockChangeParams, InventoryOverviewParams, InventoryOverviewResult, InventoryContainer } from '@/types/inventory'
 import type { InventoryReservationParams, InventoryReservationsResult } from '@/types/inventory'
 import type { InventoryReservationSnapshotParams, InventoryReservationSnapshotResult } from '@/types/inventory'
 
@@ -13,7 +13,6 @@ export const getInventoryReservationsApi = (params: InventoryReservationParams, 
 export const getInventoryReservationSnapshotApi = (params: InventoryReservationSnapshotParams, config?: AxiosRequestConfig) =>
   apiClient.get<InventoryReservationSnapshotResult>('/inventory/reservations', { ...config, params: { ...params, readMode: 'snapshot' }, listMode: 'paged', skipGlobalError: true })
 
-export const getStockApi    = async (p: QueryParams) => apiClient.get<PaginatedData<StockItem>>('/inventory/stock', { params: p })
 export const getLogsApi     = async (p: QueryParams, signal?: AbortSignal) => apiClient.get<PaginatedData<InventoryLog>>('/inventory/logs', { params: p, signal })
 
 /** 修复缓存漂移（成本对账页按钮）：仅重算存在漂移的 SKU+仓库,返回修复明细 */
@@ -96,33 +95,6 @@ export const queryInventoryByBarcodeApi = async (barcode: string) =>
   apiClient.get<InventoryQueryContainer[]>(`/inventory/query-by-barcode`, {
     params: { barcode },
     skipGlobalError: true,
-  })
-
-export interface InventoryQueryByProductResult {
-  productId: number
-  productCode: string
-  productName: string
-  unit: string | null
-  containers: Array<{
-    containerId: number
-    barcode: string
-    warehouseId: number
-    warehouseName: string
-    locationCode: string | null
-    batchNo: string | null
-    mfgDate: string | null
-    expDate: string | null
-    remainingQty: number
-    containerKind: 'inventory' | 'plastic_box'
-    individual: boolean
-    lockedByTaskId: number | null
-    lockedByTaskNo: string | null
-  }>
-}
-
-export const queryInventoryByProductApi = async (productId: number, warehouseId?: number | null) =>
-  apiClient.get<InventoryQueryByProductResult>(`/inventory/query-by-product`, {
-    params: { productId, ...(warehouseId ? { warehouseId } : {}) },
   })
 
 export interface SplitContainerResult {
@@ -209,7 +181,7 @@ export const repackPlasticBoxApi = async (
     headers: { ...config?.headers, 'X-Request-Key': requestKey, ...(client === 'pda' ? { 'X-Client': 'pda' } : {}) },
   })
 
-export interface PlasticBoxSourcesResult {
+interface PlasticBoxSourcesResult {
   boxId: number
   barcode: string
   mixedBatch: boolean
@@ -270,7 +242,7 @@ export interface AgingItem {
   totalQty: number; avgAgeDays: number; maxAgeDays: number; totalValue: number
   lastOutboundAt: string | null; daysSinceOutbound: number | null; isStale: boolean
 }
-export interface InventoryAgingReport {
+interface InventoryAgingReport {
   buckets: AgingBucket[]
   list: AgingItem[]
   pagination: { page: number; pageSize: number; total: number }

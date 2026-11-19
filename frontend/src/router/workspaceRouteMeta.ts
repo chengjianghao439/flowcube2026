@@ -89,7 +89,7 @@ function buildCanonicalSearch(searchParams: URLSearchParams, keys?: string[], pr
   return `?${new URLSearchParams(pairs).toString()}`
 }
 
-export function getWorkspaceRouteMeta(path: string): WorkspaceRouteMeta {
+function getWorkspaceRouteMeta(path: string): WorkspaceRouteMeta {
   const normalizedPath = normalizeWorkspacePath(path)
   const tabIdentity = resolveRouteTabIdentity(normalizedPath)
   return tabIdentity ? { tabIdentity } : {}
@@ -101,12 +101,7 @@ function resolveWorkspaceTabIdentity(pathname: string, search = ''): RouteTabIde
   return search ? { kind: 'full-url' } : { kind: 'pathname' }
 }
 
-export function buildCanonicalWorkspaceSearch(search = '', preserveEmptyKeys: readonly string[] = []): string {
-  const searchParams = getWorkspaceSearchParams(search)
-  return buildCanonicalSearch(searchParams, undefined, preserveEmptyKeys)
-}
-
-export function buildCanonicalWorkspacePath(pathname: string, search = ''): string {
+function buildCanonicalWorkspacePath(pathname: string, search = ''): string {
   const normalizedPath = normalizeWorkspacePath(pathname)
   const searchParams = getWorkspaceSearchParams(search)
   // 交接上下文的空值/重复值必须留给接收页拒绝，不能规范化成有效任务。
@@ -121,7 +116,7 @@ export function buildCanonicalWorkspacePath(pathname: string, search = ''): stri
   return `${normalizedPath}${buildCanonicalSearch(searchParams, undefined, preserveEmptyKeys)}`
 }
 
-export function buildWorkspaceTabKey(pathname: string, search = ''): string {
+function buildWorkspaceTabKey(pathname: string, search = ''): string {
   const normalizedPath = normalizeWorkspacePath(pathname)
   const group = getMergedPageGroup(normalizedPath)
   if (group) return group.key
@@ -151,9 +146,4 @@ export function buildWorkspaceTabRegistration(pathname: string, search = ''): { 
 export function buildWorkspaceTabRegistrationFromPath(path: string): { key: string; path: string } {
   const [pathname, rawSearch = ''] = path.split('?')
   return buildWorkspaceTabRegistration(pathname || '/', rawSearch ? `?${rawSearch}` : '')
-}
-
-export function isQuerySensitiveWorkspaceRoute(path: string): boolean {
-  const pathname = path.split(/[?#]/)[0] || '/'
-  return buildWorkspaceTabKey(pathname, path.includes('?') ? path.slice(path.indexOf('?')) : '') !== buildWorkspaceTabKey(pathname)
 }

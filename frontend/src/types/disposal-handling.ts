@@ -16,8 +16,8 @@ export interface ConversionSnapshot {
   snapshot: { version: 1; head: Record<string, unknown>; items: Array<Record<string, unknown>>; approval: Record<string, unknown> }; snapshotFingerprint: string
   conversion?: { id: number; operationUuid: string } | null
 }
-export interface ConversionAck { id: number; originalDisposalId: number; disposalNo: string; operationUuid: string; snapshotFingerprint: string; sources: Array<{ sourceId: number; intentUuid: string; legacyItemId: number; handlingType: 1 | 2 | 3; productId: number; warehouseId: number; unit: string; quantity: number; revision: 1 }> }
-export interface ReleaseAck { sourceId: number; linkId: number; executedQuantity: number; releasedQuantity: number; revision: number }
+interface ConversionAck { id: number; originalDisposalId: number; disposalNo: string; operationUuid: string; snapshotFingerprint: string; sources: Array<{ sourceId: number; intentUuid: string; legacyItemId: number; handlingType: 1 | 2 | 3; productId: number; warehouseId: number; unit: string; quantity: number; revision: 1 }> }
+interface ReleaseAck { sourceId: number; linkId: number; executedQuantity: number; releasedQuantity: number; revision: number }
 export type HandlingAck = HandlingSourceAck | ConversionAck | ReleaseAck | { id: number; orderNo: string } | { id: number; returnNo: string } | { id: number; disposalNo: string }
 export type HandlingKind = 'source' | 'sale' | 'purchase_return' | 'scrap' | 'release' | 'conversion'
 export interface HandlingSpec { kind: HandlingKind; draftIdentity: string; intentUuid?: string; sourceId?: number; linkId?: number; legacyId?: number; operationUuid: string; requestKey: string; path: string; action: string; body: Record<string, unknown> }

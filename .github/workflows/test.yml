@@ -275,6 +275,9 @@ jobs:
       - name: 契约测试 — 列表导出透传列表接口支持的每一个筛选
         run: npm run test:export-filters
 
+      - name: 契约测试 — 操作日志及账号可见性和导出
+        run: npm run test:development-visibility
+
       - name: "验收修复回归 — 请求体解析错误码、废弃设置键、取消单明细投影、审计覆盖"
         run: npm run test:acceptance-fixes
 

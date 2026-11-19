@@ -1,5 +1,5 @@
 import type { CreateKitInput, KitDefinition, UpdateKitInput } from '@/types/kits'
-export interface KitComponentDraft {
+interface KitComponentDraft {
   productId: number; code: string; name: string; unit: string
   allowDecimal: boolean; active: boolean; quantity: string; weight: string
 }

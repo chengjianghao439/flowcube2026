@@ -52,11 +52,3 @@ export interface CreateCreditOverrideParams {
   saleOrderId: number
   reason?: string
 }
-
-export const CREDIT_OVERRIDE_STATUS = {
-  DRAFT: 1,
-  PENDING: 2,
-  APPROVED: 3,
-  REJECTED: 4,
-  CANCELLED: 5,
-} as const

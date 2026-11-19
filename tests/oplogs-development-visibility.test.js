@@ -1,6 +1,11 @@
 'use strict'
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { randomBytes } = require('node:crypto')
+
+// This test loads the auth configuration through the export service.
+process.env.NODE_ENV = 'test'
+process.env.JWT_SECRET = randomBytes(32).toString('hex')
 
 const dbPath = require.resolve('../backend/src/config/db')
 const queries = []

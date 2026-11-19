@@ -148,6 +148,8 @@ npm run test:permissions
 
 `test:permissions` 同时运行权限码一致性、岗位角色预置授权边界、用户自助接口的身份绑定回归（“我的信息”和“我的仓库权限”只能读取当前登录者），以及部门负责人启用校验与审批流引用删除护栏。
 
+`npm run test:development-visibility` 在 Tests CI 的静态检查任务中运行。它用模拟数据库验证开发账号过滤在操作日志、用户列表、下拉选项和导出中的一致性，以及操作日志排除成功打印轮询的筛选。
+
 按改动影响选择验证：
 
 安全扫描整改入口（2026-10-06）：`npm run test:security-scan-remediation` 是离线真实函数/HTTP/子进程及发布契约回归，需安装前后端依赖，不连接数据库；`npm run smoke:security-scan-remediation` 串行验证新增迁移重放/schema、资源范围、会话族和随机打印凭据，必须先按下文加载显式独立测试环境并完成迁移，不能连接生产。两者分别接入 Tests 的 static / MySQL job；本地通过不代表远端已运行。原主链路、打印、认证及导入回归仍需按受影响范围补跑，完整发版门禁保持。27 项证据及部署边界见 `docs/security-scan-remediation-2026-10-06.md`。

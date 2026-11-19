@@ -154,7 +154,7 @@ export const payExpenseClaimApi = (
 
 // ── 资金看板 ──────────────────────────────────────────────────────────────────
 
-export interface FinanceDashboard {
+interface FinanceDashboard {
   range: { startDate: string; endDate: string }
   summary: {
     totalBalance: number; accountCount: number
@@ -171,7 +171,7 @@ export const getFinanceDashboardApi = (p: { startDate?: string; endDate?: string
   client.get<FinanceDashboard>('/finance/dashboard', { params: p })
 
 /** 资金流水的准确供应商退款来源，仅只读追溯。 */
-export interface SupplierRefundTrace {
+interface SupplierRefundTrace {
   id: number; refund_no: string; status: number; amount: string; refund_date: string
   fund_transaction_id: number | null; voucher_id: number | null; voucher_generate_error: string | null
 }

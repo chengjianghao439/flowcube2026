@@ -128,6 +128,4 @@ module.exports = {
   recordPrintSuccess,
   recordPrintFailure,
   getHealthMap,
-  coldEntry,
-  COLD_START_MAX_SAMPLES,
 }

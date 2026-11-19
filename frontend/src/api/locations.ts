@@ -31,7 +31,7 @@ export async function getLocationByCodeApi(code: string, config?: Parameters<typ
 }
 
 /** 库位标签打印（与货架标签打印同构：入队 + 桌面端本机 RAW 出纸） */
-export interface PrintLocationLabelResult {
+interface PrintLocationLabelResult {
   queued: boolean
   jobId: number | null
   printerCode: string | null

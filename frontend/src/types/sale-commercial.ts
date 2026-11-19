@@ -1,4 +1,4 @@
-import type { CreateSaleParams, SaleOrder, SaleOrderItem } from './sale'
+import type { CreateSaleParams, SaleOrderItem } from './sale'
 import type { PrintItem } from '@/components/print/TemplateRenderer'
 export type CommercialInput = { lineKey: string; warehouseId?: number; quantity: number; remark?: string } & (
   | { kind: 'kit'; kitVersionId: number; priceSource: 'kit_default' | 'manual'; unitPrice?: number }
@@ -10,7 +10,7 @@ export type CommercialInput = { lineKey: string; warehouseId?: number; quantity:
       unitPrice?: number
     }
 )
-export interface CommercialEntry {
+interface CommercialEntry {
   entryUnit: string
   entryQty: number
   conversionRate: number
@@ -119,7 +119,7 @@ export interface CommercialPreview {
   inventoryExplanation: string
 }
 export type CommercialAction = 'create' | 'update' | 'adjust' | 'ship' | 'cancel' | 'reserve' | 'release' | 'delete'
-export interface CommercialMarker {
+interface CommercialMarker {
   commercialModel: 'kit-v1'
   expectedRevision: number
   changeReason?: string | null
@@ -148,11 +148,6 @@ export interface CommercialWriteConfirmation {
   result: CommercialWriteResult
   queryOnly?: boolean
   plan: Omit<CommercialOperationPlan, 'operation'> & { operation: Pick<CommercialOperation, 'action' | 'id'> }
-}
-export type CommercialSaleOrder = SaleOrder & {
-  commercialModel: 'kit-v1'
-  commercialRevision: number
-  commercialGroups: CommercialGroup[]
 }
 export type CommercialPrintItem = PrintItem
 

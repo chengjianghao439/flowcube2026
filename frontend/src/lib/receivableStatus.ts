@@ -2,7 +2,7 @@ import type { SaleOrder } from '@/types/sale'
 import type { StatusTone } from '@/lib/statusTone'
 import { SETTLEMENT_TYPE } from '@/generated/status'
 
-export interface ReceivableStatus {
+interface ReceivableStatus {
   label: string
   tone: StatusTone
   /** 到期日（账期至 X），逾期/月结时用于悬停提示 */

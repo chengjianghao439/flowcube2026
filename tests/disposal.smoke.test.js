@@ -17,7 +17,6 @@
  * 运行：node tests/disposal.smoke.test.js
  */
 
-const path = require('path')
 const {
   createLogger,
   prepareSmokeContext,
@@ -73,7 +72,7 @@ async function currentOnHand(pool, productId, warehouseId) {
 
 /** 完整处置链路：创建 → 提交 → 审批 → 执行，验证库存扣减 + 报废台账 */
 async function scenarioFullFlow(ctx, log, token) {
-  const { http, pool, warehouse, product: baseProduct } = ctx
+  const { http, pool, warehouse } = ctx
   const product = await createTestProduct(pool)
   await seedStock(pool, product.id, warehouse.id, 20)
 

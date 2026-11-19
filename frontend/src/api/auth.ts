@@ -7,7 +7,7 @@ export interface LoginParams {
   password: string
 }
 
-export interface LoginResult {
+interface LoginResult {
   token: string
   /** refresh token（2026-08-21 权衡修复）：access 过期后自动换新 */
   refreshToken?: string | null

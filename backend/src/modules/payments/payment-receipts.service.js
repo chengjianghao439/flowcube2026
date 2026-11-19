@@ -666,4 +666,4 @@ async function findById(id) {
   }
 }
 
-module.exports = { create, settle, findAll, findById, RECEIPT_STATUS }
+module.exports = { create, settle, findAll, findById }

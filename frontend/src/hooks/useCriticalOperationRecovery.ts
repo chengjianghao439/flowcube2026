@@ -19,7 +19,7 @@ export function recoveryRequestConfig(record: RepackRecoveryRecord, sessionGener
   return { baseURL: record.endpoint, _erpApiFallbackTried: true, _authSessionGeneration: sessionGeneration, skipGlobalError: true }
 }
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
-export function validatedRepackResult(value: unknown, boxId: number): PlasticBoxRepackResult | null {
+function validatedRepackResult(value: unknown, boxId: number): PlasticBoxRepackResult | null {
   if (!object(value) || value.boxId !== boxId || typeof value.boxRemainingAfter !== 'number' || !Number.isFinite(value.boxRemainingAfter) || value.boxRemainingAfter < 0 || !Array.isArray(value.created)) return null
   if (!value.created.every(c => object(c) && Number.isSafeInteger(c.containerId) && Number(c.containerId) > 0 && typeof c.barcode === 'string' && !!c.barcode && typeof c.qty === 'number' && Number.isFinite(c.qty) && c.qty > 0)) return null
   if (!Array.isArray(value.printJobIds) || !value.printJobIds.every(id => Number.isSafeInteger(id) && id > 0)) return null

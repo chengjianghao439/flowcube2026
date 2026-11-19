@@ -127,7 +127,5 @@ module.exports = {
   MM_TO_DOT,
   sanitizeZplValue,
   applyZplTemplate,
-  calcBarcodeModuleWidth,
-  mmDot,
   generateZplFromElements,
 }

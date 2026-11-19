@@ -3,7 +3,7 @@ const STORAGE_KEY = 'pda_pending_request_confirmations'
 const UNCLAIMED_KEY = 'pda_unclaimed_request_confirmations'
 const OWNED_PREFIX = 'pda_owned_request_v3:'
 const TERMINAL_PREFIX = 'pda_owned_terminal_v3:'
-export interface UnclaimedRequest { action: string; requestKey: string; requestAction?: string }
+interface UnclaimedRequest { action: string; requestKey: string; requestAction?: string }
 let unclaimed: UnclaimedRequest[] = []
 let dirty = false
 

@@ -260,6 +260,5 @@ module.exports = {
   create,
   update,
   softDelete,
-  generateCode,
   enqueuePrintLabel,
 }

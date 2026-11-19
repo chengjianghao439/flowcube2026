@@ -191,4 +191,4 @@ async function trackOne(row) {
   }
 }
 
-module.exports = { runFetchWaybills, runTrackWaybills, reclaimStaleFetching }
+module.exports = { runFetchWaybills, runTrackWaybills }

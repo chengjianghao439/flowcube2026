@@ -19,7 +19,7 @@ interface CloseRecord {
   baseURL: string
   uncertain: boolean
 }
-export function closeReceivingMessage(result: CloseReceivingResult) {
+function closeReceivingMessage(result: CloseReceivingResult) {
   return result.status === 4 ? '已结束收货，实收已全部上架并完成结算' : '已结束收货，待实收全部上架后结算'
 }
 function validResult(value: unknown, taskId: number): value is CloseReceivingResult {

@@ -444,7 +444,6 @@ async function forceRelease(id, scopeWarehouseIds = null) {
 
 module.exports = {
   scanProduct,
-  resolvePickCode,
   findAll, findAllWarehouses, create, batchCreate, update, remove,
   assignToTask, releaseByTask, forceRelease, checkCapacityWarning,
 }

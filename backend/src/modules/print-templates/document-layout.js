@@ -33,4 +33,4 @@ function validateDocumentLayout(layout) {
   if (Buffer.byteLength(JSON.stringify(parsed.data), 'utf8') > MAX_DOCUMENT_LAYOUT_BYTES) throw invalid()
   return parsed.data
 }
-module.exports = { validateDocumentLayout, MAX_DOCUMENT_LAYOUT_BYTES, MAX_DOCUMENT_ELEMENTS, MAX_DOCUMENT_COLUMNS }
+module.exports = { validateDocumentLayout }

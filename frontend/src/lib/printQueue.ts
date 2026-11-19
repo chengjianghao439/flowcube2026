@@ -41,7 +41,7 @@ export interface PrintQueueDispatchHint {
   message?: string | null
 }
 
-export interface PrintQueueFeedback {
+interface PrintQueueFeedback {
   level: 'success' | 'warning'
   message: string
 }

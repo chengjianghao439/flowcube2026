@@ -3,7 +3,7 @@ import { payloadClient as client } from './client';
 import { collectAllRecords } from './allRecords';
 import type { PaginatedData } from '@/types';
 import type { RefundAck, RefundApplicationAck, SupplierRefund, SupplierRefundSource } from '@/types/supplier-refund';
-export const listSupplierRefundsApi = (params: {
+const listSupplierRefundsApi = (params: {
     page: number;
     pageSize: number;
 }, config: AxiosRequestConfig) => client.get<{

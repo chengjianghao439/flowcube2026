@@ -73,7 +73,7 @@ async function scenarioRefundListScope(ctx, log) {
 
 async function scenarioRefundExecutes(ctx, log, token) {
   const { http, pool } = ctx
-  const { orderId, orderNo } = await seedSaleWithPaid(pool, 1000, 800)
+  const { orderId } = await seedSaleWithPaid(pool, 1000, 800)
 
   // 建账户（退款出账目标）
   const acc = await http.post('/api/finance/accounts', { token, json: { name: randomRef('退款账户').slice(0, 30), type: 2, openingBalance: 500 } })
@@ -125,7 +125,7 @@ async function scenarioRefundExecutes(ctx, log, token) {
 
 async function scenarioRefundThenReturnPasses(ctx, log, token) {
   const { http, pool } = ctx
-  const { orderId, orderNo, paymentRecordId } = await seedSaleWithPaid(pool, 1000, 800)
+  const { orderId } = await seedSaleWithPaid(pool, 1000, 800)
 
   // 退款前：退货守卫应拦截（paid 800 > 退货冲减后总额）。这里直接用 returns.helpers 的守卫函数验证
   const { assertReturnPaymentHeadroom } = require('../backend/src/modules/returns/returns.helpers')

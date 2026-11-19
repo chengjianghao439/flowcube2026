@@ -17,7 +17,7 @@ export interface SplitRecoveryRecord {
   createdAt: string
   body: SplitContainerBody | null
 }
-export interface SplitRecoveryNotice { busy?: boolean; message?: string; notFoundAt?: number; context?: string }
+interface SplitRecoveryNotice { busy?: boolean; message?: string; notFoundAt?: number; context?: string }
 interface Snapshot { records: SplitRecoveryRecord[]; notices: Record<string, SplitRecoveryNotice>; error: string | null }
 const empty: Snapshot = { records: [], notices: {}, error: null }
 const states = new Map<number, Snapshot>()
@@ -44,7 +44,7 @@ useAuthStore.subscribe((next, previous) => {
   if (identity(next) !== identity(previous)) ownerEpoch++
 })
 export const splitOwnerEpoch = () => ownerEpoch
-export function trustedSplitBody(value: unknown): value is SplitContainerBody {
+function trustedSplitBody(value: unknown): value is SplitContainerBody {
   return object(value) && Object.keys(value).every(k => ['qty', 'remark', 'printLabel', 'targetContainerId'].includes(k))
     && quantity(value.qty) && (value.remark === undefined || typeof value.remark === 'string' && value.remark.length <= 500)
     && (value.printLabel === undefined || typeof value.printLabel === 'boolean')
@@ -72,7 +72,7 @@ function diskRecords(accountId: number) {
   if (new Set(records.map(r => r.requestKey)).size !== records.length) throw new Error('原拆分记录身份重复，请人工核对')
   return records
 }
-export const sameSplitRecord = (a: SplitRecoveryRecord, b: SplitRecoveryRecord) => JSON.stringify(a) === JSON.stringify(b)
+const sameSplitRecord = (a: SplitRecoveryRecord, b: SplitRecoveryRecord) => JSON.stringify(a) === JSON.stringify(b)
 export function reloadSplitRecovery(accountId: number) {
   const prev = splitRecoverySnapshot(accountId)
   try {

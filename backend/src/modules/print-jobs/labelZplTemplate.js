@@ -69,6 +69,5 @@ module.exports = {
   sanitizeZplValue,
   generateZplFromElements,
   getLabelZplFromDefaultTemplate,
-  LABEL_TEMPLATE_TYPES,
   MM_TO_DOT,
 }

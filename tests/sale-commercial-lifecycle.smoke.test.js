@@ -277,8 +277,8 @@ async function main() {
     await svc.reserveStock(sale.id,operator(),[],{commercialModel:'kit-v1',expectedRevision:1,requestKey:reserveKey})
     await assert.rejects(svc.ship(sale.id,operator(),{commercialModel:'kit-v1',expectedRevision:1,groups:detail.commercialGroups.filter(g=>g.kind==='kit').map(g=>({groupId:g.id,qty:1})),requestKey:randomUUID()}))
     const dispatchKey=randomUUID(),a=detail.commercialGroups[0]
-    const dispatched=await svc.ship(sale.id,operator(),{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:a.id,qty:1}],requestKey:dispatchKey})
-    const replay=await svc.ship(sale.id,operator(),{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:a.id,qty:1}],requestKey:dispatchKey})
+    await svc.ship(sale.id,operator(),{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:a.id,qty:1}],requestKey:dispatchKey})
+    await svc.ship(sale.id,operator(),{commercialModel:'kit-v1',expectedRevision:1,groups:[{groupId:a.id,qty:1}],requestKey:dispatchKey})
     const current=await http(`/sale/${sale.id}`,undefined,{method:'GET'});fixture.taskId=current.tasks[0].taskId
     assert.equal(current.tasks.length,1,'dispatch replay never adds a task')
     const readPending=current.commercialGroups.map(g=>g.dispatch)
@@ -472,8 +472,8 @@ async function main() {
     fixture.returnId=ret.id;await http(`/returns/sale/${ret.id}/confirm`,{})
     const returnDetail=await http(`/returns/sale/${ret.id}`,undefined,{method:'GET'})
     const rt=returnDetail.task.id
-    const receive=await http(`/return-tasks/${rt}/receive`,{productId:hinge.productId,packages:[{qty:1}]},{pda:true})
-    const qa=await http(`/return-tasks/${rt}/check`,{productId:hinge.productId,passedQty:1,rejectedQty:0},{pda:true})
+    await http(`/return-tasks/${rt}/receive`,{productId:hinge.productId,packages:[{qty:1}]},{pda:true})
+    await http(`/return-tasks/${rt}/check`,{productId:hinge.productId,passedQty:1,rejectedQty:0},{pda:true})
     const [returned]=await q("SELECT id FROM inventory_containers WHERE source_ref_type='sale_return' AND source_ref_id=? AND status=4",[rt])
     await http(`/return-tasks/${rt}/putaway`,{containerId:Number(returned.id),locationId:fixture.locationId},{pda:true})
     const [arAfter]=await q('SELECT total_amount FROM payment_records WHERE type=2 AND order_id=?',[sale.id]);assert.equal(Number(arAfter.total_amount),20,'qualified source hinge refunds80, never physical average120')

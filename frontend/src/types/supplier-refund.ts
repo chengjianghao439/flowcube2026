@@ -1,4 +1,4 @@
-export interface RefundSourceIdentity {
+interface RefundSourceIdentity {
     purchaseReturnId: number;
     purchaseOrderId: number;
     paymentRecordId: number;
@@ -108,7 +108,7 @@ export interface RefundApplicationAck {
     period: string;
     businessDate: string;
 }
-export type RefundKind = 'create' | 'confirm' | 'receive' | 'cancel' | 'backfill';
+type RefundKind = 'create' | 'confirm' | 'receive' | 'cancel' | 'backfill';
 export interface RefundSpec {
     kind: RefundKind;
     draftIdentity: string;

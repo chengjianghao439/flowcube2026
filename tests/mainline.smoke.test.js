@@ -7,7 +7,6 @@ const ExcelJS = require(path.resolve(__dirname, '../backend/node_modules/exceljs
 const {
   createLogger,
   prepareSmokeContext,
-  dbQuery,
   login,
   createPurchaseOrder,
   confirmPurchaseOrder,
@@ -37,7 +36,7 @@ async function expectJsonSuccess(log, response, label) {
 async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
-  const { http, pool, warehouse, location, product, supplier, printer, pdaHeaders } = ctx
+  const { http, warehouse, location, product, supplier, printer, pdaHeaders } = ctx
 
   try {
     log.section('service contract')

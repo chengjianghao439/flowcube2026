@@ -1065,7 +1065,6 @@ async function fetchPurchasePriceTrend({ productId, startDate = null, endDate = 
 
 module.exports = {
   fetchOne,
-  fetchMany,
   fetchPurchaseStatsRows,
   fetchSaleStatsRows,
   fetchInventoryStatsRows,

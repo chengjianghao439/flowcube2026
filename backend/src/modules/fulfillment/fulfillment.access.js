@@ -48,4 +48,4 @@ async function eligibleOwners(conn, type, row) {
     return type === 'transfer' ? scope.includes(Number(row.from_warehouse_id)) || scope.includes(Number(row.to_warehouse_id)) : warehouses.every(w => w != null && scope.includes(Number(w)))
   }).map(u => ({ id: Number(u.id), name: u.name }))
 }
-module.exports = { definitions, definition, can, authorize, eligibleOwners, scopeDocument }
+module.exports = { definitions, definition, can, authorize, eligibleOwners }

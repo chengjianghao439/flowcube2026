@@ -28,7 +28,7 @@
 
 import { cn } from '@/lib/utils'
 
-export interface SectionCardProps {
+interface SectionCardProps {
   /** 卡片标题（可选） */
   title?: string
   /** 标题右侧操作区（Button、Badge 等） */

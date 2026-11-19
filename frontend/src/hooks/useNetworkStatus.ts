@@ -11,7 +11,7 @@ import { Capacitor } from '@capacitor/core'
 import { getApiHealthUrl, getRelativeApiHealthUrl } from '@/lib/apiOrigin'
 import { IS_CAPACITOR_PDA } from '@/lib/platform'
 
-export type NetworkStatus = 'online' | 'offline' | 'recovering'
+type NetworkStatus = 'online' | 'offline' | 'recovering'
 
 const HEARTBEAT_INTERVAL = 10_000  // 10 秒探一次
 const HEARTBEAT_TIMEOUT  = 5_000

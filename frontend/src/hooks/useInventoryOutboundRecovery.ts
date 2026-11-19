@@ -16,14 +16,14 @@ const positiveId = (v: unknown): v is number => typeof v === 'number' && Number.
 const stable = (v: unknown): string => v === null || typeof v !== 'object' ? JSON.stringify(v ?? null)
   : Array.isArray(v) ? `[${v.map(stable).join(',')}]`
   : `{${Object.keys(v).filter(k => (v as Record<string, unknown>)[k] !== undefined).sort().map(k => `${JSON.stringify(k)}:${stable((v as Record<string, unknown>)[k])}`).join(',')}}`
-export interface OutboundRecoveryRecord {
+interface OutboundRecoveryRecord {
   version: 1; userId: number; baseURL: string; requestKey: string; action: string; createdAt: number
   body: StockChangeParams; phase: 'pending' | 'success' | 'failed'; result?: { beforeQty: number; afterQty: number }
   display?: { productName: string; warehouseName: string }
 }
 const keyFor = (r: Pick<OutboundRecoveryRecord, 'userId' | 'baseURL' | 'requestKey'>) => encodeURIComponent(JSON.stringify([r.userId, r.baseURL, r.requestKey]))
 const immutable = (r: OutboundRecoveryRecord) => stable({ ...r, phase: 'pending', result: undefined })
-export function normalizeOutboundBody(body: StockChangeParams): StockChangeParams {
+function normalizeOutboundBody(body: StockChangeParams): StockChangeParams {
   if (!positiveId(body.productId) || !positiveId(body.warehouseId) || !Number.isFinite(body.quantity) || body.quantity <= 0
     || Math.abs(body.quantity * 100 - Math.round(body.quantity * 100)) > 1e-7 || Object.keys(body).some(k => !['productId', 'warehouseId', 'quantity', 'supplierId', 'unitPrice', 'remark'].includes(k))
     || (body.supplierId != null && !positiveId(body.supplierId)) || (body.unitPrice != null && (!Number.isFinite(body.unitPrice) || body.unitPrice < 0))

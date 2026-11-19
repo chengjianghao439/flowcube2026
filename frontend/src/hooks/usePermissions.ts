@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { payloadClient as client } from '@/api/client'
 import { getRolesApi, createRoleApi, deleteRoleApi } from '@/api/settings'
 
-export const ROLES_QUERY_KEY = 'roles'
-export const ROLE_PERMS_QUERY_KEY = 'role-perms'
+const ROLES_QUERY_KEY = 'roles'
+const ROLE_PERMS_QUERY_KEY = 'role-perms'
 
 export interface Role {
   id: number
