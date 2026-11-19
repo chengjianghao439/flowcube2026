@@ -156,7 +156,10 @@ test('迟到的后台成功不能清当前新账号的输入或解除原账号�
   let resolve!: (value: unknown) => void
   api.post.mockImplementation(() => new Promise(done => { resolve = done }))
   let first!: Promise<unknown>
-  await act(async () => { first = operation.mutateAsync(body).catch(() => {}); await new Promise(done => setTimeout(done, 10)) })
+  await act(async () => {
+    first = operation.mutateAsync(body).catch(() => {})
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledOnce())
+  })
   await act(async () => useAuthStore.getState().login('other', null, { id: 2, roleId: 1 } as User))
   await act(async () => { resolve({ beforeQty: 20, afterQty: 17 }); await first })
   expect(operation.recovery.lastOutcome).toBeNull()

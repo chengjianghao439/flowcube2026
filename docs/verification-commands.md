@@ -113,6 +113,8 @@ GitHub 浏览器夹具任务的总时限为 15 分钟。系统依赖下载和安
 
 以下命令从仓库根目录运行。
 
+库存出库的账号切换回归使用 `npm --prefix frontend run test:unit -- src/hooks/useInventoryOutboundRecovery.test.tsx`。测试在首次 POST 确实发出后切换账号，再交付原请求的成功响应。摘要计算等异步步骤耗时波动时，这个顺序仍成立。完整前端单测同样执行该用例。
+
 若 `$HOME/.config/flowcube/dev-env.sh` 存在，执行本地开发、测试和 Android 命令前先 `source "$HOME/.config/flowcube/dev-env.sh"`。切换机器时核对实际 Node、Java 和 Android SDK。原本机环境核查和工具设置见 [2026-09-04 工具记录](local-tooling-2026-09-04.md)。
 
 曾使用独立浏览器诊断工具排查界面读取故障，安装和实测范围见[工具记录](local-tooling-2026-09-04.md#2026-09-06-独立-chrome-devtools-工具)。每次使用前核对工具可用性，结束时关闭本任务会话。
