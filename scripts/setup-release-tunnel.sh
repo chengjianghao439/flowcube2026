@@ -17,21 +17,27 @@ done
    "$FLOWCUBE_WG_PRIVATE_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] || { echo 'WireGuard 密钥格式无效' >&2; exit 1; }
 
 umask 077
-key_file=$(mktemp)
+key_file=
 created=false
 interface=flowcube-wg
 cleanup() {
   local result=$?
-  rm -f -- "$key_file"
+  if [ -n "$key_file" ]; then sudo rm -f -- "$key_file"; fi
   if (( result != 0 )) && "$created"; then sudo ip link delete dev "$interface"; fi
 }
 trap cleanup EXIT
-printf '%s\n' "$FLOWCUBE_WG_PRIVATE_KEY" > "$key_file"
+private_key=$FLOWCUBE_WG_PRIVATE_KEY
 unset FLOWCUBE_WG_PRIVATE_KEY
 if ! command -v wg >/dev/null; then
   sudo apt-get update -qq
   sudo apt-get install -y --no-install-recommends wireguard-tools
 fi
+
+# Ubuntu 26.04 的 AppArmor 只允许 wg 从 /etc/wireguard 读密钥。
+sudo mkdir -p -m 0700 -- /etc/wireguard
+key_file=$(sudo mktemp /etc/wireguard/.flowcube-ci-key.XXXXXX)
+printf '%s\n' "$private_key" | sudo tee "$key_file" >/dev/null
+unset private_key
 
 sudo ip link add dev "$interface" type wireguard
 created=true

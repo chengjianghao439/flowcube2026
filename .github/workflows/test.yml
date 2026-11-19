@@ -155,8 +155,8 @@ jobs:
     name: 页面验收脚本（本地夹具真浏览器）
     # Match the Noble runtime used by the pinned Playwright release gate.
     runs-on: ubuntu-24.04
-    # System dependency setup can take most of the former 8-minute job budget.
-    timeout-minutes: 15
+    # Both Chromium installers fetch system dependencies, which exceeded the 15-minute job budget.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
@@ -165,6 +165,12 @@ jobs:
           cache: npm
           cache-dependency-path: scripts/browser-smoke/package-lock.json
       - run: npm ci --prefix scripts/browser-smoke --ignore-scripts
+      - name: Use the Ubuntu HTTPS archive for browser dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The runner's regional HTTP mirrors failed on both indices and package downloads.
+          printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
       - run: node scripts/browser-smoke/node_modules/playwright-core/cli.js install --with-deps chromium
       - run: npm run test:browser-smoke
       - run: npm ci --prefix frontend
