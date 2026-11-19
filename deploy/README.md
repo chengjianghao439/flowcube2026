@@ -7,7 +7,7 @@
 1. 环境变量 `FLOWCUBE_DEPLOY_CONFIG` 指向的 JSON 文件
 2. `deploy/production.local.json`
 
-请从 [production.example.json](/Users/chengjianghao/flowcube/deploy/production.example.json) 复制一份本地文件后填写真实值：
+请从 [production.example.json](production.example.json) 复制一份本地文件后填写真实值：
 
 ```bash
 cp deploy/production.example.json deploy/production.local.json

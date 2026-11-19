@@ -14,7 +14,7 @@
 - 触发：`push` 到 `v*` **tag**（推荐发版路径）、或 `push` 到 `main`（验证构建）、或 Actions 里手动运行。手动发布必须使用工作流的发布参数，输入版本匹配实际检出 package；关联 tag 时还须核对其 SHA。
 - Runner：`windows-latest`。
 - 步骤概要：`npm ci`（frontend → desktop）→ `npm run build`（frontend，桌面包）→ 固定下载 **NSIS 3.0.4.1** → `dist:win`（electron-builder NSIS）→ 校验产物内部为 **`Nullsoft Install System v3.04`** → 核对两处已有发布身份 → 上传到 GitHub Release 草稿 → 更新服务器规范下载目录 → 从公开地址回读同一 EXE 后转正草稿。
-- Release 附件上传走 `scripts/publish-release-asset.cjs`（不再用 `gh release upload`）：GitHub 附件存储会间歇性返回 `HTTP 500 Error saving asset`（2026-09-18 v0.9.20 上传多次挂起 15 分钟以上即此原因，gh CLI 不超时、不重试、不校验，中断还会留下没有附件的**草稿** Release）。脚本流程是「确保 Release 存在（缺则建草稿）→ 删同名附件 → 默认 5 次尝试、每次 10 分钟超时、失败 10 秒后重试 → 校验远端附件大小 → 才 `draft=false` + latest」，任何一步失败都以非零退出并打印 `::error::`。补传用同一脚本并传入 `--tag/--version/--file`，文件必须取自服务器 `/versions/v<版本>/` 的 CI 构建包（先复算 sha256 与 `latest.json` 一致）；回归见 `npm run test:release-tooling`。
+- Release 附件由 [发布脚本](../scripts/publish-release-asset.cjs)上传和核验。脚本重用同版本同摘要的附件，遇到已上传附件身份或摘要冲突即停止。重试时只移除经核验的草稿零字节占位。脚本默认最多尝试 5 次、单次 10 分钟、失败间隔 10 秒。服务器公开地址和 GitHub 附件均与原构建匹配后，才转正草稿。补发按下文原构建产物恢复流程处理。
 - 权限：`contents: write`（`GITHUB_TOKEN` 创建 Release）、`actions: read`（读取待发布实际 SHA 的 Tests 与 Security Scan 结果）。
 - Tag 推送时 CI 会校验：**`Git tag` 去掉 `v` 后**必须与 **`desktop/package.json` 的 `version`** 一致，否则失败（避免 exe / Release / 仓库版本错乱）。
 
@@ -69,18 +69,18 @@ node scripts/release-desktop.js x.x.x \
 
 正式构建、独立 SSH 传输及真实 Windows 安装和更新各自留证。服务器中转须用已验主机键，下载目录里的可公开 EXE 应由运行用户可读。离线合成测试覆盖两处摘要冲突、草稿及服务器中断、响应丢失和字节校验。
 
-### `/downloads` 兼容别名退场计划
+### 旧下载地址兼容
 
 - `/downloads/` 仅保留给旧桌面客户端或旧 manifest 的 GET/HEAD 静态下载兼容，不是新发布入口。
 - 新版本 manifest 禁止生成 `/downloads/...` URL，只允许使用 `/versions/vX.Y.Z/...` 或 `/current/...`。
 - `scripts/release-desktop.js` 会拒绝从 `backend/downloads` 发布安装包，并强制 `latest.json` 指向 `/versions/`。
-- 计划在 `v0.5.0` 后移除 `/downloads/` alias。移除前置条件：连续 30 天访问日志无 `/downloads/` 命中，且受管客户端均已升级到 `>=0.3.72`。
+- 下线条件和审批入口见[部署说明](DEPLOY.md#downloads-兼容别名)。
 
 ### 桌面默认 API 地址（避免每次填写服务器）
 
 Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默认连 `http://localhost:3000`，正式用户必须在登录前改地址。
 
-- 生产默认地址来自 `VITE_ERP_PRODUCTION_ORIGIN`，或 [deploy/production.local.json](/Users/chengjianghao/flowcube/deploy/production.local.json) 的 `erpOrigin`（CI 可用 GitHub Variable `VITE_ERP_PRODUCTION_ORIGIN`）。
+- 生产默认地址来自 `VITE_ERP_PRODUCTION_ORIGIN`，或 本机部署配置（参照[脱敏示例](../deploy/production.example.json)） 的 `erpOrigin`（CI 可用 GitHub Variable `VITE_ERP_PRODUCTION_ORIGIN`）。
 - **Build Desktop Installer** 工作流和本地 `desktop` 打包脚本都会强制注入该地址；缺失时直接失败，避免安装包默认连 `localhost:3000`。
 - 桌面端连哪个服务器是**打包期焊死**的（见 `docs/换服务器与桌面端自动更新说明.md`）；旧版的登录页改地址 / `Ctrl+Shift+S` 入口已彻底移除。
 
@@ -103,7 +103,8 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 - Secrets
   - `SSH_PRIVATE_KEY`
   - `SMOKE_USERNAME`、`SMOKE_PASSWORD`（服务器页面与对账回跳门禁账号）
-  - `SMOKE_LIMITED_USERNAME`、`SMOKE_LIMITED_PASSWORD`（长期保留的受限权限验收账号，仅仪表盘和收货查看；使用随机口令，不复用源码测试口令）
+  - `SMOKE_LIMITED_USERNAME`、`SMOKE_LIMITED_PASSWORD`（长期保留的受限权限验收账号，仅仪表盘和收货查看，使用独立随机口令）
+  - PDA 正式签名使用 `PDA_SIGNING_KEYSTORE_BASE64`、`PDA_SIGNING_STORE_PASSWORD`、`PDA_SIGNING_KEY_ALIAS`、`PDA_SIGNING_KEY_PASSWORD`。配置和校验以 [Build PDA APK](../.github/workflows/build-pda-apk.yml) 为准。
 
 说明：
 

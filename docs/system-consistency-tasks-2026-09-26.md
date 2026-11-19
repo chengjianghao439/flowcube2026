@@ -541,7 +541,7 @@ status = CASE WHEN VALUES(total_amount) > 0 AND paid_amount >= VALUES(total_amou
 ### 通过/失败标准
 
 - Part A：勾稽在存在无凭证台账时**不再显示平**。
-- Part B：运费结算产生平衡凭证；`npm run test:*` 相关守卫全绿。
+- Part B：运费结算产生平衡凭证；对应的 `test:` 守卫全绿。
 
 ### 数据库 / 部署 / 回滚
 

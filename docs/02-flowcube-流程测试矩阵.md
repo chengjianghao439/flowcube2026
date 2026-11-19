@@ -29,7 +29,7 @@
 
 ```text
 PENDING(1) -> PICKING(2) -> SORTING(3) -> CHECKING(4) -> PACKING(5) -> SHIPPING(6) -> SHIPPED(7)
-任意进行中状态 -> CANCELLED(8)
+符合业务取消条件的任务 -> CANCELLED(8)
 ```
 
 当前系统通常跳过 `PENDING(1)`，销售单发起出库后直接创建 `PICKING(2)` 仓库任务。
@@ -38,14 +38,16 @@ PENDING(1) -> PICKING(2) -> SORTING(3) -> CHECKING(4) -> PACKING(5) -> SHIPPING(
 
 | 动作 | 接口 / 入口 | 允许来源 | 目标状态 |
 | --- | --- | --- | --- |
-| 创建仓库任务 | `sale.service.ship -> warehouseTasks.createForSaleOrder` | 销售单 `已占库(2)` | `PICKING(2)` |
+| 创建仓库任务 | `sale.service.ship -> warehouseTasks.createForSaleOrder` | 销售单已占库 (2) 或部分占库 (6)，还须通过销售出库校验 | `PICKING(2)` |
 | 开始拣货 | `warehouseTasks.startPicking` | `PENDING(1)` 或 `PICKING(2)` | `PICKING(2)` |
 | 拣货完成 | `warehouseTasks.readyToShip` | `PICKING(2)` | `SORTING(3)` |
 | 分拣完成 | `warehouseTasks.sortTask` | `SORTING(3)` | `CHECKING(4)` |
 | 复核完成 | `warehouseTasks.checkDone` / 复核扫码自动收口 | `CHECKING(4)` | `PACKING(5)` |
 | 打包完成 | `warehouseTasks.packDone` / `packages.finishPackage` | `PACKING(5)` | `SHIPPING(6)` |
 | 出库确认 | `warehouseTasks.ship` | `SHIPPING(6)` | `SHIPPED(7)` |
-| 取消任务 | `warehouseTasks.cancel` | 进行中状态 | `CANCELLED(8)` |
+| 取消任务 | 销售出库从原销售单统一发起取消。非销售任务按自身类型及取消入口处理 | 先校验任务类型、当前状态和取消或归还阶段 | `CANCELLED(8)`，需归还时完成归还后进入终态 |
+
+销售出库直接取消仓库任务会返回 `SALE_ORDER_CANCEL_REQUIRED`。返货出库沿退货单的原处置流程。规则与服务边界见[业务语义](business-semantics.md)和[仓库任务取消入口](../backend/src/modules/warehouse-tasks/warehouse-tasks.command.js)。
 
 ## 销售单状态与仓库任务状态关系
 
@@ -57,10 +59,10 @@ PENDING(1) -> PICKING(2) -> SORTING(3) -> CHECKING(4) -> PACKING(5) -> SHIPPING(
 | `CHECKING(4)` | `sale_orders.status = 3` 拣货中 | 真实阶段以仓库任务状态为准 |
 | `PACKING(5)` | `sale_orders.status = 3` 拣货中 | 前端必须展示履约状态，不能只看销售状态 |
 | `SHIPPING(6)` | `sale_orders.status = 3` 拣货中 | 待出库不是销售单状态 |
-| `SHIPPED(7)` | `sale_orders.status = 4` 已出库 | 出库完成后通过销售服务主入口同步 |
-| `CANCELLED(8)` | `sale_orders.status = 5` 已取消 | 取消同步必须走销售服务主入口 |
+| `SHIPPED(7)` | 未发完保持 3，全部发完进入 4 | 出库任务完成后按整张销售单的实际发货进度同步 |
+| `CANCELLED(8)` | 销售单按取消结果同步 | 从销售单统一取消，未实发的按取消结案，已部分出库并结束剩余未发的按实发结案 |
 
-更完整的状态同步逻辑以 `warehouse-tasks` / `sale` 服务代码为准。
+销售单状态和动作以[单据状态规则](../backend/src/constants/documentStatusRules.js)及[销售出库同步](../backend/src/modules/sale/sale.shipment-command.js)为准。
 
 ## 旧状态污染清单
 

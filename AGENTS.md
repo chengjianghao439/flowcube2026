@@ -18,7 +18,7 @@
 
 > 涉及这些路径时逐条核对。有测试入口的条目标出回归位置，实际 CI 接线以工作流为准。详细背景见对应主题文档（§4）。
 
-- **撤回收货拒绝「已不属于本仓」的容器**，三道守卫都要在：① `transfer_order_id` 非空（调拨在途）；② 容器 `warehouse_id` 已不在任务所属仓（整箱调拨已完成，409 `INBOUND_TASK_CONTAINER_MOVED_AWAY`）；③ 容器**曾参与过调拨**——`inventory_logs` 里有 `ref_type='transfer'` 的调出/调入流水（409 `INBOUND_TASK_CONTAINER_TRANSFERRED`）。②③ 不能只认容器当前仓库，③ 还**不能只查撤回候选容器**：候选集只有 ACTIVE/待上架/EMPTY，而在途异常了结（`forceCloseInTransit`）把在途容器置 **VOID** 并清空 `transfer_order_id`，容器同时脱离候选集、摘掉在途标记，四道守卫会全落空——故 ③ 按**该收货单名下全部未删除容器**是否有调拨流水判定（覆盖 A→B→A 往返与异常了结两种形态，但不误伤无调拨流水的普通作废）。回归 `tests/inbound-void-transferred-container.smoke.test.js`（§D 往返 / §E 异常了结 / §F 普通作废仍放行）（`inbound-tasks.void.js`、`transfer.service.js`）
+- **撤回收货拒绝调拨在途、已离开任务仓或曾参与过调拨的容器**。在途看 `transfer_order_id`，已离开任务仓返回 `409 INBOUND_TASK_CONTAINER_MOVED_AWAY`。曾调拨按同一收货任务下**全部未删除容器**共享读，覆盖异常了结后的 VOID 容器。迁移 285 的 `has_transfer_history` 是永久标记，真实调出、调入及在途异常了结同事务置 1。历史调拨流水仍是兼容证据，标记或流水命中即返回 `409 INBOUND_TASK_CONTAINER_TRANSFERRED`。覆盖往返本仓、流水清理和异常了结，普通无调拨事实的作废仍可撤回。回归见 `docs/inventory-transaction-invariants.md` 的「保留期与曾调拨事实」。
 - **盘点扫码账面查询必须带 `locked_by_task_id IS NULL`**，action 用 `stockcheck.scan.<盘点单ID>` + 幂等回执（`stockcheck.service.js`、PDA `stockcheck.tsx`）
 - **行已有预占时禁止更换发货仓库**：400 `RESERVE_WAREHOUSE_CHANGE_NOT_ALLOWED`（`sale.service.js`）
 - **销售收入凭证**按已发原值占比净额化折扣、税额夹到折后净额；退货冲回成本用 `COALESCE(soi.cost_snapshot,0)` 且去掉 `product_items` JOIN，兜底留给 `reports.query.js`（`voucher-engine.js`）

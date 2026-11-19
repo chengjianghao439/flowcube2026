@@ -592,16 +592,13 @@ test('真实工作流的同一步骤注释、留空、失活或掩盖失败时�
 
 test('两项 PR Gate 均等待全部依赖，并拒绝失败、取消、跳过及空结果', () => {
   const gateNames = { 'test.yml': 'Tests PR Gate', 'security-scan.yml': 'Security Scan PR Gate' }
-  const workflows = Object.keys(gateNames).map(file => [file, readWorkflow(path.join(root, '.github/workflows', file))])
-  // 在 PR #114 接线后，任一在用 Gate 都要求两条实际工作流同时满足契约。
-  const activated = workflows.some(([, workflow]) => 'pr-gate' in workflow.jobs)
-  for (const [file, workflow] of workflows) {
-    const fixture = activated ? { jobs: {} } : readWorkflow(path.join(root, 'tests/fixtures/pr-gates', file))
-    const jobs = { ...workflow.jobs, ...fixture.jobs }
-    const name = gateNames[file]
-    verifyPrGate({ ...workflow, jobs }, name)
+  for (const [file, name] of Object.entries(gateNames)) {
+    const workflow = readWorkflow(path.join(root, '.github/workflows', file))
+    verifyPrGate(workflow, name)
+    const { jobs } = workflow
     const gate = jobs['pr-gate']
     for (const change of [
+      broken => { delete broken['pr-gate'] },
       broken => { broken['pr-gate'].needs.pop() },
       broken => { broken[gate.needs[0]].if = false },
       broken => { broken[gate.needs[0]]['continue-on-error'] = true },

@@ -69,10 +69,10 @@ node tests/plastic-box-batch-a.smoke.test.js
    **限定**：这是**「快照不符即 409」的功能验证**，**不是**并发竞态证明，**也不构成**「锁下重读缺口」的反证——后者需要真实并发交错，本用例**未构造**（本轮补）
 27. **混合标识传递补齐（A2）**：① 非空混合盒再倒入**单批**来源 ⇒ **仍为混合**（不得被清回 0）；② **曾混合的空盒**（清空后标识仍在）倒入**单批**来源 ⇒ **重置为单批(0)**；③ 非空 + **同批次**再倒入 ⇒ **仍为单批(0)**；④ **非空单批盒**并入**混合来源** ⇒ **置 1**（本轮补）
 
-**关于第 22 项的注入方式（如实）**：真实渲染失败的唯一来源是光栅 worker 的 `error`/`exit`（`LABEL_RENDER_FAILED`），而**模板解析失败只会降级返回 `null` 并回退内置光栅渲染**（[labelZplTemplate.js:52](../../backend/src/modules/print-jobs/labelZplTemplate.js#L52)），删改模板构造不出失败；worker 由 `new Worker(...)` 固定创建、无 env 开关。
+**关于第 22 项的注入方式（如实）**：真实渲染失败的唯一来源是光栅 worker 的 `error`/`exit`（`LABEL_RENDER_FAILED`），而**模板解析失败只会降级返回 `null` 并回退内置光栅渲染**（[labelZplTemplate.js:52](https://github.com/chengjianghao439/flowcube2026/blob/d8dc21572dfefd6e786a5e14da57f761fb0cf1e9/backend/src/modules/print-jobs/labelZplTemplate.js#L52)），删改模板构造不出失败；worker 由 `new Worker(...)` 固定创建、无 env 开关。
 因此沿用仓库既有范式（`tests/label-render-degrade.smoke.test.js` 顶部）用 `require.cache` 打桩：**默认透传真实实现**，仅该用例打开 `globalThis.__PB_FORCE_RENDER_FAIL__` 时才让 `renderLabelAsync` 抛 `LABEL_RENDER_BUSY` 并让 `getLabelZplFromDefaultTemplate` 返回 `null`。打桩必须在 backend 侧首次 require 这两个模块**之前**（`label-command` 是解构导入）。
 故这一项**不是**「真实 worker 故障」的端到端，而是**真实走完降级路径**（入队层到 DB 事实）。真实的 worker 故障注入仍**未覆盖**。
-另：另一条降级原因「无可用打印机」由用例 17 覆盖；service 侧按 `errorMessage` 是否含 `label render failed` 分流，见 [plastic-boxes.service.js:375](../../backend/src/modules/plastic-boxes/plastic-boxes.service.js#L375)。
+另：另一条降级原因「无可用打印机」由用例 17 覆盖；service 侧按 `errorMessage` 是否含 `label render failed` 分流，见 [plastic-boxes.service.js:375](https://github.com/chengjianghao439/flowcube2026/blob/d8dc21572dfefd6e786a5e14da57f761fb0cf1e9/backend/src/modules/plastic-boxes/plastic-boxes.service.js#L375)。
 
 用例安全约束：文件顶部断言确切库名/回环/3307；`RepackDialog` 相关主数据改动按**原值恢复**（`allow_decimal_qty` 读原值；printers 逐 id/status 快照恢复；printer_bindings 用 `VALUES ?` 批量恢复）。
 
@@ -173,7 +173,7 @@ node tests/plastic-box-batch-a.smoke.test.js
 
 入口：`/tmp/fc-pb-vite-erp.sh`（**unset `VITE_CAPACITOR`**、`VITE_ELECTRON=1`、`DEV_API_TARGET=http://127.0.0.1:3400`、`127.0.0.1:5173`），复用同 origin 的已登录态。
 
-> 入口勘误：先前误用 `dev:pda` 入口（`VITE_CAPACITOR=1`）去访问 ERP 页，被 [main.tsx:35](../../frontend/src/main.tsx#L35) 把非 `/pda` 路径 replace 成 `#/pda`（PDA 构建设计）——属**检查方法问题（入口选错）**，不是产品缺陷。
+> 入口勘误：先前误用 `dev:pda` 入口（`VITE_CAPACITOR=1`）去访问 ERP 页，被 [main.tsx:35](https://github.com/chengjianghao439/flowcube2026/blob/d8dc21572dfefd6e786a5e14da57f761fb0cf1e9/frontend/src/main.tsx#L35) 把非 `/pda` 路径 replace 成 `#/pda`（PDA 构建设计）——属**检查方法问题（入口选错）**，不是产品缺陷。
 
 | # | 验收点 | 结果 | 证据 |
 |---|---|---|---|

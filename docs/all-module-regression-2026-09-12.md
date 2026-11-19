@@ -29,7 +29,7 @@
 
 ## 3. 62个挂载模块的本轮覆盖
 
-表内无 `test:` 前缀的命令名默认表示 `npm run smoke:<名称>`；例外 `users-roles` 为 `node tests/users-roles.smoke.test.js`，`cors-policy` 为 `node --test tests/cors-policy.test.js`。单独写出的 `node tests/...` 按原命令执行。全部“通过”仅指该行列出的实际断言，不表示整个模块全部接口或全部状态组合通过。UI读取列以72入口检查为基础，典型交互见第6节，未操作的管理动作明确保留。
+表内无 `test:` 前缀的命令名默认表示通过 npm 运行带 `smoke:` 前缀的同名脚本；例外 `users-roles` 为 `node tests/users-roles.smoke.test.js`，`cors-policy` 为 `node --test tests/cors-policy.test.js`。单独写出的 `node tests/...` 按原命令执行。全部“通过”仅指该行列出的实际断言，不表示整个模块全部接口或全部状态组合通过。UI读取列以72入口检查为基础，典型交互见第6节，未操作的管理动作明确保留。
 
 | API挂载模块 | 本轮实际测试入口 | 结果范围 | UI与剩余边界 |
 |---|---|---|---|

@@ -30,7 +30,7 @@
 - **复现步骤**：管理员打开「采购 → 供应商管理 → 新增供应商」，输入名称“验收供应商-0924”、联系人、合法手机号，保持默认月结 30 天和提前期 0，点击「创建」。再次点击可稳定复现。
 - **实际结果**：弹窗不关闭，出现“操作失败，请稍后重试”和“保存失败”两个通用提示；`POST /api/suppliers` 返回 400，校验日志为 `Required`。
 - **预期结果**：服务端生成供应商编码并创建记录；若输入有误，展示具体字段和处理方式。
-- **证据**：[失败界面](../output/deep-acceptance-2026-09-24/screenshots/issue-001-supplier-error-toast.png)；本地后端日志 `POST /api/suppliers` 400，`VALIDATION_ERROR`；源码 `frontend/src/pages/suppliers/index.tsx` 的 `submitForm` 不发送 `code`，`backend/src/modules/suppliers/suppliers.routes.js` 的 `base.code` 却是必填，而 `suppliers.service.create` 自行调用 `generateMasterCode`。
+- **证据**：失败界面（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-001-supplier-error-toast.png`，本机留存）；本地后端日志 `POST /api/suppliers` 400，`VALIDATION_ERROR`；源码 `frontend/src/pages/suppliers/index.tsx` 的 `submitForm` 不发送 `code`，`backend/src/modules/suppliers/suppliers.routes.js` 的 `base.code` 却是必填，而 `suppliers.service.create` 自行调用 `generateMasterCode`。
 - **可能原因**：创建路由复用了编辑表单的编码必填契约，与服务层自动编号设计不一致。前后端缺少真实 HTTP 创建回归。
 - **影响范围**：正常新增供应商无法进行，继而阻断新供应商采购；已有供应商及批量导入待另测。客户创建路由也有必填 `code`、服务自动编号的同形态代码，需 GUI 复现。
 - **建议修复方案**：创建契约去掉 `code` 必填，让服务层唯一生成编码；编辑契约保留既有不可改编码约束；增加真实 HTTP 创建及 UI 保存失败文案回归。
@@ -41,7 +41,7 @@
 - **复现步骤**：管理员打开「销售 → 客户管理 → 新增客户」，输入名称“验收客户-0924”，保持默认结算项，点击「保存」；重复点击仍失败。
 - **实际结果**：弹窗保持打开，仅出现“操作失败，请稍后重试”；`POST /api/customers` 返回 400，后端校验日志为 `Required`。
 - **预期结果**：系统自动生成客户编码并保存；失败时显示明确字段错误。
-- **证据**：[失败界面](../output/deep-acceptance-2026-09-24/screenshots/issue-002-customer-error-toast.png)；后端日志 `POST /api/customers` 400；`customers.routes.js` 必填 `code`，`customers.service.create` 自动生成编码，前端新增表单未提供编码。
+- **证据**：失败界面（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-002-customer-error-toast.png`，本机留存）；后端日志 `POST /api/customers` 400；`customers.routes.js` 必填 `code`，`customers.service.create` 自动生成编码，前端新增表单未提供编码。
 - **可能原因**：与 ACCEPT-001 同一类创建路由/服务契约漂移。
 - **影响范围**：无法通过正常 GUI 新增客户，阻断新客户销售；客户导入是否可用待另测。
 - **建议修复方案**：统一客户与供应商自动编号的创建契约，分别加真实 HTTP 与界面端到端回归；服务层独立验证编码唯一性。
@@ -52,7 +52,7 @@
 - **复现步骤**：在「客户管理 → 批量导入」上传一行 CSV，结算方式填写页面明确支持的“现结”。上传结果显示成功 1 条。查看列表中的新客户。
 - **实际结果**：客户显示“月结 30 天”；测试库 `sale_customers.settlement_type=2`、`payment_terms_days=30`，与导入文件的“现结”不同，且界面没有异常提示。
 - **预期结果**：保存为现结，账期为 0；无法识别的值应该按行报错，不能默认成另一种财务条件。
-- **证据**：[导入结果和列表](../output/deep-acceptance-2026-09-24/screenshots/issue-003-customer-import-settlement.png)；测试 CSV `output/deep-acceptance-2026-09-24/customer-fixture.csv`；测试库只读查询。`backend/src/modules/import/import.service.js` 的 `importCustomers` 将原始文本直接传给 `normalizeSettlementType`，该函数不识别中文时回退月结；同文件 `importSuppliers` 已有中文转数字映射。
+- **证据**：导入结果和列表（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-003-customer-import-settlement.png`，本机留存）；测试 CSV `output/deep-acceptance-2026-09-24/customer-fixture.csv`；测试库只读查询。`backend/src/modules/import/import.service.js` 的 `importCustomers` 将原始文本直接传给 `normalizeSettlementType`，该函数不识别中文时回退月结；同文件 `importSuppliers` 已有中文转数字映射。
 - **可能原因**：客户导入与供应商导入没有复用同一结算方式解析器，且错误输入采取静默默认值。
 - **影响范围**：通过客户导入创建的现结客户可能被错误给予 30 天账期，影响销售结算、应收与对账。其他中文选项及历史已导入客户需单独排查。
 - **建议修复方案**：统一导入与 GUI 的结算枚举解析，所有展示给用户的中文值都做明确映射；未知值按行拒绝；补 CSV/XLSX 现结、月结及非法值回归，并核对受影响历史记录。
@@ -63,7 +63,7 @@
 - **复现步骤**：在普通 ERP 开发入口 `localhost:5173` 的新标签访问 `#/pda`，登录后从“去绑定设备”进入绑定页，使用 ERP“PDA 设备”登记界面当场生成并显示的设备码与密钥，点“确认绑定”。再在正式独立 PDA 入口 `localhost:5174` 重复同一操作。
 - **实际结果**：5173 路由提示“设备码或密钥无效”，后端没有收到 `/api/pda/sessions`；5174 使用相同凭据绑定成功并显示有效票据。
 - **预期结果**：凡向用户展示 PDA 绑定页的入口都应初始化设备缓存并可绑定；若只支持独立 PDA 构建，应在普通 Web 路由清楚阻止进入并引导正确入口，不能误报密钥错误。
-- **证据**：[未绑定 PDA 页面](../output/deep-acceptance-2026-09-24/screenshots/pda-unbound.png)；本地两入口对照。`frontend/src/main.tsx` 仅在 `IS_CAPACITOR_PDA || isNative` 时调用 `initDeviceBinding()`，但普通 ERP router 仍挂 `pdaRoutes()`；`getDeviceCredential()` 在未水合时固定返回 null，导致绑定页把 `ensureDeviceSession()` 的 null 当作密钥无效。
+- **证据**：未绑定 PDA 页面（原路径 `output/deep-acceptance-2026-09-24/screenshots/pda-unbound.png`，本机留存）；本地两入口对照。`frontend/src/main.tsx` 仅在 `IS_CAPACITOR_PDA || isNative` 时调用 `initDeviceBinding()`，但普通 ERP router 仍挂 `pdaRoutes()`；`getDeviceCredential()` 在未水合时固定返回 null，导致绑定页把 `ensureDeviceSession()` 的 null 当作密钥无效。
 - **可能原因**：PDA 路由可达范围与启动初始化范围不一致。
 - **影响范围**：从普通 Web/ERP 链接访问 PDA 的浏览器用户或验收人员；独立 PDA 构建本轮绑定成功，Android 真机未验证。
 - **建议修复方案**：统一路由可达性与初始化条件，并让绑定失败文案区分“设备缓存未初始化”和服务端拒绝；覆盖 ERP 构建访问 `#/pda/bind` 与独立 PDA 构建的浏览器回归。
@@ -85,7 +85,7 @@
 - **复现步骤**：在同一 ERP 会话里先打开销售商品选择器，商品 `P000001` 显示可用 5 件；第一张销售单占库 3 件；随后新建第二张销售单并打开同一仓库的商品选择器。
 - **实际结果**：选择器列名为“可用库存”，仍显示 5 件；第二张单的占库弹窗正确显示“现货 5 · 已占 3”、最多可占 2 件。测试库 `inventory_stock.quantity=5,reserved=3`。
 - **预期结果**：占库成功后所有标为“可用库存”的界面及时显示 2 件；即使缓存短时存在，也不能把过期量作为当前量展示给开单人员。
-- **证据**：[占库后商品选择器](../output/deep-acceptance-2026-09-24/screenshots/issue-006-available-stock.png)、[释放占库后调拨选择器仍显示旧值](../output/deep-acceptance-2026-09-24/screenshots/issue-006-transfer-finder-after-release.png)；同会话占库弹窗与数据库对照。`products.service.findForFinder` 的 SQL 正确计算 `quantity-reserved`；`queryClient.ts` 默认 `staleTime=5min`，`useProductFinder` 用 `['products','finder',...]`，但 `useInvalidate.ts:sale_reserve` 只失效 `sale/inventory-*`，未失效 `products`。
+- **证据**：占库后商品选择器（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-006-available-stock.png`，本机留存）、释放占库后调拨选择器仍显示旧值（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-006-transfer-finder-after-release.png`，本机留存）；同会话占库弹窗与数据库对照。`products.service.findForFinder` 的 SQL 正确计算 `quantity-reserved`；`queryClient.ts` 默认 `staleTime=5min`，`useProductFinder` 用 `['products','finder',...]`，但 `useInvalidate.ts:sale_reserve` 只失效 `sale/inventory-*`，未失效 `products`。
 - **可能原因**：库存变更事件缺少商品选择器查询键失效，五分钟新鲜缓存被再次复用。
 - **影响范围**：所有占库/释放及其他库存变化后，在同一 Web 会话内继续建单的员工；后端占库有独立实时校验，当前证据不表示实际超占，但可能诱导错误承诺和重复开单。
 - **建议修复方案**：将商品选择器库存查询拆为短新鲜期或统一在库存变化事件失效 `products/finder`；补同会话“占库→再开单”回归，并关联检查其他改变库存/预占的动作。
@@ -96,7 +96,7 @@
 - **复现步骤**：同一容器 `I000001` 有 5 件，销售单 A 占 3 件并 PDA 拣货；销售单 B 对剩余 2 件正常占库并生成任务；在 B 的 PDA 拣货页查看推荐并扫 `I000001`。
 - **实际结果**：B 无推荐库存单元，手动扫条码提示“库存条码已被其它任务锁定”，无法拣货；测试库容器仍有 5 件且 `locked_by_task_id=1`，库存缓存为 `quantity=5,reserved=5`。A 取消后仍需 PDA 扫库存条码与原库位完成逆向归还，锁释放后 B 才能成功拣货。
 - **预期结果**：若容器级整箱锁是正式策略，ATP/发货安排应提示剩余 2 件短时不可并行拣货及释放条件；若允许部分拣货并行，应以拆分容器或数量级锁实现，避免“已占库可出库”任务无法执行。
-- **证据**：[B 的 PDA 拣货失败界面](../output/deep-acceptance-2026-09-24/screenshots/issue-007-locked-container.png)、两张销售单的实际 GUI 操作及取消退回前后数据库快照；本轮未观测到超占或库存负数。
+- **证据**：B 的 PDA 拣货失败界面（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-007-locked-container.png`，本机留存）、两张销售单的实际 GUI 操作及取消退回前后数据库快照；本轮未观测到超占或库存负数。
 - **可能原因**：预占按商品/仓库数量计数，拣货按整个容器独占；两个层次未在可执行库存中联动。
 - **影响范围**：同一大箱/托盘供多张小单、并行波次、取消退回延迟的仓库；员工可能误以为系统有 2 件可发而反复扫码。此项需产品确认是否接受串行拣货策略。
 - **建议修复方案**：明确拣货锁粒度及 ATP 的“可承诺”和“当前可拣”两个口径；如需并行，事务内先拆出任务数量的新容器并完整追溯；如维持串行，界面展示锁定任务与预计处理动作，不要空泛提示“暂无推荐库存单元”。
@@ -118,7 +118,7 @@
 - **复现步骤**：销售出库任务锁住唯一容器 `I000001` 后，在 ERP 新建全盘单 `SC20260924002`，将账面 5 件填为实盘 4 件并保存，点击「提交盘点」及确认。
 - **实际结果**：`POST /api/stockcheck/2/submit` 返回 400，服务端解释“可动用库存条码库存不足，当前可用 0，需要 1（另有 5 正被拣货任务占用）”；弹窗仍停留在“进行中”，用户看不到任何失败原因。后端收到前端错误上报 `Unhandled Promise rejection`。随后点「取消盘点」可正常取消，库存未变化。
 - **预期结果**：提交失败时保留填写内容，显式展示“拣货任务占用库存、先完成或取消任务”的业务错误，不产生未处理 Promise 拒绝。
-- **证据**：[失败后无提示的界面](../output/deep-acceptance-2026-09-24/screenshots/issue-009-stockcheck-failure.png)、同次浏览器网络 400、后端错误日志；隔离测试库盘点单 2 最终已取消，库存仍 5 件。
+- **证据**：失败后无提示的界面（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-009-stockcheck-failure.png`，本机留存）、同次浏览器网络 400、后端错误日志；隔离测试库盘点单 2 最终已取消，库存仍 5 件。
 - **可能原因**：`frontend/src/pages/stockcheck/components/CheckDetailDialog.tsx:handleSubmit` 的 `submit.mutateAsync` 仅用 `try/finally`，没有 `catch` 或错误提示；确认弹窗的 `onConfirm` 调用 `handleSubmit()` 后没有处理返回的 Promise。保存、刷新账面、取消等同组件异步动作需关联核查。
 - **影响范围**：盘点因为库存锁、状态变更或服务端校验而失败的所有真实用户；容易造成重复点击或误判为仍在提交。
 - **建议修复方案**：在盘点操作入口统一捕获并显示业务错误，明确可执行的解锁建议；验证失败后按钮、填写值、刷新及重试状态，覆盖其他异步动作的拒绝路径。
@@ -129,7 +129,7 @@
 - **复现步骤**：管理员与只读用户分别通过 GUI 登录、退出；再以管理员打开「操作日志」查看这些成功记录。
 - **实际结果**：登录、退出行的操作人均为“未识别访问者”，操作内容仍是原始 `POST /api/auth/login` 等路径。测试库 `operation_logs` 相关行 `user_id/user_name` 均为 NULL；独立的 `auth_audit_logs` 登录成功行有正确用户 ID 与账号。
 - **预期结果**：至少成功登录/退出应显示可识别账号，并以一致的中文业务文案呈现；失败登录可保留匿名身份但明确说明。
-- **证据**：[实际操作日志](../output/deep-acceptance-2026-09-24/screenshots/oplogs-ui.png)；隔离测试库只读查询。`backend/src/middleware/opLogger.js` 在认证路由之前记录通用操作日志，认证请求没有 `req.user`，`frontend/src/utils/operationLogFormatters.ts:formatOperator` 将 NULL 显示为“未识别访问者”。
+- **证据**：实际操作日志（原路径 `output/deep-acceptance-2026-09-24/screenshots/oplogs-ui.png`，本机留存）；隔离测试库只读查询。`backend/src/middleware/opLogger.js` 在认证路由之前记录通用操作日志，认证请求没有 `req.user`，`frontend/src/utils/operationLogFormatters.ts:formatOperator` 将 NULL 显示为“未识别访问者”。
 - **可能原因**：通用 HTTP 日志和专门的认证审计记录分离，没有在展示层关联已确认的成功身份。
 - **影响范围**：通过通用操作日志按人员追踪登录、退出和筛选认证操作；专门的 `auth_audit_logs` 仍保留身份，未观察到认证审计数据丢失。
 - **建议修复方案**：以同次请求的安全关联键将已确认身份回填或在查询层并列展示认证审计；避免从未经验证的请求体直接当作已认证操作者；把认证路径译为中文。
@@ -140,7 +140,7 @@
 - **复现步骤**：在「月结供应商对账 → 新建对账单」选择已产生 ¥50 应付的验收供应商，勾选页面显示的 `PC20260924001`，点击生成。
 - **实际结果**：`POST /api/payments/statements` 返回 400，提示 `Expected number, received null`；对账单未创建。页面候选明细正确显示单号与金额，却把无值的 `recordId` 放入选择集合并提交 `recordIds:[null]`。随后以正确 `recordIds:[1]` 直接调用同一受权限保护的 API 可创建 `SP20260924001`，并在 GUI 确认。
 - **预期结果**：勾选候选后提交真实账款 ID；失败时显示具体问题并允许修正。
-- **证据**：[创建失败界面](../output/deep-acceptance-2026-09-24/screenshots/issue-011-statement-failure.png)；`reconciliation-statements.service.js:listCandidates` 输出 `id`，`CreateStatementDialog.tsx` 的勾选、合计和提交均读取 `recordId`；`payments.routes.js` 要求正整数数组。
+- **证据**：创建失败界面（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-011-statement-failure.png`，本机留存）；`reconciliation-statements.service.js:listCandidates` 输出 `id`，`CreateStatementDialog.tsx` 的勾选、合计和提交均读取 `recordId`；`payments.routes.js` 要求正整数数组。
 - **可能原因**：候选接口 DTO 与前端 `StatementItem` 类型漂移；TypeScript 的 API 声明未由真实响应验证。
 - **影响范围**：共用 `CreateStatementDialog` 的供应商及客户月结，无法从正常页面建立新对账单；原有对账单的确认和查询不受本问题直接影响。
 - **建议修复方案**：统一候选响应与前端类型，契约测试覆盖 `GET candidates → GUI 勾选 → POST statements` 的真实载荷，显式阻止空 ID 和显示后端校验原因。
@@ -149,7 +149,7 @@
 
 - **模块 / 类型 / 严重程度**：采购结算、月结、付款核销；业务流程 Bug / 权限入口遗漏；P1。
 - **复现步骤**：采购 `PC20260924001` 收货上架产生 ¥50 月结应付，建立并确认 `SP20260924001`；在月结页「付款核销」为该对账单登记 ¥50 付款；再查看「全部账款」和现结供应商账款页。
-- **实际结果**：付款 API 返回 409，应付 `payment_records.confirm_status=0`。后端正确要求应付先经财务确认；但月结「全部账款」只有“原单”操作，现结账款页又按结算类型排除该记录，因此用户找不到确认入口。[月结账款界面](../output/deep-acceptance-2026-09-24/screenshots/issue-012-monthly-no-confirm.png)。测试库中通过需要 `PAYMENT_CONFIRM` 权限的 `POST /api/payments/1/confirm` 确认后，回到 GUI 付款核销成功：账款、对账单和付款单均为已核销 ¥50，资金账户从 ¥100 减至 ¥50。
+- **实际结果**：付款 API 返回 409，应付 `payment_records.confirm_status=0`。后端正确要求应付先经财务确认；但月结「全部账款」只有“原单”操作，现结账款页又按结算类型排除该记录，因此用户找不到确认入口。月结账款界面（原路径 `output/deep-acceptance-2026-09-24/screenshots/issue-012-monthly-no-confirm.png`，本机留存）。测试库中通过需要 `PAYMENT_CONFIRM` 权限的 `POST /api/payments/1/confirm` 确认后，回到 GUI 付款核销成功：账款、对账单和付款单均为已核销 ¥50，资金账户从 ¥100 减至 ¥50。
 - **预期结果**：月结应付在允许付款前有可见、可审计的结算核对与确认入口；未确认时页面说明原因及下一步。
 - **证据**：实际 GUI 409 与付款后数据库核对；`ReconciliationView.tsx` 的月结账款操作只含原单跳转；`usePaymentActions.tsx` 已有共用 `SettlementConfirmDialog`，但月结页未调用；`payment-receipts.service.js:applyAllocations` 对待确认应付返回 409。
 - **可能原因**：拆分现结/月结页面后，财务确认操作仅留在现结 `PaymentsView`，月结复用了数据列表而丢失写入口。
@@ -176,9 +176,9 @@
 ## 2. 实际测试覆盖与方法
 
 - 使用隔离测试库 `flowcube_acceptance20260924_test` 启动真实后端、ERP Web、独立 PDA Web、由当前源码构建的 Electron 开发窗口；测试库与生产凭据/数据隔离。Web 使用命名 `agent-browser` 会话，PDA 条码由真实页面接收合成键盘楔入事件，**不是物理扫描枪**。
-- 对 `routeDefinitions.ts` 中 71 个静态可达路径逐一打开并保存可访问性快照：[GUI 路由扫描](../output/deep-acceptance-2026-09-24/gui-route-sweep.txt)。未出现“页面不存在/加载失败”，但只证明这些路径的首屏渲染；不包含动态详情路由的全部 ID/权限组合。
-- 深度操作了供应商、客户/导入、商品与仓库基础资料、采购/收货/上架、销售/占库/拣分复核/打包/取消逆向归还、盘点、调拨、PDA 绑定/改仓、只读角色、对账/核销、资金账户、采购退货异常与取消、日志和 Electron 登录/重启。截图在 [本轮证据目录](../output/deep-acceptance-2026-09-24/)。
-- `npm run check:schema:strict` 在隔离库通过；`npm run audit:business-consistency` 检查 41 类已定义不变量，最终未报不一致：[最终一致性快照](../output/deep-acceptance-2026-09-24/business-consistency-final.txt)。这是脚本覆盖范围内的结论；不能替代生产库、未执行路径或未定义业务不变量。
+- 对 `routeDefinitions.ts` 中 71 个静态可达路径逐一打开并保存可访问性快照：GUI 路由扫描（原路径 `output/deep-acceptance-2026-09-24/gui-route-sweep.txt`，本机留存）。未出现“页面不存在/加载失败”，但只证明这些路径的首屏渲染；不包含动态详情路由的全部 ID/权限组合。
+- 深度操作了供应商、客户/导入、商品与仓库基础资料、采购/收货/上架、销售/占库/拣分复核/打包/取消逆向归还、盘点、调拨、PDA 绑定/改仓、只读角色、对账/核销、资金账户、采购退货异常与取消、日志和 Electron 登录/重启。截图在 本轮证据目录（原路径 `output/deep-acceptance-2026-09-24`，本机留存）。
+- `npm run check:schema:strict` 在隔离库通过；`npm run audit:business-consistency` 检查 41 类已定义不变量，最终未报不一致：最终一致性快照（原路径 `output/deep-acceptance-2026-09-24/business-consistency-final.txt`，本机留存）。这是脚本覆盖范围内的结论；不能替代生产库、未执行路径或未定义业务不变量。
 
 ## 3. 完整业务链与跨模块结果
 
@@ -194,7 +194,7 @@
 ## 4. 状态机、库存、并发与事务专项
 
 - **状态机实测**：销售占库/派发/取消/逆向归还、仓库任务拣分复核打包、采购收货上架、盘点完成/取消、调拨创建/在途/完成/取消、对账草稿/确认/核销、采购退货草稿/确认拒绝/取消。完成或取消后的每一个 API 转换并未穷举，下面的未覆盖表列出缺口。
-- **库存事实**：ACTIVE 容器 `remaining_qty` 为事实源；`inventory_stock.quantity` 是缓存。实测关键节点 5→原仓 0/目标仓 5，销售剩余预占 2；并发占库时仅一个请求成功，不超占、不出现负库存。取消已拣/已装箱销售单时通过 PDA 归还实物后释放锁和预占；无归还前任务仍保留锁，符合安全边界但影响吞吐（ACCEPT-007）。[最终业务状态快照](../output/deep-acceptance-2026-09-24/final-core-state.json)记录了各订单、容器、库存、账款与账户状态。
+- **库存事实**：ACTIVE 容器 `remaining_qty` 为事实源；`inventory_stock.quantity` 是缓存。实测关键节点 5→原仓 0/目标仓 5，销售剩余预占 2；并发占库时仅一个请求成功，不超占、不出现负库存。取消已拣/已装箱销售单时通过 PDA 归还实物后释放锁和预占；无归还前任务仍保留锁，符合安全边界但影响吞吐（ACCEPT-007）。最终业务状态快照（原路径 `output/deep-acceptance-2026-09-24/final-core-state.json`，本机留存）记录了各订单、容器、库存、账款与账户状态。
 - **并发/幂等**：在可用 3 件时并发对两张 2 件销售单占库，一单成功、一单 `STOCK_SHORTAGE`；用各自相同 `X-Request-Key` 重放，回执稳定且未重复占库。GUI 付款提交期间按钮变“提交中”，成功后再次寻找提交按钮已不存在；未对所有写接口做并发穷举。重复确认对账、并发资金核销和断网后同键重试未实际执行。
 - **事务与异常**：盘亏因锁冲突被后端整体拒绝且库存未动；已付采购退货确认被拒且账款/库存未变；付款前未确认 409 后无付款单与资金流水，确认后的一笔 GUI 核销与资金流水同量。`audit:business-consistency` 的 41 项零差只覆盖该小样本。
 

@@ -14,10 +14,10 @@ frontend/
 
 | 工具 | 版本要求 | 安装地址 |
 |------|---------|----------|
-| JDK  | 17+     | https://adoptium.net |
-| Android Studio | 最新版 | https://developer.android.com/studio |
-| Android SDK | API 23+ | 通过 Android Studio 安装 |
-| Node.js | 18+ | https://nodejs.org |
+| JDK | 21，与[正式构建](../.github/workflows/build-pda-apk.yml)和 [Gradle](android/app/capacitor.build.gradle) 一致 | https://adoptium.net |
+| Android Studio | 支持项目 [Gradle Wrapper](android/gradle/wrapper/gradle-wrapper.properties) | https://developer.android.com/studio |
+| Android SDK | 根据 [SDK 配置](android/variables.gradle)安装 compile SDK。当前为 35，设备最低为 API 23 | 使用 SDK Manager |
+| Node.js | 22.13 及以上的 22.x，见[版本声明](../package.json) | https://nodejs.org |
 
 安装完成后确保以下环境变量已设置：
 ```bash
@@ -25,7 +25,7 @@ export ANDROID_HOME=$HOME/Library/Android/sdk        # macOS
 export PATH=$PATH:$ANDROID_HOME/tools:$ANDROID_HOME/platform-tools
 ```
 
-## 打包方式一：本地离线包（推荐）
+## 本地调试 APK
 
 静态资源内嵌在 APK 中，无需网络连接即可运行界面，API 请求仍需连接后端服务器。
 
@@ -97,8 +97,8 @@ sdk.dir=/Users/你的用户名/Library/Android/sdk
 ```
 
 **Q: 安装报错 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`**  
-A: 先卸载旧版本再安装：`adb uninstall com.flowcube.pda`
+A. 先核对新旧包的应用 ID 与签名。生产设备使用签名一致的正式 APK 升级。调试包在专用测试设备安装。卸载会删除应用本地数据，先核对本地会话和未决操作恢复记录，避免为调试覆盖现场。
 
-**Q: 如何生成 Release APK 用于生产**  
-A: 需要签名密钥，在 Android Studio 中：  
-`Build → Generate Signed Bundle / APK → APK → 填写密钥信息`
+**Q. 如何生成正式 APK**
+
+A. 走[正式发布流程](../docs/RELEASE.md#正式发布流程唯一入口)，由 [Build PDA APK](../.github/workflows/build-pda-apk.yml)对同一提交执行原生扫码测试、构建、签名及发布校验。

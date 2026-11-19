@@ -18,15 +18,15 @@
 
 | 验收 | 实际结果 | 证据与边界 |
 |---|---|---|
-| 新实例完整迁移 | 278个文件首次执行成功 | [日志](acceptance/2026-10-06-go-live-runtime/batch-two/migration-clean-first.log)。第一实例补跑277/278及再运行0个迁移也成功，保留修前失败。 |
-| 元数据/迁移重放/搜索SQL | 131条检查、7张新表、1238条条件式重放语句 | [日志](acceptance/2026-10-06-go-live-runtime/batch-two/schema-clean-double-mode-replay.log)、[元数据](acceptance/2026-10-06-go-live-runtime/batch-two/schema-metadata.json)。按名称及列序核索引/FK，核长度、CHECK及UUID/JSON负例；默认SQL_MODE与`NO_BACKSLASH_ESCAPES`下重放/字面LIKE/四档排序。EXPLAIN已保存，不代表大数据性能压测。 |
-| 财务专项 | 118断言通过 / 0失败 | [日志](acceptance/2026-10-06-go-live-runtime/batch-one/finance-owned-01.log)，按单/对账单边界及流水/余额/账龄。 |
-| 会计 / 期间 | 11 / 20断言通过 | [会计](acceptance/2026-10-06-go-live-runtime/batch-one/accounting-owned-01.log)、[期间](acceptance/2026-10-06-go-live-runtime/batch-one/accounting-period-owned-01.log)。 |
-| 期间锁 / 跨期补录 | 14 / 147断言通过 | [期间锁](acceptance/2026-10-06-go-live-runtime/batch-one/period-lock-owned-01.log)、[补录](acceptance/2026-10-06-go-live-runtime/batch-one/backfill-owned-01.log)；各TAP外层只有1测试，不将它混入断言数。 |
-| 原退货退款 / 处置 | 14 / 32断言通过 | [退款](acceptance/2026-10-06-go-live-runtime/batch-one/refund-owned-01.log)、[处置](acceptance/2026-10-06-go-live-runtime/batch-one/disposal-owned-01.log)。 |
-| 仓库范围 / PDA会话 | 43 / 28断言通过 | [范围](acceptance/2026-10-06-go-live-runtime/batch-one/scope-owned-01.log)、[PDA会话](acceptance/2026-10-06-go-live-runtime/batch-one/pda-session-owned-01.log)；PDA鉴权API不代表扫描头验收。 |
-| 并发保护 | 修正夹具后123断言通过 / 0失败 | [最终日志](acceptance/2026-10-06-go-live-runtime/batch-two/concurrency-owned-fixed.log)；修前118通过/3失败另存。故障注入确实命中一次，失败事务原容器余量不变、不留子容器，结束恢复原函数与缓存。 |
-| 本轮处置/供应商退款新链路 | **9个业务子案例通过，含父测试TAP共10/10；失败/跳过/取消均0** | [最终日志](acceptance/2026-10-06-go-live-runtime/batch-two/go-live-new-chain-runtime-final.log)、[退出状态](acceptance/2026-10-06-go-live-runtime/batch-two/go-live-new-chain-runtime-final.result.json)。最终执行在本轮日期DTO修补之后，GUI采购审批阈值在finally准确恢复。 |
+| 新实例完整迁移 | 278个文件首次执行成功 | 日志（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-two/migration-clean-first.log`，当前工作树未找到原件）。第一实例补跑277/278及再运行0个迁移也成功，保留修前失败。 |
+| 元数据/迁移重放/搜索SQL | 131条检查、7张新表、1238条条件式重放语句 | 日志（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-two/schema-clean-double-mode-replay.log`，当前工作树未找到原件）、[元数据](acceptance/2026-10-06-go-live-runtime/batch-two/schema-metadata.json)。按名称及列序核索引/FK，核长度、CHECK及UUID/JSON负例；默认SQL_MODE与`NO_BACKSLASH_ESCAPES`下重放/字面LIKE/四档排序。EXPLAIN已保存，不代表大数据性能压测。 |
+| 财务专项 | 118断言通过 / 0失败 | 日志（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/finance-owned-01.log`，当前工作树未找到原件），按单/对账单边界及流水/余额/账龄。 |
+| 会计 / 期间 | 11 / 20断言通过 | 会计（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/accounting-owned-01.log`，当前工作树未找到原件）、期间（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/accounting-period-owned-01.log`，当前工作树未找到原件）。 |
+| 期间锁 / 跨期补录 | 14 / 147断言通过 | 期间锁（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/period-lock-owned-01.log`，当前工作树未找到原件）、补录（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/backfill-owned-01.log`，当前工作树未找到原件）；各TAP外层只有1测试，不将它混入断言数。 |
+| 原退货退款 / 处置 | 14 / 32断言通过 | 退款（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/refund-owned-01.log`，当前工作树未找到原件）、处置（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/disposal-owned-01.log`，当前工作树未找到原件）。 |
+| 仓库范围 / PDA会话 | 43 / 28断言通过 | 范围（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/scope-owned-01.log`，当前工作树未找到原件）、PDA会话（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-one/pda-session-owned-01.log`，当前工作树未找到原件）；PDA鉴权API不代表扫描头验收。 |
+| 并发保护 | 修正夹具后123断言通过 / 0失败 | 最终日志（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-two/concurrency-owned-fixed.log`，当前工作树未找到原件）；修前118通过/3失败另存。故障注入确实命中一次，失败事务原容器余量不变、不留子容器，结束恢复原函数与缓存。 |
+| 本轮处置/供应商退款新链路 | **9个业务子案例通过，含父测试TAP共10/10；失败/跳过/取消均0** | 最终日志（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-two/go-live-new-chain-runtime-final.log`，当前工作树未找到原件）、[退出状态](acceptance/2026-10-06-go-live-runtime/batch-two/go-live-new-chain-runtime-final.result.json)。最终执行在本轮日期DTO修补之后，GUI采购审批阈值在finally准确恢复。 |
 
 新增 `tests/go-live-runtime.smoke.test.js` 与 `tests/helpers/goLiveRuntimeFixture.js` 覆盖：促销来源回接销售、实际发货才执行实物量；退供应商回接采购退货；报废审批与执行分离；历史混合单整单签认且原头/行保留；准确原付款分配和跨采购来源拒绝；四位退款、应付净额、往来/对账单/资金/凭证；0.0001回款不生成零额凭证且原永久回执可核；闭期409与显式补录、另一人批准；并发退款预算及同原键一次实收；数量精度/仓范围/权限。
 
@@ -55,7 +55,7 @@ PDA使用浏览器手动条码输入，并分别核原扫码规则和回执；�
 
 ## 4. 合成资金勾稽
 
-[最终数据库断言](acceptance/2026-10-06-go-live-runtime/batch-two/gui-finance-final-db.log)及[结构化快照](acceptance/2026-10-06-go-live-runtime/batch-two/gui-finance-final.json)：
+最终数据库断言（原路径 `docs/acceptance/2026-10-06-go-live-runtime/batch-two/gui-finance-final-db.log`，当前工作树未找到原件）及[结构化快照](acceptance/2026-10-06-go-live-runtime/batch-two/gui-finance-final.json)：
 
 | 事实 | 实际值 |
 |---|---|
