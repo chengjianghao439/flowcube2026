@@ -169,6 +169,24 @@ jobs:
       - run: npm run test:browser-smoke
       - run: npm ci --prefix frontend
       - run: npm install --global agent-browser@0.36.0
+      - name: Fetch the Ubuntu CJK font package from the primary archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The runner mirror repeatedly stalls on this package. Use the same signed APT metadata.
+          metadata="$(apt-cache show --no-all-versions fonts-noto-cjk)"
+          package_path="$(awk '$1 == "Filename:" && !found++ { print $2 }' <<< "$metadata")"
+          package_sha="$(awk '$1 == "SHA256:" && !found++ { print $2 }' <<< "$metadata")"
+          [[ "$package_path" =~ ^pool/main/f/fonts-noto-cjk/fonts-noto-cjk_[[:alnum:].+~_-]+_all\.deb$ ]]
+          [[ "$package_sha" =~ ^[0-9a-f]{64}$ ]]
+          font_dir="$(mktemp -d "$RUNNER_TEMP/flowcube-noto.XXXXXX")"
+          package_file="$font_dir/fonts-noto-cjk.deb"
+          trap 'rm -f -- "$package_file"; rmdir "$font_dir"' EXIT
+          chmod 755 "$font_dir"
+          curl -fsSL --proto '=https' --proto-redir '=https' --connect-timeout 10 --max-time 90 \
+            --retry 2 --retry-max-time 200 "https://archive.ubuntu.com/ubuntu/$package_path" -o "$package_file"
+          printf '%s  %s\n' "$package_sha" "$package_file" | sha256sum --check --status
+          sudo apt-get install -y --no-install-recommends "$package_file"
       - run: agent-browser install --with-deps
       - run: npm run test:dirty-navigation
       - run: npm run test:style-compat
