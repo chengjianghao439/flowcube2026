@@ -73,29 +73,29 @@ Compose 只向 backend 注入以下模型变量，不能传给 Vite 构建或写
 npm run release:prod
 ```
 
-这个入口推送 main，等待同 SHA 的检查、浏览器部署、PDA 发布和桌面验证构建全部成功，再打桌面 tag 并等待实际发布；最后执行线上版本与安装包 SHA256 核对。正常成功目标 15 分钟，异常网络与回退保留独立预算，详见 `docs/release-flow-speed-2026-09-22.md`。以下各链的关系为：
+合并 PR 只触发检查和桌面验证构建。获授权的发布入口核对本地与 GitHub 的实际 `main`，显式触发该 SHA 的网页和 PDA 工作流。记录两个运行编号，等本次运行和同 SHA 的检查完成后才打桌面 tag，最后核对线上版本和安装包 SHA-256。各阶段保留独立等待及失败收尾预算。
 
-1. `git push origin main`
-   - 触发 `Deploy Browser App`
+1. 显式触发 `Deploy Browser App`
+   - `workflow_dispatch` 接收触发时 `main` 的完整 SHA，拒绝分支或提交不一致
    - 等待同一 SHA、main 可信事件的 `Tests` 与 `Security Scan` 最新运行成功，失败/取消/超时不得部署
    - GitHub Actions 解析部署配置后 SSH 到服务器，在重置代码前获取部署锁，固定实际 SHA
    - GitHub runner 通过 `scripts/build-deploy-images.sh` 构建 Linux amd64 镜像、写 OCI revision 标签并打包；优先让服务器 HTTPS 拉取临时 artifact，失败明确回退并行 SCP；`server-update.sh` 保存旧运行镜像 ID，验证归档 SHA-256 / 镜像 revision，加载镜像、等 MySQL 健康、一次性容器迁移，再切换应用并执行本地/公网健康与页面门禁。生产不再编译
    - 发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。
 
-2. 同 SHA 浏览器和 PDA 工作流均已成功后，`npm run release:tag-desktop`
+2. `Build PDA APK`
+   - 由发布入口显式触发联合发布，传入完整提交 SHA 和本次网页部署运行编号
+   - 使用 `frontend/android/app/build.gradle` 的 `versionName/versionCode` 构建签名 APK
+   - 等待同 SHA 浏览器部署通过，在同一部署锁内确认服务器 HEAD 匹配
+   - `scripts/publish-pda.sh` 先发布含 versionCode/摘要的唯一 APK，再原子替换 `backend/apk/published-version.json`
+   - 只修改只读挂载目录的宿主文件，不重置 Git/重建后端；校验 `/api/pda/version` 与 `/api/pda/download`
+
+3. 同 SHA 浏览器和 PDA 工作流均已成功后，`npm run release:tag-desktop`
    - 自动读取 `desktop/package.json` 的 `version`
    - 推送对应 `v<version>` tag
    - 触发 `Build Desktop Installer`
    - 发布前再次确认实际检出 SHA 的 Tests/Security 成功；手动 checkout_ref 和版本输入不得借用另一 SHA 的绿灯或只重命名版本
    - GitHub Release 自动生成/更新安装包
    - 已配置 SSH 时，CI 会把安装包交给服务器 `scripts/release-desktop.js`，写入 `/var/www/flowcube-downloads/versions/v<version>/` 并更新 `/latest.json` 与 `/current/`
-
-3. `Build PDA APK`
-   - `main` 推送且包含 `frontend/**` 或 `backend/apk/version.json` 变更时自动触发
-   - 使用 `frontend/android/app/build.gradle` 的 `versionName/versionCode` 构建签名 APK
-   - 等待同 SHA 浏览器部署通过，在同一部署锁内确认服务器 HEAD 匹配
-   - `scripts/publish-pda.sh` 先发布含 versionCode/摘要的唯一 APK，再原子替换 `backend/apk/published-version.json`
-   - 只修改只读挂载目录的宿主文件，不重置 Git/重建后端；校验 `/api/pda/version` 与 `/api/pda/download`
 
 PDA 自动更新的权威关系：
 
@@ -242,7 +242,7 @@ DEPLOY_IMAGE_ARCHIVE=/path/to/ci-images.tar.gz \
 DEPLOY_IMAGE_SHA256=<该CI归档的SHA256> bash scripts/server-update.sh
 ```
 
-推荐使用 Actions 的 Deploy Browser App → Run workflow，自动完成 CI 构建与传输。手动入口也必须提供同 SHA 的 CI 镜像归档，不允许降级为生产编译。脚本人工入口会重新查询同 SHA 的 Tests/Security；缺少凭据或检查失败会终止。不要默认设置 SKIP_RELEASE_GATE。仅更新服务器应用，不构建桌面安装包。
+使用 Actions 的 Deploy Browser App → Run workflow 时选择 `main` 并填写触发时该分支的完整 SHA。该入口完成同 SHA 的 CI 构建和传输。服务器脚本人工入口则须提供同 SHA 的 CI 镜像归档，并重新查询 Tests/Security。缺少凭据或检查失败会终止。不要默认设置 SKIP_RELEASE_GATE。应急网页发布只更新服务器应用。
 
 ## 日常成对备份与异地副本
 

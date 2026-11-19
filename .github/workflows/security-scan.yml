@@ -118,3 +118,20 @@ jobs:
             echo "未发现被跟踪的敏感文件 ✅" >> "$GITHUB_STEP_SUMMARY"
           fi
           exit "$ISSUES"
+
+  pr-gate:
+    name: Security Scan PR Gate
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    needs:
+      - gitleaks
+      - npm-audit
+      - sensitive-files
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Require every job to succeed
+        shell: bash
+        env:
+          REQUIRED_RESULTS: ${{ toJSON(needs.*.result) }}
+        run: |
+          jq -e 'type == "array" and length > 0 and all(.[]; . == "success")' <<< "$REQUIRED_RESULTS"

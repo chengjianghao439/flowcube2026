@@ -1,12 +1,13 @@
 name: Build PDA APK
 'on':
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       checkout_ref:
-        description: 仅支持 main、main 历史中的完整 SHA 或 v* tag；运行分支必须为 main，且同 SHA 浏览器部署已通过。
+        description: 经授权发布的完整 main 提交 SHA，补发须使用已部署的提交
+        required: true
+        type: string
+      browser_run_id:
+        description: 本次网页部署运行编号，单独补发时可留空
         required: false
         type: string
 permissions:
@@ -23,6 +24,22 @@ jobs:
       sha: ${{ steps.target.outputs.sha }}
       main_sha: ${{ steps.target.outputs.main_sha }}
     steps:
+      - name: Validate authorized dispatch
+        shell: bash
+        env:
+          RELEASE_CHECKOUT_REF: ${{ inputs.checkout_ref }}
+          BROWSER_RELEASE_RUN_ID: ${{ inputs.browser_run_id }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main ||
+                ! "$RELEASE_CHECKOUT_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo '::error::PDA 发布必须由 main 显式指定完整提交 SHA'
+            exit 1
+          fi
+          if [[ -n "$BROWSER_RELEASE_RUN_ID" ]] &&
+             [[ ! "$BROWSER_RELEASE_RUN_ID" =~ ^[1-9][0-9]*$ || "$RELEASE_CHECKOUT_REF" != "$GITHUB_SHA" ]]; then
+            echo '::error::联合发布的 PDA SHA 必须与触发时的 main 一致，且网页运行编号必须有效'
+            exit 1
+          fi
       - name: Checkout trusted target resolver
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
@@ -32,7 +49,7 @@ jobs:
       - name: Validate immutable release target
         id: target
         env:
-          RELEASE_CHECKOUT_REF: ${{ github.event.inputs.checkout_ref }}
+          RELEASE_CHECKOUT_REF: ${{ inputs.checkout_ref }}
         run: node scripts/resolve-release-target.cjs
   preflight:
     runs-on: ubuntu-latest
@@ -335,6 +352,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           REQUIRE_BROWSER_DEPLOY: '1'
+          BROWSER_RELEASE_RUN_ID: ${{ inputs.browser_run_id }}
           GITHUB_SHA: ${{ needs.build-pda.outputs.sha }}
         run: node scripts/wait-release-checks.js
   publish-pda:

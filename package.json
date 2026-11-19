@@ -91,7 +91,7 @@
     "test:query-loop": "node --test tests/query-loop-policy-contract.test.js && node tests/query-loop-contract.test.js",
     "test:warehouse-scan-closure": "node --test tests/warehouse-scan-closure.test.js",
     "test:chart-series-limit": "node --test tests/chart-series-limit-contract.test.js",
-    "test:agents-md-guard": "node --test tests/agents-md-injection-guard.test.js tests/project-onboarding.test.js",
+    "test:agents-md-guard": "node --test tests/agents-md-injection-guard.test.js tests/agents-md-guard-regression.test.js tests/project-onboarding.test.js",
     "test:frontend-session-contract": "node tests/frontend-session-contract.test.js",
     "test:frontend-polling-contract": "node tests/frontend-polling-contract.test.js",
     "test:sale-order-contract": "node tests/sale-order-contract.test.js && node --test tests/sale-reservation-continuation.test.js",

@@ -2,6 +2,51 @@
 
 从[常用命令与本地环境](#常用命令与本地环境)开始，按改动范围选检查。涉及数据库时，先按[独立测试库](#独立测试库)核对归属和连接。实际可执行命令看[根脚本清单](../package.json)和各端清单，远端接线看 [Tests 工作流](../.github/workflows/test.yml)。带日期或候选版本的实测结论按当时提交和环境解读。
 
+## 仓库守卫索引
+
+先从改动涉及的规则选命令，再核 `package.json` 和 GitHub Tests 工作流的实际接线。新增守卫须在临时副本中验证相应规则被破坏时会失败。规则入口守卫同时运行回归，覆盖项目覆盖文件、规则链的累计预算、兄弟目录独立计量、现行守卫命令及共享交接指南的仓库内链接。
+
+- 分布类图表系列数必须有界（`TOP_SERIES_LIMIT = 8` + 其他 N 个）→ `npm run test:chart-series-limit`
+- 只读路径禁止 N+1；无扫码行的明细必须按 0 拒绝（fail-open 风险）→ `npm run test:query-loop`、`npm run test:warehouse-scan-closure`
+- `fail-loud` 错误不得被调用处吞成静默跳过 → `node --test tests/accounting-voucher-mapping.test.js`
+- 结账逐来源核原业务凭证净投影、零净利仍结平非零损益腿；实际资金/报销按分，正月额资产按实际末笔补尾 → `npm run test:accounting`（详见 `docs/finance-permission-time.md`、`docs/cash-cents-policy.md`；零月额资产政策未定，不追改历史）。
+- 全仓默认策略写须原管理权限及当前不限仓；普通折扣退货同源净额累计，短装只结束本次任务，明确结束剩余采购才取消余量 → `npm run test:security-scan-remediation`、`npm run test:accounting`、`npm run test:inbound-edit`（详见对应财务、库存与业务主题文档）。
+- `logger.info/warn` 参数顺序必须是 `(msg, meta, module_)`，meta 是对象 → `npm run test:logger-args-order`
+- 前端业务日期一律走 `lib/dateTime.ts`/`lib/dateRange.ts`，禁止自拼 `getFullYear` 等 → `npm run test:frontend-date-source`
+- SQL 标识符插值必须经 `assertSqlIdentifier`/`assertSqlColumnList` → `npm run test:sql-identifier`
+- 每处 `eslint-disable` 必须带可读理由，整文件禁用仅限机器产物白名单 → `npm run test:eslint-disable-rationale`
+- 状态文案只能取 `generated/status.ts` → `node --test tests/status-rules-integrity.test.js`
+- 轮询页面不得小 `pageSize` + 高频轮询（`refetchInterval` ≥ 5s、分页批量 ≥ 100）→ `npm run test:frontend-polling-contract`
+- 权限常量前后端手工同步一致 → `npm run test:permissions`
+- 前端调用的接口后端必须存在（防改名漏改）→ `npm run test:api-route-contract`
+- 写路由必须挂 `requirePermission`（例外须登记理由且可验证）→ `npm run test:route-permission-contract`
+- 发版必须同步三端 + PDA 版本、本版说明与官网 `landing/updates.ts` → `npm run test:landing-updates`
+- `backend/downloads/` 已废弃，只允许 `.gitignore`/`README.md`（须在 CI 静态 job 真跑）→ `npm run release:check-downloads`
+- `smoke:*`/`test:*` 脚本必须 CI 可达；smoke 测试服务须 `app.listen(0, '127.0.0.1')`；部署预算须覆盖上传/合并/等锁/故障停写，PDA 等待不得提前超时；PDA 工作流「等部署」与「持组」不同 job；桌面发布清理服务器中转目录（`EXIT` trap）；部署磁盘预检失败必须打印余量；SSH `known_hosts` 必须使用独立核对的可信公钥，禁止在线盲信扫描；只读诊断 workflow 必须只读 → `node --test tests/deployment-resources.test.js`
+- 恢复演练临时卷必须具名 + 启动前幂等清理；`dingtalk_send` 失败必须非 0 → `node --test tests/ops-monitor-restore.test.js`
+- 备份导入前只把触发器残留分号移出可执行注释 → `node --test tests/restore-trigger-normalize.test.js`
+- 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`
+- 前端命名与呈现结构：菜单名 = 工作区标签 = 页面标题、标签 ≤7 汉字、带日期的查询弹窗必须能重置回本页默认口径、纯图标按钮必须有可读名称 → `npm run test:frontend-conventions`
+- 商品级 `allow_decimal_qty` 是全数量规则，界面“允许小数数量”、新建默认关闭；所有数量录入、换算结果、库存写入和任务执行都验证当前商品策略，价格/成本/金额保持自身精度。原快照不作豁免；关闭前检查小数库存/在途/未完成业务/可退额度，拒绝不安全切换，不取整或改历史账（`docs/sale-shipping-quantity-policy.md`）。新销售固定唯一单位并走 `normalizeFixedSaleItems()`，采购/必要旧退货保留 `foldEntryItems()`；守卫 → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
+- 应用部署保留既有健康且认证 TCP SQL 通过的 MySQL，切换应用须 `--no-deps`；未知实例状态提前拒绝；288–292 迁移窗口后旧后端须同时具备数量/退货/资金写入契约，否则失败保持停写、向前恢复，不能仅凭240契约恢复写入 → `node --test tests/audit-deployment.test.js`
+- 组合页发布验收须核可见组标题与当前子视图链接；电话旧形状真实迁移回归须专属实例归属证明 → `npm run test:browser-smoke`、`npm run test:party-profile`、`npm run test:go-live-runner`
+- 本地实例脚本 `start` 只启动实例（不改库结构）、迁移必须由显式 `dev:mysql8:migrate` 触发且目标固定、凭据只由 `start` 生成 → `npm run test:mysql8-dev-script`
+- 含全表清理的采购/应收修复 smoke 只允许落在**本批专属临时实例**（`npm run repair:smoke-ephemeral`），写入前必须过归属门：0600 归属文件 + 拒绝共享端口 3307/3306 + 容器/卷 `docker inspect` 本批 label 与实时端口映射 + 同运行时间窗 + **runner 进程存活** + 实例 `@@server_uuid`；不认库名后缀、`IF NOT EXISTS`、可自填 env、空表 → `npm run test:repair-smoke-instance-guard`
+- 项目 `AGENTS.md` 规则链须在 32 KiB 内，项目目录禁止覆盖文件；根文件关键章节、红线、文档及 npm 脚本引用均有效 → `npm run test:agents-md-guard`
+- 收货草稿编辑须核完整执行事实、原基线与同来源行锁；新建原键须绑定完整正文、未知先查询；运费仅记录 → `npm run test:inbound-edit`、`npm run smoke:inbound-edit-owned`（详见 `docs/business-semantics.md`）
+
+- 安全扫描入口/授权/会话/解析/打印/发布资源预算，必须先限流与授权再解析、放大或回放；构建与发布凭据分离 → `npm run test:security-scan-remediation`、`npm run smoke:security-scan-remediation`（边界与逐项结果见 `docs/security-scan-remediation-2026-10-06.md`）
+
+- 曾调拨永久事实与补打同意图回执不得依赖可清理日志/时间桶 → `npm run test:print`、`npm run smoke:retention-reprint-owned`（详见 `docs/inventory-transaction-invariants.md`）
+
+- 销售/价格有效差异同事务留痕、仓库交接只读、打印目的与派机分开；未知结果复用原正文/键 → `npm run test:change-records`、`npm run smoke:change-records-owned`（详见 `docs/backend-api-sql-conventions.md`、`docs/verification-commands.md`）
+
+## PR 必过检查与显式发布
+
+`node --test tests/release-orchestration.test.js` 读取真实工作流并执行聚合步骤和发布触发校验，覆盖 PR 全成功、失败、取消、跳过，及错误分支/提交。正式入口通过替身命令校验预检顺序、GitHub main 校验、网页与 PDA 的同一 SHA 和各自运行编号，触发失败后不继续；不会连接 GitHub 或服务器。编排回归已由 Tests 的 `npm run test:audit-tooling` 执行。原包中转运行身份与同一 SHA 的区分由 `npm run test:release-tooling` 的 Python 测试覆盖。
+
+工作流静态解析可用 `actionlint` 核对。实际 GitHub PR 运行、远端 Ruleset 生效及三端正式发布另行验收。
+
 ## Compose 2.27.0 发布预检兼容
 
 `npm run test:compose-preflight-compat` 校验并临时使用官方 2.27.0 CLI，执行 `server-update.sh` 原预检函数和独立合成 Node 容器。Tests CI 独立 job 必须实际执行，不能跳过。覆盖缓存候选、只读根目录/node 用户、禁止应用入口/依赖启动、缺镜像不拉取不构建、预检拒绝保留非零退出，以及恢复旧 `run --pull` 必然失败的反例。Mac 可用 `FLOWCUBE_COMPAT_DOCKER_CONTEXT=colima-flowcube`；测试基础镜像须提前本地准备，可用 `FLOWCUBE_COMPAT_NODE_IMAGE` 指定现有合成 Node 镜像。只清理本批临时镜像标签、容器、网络、卷和夹具；不连接生产、不安装全局 CLI。

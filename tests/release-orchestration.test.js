@@ -1,28 +1,163 @@
 'use strict'
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const sha = 'a'.repeat(40)
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { spawnSync } = require('node:child_process')
+const yaml = require('../frontend/node_modules/js-yaml')
 
-test('正式入口缺少本机代理时在 push main 前拒绝发布', () => {
-  const fs = require('node:fs'), os = require('node:os'), path = require('node:path')
-  const { spawnSync } = require('node:child_process')
-  const root = path.resolve(__dirname, '..')
-  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-release-entry-'))
-  const bin = path.join(temp, 'bin'), sentinel = path.join(temp, 'pushed')
+const sha = 'a'.repeat(40)
+const root = path.resolve(__dirname, '..')
+const workflow = name => yaml.load(fs.readFileSync(path.join(root, '.github/workflows', name), 'utf8'))
+
+test('合并仅验证，网页和 PDA 正式工作流必须显式提交完整 SHA', () => {
+  for (const name of ['deploy-browser.yml', 'build-pda-apk.yml']) {
+    const wf = workflow(name)
+    assert.deepEqual(Object.keys(wf.on), ['workflow_dispatch'])
+    assert.equal(wf.on.workflow_dispatch.inputs.checkout_ref.required, true)
+  }
+  const desktop = workflow('build-desktop.yml')
+  assert.deepEqual(desktop.on.push.branches, ['main'])
+  assert.match(desktop.jobs.publish.if, /github\.ref_type == 'tag' \|\| github\.event_name == 'workflow_dispatch'/)
+  for (const name of ['test.yml', 'security-scan.yml']) {
+    const wf = workflow(name)
+    assert.deepEqual(wf.on.pull_request.branches, ['main'])
+    assert.deepEqual(wf.on.push.branches, ['main'])
+  }
+})
+
+for (const [name, gateName] of [['test.yml', 'Tests PR Gate'], ['security-scan.yml', 'Security Scan PR Gate']]) {
+  test(`${gateName} 覆盖所有作业，失败、取消、跳过或缺结果均失败`, () => {
+    const jobs = workflow(name).jobs
+    const gate = jobs['pr-gate']
+    assert.ok(gate, gateName)
+    assert.equal(gate.name, gateName)
+    assert.match(gate.if, /always\(\).*pull_request/)
+    assert.deepEqual([...gate.needs].sort(), Object.keys(jobs).filter(id => id !== 'pr-gate').sort())
+    assert.notEqual(gate['continue-on-error'], true)
+    const step = gate.steps[0]
+    assert.equal(step.env.REQUIRED_RESULTS, '${{ toJSON(needs.*.result) }}')
+    const success = gate.needs.map(() => 'success')
+    for (const results of [success, [], ...['failure', 'cancelled', 'skipped'].map(state => [state, ...success.slice(1)])]) {
+      const result = spawnSync('bash', ['-eo', 'pipefail', '-c', step.run], {
+        env: { ...process.env, REQUIRED_RESULTS: JSON.stringify(results) }, encoding: 'utf8',
+      })
+      assert.ifError(result.error)
+      assert.equal(result.status, results === success ? 0 : 1, result.stdout + result.stderr)
+    }
+  })
+}
+
+for (const [name, job] of [['deploy-browser.yml', 'deploy'], ['build-pda-apk.yml', 'resolve-release-target']]) {
+  test(`${name} 拒绝自动事件、错误分支以及普通发布中的 SHA 漂移`, () => {
+    const step = workflow(name).jobs[job].steps[0]
+    assert.equal(step.name, 'Validate authorized dispatch')
+    for (const [overrides, expected] of [
+      [{}, 0],
+      [{ GITHUB_EVENT_NAME: 'push' }, 1],
+      [{ GITHUB_REF: 'refs/heads/topic' }, 1],
+      [{ RELEASE_CHECKOUT_REF: '' }, 1],
+      [{ RELEASE_CHECKOUT_REF: 'main' }, 1],
+      [{ GITHUB_SHA: 'b'.repeat(40) }, 1],
+    ]) {
+      const result = spawnSync('bash', ['-c', step.run], {
+        env: { ...process.env, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/main',
+          GITHUB_SHA: sha, RELEASE_CHECKOUT_REF: sha, BROWSER_RELEASE_RUN_ID: '101', ...overrides },
+        encoding: 'utf8',
+      })
+      assert.ifError(result.error)
+      assert.equal(result.status, expected, result.stdout + result.stderr)
+    }
+  })
+}
+
+function releaseEntry(t, remoteSha = sha, { proxy = 'http://fixture.test', pdaRunId = '102' } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-release-dispatch-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const bin = path.join(dir, 'bin'), log = path.join(dir, 'commands')
   fs.mkdirSync(bin)
-  const stub = (name, body) => fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n' + body, { mode: 0o755 })
-  stub('git', `if [ "$1" = rev-parse ] && [ "$2" = --abbrev-ref ]; then echo main; elif [ "$1" = rev-parse ]; then echo ${sha}; elif [ "$1" = push ]; then touch "$RELEASE_TEST_SENTINEL"; fi\n`)
-  stub('node', 'if [ "$1" = -p ]; then echo 1.2.3; else echo fixture; fi\n')
-  stub('gh', 'if [ "$1" = auth ]; then echo fixture-token; else echo fixture/repo; fi\n')
-  try {
-    const result = spawnSync('bash', ['scripts/release-prod.sh'], {
-      cwd: root, encoding: 'utf8', timeout: 5000,
-      env: { ...process.env, PATH: bin + ':' + process.env.PATH, HTTPS_PROXY: '', https_proxy: '', FLOWCUBE_RELAY_PROXY: '', RELEASE_TEST_SENTINEL: sentinel },
-    })
-    assert.equal(result.status, 1, result.stdout + result.stderr)
-    assert.match(result.stdout + result.stderr, /缺少本机代理地址/)
-    assert.equal(fs.existsSync(sentinel), false)
-  } finally { fs.rmSync(temp, { recursive: true, force: true }) }
+  fs.mkdirSync(path.join(dir, 'scripts'))
+  fs.copyFileSync(path.join(root, 'scripts/release-prod.sh'), path.join(dir, 'scripts/release-prod.sh'))
+  fs.writeFileSync(path.join(dir, 'scripts/check-release-ssh-trust.sh'), 'echo ssh-preflight >> "$RELEASE_TEST_LOG"\n')
+  function stub(name, body) {
+    fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n' + body, { mode: 0o755 })
+  }
+  stub('git', `case "$1 $2" in
+    "rev-parse --abbrev-ref") echo main;;
+    "rev-parse HEAD") echo "$FIXTURE_SHA";;
+    "status --porcelain") :;;
+    *) echo "git $*" >> "$RELEASE_TEST_LOG"; exit 3;;
+  esac
+`)
+  stub('node', `case "$1" in
+    -p) echo 1.2.3;;
+    scripts/complete-release.js) echo "complete $BROWSER_RELEASE_RUN_ID $PDA_RELEASE_RUN_ID" >> "$RELEASE_TEST_LOG";;
+    *) echo fixture;;
+  esac
+`)
+  stub('gh', `case "$1 $2" in
+    "repo view") echo fixture/repo;;
+    "api repos/fixture/repo/git/ref/heads/main") echo "$FIXTURE_REMOTE_SHA";;
+    api" "*)
+      echo "gh $*" >> "$RELEASE_TEST_LOG"
+      case "$2" in
+        */deploy-browser.yml/dispatches) echo 101;;
+        */build-pda-apk.yml/dispatches) echo "$FIXTURE_PDA_RUN_ID";;
+        *) exit 4;;
+      esac;;
+    *) exit 4;;
+  esac
+`)
+  stub('python3', `if [ "$FLOWCUBE_RELAY_PREFLIGHT_ONLY" = 1 ]; then
+    echo relay-preflight
+  else
+    echo "relay $BROWSER_RELEASE_RUN_ID $PDA_RELEASE_RUN_ID"
+  fi >> "$RELEASE_TEST_LOG"
+`)
+  stub('caffeinate', 'exit 0\n')
+  const result = spawnSync('bash', ['scripts/release-prod.sh'], {
+    cwd: dir, timeout: 5000, encoding: 'utf8',
+    env: { PATH: bin + ':' + process.env.PATH, GITHUB_TOKEN: 'fixture-token', FLOWCUBE_RELAY_PROXY: proxy,
+      FIXTURE_SHA: sha, FIXTURE_REMOTE_SHA: remoteSha, FIXTURE_PDA_RUN_ID: pdaRunId, RELEASE_TEST_LOG: log },
+  })
+  assert.ifError(result.error)
+  return { ...result, commands: fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n') : [] }
+}
+
+test('正式入口显式触发两个工作流，传递同 SHA 和本次运行编号', t => {
+  const result = releaseEntry(t)
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  assert.deepEqual(result.commands.slice(0, 2), ['ssh-preflight', 'relay-preflight'])
+  assert.match(result.commands[2], new RegExp('deploy-browser.yml/dispatches.*checkout_ref.*' + sha))
+  assert.match(result.commands[3], new RegExp('build-pda-apk.yml/dispatches.*checkout_ref.*' + sha + '.*browser_run_id.*101'))
+  for (const command of result.commands.slice(2, 4)) {
+    assert.match(command, /--method POST .*--raw-field ref=main --field return_run_details=true/)
+  }
+  assert.ok(result.commands.includes('relay 101 102'))
+  assert.ok(result.commands.includes('complete 101 102'))
+  assert.ok(!result.commands.some(command => command.startsWith('git ')))
+})
+
+test('本地与 GitHub 主线不一致时不触发任何正式工作流', t => {
+  const result = releaseEntry(t, 'b'.repeat(40))
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.match(result.stdout + result.stderr, /GitHub main/)
+  assert.deepEqual(result.commands, [])
+})
+
+test('任一触发未返回有效运行编号时停止中转与后续发布', t => {
+  const result = releaseEntry(t, sha, { pdaRunId: '' })
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.match(result.stdout + result.stderr, /运行编号/)
+  assert.ok(!result.commands.some(command => /^(relay |complete )/.test(command)))
+})
+
+test('正式入口缺少本机代理时在触发前拒绝发布', t => {
+  const result = releaseEntry(t, sha, { proxy: '' })
+  assert.equal(result.status, 1, result.stdout + result.stderr)
+  assert.match(result.stdout + result.stderr, /缺少本机代理地址/)
+  assert.deepEqual(result.commands, [])
 })
 
 test('发布前用 CI 实际域名校验可信主机键，只有 IP 时拒绝', () => {
@@ -138,13 +273,11 @@ test('桌面发布两侧均预检，阶段失败只保留原包并收尾本次�
   }
 })
 
-test('PDA 发布检查覆盖每次 main 推送，不能被源码路径过滤漏掉', () => {
-  const fs = require('node:fs'), path = require('node:path')
-  const root = path.resolve(__dirname, '..')
-  const yaml = require(path.join(root, 'frontend/node_modules/js-yaml'))
-  const wf = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/build-pda-apk.yml'), 'utf8'))
-  assert.deepEqual(wf.on.push.branches, ['main'])
-  assert.equal(wf.on.push.paths, undefined)
+test('PDA 构建与发布仍绑定解析出的目标提交', () => {
+  const wf = workflow('build-pda-apk.yml')
+  assert.equal(wf.on.workflow_dispatch.inputs.browser_run_id.required, false)
+  assert.equal(wf.jobs['wait-browser'].steps.find(step => /wait-release-checks/.test(step.run || '')).env.BROWSER_RELEASE_RUN_ID,
+    '${{ inputs.browser_run_id }}')
   assert.equal(wf.jobs['build-pda'].concurrency.group, 'build-pda-ci-${{ needs.resolve-release-target.outputs.sha }}')
   assert.ok(wf.jobs['build-pda'].needs.includes('resolve-release-target'))
 })
@@ -157,14 +290,50 @@ test('桌面发布等待对应 tag，不能把 main 验证构建当成发布成�
   assert.equal(assessRuns([{ ...main, head_branch: 'v1.2.3', event: 'workflow_dispatch' }], sha, { branch: 'v1.2.3', events: ['push'] }).state, 'pending')
 })
 
+test('指定本次运行后，旧部署成功不能替代正在运行或失败的本次部署', async () => {
+  const { waitForChecks } = require('../scripts/wait-release-checks')
+  const old = { id: 100, head_sha: sha, head_branch: 'main', event: 'workflow_dispatch', status: 'completed', conclusion: 'success' }
+  const exact = { ...old, id: 101 }
+  const later = { ...old, id: 102 }
+  let time = 0, calls = 0
+  const args = { repository: 'fixture/repo', sha, token: 'fixture', requiredWorkflows: ['deploy-browser.yml'],
+    dispatchRunIds: { 'deploy-browser.yml': '101' }, log: () => {},
+    now: () => time, sleep: async ms => { time += ms }, timeoutMs: 100, intervalMs: 1 }
+  const result = await waitForChecks({ ...args, fetchImpl: async () => ({
+    ok: true, json: async () => ({ workflow_runs: [
+      old, later, ++calls === 1 ? { ...exact, status: 'in_progress', conclusion: null } : exact,
+    ] }),
+  }) })
+  assert.equal(calls, 2)
+  assert.equal(result[0].run.id, 101)
+  await assert.rejects(waitForChecks({ ...args, fetchImpl: async () => ({
+    ok: true, json: async () => ({ workflow_runs: [old, later, { ...exact, conclusion: 'failure' }] }),
+  }) }), /未通过.*failure/)
+})
+
+test('PDA 单独补发校验历史完整 SHA，仍由受信解析和同 SHA 网页记录放行', () => {
+  const wf = workflow('build-pda-apk.yml')
+  const [step, , resolver] = wf.jobs['resolve-release-target'].steps
+  const result = spawnSync('bash', ['-c', step.run], {
+    env: { ...process.env, GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/main',
+      GITHUB_SHA: 'b'.repeat(40), RELEASE_CHECKOUT_REF: sha, BROWSER_RELEASE_RUN_ID: '' }, encoding: 'utf8',
+  })
+  assert.equal(result.status, 0, result.stdout + result.stderr)
+  assert.equal(resolver.run, 'node scripts/resolve-release-target.cjs')
+  const wait = wf.jobs['wait-browser'].steps.find(s => s.env?.REQUIRE_BROWSER_DEPLOY === '1')
+  assert.equal(wait.env.GITHUB_SHA, '${{ needs.build-pda.outputs.sha }}')
+  assert.ok(wf.jobs['publish-pda'].needs.includes('wait-browser'))
+})
+
 test('完整发布顺序：main 全绿含 PDA → tag → tag 构建成功 → 线上核对', async () => {
   const { completeRelease } = require('../scripts/complete-release')
   const events = []
-  await completeRelease({ repository: 'fixture/repo', sha, token: 'fixture', tag: 'v1.2.3', origin: 'https://fixture.test',
+  await completeRelease({ repository: 'fixture/repo', sha, token: 'fixture', tag: 'v1.2.3', browserRunId: '101', pdaRunId: '102', origin: 'https://fixture.test',
     wait: async opts => { events.push(opts); return [] }, publishTag: async () => events.push('tag'),
     verify: async opts => { events.push(opts); return { ok: true } }, log: () => {},
   })
   assert.deepEqual(events[0].requiredWorkflows, ['test.yml', 'security-scan.yml', 'deploy-browser.yml', 'build-pda-apk.yml', 'build-desktop.yml'])
+  assert.deepEqual(events[0].dispatchRunIds, { 'deploy-browser.yml': '101', 'build-pda-apk.yml': '102' })
   assert.equal(events[1], 'tag')
   assert.equal(events[2].branch, 'v1.2.3')
   assert.deepEqual(events[2].events, ['push'])
@@ -176,7 +345,7 @@ for (const failure of ['main', 'tag', 'desktop', 'verify']) {
     const { completeRelease } = require('../scripts/complete-release')
     const calls = []
     const step = name => { calls.push(name); if (failure === name) throw Error('fixture failure') }
-    await assert.rejects(completeRelease({ repository: 'fixture/repo', sha, token: 'fixture', tag: 'v1.2.3', origin: 'https://fixture.test',
+    await assert.rejects(completeRelease({ repository: 'fixture/repo', sha, token: 'fixture', tag: 'v1.2.3', browserRunId: '101', pdaRunId: '102', origin: 'https://fixture.test',
       wait: async opts => step(opts.branch === 'v1.2.3' ? 'desktop' : 'main'),
       publishTag: async () => step('tag'), verify: async () => { calls.push('verify'); return { ok: failure !== 'verify' } }, log: () => {},
     }))
@@ -187,7 +356,7 @@ for (const failure of ['main', 'tag', 'desktop', 'verify']) {
 test('取消十五分钟目标后仍记录真实耗时', async () => {
   const { completeRelease } = require('../scripts/complete-release')
   const logs = []
-  await completeRelease({ repository: 'fixture/repo', sha, token: 'fixture', tag: 'v1.2.3', origin: 'https://fixture.test',
+  await completeRelease({ repository: 'fixture/repo', sha, token: 'fixture', tag: 'v1.2.3', browserRunId: '101', pdaRunId: '102', origin: 'https://fixture.test',
     wait: async () => {}, publishTag: async () => {}, verify: async () => ({ ok: true }), log: message => logs.push(message),
   })
   assert.match(logs[0], /用时 \d+ 秒/)

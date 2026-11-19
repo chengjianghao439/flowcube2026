@@ -2,10 +2,9 @@
 
 本文件是 Codex 在本仓库工作的**入口与约束清单**，适用于整个仓库。业务事实以当前代码、迁移和实际配置为准；文档与代码冲突时先核实，再同步两者。
 
-**本文件的定位（2026-09-19 重构）**：只放两类内容——① **每次都必须生效的行为约束**；② **「何时必须读哪份主题文档」的索引**。
-项目知识、业务流程、命令细节、历史背景一律放 `docs/`（见 §4）。旧版单文件全文归档在 `docs/agents-md-archive-2026-09-19.md`，重构说明见 `docs/agents-md-refactor-2026-09-19.md`。
+这里只保留每次适用的操作约束、改动前必须核对的红线，以及主题文档入口。开工和交接流程见 `docs/project-working-guide.md`。
 
-**体积是硬约束**：本文件必须 ≤ **32 KiB**（默认注入预算 64 KiB 的一半，留一倍余量）。超预算的后果不是"变慢"，而是**尾部被静默截断**——2026-09-18 实测：文件 211 KB 时新会话注入的是一份过时的 `CLAUDE.md`、本文件显示 `omitted`，全链路不报错；重构前 130.6 KB 时 §8 之后（财务/前端/打印/部署/运维）**全部进不了上下文**，等于规则写了没人看见。`npm run test:agents-md-guard` 断言本约束：**超限即 CI 失败，不允许"再加一条"**。
+**项目规则链上限是 32 KiB**，对齐 Codex 默认项目指令预算。根文件和工作目录各级 `AGENTS.md` 累加，兄弟目录分别计量。旧版归档见 §5。
 
 ## 0. 元规则：载体分工
 
@@ -59,6 +58,7 @@
 - **回退/还原逐个写全路径、不得 `||` 兜底猜路径**，改完立即 `git status --short`
 - **生产机上批量删除/清理前先确认云盘 IO，并分批执行**：该机云盘有已知读写受限。动手前看 `iostat -x 1 2`（`%util`/`await`/`aqu-sz`）与 `vmstat`（`wa`）；分批删除（每批 ≤200MB、间隔数秒）并用 `ionice -c3 nice -n19`；避开 MySQL 写入高峰与部署进行中。2026-09-19 一次删除 1.9G 后系统极端缓慢、只能靠控制台重启恢复（`docs/deploy-disk-precheck-2026-09-19.md`）
 - **成功发版并通过健康验收后必须盘点镜像与磁盘，记录保留、拟清理及待确认结论**；镜像身份、恢复兼容性、精确清单和永久删除确认按 `docs/DEPLOY.md`「发布成功后的镜像与磁盘收尾」执行，沿用本节低 IO 约束。
+- **停止数据库容器前核实际数据目录及其挂载方式**。tmpfs 停止即丢数据，先有可验证备份，或就不可恢复删除取得逐次明确确认。核查项见 `docs/local-preview-acceptance.md`「数据库停启与数据保全」。
 - **服务器 SSH 访问必须复用连接**（`-o ControlMaster=auto -o ControlPath=… -o ControlPersist=…`），并把多条只读查询合并进一次会话；反复新建短连接会被 sshd 限流（2026-09-19 实测：本机 IP 被限流数十分钟，同期 HTTPS 仍正常）
 - **改共用函数或路由契约后，发版前统一跑全量套件**（调用点补 `X-Client-Id`）；调试故障所需的最小验证可提前跑
 - **普通资金登记用共享锁、补录与结账用排他锁**：`lockAccountingCompanyShared`（`FOR SHARE`）vs `lockAccountingCompany`（`FOR UPDATE`）；**全排他就会让并发登记排队、全共享就会让结账挡不住写入**——两侧别"顺手统一"。加锁顺序固定「账套→账户→对账单→账款」。`acct_periods` 主键是 `(company_id, period)`、**没有 `id` 列**（`accounting.period-lock.js`；回归 `tests/finance-period-lock-order.smoke.test.js`，已接 CI）
@@ -66,44 +66,10 @@
 - **返货出库全程不动会计**：`sale_return_out` 跳过复核/打包、走独立待出库列表、重复取消**幂等不 409**；状态 1/2 的退货应收**从未冲减**，故**既不冲减也不加回**（加回＝多收客户、再冲减＝少收客户）（详见 `docs/business-semantics.md`）
 - **非单据应付只认有借方科目的行**：`buildUnbilledPayable` 按 `payment_records.debit_account_code` 取科目，**NULL = 历史未分类，跳过不猜科目**（`voucher-engine.js`、迁移 `259`）
 
-## 0.2 有守卫的规则（一行一条 → 守卫命令）
+## 0.2 有守卫的规则
 
-> 这些**有 CI 拦截**，违反会红。此处只作速查；「为什么」与反向验证方式写在守卫文件头部。
-
-- 分布类图表系列数必须有界（`TOP_SERIES_LIMIT = 8` + 其他 N 个）→ `npm run test:chart-series-limit`
-- 只读路径禁止 N+1；无扫码行的明细必须按 0 拒绝（fail-open 风险）→ `npm run test:query-loop`、`npm run test:warehouse-scan-closure`
-- `fail-loud` 错误不得被调用处吞成静默跳过 → `node --test tests/accounting-voucher-mapping.test.js`
-- 结账逐来源核原业务凭证净投影、零净利仍结平非零损益腿；实际资金/报销按分，正月额资产按实际末笔补尾 → `npm run test:accounting`（详见 `docs/finance-permission-time.md`、`docs/cash-cents-policy.md`；零月额资产政策未定，不追改历史）。
-- 全仓默认策略写须原管理权限及当前不限仓；普通折扣退货同源净额累计，短装只结束本次任务，明确结束剩余采购才取消余量 → `npm run test:security-scan-remediation`、`npm run test:accounting`、`npm run test:inbound-edit`（详见对应财务、库存与业务主题文档）。
-- `logger.info/warn` 参数顺序必须是 `(msg, meta, module_)`，meta 是对象 → `npm run test:logger-args-order`
-- 前端业务日期一律走 `lib/dateTime.ts`/`lib/dateRange.ts`，禁止自拼 `getFullYear` 等 → `npm run test:frontend-date-source`
-- SQL 标识符插值必须经 `assertSqlIdentifier`/`assertSqlColumnList` → `npm run test:sql-identifier`
-- 每处 `eslint-disable` 必须带可读理由，整文件禁用仅限机器产物白名单 → `npm run test:eslint-disable-rationale`
-- 状态文案只能取 `generated/status.ts` → `node --test tests/status-rules-integrity.test.js`
-- 轮询页面不得小 `pageSize` + 高频轮询（`refetchInterval` ≥ 5s、分页批量 ≥ 100）→ `npm run test:frontend-polling-contract`
-- 权限常量前后端手工同步一致 → `npm run test:permissions`
-- 前端调用的接口后端必须存在（防改名漏改）→ `npm run test:api-route-contract`
-- 写路由必须挂 `requirePermission`（例外须登记理由且可验证）→ `npm run test:route-permission-contract`
-- 发版必须同步三端 + PDA 版本、本版说明与官网 `landing/updates.ts` → `npm run test:landing-updates`
-- `backend/downloads/` 已废弃，只允许 `.gitignore`/`README.md`（须在 CI 静态 job 真跑）→ `npm run release:check-downloads`
-- `smoke:*`/`test:*` 脚本必须 CI 可达；smoke 测试服务须 `app.listen(0, '127.0.0.1')`；部署预算须覆盖上传/合并/等锁/故障停写，PDA 等待不得提前超时；PDA 工作流「等部署」与「持组」不同 job；桌面发布清理服务器中转目录（`EXIT` trap）；部署磁盘预检失败必须打印余量；SSH `known_hosts` 必须使用独立核对的可信公钥，禁止在线盲信扫描；只读诊断 workflow 必须只读 → `node --test tests/deployment-resources.test.js`
-- 恢复演练临时卷必须具名 + 启动前幂等清理；`dingtalk_send` 失败必须非 0 → `node --test tests/ops-monitor-restore.test.js`
-- 备份导入前只把触发器残留分号移出可执行注释 → `node --test tests/restore-trigger-normalize.test.js`
-- 迁移逐条执行、触发器函数体不得残留结尾分号 → `node --test tests/migration-trigger-bodies.test.js`
-- 前端命名与呈现结构：菜单名 = 工作区标签 = 页面标题、标签 ≤7 汉字、带日期的查询弹窗必须能重置回本页默认口径、纯图标按钮必须有可读名称 → `npm run test:frontend-conventions`
-- 商品级 `allow_decimal_qty` 是全数量规则，界面“允许小数数量”、新建默认关闭；所有数量录入、换算结果、库存写入和任务执行都验证当前商品策略，价格/成本/金额保持自身精度。原快照不作豁免；关闭前检查小数库存/在途/未完成业务/可退额度，拒绝不安全切换，不取整或改历史账（`docs/sale-shipping-quantity-policy.md`）。新销售固定唯一单位并走 `normalizeFixedSaleItems()`，采购/必要旧退货保留 `foldEntryItems()`；守卫 → `npm run test:qty-precision`、`npm run test:qty-precision-coverage`
-- 应用部署保留既有健康且认证 TCP SQL 通过的 MySQL，切换应用须 `--no-deps`；未知实例状态提前拒绝；288–292 迁移窗口后旧后端须同时具备数量/退货/资金写入契约，否则失败保持停写、向前恢复，不能仅凭240契约恢复写入 → `node --test tests/audit-deployment.test.js`
-- 组合页发布验收须核可见组标题与当前子视图链接；电话旧形状真实迁移回归须专属实例归属证明 → `npm run test:browser-smoke`、`npm run test:party-profile`、`npm run test:go-live-runner`
-- 本地实例脚本 `start` 只启动实例（不改库结构）、迁移必须由显式 `dev:mysql8:migrate` 触发且目标固定、凭据只由 `start` 生成 → `npm run test:mysql8-dev-script`
-- 含全表清理的采购/应收修复 smoke 只允许落在**本批专属临时实例**（`npm run repair:smoke-ephemeral`），写入前必须过归属门：0600 归属文件 + 拒绝共享端口 3307/3306 + 容器/卷 `docker inspect` 本批 label 与实时端口映射 + 同运行时间窗 + **runner 进程存活** + 实例 `@@server_uuid`；不认库名后缀、`IF NOT EXISTS`、可自填 env、空表 → `npm run test:repair-smoke-instance-guard`
-- `AGENTS.md` 体积、关键章节与红线必须在默认预算内，`docs/*.md` 与 `npm run` 引用有效 → `npm run test:agents-md-guard`
-- 收货草稿编辑须核完整执行事实、原基线与同来源行锁；新建原键须绑定完整正文、未知先查询；运费仅记录 → `npm run test:inbound-edit`、`npm run smoke:inbound-edit-owned`（详见 `docs/business-semantics.md`）
-
-- 安全扫描入口/授权/会话/解析/打印/发布资源预算，必须先限流与授权再解析、放大或回放；构建与发布凭据分离 → `npm run test:security-scan-remediation`、`npm run smoke:security-scan-remediation`（边界与逐项结果见 `docs/security-scan-remediation-2026-10-06.md`）
-
-- 曾调拨永久事实与补打同意图回执不得依赖可清理日志/时间桶 → `npm run test:print`、`npm run smoke:retention-reprint-owned`（详见 `docs/inventory-transaction-invariants.md`）
-
-- 销售/价格有效差异同事务留痕、仓库交接只读、打印目的与派机分开；未知结果复用原正文/键 → `npm run test:change-records`、`npm run smoke:change-records-owned`（详见 `docs/backend-api-sql-conventions.md`、`docs/verification-commands.md`）
+- 按 `docs/verification-commands.md` 的「仓库守卫索引」选择检查。新增可机械验证的约束接入测试与 CI，并反向验证。
+- 项目规则统一使用 `AGENTS.md`，子目录需要补充时用同名文件。仓库目录禁止 `AGENTS.override.md` 和 `CLAUDE.md`，以保持共享规则入口一致。检查规则链、必读入口及引用 → `npm run test:agents-md-guard`。
 
 ## 1. 协作与操作边界
 
@@ -112,7 +78,7 @@
 - **提交范围必须明确**：先列出拟提交文件与用途，只暂存已核对的路径，不用 `git add .`/`--all`。业务代码与其说明文档同批提交；技能迁移、环境整理、版本发布分别组织。
 - **发布失败停止并保留现场，不自动回滚应用；禁止自动修改数据库全局参数，迁移前只读核验必要条件，缺条件即停**（`scripts/server-update.sh`、`tests/audit-deployment.test.js`）。
 - **未经明确要求，不执行** `git push`、打 tag、发版、重启生产服务、会删数据的 SQL。**已授权的同一操作不重复询问**；需要新授权时先停手问清楚。
-- 分支默认 `codex/` 前缀；需要隔离时用工作树，但不要假定新工作树已装依赖或具备本地环境配置。
+- 分支默认 `codex/` 前缀。并行改动按任务使用独立工作树，共用文件由一个写入者统筹；开工、验收与交接按 `docs/project-working-guide.md` 记录。
 - 发布工作树收尾：确认工作区干净后切回 `codex/release-*` 或停在已发布提交，释放 `main`；用 `git worktree list` 核验。
 - **工具可直接安装**（用户长期授权）：缺 Skill/MCP/插件/CLI/依赖时自行安装并验证，完成后简要记录；涉及项目配置或流程变化时按 §0 同步文档。需要登录、付费或平台强制本人授权时，说明原因并请用户协助。
 - **项目凭据代为输入**（用户长期授权）：已授权任务中可用为本项目配置的凭据登录、输密码、完成认证，优先复用有效会话；**不索取密码/API Key/Token/恢复码**，不绕过验证码、生物识别等本人验证。
@@ -183,6 +149,7 @@
 | `docs/workspace-filter-return.md` | 改工作区列表筛选、详情返回、合并子页与查询作用域时 |
 | `docs/print-deploy-ops.md` | 改标签与单据打印、发布与部署链路、CI 门禁、备份恢复与服务器运维动作时 |
 | `docs/local-preview-acceptance.md` | 启动本地开发服务、做浏览器/页面验收、判断某个账号能验收哪些页面时 |
+| `docs/project-working-guide.md` | 开工核对基线、并行分工、接手或移交任务时 |
 
 **专题记录（按需查）**：`docs/DEPLOY.md`、`docs/runbooks/failure-recovery.md`（故障处置先读它）、`docs/audit-2026-09-18.md`（深审计）、`docs/ci-wiring-gaps-2026-09-19.md`（CI 接线缺口）、`docs/deploy-disk-precheck-2026-09-19.md`（磁盘与服务器运维事故链）、`docs/chart-series-limit-2026-09-19.md`、`docs/toolchain-acceptance-2026-09-26.md`（开发工具链配置与验收、测试库 EPERM 结论）。
 

@@ -2,7 +2,7 @@
 
 name: release-flowcube
 description: >-
-  极序 Flow（flowcube）的正式发版流程：三端版本号同步递增、填写本版更新内容、推送 main 触发浏览器部署、
+  极序 Flow（flowcube）的正式发版流程：三端版本号同步递增、填写本版更新内容、合入 main 后显式触发网页和 PDA 部署、
   打 v* tag 触发桌面安装包构建并发布 latest.json，从而让桌面端能检测到新版本并弹出自动更新。
   务必在用户提到「发版 / 发布新版本 / 上线新版本 / 出一版 / 桌面端检测不到更新 / 桌面端没有更新提示 /
   自动更新不弹 / 打 tag / release / 版本号要不要升 / 写更新内容 / changelog / release notes / latest.json」
@@ -15,23 +15,15 @@ description: >-
 
 ## 这个技能解决什么
 
-把「让一次改动真正变成用户能装到的新版本」这件事走对。最常见的踩坑是：
-
-> 只 `git push origin main` 就以为发版完成 → 浏览器端确实更新了，但**桌面端永远检测不到新版本**。
-
-原因有两个，缺一不可：
-
-1. **版本号没递增**。桌面端 `desktop/lib/updateCheck.js` 用 **semver 比较**：只有 `latest.json` 的 `version` **严格大于**当前已安装版本，才会弹「发现新版本」。版本号没变 → 不弹。
-2. **没打 `v*` tag**。`latest.json` 由 `scripts/release-desktop.js` 生成发布，而它**只在 tag 推送时**由 CI（`build-desktop.yml`）调用。仅 push main 会触发桌面包「验证构建」，但**不会**更新 `latest.json`，也不会上传 GitHub Release。
-
-所以正确发版 = **递增版本号 + 填更新内容 + push main + 打 tag**。本技能就是把这四件事按正确顺序做完。
+浏览器、PDA 和 Windows 发布都从获授权的 `npm run release:prod` 流程起步。合并到 `main` 只触发自动检查和桌面验证构建。桌面客户端只在清单版本严格大于已安装版本时提示更新。正式 Windows 包与更新清单由后续版本 tag 的发布任务产生。
 
 ## 发版链路速览（建立心智模型）
 
 ```
-写 release-notes ──► bump 三端版本 ──► 提交 ──► npm run release:prod
-  ├─ 本机代理与 SSH 预检，自动中转原 CI 产物
-  ├─ push main，等同 SHA 的 Tests / Security / Browser / PDA / 桌面验证成功
+写 release-notes ──► bump 三端版本 ──► PR 合入 main ──► 获授权后 npm run release:prod
+  ├─ 本机代理与 SSH 预检，确认本地 HEAD 等于 GitHub main
+  ├─ 显式触发同 SHA 的 Browser / PDA，绑定本次运行编号并自动中转原 CI 产物
+  ├─ 等同 SHA 的 Tests / Security / Browser / PDA / 桌面验证成功
   └─ 推送 v<version> tag → CI: Build Desktop Installer（仅 tag 触发发布）
        ├─ 构建 Windows exe（NSIS 3.0.4.1）并保存原始 Actions artifact
        ├─ 核对两处既有发布身份，准备 GitHub 草稿和附件
@@ -58,7 +50,7 @@ description: >-
   git pull --ff-only origin main
   ```
 - 确认要发布的代码改动已经合并进 main（发版是给「已经在 main 上的东西」打版本，不是顺便合特性）。
-- `release:prod` 会在 push 前从 GitHub 仓库变量读取 `FLOWCUBE_SSH_KNOWN_HOSTS`，按 CI 部署配置中的**域名与端口**离线校验。只含本机 SSH 别名或服务器 IP 的记录不能通过；修正前先用独立渠道核实公钥，不能以 `ssh-keyscan` 现场结果代替核验。
+- `release:prod` 会在触发前从 GitHub 仓库变量读取 `FLOWCUBE_SSH_KNOWN_HOSTS`，按 CI 部署配置中的**域名与端口**离线校验。只含本机 SSH 别名或服务器 IP 的记录不能通过；修正前先用独立渠道核实公钥，不能以 `ssh-keyscan` 现场结果代替核验。
 - 若本版新增迁移，先按 `docs/verification-commands.md` 在独立 MySQL 8 测试库完整迁移，并覆盖 CI 默认排序规则 `utf8mb4_0900_ai_ci`；临时表字符列与被比较的业务列需显式对齐。v0.11.0 的角色迁移曾因本地库与 CI 库排序规则不同，在推送后才暴露失败。
 
 ### 1. 决定新版本号
@@ -112,7 +104,7 @@ git diff --cached --stat
 git diff --cached --check
 git commit -m "release: 发布 v<version> — <一句话主题>"
 ```
-下一步的唯一入口负责 push main。`Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。
+通过 PR 合入待发布提交后，将本地 main 同步到实际远端 SHA，再进入正式发布。`Deploy Browser App` 等待实际发布 SHA 的 Tests 与 Security Scan 成功，由 GitHub runner 构建 Linux amd64 镜像，再在生产部署锁内核对归档摘要/镜像 SHA、加载、迁移、切换和验证。禁止在生产机重新编译。检查失败/取消/超时不能发布；发布失败即停止并保留本次 SHA、阶段、迁移状态、备份路径和原镜像身份供人工核查；不自动 tag 旧镜像、不重建或恢复旧容器、不改写 PDA 清单。前置检查失败保持原应用；停写请求开始后失败（含信号、备份、半迁移、应用或页面门禁失败）停止 backend/frontend 并保持停写，核查后向前修复。数据库 DDL 和业务数据不自动回滚。
 
 ### 5. 等待浏览器和 PDA 完成，再打 tag（桌面发布）
 
@@ -120,7 +112,7 @@ git commit -m "release: 发布 v<version> — <一句话主题>"
 ```bash
 npm run release:prod
 ```
-入口在 push 前强制预检 CI SSH 可信主机键、本机代理和 `flowcube-prod` SSH 别名，启动自动中转并保持 Mac 在线；预检失败就停止，不悄悄改走已多次超时的服务器直连。它推送 main，等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag、等待桌面正式发布并核对线上三端。中转下载 GitHub 原 artifact ZIP；大分段连续失败后仅把该分段缩为 256 KiB 子区间，保留其他已成功分段，最后检查归档摘要与唯一文件。SSH 交付后由服务器再次核对 runner 的原包大小/SHA-256；CI 的 HTTPS/SCP 仅作有界故障回退。代码修复本身不构成推送/发版授权。
+入口核实本地 HEAD 与 GitHub main 相等，预检 CI SSH 可信主机键、本机代理和 `flowcube-prod` SSH 别名。通过后显式触发网页和 PDA，由本次运行编号绑定等待及原包中转，期间保持 Mac 在线。它等待同 SHA 的 Tests、Security、Browser、PDA 和桌面验证构建，再打 tag、等待桌面正式发布并核对线上三端。触发结果不明时保留原运行，不自动重发。中转下载 GitHub 原 artifact ZIP；大分段连续失败后仅把该分段缩为 256 KiB 子区间，保留其他已成功分段，最后检查归档摘要与唯一文件。SSH 交付后由服务器再次核对 runner 的原包大小/SHA-256；CI 的 HTTPS/SCP 仅作有界故障回退。代码修复本身不构成推送/发版授权。
 
 Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcube-prod`。只有本机配置变化时才更新本机环境或 `FLOWCUBE_RELAY_SSH_TARGET` / `FLOWCUBE_RELAY_PROXY`，先做预检再发布。入口负责中转进程、SSH 控制连接与临时文件的收尾。保留完整门禁和停写收尾窗口，不设固定 15 分钟目标。
 
@@ -143,7 +135,7 @@ Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcub
 - 用户已取消固定 15 分钟目标，旧记录中的该目标仅表示历史要求。记录首次启动到最终验收的总耗时；发生修复重试时另列最终应用提交到完成的耗时，包含排队、传输、门禁和恢复，不能通过换起点隐藏失败时间。不得为提速跳过门禁或压缩迁移、失败收尾安全窗口。
 - 若使用操作端代理，明确记录该依赖；自动本地中转可证明本机在线期间无需人工搬运，不能算脱离个人电脑的托管链路验收。人工中转仍单列恢复措施。架构优化咨询按 `docs/release-pipeline-optimization-2026-09-22.md` 比较方案；其中待实施项目不是现行发布能力。
 
-#### push main 后 `Deploy Browser App` 长时间 pending（2026-09-18 已结构性修复）
+#### 历史案例：网页发布长时间 pending（2026-09-18）
 
 > **该形态自 2026-09-18 起已消除。** 保留本节仅供故障识别：若再次看到 pending，先按下面的
 > 「三段结构」核对 `build-pda-apk.yml` 的 job 划分是否被改动过——`tests/deployment-resources.test.js`
@@ -167,7 +159,7 @@ GitHub 不报错，只是干等（旧 PDA 等待上限 25 分钟，期间线上�
 
 #### PDA 没跟上时（`Build PDA APK` 失败 / 被取消 / 根本没触发）
 
-`Build PDA APK` 现对每次 `main` push 建立运行，避免后端迁移等路径外修复提交漏掉 PDA；已发布同版由 `preflight` 跳过构建。工作流失败、取消或被 `[skip ci]` 跳过时，补跑仍须在**已部署的发布提交**上做，并显式指定提交，不依赖当前 main HEAD：
+联合发布会显式启动 `Build PDA APK`，并绑定本次网页部署运行。已发布同版由 `preflight` 跳过构建。单独补跑仍须用**已部署的完整发布 SHA**，允许该提交已不在当前 main 顶端：
 
 ```bash
 gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<完整的40位发布提交SHA>
