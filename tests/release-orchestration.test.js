@@ -27,6 +27,57 @@ test('合并仅验证，网页和 PDA 正式工作流必须显式提交完整 SH
   }
 })
 
+test('发布和只读探针使用同一套隧道入口与对应的受保护环境', () => {
+  const entries = [
+    ['deploy-browser.yml', 'deploy', 'web'],
+    ['build-pda-apk.yml', 'publish-pda', 'pda'],
+    ['build-desktop.yml', 'publish', 'desktop'],
+    ['server-diagnostics.yml', 'diagnose', 'web'],
+    ['probe-release-ssh.yml', 'probe', '${{ matrix.channel }}'],
+  ]
+  for (const [file, jobId, channel] of entries) {
+    const job = workflow(file).jobs[jobId]
+    assert.equal(job.environment, `flowcube-release-${channel}`, file)
+    const action = job.steps.find(step => step.uses === './.github/actions/release-ssh')
+    assert.ok(action, file)
+    assert.equal(action.with['wireguard-private-key'], '${{ secrets.FLOWCUBE_WG_PRIVATE_KEY }}')
+    assert.equal(action.with['wireguard-client-ip'], '${{ vars.FLOWCUBE_WG_CLIENT_IP }}')
+  }
+  const probe = workflow('probe-release-ssh.yml')
+  assert.deepEqual(Object.keys(probe.on), ['workflow_dispatch'])
+  assert.deepEqual(probe.permissions, { contents: 'read' })
+  assert.deepEqual(probe.jobs.probe.strategy.matrix.channel, ['web', 'pda', 'desktop'])
+  assert.match(probe.jobs.probe.steps.at(-1).run, /bash scripts\/probe-release-ssh\.sh/)
+})
+
+test('CI SSH 将公有目标固定到隧道，继续匹配原 SSH 主机键及非默认端口', t => {
+  const sshDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-ci-tunnel-'))
+  t.after(() => fs.rmSync(sshDir, { recursive: true, force: true }))
+  const key = path.join(sshDir, 'fixture')
+  const generated = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key], { encoding: 'utf8' })
+  assert.equal(generated.status, 0, generated.stderr)
+  const publicKey = fs.readFileSync(key + '.pub', 'utf8').trim().split(' ').slice(0, 2).join(' ')
+  const host = 'deploy.example.test'
+  const port = '2222'
+  const env = {
+    ...process.env,
+    FLOWCUBE_SSH_HOST: host,
+    FLOWCUBE_SSH_PORT: port,
+    FLOWCUBE_SSH_KNOWN_HOSTS: `[${host}]:${port} ${publicKey}`,
+    FLOWCUBE_WG_SERVER_IP: '10.203.85.1',
+  }
+  const configure = () => spawnSync('bash', ['scripts/setup-ci-ssh-trust.sh', sshDir], { cwd: root, env, encoding: 'utf8' })
+  const result = configure()
+  assert.equal(result.status, 0, result.stderr)
+  const effective = spawnSync('ssh', ['-F', path.join(sshDir, 'config'), '-G', '-p', port, host], { encoding: 'utf8' })
+  assert.equal(effective.status, 0, effective.stderr)
+  assert.match(effective.stdout, /^hostname 10\.203\.85\.1$/m)
+  assert.match(effective.stdout, /^hostkeyalias \[deploy\.example\.test\]:2222$/m)
+  assert.match(effective.stdout, /^stricthostkeychecking (?:yes|true)$/m)
+  env.FLOWCUBE_WG_SERVER_IP = '10.203.85.1\nProxyCommand false'
+  assert.notEqual(configure().status, 0)
+})
+
 for (const [name, gateName] of [['test.yml', 'Tests PR Gate'], ['security-scan.yml', 'Security Scan PR Gate']]) {
   test(`${gateName} 覆盖所有作业，失败、取消、跳过或缺结果均失败`, () => {
     const jobs = workflow(name).jobs
