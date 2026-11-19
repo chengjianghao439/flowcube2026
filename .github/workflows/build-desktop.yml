@@ -566,6 +566,7 @@ jobs:
       - build
     if: ${{ !cancelled() && needs.resolve-release-target.result == 'success' && (needs.build.result == 'success' || needs.resolve-release-target.outputs.recovery_run != '') && (github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
+    environment: flowcube-release-desktop
     permissions:
       contents: write
       actions: read
@@ -674,29 +675,19 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           TARGET_SHA: ${{ needs.resolve-release-target.outputs.sha }}
         run: GITHUB_SHA="$TARGET_SHA" node scripts/wait-release-checks.js
-      - name: Setup SSH agent
-        shell: bash
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          KEY_FILE=~/.ssh/flowcube_ci_key
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
-          chmod 600 "$KEY_FILE"
-          eval "$(ssh-agent -s)"
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
-          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
-          ssh-add "$KEY_FILE"
-      - name: Add SSH known_hosts
+      - name: Connect SSH over WireGuard
         id: ssh_trust
-        shell: bash
-        env:
-          FLOWCUBE_SSH_HOST: ${{ steps.deploy_config.outputs.server_host }}
-          FLOWCUBE_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
-          FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
-        run: bash scripts/setup-ci-ssh-trust.sh
+        uses: ./.github/actions/release-ssh
+        with:
+          host: ${{ steps.deploy_config.outputs.server_host }}
+          port: ${{ steps.deploy_config.outputs.server_ssh_port }}
+          known-hosts: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
+          wireguard-endpoint: ${{ vars.FLOWCUBE_WG_ENDPOINT }}
+          wireguard-server-public-key: ${{ vars.FLOWCUBE_WG_SERVER_PUBLIC_KEY }}
+          wireguard-server-ip: ${{ vars.FLOWCUBE_WG_SERVER_IP }}
+          wireguard-client-ip: ${{ vars.FLOWCUBE_WG_CLIENT_IP }}
+          wireguard-private-key: ${{ secrets.FLOWCUBE_WG_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
       - name: Publish EXE to canonical download directory
         shell: bash
         env:

@@ -109,7 +109,7 @@ Electron 使用 `file://` 打开页面时没有浏览器域名，旧逻辑会默
 说明：
 
 - 本地服务器配置由不入 Git 的 `deploy/production.local.json` 提供；CI 使用工作流声明的 `VITE_ERP_PRODUCTION_ORIGIN` 和 `FLOWCUBE_SERVER_*` Variables。
-- `SSH_PRIVATE_KEY` 缺失时，网页发布在连接服务器前失败。部署边界见[部署说明](DEPLOY.md)。
+- 三端发布通过 WireGuard 连接生产 SSH。各发布 job 从其受保护的 GitHub 环境读取独立的 `FLOWCUBE_WG_PRIVATE_KEY` 和固定客户端地址，继续使用现有 `SSH_PRIVATE_KEY` 与核实过的 `FLOWCUBE_SSH_KNOWN_HOSTS`。网络或认证异常会中止 SSH 步骤。配置及只读探针见[发布 SSH 与救援](print-deploy-ops.md#发布-ssh-与救援)。
 
 ## 正式发布流程（唯一入口）
 

@@ -28,6 +28,10 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: flowcube-release-web
+    concurrency:
+      group: flowcube-release-vpn-web
+      cancel-in-progress: false
     # 故障预算：检查 30 + 构建 20 + artifact 3 + 部署 165 + 清理 3；job 另留 3 分钟。
     timeout-minutes: 224
 
@@ -135,42 +139,19 @@ jobs:
           [ -n "${{ steps.deploy_config.outputs.server_app_path }}" ] || { echo "::error::缺少 server_app_path"; exit 1; }
           [ -n "${{ secrets.SSH_PRIVATE_KEY }}" ] || { echo "::error::缺少 Actions Secret: SSH_PRIVATE_KEY"; exit 1; }
 
-      - name: Setup SSH agent
-        shell: bash
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          KEY_FILE=~/.ssh/flowcube_ci_key
-          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
-          chmod 600 "$KEY_FILE"
-          eval "$(ssh-agent -s)"
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
-          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
-          ssh-add "$KEY_FILE"
-          # 同一台服务器的预检、上传和执行复用 SSH，避免短连接触发 sshd 限流。
-          cat >> ~/.ssh/config <<EOF
-          Host ${{ steps.deploy_config.outputs.server_host }}
-            ControlMaster auto
-            ControlPath ~/.ssh/flowcube-%C
-            ControlPersist 300
-            ServerAliveInterval 30
-            ServerAliveCountMax 10
-          EOF
-          chmod 600 ~/.ssh/config
-          # 仅输出连接策略；不建立连接，也不输出凭据或主机配置全文。
-          ssh -G "${{ steps.deploy_config.outputs.server_host }}" | awk '/^(controlmaster|controlpersist|serveraliveinterval|serveralivecountmax) /'
-
-      - name: Add SSH known_hosts
+      - name: Connect SSH over WireGuard
         id: ssh_trust
-        shell: bash
-        env:
-          FLOWCUBE_SSH_HOST: ${{ steps.deploy_config.outputs.server_host }}
-          FLOWCUBE_SSH_PORT: ${{ steps.deploy_config.outputs.server_ssh_port }}
-          FLOWCUBE_SSH_KNOWN_HOSTS: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
-        run: bash scripts/setup-ci-ssh-trust.sh
+        uses: ./.github/actions/release-ssh
+        with:
+          host: ${{ steps.deploy_config.outputs.server_host }}
+          port: ${{ steps.deploy_config.outputs.server_ssh_port }}
+          known-hosts: ${{ vars.FLOWCUBE_SSH_KNOWN_HOSTS }}
+          wireguard-endpoint: ${{ vars.FLOWCUBE_WG_ENDPOINT }}
+          wireguard-server-public-key: ${{ vars.FLOWCUBE_WG_SERVER_PUBLIC_KEY }}
+          wireguard-server-ip: ${{ vars.FLOWCUBE_WG_SERVER_IP }}
+          wireguard-client-ip: ${{ vars.FLOWCUBE_WG_CLIENT_IP }}
+          wireguard-private-key: ${{ secrets.FLOWCUBE_WG_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Deploy backend and frontend on server
         # 故障预算：HTTPS/中转尝试 1145s + 上传 2700s + 合并 610s + 等锁 1800s + 部署/故障清理 3300s + 预检等 300s。

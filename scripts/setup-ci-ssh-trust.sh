@@ -4,7 +4,10 @@ set -euo pipefail
 : "${FLOWCUBE_SSH_PORT:?缺少 SSH 端口}"
 : "${FLOWCUBE_SSH_KNOWN_HOSTS:?缺少可信 FLOWCUBE_SSH_KNOWN_HOSTS，须经独立渠道核对服务器公钥}"
 [[ "$FLOWCUBE_SSH_HOST" =~ ^[a-zA-Z0-9_.:-]+$ ]] || { echo 'SSH 主机格式无效' >&2; exit 1; }
-[[ "$FLOWCUBE_SSH_PORT" =~ ^[0-9]{1,5}$ ]] && ((10#$FLOWCUBE_SSH_PORT > 0 && 10#$FLOWCUBE_SSH_PORT <= 65535)) || { echo 'SSH 端口无效' >&2; exit 1; }
+if [[ ! "$FLOWCUBE_SSH_PORT" =~ ^[0-9]{1,5}$ ]] || ((10#$FLOWCUBE_SSH_PORT < 1 || 10#$FLOWCUBE_SSH_PORT > 65535)); then
+  echo 'SSH 端口无效' >&2
+  exit 1
+fi
 ssh_dir=${1:-"$HOME/.ssh"}
 mkdir -p "$ssh_dir"
 chmod 700 "$ssh_dir"
@@ -22,6 +25,12 @@ printf '%s\n' "$matched" > "$candidate"
 ssh-keygen -lf "$candidate" >/dev/null
 {
   printf 'Host %s\n  StrictHostKeyChecking yes\n  UserKnownHostsFile "%s/flowcube_known_hosts"\n  GlobalKnownHostsFile /dev/null\n  UpdateHostKeys no\n' "$FLOWCUBE_SSH_HOST" "$ssh_dir"
+  if [ -n "${FLOWCUBE_WG_SERVER_IP:-}" ]; then
+    [[ "$FLOWCUBE_WG_SERVER_IP" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || { echo 'WireGuard SSH 目标格式无效' >&2; exit 1; }
+    printf '  HostName %s\n  HostKeyAlias %s\n  CheckHostIP no\n  BatchMode yes\n' "$FLOWCUBE_WG_SERVER_IP" "$lookup"
+    printf '  ControlMaster auto\n  ControlPath "%s/flowcube-%%C"\n  ControlPersist 300\n' "$ssh_dir"
+    printf '  ServerAliveInterval 30\n  ServerAliveCountMax 10\n'
+  fi
   if [ -f "$ssh_dir/config" ]; then cat "$ssh_dir/config"; fi
 } > "$config"
 mv "$candidate" "$ssh_dir/flowcube_known_hosts"

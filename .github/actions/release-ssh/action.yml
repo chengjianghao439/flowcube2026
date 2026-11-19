@@ -1,0 +1,60 @@
+name: Connect to production SSH over WireGuard
+description: Configure the release peer, pin the original SSH host key, and load the SSH agent.
+inputs:
+  host:
+    description: Original trusted SSH hostname
+    required: true
+  port:
+    description: SSH port
+    required: true
+  known-hosts:
+    description: Independently verified SSH known_hosts records
+    required: true
+  wireguard-endpoint:
+    description: WireGuard endpoint with UDP port
+    required: true
+  wireguard-server-public-key:
+    description: WireGuard server public key
+    required: true
+  wireguard-server-ip:
+    description: Private SSH destination on the WireGuard interface
+    required: true
+  wireguard-client-ip:
+    description: Private source address reserved for the release peer
+    required: true
+  wireguard-private-key:
+    description: Private key for the selected release peer
+    required: true
+  ssh-private-key:
+    description: Existing SSH authentication key
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Establish the release tunnel and pin SSH
+      shell: bash
+      env:
+        FLOWCUBE_SSH_HOST: ${{ inputs.host }}
+        FLOWCUBE_SSH_PORT: ${{ inputs.port }}
+        FLOWCUBE_SSH_KNOWN_HOSTS: ${{ inputs.known-hosts }}
+        FLOWCUBE_WG_ENDPOINT: ${{ inputs.wireguard-endpoint }}
+        FLOWCUBE_WG_SERVER_PUBLIC_KEY: ${{ inputs.wireguard-server-public-key }}
+        FLOWCUBE_WG_SERVER_IP: ${{ inputs.wireguard-server-ip }}
+        FLOWCUBE_WG_CLIENT_IP: ${{ inputs.wireguard-client-ip }}
+        FLOWCUBE_WG_PRIVATE_KEY: ${{ inputs.wireguard-private-key }}
+      run: |
+        set -euo pipefail
+        scripts_dir="$GITHUB_ACTION_PATH/../../../scripts"
+        bash "$scripts_dir/setup-release-tunnel.sh"
+        bash "$scripts_dir/setup-ci-ssh-trust.sh"
+
+    - name: Load the existing SSH credential
+      shell: bash
+      env:
+        SSH_PRIVATE_KEY: ${{ inputs.ssh-private-key }}
+      run: |
+        set -euo pipefail
+        : "${SSH_PRIVATE_KEY:?缺少发布 SSH 私钥}"
+        eval "$(ssh-agent -s)"
+        ssh-add - <<< "$SSH_PRIVATE_KEY"
+        printf 'SSH_AUTH_SOCK=%s\nSSH_AGENT_PID=%s\n' "$SSH_AUTH_SOCK" "$SSH_AGENT_PID" >> "$GITHUB_ENV"
