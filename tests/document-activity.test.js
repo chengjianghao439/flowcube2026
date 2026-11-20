@@ -120,6 +120,42 @@ test('销售详情关联仓库任务的分拣格动作取自该任务真实请�
   assert.ok(activity.events.some(event => event.title === '分配分拣格'))
 })
 
+test('销售关联变更核对实际任务后保留有效事件，隐藏找不到关联的整条记录', async () => {
+  const checkedTaskIds = new Set()
+  const tasks = [7, 8].map(id => ({ id, sale_order_id: 1, warehouse_id: 1 }))
+  const savedChange = (id, taskId, title) => ({
+    id, document_type: 'warehouse-task', document_id: 7, title, payload_version: 1,
+    payload_json: {
+      version: 1, kind: 'line_changes', quantityScale: 2, priceScale: 4,
+      rows: [], context: { warehouseTaskId: taskId },
+    },
+  })
+  const service = load('backend/src/modules/document-activity/document-activity.service.js', {
+    '../../config/db': { pool: { query: async (sql, params) => {
+      if (sql.includes('FROM warehouse_tasks')) {
+        const ids = params[0]
+        ids.forEach(id => checkedTaskIds.add(id))
+        return [tasks.filter(task => ids.includes(task.id))]
+      }
+      if (params[0] === 'warehouse-task' && sql.includes('FROM document_operation_events')) {
+        return [[savedChange(11, 8, '保留的作业变更'), savedChange(12, 9, '已找不到关联的旧作业变更')]]
+      }
+      return [[]]
+    } } },
+    './document-registry': { loadDocument: async () => ({ timeline: [], tasks: [{ taskId: 7 }] }) },
+    './document-operation': require('../backend/src/modules/document-activity/document-operation'),
+    './document-change-audit': { parsePayload: payload => payload ?? null },
+    './document-progress': { buildProgress: async (_type, _id, doc) => ({
+      sections: [], events: [], taskIds: doc.tasks.map(task => task.taskId),
+    }) },
+    '../fulfillment/fulfillment.service': { events: async () => [] },
+  })
+  const activity = await service.getActivity('sale', 1, { warehouseIds: [1] })
+
+  assert.deepEqual(Array.from(activity.events, event => event.id), ['operation-11'])
+  assert.deepEqual(checkedTaskIds, new Set([7, 8, 9]))
+})
+
 test('订单事件独立保存，只存动作和原因，不复制请求正文', async () => {
   const queries = []
   const conn = { beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release: () => {}, query: async (sql, params) => { queries.push({ sql, params }); return [{ insertId: 99 }] } }
