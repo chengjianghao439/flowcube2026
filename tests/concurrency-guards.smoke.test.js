@@ -13,7 +13,6 @@ const {
 } = require('./helpers/smokeTestKit')
 
 const inventoryService = require('../backend/src/modules/inventory/inventory.service')
-const warehouseTaskService = require('../backend/src/modules/warehouse-tasks/warehouse-tasks.service')
 const printJobsService = require('../backend/src/modules/print-jobs/print-jobs.service')
 const { createContainer, syncStockFromContainers, SOURCE_TYPE, CONTAINER_STATUS } = require('../backend/src/engine/containerEngine')
 
@@ -768,7 +767,7 @@ async function scenarioCancelReverseReturnConcurrency(log, ctx, adminToken) {
 
   // 1) 并发双击"取消"只有一条成功
   {
-    const { taskId, saleId } = await setupTaskWithLockedContainer(ctx, adminToken)
+    const { saleId } = await setupTaskWithLockedContainer(ctx, adminToken)
     const cancelCall = () => ctx.http.post(`/api/sale/${saleId}/cancel`, { token: adminToken })
     const [a, b] = await Promise.all([cancelCall(), cancelCall()])
     const successCount = [a, b].filter(r => r.ok).length
@@ -818,7 +817,7 @@ async function scenarioCancelReverseReturnConcurrency(log, ctx, adminToken) {
 //              1 个单位的量，复核扫满就会自动收口进 PACKING，没法卡在"扫过但未完成"
 //              这个中间态，因此测复核阶段的取消要在扫码之前）
 // 'packing'  → 复核扫码已做（自动收口触发 checkDone），任务处于 PACKING，尚未创建任何箱子
-async function advanceTaskToStage(ctx, token, { taskId, itemId, container }, stage) {
+async function advanceTaskToStage(ctx, token, { taskId, container }, stage) {
   const ready = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
   if (!ready.ok) throw new Error(`advanceTaskToStage: ready failed: ${JSON.stringify(ready.data)}`)
   const [[task]] = await ctx.pool.query('SELECT warehouse_id,sorting_bin_id FROM warehouse_tasks WHERE id=?', [taskId])

@@ -220,4 +220,4 @@ function summarizeSources(sources) {
     netPaid4:moneyText(net),currentPaid4:moneyText(current),paidDifference4:moneyText(diff),balanceDifference4:moneyText(balanceDiff),mismatchedPaymentCount,matched:mismatchedPaymentCount===0}
 }
 async function reconciliation(conn,companyId=1){return summarizeSources(await loadSources(conn,{companyId}))}
-module.exports={loadSources,projectReceived,proveSources,assertPeriodCurrent,reconciliation,summarizeSources}
+module.exports={loadSources,proveSources,assertPeriodCurrent,reconciliation,summarizeSources}

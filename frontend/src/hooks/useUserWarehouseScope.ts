@@ -1,17 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { payloadClient as client } from '@/api/client'
 
-export const USER_WAREHOUSE_SCOPE_QUERY_KEY = 'user-warehouse-scope'
+const USER_WAREHOUSE_SCOPE_QUERY_KEY = 'user-warehouse-scope'
 
-export interface UserWarehouseScopeRow {
+interface UserWarehouseScopeRow {
   warehouseId: number
   warehouseName: string
 }
 
-export function getUserWarehouseScopeApi(userId: number) {
+function getUserWarehouseScopeApi(userId: number) {
   return client.get<UserWarehouseScopeRow[]>(`/users/${userId}/warehouse-scope`)
 }
-export function saveUserWarehouseScopeApi(userId: number, warehouseIds: number[]) {
+function saveUserWarehouseScopeApi(userId: number, warehouseIds: number[]) {
   return client.put(`/users/${userId}/warehouse-scope`, { warehouseIds }, { skipGlobalError: true })
 }
 

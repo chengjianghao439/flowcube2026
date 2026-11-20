@@ -22,7 +22,7 @@ export interface PdaDeviceWithSecret extends PdaDevice {
   revokedSessions?: number
 }
 
-export interface PdaDeviceListResult {
+interface PdaDeviceListResult {
   list: PdaDevice[]
   pagination: { page: number; pageSize: number; total: number }
 }

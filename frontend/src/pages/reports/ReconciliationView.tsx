@@ -29,7 +29,7 @@ import { resolveRoutePermission } from '@/router/routeDefinitions'
 import { SettlementConfirmDialog } from '@/components/shared/payments/SettlementConfirmDialog'
 import type { TableColumn } from '@/types'
 
-export type StatementType = 1 | 2
+type StatementType = 1 | 2
 
 /** 对账页只管月结往来方；现结走账款页，两边合起来才是全量 */
 const MONTHLY_SCOPE = String(SETTLEMENT_TYPE.MONTHLY)

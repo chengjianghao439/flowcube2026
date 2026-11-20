@@ -794,7 +794,6 @@ module.exports = {
   getPendingUpdate,
   clearPendingUpdate,
   /** 供测试或后续自动下载模块复用 */
-  isRemoteVersionNewer,
   isValidDownloadUrl,
   startUpdateDownload,
   ignoreVersion,

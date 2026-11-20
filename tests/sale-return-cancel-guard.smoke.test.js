@@ -244,7 +244,7 @@ const pendingPutawayQty = async (pool, taskId) => {
 
 /** 建销售单 → 占库 → 拣货 → 复核 → 装箱 → 出库（走完整 PDA 链路，返回已出库的销售单） */
 async function shipSale(ctx, token, { product, seed, qty }) {
-  const { pool, http, warehouse, location, customer, pdaHeaders } = ctx
+  const { pool, http, warehouse, customer, pdaHeaders } = ctx
   const H = pdaHeaders()
 
   const saleResp = await http.post('/api/sale', {
@@ -532,7 +532,7 @@ async function main() {
       revContainers.length === activeOnReturn(midContainers).length && revContainers.length > 0,
       `预锁=${JSON.stringify(revContainers)}`)
 
-    const foreignStockBefore = await stockQty(pool, product.id, warehouse.id)
+    await stockQty(pool, product.id, warehouse.id)
     const foreignScan = await http.post('/api/scan-logs', {
       token, headers: ctx.pdaHeaders(),
       json: {

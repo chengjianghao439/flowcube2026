@@ -9,21 +9,21 @@ export interface AssistantLine {
   available?: number
   priceSource?: { level?: string; source?: string }
 }
-export interface AssistantCandidate {
+interface AssistantCandidate {
   id: number | string
   title: string
   subtitle?: string
   details?: { label: string; value: string | number }[]
 }
-export interface AssistantAccount { id: number; name: string }
-export interface AssistantAllocation {
+interface AssistantAccount { id: number; name: string }
+interface AssistantAllocation {
   recordId: number
   orderNo: string
   amountCents: number
   balanceBeforeCents: number
   settledAfter?: boolean
 }
-export interface AssistantPreview {
+interface AssistantPreview {
   title?: string
   confirmLabel?: string
   customer?: { id?: number; name: string }

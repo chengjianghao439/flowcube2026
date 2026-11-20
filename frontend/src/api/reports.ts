@@ -2,7 +2,7 @@ import { useAuthStore } from '@/store/authStore'
 import { payloadClient as client } from './client'
 
 /** 已有统计接口的商品身份字段，与 reports.metrics.js 投影保持一致。 */
-export interface ProductStatsRow {
+interface ProductStatsRow {
   productCode: string
   productName: string
   articleNumber: string | null
@@ -12,12 +12,12 @@ export interface ProductStatsRow {
   totalAmount: number
 }
 
-export interface PurchaseStats {
+interface PurchaseStats {
   byMonth: { month: string; orderCount: number; totalAmount: number; receivedAmount: number }[]
   bySupplier: { supplierName: string; orderCount: number; totalAmount: number; receivedAmount: number }[]
   byProduct: ProductStatsRow[]
 }
-export interface SaleStats {
+interface SaleStats {
   byMonth: { month: string; orderCount: number; totalAmount: number; shippedAmount: number }[]
   byCustomer: { customerName: string; orderCount: number; totalAmount: number }[]
   byProduct: ProductStatsRow[]
@@ -50,7 +50,7 @@ export const getPurchaseStatsApi  = (p: object) => client.get<PurchaseStats>(`/r
 export const getSaleStatsApi      = (p: object) => client.get<SaleStats>(`/reports/sale?${q(p)}`)
 export const getInventoryStatsApi = (p: object) => client.get<InventoryStats>(`/reports/inventory?${q(p)}`)
 
-export interface PdaOperator {
+interface PdaOperator {
   operatorId: number
   operatorName: string
   scanCount: number
@@ -58,7 +58,7 @@ export interface PdaOperator {
   avgMinutes: number | null
 }
 
-export interface PdaPerformance {
+interface PdaPerformance {
   today: { scanCount: number; pickQty: number }
   topOperator: PdaOperator | null
   operators: PdaOperator[]
@@ -69,13 +69,13 @@ export const getPdaPerformanceApi = () =>
   client.get<PdaPerformance>('/reports/pda-performance')
 
 // ── PDA 异常分析 ──────────────────────────────────────────────────────────────
-export interface PdaAnomalySummary {
+interface PdaAnomalySummary {
   totalScans:  number
   totalErrors: number
   totalUndos:  number
   errorRate:   string
 }
-export interface PdaAnomalyReport {
+interface PdaAnomalyReport {
   summary:        PdaAnomalySummary
   byOperator:     { operatorId: number; operatorName: string; errorCount: number }[]
   byReason:       { reason: string; count: number }[]
@@ -88,7 +88,7 @@ export const getPdaAnomalyApi = (params: { startDate?: string; endDate?: string 
   client.get<PdaAnomalyReport>(`/scan-logs/anomaly?${q(params)}`)
 
 // ── 仓库运营看板 ──────────────────────────────────────────────────────────────
-export interface WarehouseOpsSummary {
+interface WarehouseOpsSummary {
   shippedToday: number | null
   pickingNow:   number | null
   inboundToday: number | null
@@ -127,7 +127,7 @@ export interface WarehouseOpsData {
 export const getWarehouseOpsApi = () =>
   client.get<WarehouseOpsData>('/reports/warehouse-ops')
 
-export interface WorkbenchItem {
+interface WorkbenchItem {
   id: number | string
   title: string
   subtitle?: string | null
@@ -148,7 +148,7 @@ export interface WorkbenchCard {
   priorityLabel: string
   items: WorkbenchItem[]
 }
-export interface WorkbenchSection {
+interface WorkbenchSection {
   key: string
   title: string
   description: string
@@ -224,7 +224,7 @@ export interface ReconciliationRecord {
   createdAt: string
 }
 
-export interface ReconciliationSummary {
+interface ReconciliationSummary {
   totalRecords: number
   totalAmount: number
   paidAmount: number
@@ -233,7 +233,7 @@ export interface ReconciliationSummary {
   pendingCount: number
 }
 
-export interface ReconciliationReport {
+interface ReconciliationReport {
   summary: ReconciliationSummary
   list: ReconciliationRecord[]
   type: 1 | 2
@@ -244,7 +244,7 @@ export const getReconciliationApi = (params: { type?: number | string; startDate
   client.get<ReconciliationReport>('/reports/reconciliation', { params })
 
 /** 行级成本来源（2026-09-27 P2）：让榜单每一行都能定位毛利是否可信 */
-export type ProfitCostBasis = 'snapshot' | 'estimated' | 'missing' | 'mixed'
+type ProfitCostBasis = 'snapshot' | 'estimated' | 'missing' | 'mixed'
 
 export interface ProfitSaleOrderRow {
   id: number
@@ -314,7 +314,7 @@ export interface ProfitSlowMovingRow {
   path: string
 }
 
-export interface ProfitAnalysisSummary {
+interface ProfitAnalysisSummary {
   saleAmount: number
   costAmount: number
   grossProfit: number
@@ -327,7 +327,7 @@ export interface ProfitAnalysisSummary {
   slowMovingCount: number
 }
 
-export interface ProfitAnalysisReport {
+interface ProfitAnalysisReport {
   summary: ProfitAnalysisSummary
   saleOrders: ProfitSaleOrderRow[]
   products: ProfitProductRow[]
@@ -348,7 +348,7 @@ export interface KpiMetric {
   changePct: number | null
 }
 /** 近 N 个月趋势序列的一行（口径与 KpiMetric 一致：status=4+sale_date / payment_date） */
-export interface KpiTrendRow {
+interface KpiTrendRow {
   month: string
   gmv: number
   grossProfit: number
@@ -365,7 +365,7 @@ export interface KpiByWarehouseRow {
   orderCount: number
   avgOrderValue: number
 }
-export interface KpiReport {
+interface KpiReport {
   period: string
   prevPeriod: string
   metrics: KpiMetric[]
@@ -402,7 +402,7 @@ export interface WaveStats {
   efficiency: number | null
 }
 
-export interface WavePerformance {
+interface WavePerformance {
   summary: {
     totalWaves: number
     completedWaves: number
@@ -417,7 +417,7 @@ export const getWavePerformanceApi = (params: { startDate?: string; endDate?: st
   client.get<WavePerformance>(`/reports/wave-performance?${q(params)}`)
 
 // ── 采购价格趋势 ──────────────────────────────────────────────────────────────
-export interface PurchasePricePoint {
+interface PurchasePricePoint {
   month: string
   avgPrice: number
   orderCount: number

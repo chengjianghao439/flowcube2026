@@ -131,8 +131,6 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 .desktop-workspace .desktop-purchase-form > .desktop-section-card { overflow:hidden; }
 .desktop-workspace [data-purchase-entry-table] { font-size:13px; }
 .desktop-workspace [data-purchase-entry-table] td { padding-block:10px; }
-.desktop-workspace .desktop-order-overview { padding:0 0 16px; border-bottom:0; font-size:13px; }
-.desktop-workspace .desktop-order-overview strong { font-size:20px; font-weight:600; letter-spacing:-.02em; }
 .desktop-workspace .desktop-order-facts { gap:14px 28px; font-size:13px; }
 .desktop-workspace .desktop-order-facts > div:not(.col-span-full) > dt { min-width:64px; }
 .desktop-workspace .desktop-order-facts dd { font-weight:500; line-height:1.6; }
@@ -416,7 +414,6 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { an
 }
 /* 低频配置、审计详情与会计分区沿同一材质；不扩展到PDA或打印画布。 */
 .desktop-workspace .fc-context-notice { border-radius:10px; background:hsl(var(--card) / .72); }
-.desktop-workspace .fc-context-notice-inline { border:0; border-radius:0; background:transparent; }
 /* 同一工作面承载类别、查询、当前范围和表格，减少层层堆叠的面板。 */
 .desktop-workspace .fc-list-workbench { border-radius:14px; }
 .desktop-workspace .fc-list-toolbar { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px 20px; padding:14px 16px 8px; }

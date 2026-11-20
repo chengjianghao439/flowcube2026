@@ -17,7 +17,6 @@ function load(file, deps, transform = source => source) {
 }
 const scope = load('utils/warehouseScope.js', { '../config/db': {}, './AppError': AppError })
 const shortReceipt = load('modules/inbound-tasks/inbound-tasks.short-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, './inbound-tasks.cost': require('../backend/src/modules/inbound-tasks/inbound-tasks.cost') })
-const closeReceipt = load('modules/purchase/purchase.close-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope })
 const printStatus = load('modules/print-jobs/print-jobs.status.js', {
   '../../utils/AppError': AppError,
   '../../utils/inboundThresholds': { DEFAULT_INBOUND_THRESHOLDS: { printTimeoutMinutes: 5 } },

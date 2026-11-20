@@ -293,7 +293,6 @@ function closure(seeds, filter = () => true) {
 }
 const reachable = closure(roots)
 const excludedFiles = [...bySource.keys()].filter(file => !reachable.has(file))
-const isUiFile = file => /\.(tsx|jsx)$/.test(file)
 function uiClosure(route) {
   return closure([route.source], (edge, from) => {
     // Do not spread route registry or shared workspace wrapper to every page.
@@ -319,14 +318,6 @@ function classifySurface(component) {
   if (/(?:State|ErrorBoundary|DoneView|Flash|Badge|Notice|RecoveryPanel|QueryFeedback|CriticalActionNotice|ConnectionGate|UpdateDialog)$/.test(component) || /^(?:OrderEntryIssues|RecoveryPanel|HandlingOperationPanel|DisposalExecutionPanel)$/.test(component)) return '状态表面'
   if (/^(?:GlobalSearch|NotificationBell|UserMenu|WorkspaceTabs|TopNav|DailyWork|MergedPage|KeepAliveOutlet|PdaHeader)$/.test(component)) return '导航/全局表面'
   return undefined
-}
-function enclosingNode(node) {
-  let current = node
-  while (current.parent && !ts.isSourceFile(current.parent)) {
-    if (ts.isFunctionDeclaration(current.parent) || ts.isArrowFunction(current.parent) || ts.isFunctionExpression(current.parent)) return current.parent
-    current = current.parent
-  }
-  return sourceOf(node)
 }
 function renderContainer(node) {
   let current = node

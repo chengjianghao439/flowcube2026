@@ -201,5 +201,4 @@ async function resolvePrinterForJob({ warehouseId, jobType, contentType, require
 module.exports = {
   normalizeJobType,
   resolvePrinterForJob,
-  printerTypeForContentType,
 }

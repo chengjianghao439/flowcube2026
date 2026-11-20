@@ -273,7 +273,6 @@ export const SALE_STATUS = {
   "RESERVED": 2,
   "SHIPPED": 4
 } as const
-export type SaleStatus = typeof SALE_STATUS[keyof typeof SALE_STATUS]
 export const SALE_STATUS_NAME = {
   "1": "草稿",
   "2": "已占库",
@@ -372,36 +371,6 @@ export const SALE_ACTION_RULES = {
     "to": 3
   }
 } as const
-export const SALE_STATUS_OPTIONS = [
-  {
-    "label": "全部状态",
-    "value": ""
-  },
-  {
-    "label": "草稿",
-    "value": "1"
-  },
-  {
-    "label": "已占库",
-    "value": "2"
-  },
-  {
-    "label": "拣货中",
-    "value": "3"
-  },
-  {
-    "label": "已出库",
-    "value": "4"
-  },
-  {
-    "label": "已取消",
-    "value": "5"
-  },
-  {
-    "label": "部分占库",
-    "value": "6"
-  }
-] as const
 
 export const PURCHASE_STATUS_NAME = {
   "1": "草稿",
@@ -409,95 +378,6 @@ export const PURCHASE_STATUS_NAME = {
   "3": "已完成",
   "4": "已取消",
   "5": "待审批"
-} as const
-export const PURCHASE_ACTION_RULES = {
-  "approve": {
-    "blocked": {
-      "1": "采购单尚未提交",
-      "2": "该采购单已确认，无需审批",
-      "3": "采购单已完成",
-      "4": "采购单已取消"
-    },
-    "from": [
-      5
-    ],
-    "message": "只有待审批的采购单可以审批通过",
-    "to": 2
-  },
-  "cancel": {
-    "blocked": {
-      "3": "已完成的采购单不能取消",
-      "4": "采购单已取消"
-    },
-    "from": [
-      1,
-      2,
-      5
-    ],
-    "message": "当前状态的采购单不能取消",
-    "to": 4
-  },
-  "close": {
-    "from": [
-      2
-    ],
-    "message": "只有已提交的采购单可以关闭剩余结案",
-    "to": 3
-  },
-  "complete": {
-    "from": [
-      2
-    ],
-    "message": "只有已提交的采购单可以完成",
-    "to": 3
-  },
-  "confirm": {
-    "from": [
-      1
-    ],
-    "message": "只有草稿状态的采购单可以提交",
-    "to": 2
-  },
-  "createInboundTask": {
-    "from": [
-      2
-    ],
-    "message": "只有已确认的采购单可创建入库任务"
-  },
-  "edit": {
-    "from": [
-      1
-    ],
-    "message": "只有草稿状态的采购单可以编辑"
-  },
-  "reject": {
-    "blocked": {
-      "1": "采购单尚未提交",
-      "2": "该采购单已确认",
-      "3": "采购单已完成",
-      "4": "采购单已取消"
-    },
-    "from": [
-      5
-    ],
-    "message": "只有待审批的采购单可以驳回",
-    "to": 1
-  },
-  "reopen": {
-    "from": [
-      3
-    ],
-    "message": "只有已完成的采购单可以重新打开",
-    "to": 2
-  },
-  "withdrawConfirm": {
-    "from": [
-      2,
-      5
-    ],
-    "message": "只有已确认/待审批的采购单可以撤回",
-    "to": 1
-  }
 } as const
 export const PURCHASE_STATUS_OPTIONS = [
   {
@@ -526,12 +406,6 @@ export const PURCHASE_STATUS_OPTIONS = [
   }
 ] as const
 
-export const SUPPLIER_REFUND_STATUS = {
-  "CANCELLED": 4,
-  "CONFIRMED": 2,
-  "DRAFT": 1,
-  "RECEIVED": 3
-} as const
 export const SUPPLIER_REFUND_STATUS_NAME = {
   "1": "草稿",
   "2": "待收退款",
@@ -562,28 +436,6 @@ export const SUPPLIER_REFUND_ACTION_RULES = {
     "to": 3
   }
 } as const
-export const SUPPLIER_REFUND_STATUS_OPTIONS = [
-  {
-    "label": "全部状态",
-    "value": ""
-  },
-  {
-    "label": "草稿",
-    "value": "1"
-  },
-  {
-    "label": "待收退款",
-    "value": "2"
-  },
-  {
-    "label": "已收退款",
-    "value": "3"
-  },
-  {
-    "label": "已取消",
-    "value": "4"
-  }
-] as const
 
 export const DISPOSAL_STATUS_NAME = {
   "1": "草稿",
@@ -643,15 +495,5 @@ export const MONTHLY_TERMS_OPTIONS = [
 ] as const
 export const IMMEDIATE_SETTLEMENT_TYPES = [
   1
-] as const
-export const SETTLEMENT_TYPE_OPTIONS = [
-  {
-    "label": "现结",
-    "value": "1"
-  },
-  {
-    "label": "月结",
-    "value": "2"
-  }
 ] as const
 

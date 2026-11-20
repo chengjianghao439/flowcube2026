@@ -41,22 +41,9 @@ export function amountCents(price, quantity) {
   if (!Number.isSafeInteger(result)) throw new Error('金额超过安全计算范围，请人工处理');
   return result;
 }
-export function centsToYuan(cents) {
-  return (Number(cents) / 100).toFixed(2);
-}
 
 // 数字纪律检查：汇报文本中出现的金额/数量必须能在工具返回中找到出处。
 // allowed: 数字数组（元或个数的数值）。返回文本里无法溯源的数字列表（空 = 通过）。
-export function checkReportNumbers(text, allowed) {
-  const allowedSet = new Set(allowed.map(v => String(Number(v))));
-  const found = String(text).match(/\d+(?:\.\d+)?/g) || [];
-  const bad = [];
-  for (const raw of found) {
-    const norm = String(Number(raw));
-    if (!allowedSet.has(norm)) bad.push(raw);
-  }
-  return bad;
-}
 
 // 预览新鲜度：比对关键字段（价格/可用量），返回变化明细（空数组 = 无变化）
 export function diffPreview(before, after) {

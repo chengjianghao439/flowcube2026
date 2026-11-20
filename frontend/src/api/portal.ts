@@ -19,7 +19,7 @@ export interface PortalStatementRow {
   createdAt: string
 }
 
-export interface PortalStatementResult {
+interface PortalStatementResult {
   customer: { id: number; name: string }
   list: PortalStatementRow[]
   pagination: { page: number; pageSize: number; total: number }

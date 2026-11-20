@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
-import { TOOLS } from '../src/tools.js';
 import { TaskStore } from '../src/tasks.js';
 import { handleMessage, confirmTask, tryAccountSelection, buildReceiptPreview } from '../src/agent.js';
 import { unverifiedChatReply } from '../src/persona.js';

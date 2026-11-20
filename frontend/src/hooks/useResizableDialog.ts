@@ -63,7 +63,7 @@ function loadPersistedSize(
 
 // ─── 公共类型 ─────────────────────────────────────────────────────────────────
 
-export interface UseResizableDialogOptions {
+interface UseResizableDialogOptions {
   dialogId: string
   defaultWidth: number
   defaultHeight: number
@@ -73,7 +73,7 @@ export interface UseResizableDialogOptions {
   resizable?: boolean
 }
 
-export interface UseResizableDialogReturn {
+interface UseResizableDialogReturn {
   width: number
   height: number
   /** 绑定到 resize handle 的 onMouseDown 事件处理器 */

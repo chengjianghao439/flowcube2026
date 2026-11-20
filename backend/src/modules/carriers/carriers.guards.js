@@ -40,4 +40,4 @@ function accountChangedOf(row, { platformCode, monthlyAccount }) {
     || (!!row.platform_code && row.platform_code !== platformCode)
 }
 
-module.exports = { assertAccountChangeAllowed, accountChangedOf, PENDING_WAYBILL_STATUSES }
+module.exports = { assertAccountChangeAllowed, accountChangedOf }

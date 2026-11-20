@@ -41,19 +41,6 @@ export interface User {
   permissions?: string[]
 }
 
-export interface TokenPayload {
-  userId: number
-  roleId: number
-  iat: number
-  exp: number
-}
-
-export interface Permission {
-  code: string
-  name: string
-  module: string
-}
-
 // ─── 通用表格列定义 ─────────────────────────────────────────────────────────────
 
 export interface TableColumn<T extends object> {

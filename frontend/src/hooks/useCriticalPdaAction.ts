@@ -43,7 +43,7 @@ const sameDevice = (record: PendingRequestRecord) => !record.endpoint || record.
 
 type ConfirmContext = { recovered: boolean; requestKey: string }
 export type CriticalPdaActionPhase = 'idle' | 'submitting' | 'pending' | 'confirming' | 'failed'
-export type CriticalPdaConfirmResult = OperationRequestStatus | {
+type CriticalPdaConfirmResult = OperationRequestStatus | {
   status: 'state_confirmed'; data: unknown; message: string
 } | {
   status: 'state_unconfirmed'; data: null; message: string; reason: 'receipt_missing' | 'state_not_advanced'

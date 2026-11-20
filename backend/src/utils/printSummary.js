@@ -43,7 +43,5 @@ function buildPackagePrintSummary(rows, totalPackages, { timeoutMinutes } = {}) 
 }
 
 module.exports = {
-  createPackagePrintSummary,
-  addLatestPrintJobToSummary,
   buildPackagePrintSummary,
 }

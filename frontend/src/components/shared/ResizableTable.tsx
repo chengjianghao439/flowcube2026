@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { useTableColumns } from './useTableColumns'
 import { TableColumnHeader } from './TableColumnHeader'
 
-export interface ResizableTableProps extends TableHTMLAttributes<HTMLTableElement> {
+interface ResizableTableProps extends TableHTMLAttributes<HTMLTableElement> {
   columns: (TableColumn<object> & { headerTitle?: string })[]
   columnStorageKey: string
   minWidth?: number

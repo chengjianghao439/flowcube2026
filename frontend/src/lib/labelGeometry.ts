@@ -9,12 +9,12 @@
  * 后端 ZPL：同一 resolveLayout → ×MM_TO_DOT 渲染为 ZPL。几何只算一次，两端一致。
  */
 
-export type LabelElementType = 'text' | 'title' | 'barcode'
-export type TextAlign = 'left' | 'center' | 'right'
-export type BarcodeSymbology = 'code128' | 'ean13'
+type LabelElementType = 'text' | 'title' | 'barcode'
+type TextAlign = 'left' | 'center' | 'right'
+type BarcodeSymbology = 'code128' | 'ean13'
 
 /** v2 标签元素 */
-export interface LabelElement {
+interface LabelElement {
   id: string
   type: LabelElementType
   fieldKey: string
@@ -31,7 +31,7 @@ export interface LabelElement {
   hri?: boolean
 }
 
-export interface LabelLayoutV2 {
+interface LabelLayoutV2 {
   version: 2
   canvasWidthMm: number
   canvasHeightMm: number
@@ -39,11 +39,11 @@ export interface LabelLayoutV2 {
 }
 
 /** 中性绘制图元（mm 单位） */
-export type DrawPrimitive =
+type DrawPrimitive =
   | { kind: 'barcode'; xMm: number; yMm: number; widthMm: number; heightMm: number; value: string; symbology: BarcodeSymbology; hri: boolean }
   | { kind: 'text'; xMm: number; yMm: number; widthMm: number; heightMm: number; text: string; fontHeightMm: number; align: TextAlign }
 
-export interface ResolvedLayout {
+interface ResolvedLayout {
   widthMm: number
   heightMm: number
   primitives: DrawPrimitive[]
@@ -51,9 +51,6 @@ export interface ResolvedLayout {
 
 /** pt → mm（1pt = 1/72 inch）。旧模板 fontSize(pt) 迁移用 */
 export const PT_TO_MM = 25.4 / 72
-
-/** v2 仅支持这三种元素；divider/table 属单据画布模板，标签真机不画，normalize 阶段剔除 */
-export const LABEL_ELEMENT_TYPES: LabelElementType[] = ['text', 'title', 'barcode']
 
 function num(v: unknown, fallback = 0): number {
   const n = Number(v)

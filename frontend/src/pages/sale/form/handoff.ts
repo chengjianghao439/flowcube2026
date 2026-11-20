@@ -1,4 +1,4 @@
-export type SaleHandoff = { focus: 'fulfillment' | 'progress'; taskId?: number }
+type SaleHandoff = { focus: 'fulfillment' | 'progress'; taskId?: number }
 /** 仅读取本标签的本单交接；空值和重复值都不能被容错成有效任务。 */
 export function readSaleHandoff(path: string, saleId: number): SaleHandoff | 'invalid' | null {
   const [pathname, search = ''] = path.split('?')

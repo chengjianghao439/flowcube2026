@@ -26,15 +26,12 @@
 const {
   createLogger,
   prepareSmokeContext,
-  dbQuery,
   randomRef,
 } = require('./helpers/smokeTestKit')
 const periodSvc = require('../backend/src/modules/accounting/accounting.period.service')
-const engine = require('../backend/src/modules/accounting/voucher-engine')
 const { syncStockFromContainers } = require('../backend/src/engine/containerEngine')
 const { SOURCE_TYPES } = require('../backend/src/constants/voucherSource')
 
-const today = () => new Date().toISOString().slice(0, 10)
 const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100
 
 async function main() {

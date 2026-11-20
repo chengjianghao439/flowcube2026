@@ -3,7 +3,7 @@ import * as definitions from './routeDefinitions'
 import { hasInboundEditRecoveryForPath } from '@/hooks/useInboundTaskEditRecovery'
 export * from './routeDefinitions'
 
-export type RouteComponent = LazyExoticComponent<ComponentType>
+type RouteComponent = LazyExoticComponent<ComponentType>
 export type RouteRegistryEntry = definitions.RouteRegistryEntry & { component: RouteComponent }
 export type AuthenticationRouteEntry = definitions.AuthenticationRouteEntry & { component: RouteComponent }
 export type RoutePatternEntry = definitions.RoutePatternEntry & { component: RouteComponent }

@@ -29,30 +29,3 @@ export default function PdaSection({ title, children, className = '' }: PdaSecti
     </div>
   )
 }
-
-/**
- * PdaSectionRow — Section 内的单行条目（带可选分隔线）
- *
- * 示例：
- *   商品名称          数量
- */
-interface PdaSectionRowProps {
-  label: string
-  value?: ReactNode
-  children?: ReactNode
-  /** 是否显示底部分隔线，默认 true */
-  divider?: boolean
-}
-
-export function PdaSectionRow({ label, value, children, divider = true }: PdaSectionRowProps) {
-  return (
-    <div
-      className={`flex items-center justify-between gap-3 px-4 py-3 text-sm ${
-        divider ? 'border-b border-border last:border-0' : ''
-      }`}
-    >
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="min-w-0 font-medium text-foreground text-right [overflow-wrap:anywhere]">{value ?? children}</span>
-    </div>
-  )
-}

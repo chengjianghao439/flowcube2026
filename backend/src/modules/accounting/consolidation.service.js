@@ -174,4 +174,4 @@ async function getConsolidatedIncomeStatement({ groupId, period }) {
   }
 }
 
-module.exports = { getConsolidatedBalanceSheet, getConsolidatedIncomeStatement, getGroupCompanies }
+module.exports = { getConsolidatedBalanceSheet, getConsolidatedIncomeStatement }

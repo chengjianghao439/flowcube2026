@@ -39,10 +39,10 @@ function guideLinksFor(text) {
   if (!picked.length) ['新建销售单', '库存管理', '采购订单', '客户往来'].forEach(add);
   return picked.map(guideToken).join('、');
 }
-export const OUTSIDE_FLOW_REPLY = `这边只聊极序相关的事。要查库存或开单，直接说。也可以先打开 ${guideLinksFor('')}。`;
+const OUTSIDE_FLOW_REPLY = `这边只聊极序相关的事。要查库存或开单，直接说。也可以先打开 ${guideLinksFor('')}。`;
 export const DISCUSSION_CLOSED_REPLY = `小满不做开放讨论。要办事直接说，例如「做个订单」或「查库存」，也可以打开 ${guideLinksFor('')}。`;
-export const CLARIFY_BUSINESS_REPLY = '请说明要查询的对象：单据请给出类型和完整单号，账款请给出客户全称，库存请给出商品和仓库。我不会把“这张单”或“那笔款”猜成某一条记录。';
-export function blockedGuide(text) {
+const CLARIFY_BUSINESS_REPLY = '请说明要查询的对象：单据请给出类型和完整单号，账款请给出客户全称，库存请给出商品和仓库。我不会把“这张单”或“那笔款”猜成某一条记录。';
+function blockedGuide(text) {
   return `这一步我不能代为办理。请到对应菜单继续：${guideLinksFor(text)}。我不会替你提交。`;
 }
 export function guideReply(text) {

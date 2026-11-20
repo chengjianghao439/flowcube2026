@@ -36,7 +36,7 @@ const DEFAULT_RECORD_QUERY: PaymentQueryValues = { ...ALL_DATES_QUERY, status: '
 /** 1未付 = 尚未发生 · 2部分付 = 进行中 · 3已付清 = 终态成功 */
 const ST_TONE: Record<number, StatusTone> = { 1: 'draft', 2: 'active', 3: 'success' }
 
-export type PaymentType = 1 | 2
+type PaymentType = 1 | 2
 
 /**
  * 应付与应收共用同一张 `payment_records` 表和同一套接口，页面结构完全一致，

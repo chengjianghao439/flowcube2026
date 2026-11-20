@@ -7,7 +7,7 @@ import { useDirtyGuardStore } from './dirtyGuardStore'
 import { toast } from '@/lib/toast'
 export { PATH_TITLES } from '@/router/routeDefinitions'
 
-export interface WorkspaceTab {
+interface WorkspaceTab {
   key: string        // 唯一标识，对列表页即路径本身
   title: string
   path: string

@@ -4,10 +4,6 @@ export const INBOUND_STATUS_LABEL: Record<InboundTaskStatus, string> = {
   1: '待收货', 2: '收货中', 3: '待上架', 4: '已完成', 5: '已取消',
 }
 
-export const INBOUND_STATUS_VARIANT: Record<InboundTaskStatus, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  1: 'outline', 2: 'secondary', 3: 'default', 4: 'default', 5: 'destructive',
-}
-
 export interface InboundTaskItem {
   id: number
   taskId: number
@@ -36,7 +32,7 @@ export interface InboundStatusView {
   label: string
 }
 
-export interface InboundPrintSummary {
+interface InboundPrintSummary {
   total: number
   queued: number
   printing: number
@@ -46,7 +42,7 @@ export interface InboundPrintSummary {
   unassigned?: number
 }
 
-export interface InboundPutawaySummary {
+interface InboundPutawaySummary {
   waitingContainers: number
   storedContainers: number
   waitingQty: number
@@ -54,7 +50,7 @@ export interface InboundPutawaySummary {
   overdueContainers: number
 }
 
-export interface InboundTimelineEvent {
+interface InboundTimelineEvent {
   id: number
   eventType: string
   title: string
@@ -65,7 +61,7 @@ export interface InboundTimelineEvent {
   createdAt: string
 }
 
-export interface InboundRecentPrintJob {
+interface InboundRecentPrintJob {
   id: number
   status: number
   statusKey: 'queued' | 'printing' | 'success' | 'failed' | 'timeout' | 'unassigned' | 'cancelled'
@@ -84,7 +80,7 @@ export interface InboundRecentPrintJob {
   updatedAt: string
 }
 
-export interface InboundPrintBatch {
+interface InboundPrintBatch {
   batchKey: string
   title: string
   dispatchReason: string | null
@@ -221,7 +217,7 @@ export interface PutawayParams {
   suggestedLocationCode?: string
 }
 
-export interface InboundContainerRow {
+interface InboundContainerRow {
   id: number
   barcode: string
   taskId: number | null

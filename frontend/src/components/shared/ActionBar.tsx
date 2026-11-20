@@ -43,7 +43,7 @@
 
 import { cn } from '@/lib/utils'
 
-export interface ActionBarProps {
+interface ActionBarProps {
   /** 页面主标题，支持字符串或自定义 JSX（text-xl font-semibold 由组件提供） */
   title: React.ReactNode
 

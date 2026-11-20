@@ -21,7 +21,7 @@ export type BarcodeType =
   | 'wave'
   | 'unknown'
 
-export interface ParsedBarcode {
+interface ParsedBarcode {
   /** 原始扫描字符串 */
   raw: string
   /** 条码类型 */

@@ -22,7 +22,7 @@ export interface AvgCostRow {
   diffValue: number
   drifted: boolean
 }
-export interface AvgCostResult {
+interface AvgCostResult {
   ok: boolean
   driftedCount: number
   totalDiffValue: number
@@ -32,7 +32,7 @@ export interface AvgCostResult {
   matchedRows?: number
 }
 
-export function getAvgCostReconciliationApi() {
+function getAvgCostReconciliationApi() {
   return payloadClient.get<AvgCostResult>('/reports/avg-cost-reconciliation')
 }
 

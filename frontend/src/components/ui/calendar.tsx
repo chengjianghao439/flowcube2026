@@ -6,7 +6,7 @@ import { zhCN } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/buttonVariants"
 
-export type CalendarProps = React.ComponentProps<typeof DayPicker>
+type CalendarProps = React.ComponentProps<typeof DayPicker>
 
 function Calendar({
   className,

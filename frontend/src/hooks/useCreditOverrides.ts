@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   listCreditOverridesApi,
-  getCreditOverrideApi,
   createCreditOverrideApi,
   submitCreditOverrideApi,
   cancelCreditOverrideApi,
@@ -18,14 +17,6 @@ export function useCreditOverrides(params: Record<string, unknown>) {
   return useQuery({
     queryKey: [QUERY_KEY, params],
     queryFn: () => listCreditOverridesApi(params),
-  })
-}
-
-export function useCreditOverride(id: number | null) {
-  return useQuery({
-    queryKey: [QUERY_KEY, 'detail', id],
-    queryFn: () => (id ? getCreditOverrideApi(id) : Promise.resolve(null)),
-    enabled: !!id,
   })
 }
 

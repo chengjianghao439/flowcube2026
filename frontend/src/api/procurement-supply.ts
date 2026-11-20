@@ -1,6 +1,6 @@
 import { payloadClient } from './client'
 
-export interface TransferCandidate { warehouseId: number; warehouseName: string; quantity: number; arrivalCondition: string; expectedArrival: string | null }
+interface TransferCandidate { warehouseId: number; warehouseName: string; quantity: number; arrivalCondition: string; expectedArrival: string | null }
 export interface ProcurementSupply {
   id: string; productId: number; productCode: string; productName: string; unit: string
   articleNumber?: string | null; spec?: string | null; color?: string | null

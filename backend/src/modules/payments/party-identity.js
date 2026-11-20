@@ -69,4 +69,4 @@ async function assertAllocationParty(conn, recordId, receipt) {
     throw new AppError('汇款与账款的单位归属不一致；未归属汇款须先核实，不能核销到已知单位',409)
   }
 }
-module.exports = { recordParty, resolveReceiptParty, assertAllocationParty }
+module.exports = { resolveReceiptParty, assertAllocationParty }

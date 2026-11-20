@@ -227,7 +227,5 @@ async function settlePurchaseOnAudit(conn, taskId) {
 
 module.exports = {
   recomputePurchasePayable,
-  isPurchaseFullyReceivedAndAudited,
-  tryCompletePurchase,
   settlePurchaseOnAudit,
 }
