@@ -1,7 +1,7 @@
 {
-  "version": "0.14.4",
-  "versionCode": 164,
+  "version": "0.14.5",
+  "versionCode": 165,
   "filename": "app-release.apk",
-  "releaseNote": "- 修复整单取消和 PDA 同时首次拣货时的并发冲突。销售列表、总数和状态统计使用同一组筛选。",
-  "publishedAt": "2026-11-19T04:27:06.973Z"
+  "releaseNote": "- 修复销售订单关联作业记录的仓库权限校验。员工只会看到自己有权限查看的作业记录。",
+  "publishedAt": "2026-11-20T08:49:54.543Z"
 }
