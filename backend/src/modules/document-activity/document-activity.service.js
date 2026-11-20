@@ -16,14 +16,18 @@ function savedEvent(row, type, id) {
   return event
 }
 
-async function scopeSaleHistory(id, doc, operations, businessEvents, warehouseIds) {
-  const references = new Map([...operations,...businessEvents].map(event => [event,taskReferences(event)]))
+async function resolveSaleHistoryScope(id, events, warehouseIds, documentTaskIds = []) {
+  const references = new Map(events.map(event => [event, taskReferences(event)]))
   const adjustmentIds = [...new Set([...references.values()].flatMap(ref => ref.adjustments))]
   const [adjustments] = adjustmentIds.length ? await pool.query(
     'SELECT id,sale_order_id,warehouse_task_id FROM sale_order_adjustments WHERE id IN (?)', [adjustmentIds],
   ) : [[]]
   const byAdjustment = new Map(adjustments.map(row => [Number(row.id),row]))
-  const taskIds = [...new Set([...(doc.tasks || []).map(task => task.taskId),...[...references.values()].flatMap(ref => ref.ids),...adjustments.map(row => Number(row.warehouse_task_id))].filter(validId))]
+  const taskIds = [...new Set([
+    ...documentTaskIds,
+    ...[...references.values()].flatMap(ref => ref.ids),
+    ...adjustments.map(row => Number(row.warehouse_task_id)),
+  ].filter(validId))]
   const [tasks] = taskIds.length ? await pool.query(
     'SELECT id,sale_order_id,warehouse_id FROM warehouse_tasks WHERE id IN (?) AND deleted_at IS NULL', [taskIds],
   ) : [[]]
@@ -45,8 +49,16 @@ async function scopeSaleHistory(id, doc, operations, businessEvents, warehouseId
     if (event.payload?.version === 1 && !rowsInScope(event.payload,warehouseIds)) return false
     return true
   }
+  return { byTask, visible }
+}
+
+async function scopeSaleHistory(id, doc, operations, businessEvents, warehouseIds) {
+  const tasks = doc.tasks || []
+  const { byTask, visible } = await resolveSaleHistoryScope(
+    id, [...operations, ...businessEvents], warehouseIds, tasks.map(task => task.taskId),
+  )
   const visibleOperations = operations.filter(visible)
-  return { doc: { ...doc,tasks: (doc.tasks || []).filter(task => byTask.has(Number(task.taskId))), activityTaskAccessChecked:true,
+  return { doc: { ...doc,tasks: tasks.filter(task => byTask.has(Number(task.taskId))), activityTaskAccessChecked:true,
     activityAuditIds:visibleOperations.filter(event=>event.payload?.version===1).map(event=>Number(event.id.replace('operation-',''))) }, operations: visibleOperations, businessEvents: businessEvents.filter(visible) }
 }
 async function enrichPriceEvents(events) {
@@ -163,7 +175,11 @@ async function getActivity(type, id, user) {
     const [tasks] = await pool.query("SELECT id FROM return_tasks WHERE return_type='sale' AND return_id=?", [id])
     related = tasks.map(t => ['return-task', t.id])
   } else if (['purchase-return','sale','wave'].includes(type)) related = (progress.taskIds || []).map(taskId=>['warehouse-task',taskId])
-  const relatedEvents = await loadRelatedOperations(related)
+  let relatedEvents = await loadRelatedOperations(related)
+  if (type === 'sale' && relatedEvents.length) {
+    const { visible } = await resolveSaleHistoryScope(id, relatedEvents, user.warehouseIds)
+    relatedEvents = relatedEvents.filter(visible)
+  }
   const hasBusinessCreation = businessEvents.some(e => /创建|新建/.test(e.title))
   const uniqueOperations = hasBusinessCreation
     ? operations.filter(e => e.title !== '创建单据')
