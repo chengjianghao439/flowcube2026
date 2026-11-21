@@ -253,7 +253,7 @@ async function scenarioTransferScope(ctx, log, adminToken, scopedToken, mine, ot
 
 async function scenarioStockcheckAndReturnsScope(ctx, log, adminToken, scopedToken, mine, others) {
   log.section('盘点单与退货单：列表过滤 + 详情拦截')
-  const { http, pool, customer, supplier } = ctx
+  const { http, pool, customer } = ctx
 
   // 2026-09-17 起，仓库没有在库商品时不允许创建盘点单（避免建出 PDA 永远看不见、
   // 又卡在「进行中」的空单，见 docs/acceptance-issues-fix-2026-09-17.md 与
@@ -320,7 +320,7 @@ async function scenarioStockcheckAndReturnsScope(ctx, log, adminToken, scopedTok
   }
 }
 
-async function scenarioUnscopedUserUnaffected(ctx, log, adminToken, others) {
+async function scenarioUnscopedUserUnaffected(ctx, log, adminToken) {
   log.section('不限仓用户不受影响（表里没有行 = 不限仓）')
   const { http } = ctx
   const list = await http.get('/api/purchase?pageSize=200', { token: adminToken })
@@ -435,7 +435,7 @@ async function scenarioSaleScope(ctx, log, adminToken, scopedToken, mine, others
  */
 async function scenarioWarehouseTaskScope(ctx, log, adminToken, scopedToken, mine, others) {
   log.section('仓库任务：详情/取消/出库跨仓拦截（2026-08-21 高危修复）')
-  const { http, pool, customer, warehouse, location, product, supplier, printer } = ctx
+  const { http, pool, customer, product } = ctx
 
   // 两个仓库都铺库存（占库/出库需要真实可用库存）
   await seedStock(pool, product.id, others.id, 50)
@@ -575,7 +575,7 @@ async function main() {
     await scenarioInboundScope(ctx, log, adminToken, scopedToken, mine, others, seeded)
     await scenarioTransferScope(ctx, log, adminToken, scopedToken, mine, others)
     await scenarioStockcheckAndReturnsScope(ctx, log, adminToken, scopedToken, mine, others)
-    await scenarioUnscopedUserUnaffected(ctx, log, adminToken, others)
+    await scenarioUnscopedUserUnaffected(ctx, log, adminToken)
     await scenarioSaleScope(ctx, log, adminToken, scopedToken, mine, others)
     await scenarioWarehouseTaskScope(ctx, log, adminToken, scopedToken, mine, others)
     await scenarioPrivilegeEscalationBlocked(ctx, log, adminToken, scopedToken)

@@ -7,4 +7,4 @@ const ordinarySaleReturnSchema=z.object({customerId:z.number().int().positive(),
 const sourceReturnItemSchema=returnItemSchema.extend({sourceItemId:z.number().int().positive(),commercialComponentId:z.number().int().positive(),dispatchComponentId:z.number().int().positive(),quantity:z.number().positive().refine(q=>!hasTooManyDecimals(q),'退货数量最多保留两位小数')}).strict()
 const commercialSaleReturnSchema=ordinarySaleReturnSchema.extend({commercialModel:z.literal('kit-v1'),expectedRevision:z.number().int().positive(),saleOrderId:z.number().int().positive(),items:z.array(sourceReturnItemSchema).min(1).max(200)}).strict()
 const saleReturnSchema=modelSchema(ordinarySaleReturnSchema,commercialSaleReturnSchema)
-module.exports={returnItemSchema,ordinarySaleReturnSchema,saleReturnSchema}
+module.exports={saleReturnSchema}

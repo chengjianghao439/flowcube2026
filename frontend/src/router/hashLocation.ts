@@ -1,4 +1,4 @@
-export interface HashRouterWindowLocation {
+interface HashRouterWindowLocation {
   pathname: string
   search: string
   fullPath: string

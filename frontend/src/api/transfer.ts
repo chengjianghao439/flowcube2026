@@ -3,7 +3,7 @@ import { withRequestKeyHeaders } from '@/lib/requestKey'
 import type { PaginatedData } from '@/types'
 export interface TransferItem { id:number; productId:number; productCode:string; productName:string; unit:string; articleNumber?:string|null; spec?:string|null; color?:string|null; quantity:number; deductedQty?:number; receivedQty?:number; remark?:string }
 export interface TransferOrder { id:number; orderNo:string; fromWarehouseId:number; fromWarehouseName:string; toWarehouseId:number; toWarehouseName:string; status:1|2|3|4|5; statusName:string; closedReason?:string|null; remark?:string; submittedAt?:string|null; submittedByName?:string|null; operatorName:string; createdAt:string; items?:TransferItem[] }
-export interface CreateTransferParams { fromWarehouseId:number; fromWarehouseName:string; toWarehouseId:number; toWarehouseName:string; remark?:string; items:Omit<TransferItem,'id'>[] }
+interface CreateTransferParams { fromWarehouseId:number; fromWarehouseName:string; toWarehouseId:number; toWarehouseName:string; remark?:string; items:Omit<TransferItem,'id'>[] }
 export const getTransferListApi   = (p:object) => client.get<PaginatedData<TransferOrder>>('/transfer', {params:p})
 export const getTransferDetailApi = (id:number) => client.get<TransferOrder>(`/transfer/${id}`)
 export const createTransferApi    = (d:CreateTransferParams) => client.post<{id:number;orderNo:string}>('/transfer', d)

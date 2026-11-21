@@ -99,7 +99,7 @@ export const voidPackageApi = (packageId: number, requestKey?: string) =>
     },
   )
 
-export interface PackagePrintDispatchHint {
+interface PackagePrintDispatchHint {
   code?: string
   message?: string
   onlineClients?: number

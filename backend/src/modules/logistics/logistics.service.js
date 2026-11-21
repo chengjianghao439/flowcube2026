@@ -290,8 +290,6 @@ async function voidWaybill(id, { reason = null } = {}, { warehouseIds = null } =
 
 module.exports = {
   WB_STATUS,
-  WB_STATUS_META,
-  TRACK_STATUS_LABEL,
   trackStatusLabel,
   fmt,
   listWaybills,

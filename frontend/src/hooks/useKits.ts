@@ -41,7 +41,7 @@ export function useKit(id: number, source?: KitReadOwner) {
   const [readOwner] = useState(() => source ?? captureKitReadOwner())
   return useQuery({ queryKey: ['kits', 'detail', id, readOwner.baseURL, readOwner.userId, readOwner.sessionGeneration], queryFn: () => readKitOwned(id, readOwner), enabled: id > 0, refetchOnMount: 'always', staleTime: 0 })
 }
-export type KitOperation = { kind: 'create'; data: CreateKitInput } | { kind: 'update'; id: number; data: UpdateKitInput } | { kind: 'delete'; id: number; data: { revision: number } }
+type KitOperation = { kind: 'create'; data: CreateKitInput } | { kind: 'update'; id: number; data: UpdateKitInput } | { kind: 'delete'; id: number; data: { revision: number } }
 interface FrozenKitRequest extends KitRequestContext { operation: KitOperation; userId: number; uncertain: boolean }
 const permissionFor = (kind: KitOperation['kind']) => kind === 'create' ? PERMISSIONS.PRODUCT_CREATE : kind === 'delete' ? PERMISSIONS.PRODUCT_DELETE : PERMISSIONS.PRODUCT_UPDATE
 /** 同一挂载页内保留原提交；未知结果不能因输入改变变成新键。 */

@@ -26,7 +26,7 @@ const PHONE_RE = /^[0-9+()\-\s]{3,30}$/
 const emptyForm = { receiverName: '', receiverPhone: '', receiverAddress: '' }
 
 /** 挑选出的地址落进销售单收货字段的最小形状 */
-export interface PickedAddress {
+interface PickedAddress {
   receiverName?: string | null
   receiverPhone?: string | null
   receiverAddress: string

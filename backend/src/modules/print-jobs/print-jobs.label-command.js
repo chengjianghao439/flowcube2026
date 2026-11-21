@@ -798,5 +798,4 @@ module.exports = {
   enqueueWaybillLabelJob,
   enqueueProductLabelJob,
   reprintBarcodeRecord,
-  resolveLabelPrinterId,
 }

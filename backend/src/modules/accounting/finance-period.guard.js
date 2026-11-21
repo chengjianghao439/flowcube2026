@@ -517,12 +517,9 @@ async function markBackfillExecuted(conn, id, { bizId = null, postingPeriod = nu
 
 module.exports = {
   STATUS,
-  toYmd,
-  periodOfDate,
   assertFinancePeriodOpen,
   resolveBackfillRequest,
   resolvePostingPeriod,
-  assertBackfillPostingPeriodOpen,
   recordBackfillApplication,
   tryRecordBackfillApplication,
   markBackfillExecuted,

@@ -26,7 +26,6 @@ const scope = load('utils/warehouseScope.js', { '../config/db': {}, './AppError'
 const shortReceipt = load('modules/inbound-tasks/inbound-tasks.short-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope, './inbound-tasks.cost': require('../backend/src/modules/inbound-tasks/inbound-tasks.cost') })
 const closeReceipt = load('modules/purchase/purchase.close-receipt.js', { '../../utils/AppError': AppError, '../../utils/warehouseScope': scope })
 const qtyPrecision = require('../backend/src/utils/qtyPrecision')
-const purchaseCash = require('../backend/src/modules/purchase/purchase.cash-money'), cash = require('../backend/src/utils/cashMoney')
 const operator = { userId: 9, realName: 'fixture' }
 const input = { supplierId: 4, supplierName: 'fixture', warehouseId: 8, warehouseName: 'fixture', purchaseOrderId: 10, purchaseOrderNo: 'PO10', operator, scopeWarehouseIds: [8], items: [{ sourceItemId: 101, productId: 3, productName: 'fixture', quantity: 3, unitPrice: 99, unit: '个' }] }
 function fixture({ waitBudget = false, legacy = false, orphan = false, driftPR = false, driftWT = false, pendingCancel = false, tasks, wrongPOWarehouse = false } = {}) {

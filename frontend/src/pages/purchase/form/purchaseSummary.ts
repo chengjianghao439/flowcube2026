@@ -1,7 +1,7 @@
 import { hasQuantityPrecision, roundQuantity } from '@/lib/qtyStep'
 
 /** UI projection only: draft quantity is entry quantity; saved quantity is base quantity. */
-export interface PurchaseQuantityItem {
+interface PurchaseQuantityItem {
   _key?: number | string
   id?: number | string
   productId: number
@@ -31,7 +31,7 @@ export interface PurchaseQuantityGroup {
   lineCount: number
 }
 
-export interface PurchaseDraftSummary {
+interface PurchaseDraftSummary {
   /** null denotes an unsafe numeric aggregate, never an invented zero amount. */
   amount: number | null
   validLineCount: number
@@ -39,7 +39,7 @@ export interface PurchaseDraftSummary {
   quantityGroups: PurchaseQuantityGroup[]
 }
 
-export interface PurchaseSavedPriceInput {
+interface PurchaseSavedPriceInput {
   unit: string
   entryUnit?: string | null
   unitPrice: number
@@ -49,7 +49,7 @@ export interface PurchaseSavedPriceInput {
   amount?: number | null
 }
 
-export interface PurchaseEntryPriceRestoration {
+interface PurchaseEntryPriceRestoration {
   entryUnitPrice: number | null
   /** Checks stored four-place quote evidence; it does not authorize a save or current units. */
   verified: boolean

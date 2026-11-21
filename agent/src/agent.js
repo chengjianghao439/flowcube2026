@@ -137,22 +137,6 @@ async function getCustomer(client, id) {
   }
 }
 
-async function defaultWarehouse(client, preferred, actor) {
-  const data = await client.get('/api/warehouses?page=1&pageSize=50');
-  const list = data?.list ?? data ?? [];
-  const scoped = actor && Array.isArray(actor.warehouseIds)
-    ? list.filter(w => actor.warehouseIds.includes(Number(w.id)))
-    : list;
-  if (preferred) {
-    if (actor && Array.isArray(actor.warehouseIds) && !actor.warehouseIds.includes(Number(preferred))) {
-      throw new Error('指定仓库不在你的仓库范围内，已拒绝');
-    }
-    return preferred;
-  }
-  if (!scoped.length) throw new Error('你的账号没有可访问的仓库（仓库范围为空），无法继续');
-  return scoped[0]?.id ?? 1;
-}
-
 // 图 B 选仓：不能盲取范围内第一个仓——第一个仓可能是空仓（库存图/C 图已各踩过一次同款陷阱），
 // 空仓会让预览全是假缺口，且 payload 的商品编码/单位取不到、被后端校验拒绝。
 // 口径：范围内第一个「有本单任一商品库存行」的仓；都没有才回退第一个仓（预览如实报缺口）。
@@ -604,7 +588,7 @@ async function graphReplenishment(store, client, actor, text) {
   }
 }
 
-export async function buildPurchasePreview(client, actor) {
+async function buildPurchasePreview(client, actor) {
   const warehouses = await inScopeWarehouses(client, actor);
   const items = [];
   for (const w of warehouses) items.push(...(await replenishmentItems(client, w.id, actor)));
@@ -725,7 +709,7 @@ async function findSaleOrderByNo(client, orderNo) {
   return list.find(o => o.orderNo === orderNo) || null;
 }
 
-export async function buildReservePreview(client, actor, order) {
+async function buildReservePreview(client, actor, order) {
   const rp = await run('sale.reserve_preview', client, { saleOrderId: order.id }, actor);
   const lines = (rp.items || []).map(it => {
     const wh = (it.warehouses || []).find(w => Number(w.warehouseId) === Number(rp.warehouseId)) || {};
@@ -1026,7 +1010,6 @@ async function graphReceipt(store, client, actor, text, preset) {
 
 // 图 D 多账户选户：对话回复（序号或账户名）→ 补齐预览的 account/payload/signature。
 // 只接管「本人有待选户的 D-receipt 任务」时的消息；选错/没认出时回列清单，不落规划器。
-function actorNameOf(a) { return typeof a === 'string' ? a : a?.username; }
 function pendingAccountTask(store, actor) {
   for (const page of store.pagesForActor(actor, { orderBy: 'createdAt' })) {
     const task = page.find(task => task.graph === 'D-receipt' && task.state === 'AWAITING_CONFIRM'
@@ -1282,7 +1265,7 @@ const stuckGraph = (store, client, actor, t) => graphSimple(store, client, actor
 const refusal = (text) => ({ task: null, reply: guideReply(text) });
 
 // ---------- 结构化意图执行（LLM 解析后的唯一入口） ----------
-export async function executeIntent(store, client, actor, text, intent, task) {
+async function executeIntent(store, client, actor, text, intent, task) {
   switch (intent.graph) {
     case 'A-inventory': return graphInventory(store, client, actor, text, intent.productKeyword, { warehouseKeyword: intent.warehouseKeyword, task });
     case 'B-sale-draft': return graphSaleDraft(store, client, actor, text, { customerKeyword: intent.customerKeyword, lines: intent.lines, task });

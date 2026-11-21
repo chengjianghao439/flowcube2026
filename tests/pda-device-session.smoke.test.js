@@ -268,7 +268,7 @@ async function scenarioPackagesRequireSession(ctx, log, token) {
   }
 
   // 有票据时则允许通过会话校验（权限检查在会话之后；smoke_admin 是超管能过权限）
-  const task = await seedInboundTask(ctx, token, ctx.warehouse)
+  await seedInboundTask(ctx, token, ctx.warehouse)
   // 建一个处于待打包状态的任务才能真正创建箱子，这里只验证「票据能过会话闸门」
   // 而不关心业务结果——因此用一个不存在的任务 id，应得到业务层 404 而非 403。
   const withTicket = await http.post('/api/packages', {

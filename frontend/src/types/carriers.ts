@@ -32,7 +32,7 @@ export const WAYBILL_PLATFORM_OPTIONS = WAYBILL_PLATFORM_ALL.filter((o) => o.val
  *  那条路径有 revision CAS、暂停前置、待处理运单与 canEnable 闸门，后端 `carriers.service.js`
  *  对这两个平台的账号字段直接返回 400 `CARRIER_ACCOUNT_FIELDS_MOVED`（2026-09-18 审计 [9]）。
  *  承运商管理页只做只读展示 + 跳转。 */
-export const DIRECT_CARRIER_PLATFORMS = ['sf', 'deppon']
+const DIRECT_CARRIER_PLATFORMS = ['sf', 'deppon']
 export const isDirectCarrierPlatform = (platform?: string | null): boolean =>
   !!platform && DIRECT_CARRIER_PLATFORMS.includes(platform)
 

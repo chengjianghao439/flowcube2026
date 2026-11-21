@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { isReversedDateRange } from '@/lib/dateRange'
 
-export interface DateRangePreset {
+interface DateRangePreset {
   label: string
   startDate: string
   endDate: string

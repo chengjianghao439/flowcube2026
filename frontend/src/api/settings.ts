@@ -3,7 +3,7 @@ import { resolveApiFetchUrl } from '@/lib/apiOrigin'
 import type { AxiosRequestConfig } from 'axios'
 
 export interface SettingItem { key_name: string; value: string | null; label: string; type: string; remark: string | null }
-export interface SettingsData { list: SettingItem[]; map: Record<string, { value: string | null; label: string; type: string }> }
+interface SettingsData { list: SettingItem[]; map: Record<string, { value: string | null; label: string; type: string }> }
 
 export const getSettingsApi = (config?: AxiosRequestConfig) => config === undefined ? client.get<SettingsData>('/settings') : client.get<SettingsData>('/settings', config)
 export const updateSettingsApi = (data: Record<string, string>) => client.put<null>('/settings', data)
@@ -16,7 +16,7 @@ export const deleteRoleApi = (id: number) => client.delete<null>(`/roles/${id}`)
 // baseURL（含 /api 前缀）拼接，所以这里先剥掉 /api 再传入；
 // 结果是当前环境可加载的绝对 URL：浏览器同源（走 Vite 代理）、PDA WebView /
 // Electron file:// 指向真实 API 服务器。未上传时 url 为空串，组件回退默认图标+文字。
-export interface BrandLogoInfo { url: string; updatedAt: string | null }
+interface BrandLogoInfo { url: string; updatedAt: string | null }
 
 export async function getLogoApi(config?: AxiosRequestConfig): Promise<BrandLogoInfo> {
   const info = await client.get<BrandLogoInfo>('/settings/logo', config)

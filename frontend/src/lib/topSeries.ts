@@ -10,7 +10,7 @@
  */
 export const TOP_SERIES_LIMIT = 8
 
-export interface TopSeriesOptions<T> {
+interface TopSeriesOptions<T> {
   /** 排序与合计依据的数值（余额、库存价值等）。 */
   value: (item: T) => number
   /**

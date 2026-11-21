@@ -70,7 +70,7 @@ export interface PendingScanCheck {
 }
 
 /** 某行已扫的一个容器 */
-export interface ScanEntry {
+interface ScanEntry {
   containerId: number
   barcode: string
   countedQty: number

@@ -9,7 +9,6 @@
  * 反向验证见 agents-md-guard-regression.test.js。
  */
 
-const assert = require('node:assert/strict')
 const { execFileSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')

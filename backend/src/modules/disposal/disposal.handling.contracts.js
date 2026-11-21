@@ -18,4 +18,4 @@ function assertNoSource(body) {
 function rejectSource(req, _res, next) {
   try { assertNoSource(req.body); next() } catch (error) { next(error) }
 }
-module.exports = { disposalSourceSchema, validateReference, assertNoSource, rejectSource }
+module.exports = { disposalSourceSchema, validateReference, rejectSource }

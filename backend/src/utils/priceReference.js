@@ -56,4 +56,4 @@ async function getPriceReferenceWarnings(items) {
   return warnings
 }
 
-module.exports = { getPriceReferenceWarnings, DEVIATION_WARN }
+module.exports = { getPriceReferenceWarnings }

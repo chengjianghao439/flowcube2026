@@ -434,8 +434,6 @@ module.exports = {
   createForSaleOrder,
   createForPurchaseReturn,
   createForSaleReturnReverse,
-  lockContainersForSaleReturnReverse,
-  SALE_RETURN_CONTAINER_SOURCE,
   assign,
   updatePriority,
   cancel,

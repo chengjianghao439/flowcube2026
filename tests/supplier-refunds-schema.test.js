@@ -23,7 +23,7 @@ test('F1 routes have separate source/read/write gates and own-query auth-only; F
  assert.equal(permission('post','/:id/receive'),'supplier.refund.receive')
 })
 
-const {fixture,required,input,uuid,copy}=require('./helpers/supplier-refunds-fixture')
+const {fixture,input,uuid}=require('./helpers/supplier-refunds-fixture')
 const route=require('../backend/src/utils/route')
 test('actual registered POST middlewares execute real validateBody and domain parse',()=>{
  const stack=[],router={use:()=>{}}

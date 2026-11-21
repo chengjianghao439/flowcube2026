@@ -24,7 +24,7 @@ import { useId, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-export interface FilterCardProps {
+interface FilterCardProps {
   /** 筛选内容，inline 横向排列 */
   children: React.ReactNode
   /** 额外 className */

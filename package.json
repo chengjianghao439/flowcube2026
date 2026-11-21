@@ -27,6 +27,7 @@
     "test:export": "node --test tests/export-xlsx.test.js",
     "test:party-profile": "node --test tests/party-profile.test.js tests/sale-order-capacity.test.js",
     "test:export-filters": "node --test tests/export-list-filters-passthrough.test.js",
+    "test:development-visibility": "node --test tests/oplogs-development-visibility.test.js tests/users-development-visibility.test.js",
     "test:label": "node tests/label-geometry.test.js && node tests/label-zpl.test.js && node tests/label-geometry-frontend.test.js && node --test tests/label-raster.test.js",
     "test:print": "node tests/print-policy.test.js && node tests/print-status.test.js && node --test tests/retention-reprint-contract.test.js",
     "test:print-barcode-void": "node --test tests/print-barcode-void-guard.test.js",

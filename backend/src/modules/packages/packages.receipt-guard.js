@@ -47,4 +47,4 @@ function assertPrintLabelReceiptConsistent(action, receipt) {
   }
 }
 
-module.exports = { assertPrintLabelReceiptConsistent, baseActionOf, PRINT_LABEL_BASE_ACTION }
+module.exports = { assertPrintLabelReceiptConsistent }

@@ -643,5 +643,4 @@ module.exports = {
   getAdjustmentDetail,
   confirmPackageVoid,
   confirmContainerReturn,
-  checkAdjustmentClearedAndFinalize,
 }

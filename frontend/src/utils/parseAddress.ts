@@ -14,7 +14,7 @@ const ADDRESS_KEYWORDS = /省|市|区|县|镇|乡|街道|街|路|号|栋|幢|单
 // 常见标签词，识别前先剥掉
 const LABELS = /(收货人|收件人|姓名|联系人|联系电话|联系方式|电话|手机号|手机|地址|收货地址|所在地区|详细地址)\s*[：:]?/g
 
-export interface ParsedAddress {
+interface ParsedAddress {
   name?: string
   phone?: string
   address?: string

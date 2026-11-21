@@ -15,4 +15,4 @@ function companyScope(req, res, next) {
   next()
 }
 
-module.exports = { companyScope, DEFAULT_COMPANY_ID }
+module.exports = { companyScope }

@@ -1,6 +1,6 @@
 import { payloadClient as client } from '@/api/client'
 
-export interface AppUpdateLatestPayload {
+interface AppUpdateLatestPayload {
   version: string
   notes: string
   url?: string | null

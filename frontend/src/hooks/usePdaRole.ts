@@ -15,7 +15,7 @@ import { hasPermission } from '@/lib/permissions'
 import type { PermissionCode } from '@/lib/permission-codes'
 import { visibleAccountIdentity } from '@/lib/visibleAccountIdentity'
 
-export type PdaRole = 'supervisor' | 'picker' | 'packer' | 'receiver' | 'other'
+type PdaRole = 'supervisor' | 'picker' | 'packer' | 'receiver' | 'other'
 
 export type PdaPerm = PermissionCode
 
@@ -29,7 +29,7 @@ function toPdaRole(roleId: number): PdaRole {
 }
 
 // ── 角色显示配置 ───────────────────────────────────────────────────────────
-export const PDA_ROLE_LABEL: Record<PdaRole, string> = {
+const PDA_ROLE_LABEL: Record<PdaRole, string> = {
   supervisor: '主管',
   picker:     '拣货员',
   packer:     '打包员',
@@ -37,7 +37,7 @@ export const PDA_ROLE_LABEL: Record<PdaRole, string> = {
   other:      '操作员',
 }
 
-export const PDA_ROLE_COLOR: Record<PdaRole, string> = {
+const PDA_ROLE_COLOR: Record<PdaRole, string> = {
   supervisor: 'bg-purple-100 text-purple-800 border-purple-200',
   picker:     'bg-blue-100   text-blue-800   border-blue-200',
   packer:     'bg-orange-100 text-orange-800 border-orange-200',

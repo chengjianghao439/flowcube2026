@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { payloadClient as apiClient } from '@/api/client'
 
-export const PRINTERS_QUERY_KEY = 'printers'
+const PRINTERS_QUERY_KEY = 'printers'
 
 export interface Printer {
   id: number
@@ -20,10 +20,10 @@ export interface Printer {
   createdAt: string
 }
 
-export function getPrintersApi() {
+function getPrintersApi() {
   return apiClient.get<Printer[]>('/printers')
 }
-export function createPrinterApi(
+function createPrinterApi(
   payload: { name: string; code: string; type: number; description: string | null; clientId?: string | null; warehouseId?: number | null },
   config?: Parameters<typeof apiClient.post>[2],
 ) {
@@ -32,10 +32,10 @@ export function createPrinterApi(
 export function updatePrinterApi(id: number, data: Record<string, unknown>, config?: Parameters<typeof apiClient.put>[2]) {
   return apiClient.put(`/printers/${id}`, data, config)
 }
-export function deletePrinterApi(id: number, config?: Parameters<typeof apiClient.delete>[1]) {
+function deletePrinterApi(id: number, config?: Parameters<typeof apiClient.delete>[1]) {
   return apiClient.delete(`/printers/${id}`, config)
 }
-export function updatePrinterClientAliasApi(clientId: string, aliasName: string, config?: Parameters<typeof apiClient.put>[2]) {
+function updatePrinterClientAliasApi(clientId: string, aliasName: string, config?: Parameters<typeof apiClient.put>[2]) {
   return apiClient.put(`/printers/clients/${clientId}/alias`, { aliasName }, config)
 }
 

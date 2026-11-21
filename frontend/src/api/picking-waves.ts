@@ -9,7 +9,7 @@ export const WAVE_STATUS_LABEL: Record<WaveStatus, string> = {
   1: '待拣货', 2: '拣货中', 3: '待分拣', 4: '已完成', 5: '已取消',
 }
 
-export interface WaveTask {
+interface WaveTask {
   taskId: number
   taskNo: string
   taskStatus: number
@@ -18,7 +18,7 @@ export interface WaveTask {
   customerName: string
 }
 
-export interface WaveItem {
+interface WaveItem {
   id: number
   productId: number
   productCode: string
@@ -31,14 +31,14 @@ export interface WaveItem {
   pickedQty: number
 }
 
-export type WavePriority = 1 | 2 | 3
+type WavePriority = 1 | 2 | 3
 
 export const WAVE_PRIORITY_LABEL: Record<WavePriority, string> = {
   1: '紧急', 2: '普通', 3: '低',
 }
 
 /** 批次内可扫码的仓库任务明细行（按任务顺序分配拣货量） */
-export interface WavePickLine {
+interface WavePickLine {
   taskId: number
   itemId: number
   productId: number

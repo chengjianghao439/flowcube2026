@@ -1,9 +1,3 @@
-export interface StockItem {
-  id: number; quantity: number; reserved?: number; available?: number
-  productId: number; productCode: string; productName: string; unit: string
-  warehouseId: number; warehouseName: string
-}
-
 export interface InventoryLog {
   id: number; type: number; typeName: string
   productId: number; productCode: string; productName: string; unit: string
@@ -24,7 +18,7 @@ export interface StockChangeParams {
 
 // ─── 库存总览 ─────────────────────────────────────────────────────────────────
 
-export interface InventoryOverviewStats {
+interface InventoryOverviewStats {
   totalSkus:      number
   totalOnHand:    number
   totalReserved:  number
@@ -78,7 +72,7 @@ export interface InventoryReservationSummary {
   visibleReservationQuantity: number; hiddenReservationQuantity: number; orphanReservationQuantity: number; unknownReservationQuantity: number
   visibleBindingQuantity: number; hiddenBindingQuantity: number; orphanBindingQuantity: number
 }
-export interface InventoryReservationSource {
+interface InventoryReservationSource {
   saleOrderId: number; orderNo: string; customerName: string | null; status: number; createdAt: string | null
   reservationQuantity: number; expectedBindingQuantity: number; hiddenBindingQuantity: number; orphanBindingQuantity: number
   bindings: Array<{ bindingId: number; saleOrderItemId: number; quantity: number; sourceState: 'expected_supply' | 'outside_expected_supply' | 'putaway_exceeds_order'

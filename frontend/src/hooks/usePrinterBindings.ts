@@ -4,10 +4,10 @@ import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
-export const PRINTER_BINDINGS_QUERY_KEY = 'printer-bindings'
+const PRINTER_BINDINGS_QUERY_KEY = 'printer-bindings'
 
 export type BindingMap = Record<string, { print_type: string; printer_code: string; printer_name: string }>
-export type PrinterBindingsPayload = {
+type PrinterBindingsPayload = {
   defaultBindings: BindingMap
   routes: Array<Record<string, unknown>>
 }
@@ -15,10 +15,10 @@ export type PrinterBindingsPayload = {
 export function getPrinterBindingsApi() {
   return apiClient.get<PrinterBindingsPayload>('/printer-bindings', { skipGlobalError: true })
 }
-export function bindPrinterApi(type: string, printerId: number, config?: Parameters<typeof apiClient.put>[2]) {
+function bindPrinterApi(type: string, printerId: number, config?: Parameters<typeof apiClient.put>[2]) {
   return apiClient.put(`/printer-bindings/${type}`, { printerId }, config)
 }
-export function unbindPrinterApi(type: string, config?: Parameters<typeof apiClient.delete>[1]) {
+function unbindPrinterApi(type: string, config?: Parameters<typeof apiClient.delete>[1]) {
   return apiClient.delete(`/printer-bindings/${encodeURIComponent(type)}`, config)
 }
 

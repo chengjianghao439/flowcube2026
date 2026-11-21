@@ -544,5 +544,4 @@ module.exports = {
   finishPicking,
   finish,
   cancel,
-  refreshWavePickedFromTasks,
 }

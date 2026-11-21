@@ -36,31 +36,30 @@ if (typeof window !== 'undefined')
     window.addEventListener('storage', e => { if (e.key === REFUND_STORAGE || e.key === null)
         notify(); });
 export const refundId = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
-export const refundUuid = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v);
+const refundUuid = (v: unknown): v is string => typeof v === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(v);
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 export function canonicalRefund(value: unknown): string { function sort(v: unknown): unknown { if (Array.isArray(v))
     return v.map(sort); if (object(v))
     return Object.fromEntries(Object.keys(v).sort().map(k => [k, sort(v[k])])); return v; } return JSON.stringify(sort(JSON.parse(JSON.stringify(value)))); }
 export function refundMoney(v: unknown): bigint | null { if (typeof v !== 'string' || !/^\d{1,10}\.\d{4}$/.test(v))
     return null; const [whole, fraction] = v.split('.'); return BigInt(whole) * 10000n + BigInt(fraction); }
-export const positiveRefundMoney = (v: unknown) => { const n = refundMoney(v); return n !== null && n > 0n && n <= 99999999999999n; };
-export function inputRefundMoney(v: string): string | null { const m = /^(\d{1,10})(?:\.(\d{1,4}))?$/.exec(v); if (!m)
+const positiveRefundMoney = (v: unknown) => { const n = refundMoney(v); return n !== null && n > 0n && n <= 99999999999999n; };
+function inputRefundMoney(v: string): string | null { const m = /^(\d{1,10})(?:\.(\d{1,4}))?$/.exec(v); if (!m)
     return null; const n = `${BigInt(m[1])}.${(m[2] || '').padEnd(4, '0')}`; return positiveRefundMoney(n) ? n : null; }
-export const refundMoneyLabel = (v: unknown) => refundMoney(v) !== null ? `¥${v}` : '—';
 /** Preserve four-place wire identity; only new cash commitments must be exact cents. */
 export const refundCashMoney = (v: unknown): bigint | null => { const n = refundMoney(v); return n !== null && n % 100n === 0n ? n / 100n : null; };
 export function inputRefundCashMoney(v: string): string | null { if (!/^\d{1,10}(?:\.\d{1,2})?$/.test(v)) return null; const value = inputRefundMoney(v); return value !== null && refundCashMoney(value) !== null ? value : null; }
 export function refundCashLabel(v: unknown): string { const cents = refundCashMoney(v); return cents !== null ? `¥${cents / 100n}.${String(cents % 100n).padStart(2, '0')}` : refundMoney(v) !== null ? `¥${v}（待核）` : '—'; }
-export function assertRefundCashWrite(r: RefundSpec) { if (r.kind !== 'cancel' && (refundCashMoney(r.source.amount) === null || r.kind === 'create' && (!Array.isArray(r.body.allocations) || r.body.allocations.some(a => !object(a) || refundCashMoney(a.amount) === null)))) throw Error('历史退款金额含不足一分的尾差，请保留原记录核对，不会发送新请求'); }
+function assertRefundCashWrite(r: RefundSpec) { if (r.kind !== 'cancel' && (refundCashMoney(r.source.amount) === null || r.kind === 'create' && (!Array.isArray(r.body.allocations) || r.body.allocations.some(a => !object(a) || refundCashMoney(a.amount) === null)))) throw Error('历史退款金额含不足一分的尾差，请保留原记录核对，不会发送新请求'); }
 
 const date = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v + 'T00:00:00Z')) && new Date(v + 'T00:00:00Z').toISOString().slice(0, 10) === v;
 export function mayRefund(...permissions: PermissionCode[]) { const s = useAuthStore.getState(); return !!s.token && permissions.every(p => hasPermission(s.user?.permissions, p, s.user?.roleId)); }
-export const REFUND_READ_PERMISSIONS = [P.SUPPLIER_REFUND_VIEW, P.PURCHASE_ORDER_VIEW, P.RETURN_ORDER_VIEW, P.PAYMENT_VIEW] as const;
+const REFUND_READ_PERMISSIONS = [P.SUPPLIER_REFUND_VIEW, P.PURCHASE_ORDER_VIEW, P.RETURN_ORDER_VIEW, P.PAYMENT_VIEW] as const;
 export const mayReadRefund = () => mayRefund(...REFUND_READ_PERMISSIONS);
 function secretFree(v: unknown): boolean { if (Array.isArray(v))
     return v.every(secretFree); return !object(v) || Object.entries(v).every(([k, child]) => !/^(authorization|token|accessToken|refreshToken|password)$/i.test(k) && secretFree(child)); }
 function keys(v: Record<string, unknown>, required: string[], optional: string[] = []) { return required.every(k => Object.hasOwn(v, k)) && Object.keys(v).every(k => required.includes(k) || optional.includes(k)); }
-export function validRefundSpec(r: RefundSpec) {
+function validRefundSpec(r: RefundSpec) {
     if (!refundUuid(r.operationUuid) || typeof r.requestKey !== 'string' || !r.requestKey || r.requestKey !== r.requestKey.trim() || r.requestKey.length > 64 || !r.draftIdentity || !date(r.refundDate) || !r.sourceFingerprint || !object(r.source) || !object(r.body) || !secretFree(r))
         return false;
     const s = r.source, b = r.body;
@@ -130,7 +129,6 @@ export function removeRefundRecords(records: RefundRecord[], stillCurrent?: () =
         throw Error('原确认退款或补录仍待核对，禁止清理');
 } if (stillCurrent && !stillCurrent())
     throw Error('原退款清理上下文已变化'); persist(all.filter(x => !records.some(r => refundRecordIdentity(r) === refundRecordIdentity(x))), stillCurrent, raw); }
-export function removeRefundRecord(r: RefundRecord, stillCurrent?: () => boolean) { removeRefundRecords([r], stillCurrent); }
 export function ownRefundRecords() { const owner = captureDisposalOwner(); try {
     return { records: readRefundRecords().filter(r => r.userId === owner.userId && r.baseURL === owner.baseURL), error: '' };
 }

@@ -156,7 +156,7 @@ test('legacy v1 accurate closed endpoint uses earned net, never entire original 
 })
 
 test('shipment current source and prior receipts are acquired before stock; money uses only same-connection context',async()=>{
- const b=basis({legacy:false}),log=[],conn={query:async(sql,p)=>{log.push(sql)
+ const b=basis({legacy:false}),log=[],conn={query:async(sql)=>{log.push(sql)
   if(sql.startsWith('SELECT * FROM sale_ordinary_return_bases'))return [[b]]
   if(sql.includes('FROM sale_order_items'))return [[{id:1,product_id:7,warehouse_id:2,quantity:10,shipped_qty:10,unit_price:10}]]
   if(sql.startsWith('SELECT sr.id')||sql.includes('FROM sale_ordinary_return_receipts'))return [[]]

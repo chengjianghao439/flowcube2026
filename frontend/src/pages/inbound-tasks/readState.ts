@@ -1,4 +1,4 @@
-export function inboundReadStatus(error: unknown): number | undefined {
+function inboundReadStatus(error: unknown): number | undefined {
   const value = error as { status?: number; response?: { status?: number } } | null
   return value?.status ?? value?.response?.status
 }

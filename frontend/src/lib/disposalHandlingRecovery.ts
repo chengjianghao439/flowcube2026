@@ -22,7 +22,7 @@ export function mayHandle(...permissions: PermissionCode[]) {
   return !!state.token && permissions.every(permission => hasPermission(state.user?.permissions, permission, state.user?.roleId))
 }
 export const handlingId = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n > 0
-export const handlingUuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value)
+const handlingUuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value)
 export function handlingQty(n: unknown, positive = true): n is number {
   return typeof n === 'number' && Number.isFinite(n) && (positive ? n > 0 : n >= 0) && n <= 9999999999.99 && quantityInputError(String(n)) === null
 }

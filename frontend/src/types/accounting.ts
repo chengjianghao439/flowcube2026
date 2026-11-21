@@ -43,7 +43,6 @@ export const ACCOUNT_CATEGORY_LABELS: Record<number, string> = {
   1: '资产', 2: '负债', 3: '权益', 4: '成本', 5: '收入', 6: '费用',
 }
 export const BALANCE_DIR_LABELS: Record<number, string> = { 1: '借', 2: '贷' }
-export const AUX_TYPE_LABELS: Record<number, string> = { 0: '无', 1: '往来单位' }
 
 /** 资产/成本/费用 借；负债/权益/收入 贷（仅用于新建时预填方向，最终以后端为准） */
 export function defaultBalanceDir(category: number): number {
@@ -51,7 +50,7 @@ export function defaultBalanceDir(category: number): number {
 }
 
 // ── 记账凭证（Phase 1） ──────────────────────────────────────────────
-export interface VoucherEntry {
+interface VoucherEntry {
   id: number
   lineNo: number
   accountId: number
@@ -93,7 +92,7 @@ export interface GenerateStats {
   total: number
 }
 
-export interface ReconciliationItem {
+interface ReconciliationItem {
   name: string
   voucher: number
   business: number
@@ -106,7 +105,7 @@ export interface ReconciliationItem {
  * 若没有凭证来源，会同时从凭证侧和业务侧消失、显示为平——这份数据就是用来把它显式报出来的。
  * total = unclassified + pendingVoucher。
  */
-export interface UnpostedLedger {
+interface UnpostedLedger {
   /** 未入账合计（2202 凭证净额尚未覆盖的应付金额） */
   total: number
   /** 其中因缺借方科目而无法入账的金额（历史记录，凭证引擎有意跳过不猜科目，需财务确认后补录） */
@@ -172,7 +171,7 @@ export interface TrialBalance {
   balanced: { period: boolean; closing: boolean }
 }
 
-export interface LedgerEntry {
+interface LedgerEntry {
   voucherId: number
   voucherNo: string
   voucherDate: string

@@ -5,9 +5,9 @@ import { withRequestKeyHeaders } from '@/lib/requestKey'
 
 export interface ReturnSourceLabels { kind: 'kit' | 'ordinary'; kitCode: string | null; kitName: string | null; groupId: number; lineKey: string; taskId: number; taskNo: string | null; confirmedAt: string | null; warehouseId: number; warehouseName: string | null; allowDecimalQty: boolean | null }
 export interface ReturnItem { dispatchComponentId?: number | null; commercialComponentId?: number | null; source?: ReturnSourceLabels | null; id:number; sourceItemId?:number|null; productId:number; productCode:string; productName:string; articleNumber?:string|null; spec?:string|null; color?:string|null; unit:string; entryUnit?:string; quantity:number; entryQty?:number; conversionRate?:number; unitPrice:number; amount:number }
-export interface ReturnLinkedTask { id:number; taskNo:string; status:number; statusName:string; rejectedQty?:number; rejectedContainers?:RejectedContainer[] }
+interface ReturnLinkedTask { id:number; taskNo:string; status:number; statusName:string; rejectedQty?:number; rejectedContainers?:RejectedContainer[] }
 export interface PurchaseReturn { id:number; returnNo:string; supplierId:number; supplierName:string; warehouseId:number; warehouseName:string; purchaseOrderId?:number|null; purchaseOrderNo?:string; status:1|2|3|4; statusName:string; totalAmount:number; remark?:string; operatorName:string; createdAt:string; items?:ReturnItem[]; task?:ReturnLinkedTask|null }
-export interface ReverseTaskContainer { id:number; barcode:string; qty:number; productId:number; productName:string }
+interface ReverseTaskContainer { id:number; barcode:string; qty:number; productId:number; productName:string }
 export interface CashMoneyProof { moneyPrecision?: 2; cashPolicy?: 'cash-cents-v1' }
 
 export interface SaleReturnReverseTask {
@@ -24,7 +24,7 @@ export interface ReturnTaskItem {
   id: number; productId: number; productCode: string; productName: string; unit: string
   expectedQty: number; receivedQty: number; checkedQty: number; rejectedQty: number; putawayQty: number
 }
-export interface RejectedContainer { id: number; barcode: string; qty: number; productId: number; productName: string }
+interface RejectedContainer { id: number; barcode: string; qty: number; productId: number; productName: string }
 export interface ReturnTask {
   id: number; taskNo: string; returnType: string; returnId: number; returnNo: string
   warehouseId: number; warehouseName: string; partyName: string
@@ -41,7 +41,7 @@ export const createPurchaseReturnApi= (d:object, requestKey?: string, config?: A
   client.post<{id:number; returnNo:string}>('/returns/purchase', d, { ...config, ...(requestKey ? { headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey) } } : {}) })
 export const confirmPurchaseReturnApi=(id:number,config?:import('axios').AxiosRequestConfig) => client.post<null>(`/returns/purchase/${id}/confirm`, undefined, config)
 /** 拣货实物尚未归还时保留原退货状态；null 兼容已完成取消的原响应。 */
-export interface PurchaseReturnCancelResult { pendingCancel: boolean; tasks: Array<{ id: number; taskNo: string }> }
+interface PurchaseReturnCancelResult { pendingCancel: boolean; tasks: Array<{ id: number; taskNo: string }> }
 export const cancelPurchaseReturnApi = (id:number) => client.post<PurchaseReturnCancelResult | null>(`/returns/purchase/${id}/cancel`)
 export const getSaleReturnsApi       = (p:object) => client.get<PaginatedData<SaleReturn>>('/returns/sale', {params:p, skipGlobalError:true})
 export const getSaleReturnDetailApi  = (id:number, config?: AxiosRequestConfig) => client.get<SaleReturn>(`/returns/sale/${id}`, config)
@@ -76,10 +76,10 @@ export const checkReturnApi = (id: number, data: { productId: number; passedQty:
   client.post<ReturnTaskActionResult>(`/return-tasks/${id}/check`, data,
     requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }), skipGlobalError: true } : { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
 
-export interface ReturnPutawayContainer {
+interface ReturnPutawayContainer {
   containerId: number; barcode: string; taskId: number; warehouseId: number; status: number
 }
-export interface ReturnPutawayLocation {
+interface ReturnPutawayLocation {
   id: number; code: string; warehouseId: number; status: number
 }
 export const getReturnPutawayContainerApi = (id: number, barcode: string) =>

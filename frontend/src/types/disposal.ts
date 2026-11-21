@@ -1,6 +1,6 @@
 /** 滞销库存处理单（P2-9） */
 
-export type DisposeType = 1 | 2 | 3
+type DisposeType = 1 | 2 | 3
 
 export interface DisposalSuggestion {
   productId: number
@@ -23,7 +23,7 @@ export interface DisposalSuggestion {
   avgCost: number
 }
 
-export interface DisposalItem {
+interface DisposalItem {
   id: number
   productId: number
   productCode: string

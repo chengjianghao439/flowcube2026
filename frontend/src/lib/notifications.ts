@@ -1,4 +1,4 @@
-export type NotificationCategory = 'finance' | 'inventory' | 'operations' | 'system' | 'approval'
+type NotificationCategory = 'finance' | 'inventory' | 'operations' | 'system' | 'approval'
 
 export interface NotificationEntry {
   code?: string
