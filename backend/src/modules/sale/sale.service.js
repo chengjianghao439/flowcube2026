@@ -1134,7 +1134,7 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
 // 占库前的分仓预览：按明细行的产品，列出各仓库当前可用量，供占库弹窗逐行选仓库。
 async function getReservePreview(id, scopeWarehouseIds = null) {
   const [[orderRow]] = await pool.query(
-    'SELECT id, status, warehouse_id, warehouse_name, customer_id, total_amount, discount_amount FROM sale_orders WHERE id = ?', [id],
+    'SELECT * FROM sale_orders WHERE id = ? AND deleted_at IS NULL', [id],
   )
   if (!orderRow) throw new AppError('销售单不存在', 404)
   assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '销售单')
@@ -1206,6 +1206,9 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
     orderId: orderRow.id,
     warehouseId: Number(orderRow.warehouse_id),
     warehouseName: orderRow.warehouse_name,
+    commercialModel: orderRow.commercial_model ?? null,
+    commercialRevision: orderRow.commercial_revision == null ? null : Number(orderRow.commercial_revision),
+    reserveFingerprint: editFingerprint(orderRow, itemRows),
     items: itemRows.map(item => ({
       itemId: item.id,
       allowDecimalQty: qtyPolicies.get(Number(item.product_id))?.allowDecimal !== false,
@@ -1235,7 +1238,7 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 //
 // items: [{ id, warehouseId, warehouseName, qty }]（qty 为本次要占的数量，>0）
 // 先做一次全量可用量检查（不实际预占），把所有不足的商品一次性收集进错误明细。
-async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null, requestKey = null, commercialModel, expectedRevision } = {}) {
+async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null, requestKey = null, commercialModel, expectedRevision, expectedReserveFingerprint } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -1308,6 +1311,9 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
 
     // 按 items 里的 id 精确取本次要占的明细行，并用 items 里的 qty/仓库覆盖
     const [allItemRows] = await conn.query('SELECT * FROM sale_order_items WHERE order_id = ? ORDER BY id', [id])
+    if (expectedReserveFingerprint && editFingerprint(orderRow, allItemRows) !== expectedReserveFingerprint) {
+      throw new AppError('原占库预览已失效，请重新核对销售单后再确认', 409, 'SALE_RESERVATION_PREVIEW_CONFLICT')
+    }
     handlingGuards.assertSaleItems(handlingLink, allItemRows, orderRow)
     if (!allItemRows.length) throw new AppError('销售单无明细，无法占用库存', 400)
     const itemById = new Map(allItemRows.map(r => [Number(r.id), r]))

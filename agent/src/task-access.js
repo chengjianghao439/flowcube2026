@@ -13,6 +13,13 @@ const READ_PERMISSIONS = {
   'F-briefing': ['dashboard.view'],
 };
 const WAREHOUSE_GRAPHS = new Set(['A-inventory', 'B-sale-draft', 'B2-reserve', 'C-replenishment', 'C-purchase-draft', 'E-stuck', 'F-briefing']);
+// 对应 /api/approvals/pending 的路由和各业务分支的当前可见权限。
+const PENDING_APPROVAL_PERMISSIONS = [
+  'approval.task.view', 'finance.expense.view.all', 'finance.expense.view', 'finance.expense.approve',
+  'sale.credit.override.view', 'sale.credit.override.approve', 'product.view',
+  'purchase.order.view', 'purchase.order.approve', 'inventory.disposal.view', 'inventory.disposal.approve',
+  'supplier.refund.view', 'supplier.refund.confirm', 'return.order.view', 'payment.view',
+];
 const fail = (message, code = 'TASK_ACCESS_DENIED') => Object.assign(new Error(message), { status: 403, code });
 
 export function ownsTask(task, actor) {
@@ -43,7 +50,9 @@ export function assertTaskAccess(task, actor) {
   if (missing) throw Object.assign(fail('小满无法显示该任务：当前查看权限已变化'), { permission: missing });
   if (task.graph === 'E-stuck' && !['warehouse.task.view', 'inventory.view'].some(code => hasPerm(actor, code))) throw fail('小满无法显示该任务：当前仓储查看权限已变化');
   // 聚合结果含多个独立权限段；曾有权取得的明细在该权限撤回后不可从旧快照重放。
-  const extra = task.graph === 'F-briefing' ? ['sale.credit.view', 'approval.task.view']
+  const extra = task.graph === 'F-briefing' ? [
+    'sale.credit.view', ...(task.result?.sections?.pendingApprovals?.ok ? PENDING_APPROVAL_PERMISSIONS : ['approval.task.view']),
+  ]
     : task.graph === 'E-stuck' ? ['warehouse.task.view', 'inventory.view', 'warehouse.task.assign', 'inbound.order.view'] : [];
   if (extra.some(code => hasPerm(task.actor, code) && !hasPerm(actor, code))) throw fail('小满无法显示该任务：当前明细查看权限已变化');
   if (WAREHOUSE_GRAPHS.has(task.graph) && Array.isArray(actor?.warehouseIds)) {

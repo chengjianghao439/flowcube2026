@@ -202,6 +202,42 @@ test('并行首次请求只建立一个运行实例，各用户任务不会互�
   const owners = await Promise.all(files.map(async name => JSON.parse(await readFile(join(directory, name), 'utf8'))[0].actor.id));
   assert.deepEqual(owners.sort(), [11, 12]);
 }));
+test('作废只作用于本人尚未确认的销售草稿，重启后原预览仍无法确认', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'xiaoman-embedded-cancel-'));
+  const owner = { id: 11, username: 'owner', permissions: full, warehouseIds: null };
+  const seed = ['AWAITING_CONFIRM', 'EXECUTING'].map(state => ({
+    id: state, graph: 'B-sale-draft', state, actor: owner, revision: 1, userText: '合成销售',
+    preview: { warehouseId: 2, expiresAt: '2099-01-01T00:00:00Z' },
+  }));
+  const path = '/tasks/AWAITING_CONFIRM/sale-draft';
+  const change = { method: 'POST', body: { action: 'cancel', revision: 1 } };
+  try {
+    await usingFixture(async f => {
+      assert.equal((await f.request(path, { ...change, id: null })).status, 401);
+      assert.equal((await f.request(path, { ...change, id: 12 })).status, 403);
+      f.users.get(11).warehouseIds = [1];
+      assert.equal((await f.request(path, change)).status, 403);
+      f.users.get(11).warehouseIds = [2];
+      f.users.get(11).permissions = full.filter(code => code !== 'sale.order.create');
+      assert.equal((await f.request(path, { method: 'POST', body: { action: 'reselect', revision: 1 } })).status, 403);
+      f.users.get(11).permissions = full;
+      assert.equal((await f.request(path, { method: 'POST', body: { action: 'cancel', revision: 0 } })).status, 409);
+      assert.equal((await f.request('/tasks/EXECUTING/sale-draft', change)).status, 409);
+      assert.equal((await f.request(path, change)).body.data.task.state, 'CANCELLED');
+      assert.equal((await f.request(path, change)).body.data.task.state, 'CANCELLED');
+      assert.equal(f.flowCalls.length, 0);
+    }, { dataDir: directory, seed });
+    await usingFixture(async f => {
+      f.users.get(11).warehouseIds = [2];
+      const details = await f.request('/tasks/AWAITING_CONFIRM');
+      assert.equal(details.body.data.task.state, 'CANCELLED');
+      assert.equal(details.body.data.task.preview, undefined);
+      assert.equal((await f.request('/tasks/AWAITING_CONFIRM/confirm', { method: 'POST', body: { revision: 1 } })).status, 409);
+      assert.equal(f.flowCalls.length, 0);
+    }, { dataDir: directory });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('正式任务重启恢复本人记录且原键恢复不重新发写入', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'xiaoman-embedded-restore-'));
   const owner = { id: 11, username: 'owner', permissions: full, warehouseIds: null };

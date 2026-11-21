@@ -14,7 +14,10 @@ async function list(req, res, next) {
 async function create(req, res, next) {
   try {
     const { warehouseTaskId, remark } = req.body
-    const result = await svc.createPackage(warehouseTaskId, remark, req.user?.warehouseIds ?? null, req.pda?.warehouseId ?? null)
+    const result = await svc.createPackage(warehouseTaskId, remark, req.user?.warehouseIds ?? null, req.pda?.warehouseId ?? null, {
+      requestKey: extractRequestKey(req),
+      userId: req.user?.userId ?? null,
+    })
     return successResponse(res, result, '箱子已创建')
   } catch (e) { next(e) }
 }

@@ -62,11 +62,19 @@ async function updatePickedQty() {
   throw new AppError('禁止直接修改已拣数量，请使用 PDA 拣货扫码', 400)
 }
 
-/**
- * 拣货完成，自动推进到「待分拣」（2→3）
- * 同步销售单状态 → 3；释放分拣格
- */
-async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
+function getPickingSaleId(task) {
+  if (task.task_type === 'purchase_return' || task.task_type === 'sale_return_out') return null
+  return task.sale_order_id == null ? null : Number(task.sale_order_id)
+}
+
+async function lockPickingSales(conn, saleIds) {
+  const ids = [...new Set(saleIds.filter(id => id != null))]
+  if (!ids.length) return
+  await conn.query('SELECT id FROM sale_orders FORCE INDEX (PRIMARY) WHERE id IN (?) ORDER BY id FOR UPDATE', [ids])
+}
+
+/** 拣货完成后推进任务，调用方须已锁定需同步的关联销售单。 */
+async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null, lockedSaleId = null } = {}) {
   const taskRow = await lockStatusRow(conn, {
     table: 'warehouse_tasks',
     id,
@@ -74,6 +82,9 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
     entityName: '仓库任务',
   })
   assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
+  if (getPickingSaleId(taskRow) !== lockedSaleId) {
+    throw new AppError('拣货任务关联的销售单已变化，请刷新后核对', 409, 'WAREHOUSE_PICK_SALE_CHANGED')
+  }
   if (taskRow.cancel_requested_at) {
     throw new AppError('该任务正在拣货退回中，不可继续拣货', 409)
   }
@@ -83,17 +94,6 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
   // 两类退货出库（采购退货、销售退货返货）都不走分拣/复核/打包：货要退回给供应商/客户，
   // 不是销售发货，装箱打印那套在这里没有对应物
   const isReturnOut = taskRow.task_type === 'purchase_return' || taskRow.task_type === 'sale_return_out'
-
-  // 退货出库：拣货完成后直接跳到待出库（跳过排序/复核/打包）
-  const targetStatus = isReturnOut ? WT_STATUS.SHIPPING : WT_STATUS.SORTING
-  const action = isReturnOut ? 'readyToShip' : 'readyToShip'
-
-  if (!isReturnOut) {
-    const rule = assertWarehouseTaskAction(action, taskRow.status)
-    if (!isValidTransition(taskRow.status, rule.toStatus)) {
-      throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
-    }
-  }
 
   let requestState = { enabled: false }
   if (requestKey) {
@@ -109,8 +109,17 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
     }
   }
 
-  if (isReturnOut && Number(taskRow.status) !== WT_STATUS.PICKING) {
-    throw new AppError('退货出库任务已不在拣货中，请核对原操作结果', 409, 'RETURN_READY_STATUS_CHANGED')
+  // 同键重放取原结果。新请求才按当前阶段判断能否推进。
+  const targetStatus = isReturnOut ? WT_STATUS.SHIPPING : WT_STATUS.SORTING
+  if (isReturnOut) {
+    if (Number(taskRow.status) !== WT_STATUS.PICKING) {
+      throw new AppError('退货出库任务已不在拣货中，请核对原操作结果', 409, 'RETURN_READY_STATUS_CHANGED')
+    }
+  } else {
+    const rule = assertWarehouseTaskAction('readyToShip', taskRow.status)
+    if (!isValidTransition(taskRow.status, rule.toStatus)) {
+      throw new AppError(`非法状态迁移：${taskRow.status} → ${rule.toStatus}`, 400)
+    }
   }
 
   await assertTaskPickScanClosure(conn, id)
@@ -121,9 +130,9 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
     toStatus: targetStatus,
     entityName: '仓库任务',
   })
-  if (!isReturnOut && taskRow.sale_order_id) {
+  if (lockedSaleId != null) {
     const saleSvc = require('../sale/sale.service')
-    await saleSvc.syncPickingByWarehouseTaskWithinTransaction(conn, Number(taskRow.sale_order_id), {
+    await saleSvc.syncPickingByWarehouseTaskWithinTransaction(conn, lockedSaleId, {
       taskId: Number(taskRow.id),
       taskNo: taskRow.task_no,
     })
@@ -160,8 +169,17 @@ async function readyToShipWithinTransaction(conn, id, { requestKey, userId, scop
 async function readyToShip(id, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
+    // 在事务前定位销售单，避免加锁等待前建立一致性读快照。
+    const [[identity]] = await conn.query(
+      'SELECT task_type, sale_order_id, warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL', [id],
+    )
+    if (!identity) throw new AppError('仓库任务不存在', 404)
+    assertTaskScope(identity, { scopeWarehouseIds, pdaWarehouseId })
+    const saleId = getPickingSaleId(identity)
     await conn.beginTransaction()
-    const payload = await readyToShipWithinTransaction(conn, id, { requestKey, userId, scopeWarehouseIds, pdaWarehouseId })
+    // 与销售改单、取消、出库使用相同的销售单 → 仓库任务锁序。
+    await lockPickingSales(conn, [saleId])
+    const payload = await readyToShipWithinTransaction(conn, id, { requestKey, userId, scopeWarehouseIds, pdaWarehouseId, lockedSaleId: saleId })
     await conn.commit()
     return payload
   } catch (e) {
@@ -371,6 +389,8 @@ module.exports = {
   updatePickedQty,
   readyToShip,
   readyToShipWithinTransaction,
+  getPickingSaleId,
+  lockPickingSales,
   getPickSuggestions,
   getPickRoute,
 }

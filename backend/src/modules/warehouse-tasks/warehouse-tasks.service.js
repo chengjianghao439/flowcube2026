@@ -33,6 +33,8 @@ module.exports = {
   updatePickedQty: pick.updatePickedQty,
   readyToShip: pick.readyToShip,
   readyToShipWithinTransaction: pick.readyToShipWithinTransaction,
+  getPickingSaleId: pick.getPickingSaleId,
+  lockPickingSales: pick.lockPickingSales,
   getPickSuggestions: pick.getPickSuggestions,
   getPickRoute: pick.getPickRoute,
 

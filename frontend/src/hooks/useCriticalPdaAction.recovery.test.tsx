@@ -10,14 +10,14 @@ import type { User } from '@/types'
 const api = vi.hoisted(()=>({receipt:vi.fn(),retry:vi.fn(),weak:vi.fn(),confirmed:vi.fn()}))
 vi.mock('@/hooks/useNetworkStatus',()=>({useNetworkStatus:()=> 'online'}))
 vi.mock('@/api/operation-requests',()=>({getOperationRequestStatusApi:api.receipt}))
-let mode: 'receive' | 'stockcheck' = 'receive'
+let action = 'inbound.receive.7'
 let root:Root, critical:ReturnType<typeof useCriticalPdaAction>
 const body={productId:3,packages:[{qty:2},{qty:1}],batchNo:'合成批次',confirmDuplicate:true}
-async function mount(){root=createRoot(document.createElement('div'));function Probe(){critical=useCriticalPdaAction({action:mode === 'receive' ? 'inbound.receive.7' : 'stockcheck.scan.11',label:'作业',onConfirmed:api.confirmed,resolveServerState:api.weak,retryExecutor:api.retry});return null}await act(async()=>root.render(<Probe/>))}
+async function mount(){root=createRoot(document.createElement('div'));function Probe(){critical=useCriticalPdaAction({action,label:'作业',onConfirmed:api.confirmed,resolveServerState:api.weak,retryExecutor:api.retry});return null}await act(async()=>root.render(<Probe/>))}
 beforeEach(async()=>{
  Object.defineProperty(globalThis, 'crypto', { configurable: true, value: webcrypto })
 
- mode = 'receive'
+ action = 'inbound.receive.7'
  Object.assign(globalThis,{IS_REACT_ACT_ENVIRONMENT:true});localStorage.clear()
  Object.defineProperty(navigator,'locks',{configurable:true,value:{request: async (_name: string, options: unknown, fn?: (lock: object) => unknown) => (typeof options === 'function' ? options : fn!)({})}})
  api.receipt.mockReset().mockResolvedValue({status:'not_found',data:null});api.retry.mockReset();api.confirmed.mockClear();api.weak.mockReset().mockResolvedValue({effective:true,data:{}})
@@ -114,7 +114,7 @@ test('冷启动合法但不一致的收货单定位全域阻断，不自动选�
 })
 
 test('盘点成功结果须精确原itemId，另一商品的相同条码数/总量不能确认',async()=>{
- await act(async()=>root.unmount());mode='stockcheck';await mount()
+ await act(async()=>root.unmount());action='stockcheck.scan.11';await mount()
  await act(async()=>{await critical.run(async()=>{throw Object.assign(Error('synthetic'),{status:503})},{checkId:11,itemId:9,requestBody:{scans:[{barcode:'I1',countedQty:2},{barcode:'I2',countedQty:0}]}})})
  await act(async()=>{await new Promise(resolve=>setTimeout(resolve,25))})
  const original=critical.pendingRecord!
@@ -124,6 +124,31 @@ test('盘点成功结果须精确原itemId，另一商品的相同条码数/总�
  api.receipt.mockResolvedValue({status:'success',resourceType:'stockcheck',resourceId:11,data:{itemId:9,scannedContainers:2,actualQty:2}})
  await act(async()=>{await critical.confirmPending()})
  expect(critical.pendingRecord).toBeNull();expect(api.confirmed).toHaveBeenCalledOnce()
+})
+
+test('建箱丢响应并重挂后，只接受属于原仓库任务的箱码', async () => {
+  await act(async () => root.unmount())
+  action = 'package.create'
+  await mount()
+  const requestBody = { warehouseTaskId: 41 }
+  const submit = vi.fn(async () => { throw Error('响应中断') })
+  await act(async () => { await critical.run(submit, { taskId: 41, requestBody }) })
+  const original = critical.pendingRecord!
+  const receipt = { status: 'success', resourceType: 'warehouse_task', resourceId: 41 }
+  const box = { id: 8, barcode: 'L000008', warehouseTaskId: 41 }
+  await act(async () => root.unmount())
+  api.receipt.mockResolvedValue({ ...receipt, data: { ...box, warehouseTaskId: 42 } })
+  await mount()
+  await vi.waitFor(() => expect(critical.phaseMessage).toContain('建箱回执与原任务不一致'))
+  expect(critical.pendingRecord?.requestKey).toBe(original.requestKey)
+  expect(critical.submitBlocked).toBe(true)
+  expect(api.confirmed).not.toHaveBeenCalled()
+
+  api.receipt.mockResolvedValue({ ...receipt, data: box })
+  await act(async () => { await critical.confirmPending() })
+  expect(critical.pendingRecord).toBeNull()
+  expect(api.confirmed).toHaveBeenCalledWith(box, { recovered: true, requestKey: original.requestKey })
+  expect(submit).toHaveBeenCalledOnce()
 })
 
 test('compact终态的旧标签只能GET原结果详情，缺结果不调用success或原键POST',async()=>{

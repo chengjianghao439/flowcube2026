@@ -431,17 +431,32 @@ export default function PdaPackPage() {
   function refetch() { return qc.invalidateQueries({ queryKey: ['pda-packages', taskId] }) }
   const onlineBlocked = finishAction.networkStatus !== 'online'
 
+  const createAction = useCriticalPdaAction<NonNullable<Awaited<ReturnType<typeof createPackageApi>>>>({
+    action: 'package.create',
+    label: '新建箱子',
+    retryExecutor: (record, key, config) => {
+      const original = record.metadata?.requestBody as { warehouseTaskId?: number } | undefined
+      const originalTaskId = original?.warehouseTaskId
+      if (!originalTaskId || !Number.isSafeInteger(originalTaskId) || originalTaskId < 1 || originalTaskId !== record.metadata?.taskId) {
+        throw new Error('原建箱任务无法确认，请保留记录并核对')
+      }
+      return createPackageApi(originalTaskId, key, config).then(result => result!)
+    },
+    onConfirmed: ({ warehouseTaskId, id, barcode }, { recovered }) => {
+      ok(recovered ? `已确认任务 #${warehouseTaskId} 的箱子 ${barcode}` : `已创建箱子 ${barcode}`)
+      if (warehouseTaskId === taskId) setActivePackageId(id)
+      return qc.invalidateQueries({ queryKey: ['pda-packages', warehouseTaskId] })
+    },
+  })
+
   const createMut = useMutation({
     mutationFn: () => {
       if (!taskDetail) throw new Error('任务数据仍在加载，请稍后重试')
       if (taskDetail.status !== WT_STATUS.PACKING) throw new Error('当前任务不是待打包状态，不能新建箱子')
-      return createPackageApi(taskId)
-    },
-    onSuccess: (res) => {
-      const pkg = res!
-      ok(`已创建箱子 ${pkg.barcode}`)
-      setActivePackageId(pkg.id)
-      refetch()
+      return createAction.run(
+        (key, config) => createPackageApi(taskId, key, config).then(result => result!),
+        { taskId, taskNo: taskDetail.taskNo, requestBody: { warehouseTaskId: taskId } },
+      )
     },
     onError: (e: unknown) => err((e as { message?: string; response?: { data?: { message?: string } } })?.response?.data?.message ?? (e as { message?: string })?.message ?? '创建失败'),
   })
@@ -529,19 +544,21 @@ export default function PdaPackPage() {
     },
   })
 
-  // 关键操作共用一个「当前待确认」位次：装箱 → 移出 → 作废 → **完成箱子** → 打印机 → 完成打包。
+  // 待确认入口优先展示原操作，其余写操作继续冻结。
   // **完成箱子（finishAction）必须保留在位**：旧版链里就有它，漏掉会让「完成箱」待确认时
   // frozenRecord 变 null、查询/清除落到 finalizeAction，等于把既有的恢复入口改回归了。
   // 任一未确认都冻结换箱 / 换目标 / 新增等操作，别让原目标的恢复入口消失。
   const noticePendingAction =
-    addAction.pendingRecord ? addAction
-      : removeAction.pendingRecord ? removeAction
-        : voidAction.pendingRecord ? voidAction
-          : finishAction.pendingRecord ? finishAction
-            : printAction.pendingRecord ? printAction
-              : finalizeAction.pendingRecord ? finalizeAction
-                : null
+    createAction.pendingRecord ? createAction
+      : addAction.pendingRecord ? addAction
+        : removeAction.pendingRecord ? removeAction
+          : voidAction.pendingRecord ? voidAction
+            : finishAction.pendingRecord ? finishAction
+              : printAction.pendingRecord ? printAction
+                : finalizeAction.pendingRecord ? finalizeAction
+                  : null
   const frozenRecord = noticePendingAction?.pendingRecord ?? null
+  const creatingBox = frozenRecord?.action === 'package.create'
   // 冻结卡片**能不能展示原内容**：归属不明（owner 不可信 / 缺 packageId / 旧 scoped 记录的后缀
   // 与 metadata.taskId 不一致）时**不展示**原内容，只提示人工核对并保留阻断 ——
   // 展示错的原目标比不展示更糟（工人会照着错的去核对实物）。
@@ -550,6 +567,7 @@ export default function PdaPackPage() {
     if (frozenRecord.unverifiedOwner) return false
     const action = String(frozenRecord.action || '')
     const meta = (frozenRecord.metadata ?? {}) as { taskId?: unknown; packageId?: unknown }
+    if (action === 'package.create') return readPositiveId(String(meta.taskId)) > 0
 
     // 完成箱子：旧 scoped 记录要有 packageId 且后缀 === metadata.taskId
     const finishScoped = /^package\.finish\.(\d+)$/.exec(action)
@@ -580,26 +598,28 @@ export default function PdaPackPage() {
   // 否则「原目标恢复入口」虽然还在，工人却已经能在别的箱上继续动手，定位就失去了意义。
   // finish 的 `submitBlocked` 只覆盖「有待确认记录」，**提交中**（`phase === 'submitting'`）也要算进来。
   // print / finalize 已随本批 C4 一并纳入（它们的待确认来源与 finish 同类）。
-  const anySubmitBlocked = addAction.submitBlocked || removeAction.submitBlocked || voidAction.submitBlocked
+  const anySubmitBlocked = createAction.submitBlocked || createMut.isPending || createAction.phase === 'submitting'
+    || addAction.submitBlocked || removeAction.submitBlocked || voidAction.submitBlocked
     || finishAction.submitBlocked || finishAction.phase === 'submitting'
     // 打印 / 完成打包同样纳入本页冻结：它们也是「未确认原目标结果」的来源，
     // 只挡别的入口会让工人一边等着确认、一边在别的箱上继续动手，定位就失去意义。
     || printAction.submitBlocked || printAction.phase === 'submitting'
     || finalizeAction.submitBlocked || finalizeAction.phase === 'submitting'
-  const anyBlockedReason = addAction.blockedReason || removeAction.blockedReason || voidAction.blockedReason
+  const anyBlockedReason = createAction.blockedReason || addAction.blockedReason || removeAction.blockedReason || voidAction.blockedReason
     || finishAction.blockedReason
 
   // 提示卡片的 phase/lastErrorMessage 来源：优先未确认的 pendingRecord，
   // 其次正在提交/刚失败的。放在这些 action 之后定义，避免提前引用。
   const packNoticeAction =
     noticePendingAction
-      ?? (addAction.phase !== 'idle' || addAction.lastErrorMessage ? addAction
-        : removeAction.phase !== 'idle' || removeAction.lastErrorMessage ? removeAction
-          : voidAction.phase !== 'idle' || voidAction.lastErrorMessage ? voidAction
-            : finishAction.phase !== 'idle' || finishAction.lastErrorMessage ? finishAction
-              : printAction.phase !== 'idle' || printAction.lastErrorMessage ? printAction
-                : finalizeAction.phase !== 'idle' || finalizeAction.lastErrorMessage ? finalizeAction
-                  : null)
+      ?? (createAction.phase !== 'idle' || createAction.lastErrorMessage ? createAction
+        : addAction.phase !== 'idle' || addAction.lastErrorMessage ? addAction
+          : removeAction.phase !== 'idle' || removeAction.lastErrorMessage ? removeAction
+            : voidAction.phase !== 'idle' || voidAction.lastErrorMessage ? voidAction
+              : finishAction.phase !== 'idle' || finishAction.lastErrorMessage ? finishAction
+                : printAction.phase !== 'idle' || printAction.lastErrorMessage ? printAction
+                  : finalizeAction.phase !== 'idle' || finalizeAction.lastErrorMessage ? finalizeAction
+                    : null)
 
   // 移出走关键操作：未确认期间冻结**原目标**（箱 / 明细），恢复只认**原键回执**
   const runRemoveItem = async (pkg: Package, item: PackageItem) => {
@@ -764,7 +784,7 @@ export default function PdaPackPage() {
               || (onlineBlocked ? '网络已断开，打包、打印和完成待出库都已阻断。' : null)
             }
             pendingRecord={frozenRecord}
-            confirming={addAction.confirming || removeAction.confirming || voidAction.confirming || finishAction.confirming || printAction.confirming || finalizeAction.confirming}
+            confirming={createAction.confirming || addAction.confirming || removeAction.confirming || voidAction.confirming || finishAction.confirming || printAction.confirming || finalizeAction.confirming}
             phase={packNoticeAction?.phase}
             phaseMessage={packNoticeAction?.phaseMessage}
             lastErrorMessage={packNoticeAction?.lastErrorMessage}
@@ -778,6 +798,7 @@ export default function PdaPackPage() {
                 if (status.status === 'failed') err(status.message || '上次操作未成功，请检查后重试')
               })
             }}
+            onRetry={creatingBox && createAction.canRetry ? () => { void createAction.retryPending().catch(e => err(e.message)) } : undefined}
             onClear={() => {
               // 人工明确清除：只清**当前待确认**的那一个 action，绝不自动清 pending
               ;(noticePendingAction ?? finalizeAction).clearPending()
@@ -804,22 +825,26 @@ export default function PdaPackPage() {
               {frozenRecordTrusted ? (
                 <div className="mt-1 grid grid-cols-2 gap-2 text-xs text-warning-ink dark:text-warning-ink">
                   <div>任务 <span className="font-mono">{String(frozenRecord.metadata?.taskNo ?? frozenRecord.metadata?.taskId ?? '—')}</span></div>
-                  <div>箱子 <span className="font-mono">{String(frozenRecord.metadata?.packageBarcode ?? frozenRecord.metadata?.packageId ?? '—')}</span></div>
-                  <div className="min-w-0">
-                    条码 <span className="font-mono break-all">
-                      {String(frozenRecord.metadata?.labelBarcode ?? frozenRecord.metadata?.productCode ?? '—')}
-                    </span>
-                  </div>
-                  {/* 原货名：整行移出后原明细行会被删掉，只有冻结快照还记得这是哪件货 */}
-                  {frozenRecord.metadata?.productName != null && (
-                    <div className="min-w-0">
-                      商品 <span className="font-mono break-all">{String(frozenRecord.metadata.productName)}</span>
-                    </div>
-                  )}
-                  <div>数量 <span className="font-mono">{frozenRecord.metadata?.qty == null ? '整份' : String(frozenRecord.metadata.qty)}</span></div>
-                  {/* 移出冻结的是**某一行明细**，光有箱码定位不到是哪一行，恢复时对不上账 */}
-                  {frozenRecord.metadata?.itemId != null && (
-                    <div>明细 <span className="font-mono">#{String(frozenRecord.metadata.itemId)}</span></div>
+                  {!creatingBox && (
+                    <>
+                      <div>箱子 <span className="font-mono">{String(frozenRecord.metadata?.packageBarcode ?? frozenRecord.metadata?.packageId ?? '—')}</span></div>
+                      <div className="min-w-0">
+                        条码 <span className="font-mono break-all">
+                          {String(frozenRecord.metadata?.labelBarcode ?? frozenRecord.metadata?.productCode ?? '—')}
+                        </span>
+                      </div>
+                      {/* 原货名：整行移出后原明细行会被删掉，只有冻结快照还记得这是哪件货 */}
+                      {frozenRecord.metadata?.productName != null && (
+                        <div className="min-w-0">
+                          商品 <span className="font-mono break-all">{String(frozenRecord.metadata.productName)}</span>
+                        </div>
+                      )}
+                      <div>数量 <span className="font-mono">{frozenRecord.metadata?.qty == null ? '整份' : String(frozenRecord.metadata.qty)}</span></div>
+                      {/* 移出冻结的是**某一行明细**，光有箱码定位不到是哪一行，恢复时对不上账 */}
+                      {frozenRecord.metadata?.itemId != null && (
+                        <div>明细 <span className="font-mono">#{String(frozenRecord.metadata.itemId)}</span></div>
+                      )}
+                    </>
                   )}
                 </div>
               ) : (

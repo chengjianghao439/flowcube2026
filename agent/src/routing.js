@@ -83,8 +83,8 @@ export function classifyMessage(input) {
     return { kind: 'blocked', reply: '权限、核对和确认这几步不能跳过。需要办理业务的话，请按原页面的流程来。' };
   }
   const text = activeTopicText(original);
-  if (/(?:不用|不使用|不谈|不聊|别聊|不讨论)\s*(?:极序|FlowCube)|(?:极序|FlowCube).{0,6}(?:先放一边|放一边|暂且不谈|无关)/i.test(text)) return { kind: 'outside', reply: OUTSIDE_FLOW_REPLY };
-  if (/天气|气温|(?:多少|几)度|°[cCfF]/.test(text)) return { kind: 'outside', reply: OUTSIDE_FLOW_REPLY };
+  if (/(?:不用|不使用|不谈|不聊|别聊|不讨论)\s*(?:极序|FlowCube)|(?:极序|FlowCube).{0,6}(?:先放一边|放一边|暂且不谈|无关)/i.test(text)) return { kind: 'outside', explicitOutside: true, reply: OUTSIDE_FLOW_REPLY };
+  if (/天气|气温|(?:多少|几)度|°[cCfF]/.test(text)) return { kind: 'outside', explicitOutside: true, reply: OUTSIDE_FLOW_REPLY };
   const identified = FLOW_IDENTIFIER.test(text);
   const lookupText = text.replace(/^(?:在)?极序(?:\s*Flow)?(?:里|中|上)?[，,:：\s]*/i, '');
   const directLookup = DIRECT_LOOKUP.test(lookupText);

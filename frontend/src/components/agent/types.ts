@@ -1,6 +1,7 @@
 export interface AssistantLine {
   productId?: number
   productName: string
+  warehouseName?: string
   qty: number
   unit?: string
   unitPrice?: number
@@ -66,7 +67,7 @@ export interface AssistantMessage { id: number; role: 'user' | 'assistant'; text
 export const TASK_STATE_LABELS: Record<string, string> = {
   CREATED: '准备中', PLANNED: '准备中', CONFIRMED: '待执行', DISAMBIGUATING: '待选择', DRY_RUNNING: '核对中', AWAITING_CONFIRM: '待确认',
   EXECUTING: '执行中', VERIFYING: '回查中', RESULT_UNKNOWN: '待核对', ESCALATED: '待人工核对',
-  DONE: '已完成', EXPIRED: '已失效', FAILED_FINAL: '未完成', CANCELLED: '已取消',
+  DONE: '已完成', EXPIRED: '已失效', FAILED_FINAL: '未完成', CANCELLED: '已作废',
 }
 export const GRAPH_LABELS: Record<string, string> = {
   'A-inventory': '库存查询', 'B-sale-draft': '销售草稿', 'B2-reserve': '销售占库',

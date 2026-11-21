@@ -46,6 +46,7 @@ export function useAssistantConversation() {
     ])
   }, [select])
   const loadTasks = useCallback(async () => {
+    if (locked.current) return
     const loadId = ++loadSequence.current
     setLoading(true); setHistoryError('')
     try {
@@ -89,7 +90,7 @@ export function useAssistantConversation() {
         const next: AssistantTask = {
           ...previous, ...task, userText: task.userText || previous?.userText || userText,
           reply: out.reply || task.reply || previous?.reply,
-          preview: out.preview || task.preview || previous?.preview,
+          preview: ['DISAMBIGUATING', 'CANCELLED'].includes(task.state) ? undefined : out.preview || task.preview || previous?.preview,
           result: out.result || task.result,
           candidates: out.candidates || task.candidates || [],
         }
@@ -134,6 +135,25 @@ export function useAssistantConversation() {
       }
     } finally { locked.current = false; if (mounted.current) setBusy(false) }
   }
+  async function changeSaleDraft(action: 'reselect' | 'cancel', original = selected) {
+    if (!original || selected?.id !== original.id || selected.revision !== original.revision || locked.current || loading) return
+    const path = `/tasks/${encodeURIComponent(original.id)}`
+    locked.current = true; selectionTouched.current = true; setBusy(true); setError('')
+    try {
+      apply(await request<AssistantResponse>(`${path}/sale-draft`, { action, revision: original.revision }), original.userText || '')
+    } catch (cause) {
+      if (!mounted.current) return
+      const message = cause instanceof AssistantRequestError ? cause.message : '暂未取得操作结果。'
+      try {
+        const { task } = await request<{ task: AssistantTask }>(path)
+        if (!mounted.current) return
+        apply({ task, reply: task.reply || '已读取原任务。' }, original.userText || '')
+        if (task.revision === original.revision) setError(message)
+      } catch {
+        if (mounted.current) { select(null); setError('暂时无法核对操作结果，请重新打开原记录。') }
+      }
+    } finally { locked.current = false; if (mounted.current) setBusy(false) }
+  }
   async function selectTask(id: string) {
     if (locked.current) return
     selectionTouched.current = true; locked.current = true; setBusy(true); setError('')
@@ -152,5 +172,5 @@ export function useAssistantConversation() {
     if (locked.current) return
     selectionTouched.current = true; select(null); setMessages([]); setInput(''); setError(''); setRecoveryId(null)
   }
-  return { tasks, selected, messages, input, setInput, busy, loading, error, historyError, identity, connected, recoveryId, send, confirm, selectTask, newTask, loadTasks }
+  return { tasks, selected, messages, input, setInput, busy, loading, error, historyError, identity, connected, recoveryId, send, confirm, changeSaleDraft, selectTask, newTask, loadTasks }
 }

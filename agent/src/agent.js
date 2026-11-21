@@ -112,8 +112,7 @@ function entityFailure(store, task, error) {
 function clearChoice(task) { task.selection = null; task.candidates = null; task.error = null; }
 
 async function inventoryWarehouses(client, actor, text, warehouseKeyword) {
-  const data = await client.get('/api/warehouses?page=1&pageSize=50');
-  const all = data?.list ?? (Array.isArray(data) ? data : []);
+  const { list: all } = await collectList(client, '/api/warehouses');
   const named = warehouseKeyword ? all.filter(w => w.name === warehouseKeyword || w.name.includes(warehouseKeyword))
     : all.filter(w => text.includes(w.name) || (w.name.match(/[一二三四五六七八九十\d]+号?仓(?:库)?$/)?.[0] && text.includes(w.name.match(/[一二三四五六七八九十\d]+号?仓(?:库)?$/)[0])));
   const explicit = Boolean(warehouseKeyword || named.length);
@@ -153,8 +152,7 @@ async function pickSaleWarehouse(client, actor, productIds) {
 }
 
 async function warehouseName(client, warehouseId) {
-  const data = await client.get('/api/warehouses?page=1&pageSize=50');
-  const list = data?.list ?? data ?? [];
+  const { list } = await collectList(client, '/api/warehouses');
   return list.find(w => String(w.id) === String(warehouseId))?.name || '';
 }
 
@@ -289,42 +287,62 @@ function salePayload(preview) {
 }
 
 const SALE_DRAFT_PERMS = ['sale.order.create', 'sale.order.view', 'customer.view', 'price.list.view', 'product.view', 'inventory.view', 'warehouse.view', 'dashboard.view'];
+const chineseQuantityToken = '[零〇一二两三四五六七八九十百千万亿]+';
+const saleQuantityUnit = '[个件条只套箱把]';
+const chineseQuantityWithUnit = new RegExp(`${chineseQuantityToken}\\s*${saleQuantityUnit}`);
+const quantityOnly = new RegExp(`^(?:\\d+(?:\\.\\d+)?|${chineseQuantityToken})\\s*${saleQuantityUnit}?$`);
+const chineseSaleLine = new RegExp(`^(.+?)\\s*(${chineseQuantityToken})\\s*${saleQuantityUnit}$`);
+const quantityFirstSaleLine = new RegExp(`^(\\d+(?:\\.\\d+)?|${chineseQuantityToken})\\s*${saleQuantityUnit}\\s*(.+)$`);
+
 function splitSaleLines(linesText) {
-  const parts = String(linesText || '').split(/[，,、]/).map(seg => seg.trim()).filter(Boolean);
+  const parts = String(linesText || '').split(/[，,、]/).map(seg => seg.trim().replace(/[。！!？?]+$/, '')).filter(Boolean);
   if (!parts.length) return [];
   const lines = [];
   for (const seg of parts) {
-    const forward = seg.match(/^(.+?)\s*(\d+(?:\.\d+)?)\s*(?:个|件|条|只|套|箱|把)?$/);
-    const reverse = seg.match(/^(\d+(?:\.\d+)?)\s*(?:个|件|条|只|套|箱|把)\s*(.+)$/);
-    if (forward?.[1].trim()) lines.push({ productKeyword: forward[1].trim(), qty: Number(forward[2]) });
-    else if (reverse?.[2].trim()) lines.push({ productKeyword: reverse[2].trim(), qty: Number(reverse[1]) });
-    else return null;
+    if (quantityOnly.test(seg)) return null;
+    const forward = seg.match(/^(.+?)\s*(\d+(?:\.\d+)?)\s*(?:个|件|条|只|套|箱|把)?$/) || seg.match(chineseSaleLine);
+    const reverse = forward ? null : seg.match(quantityFirstSaleLine);
+    const productKeyword = (forward?.[1] ?? reverse?.[2])?.trim();
+    const qty = quantityNumber(forward?.[2] ?? reverse?.[1] ?? '');
+    if (!productKeyword || !Number.isFinite(qty)) return null;
+    lines.push({ productKeyword, qty });
   }
   return lines;
 }
 function saleIntakeReply(customerKeyword, lines) {
   if (customerKeyword && !lines?.length) return `客户先按「${customerKeyword}」。还差商品和数量，例如「缓冲铰链 10个」。说全了我就试算，还没建单。`;
-  if (!customerKeyword && lines?.length) return '商品先记下了。客户是谁？可以说「给某客户开单：商品 数量」。还没建单。';
+  if (!customerKeyword && lines?.length) return '商品先记下了。客户是谁？直接说「客户是某某公司」就行。还没建单。';
   return '好，按销售草稿来办。请告诉我客户是谁、要哪些商品、各多少。例如「给华南客户开单：缓冲铰链 10个」。缺了这两样我先问你。还没建单。';
 }
 function saleDraftFromText(text, prior) {
-  const formal = String(text || '').match(/给(.+?)开单[：:](.+)$/);
-  if (formal) {
-    const lines = splitSaleLines(formal[2]);
-    if (!lines) {
-      const bad = formal[2].split(/[，,、]/).map(seg => seg.trim()).find(seg => seg && !splitSaleLines(seg));
-      return { explicit: true, badSegment: bad || formal[2].trim(), customerKeyword: formal[1].trim(), lines: [] };
-    }
-    return { explicit: true, customerKeyword: formal[1].trim(), lines };
-  }
-  const loose = splitSaleLines(text);
-  if (loose?.length && prior?.customerKeyword) return { explicit: true, customerKeyword: prior.customerKeyword, lines: loose };
-  let customerKeyword = prior?.customerKeyword || null;
   const plain = String(text || '').trim();
-  if (!customerKeyword && prior?.intake && plain.length <= 40 && !/[0-9]/.test(plain) && !/库存|简报|卡点|欠款|采购|审批|发货|付款|改价|开单|订单|下一单/.test(plain)) {
+  const savedLines = Array.isArray(prior?.lines) ? prior.lines : [];
+  const formal = plain.match(/给(.+?)开单(?:[：:](.*)|[。！!])?$/);
+  if (formal) {
+    const customerKeyword = formal[1].trim();
+    const details = formal[2]?.trim();
+    if (!details) return { explicit: true, customerKeyword, lines: savedLines };
+    const lines = splitSaleLines(details);
+    if (!lines) {
+      const bad = details.split(/[，,、]/).map(seg => seg.trim()).find(seg => seg && !splitSaleLines(seg));
+      return { explicit: true, badSegment: bad || details, customerKeyword, lines: [] };
+    }
+    return { explicit: true, customerKeyword, lines };
+  }
+  let customerKeyword = prior?.customerKeyword || null;
+  const named = prior && plain.match(/^客户(?:是|叫|为|[：:])\s*(.+)$/);
+  if (named) {
+    const name = named[1].replace(/[。！!？?]+$/, '').trim();
+    if (name) return { explicit: true, customerKeyword: name, lines: savedLines };
+  }
+  const loose = prior && splitSaleLines(plain);
+  if (loose?.length) return { explicit: true, customerKeyword, lines: loose };
+  if (!customerKeyword && prior?.intake && plain.length <= 40 && !/[0-9]/.test(plain)
+      && !quantityOnly.test(plain.replace(/[。！!？?]+$/, '')) && !chineseQuantityWithUnit.test(plain)
+      && !/库存|简报|卡点|欠款|采购|审批|发货|付款|改价|开单|订单|下一单/.test(plain)) {
     customerKeyword = plain.replace(/^(?:客户(?:是|叫|为)?|给)\s*[:：]?\s*/, '').replace(/[。！!？?]/g, '').trim() || null;
   }
-  return { explicit: false, customerKeyword, lines: prior?.lines?.length ? prior.lines : [] };
+  return { explicit: false, customerKeyword, lines: savedLines };
 }
 async function graphSaleDraft(store, client, actor, text, preset) {
   let customerKeyword, lines, badSegment = null;
@@ -337,6 +355,7 @@ async function graphSaleDraft(store, client, actor, text, preset) {
     customerKeyword = parsed.customerKeyword;
     lines = parsed.lines;
     badSegment = parsed.badSegment;
+    if (prior && customerKeyword !== prior.customerKeyword && preset.task.selections) delete preset.task.selections.customer;
   }
   const task = preset?.task || store.create({ graph: 'B-sale-draft', userText: text, actor });
   if (task.state === 'CREATED') task.transition('DISAMBIGUATING');
@@ -382,6 +401,7 @@ async function graphSaleDraft(store, client, actor, text, preset) {
   preview.warehouseName = await warehouseName(client, warehouseId);
   preview.payload = salePayload(preview);
   task.setPreview(preview);
+  if (task.saleDraftReselected) task.accessWarehouseIds = [Number(warehouseId)];
   task.transition('AWAITING_CONFIRM');
   store.save(task);
   const shortageLines = preview.lines.filter(l => l.shortage > 0);
@@ -393,6 +413,45 @@ async function graphSaleDraft(store, client, actor, text, preset) {
 }
 
 // ---------- 确认执行：按任务图分发 ----------
+export function changeSaleDraft(store, taskId, actor, { action, revision }) {
+  return store.exclusive(taskId, () => {
+    const task = assertTaskAccess(store.get(taskId), actor);
+    const cancel = action === 'cancel';
+    if (task.graph !== 'B-sale-draft') throw Object.assign(new Error('这项操作仅适用于小满销售草稿'), { status: 409 });
+    if (cancel && task.state === 'CANCELLED') return { task, reply: task.reply };
+    if (!cancel && !hasPerm(actor, 'sale.order.create')) throw Object.assign(new Error('当前没有销售单新建权限，无法重选商品'), { status: 403 });
+    if (task.state !== 'AWAITING_CONFIRM' && !(cancel && task.state === 'DISAMBIGUATING')) {
+      throw Object.assign(new Error('这张草稿当前不能修改，请查看原任务状态'), { status: 409 });
+    }
+    if (revision !== Number(task.revision)) throw previewConflict();
+
+    const { customer, warehouseId } = task.preview || {};
+    const customerKeyword = task.intent?.customerKeyword || customer?.name;
+    if (!cancel && (!customerKeyword || !task.preview || task.previewExpired())) {
+      throw Object.assign(new Error('原预览已失效，请重新发起试算'), { status: 409 });
+    }
+    if (Number.isSafeInteger(Number(warehouseId)) && Number(warehouseId) > 0) task.accessWarehouseIds = [Number(warehouseId)];
+    const customerId = customer?.id ?? task.selections?.customer;
+    clearChoice(task);
+    task.preview = null;
+    task.revision = revision + 1;
+    if (cancel) {
+      task.transition('CANCELLED');
+      return rememberOutput(store, { task, reply: '销售草稿已作废。' });
+    }
+
+    task.saleDraftReselected = true;
+    task.intent = { graph: 'B-sale-draft', intake: true, customerKeyword, lines: [] };
+    task.selections = customerId == null ? {} : { customer: customerId };
+    task.transition('DISAMBIGUATING');
+    return rememberOutput(store, { task, reply: `已保留客户「${customer?.name || customerKeyword}」。请重新输入商品和数量，再试算确认。` });
+  });
+}
+
+function previewConflict(message = '预览已更新，请核对最新版本后再确认') {
+  return Object.assign(new Error(message), { status: 409, code: 'PREVIEW_REVISION_CONFLICT' });
+}
+
 export async function confirmTask(store, client, taskId, actor, options = {}) {
   return store.exclusive(taskId, async () => rememberOutput(store, await confirmTaskUnlocked(store, client, taskId, actor, options)));
 }
@@ -411,7 +470,10 @@ async function confirmTaskUnlocked(store, client, taskId, actor, options) {
     return { task, reply: '此任务已经完成，已返回原结果，无需重复确认。', result: task.result };
   }
   if (['EXECUTING', 'RESULT_UNKNOWN', 'CONFIRMED', 'ESCALATED', 'VERIFYING'].includes(task.state)) return recoverTask(store, client, task);
-  if (options.revision != null && (!Number.isSafeInteger(Number(options.revision)) || Number(options.revision) !== Number(task.revision))) throw Object.assign(new Error('预览已更新，请核对最新版本后再确认'), { status: 409, code: 'PREVIEW_REVISION_CONFLICT' });
+  if (task.state === 'CANCELLED') throw previewConflict('草稿已作废，请查看原任务。');
+  if ((task.saleDraftReselected && options.revision == null)
+    || (options.revision != null && (!Number.isSafeInteger(Number(options.revision)) || Number(options.revision) !== Number(task.revision)))) throw previewConflict();
+  if (task.saleDraftReselected && task.state !== 'AWAITING_CONFIRM') throw previewConflict('请补齐商品和数量，再确认新预览。');
   if (task.state !== 'AWAITING_CONFIRM') throw new Error(`任务不在待确认状态（当前 ${task.state}）`);
   if (task.previewExpired()) {
     task.transition('EXPIRED'); store.save(task);
@@ -435,20 +497,8 @@ async function recoverTask(store, client, task) {
   if (task.state === 'EXECUTING') task.transition('RESULT_UNKNOWN');
   store.save(task);
   const p = task.preview;
-  if (task.graph === 'C-purchase-draft') {
-    const orders = [];
-    for (const draft of p.drafts) {
-      const key = `${task.requestKey}-S${draft.supplierId}W${draft.warehouseId}`;
-      const receipt = await client.requestStatus(key, 'purchase.create').catch(() => null);
-      if (!receipt?.resourceId) return { task, reply: `采购执行尚未全部核实，已核实 ${orders.length} 张。请按原任务到采购页核对，不要重新发起整批建单。` };
-      const detail = await client.get(`/api/purchase/${receipt.resourceId}`);
-      if (toCents(detail.totalAmount) !== draft.totalCents) return { task, reply: '采购原单金额与预览不一致，请人工核对，不重新提交。' };
-      orders.push({ orderId: receipt.resourceId, orderNo: detail.orderNo, totalCents: draft.totalCents });
-    }
-    task.result = { orders, recoveredViaReceipt: true }; task.transition('VERIFYING'); task.transition('DONE'); store.save(task);
-    return { task, reply: `已按原回执恢复 ${orders.length} 张采购草稿，未重新提交。`, result: task.result };
-  }
-  const action = { 'B-sale-draft': 'sale.create', 'B2-reserve': `sale.reserve:${p?.orderId}`, 'D-receipt': 'payment.receipt.create', 'D-settle': `payment.receipt.settle.${p?.receiptId}` }[task.graph];
+  if (task.graph === 'C-purchase-draft') return recoverPurchaseDraft(store, client, task);
+  const action = { 'B-sale-draft': 'sale.create', 'B2-reserve': reserveReceiptAction(p), 'D-receipt': 'payment.receipt.create', 'D-settle': `payment.receipt.settle.${p?.receiptId}` }[task.graph];
   if (!action) return { task, reply: '此任务执行结果尚未核实，请按原任务及请求键到原页面核对，不要重新发起建单。' };
   let receipt;
   try { receipt = await client.requestStatus(task.requestKey, action); }
@@ -467,8 +517,9 @@ async function recoverTask(store, client, task) {
     if (Number(id) !== Number(p.receiptId) || !await verifySettled(client, task)) return { task, reply: '原核销尚未核实，请到收付款页核对原收款单，勿重复登记。' };
     task.result = { receiptId: id, receiptNo: p.receiptNo, recoveredViaReceipt: true };
   } else {
-    const detail = await client.get(`/api/sale/${p.orderId}`);
-    if (!detail?.items?.length || detail.items.some(i => Number(i.quantity) > Number(i.reservedQty))) return { task, reply: '原销售单占库数量尚未核实，请到销售页核对。' };
+    if (!isReserveReceipt(receipt, p)) return { task, reply: '原占库回执的单据尚未核实，请到销售页核对。' };
+    const detail = await client.get(`/api/sale/${p.orderId}`).catch(() => null);
+    if (!reserveMatchesPreview(detail, p)) return { task, reply: '原销售单占库数量或行仓尚未核实，请到销售页核对。' };
     task.result = { orderNo: p.orderNo, recoveredViaReceipt: true };
   }
   task.transition('VERIFYING'); task.transition('DONE'); store.save(task);
@@ -542,18 +593,21 @@ async function confirmSaleDraft(store, client, task, actor) {
 }
 
 // ---------- 图 C：补货建议（L1）与采购草稿（L2） ----------
-async function replenishmentItems(client, warehouseId, actor) {
-  const data = await run('inventory.replenishment', client, { warehouseId }, actor);
+async function replenishmentItems(client, warehouse, actor) {
+  const data = await run('inventory.replenishment', client, { warehouseId: warehouse.id }, actor);
   const raw = data?.replenishment;
   const list = raw?.list ?? raw?.items ?? (Array.isArray(raw) ? raw : null);
   if (!Array.isArray(list)) throw new Error('补货建议未完整读到，请稍后重试');
-  return list.filter(i => Number(i.suggestedQty ?? i.suggestQty ?? 0) > 0);
+  const items = list.filter(i => Number(i.suggestedQty ?? i.suggestQty ?? 0) > 0);
+  if (items.some(item => item.warehouseId !== warehouse.id)) {
+    throw new Error(`「${warehouse.name}」的补货建议缺少正确的仓库信息，请到补货建议页核对。`);
+  }
+  return items.map(item => ({ ...item, warehouseName: warehouse.name }));
 }
 
 // 发起人仓库范围内的仓库清单（多仓逐仓处理，不默认挑第一个——挑错仓会答错数）
 async function inScopeWarehouses(client, actor) {
-  const data = await client.get('/api/warehouses?page=1&pageSize=50');
-  const list = data?.list ?? data ?? [];
+  const { list } = await collectList(client, '/api/warehouses');
   const filtered = Array.isArray(actor?.warehouseIds) ? list.filter(w => actor.warehouseIds.includes(Number(w.id))) : list;
   if (!filtered.length) throw new Error('你的账号没有可访问的仓库（仓库范围为空），无法继续');
   return filtered.map(w => ({ id: Number(w.id), name: w.name }));
@@ -568,7 +622,7 @@ async function graphReplenishment(store, client, actor, text) {
   try {
     const warehouses = await inScopeWarehouses(client, actor);
     const items = [];
-    for (const w of warehouses) items.push(...(await replenishmentItems(client, w.id, actor)));
+    for (const w of warehouses) items.push(...(await replenishmentItems(client, w, actor)));
     task.result = { items };
     task.transition('DONE'); store.save(task);
     if (!items.length) return { task, reply: `当前没有补货建议（按系统补货口径，建议量为 0 的商品不列）。`, result: task.result };
@@ -591,8 +645,12 @@ async function graphReplenishment(store, client, actor, text) {
 async function buildPurchasePreview(client, actor) {
   const warehouses = await inScopeWarehouses(client, actor);
   const items = [];
-  for (const w of warehouses) items.push(...(await replenishmentItems(client, w.id, actor)));
+  for (const w of warehouses) items.push(...(await replenishmentItems(client, w, actor)));
   if (!items.length) return { empty: true, drafts: [], grandTotalCents: 0 };
+  const missingSupplier = items.find(item => !Number.isSafeInteger(item.supplierId) || item.supplierId <= 0);
+  if (missingSupplier) {
+    throw new Error(`「${missingSupplier.warehouseName}」的「${missingSupplier.productName}」缺少有效供应商，请先维护供应商再试算。`);
+  }
   const byKey = new Map();
   for (const i of items) {
     const qty = Number(i.suggestedQty ?? i.suggestQty);
@@ -609,9 +667,7 @@ async function buildPurchasePreview(client, actor) {
       priceSource: { level: '成本价', source: 'product_cost' },
       onHand: i.onHand, available: i.available,
     };
-    // TODO(巡检登记 2026-10-26)：图 C 建议行缺 warehouseId 时以首仓兜底——建议接口
-    // 正常按仓返回，此兜底理论上不触发；如触发可能把草稿落错仓。本轮只登记不改行为。
-    const wid = Number(i.warehouseId ?? warehouses[0].id);
+    const wid = i.warehouseId;
     const key = `${i.supplierId}@${wid}`;
     if (!byKey.has(key)) byKey.set(key, { supplierId: i.supplierId, supplierName: i.supplierName, warehouseId: wid, warehouseName: i.warehouseName || '', lines: [] });
     byKey.get(key).lines.push(line);
@@ -639,6 +695,50 @@ function purchaseSignature(preview) {
   return JSON.stringify((preview?.drafts || []).map(d => [d.supplierId, d.warehouseId, d.lines.map(l => [l.productId, l.qty, l.unitPrice])]).sort((a, b) => (a[0] - b[0]) || (a[1] - b[1])));
 }
 
+const purchaseDraftKey = (task, draft) => `${task.requestKey}-S${draft.supplierId}W${draft.warehouseId}`;
+
+function verifyPurchaseDraft(draft, id, detail) {
+  const orderId = Number(id);
+  if (!Number.isSafeInteger(orderId) || orderId <= 0 || orderId !== Number(detail?.id)
+      || draft.supplierId !== Number(detail.supplierId) || draft.warehouseId !== Number(detail.warehouseId)
+      || typeof detail.orderNo !== 'string' || !detail.orderNo.trim()) return null;
+  try {
+    if (toCents(detail.totalAmount) !== draft.totalCents) return null;
+  } catch {
+    return null;
+  }
+  return { supplierName: draft.supplierName, orderId, orderNo: detail.orderNo, totalCents: draft.totalCents };
+}
+
+async function recoverPurchaseDraft(store, client, task) {
+  const drafts = task.preview?.drafts;
+  if (!drafts?.length) return { task, reply: '无法读取原采购预览，请到采购页核对原任务。' };
+  const orders = [];
+  for (const draft of drafts) {
+    try {
+      const receipt = await client.requestStatus(purchaseDraftKey(task, draft), 'purchase.create');
+      if (receipt?.resourceType !== 'purchase_order' || !Number.isSafeInteger(receipt.resourceId) || receipt.resourceId <= 0) continue;
+      const detail = await client.get(`/api/purchase/${receipt.resourceId}`);
+      const order = verifyPurchaseDraft(draft, receipt.resourceId, detail);
+      if (order) orders.push(order);
+    } catch {
+      // 一张回执或详情暂不可读时，继续核对其余原单。
+    }
+  }
+  const unverifiedCount = drafts.length - orders.length;
+  task.result = { orders, unverifiedCount, recoveredViaReceipt: true };
+  if (unverifiedCount === 0) {
+    task.transition('VERIFYING');
+    task.transition('DONE');
+  }
+  store.save(task);
+  const verified = orders.map(order => order.orderNo).join('、') || '暂无';
+  const reply = unverifiedCount
+    ? `已核实采购单 ${orders.length}/${drafts.length} 张（${verified}）。其余 ${unverifiedCount} 张待核对，请继续查询原任务或到采购页核对，避免重复建单。`
+    : `已按原回执核实 ${orders.length} 张采购单（${verified}）。`;
+  return { task, reply, result: task.result };
+}
+
 async function graphPurchaseDraft(store, client, actor, text) {
   const task = store.create({ graph: 'C-purchase-draft', userText: text, actor });
   task.transition('DISAMBIGUATING');
@@ -654,8 +754,8 @@ async function graphPurchaseDraft(store, client, actor, text) {
   }
   task.setPreview(preview);
   task.transition('AWAITING_CONFIRM'); store.save(task);
-  const reply = `采购草稿已试算（待确认）：将按供应商建 ${preview.drafts.length} 张草稿，合计 ¥${(preview.grandTotalCents / 100).toFixed(2)}。` +
-    preview.drafts.map(d => `【${d.supplierName}】${d.lines.map(l => `${l.productName} ×${l.qty} @成本价 ¥${l.unitPrice ?? (l.unitPriceCents / 100).toFixed(2)}`).join('；')}，小计 ¥${(d.totalCents / 100).toFixed(2)}`).join('。') +
+  const reply = `采购草稿已试算（待确认）：将按供应商和仓库建 ${preview.drafts.length} 张草稿，合计 ¥${(preview.grandTotalCents / 100).toFixed(2)}。` +
+    preview.drafts.map(d => `【${d.supplierName} · ${d.warehouseName}】${d.lines.map(l => `${l.productName} ×${l.qty} @成本价 ¥${l.unitPrice ?? (l.unitPriceCents / 100).toFixed(2)}`).join('；')}，小计 ¥${(d.totalCents / 100).toFixed(2)}`).join('。') +
     `。确认请在界面点击确认，预览 10 分钟内有效。`;
   return { task, reply, preview };
 }
@@ -669,7 +769,9 @@ async function confirmPurchaseDraft(store, client, task, actor) {
     if (!hasPerm(actor, code)) return { task, reply: denialReply(actor, new PermissionDeniedError(code, task.graph)) + '（未执行）' };
   }
   // 新鲜度复核：重跑补货建议与成本价，签名不一致即拦截
-  const fresh = await buildPurchasePreview(client, actor);
+  let fresh;
+  try { fresh = await buildPurchasePreview(client, actor); }
+  catch (e) { return { task, reply: `未能复核采购预览，本次未提交采购单。${e.message}`, preview: task.preview }; }
   if (purchaseSignature(fresh) !== purchaseSignature(task.preview)) {
     task.transition('EXPIRED'); store.save(task);
     return { task, reply: '确认时发现补货建议或成本价已变化（建议量/供应商/价格与预览不一致），已拦截执行。请重新发起生成新预览。' };
@@ -678,15 +780,15 @@ async function confirmPurchaseDraft(store, client, task, actor) {
   const createdOrders = [];
   try {
     for (const draft of task.preview.drafts) {
-      const key = `${task.requestKey}-S${draft.supplierId}W${draft.warehouseId}`;
+      const key = purchaseDraftKey(task, draft);
       const { created, verified } = await run('purchase.create_draft', client, { payload: draft.payload, requestKey: key }, actor);
-      const verifiedCents = verified ? toCents(verified.totalAmount ?? verified.total_amount ?? 0) : null;
-      if (!created?.id || !verified || verifiedCents !== draft.totalCents) {
+      const order = verifyPurchaseDraft(draft, created?.id, verified);
+      if (!order) {
         task.transition('ESCALATED'); store.save(task);
-        return { task, reply: `供应商「${draft.supplierName}」建单核验不平（预览 ¥${(draft.totalCents / 100).toFixed(2)}，回查 ${verifiedCents === null ? '无' : '¥' + (verifiedCents / 100).toFixed(2)}），已转人工。已建成的草稿：${createdOrders.map(o => o.orderNo).join('、') || '无'}。` };
+        return { task, reply: `供应商「${draft.supplierName}」的原采购单未能核实，请核对仓库、供应商和金额。已核实：${createdOrders.map(o => o.orderNo).join('、') || '暂无'}。` };
       }
-      createdOrders.push({ supplierName: draft.supplierName, orderId: created.id, orderNo: verified?.orderNo || created.orderNo || String(created.id), totalCents: draft.totalCents });
-      task.recordStep('create', 'purchase.create_draft', createdOrders[createdOrders.length - 1]);
+      createdOrders.push(order);
+      task.recordStep('create', 'purchase.create_draft', order);
       task.result = { orders: createdOrders }; store.save(task);
     }
     task.result = { orders: createdOrders };
@@ -704,26 +806,32 @@ async function confirmPurchaseDraft(store, client, task, actor) {
 
 // ---------- 图 B2：销售单占库 ----------
 async function findSaleOrderByNo(client, orderNo) {
-  const data = await client.get('/api/sale/?page=1&pageSize=100');
-  const list = data?.list ?? [];
+  const { list } = await collectList(client, '/api/sale/', { keyword: orderNo });
   return list.find(o => o.orderNo === orderNo) || null;
 }
 
 async function buildReservePreview(client, actor, order) {
   const rp = await run('sale.reserve_preview', client, { saleOrderId: order.id }, actor);
+  const remainingAvailability = new Map();
   const lines = (rp.items || []).map(it => {
-    const wh = (it.warehouses || []).find(w => Number(w.warehouseId) === Number(rp.warehouseId)) || {};
+    const warehouseId = Number(it.currentWarehouseId ?? rp.warehouseId);
+    const warehouseName = it.currentWarehouseName || rp.warehouseName;
+    const wh = (it.warehouses || []).find(w => Number(w.warehouseId) === warehouseId);
+    const dimension = `${it.productId}:${warehouseId}`;
     const remain = Number(it.remainToReserve || 0);
-    const available = Number(wh.available ?? 0);
+    const available = remainingAvailability.get(dimension) ?? Math.max(0, Number(wh?.available ?? 0));
+    remainingAvailability.set(dimension, Math.max(0, Math.round(available * 100) - Math.round(remain * 100)) / 100);
     return {
-      productId: it.productId, productName: it.productName, qty: remain,
+      itemId: it.itemId, warehouseId, warehouseName,
+      productId: it.productId, productName: it.productName, qty: remain, unit: it.unit,
       reservedQty: Number(it.reservedQty || 0), remainToReserve: remain,
-      available, pickable: Number(wh.pickableQuantity ?? 0),
-      shortage: Math.max(0, remain - available),
+      available, pickable: Number(wh?.pickableQuantity ?? 0),
+      shortage: Math.max(0, Math.round(remain * 100) - Math.round(available * 100)) / 100,
       unitPriceCents: null, priceSource: { level: '占库', source: 'reserve_preview' },
     };
   });
   return {
+    _reserveFingerprint: rp.reserveFingerprint, _commercialModel: rp.commercialModel, _commercialRevision: rp.commercialRevision,
     orderId: order.id, orderNo: order.orderNo, warehouseId: rp.warehouseId, warehouseName: rp.warehouseName,
     customer: { name: order.customerName }, lines,
     totalCents: 0, title: `占库 · ${order.orderNo}`, confirmLabel: '确认占库',
@@ -749,12 +857,14 @@ async function graphReserve(store, client, actor, text, presetOrderNo) {
     const detail = await client.get(`/api/sale/${order.id}`).catch(() => null);
     const items = detail?.items || [];
     if (items.length && items.every(it => Number(it.reservedQty || 0) >= Number(it.quantity || 0))) {
+      task.accessWarehouseIds = reserveWarehouseIds(detail.warehouseId, items);
       task.result = { orderNo, alreadyReserved: true }; task.transition('DONE'); store.save(task);
       return { task, reply: `销售单 ${orderNo} 已全部占库，无需再占。` };
     }
     task.error = e.message; task.transition('FAILED_FINAL'); store.save(task);
     return { task, reply: `试占库失败：${e.message}` };
   }
+  task.accessWarehouseIds = reserveWarehouseIds(preview.warehouseId, preview.lines);
   if (preview.totalRemain === 0) {
     task.result = { orderNo, alreadyReserved: true }; task.transition('DONE'); store.save(task);
     return { task, reply: `销售单 ${orderNo} 已全部占库，无需再占。` };
@@ -762,14 +872,42 @@ async function graphReserve(store, client, actor, text, presetOrderNo) {
   const shortage = preview.lines.filter(l => l.shortage > 0);
   if (shortage.length) {
     task.result = { orderNo, shortage }; task.transition('DONE'); store.save(task);
-    return { task, reply: `销售单 ${orderNo} 现在占不了库：${shortage.map(l => `${l.productName} 还需占 ${l.remainToReserve}、本仓可用 ${l.available}、缺 ${l.shortage}`).join('；')}。我没有部分占库，也没有自动改量；补货或调仓后再来。`, result: task.result };
+    return { task, reply: `销售单 ${orderNo} 现在占不了库：${shortage.map(l => `${l.productName}（${l.warehouseName}）还需占 ${l.remainToReserve}、可分配 ${l.available}、缺 ${l.shortage}`).join('；')}。我没有部分占库，也没有自动改量；补货或调仓后再来。`, result: task.result };
   }
   task.setPreview(preview);
   task.transition('AWAITING_CONFIRM'); store.save(task);
   const reply = `占库已试算（待确认）：销售单 ${orderNo}（${preview.customer.name}，${preview.warehouseName}），待占 ${preview.totalRemain} 件：` +
-    preview.lines.map(l => `${l.productName} ×${l.remainToReserve}（可用 ${l.available}）`).join('；') +
+    preview.lines.map(l => `${l.productName} ×${l.remainToReserve}（${l.warehouseName}可分配 ${l.available}）`).join('；') +
     `。确认请在界面点击确认，预览 10 分钟内有效。`;
   return { task, reply, preview };
+}
+
+function reserveWarehouseIds(headWarehouseId, lines) {
+  return [...new Set([headWarehouseId, ...lines.map(line => line.warehouseId)].map(Number))]
+    .filter(id => Number.isSafeInteger(id) && id > 0);
+}
+
+function reserveReceiptAction(preview) {
+  const separator = preview?._commercialModel === 'kit-v1' ? '.' : ':';
+  return `sale.reserve${separator}${preview?.orderId}`;
+}
+
+function isReserveReceipt(receipt, preview) {
+  return receipt?.resourceType === 'sale_order' && Number(receipt.resourceId) === Number(preview.orderId);
+}
+
+function reserveMatchesPreview(detail, preview) {
+  if (!detail || Number(detail.id) !== Number(preview.orderId) || detail.orderNo !== preview.orderNo
+      || Number(detail.warehouseId) !== Number(preview.warehouseId) || detail.items?.length !== preview.lines.length) return false;
+  const items = new Map(detail.items.map(item => [Number(item.id), item]));
+  return preview.lines.every(line => {
+    const item = items.get(Number(line.itemId));
+    const expectedQty = Math.round((line.reservedQty + line.remainToReserve) * 100);
+    return item && Number(item.productId) === Number(line.productId)
+      && Number(item.warehouseId ?? detail.warehouseId) === line.warehouseId
+      && Math.round(Number(item.quantity) * 100) === expectedQty
+      && Math.round(Number(item.reservedQty) * 100) === expectedQty;
+  });
 }
 
 async function confirmReserve(store, client, task, actor) {
@@ -779,15 +917,25 @@ async function confirmReserve(store, client, task, actor) {
   }
   const order = await findSaleOrderByNo(client, task.preview.orderNo);
   if (!order) { task.transition('EXPIRED'); store.save(task); return { task, reply: '确认时销售单已不存在或不可见，已拦截。' }; }
-  const fresh = await buildReservePreview(client, actor, order);
-  const sig = p => JSON.stringify(p.lines.map(l => [l.productId, l.remainToReserve, l.available]).sort((a, b) => a[0] - b[0]));
-  if (sig(fresh) !== sig(task.preview)) {
+  let fresh;
+  try { fresh = await buildReservePreview(client, actor, order); }
+  catch (e) { return { task, reply: `未能复核占库预览，本次未提交占库。${e.message}`, preview: task.preview }; }
+  const sig = p => JSON.stringify(p.lines.map(l => [l.itemId, l.productId, l.warehouseId, l.remainToReserve, l.available]).sort((a, b) => a[0] - b[0]));
+  const original = task.preview;
+  if (Number(order.id) !== Number(original.orderId) || !original._reserveFingerprint
+      || fresh._reserveFingerprint !== original._reserveFingerprint
+      || fresh._commercialModel !== original._commercialModel || fresh._commercialRevision !== original._commercialRevision
+      || sig(fresh) !== sig(original)) {
     task.transition('EXPIRED'); store.save(task);
-    return { task, reply: '确认时发现待占量或可用量已变化，已拦截执行。请重新发起试占。' };
+    return { task, reply: '确认时发现原销售单、行仓或数量已变化，本次未提交。请重新试占。' };
   }
   task.transition('CONFIRMED'); task.transition('EXECUTING'); store.save(task);
   try {
-    const execution = await run('sale.reserve', client, { saleOrderId: task.preview.orderId, requestKey: task.requestKey }, actor);
+    const payload = {
+      expectedReserveFingerprint: original._reserveFingerprint,
+      ...(original._commercialModel === 'kit-v1' ? { commercialModel: 'kit-v1', expectedRevision: original._commercialRevision } : {}),
+    };
+    const execution = await run('sale.reserve', client, { saleOrderId: original.orderId, requestKey: task.requestKey, payload }, actor);
     task.recordStep('reserve', 'sale.reserve', execution.result); store.save(task);
     task.transition('VERIFYING');
     // 核验走单据明细（reservedQty）：占满后 reserve-preview 本身会被系统拒，不能用它核验
@@ -796,11 +944,9 @@ async function confirmReserve(store, client, task, actor) {
       task.transition('ESCALATED'); store.save(task);
       return { task, reply: '占库已提交，但回查暂未完成。请查询原任务结果，不要重新发起占库。' };
     }
-    const items = detail?.items || [];
-    const remain = items.reduce((s, it) => s + Math.max(0, Number(it.quantity || 0) - Number(it.reservedQty || 0)), 0);
-    if (!items.length || remain !== 0) {
+    if (!reserveMatchesPreview(detail, original)) {
       task.transition('ESCALATED'); store.save(task);
-      return { task, reply: `占库执行后回查仍有待占 ${remain} 件，与预期不符，已转人工核查。` };
+      return { task, reply: '占库执行后回查的销售单、行仓或数量与预览不一致，已转人工核查。' };
     }
     task.result = { orderNo: task.preview.orderNo, reserved: task.preview.totalRemain };
     task.transition('DONE'); store.save(task);
@@ -808,13 +954,10 @@ async function confirmReserve(store, client, task, actor) {
   } catch (e) {
     if (e instanceof FlowError && e.kind === 'unknown') {
       task.transition('RESULT_UNKNOWN'); store.save(task);
-      const receipt = await client.requestStatus(task.requestKey, `sale.reserve:${task.preview.orderId}`).catch(() => null);
-      const resId = receipt?.resourceId ?? receipt?.data?.resourceId ?? null;
-      if (resId) {
-        const detail = await client.get(`/api/sale/${task.preview.orderId}`).catch(() => null);
-        const items = detail?.items || [];
-        const remain = items.reduce((s, it) => s + Math.max(0, Number(it.quantity || 0) - Number(it.reservedQty || 0)), 0);
-        if (items.length && remain === 0) {
+      const receipt = await client.requestStatus(task.requestKey, reserveReceiptAction(original)).catch(() => null);
+      if (isReserveReceipt(receipt, original)) {
+        const detail = await client.get(`/api/sale/${original.orderId}`).catch(() => null);
+        if (reserveMatchesPreview(detail, original)) {
           task.result = { orderNo: task.preview.orderNo, recoveredViaReceipt: true };
           task.transition('VERIFYING'); task.transition('DONE'); store.save(task);
           return { task, reply: `刚才响应丢失，但回执确认占库已执行（销售单 ${task.preview.orderNo}），回查待占量为 0，未重复占库。` };
@@ -1010,15 +1153,40 @@ async function graphReceipt(store, client, actor, text, preset) {
 
 // 图 D 多账户选户：对话回复（序号或账户名）→ 补齐预览的 account/payload/signature。
 // 只接管「本人有待选户的 D-receipt 任务」时的消息；选错/没认出时回列清单，不落规划器。
-function pendingAccountTask(store, actor) {
-  for (const page of store.pagesForActor(actor, { orderBy: 'createdAt' })) {
-    const task = page.find(task => task.graph === 'D-receipt' && task.state === 'AWAITING_CONFIRM'
-      && task.preview?.needsAccountChoice && !task.previewExpired());
-    if (task) return task;
-  }
+function accountNameFromReply(text) {
+  return text.replace(/[。！!？?]+$/, '').replace(/^(?:请)?(?:选(?:择)?|入账到?|入到?|转入|用)\s*/, '').replace(/吧$/, '').trim();
 }
+
+function isAccountReply(text, task, route) {
+  if (/^\d+$/.test(text)) return true;
+  const accounts = task.preview.accounts || [];
+  const name = accountNameFromReply(text);
+  if (accounts.some(account => account.name === text || account.name === name)) return true;
+  if (route.graph || route.kind === 'clarify' || route.kind === 'discussion' || route.explicitOutside) return false;
+  return /^(?:请)?(?:选(?:择)?|入账到?|入到?|转入|用)/.test(text)
+    && (/账户/.test(text) || accounts.some(account => text.includes(account.name)));
+}
+
+function accountSelectionTargets(store, actor, text) {
+  const targets = [];
+  const route = classifyMessage(text);
+  for (const page of store.pagesForActor(actor, { orderBy: 'createdAt' })) {
+    for (const task of page) {
+      if (task.graph !== 'D-receipt' || task.state !== 'AWAITING_CONFIRM'
+          || !task.preview?.needsAccountChoice || task.previewExpired()) continue;
+      if (!isAccountReply(text, task, route)) continue;
+      targets.push(task);
+      if (targets.length === 2) return targets;
+    }
+  }
+  return targets;
+}
+const ACCOUNT_TASK_REQUIRED = '有多笔收款待选账户。请先打开对应的收款任务，再回复序号或账户名。';
+
 export async function tryAccountSelection(store, actor, text, client, task, choiceId) {
-  const pending = task || pendingAccountTask(store, actor);
+  const targets = task ? [task] : accountSelectionTargets(store, actor, String(text).trim());
+  if (targets.length > 1) return { task: null, reply: ACCOUNT_TASK_REQUIRED };
+  const [pending] = targets;
   if (!pending) return null;
   assertTaskAccess(pending, actor);
   if (pending.state !== 'AWAITING_CONFIRM' || !pending.preview?.needsAccountChoice || pending.previewExpired()) throw Object.assign(new Error('该收款任务当前不能选择账户，请核对原任务状态'), { status: 409 });
@@ -1026,13 +1194,19 @@ export async function tryAccountSelection(store, actor, text, client, task, choi
   const accounts = pending.preview.accounts || [];
   const list = accounts.map((a, i) => `${i + 1}）${a.name}`).join('；');
   let chosen = null;
-  const num = /^(\d+)$/.exec(String(text).trim());
+  const answer = String(text).trim();
+  const num = /^(\d+)$/.exec(answer);
   if (choiceId != null) chosen = accounts.find(a => String(a.id) === String(choiceId)) || null;
   else if (num) chosen = accounts[Number(num[1]) - 1] || null;
-  if (!chosen) chosen = accounts.find(a => String(text).includes(a.name)) || null;
+  else {
+    const statedName = accountNameFromReply(answer);
+    const exact = accounts.filter(a => a.name === answer);
+    const candidates = exact.length ? exact : accounts.filter(a => a.name === statedName);
+    if (candidates.length === 1) chosen = candidates[0];
+  }
   if (!chosen) {
     if (choiceId != null) throw Object.assign(new Error('请选择原预览中的资金账户'), { status: 400 });
-    return { task: pending, reply: `还没选入账账户。可用账户：${list}。回复序号或账户名选定后，再点确认登记。`, preview: pending.preview };
+    return { task: pending, reply: `还没选入账账户。可用账户：${list}。请回复一个序号或完整账户名，再点确认登记。`, preview: pending.preview };
   }
   if (!hasPerm(actor, 'payment.execute')) throw Object.assign(new Error('当前没有收付款执行权限，未修改账户'), { status: 403 });
   const freshAccounts = await receiptTool().accounts(client);
@@ -1247,8 +1421,14 @@ async function graphSimple(store, client, actor, text, graph, tool, buildReply, 
   }
   try {
     const data = await run(tool, client, {}, actor);
-    task.result = data; task.transition('DONE'); store.save(task);
-    return { task, reply: buildReply(data), result: data };
+    const reply = buildReply(data);
+    const hasFacts = graph === 'F-briefing'
+      ? Object.values(data.sections).some(section => section.ok && section.data != null)
+      : [data.warehouseTaskStats, data.sortingBinPending, data.inboundTasks].some(section => section != null);
+    task.result = data;
+    if (!hasFacts) task.error = '本次未取得业务数据';
+    task.transition(hasFacts ? 'DONE' : 'FAILED_FINAL'); store.save(task);
+    return { task, reply, result: data };
   } catch (e) {
     if (e instanceof PermissionDeniedError) { task.error = e.message; task.transition('FAILED_FINAL'); store.save(task); return { task, reply: denialReply(actor, e) }; }
     task.error = e.message; task.transition('FAILED_FINAL'); store.save(task);
@@ -1289,9 +1469,10 @@ export async function handleMessage(store, client, actor, text, opts = {}) {
   const operation = async () => rememberOutput(store, await handleMessageUnlocked(store, client, actor, text, opts));
   if (opts.taskId) return store.exclusive(opts.taskId, operation);
   if (smallTalkReply(t)) return operation();
-  const accountTask = pendingAccountTask(store, actor);
-  const accountAnswer = accountTask && (/^\d+$/.test(t) || /选.{0,8}账户|入账账户/.test(t) || accountTask.preview.accounts?.some(account => t.includes(account.name)));
-  if (accountAnswer) return store.exclusive(accountTask.id, async () => rememberOutput(store, await tryAccountSelection(store, actor, t, client, accountTask)));
+  const accountTargets = t === String(text).trim() ? accountSelectionTargets(store, actor, t) : [];
+  if (accountTargets.length > 1) return { task: null, reply: ACCOUNT_TASK_REQUIRED };
+  const [accountTask] = accountTargets;
+  if (accountTask) return store.exclusive(accountTask.id, async () => rememberOutput(store, await tryAccountSelection(store, actor, t, client, accountTask)));
   return operation();
 }
 
@@ -1303,11 +1484,18 @@ async function continueTask(store, client, actor, text, opts) {
   const busy = ['EXECUTING', 'RESULT_UNKNOWN', 'CONFIRMED', 'VERIFYING', 'ESCALATED'].includes(task.state);
   if (busy && (opts.choiceId != null || quantityEdit.test(text) || /开单|草稿|占库|核销|收款|到账|重新试算|重试|重新建|重新生成/.test(text))) throw Object.assign(new Error('此任务正在执行或结果尚未核实，请查询原任务，不能修改或另换请求键'), { status: 409 });
   const accountReply = task.graph === 'D-receipt' && task.state === 'AWAITING_CONFIRM' && task.preview?.needsAccountChoice
-    && (opts.choiceId != null || /^\d+$/.test(text) || task.preview.accounts?.some(account => text.includes(account.name)));
+    && (opts.choiceId != null || (!opts.startsNewTopic && isAccountReply(text, task, classifyMessage(text))));
   if (accountReply) return tryAccountSelection(store, actor, text, client, task, opts.choiceId);
   if (task.graph === 'B-sale-draft' && task.intent?.intake && task.state === 'DISAMBIGUATING' && !task.candidates?.length && opts.choiceId == null) {
+    const route = classifyMessage(text);
+    if (opts.startsNewTopic || route.explicitOutside || ['clarify', 'discussion'].includes(route.kind) || smallTalkReply(text)) {
+      return handleMessageUnlocked(store, client, actor, text, { ...opts, taskId: undefined });
+    }
     const nextGraph = ruleGraphFor(text);
-    if (!nextGraph || nextGraph === 'B-sale-draft') return graphSaleDraft(store, client, actor, text, { task });
+    if (!nextGraph || nextGraph === 'B-sale-draft') {
+      if (task.saleDraftReselected) assertTaskAccess(task, actor);
+      return graphSaleDraft(store, client, actor, text, { task });
+    }
   }
   if (opts.choiceId != null) {
     assertTaskAccess(task, actor);
@@ -1326,8 +1514,16 @@ async function continueTask(store, client, actor, text, opts) {
   return handleMessageUnlocked(store, client, actor, text, { ...opts, taskId: undefined });
 }
 
+const spokenDigit = '[一二三四五六七八九]';
+const spokenLeadingDigit = '[一二两三四五六七八九]';
+const spokenTens = `${spokenDigit}十${spokenDigit}?`;
+const spokenHundreds = `${spokenLeadingDigit}百(?:${spokenTens}|零${spokenDigit})?`;
+const spokenThousands = `${spokenLeadingDigit}千(?:${spokenHundreds}|零(?:${spokenTens}|${spokenDigit}))?`;
+const spokenInteger = new RegExp(`^(?:${spokenLeadingDigit}|${spokenDigit}?十${spokenDigit}?|${spokenHundreds}|${spokenThousands})$`);
+
 function quantityNumber(raw) {
   if (/^\d+(?:\.\d+)?$/.test(raw)) return Number(raw);
+  if (!spokenInteger.test(raw)) return NaN;
   const digits = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
   let total = 0, digit = 0;
   for (const char of raw) {
@@ -1344,6 +1540,7 @@ async function reviseSalePreview(store, client, actor, task, text) {
   const match = text.match(/^(.*?)(?:改成|改为|改到)\s*([\d.零一二两三四五六七八九十百千]+)\s*(?:个|件|条|只|套|箱|把)?[。！!]?$/);
   if (!match || /审批|付款|发货|确认|提交|执行/.test(match[1])) return { task, reply: '小满可以修改这张待确认销售预览的数量。请说明「第几行数量改成多少」，修改后仍需在新预览卡确认。', preview: task.preview };
   const qty = quantityNumber(match[2]);
+  if (!Number.isFinite(qty)) return { task, reply: '请给出明确的数量，例如「第 1 行数量改成 2 个」。预览还保持原数量。', preview: task.preview };
   const indexMatch = match[1].match(/第([\d零一二两三四五六七八九十百]+)行/);
   let index = indexMatch ? quantityNumber(indexMatch[1]) - 1 : null;
   if (index == null) {
@@ -1366,7 +1563,7 @@ async function reviseSalePreview(store, client, actor, task, text) {
 
 async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
   const t = activeTopicText(text);
-  if (opts.taskId) return continueTask(store, client, actor, t, opts);
+  if (opts.taskId) return continueTask(store, client, actor, t, { ...opts, startsNewTopic: t !== String(text).trim() });
   const greeting = smallTalkReply(t);
   if (greeting) return { task: null, reply: greeting };
   const routing = classifyMessage(t);
@@ -1381,11 +1578,11 @@ async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
     try {
       const intent = await parseIntent(t);
       if (intent && intent.graph !== 'none') return executeIntent(store, client, actor, t, intent);
-      if (intent && intent.graph === 'none' && ruleGraphFor(t) !== 'B-sale-draft') return refusal(t);
+      if (intent?.graph === 'none' && routing.graph !== 'A-inventory' && routing.graph !== 'B-sale-draft') return refusal(t);
     } catch { /* 模型异常 → 回退规则，不中断服务 */ }
   }
   // 规则规划器（确定性回退）
-  switch (ruleGraphFor(t)) {
+  switch (routing.graph) {
     case 'F-briefing': return briefingGraph(store, client, actor, t);
     case 'E-stuck': return stuckGraph(store, client, actor, t);
     case 'C-purchase-draft': return graphPurchaseDraft(store, client, actor, t);

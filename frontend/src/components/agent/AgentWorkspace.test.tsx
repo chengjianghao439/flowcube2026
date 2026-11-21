@@ -31,11 +31,11 @@ const fetchMock = vi.fn<typeof fetch>()
 const response = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
 const preview = (qty = 4) => ({ title: '销售草稿', customer: { name: '测试客户' }, warehouseName: '测试仓', totalCents: 1235 * qty, lines: [{ productId: 1, productName: '测试商品', qty, unitPrice: 12.35 }], confirmLabel: '确认建单', expiresAt: '2099-10-26T12:00:00Z' })
 const task = (extra = {}) => ({ id: 'task-1', graph: 'B-sale-draft', state: 'AWAITING_CONFIRM', userText: '给测试客户开单四个', revision: 1, preview: preview(), ...extra })
-let tasks: unknown[], chat: unknown, confirmed: unknown
+let tasks: unknown[], chat: unknown, confirmed: unknown, saleDraftChange: unknown
 beforeEach(async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: class { observe() {} unobserve() {} disconnect() {} } })
   useAuthStore.setState({ token: 'synthetic-token', user: { id: 1, username: 'owner', roleId: 1, permissions: [] } as unknown as User, sessionGeneration: 1 })
-  tasks = []; chat = {}; confirmed = {}
+  tasks = []; chat = {}; confirmed = {}; saleDraftChange = {}
   fetchMock.mockReset().mockImplementation(async (input, init) => {
     const url = String(input)
     if (url.endsWith('/health')) return response({ planner: 'llm' })
@@ -43,6 +43,7 @@ beforeEach(async () => {
     if (url.endsWith('/tasks')) return response({ tasks })
     if (url.endsWith('/chat')) return response(chat)
     if (url.endsWith('/confirm')) return response(confirmed)
+    if (url.endsWith('/sale-draft')) return response(saleDraftChange)
     if (init?.method === 'GET' || !init?.method) return response({ task: tasks[0] })
     throw new Error('Unexpected synthetic request')
   })
@@ -97,6 +98,60 @@ test('刷新后从当前用户任务列表恢复原预览，确认携带原任�
   const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/tasks/task-1/confirm'))!
   expect(JSON.parse(String(call[1]?.body))).toMatchObject({ revision: 1 })
   expect(host.textContent).toContain('合成销售单已创建')
+  expect(queryByRole(host, 'button', { name: '确认建单' })).toBeNull()
+})
+test('占库确认卡按明细显示实际行仓', async () => {
+  tasks = [task({
+    graph: 'B2-reserve',
+    preview: { ...preview(), warehouseName: '订单头仓', confirmLabel: '确认占库', lines: [
+      { productId: 1, productName: '商品甲', qty: 2, warehouseName: '行仓甲' },
+      { productId: 2, productName: '商品乙', qty: 3, warehouseName: '行仓乙' },
+    ] },
+  })]
+  await render()
+  const card = getByRole(host, 'region', { name: '当前业务预览' })
+  expect(card.textContent).toContain('商品甲行仓甲')
+  expect(card.textContent).toContain('商品乙行仓乙')
+  expect(card.textContent).not.toContain('订单头仓')
+})
+test('重选商品清除当前确认卡，仍可在原任务继续输入或作废', async () => {
+  tasks = [task()]
+  await render()
+  saleDraftChange = { reply: '请重新输入商品和数量', task: { id: 'task-1', graph: 'B-sale-draft', state: 'DISAMBIGUATING', revision: 2 } }
+  await click('重选商品')
+  const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/tasks/task-1/sale-draft'))!
+  expect(JSON.parse(String(call[1]?.body))).toEqual({ action: 'reselect', revision: 1 })
+  expect(queryByRole(host, 'region', { name: '当前业务预览' })).toBeNull()
+  expect(queryByRole(host, 'button', { name: '确认建单' })).toBeNull()
+  expect(host.textContent).toContain('请重新输入商品和数量')
+  expect(getByRole(host, 'button', { name: '作废草稿' })).toBeTruthy()
+})
+test('作废需要再确认，完成后清除原预览与确认入口', async () => {
+  tasks = [task()]
+  await render()
+  saleDraftChange = { reply: '销售草稿已作废', task: { id: 'task-1', graph: 'B-sale-draft', state: 'CANCELLED', revision: 2 } }
+  await click('作废草稿')
+  const dialog = getByRole(document.body, 'dialog', { name: '作废销售草稿' })
+  expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/sale-draft'))).toBe(false)
+  await act(async () => getByRole(dialog, 'button', { name: '确认作废' }).click())
+  const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/tasks/task-1/sale-draft'))!
+  expect(JSON.parse(String(call[1]?.body))).toEqual({ action: 'cancel', revision: 1 })
+  expect(queryByRole(host, 'region', { name: '当前业务预览' })).toBeNull()
+  expect(queryByRole(host, 'button', { name: '确认建单' })).toBeNull()
+  expect(host.textContent).toContain('销售草稿已作废')
+})
+test('重选响应丢失时只回读同一草稿，从服务端移除旧确认卡', async () => {
+  tasks = [task()]
+  await render()
+  tasks = [task({ state: 'DISAMBIGUATING', revision: 2, preview: undefined, reply: '已保留客户，请重新输入商品和数量' })]
+  const originalFetch = fetchMock.getMockImplementation()!
+  fetchMock.mockImplementation((url, init) => String(url).endsWith('/sale-draft')
+    ? Promise.reject(new TypeError('lost response'))
+    : originalFetch(url, init))
+  await click('重选商品')
+  expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/sale-draft'))).toHaveLength(1)
+  expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/tasks/task-1') && init?.method === 'GET')).toBe(true)
+  expect(host.textContent).toContain('已保留客户，请重新输入商品和数量')
   expect(queryByRole(host, 'button', { name: '确认建单' })).toBeNull()
 })
 test('同名候选可以点击，接续原任务只传候选稳定ID', async () => {

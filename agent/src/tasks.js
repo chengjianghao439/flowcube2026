@@ -17,7 +17,7 @@ const TRANSITIONS = {
   DISAMBIGUATING: ['PLANNED', 'DRY_RUNNING', 'CANCELLED', 'FAILED_FINAL'],
   PLANNED: ['DRY_RUNNING', 'AWAITING_CONFIRM', 'CANCELLED'],
   DRY_RUNNING: ['AWAITING_CONFIRM', 'VERIFYING', 'DONE', 'FAILED_FINAL', 'CANCELLED'],
-  AWAITING_CONFIRM: ['CONFIRMED', 'EXPIRED', 'CANCELLED'],
+  AWAITING_CONFIRM: ['DISAMBIGUATING', 'CONFIRMED', 'EXPIRED', 'CANCELLED'],
   CONFIRMED: ['EXECUTING', 'EXPIRED'],
   EXECUTING: ['VERIFYING', 'RESULT_UNKNOWN', 'FAILED_FINAL', 'ESCALATED'],
   RESULT_UNKNOWN: ['EXECUTING', 'VERIFYING', 'ESCALATED'],
@@ -226,7 +226,7 @@ export class TaskStore {
     }
   }
 
-  // 选择、改量、确认和原结果恢复用同一把任务锁，拒绝交错变更预览或重复执行。
+  // 选择、重选、作废、改量、确认和原结果恢复共用任务锁。
   async exclusive(id, operation) {
     if (this.locks.has(id)) throw Object.assign(new Error('此任务正在处理中，请稍候查询原结果'), { status: 409, code: 'TASK_BUSY' });
     this.locks.add(id);

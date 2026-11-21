@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict'
 
+const { setTimeout: delay } = require('node:timers/promises')
 const {
   createLogger,
   prepareSmokeContext,
@@ -131,6 +132,50 @@ async function cleanupSortingBins(pool, ids) {
   await pool.query('DELETE FROM sorting_bins WHERE id IN (?)', [ids])
 }
 
+async function waitForBlockOrResponse(pool, connectionId, table, pending) {
+  let responded = false
+  void pending.then(() => { responded = true }, () => { responded = true })
+  const deadline = Date.now() + 5000
+  while (!responded) {
+    const [[{ blocked }]] = await pool.query(
+      `SELECT EXISTS(
+         SELECT 1 FROM performance_schema.data_lock_waits w
+         JOIN performance_schema.threads blocker ON blocker.THREAD_ID=w.BLOCKING_THREAD_ID
+         JOIN performance_schema.data_locks requested ON requested.ENGINE_LOCK_ID=w.REQUESTING_ENGINE_LOCK_ID
+         WHERE blocker.PROCESSLIST_ID=? AND requested.OBJECT_SCHEMA=DATABASE() AND requested.OBJECT_NAME=?
+       ) AS blocked`, [connectionId, table],
+    )
+    if (blocked) return true
+    if (Date.now() >= deadline) throw new Error(`等待 ${table} 锁或响应超时`)
+    await delay(20)
+  }
+  return false
+}
+
+// Hold the parent lock in the same order as sale adjustments and cancellation.
+async function finishWhileSaleLocked(pool, saleId, taskId, finish) {
+  const holder = await pool.getConnection()
+  let pending
+  let holderError = null
+  try {
+    await holder.beginTransaction()
+    const [[{ connectionId }]] = await holder.query('SELECT CONNECTION_ID() AS connectionId')
+    await holder.query('SELECT id FROM sale_orders WHERE id=? FOR UPDATE', [saleId])
+    pending = finish()
+    if (!await waitForBlockOrResponse(pool, connectionId, 'sale_orders', pending)) {
+      throw new Error('完成拣货请求未进入预期的销售单锁等待')
+    }
+    try {
+      await holder.query({ sql: 'SELECT id FROM warehouse_tasks WHERE id=? FOR UPDATE', timeout: 5000 }, [taskId])
+    } catch (error) { holderError = error.code || error.message }
+  } finally {
+    await holder.rollback()
+    holder.release()
+    if (pending) await Promise.allSettled([pending])
+  }
+  return { response: await pending, holderError }
+}
+
 // ── 场景①：增量——task 已推进到待复核(4)后加数量，应回退到拣货中(2)让 PDA 补拣 ──
 async function scenarioIncrease(log, ctx, token) {
   log.section('Scenario: 改单增量 — 待复核阶段加数量，回退拣货中补拣')
@@ -143,10 +188,23 @@ async function scenarioIncrease(log, ctx, token) {
   const [itemRow] = await dbQuery(ctx.pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
 
   await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 2 })
-  const readyResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
-  log.assert('拣货完成推进到待分拣(3)', readyResp.ok, JSON.stringify(readyResp.data))
+  const readyPath = `/api/warehouse-tasks/${taskId}/ready`
+  const readyKey = randomRef('PICK-DONE')
+  const readyHeaders = ctx.pdaHeaders({ 'X-Request-Key': readyKey })
+  const { response: readyRequests, holderError } = await finishWhileSaleLocked(ctx.pool, saleId, taskId,
+    () => Promise.all([1, 2].map(() => ctx.http.put(readyPath, { token, headers: readyHeaders }))))
+  log.assert('完成单任务拣货与销售侧持锁并行，无互锁', holderError === null, holderError)
+  log.assert('同键并发完成拣货均返回原待分拣结果', readyRequests.every(res => res.ok
+    && Number(res.data?.data?.taskId) === taskId && Number(res.data?.data?.status) === 3),
+  JSON.stringify(readyRequests.map(res => ({ status: res.status, data: res.data }))))
   const sortDoneResp = await ctx.http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: ctx.pdaHeaders(), json: {} })
   log.assert('分拣完成推进到待复核(4)', sortDoneResp.ok, JSON.stringify(sortDoneResp.data))
+  const readyReplay = await ctx.http.put(readyPath, { token, headers: readyHeaders })
+  log.assert('已推进到待复核仍可按原键取得原拣货结果', readyReplay.ok
+    && Number(readyReplay.data?.data?.taskId) === taskId && Number(readyReplay.data?.data?.status) === 3,
+  JSON.stringify(readyReplay.data))
+  const readyNew = await ctx.http.put(readyPath, { token, headers: ctx.pdaHeaders({ 'X-Request-Key': randomRef('PICK-DONE') }) })
+  log.assert('已推进到待复核时拒绝用新键重复完成拣货', readyNew.status === 400, JSON.stringify(readyNew.data))
 
   const [taskBefore] = await dbQuery(ctx.pool, 'SELECT status FROM warehouse_tasks WHERE id=?', [taskId])
   log.assert('改单前任务确实在待复核(4)', Number(taskBefore.status) === 4, JSON.stringify(taskBefore))
@@ -169,6 +227,64 @@ async function scenarioIncrease(log, ctx, token) {
   await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container: extraContainer, product: ctx.product, qty: 1 })
   const ready2 = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
   log.assert('补拣完成后可重新推进到待分拣(3)', ready2.ok, JSON.stringify(ready2.data))
+}
+
+async function scenarioWaveFinishLockOrder(log, ctx, token) {
+  log.section('Scenario: 波次完成与销售侧加锁顺序')
+  const { http, pool } = ctx
+  const members = []
+  const containers = []
+  for (let index = 0; index < 2; index++) {
+    containers.push(await seedActiveContainer(pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 1, locationId: ctx.location.id }))
+    const created = await createSaleOrder(http, token, { ...ctx, quantity: 1 })
+    if (!created.ok) throw new Error(`创建波次夹具销售单失败：${created.status}`)
+    const saleId = Number(created.data.data.id)
+    members.push({ saleId, taskId: await shipToTask(http, token, pool, saleId) })
+  }
+  const taskIds = members.map(member => member.taskId)
+  const createWave = () => http.post('/api/picking-waves', { token, json: { taskIds } })
+  const createdWave = await createWave()
+  if (!createdWave.ok) throw new Error(`创建波次失败：${createdWave.status}`)
+  const waveId = createdWave.data.data.waveId
+  const wavePath = `/api/picking-waves/${waveId}`
+  const started = await http.post(`${wavePath}/start`, { token })
+  if (!started.ok) throw new Error(`开始波次失败：${started.status}`)
+  for (const [index, member] of members.entries()) {
+    const [[item]] = await pool.query('SELECT id FROM warehouse_task_items WHERE task_id=?', [member.taskId])
+    await pickWholeContainer(ctx, token, { taskId: member.taskId, itemId: item.id, container: containers[index], product: ctx.product, qty: 1 })
+  }
+  const picked = await http.post(`${wavePath}/finish-picking`, { token })
+  if (!picked.ok) throw new Error(`完成波次拣货失败：${picked.status}`)
+
+  const waveHolder = await pool.getConnection()
+  let duplicateRequest
+  let blockedOnWave
+  let waveHolderError
+  try {
+    await waveHolder.beginTransaction()
+    const [[{ connectionId }]] = await waveHolder.query('SELECT CONNECTION_ID() AS connectionId')
+    await waveHolder.query('SELECT id FROM picking_waves WHERE id=? FOR UPDATE', [waveId])
+    duplicateRequest = createWave()
+    blockedOnWave = await waitForBlockOrResponse(pool, connectionId, 'picking_waves', duplicateRequest)
+    try {
+      await waveHolder.query({ sql: 'SELECT id FROM warehouse_tasks WHERE id IN (?) ORDER BY id FOR UPDATE', timeout: 5000 }, [taskIds])
+    } catch (error) { waveHolderError = error.code || error.message }
+  } finally {
+    await waveHolder.rollback()
+    waveHolder.release()
+    if (duplicateRequest) await Promise.allSettled([duplicateRequest])
+  }
+  const duplicate = await duplicateRequest
+  log.assert('重复建波次拒绝时不反向等待已绑定波次行', !blockedOnWave && !waveHolderError && duplicate.status === 409,
+    JSON.stringify({ blockedOnWave, waveHolderError, status: duplicate.status }))
+
+  const { saleId, taskId } = members[1]
+  const { response, holderError } = await finishWhileSaleLocked(pool, saleId, taskId,
+    () => http.post(`${wavePath}/finish`, { token }))
+  log.assert('完成波次与销售侧持锁并行，无互锁', holderError === null && response.ok,
+    JSON.stringify({ holderError, status: response.status }))
+  const [tasks] = await dbQuery(pool, 'SELECT COUNT(*) AS n FROM warehouse_tasks WHERE id IN (?) AND status=3', [members.map(member => member.taskId)])
+  log.assert('完成波次后两张销售仓库任务进入待分拣', Number(tasks.n) === members.length)
 }
 
 // ── 场景②：减量——仅命中未拣部分，无需物理确认，立即生效 ──
@@ -546,6 +662,7 @@ async function main() {
     sortingBinIds = await seedSortingBins(ctx.pool, ctx.warehouse.id)
 
     await scenarioIncrease(log, ctx, token)
+    await scenarioWaveFinishLockOrder(log, ctx, token)
     await scenarioDecreaseImmediate(log, ctx, token)
     await scenarioDecreasePendingConfirm(log, ctx, token)
     await scenarioIncreaseWhileStillPicking(log, ctx, token)

@@ -1,10 +1,12 @@
-import { useLayoutEffect, useRef, useSyncExternalStore } from 'react'
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ArrowUp, Boxes, ClipboardList, MessageSquare, Plus, RefreshCw, ShoppingBag, TrendingUp } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { getApiClientBaseURL, subscribeApiClientBaseURL } from '@/api/client'
 import PageHeader from '@/components/shared/PageHeader'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { Button } from '@/components/ui/button'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import { GRAPH_LABELS, TASK_STATE_LABELS } from './types'
+import { GRAPH_LABELS, TASK_STATE_LABELS, type AssistantTask } from './types'
 import { useAssistantConversation } from './useAssistantConversation'
 import TaskPreview from './TaskPreview'
 import ResultLinks from './ResultLinks'
@@ -26,6 +28,7 @@ function Conversation() {
   const state = useAssistantConversation()
   const openGuide = useOpenWorkspacePath()
   const { selected, busy, loading } = state
+  const [draftToCancel, setDraftToCancel] = useState<AssistantTask | null>(null)
   const log = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const followEnd = useRef(true)
@@ -74,7 +77,11 @@ function Conversation() {
                 <span><strong>{candidate.title}</strong>{candidate.subtitle && <small>{candidate.subtitle}</small>}</span>
                 {candidate.details?.length ? <small>{candidate.details.map(d => `${d.label}：${d.value}`).join(' · ')}</small> : null}
               </button>)}</fieldset> : null}
-              {selected.preview && <TaskPreview task={selected} busy={busy || loading} recovering={recovery} onConfirm={() => void state.confirm()} onAccount={index => void state.send(String(index + 1))} />}
+              {selected.preview && <TaskPreview task={selected} busy={busy || loading} recovering={recovery} onConfirm={() => void state.confirm()} onAccount={index => void state.send(String(index + 1))}
+                onReselect={selected.graph === 'B-sale-draft' ? () => { followEnd.current = true; void state.changeSaleDraft('reselect') } : undefined}
+                onCancel={selected.graph === 'B-sale-draft' ? () => setDraftToCancel(selected) : undefined} />}
+              {selected.graph === 'B-sale-draft' && selected.state === 'DISAMBIGUATING' && !selected.preview &&
+                <Button variant="outline" size="sm" disabled={busy || loading} onClick={() => setDraftToCancel(selected)}>作废草稿</Button>}
               {recovery && <div className="xiaoman-recovery"><p>这件事的执行结果还需要核对，先查原任务，避免重复办理。</p><button className="xiaoman-primary" type="button" disabled={busy || loading} onClick={() => void state.confirm()}>查询原任务结果</button></div>}
               <ResultLinks task={selected} />
             </div>}
@@ -89,6 +96,16 @@ function Conversation() {
           </div><p className="xiaoman-input-hint">Enter 发送，Shift + Enter 换行</p>
         </form>
       </section>
+    {draftToCancel && <ConfirmDialog
+      open={selected?.id === draftToCancel.id && selected.revision === draftToCancel.revision}
+      title="作废销售草稿" description="作废后，这条小满记录将保留，草稿将无法继续确认。"
+      confirmText="确认作废" cancelText="保留草稿" variant="destructive"
+      onCancel={() => setDraftToCancel(null)} onConfirm={() => {
+        followEnd.current = true
+        setDraftToCancel(null)
+        void state.changeSaleDraft('cancel', draftToCancel)
+      }}
+    />}
     </div>
   </div>
 }

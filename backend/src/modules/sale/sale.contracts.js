@@ -55,6 +55,7 @@ const ordinaryCreateSaleSchema = z.object({
 
 const ordinaryReserveSaleSchema = z.object({
   confirmCreditOverride: z.never().optional(),
+  expectedReserveFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   items: z.array(z.object({
     id: z.number().int().positive(),
     warehouseId: z.number().int().positive(),

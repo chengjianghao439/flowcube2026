@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { config } from './config.js';
 import { buildHealth } from './health.js';
 import { TaskStore } from './tasks.js';
-import { handleMessage, confirmTask } from './agent.js';
+import { handleMessage, confirmTask, changeSaleDraft } from './agent.js';
 import { TOOLS } from './tools.js';
 import { assertTaskAccess, listTaskViews, safeTaskView, sanitizePreview } from './task-access.js';
 export { FlowClient } from './flow.js';
@@ -42,14 +42,19 @@ export function createAgentRuntime({ dataDir = config.dataDir, store = new TaskS
         try { return response(await handleMessage(store, client, actor, message, { ...messageOptions, taskId, choiceId })); }
         finally { executing.delete(lock); }
       }
-      const match = pathname.match(/^\/tasks\/([\w-]{1,100})(\/confirm)?$/);
+      const match = pathname.match(/^\/tasks\/([\w-]{1,100})(?:\/(confirm|sale-draft))?$/);
       if (match) {
         const task = assertTaskAccess(store.get(match[1]), actor);
         if (method === 'GET' && !match[2]) return { task: safeTaskView(task) };
-        if (method === 'POST' && match[2]) {
+        if (method === 'POST' && match[2] === 'confirm') {
           const { revision } = body;
           if (revision != null && (!Number.isSafeInteger(revision) || revision < 0)) throw failure(400, '预览版本无效');
           return response(await confirmTask(store, client, task.id, actor, { revision }));
+        }
+        if (method === 'POST' && match[2] === 'sale-draft') {
+          const { action, revision } = body;
+          if (!['reselect', 'cancel'].includes(action) || !Number.isSafeInteger(revision) || revision < 0) throw failure(400, '销售草稿操作或预览版本无效');
+          return response(await changeSaleDraft(store, task.id, actor, { action, revision }));
         }
       }
       throw failure(404, '接口不存在');

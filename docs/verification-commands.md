@@ -169,7 +169,7 @@ npm run test:permissions
 
 前端 C4 专项：`src/pages/pda/inbound.test.tsx` / `putaway.test.tsx`、`src/hooks/useCloseReceivingInbound.test.tsx`、`src/pages/inbound-tasks/CloseReceivingDialog.test.tsx`。真实组件通过网络边界验证双入口、开放扫码/完成语义、原键/原端点、不自洽回执、撤权后可查询、换账号旧回调与真实弹窗恢复；还验证未知后重试 4xx 保留原键、切换端点的原成功不刷新新服务器、显式错误归属的 failed 回执保持未知。GUI、真机、物理出纸、CI与生产部署各有独立证据边界，自动化专项不能代替它们。
 
-`smoke:sale-adjustment` 会为连续创建的销售任务建立本轮专用分拣格，并在结束时按 ID 清理；分拣完成必须先有已分配的分拣格。
+`smoke:sale-adjustment` 会为连续创建的销售任务建立本轮专用分拣格，并在结束时按 ID 清理；分拣完成必须先有已分配的分拣格。套件读取隔离 MySQL 的 `performance_schema.data_lock_waits`，以真实等锁控制单任务和波次完成、重复创建波次的并发顺序。
 
 `npm run test:fulfillment`、`test:procurement-planning` 为履约与采购净额纯规则回归；`smoke:fulfillment`、`smoke:procurement-planning` 必须使用本节独立测试库，已加入 Tests CI 专项矩阵。
 `npm run test:fulfillment-refresh` 检查履约提交后合并通知、有界队列、失败退避与执行中再变更；`smoke:fulfillment` 同时验证业务单号筛选、仓库权限及提交后供应依赖刷新，仍仅允许独立测试库。
@@ -331,7 +331,7 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 
 ### 2026-09-29 批 C4：打包末尾两入口（`pack-done` / 箱贴补打）
 
-`npm run smoke:pack-done-replay`（`tests/pack-done-replay.smoke.test.js`，**8 项断言**）：与前几批同一专库/回环约定（开头硬断言库名/回环/端口），在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**，不另造 job。
+`npm run smoke:pack-done-replay`（`tests/pack-done-replay.smoke.test.js`）：与前几批同一专库/回环约定（开头硬断言库名/回环/端口），在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**。建箱回归覆盖响应丢失后的同键并发重发、原箱回执、任务推进后重放及异仓设备拒绝。前端 `useCriticalPdaAction.recovery.test.tsx` 覆盖刷新重挂后错任务回执阻断及原箱回执恢复。
 **不使用 `prepareSmokeContext()`** —— 它会 upsert 共享 `SMOKE-PRN` 并 `DELETE` 该打印机下 `status=0` 的任务，与本批「不核销他人历史 job」的边界冲突；改为自建本批独立仓 / 库位 / 分类 / 供应商 / 客户 / 商品 / 分拣格 / 打印机 + 客户端绑定 / PDA 设备，收尾全走合法 API 并**断言终态**（失败计 `failed`，进程非 0）。
 覆盖：**`pack-done` 原 key 重放回原回执**（并断言 `PACK_DONE` 事件与直接运单数**不增**）、**新 key 对已推进状态仍 400 且无残留回执行**、**箱贴同 requestKey 跨箱不串 job**（同 key 重放回原 job 且数不增；新 key 恰增 1）、**缺箱在 begin 之前 404**（回执 0 行、原 key 可重试）、**设备仓不匹配 / PDA 缺票 / ERP 无标记合法路径**、**限仓用户范围外 403**（先证明范围内可成功，再改范围，原 key 与新 key 均 `WAREHOUSE_SCOPE_DENIED`）、**历史错误回执经写重放与 `GET request-status` 两个入口都被 409 拦下**、**故障注入**（`UPDATE operation_requests` 抛错 ⇒ 整体回滚、队列无残留、原 key 重试成功）。
 **红证据（先红后修）**：`pack-done` 原 key 重放与新 key 对旧状态**同为 400**；箱贴 B 箱拿到 **A 箱的 job**（`refId` 不符）；缺箱后回执行停在 `PENDING(0)`；`GET request-status` 对历史行返回 `success` 而 `resourceId` 与 `data.job.refId` 不符。

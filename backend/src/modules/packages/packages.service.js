@@ -7,7 +7,7 @@ const AppError = require('../../utils/AppError')
 const printJobs = require('../print-jobs/print-jobs.service')
 const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const { assertTaskScope } = require('../warehouse-tasks/warehouse-tasks.helpers')
-const { assertPrintLabelReceiptConsistent } = require('./packages.receipt-guard')
+const { assertPrintLabelReceiptConsistent, CREATE_PACKAGE_ACTION } = require('./packages.receipt-guard')
 
 const { WT_STATUS, WT_STATUS_NAME } = require('../../constants/warehouseTaskStatus')
 const { WT_EVENT, record: recordEvent } = require('../warehouse-tasks/warehouse-task-events.service')
@@ -95,7 +95,7 @@ async function listByTask(taskId, scopeWarehouseIds = null) {
 }
 
 // ─── 创建新物流条码（L + 6位 ID）───────────────────────────────────────────────
-async function createPackage(taskId, remark = null, scopeWarehouseIds = null, pdaWarehouseId = null) {
+async function createPackage(taskId, remark = null, scopeWarehouseIds = null, pdaWarehouseId = null, { requestKey, userId } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -109,6 +109,14 @@ async function createPackage(taskId, remark = null, scopeWarehouseIds = null, pd
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
     }
+    const requestState = requestKey ? await beginResourceOperationRequest(conn, {
+      requestKey, action: CREATE_PACKAGE_ACTION, userId,
+      resourceType: 'warehouse_task', resourceId: taskId,
+    }) : null
+    if (requestState?.replay) {
+      await conn.commit()
+      return requestState.responseData
+    }
     if (Number(task.status) !== WT_STATUS.PACKING) {
       throw new AppError('仅「待打包」任务可创建装箱', 400)
     }
@@ -120,9 +128,14 @@ async function createPackage(taskId, remark = null, scopeWarehouseIds = null, pd
     const newId  = result.insertId
     const barcode = `L${String(newId).padStart(6, '0')}`
     await conn.query('UPDATE packages SET barcode=? WHERE id=?', [barcode, newId])
+    const data = { id: newId, barcode, warehouseTaskId: taskId, status: 1, items: [] }
+    if (requestState) {
+      await completeOperationRequest(conn, requestState, {
+        data, message: '箱子已创建', resourceType: 'warehouse_task', resourceId: taskId,
+      })
+    }
     await conn.commit()
-
-    return { id: newId, barcode, warehouseTaskId: taskId, status: 1, items: [] }
+    return data
   } catch (e) {
     await conn.rollback()
     throw e

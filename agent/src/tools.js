@@ -169,8 +169,8 @@ export const TOOLS = {
   'sale.reserve': {
     level: 'L2', desc: '销售单占库（独立确认）；核验=回查预占',
     requires: 'sale.order.reserve',
-    async run(c, { saleOrderId, requestKey }) {
-      const result = await c.post(`/api/sale/${saleOrderId}/reserve`, {}, { requestKey });
+    async run(c, { saleOrderId, requestKey, payload }) {
+      const result = await c.post(`/api/sale/${saleOrderId}/reserve`, payload, { requestKey });
       let verified = null, verificationError = null;
       try { verified = await c.get(`/api/sale/${saleOrderId}`); } catch (e) { verificationError = e.message; }
       return { result, verified, verificationError };

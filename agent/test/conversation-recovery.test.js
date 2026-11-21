@@ -49,6 +49,15 @@ test('明确只查二仓库存，跨仓授权也只返回二仓零库存', async
   assert.match(out.reply, /该查询范围没有在库容器/);
   assert.equal(state.calls.filter(p => p.startsWith('/api/inventory/query-by-product')).length, 1);
 });
+test('模型未识别明确库存查询时，按原规则只查指定仓库', async () => {
+  const { state, client, store } = fixture();
+  const result = await handleMessage(store, client, FULL, '只查二仓的合成铰链库存', {
+    parseIntent: async () => ({ graph: 'none' }),
+  });
+  assert.equal(result.task?.graph, 'A-inventory');
+  assert.deepEqual(result.result.warehouses.map(w => w.warehouseId), [2]);
+  assert.deepEqual(state.writes, []);
+});
 test('LLM 库存意图保留明确仓库关键词', async () => {
   const intent = validateIntent({ graph: 'A-inventory', productKeyword: '合成铰链', warehouseKeyword: '二仓' });
   assert.equal(intent.warehouseKeyword, '二仓');
@@ -241,4 +250,25 @@ test('聚合简报虽仅一仓有提醒，撤另一仓后也不能读取原全�
   await handleMessage(store, client, FULL, '今日简报', rule);
   const restricted = { ...FULL, warehouseIds: [2], unrestrictedWarehouseScope: false };
   assert.equal(listTaskViews(store, restricted).length, 0);
+});
+
+test('撤销采购审批权限后，旧简报不能继续展示原待审批单号', async () => {
+  const { client, store } = fixture();
+  const owner = {
+    ...FULL,
+    permissions: FULL.permissions.filter(code => code !== 'approval.task.view').concat('purchase.order.approve'),
+  };
+  const original = await handleMessage(store, client, owner, '今日简报', rule);
+  assert.match(original.reply, /SYNTHETIC-APPROVAL-3/);
+  const after = { ...owner, permissions: owner.permissions.filter(code => code !== 'purchase.order.approve') };
+  assert.equal(listTaskViews(store, after).length, 0);
+});
+
+test('简报和卡点的所有读接口均失败时，任务如实保留失败状态', async () => {
+  const client = { get: async () => { throw new Error('隔离接口不可用'); } };
+  for (const message of ['今日简报', '仓库有什么卡点']) {
+    const out = await handleMessage(new TaskStore(null), client, FULL, message, rule);
+    assert.equal(out.task.state, 'FAILED_FINAL', message);
+    assert.match(out.reply, /未取得|取数失败/);
+  }
 });

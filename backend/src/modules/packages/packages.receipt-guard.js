@@ -1,6 +1,10 @@
 const AppError = require('../../utils/AppError')
+const { pdaSessionRequired } = require('../../middleware/pdaSession')
+const { assertTaskScope } = require('../warehouse-tasks/warehouse-tasks.helpers')
 
 const PRINT_LABEL_BASE_ACTION = 'package.print-label'
+const CREATE_PACKAGE_ACTION = 'package.create'
+const requireDevice = pdaSessionRequired()
 
 /** 从 base / scoped action 取回 base（`package.print-label.12` → `package.print-label`） */
 function baseActionOf(action) {
@@ -47,4 +51,27 @@ function assertPrintLabelReceiptConsistent(action, receipt) {
   }
 }
 
-module.exports = { assertPrintLabelReceiptConsistent }
+async function assertCreatePackageReceipt(conn, receipt, context, req, res) {
+  const { requestedAction, matchedAction } = context
+  if (receipt.status !== 'success') return
+  const { data, resourceType, resourceId } = receipt
+  const scopedAction = `${CREATE_PACKAGE_ACTION}.${resourceId}`
+  const invalid = () => new AppError('建箱回执与原任务或箱码不一致，请保留记录并核对', 409, 'PACKAGE_CREATE_RECEIPT_INVALID')
+  if (matchedAction !== scopedAction || resourceType !== 'warehouse_task'
+      || !Number.isSafeInteger(resourceId) || resourceId <= 0 || data?.warehouseTaskId !== resourceId
+      || !Number.isSafeInteger(data?.id) || data.id <= 0 || !/^L\d+$/.test(data.barcode)
+      || (baseActionOf(requestedAction) === CREATE_PACKAGE_ACTION
+          && requestedAction !== CREATE_PACKAGE_ACTION && requestedAction !== scopedAction)) throw invalid()
+  await new Promise((resolve, reject) => requireDevice(req, res, error => error ? reject(error) : resolve()))
+  const [[task]] = await conn.query(
+    `SELECT t.warehouse_id FROM packages p
+     JOIN warehouse_tasks t ON t.id=p.warehouse_task_id AND t.deleted_at IS NULL
+     WHERE p.id=? AND p.barcode=? AND t.id=?`,
+    [data.id, data.barcode, resourceId],
+  )
+  if (!task) throw invalid()
+  if (req.pda?.warehouseId == null) throw new AppError('设备尚未绑定仓库，无法核对建箱结果', 403, 'PDA_WAREHOUSE_REQUIRED')
+  assertTaskScope(task, { scopeWarehouseIds: req.user?.warehouseIds ?? null, pdaWarehouseId: req.pda.warehouseId })
+}
+
+module.exports = { assertPrintLabelReceiptConsistent, assertCreatePackageReceipt, CREATE_PACKAGE_ACTION }

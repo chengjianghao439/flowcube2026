@@ -1,4 +1,5 @@
 import { payloadClient as client } from './client'
+import type { AxiosRequestConfig } from 'axios'
 import { desktopLocalPrintRequestHeaders } from '@/lib/desktopLocalPrint'
 
 import { withRequestKeyHeaders } from '@/lib/requestKey'
@@ -33,8 +34,14 @@ export interface Package {
 export const getPackagesApi = (taskId: number, config?: Parameters<typeof client.get>[1]) =>
   client.get<Package[]>('/packages', { params: { taskId }, ...config })
 
-export const createPackageApi = (warehouseTaskId: number, remark?: string) =>
-  client.post<Package>('/packages', { warehouseTaskId, remark }, { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
+export const createPackageApi = (warehouseTaskId: number, requestKey: string, config?: AxiosRequestConfig) =>
+  client.post<Pick<Package, 'id' | 'barcode' | 'status' | 'items'> & { warehouseTaskId: number }>(
+    '/packages', { warehouseTaskId }, {
+      ...config,
+      headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }) },
+      skipGlobalError: true,
+    },
+  )
 
 /**
  * 两种形态互斥：

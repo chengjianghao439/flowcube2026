@@ -1,7 +1,7 @@
 const AppError = require('../../utils/AppError')
 const { successResponse } = require('../../utils/response')
 const { getScopedOperationRequestStatus } = require('../../utils/operationRequest')
-const { assertPrintLabelReceiptConsistent } = require('../packages/packages.receipt-guard')
+const { assertPrintLabelReceiptConsistent, assertCreatePackageReceipt } = require('../packages/packages.receipt-guard')
 const logger = require('../../utils/logger')
 
 /**
@@ -72,6 +72,9 @@ const requestStatus = async (req, res, next) => {
     // 待确认记录并当作本次成功，之后再无校验点 —— 所以这里必须与写重放用同一把闸。
     // 不改 operationRequest 的查询匹配语义，也不改写历史行；不一致时 409 要求人工核对。
     assertPrintLabelReceiptConsistent(req.query.action, data)
+    if (/^package\.create\.[1-9]\d*$/.test(String(receiptContext.matchedAction ?? ''))) {
+      await assertCreatePackageReceipt(require('../../config/db').pool, data, receiptContext, req, res)
+    }
     await require('../print-jobs/print-jobs.reprint-intent').ensureReprintReceiptPermission(req, res, receiptContext)
     await require('../print-jobs/print-jobs.reprint-intent').assertReprintReceiptScope(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     return successResponse(res, data, '查询成功')
