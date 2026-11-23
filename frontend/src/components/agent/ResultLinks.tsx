@@ -15,7 +15,10 @@ export default function ResultLinks({ task }: { task: AssistantTask }) {
   const links: { path: string; label: string }[] = []
   const result = task.result
   if (task.graph === 'B-sale-draft' && positiveId(result.orderId)) links.push({ path: `/sale/${result.orderId}`, label: '查看销售单' })
-  if (task.graph === 'B2-reserve' && positiveId(task.preview?.orderId)) links.push({ path: `/sale/${task.preview.orderId}`, label: '查看销售单' })
+  const reservationOrderId = task.preview?.orderId ?? result.orderId
+  if (task.graph === 'B2-reserve' && positiveId(reservationOrderId)) links.push({ path: `/sale/${reservationOrderId}`, label: '查看销售单' })
+  if (task.graph === 'L-sale-handoff' && positiveId(result.orderId)) links.push({ path: `/sale/${result.orderId}`, label: '查看销售原单' })
+  if (task.graph === 'L-sale-handoff' && positiveId(result.returnId)) links.push({ path: `/returns/sale/${result.returnId}`, label: '查看退货原单' })
   if (task.graph === 'C-purchase-draft' && Array.isArray(result.orders)) {
     for (const order of result.orders as Record<string, unknown>[]) if (positiveId(order.orderId)) links.push({ path: `/purchase/${order.orderId}`, label: `查看采购单${typeof order.orderNo === 'string' ? ` ${order.orderNo}` : ''}` })
   }

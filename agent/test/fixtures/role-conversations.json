@@ -1,0 +1,807 @@
+{
+  "roles": [
+    "admin",
+    "warehouse",
+    "purchaser",
+    "sales",
+    "viewer",
+    "smoke_limited",
+    "preset_warehouse_operator",
+    "preset_stock_controller",
+    "preset_purchase_manager",
+    "preset_sales_manager",
+    "preset_finance_specialist",
+    "preset_accountant",
+    "preset_customer_service"
+  ],
+  "cases": [
+    {
+      "id": "inventory-exact",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "只查一仓的长款铰链库存",
+          "model": {
+            "graph": "A-inventory",
+            "productKeyword": "长款铰链",
+            "warehouseKeyword": "一仓"
+          },
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "inventory-second",
+      "kind": "clear",
+      "scope": [
+        2
+      ],
+      "turns": [
+        {
+          "say": "只查二仓的长款铰链库存",
+          "expect": "stock2"
+        }
+      ]
+    },
+    {
+      "id": "inventory-zero",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "只查一仓的短款铰链库存",
+          "expect": "zero"
+        }
+      ]
+    },
+    {
+      "id": "inventory-model-none",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "只看一仓的长款铰链库存",
+          "model": {
+            "graph": "none"
+          },
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "inventory-model-malformed",
+      "kind": "failure",
+      "turns": [
+        {
+          "say": "只查一仓的长款铰链库存",
+          "model": {
+            "graph": "A-inventory",
+            "productKeyword": 14
+          },
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "inventory-model-timeout",
+      "kind": "failure",
+      "turns": [
+        {
+          "say": "只查一仓的长款铰链库存",
+          "model": "timeout",
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "inventory-ambiguous",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "只查一仓的铰链库存",
+          "expect": "stockChoice"
+        }
+      ]
+    },
+    {
+      "id": "inventory-out-of-scope",
+      "kind": "scope",
+      "turns": [
+        {
+          "say": "只查二仓的长款铰链库存",
+          "expect": "stockScopeDenied"
+        }
+      ]
+    },
+    {
+      "id": "inventory-empty-scope",
+      "kind": "scope",
+      "scope": [],
+      "turns": [
+        {
+          "say": "长款铰链库存",
+          "expect": "stockEmptyScope"
+        }
+      ]
+    },
+    {
+      "id": "inventory-unknown-warehouse",
+      "kind": "scope",
+      "turns": [
+        {
+          "say": "只查九仓的长款铰链库存",
+          "expect": "stockScopeDenied"
+        }
+      ]
+    },
+    {
+      "id": "inventory-model-changed-warehouse",
+      "kind": "scope",
+      "scope": [
+        1,
+        2
+      ],
+      "turns": [
+        {
+          "say": "只查二仓的长款铰链库存",
+          "model": {
+            "graph": "A-inventory",
+            "productKeyword": "长款铰链",
+            "warehouseKeyword": "一仓"
+          },
+          "expect": "stock2"
+        }
+      ]
+    },
+    {
+      "id": "inventory-no-sale-suffix",
+      "kind": "mixed",
+      "turns": [
+        {
+          "say": "只查一仓的长款铰链库存，别开单",
+          "model": {
+            "graph": "B-sale-draft",
+            "customerKeyword": "远山机电2号店",
+            "lines": [
+              {
+                "productKeyword": "长款铰链",
+                "qty": 2
+              }
+            ]
+          },
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "inventory-no-sale-prefix",
+      "kind": "mixed",
+      "turns": [
+        {
+          "say": "先不要开单，只查一仓的长款铰链库存",
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "sale-exact",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "给远山机电2号店开单：长款铰链 2个",
+          "model": {
+            "graph": "B-sale-draft",
+            "customerKeyword": "远山机电2号店",
+            "lines": [
+              {
+                "productKeyword": "长款铰链",
+                "qty": 2
+              }
+            ]
+          },
+          "expect": "sale2"
+        }
+      ]
+    },
+    {
+      "id": "sale-missing",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "帮我开一单",
+          "model": {
+            "graph": "none"
+          },
+          "expect": "saleAskBoth"
+        }
+      ]
+    },
+    {
+      "id": "sale-customer-only",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "给远山机电2号店开单",
+          "expect": "saleAskItems"
+        }
+      ]
+    },
+    {
+      "id": "sale-continuation",
+      "kind": "multiTurn",
+      "turns": [
+        {
+          "say": "做个订单",
+          "expect": "saleAskBoth"
+        },
+        {
+          "say": "客户是远山机电2号店",
+          "continue": true,
+          "expect": "saleAskItems"
+        },
+        {
+          "say": "长款铰链 两个",
+          "continue": true,
+          "expect": "sale2"
+        }
+      ]
+    },
+    {
+      "id": "sale-unknown-quantity",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "给远山机电2号店开单",
+          "expect": "saleAskItems"
+        },
+        {
+          "say": "二三个",
+          "continue": true,
+          "expect": "saleAskItems"
+        }
+      ]
+    },
+    {
+      "id": "sale-name-corrected",
+      "kind": "multiTurn",
+      "turns": [
+        {
+          "say": "给远山机电开单",
+          "expect": "saleAskItems"
+        },
+        {
+          "say": "客户是远山机电2号店",
+          "continue": true,
+          "expect": "saleAskItems"
+        },
+        {
+          "say": "两个长款铰链",
+          "continue": true,
+          "expect": "sale2"
+        }
+      ]
+    },
+    {
+      "id": "sale-quantity-revision",
+      "kind": "multiTurn",
+      "turns": [
+        {
+          "say": "给远山机电2号店开单：长款铰链 两个",
+          "expect": "sale2"
+        },
+        {
+          "say": "数量改成三个",
+          "continue": true,
+          "expect": "sale3"
+        }
+      ]
+    },
+    {
+      "id": "sale-selection",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "给远山机电开单：长款铰链 两个",
+          "expect": "customerChoice"
+        },
+        {
+          "say": "选这个",
+          "continue": true,
+          "choiceId": 7,
+          "expect": "sale2"
+        }
+      ]
+    },
+    {
+      "id": "sale-interruption",
+      "kind": "multiTurn",
+      "turns": [
+        {
+          "say": "给远山机电2号店开单",
+          "expect": "saleAskItems"
+        },
+        {
+          "say": "查一下这张单的状态",
+          "continue": true,
+          "expect": "askReference"
+        },
+        {
+          "say": "长款铰链 两个",
+          "continue": true,
+          "expect": "sale2"
+        }
+      ]
+    },
+    {
+      "id": "sale-confirm-once",
+      "kind": "confirmation",
+      "turns": [
+        {
+          "say": "给远山机电2号店开单：长款铰链 2个",
+          "expect": "sale2"
+        },
+        {
+          "confirm": true,
+          "expect": "saleConfirmed"
+        },
+        {
+          "confirm": true,
+          "expect": "saleConfirmed"
+        }
+      ]
+    },
+    {
+      "id": "reserve-exact",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "给 SL20261122011 占库",
+          "model": {
+            "graph": "B2-reserve",
+            "orderNo": "SL20261122011"
+          },
+          "expect": "reserve"
+        }
+      ]
+    },
+    {
+      "id": "ledger-clear",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "帮我查一下远山机电2号店的欠款",
+          "model": {
+            "graph": "D-ledger",
+            "customerKeyword": "远山机电2号店"
+          },
+          "expect": "ledgerDenied"
+        }
+      ]
+    },
+    {
+      "id": "receipt-clear",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "远山机电2号店到账 6.25 元，帮我收款核销",
+          "model": {
+            "graph": "D-receipt",
+            "customerKeyword": "远山机电2号店",
+            "amount": 6.25
+          },
+          "expect": "receiptDenied"
+        }
+      ]
+    },
+    {
+      "id": "receipt-not-payment",
+      "kind": "boundary",
+      "turns": [
+        {
+          "say": "替我付款给远山机电2号店",
+          "expect": "unsupported"
+        }
+      ]
+    },
+    {
+      "id": "stuck-clear",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "仓库有什么卡点",
+          "model": {
+            "graph": "E-stuck"
+          },
+          "expect": "stuck"
+        }
+      ]
+    },
+    {
+      "id": "stuck-read-not-ship",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "出库有没有卡点",
+          "expect": "stuck"
+        }
+      ]
+    },
+    {
+      "id": "unsupported-ship",
+      "kind": "boundary",
+      "turns": [
+        {
+          "say": "帮我发货",
+          "expect": "unsupported"
+        }
+      ]
+    },
+    {
+      "id": "naked-amount-reference",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "那笔款还有多少没收",
+          "expect": "askReference"
+        }
+      ]
+    },
+    {
+      "id": "now-briefing",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "今天的经营简报",
+          "expect": "briefing"
+        }
+      ]
+    },
+    {
+      "id": "holdout-inventory-code",
+      "split": "holdout",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "只看一仓的 P110001 库存",
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "holdout-inventory-conflict",
+      "split": "holdout",
+      "kind": "scope",
+      "scope": [
+        1,
+        2
+      ],
+      "turns": [
+        {
+          "say": "只看一仓的长款铰链库存",
+          "model": {
+            "graph": "A-inventory",
+            "productKeyword": "长款铰链",
+            "warehouseKeyword": "二仓"
+          },
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "holdout-inventory-decline-order",
+      "split": "holdout",
+      "kind": "mixed",
+      "turns": [
+        {
+          "say": "帮我查一下长款铰链库存，不用开单",
+          "expect": "stock1"
+        }
+      ]
+    },
+    {
+      "id": "holdout-sale-interleaved",
+      "split": "holdout",
+      "kind": "multiTurn",
+      "turns": [
+        {
+          "say": "开个单",
+          "expect": "saleAskBoth"
+        },
+        {
+          "say": "在吗？",
+          "continue": true,
+          "expect": "greeting"
+        },
+        {
+          "say": "客户是远山机电2号店",
+          "continue": true,
+          "expect": "saleAskItems"
+        },
+        {
+          "say": "长款铰链 2个",
+          "continue": true,
+          "expect": "sale2"
+        }
+      ]
+    },
+    {
+      "id": "holdout-ledger-spoken",
+      "split": "holdout",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "远山机电2号店的应收",
+          "expect": "ledgerDenied"
+        }
+      ]
+    },
+    {
+      "id": "holdout-workshop",
+      "split": "holdout",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "看看打包有哪些卡点",
+          "expect": "stuck"
+        }
+      ]
+    },
+    {
+      "id": "holdout-reference-switch",
+      "split": "holdout",
+      "kind": "multiTurn",
+      "turns": [
+        {
+          "say": "只查一仓的长款铰链库存",
+          "expect": "stock1"
+        },
+        {
+          "say": "换个话题，帮我查一下这张单的状态",
+          "expect": "askReference"
+        }
+      ]
+    },
+    {
+      "id": "holdout-outside-switch",
+      "split": "holdout",
+      "kind": "boundary",
+      "turns": [
+        {
+          "say": "先不说库存，换个话题，上海今天的天气怎么样",
+          "expect": "outside"
+        }
+      ]
+    },
+    {
+      "id": "purchase-suggestions",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "看一下补货建议",
+          "model": {
+            "graph": "C-replenishment"
+          },
+          "expect": "replenishment"
+        }
+      ]
+    },
+    {
+      "id": "purchase-preview",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "按补货建议建采购草稿",
+          "model": {
+            "graph": "C-purchase-draft"
+          },
+          "expect": "purchaseDraft"
+        }
+      ]
+    },
+    {
+      "id": "purchase-postpone",
+      "kind": "mixed",
+      "turns": [
+        {
+          "say": "只看补货建议，采购单先别建",
+          "model": {
+            "graph": "C-purchase-draft"
+          },
+          "expect": "replenishment"
+        }
+      ]
+    },
+    {
+      "id": "sale-conditional-stock",
+      "kind": "mixed",
+      "scope": [
+        1,
+        2
+      ],
+      "turns": [
+        {
+          "say": "先查二仓的长款铰链库存，够两个再给远山机电2号店开单",
+          "model": {
+            "graph": "B-sale-draft",
+            "customerKeyword": "远山机电2号店",
+            "lines": [
+              {
+                "productKeyword": "长款铰链",
+                "qty": 2
+              }
+            ]
+          },
+          "expect": "conditionalSale"
+        }
+      ]
+    },
+    {
+      "id": "sale-conditional-no-stock",
+      "kind": "mixed",
+      "scope": [
+        1,
+        2
+      ],
+      "turns": [
+        {
+          "say": "先查二仓的长款铰链库存，够十六个再给远山机电2号店开单",
+          "model": {
+            "graph": "B-sale-draft",
+            "customerKeyword": "远山机电2号店",
+            "lines": [
+              {
+                "productKeyword": "长款铰链",
+                "qty": 16
+              }
+            ]
+          },
+          "expect": "conditionalShortage"
+        }
+      ]
+    },
+    {
+      "id": "sale-model-ambiguous-number",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "给远山机电2号店开单：长款铰链二三个",
+          "model": {
+            "graph": "B-sale-draft",
+            "customerKeyword": "远山机电2号店",
+            "lines": [
+              {
+                "productKeyword": "长款铰链",
+                "qty": 23
+              }
+            ]
+          },
+          "expect": "saleAskQuantity"
+        }
+      ]
+    },
+    {
+      "id": "receipt-model-unclear-number",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "远山机电2号店来了五六百块，帮我核销",
+          "model": {
+            "graph": "D-receipt",
+            "customerKeyword": "远山机电2号店",
+            "amount": 560
+          },
+          "expect": "receiptAskAmount"
+        }
+      ]
+    },
+    {
+      "id": "holdout-conditional-incomplete",
+      "split": "holdout",
+      "kind": "mixed",
+      "scope": [
+        1,
+        2
+      ],
+      "turns": [
+        {
+          "say": "先查二仓的长款铰链库存，有货再开单",
+          "model": {
+            "graph": "none"
+          },
+          "expect": "conditionalClarify"
+        }
+      ]
+    },
+    {
+      "id": "holdout-explicit-reserve-wording",
+      "split": "holdout",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "把 SL20261122011 的货先预占上",
+          "model": {
+            "graph": "B2-reserve",
+            "orderNo": "SL20261122011"
+          },
+          "expect": "reserve"
+        }
+      ]
+    },
+    {
+      "id": "holdout-inventory-transcript",
+      "split": "holdout",
+      "kind": "clear",
+      "scope": [
+        2
+      ],
+      "turns": [
+        {
+          "say": "只查二倉的长款铰链库存",
+          "model": {
+            "graph": "A-inventory",
+            "productKeyword": "长款铰链",
+            "warehouseKeyword": "二仓"
+          },
+          "expect": "stock2"
+        }
+      ]
+    },
+    {
+      "id": "holdout-conditional-wrong-unit",
+      "split": "holdout",
+      "kind": "mixed",
+      "scope": [
+        1,
+        2
+      ],
+      "turns": [
+        {
+          "say": "先查二仓的长款铰链库存，够两箱再给远山机电2号店开单",
+          "expect": "conditionalUnit"
+        }
+      ]
+    },
+    {
+      "id": "sale-model-quantity-invented",
+      "kind": "ambiguous",
+      "turns": [
+        {
+          "say": "给远山机电2号店开单，要长款铰链",
+          "model": {
+            "graph": "B-sale-draft",
+            "customerKeyword": "远山机电2号店",
+            "lines": [
+              {
+                "productKeyword": "长款铰链",
+                "qty": 1
+              }
+            ]
+          },
+          "expect": "saleAskQuantity"
+        }
+      ]
+    },
+    {
+      "id": "holdout-sale-formal-variant",
+      "split": "holdout",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "给远山机电2号店开一个销售草稿，长款铰链两个",
+          "expect": "sale2"
+        }
+      ]
+    },
+    {
+      "id": "replenishment-not-draft",
+      "kind": "clear",
+      "turns": [
+        {
+          "say": "按补货建议看看哪些物料缺货",
+          "model": {
+            "graph": "none"
+          },
+          "expect": "replenishment"
+        }
+      ]
+    }
+  ]
+}

@@ -64,7 +64,6 @@ function main() {
   for (const file of files) {
     const rel = path.relative(ROOT, file)
     const lines = stripComments(fs.readFileSync(file, 'utf8')).split('\n')
-    const src = lines.join('\n')
 
     // ── A：不得自行管理事务 ────────────────────────────────────────────
     lines.forEach((line, i) => {

@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,7 +69,8 @@ async function fixture({ dataDir, seed = [], defaultLoader = false } = {}) {
   app.get('/api/inventory/query-by-product', (req, res) => successResponse(res, { productId: 7, productName: '合成铰链', unit: '件', containers: [{ id: 20, warehouseId: Number(req.query.warehouseId), remainingQty: 5, barcode: 'SYNTHETIC-SCOPE-TWO' }] }));
   app.get('/api/inventory/stock', (_req, res) => successResponse(res, { list: [1, 2].map(warehouseId => ({ id: warehouseId, warehouseId, productId: 7, quantity: 5, reserved: 0, available: 5 })) }));
   app.get('/api/system/request-status/:key', (req, res) => successResponse(res, { status: 'success', resourceId: 8 }));
-  app.get('/api/sale/8', (_req, res) => successResponse(res, { id: 8, orderNo: 'SL-SYNTHETIC-RECOVERED', totalAmount: 1, status: 0 }));
+  app.get('/api/sale/8', (_req, res) => successResponse(res, { id: 8, orderNo: 'SL-SYNTHETIC-RECOVERED', totalAmount: 1, status: 1,
+    customerId: 1, warehouseId: 1, items: [{ productId: 7, warehouseId: 1, quantity: 1 }] }));
   app.post('/api/sale/', () => assert.fail('恢复不应重发创建'));
   const errorHandler = loadBackend('middleware/errorHandler.js', {
     '../utils/logger': { warn() {}, error() {} }, '../config/env': { env: { NODE_ENV: 'test' } },
@@ -94,6 +96,96 @@ async function fixture({ dataDir, seed = [], defaultLoader = false } = {}) {
   }
 }
 async function usingFixture(run, options) { const f = await fixture(options); try { await run(f); } finally { await f.close(); } }
+
+test('正式会话日志记录无任务回复、续办和拒绝，按登录人隔离并过滤凭据', () => usingFixture(async f => {
+  const conversationId = randomUUID();
+  const chat = (message, id = 11, taskId) => f.request('/chat', { id, method: 'POST', body: {
+    message, conversationId, ...(taskId ? { taskId } : {}),
+    token: 'private-body-dont-record',
+  } });
+  const hello = await chat('在吗');
+  assert.equal(hello.status, 200);
+  assert.equal(hello.body.data.conversationId, conversationId);
+  assert.equal(hello.body.data.task, null);
+  const lookup = await chat('查二仓合成铰链库存');
+  const task = lookup.body.data.task;
+  assert.equal(task.graph, 'A-inventory', lookup.body.data.reply);
+  assert.equal(task.conversationId, conversationId);
+  const resumed = await f.request('/tasks/' + task.id + '/resume', { method: 'POST', body: {} });
+  assert.equal(resumed.status, 200);
+  await chat('在吗', 12);
+  const foreign = await f.request('/tasks/' + task.id + '/confirm', { id: 12, method: 'POST', body: {} });
+  assert.equal(foreign.status, 403);
+  await chat('口令是 demo-credential-do-not-save');
+  await chat('未登录不可写入', null);
+  assert.equal((await f.request('/conversations')).status, 404);
+  const folder = join(f.directory, 'conversations');
+  const files = await readdir(folder);
+  const log = await readFile(join(folder, files[0]), 'utf8');
+  assert.equal((await stat(folder)).mode & 0o077, 0);
+  assert.equal((await stat(join(folder, files[0]))).mode & 0o077, 0);
+  assert.doesNotMatch(log, /demo-credential-do-not-save|private-body-dont-record|未登录不可写入|Bearer |"username"/);
+  const events = log.split('\n').filter(Boolean).map(line => JSON.parse(line));
+  const started = events.filter(row => row.phase === 'started');
+  const settled = events.filter(row => row.phase === 'finished');
+  assert.equal(started.length, 6);
+  assert.equal(settled.length, 6);
+  const first = started[0].sessionId;
+  assert.equal(started[1].sessionId, first);
+  assert.equal(started[2].sessionId, first);
+  assert.notEqual(started[3].sessionId, first);
+  assert.equal(started[5].sessionId, first);
+  assert.equal(started[2].operation, 'resume');
+  assert.match(started[5].message, /过滤/);
+  assert.equal(settled[4].status, 403);
+  assert.equal(settled[4].taskId, undefined);
+  assert.ok(settled.every(row => Number.isInteger(row.durationMs) && row.durationMs >= 0));
+  const { summarizeConversations } = await import('../src/conversation-report.js');
+  const summary = await summarizeConversations(f.directory);
+  assert.equal(summary.totals.chatTurns, 4);
+  assert.equal(summary.totals.requests, 6);
+  assert.equal(summary.totals.errors, 1);
+  assert.doesNotMatch(JSON.stringify(summary), /合成铰链|过滤/);
+  const report = await summarizeConversations(f.directory, { sessionId: first });
+  assert.ok(report.requests.some(row => row.reply && row.message === '在吗'));
+  assert.equal(report.requests.length, 4);
+}));
+
+test('会话日志目录异常时仍可读取并回复', () => usingFixture(async f => {
+  await writeFile(join(f.directory, 'conversations'), 'private-file-do-not-replace', { mode: 0o600 });
+  const out = await f.request('/chat', { method: 'POST', body: { message: '在吗' } });
+  assert.equal(out.status, 200);
+  assert.ok(out.body.data.reply);
+  assert.equal(await readFile(join(f.directory, 'conversations'), 'utf8'), 'private-file-do-not-replace');
+}));
+
+test('会话关联跨服务重启保持，日志尾部损坏不吞掉后续续办事件', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'xiaoman-journal-restart-'));
+  try {
+    let task, recorded;
+    await usingFixture(async f => {
+      const result = await f.request('/chat', { method: 'POST', body: { message: '查二仓合成铰链库存' } });
+      task = result.body.data.task;
+      assert.match(task.conversationId, /^[a-f\d-]{36}$/);
+      const folder = join(directory, 'conversations');
+      [recorded] = (await readdir(folder)).map(name => join(folder, name));
+    }, { dataDir: directory });
+    await appendFile(recorded, '{"version":1,"sessionId":');
+    await usingFixture(async f => {
+      const original = await f.request('/tasks/' + task.id);
+      assert.equal(original.body.data.task.conversationId, task.conversationId);
+      const result = await f.request('/tasks/' + task.id + '/resume', { method: 'POST', body: {} });
+      assert.equal(result.status, 200);
+      assert.equal(result.body.data.conversationId, task.conversationId);
+    }, { dataDir: directory });
+    const { summarizeConversations } = await import('../src/conversation-report.js');
+    const summary = await summarizeConversations(directory);
+    assert.equal(summary.invalidLines, 1);
+    assert.equal(summary.totals.conversations, 1);
+    assert.equal(summary.totals.requests, 2);
+    assert.equal(summary.totals.awaitingResult, 0);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
 
 test('正式模块导入与挂载不启动监听、不读任务或加载模型运行时', () => usingFixture(async f => {
   assert.equal(f.loads(), 0);
@@ -202,6 +294,42 @@ test('并行首次请求只建立一个运行实例，各用户任务不会互�
   const owners = await Promise.all(files.map(async name => JSON.parse(await readFile(join(directory, name), 'utf8'))[0].actor.id));
   assert.deepEqual(owners.sort(), [11, 12]);
 }));
+test('作废只作用于本人尚未确认的销售草稿，重启后原预览仍无法确认', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'xiaoman-embedded-cancel-'));
+  const owner = { id: 11, username: 'owner', permissions: full, warehouseIds: null };
+  const seed = ['AWAITING_CONFIRM', 'EXECUTING'].map(state => ({
+    id: state, graph: 'B-sale-draft', state, actor: owner, revision: 1, userText: '合成销售',
+    preview: { warehouseId: 2, expiresAt: '2099-01-01T00:00:00Z' },
+  }));
+  const path = '/tasks/AWAITING_CONFIRM/sale-draft';
+  const change = { method: 'POST', body: { action: 'cancel', revision: 1 } };
+  try {
+    await usingFixture(async f => {
+      assert.equal((await f.request(path, { ...change, id: null })).status, 401);
+      assert.equal((await f.request(path, { ...change, id: 12 })).status, 403);
+      f.users.get(11).warehouseIds = [1];
+      assert.equal((await f.request(path, change)).status, 403);
+      f.users.get(11).warehouseIds = [2];
+      f.users.get(11).permissions = full.filter(code => code !== 'sale.order.create');
+      assert.equal((await f.request(path, { method: 'POST', body: { action: 'reselect', revision: 1 } })).status, 403);
+      f.users.get(11).permissions = full;
+      assert.equal((await f.request(path, { method: 'POST', body: { action: 'cancel', revision: 0 } })).status, 409);
+      assert.equal((await f.request('/tasks/EXECUTING/sale-draft', change)).status, 409);
+      assert.equal((await f.request(path, change)).body.data.task.state, 'CANCELLED');
+      assert.equal((await f.request(path, change)).body.data.task.state, 'CANCELLED');
+      assert.equal(f.flowCalls.length, 0);
+    }, { dataDir: directory, seed });
+    await usingFixture(async f => {
+      f.users.get(11).warehouseIds = [2];
+      const details = await f.request('/tasks/AWAITING_CONFIRM');
+      assert.equal(details.body.data.task.state, 'CANCELLED');
+      assert.equal(details.body.data.task.preview, undefined);
+      assert.equal((await f.request('/tasks/AWAITING_CONFIRM/confirm', { method: 'POST', body: { revision: 1 } })).status, 409);
+      assert.equal(f.flowCalls.length, 0);
+    }, { dataDir: directory });
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('正式任务重启恢复本人记录且原键恢复不重新发写入', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'xiaoman-embedded-restore-'));
   const owner = { id: 11, username: 'owner', permissions: full, warehouseIds: null };
@@ -214,7 +342,8 @@ test('正式任务重启恢复本人记录且原键恢复不重新发写入', as
       assert.match(lookup.path, /original-private-key\?action=sale.create/);
       assert.equal(f.flowCalls.filter(call => call.method !== 'GET').length, 0);
       assert.doesNotMatch(JSON.stringify(out.body), /original-private-key|"payload"|"actor"/);
-    }, { dataDir: directory, seed: [{ id: 'original', graph: 'B-sale-draft', state: 'EXECUTING', actor: owner, userText: '合成销售', requestKey: 'original-private-key', preview: { totalCents: 100 }, steps: [] }] });
+    }, { dataDir: directory, seed: [{ id: 'original', graph: 'B-sale-draft', state: 'EXECUTING', actor: owner, userText: '合成销售', requestKey: 'original-private-key',
+      preview: { totalCents: 100, customer: { id: 1 }, warehouseId: 1, lines: [{ productId: 7, qty: 1 }] }, steps: [] }] });
     await usingFixture(async f => {
       assert.equal((await f.request('/tasks/original')).body.data.task.state, 'DONE');
       assert.equal((await f.request('/tasks/original', { id: 12 })).status, 403);

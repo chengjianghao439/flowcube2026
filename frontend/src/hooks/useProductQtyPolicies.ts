@@ -18,7 +18,7 @@ import { getProductQtyPoliciesApi } from '@/api/products'
  * @param productIds 当前页面会出现的商品 ID（可变数组，内部自行去重排序）
  * @returns 查询函数：给商品 ID 返回是否允许小数
  */
-export interface QuantityReadContext { owner: ReturnType<typeof captureHandlingOwner>; isCurrent: () => boolean }
+interface QuantityReadContext { owner: ReturnType<typeof captureHandlingOwner>; isCurrent: () => boolean }
 export function useProductQtyPolicies(productIds: Array<number | null | undefined>, read?: QuantityReadContext) {
   const readable = !read || read.isCurrent()
   const activity = useRef({ readable, generation: 0 })

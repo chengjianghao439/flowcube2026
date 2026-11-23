@@ -15,6 +15,16 @@ const backfillFields = {
   backfillRequest: z.boolean().optional(),
   backfillReason: z.string().max(300).optional(),
 }
+const safeId = z.number().int().positive().safe()
+const safeCents = z.number().int().nonnegative().safe()
+const expectedPreview = z.object({
+  refundNo: z.string().min(1).max(30), saleOrderNo: z.string().min(1).max(30),
+  saleOrderId: safeId, paymentRecordId: safeId, accountId: safeId,
+  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), amountCents: safeCents.positive(),
+  totalCents: safeCents, paidCents: safeCents, balanceCents: safeCents,
+  statement: z.object({ id: safeId, no: z.string().min(1).max(30),
+    totalCents: safeCents, paidCents: safeCents, balanceCents: safeCents, status: z.number().int().min(1).max(3) }).strict().nullable(),
+}).strict()
 
 const createSchema = z.object({
   saleOrderId: z.number().int().positive().optional().nullable(),
@@ -30,7 +40,8 @@ router.get('/',         requirePermission(PERMISSIONS.REFUND_ORDER_VIEW), ctrl.l
 router.get('/:id',      requirePermission(PERMISSIONS.REFUND_ORDER_VIEW), ctrl.detail)
 router.post('/',        requirePermission(PERMISSIONS.REFUND_ORDER_CREATE), validateBody(createSchema), ctrl.create)
 router.post('/:id/submit',  requirePermission(PERMISSIONS.REFUND_ORDER_CREATE), ctrl.submit)
-router.post('/:id/execute', requirePermission(PERMISSIONS.REFUND_ORDER_EXECUTE), validateBody(z.object(backfillFields)), ctrl.execute)
+router.post('/:id/execute', requirePermission(PERMISSIONS.REFUND_ORDER_EXECUTE),
+  validateBody(z.object({ ...backfillFields, expectedPreview: expectedPreview.optional() })), ctrl.execute)
 router.post('/:id/cancel',  requirePermission(PERMISSIONS.REFUND_ORDER_CREATE), ctrl.cancel)
 
 module.exports = router

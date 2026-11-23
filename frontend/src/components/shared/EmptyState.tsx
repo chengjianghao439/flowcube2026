@@ -67,7 +67,7 @@ const VARIANT_MAP: Record<EmptyVariant, VariantConfig> = {
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
-export interface EmptyStateProps {
+interface EmptyStateProps {
   /** 内置预设语义（与 icon/title/description 二选一） */
   variant?: EmptyVariant
   /** 自定义图标（覆盖 variant 图标） */

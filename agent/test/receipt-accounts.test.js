@@ -149,6 +149,36 @@ test('多账户：按账户名选户同样有效；乱回复不落规划器、�
   assert.equal(stage2.task.graph, 'D-settle');
   server.close();
 });
+test('名称重叠时保留待选，各自的完整账户名仍可准确选中', async t => {
+  const { server, state, client, store } = await ctx({ accounts: [{ id: 5, name: '基本户' }, { id: 6, name: '备用基本户' }] });
+  t.after(() => server.close());
+  const pending = await handleMessage(store, client, FULL, '演示客户甲公司到账 1000 核销');
+  const options = { taskId: pending.task.id };
+  const revision = pending.task.revision;
+  const ambiguous = await handleMessage(store, client, FULL, '选基本户或者备用基本户', options);
+  assert.equal(ambiguous.preview.needsAccountChoice, true);
+  assert.equal(ambiguous.task.revision, revision);
+  const selected = await handleMessage(store, client, FULL, '入备用基本户吧', options);
+  assert.equal(selected.preview.account.id, 6);
+  assert.equal(state.receipts.length, 0);
+});
+
+test('两笔收款都待选时，裸序号需要先选原任务', async t => {
+  const { server, state, client, store } = await ctx();
+  t.after(() => server.close());
+  const one = await handleMessage(store, client, FULL, '演示客户甲公司到账 1000 核销');
+  const two = await handleMessage(store, client, FULL, '演示客户甲公司到账 500 核销');
+  assert.notEqual(one.task.id, two.task.id);
+  const ambiguous = await handleMessage(store, client, FULL, '2');
+  assert.equal(ambiguous.task, null);
+  assert.match(ambiguous.reply, /先打开.*收款任务/);
+  assert.equal(one.task.preview.needsAccountChoice, true);
+  assert.equal(two.task.preview.needsAccountChoice, true);
+  const chosen = await handleMessage(store, client, FULL, '2', { taskId: one.task.id });
+  assert.equal(chosen.preview.account.id, 6);
+  assert.equal(two.task.preview.needsAccountChoice, true);
+  assert.equal(state.receipts.length, 0);
+});
 test('待选账户时无关闲聊仍只说明极序范围，不修改预览', async () => {
   const { server, state, client, store } = await ctx();
   try {
@@ -159,6 +189,18 @@ test('待选账户时无关闲聊仍只说明极序范围，不修改预览', as
     assert.equal(pending.task.preview.needsAccountChoice, true);
     assert.equal(state.receipts.length, 0);
   } finally { server.close(); }
+});
+
+test('待选账户时提及账户名的经营简报仍走新的查询', async t => {
+  const { server, state, client, store } = await ctx();
+  t.after(() => server.close());
+  const pending = await handleMessage(store, client, FULL, '演示客户甲公司到账 1000 核销');
+  for (const options of [{}, { taskId: pending.task.id }]) {
+    const brief = await handleMessage(store, client, FULL, '给我一份简报，先不选基本户', options);
+    assert.equal(brief.task.graph, 'F-briefing');
+    assert.equal(pending.task.preview.needsAccountChoice, true);
+  }
+  assert.equal(state.receipts.length, 0);
 });
 
 test('单账户：行为不变，无待选状态、直接可确认', async () => {

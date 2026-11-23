@@ -1,7 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { payloadClient } from '@/api/client'
-
-const QUERY_KEY = 'plastic-boxes'
 
 export interface PlasticBox {
   id: number
@@ -44,31 +42,8 @@ export function printPlasticBoxLabelApi(id: number) {
   )
 }
 
-export function usePlasticBoxes(keyword: string) {
-  return useQuery({
-    queryKey: [QUERY_KEY, keyword],
-    queryFn: () => getPlasticBoxesApi({ pageSize: 500, keyword }),
-  })
-}
-
-export function useCreatePlasticBox() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (data: Record<string, unknown>) => createPlasticBoxApi(data, { skipGlobalError: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEY] }),
-  })
-}
-
-export function useDeletePlasticBox() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) => deletePlasticBoxApi(id, { skipGlobalError: true }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [QUERY_KEY] }),
-  })
-}
-
 // ── 塑料盒流水（详情弹窗）───────────────────────────────────────────────────
-export interface PlasticBoxMovement {
+interface PlasticBoxMovement {
   qty: number
   type: number
   moveType: number | null
@@ -79,7 +54,7 @@ export interface PlasticBoxMovement {
   productName: string | null
   createdAt: string
 }
-export function getPlasticBoxMovementsApi(id: number) {
+function getPlasticBoxMovementsApi(id: number) {
   return payloadClient.get<PlasticBoxMovement[]>(`/plastic-boxes/${id}/movements`)
 }
 

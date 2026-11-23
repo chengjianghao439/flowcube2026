@@ -16,7 +16,7 @@ export interface SortingBin {
   updatedAt: string
 }
 
-export interface SortScanResult {
+interface SortScanResult {
   productCode: string
   productName: string
   unit: string

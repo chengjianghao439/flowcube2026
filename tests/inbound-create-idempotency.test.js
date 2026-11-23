@@ -7,7 +7,7 @@ function fixture() {
  const real = createRequire(filename), module_ = { exports:{} }, requests = new Map(), writes=[]
  const fingerprint = real('./inbound-tasks.edit-rules').requestFingerprint
  let taskCount=0
- const conn={ query:async(sql,args=[])=>{
+ const conn={ query:async(sql)=>{
   if(/^SET TRANSACTION/.test(sql))return [[]]
   if(/INSERT INTO inbound_tasks /.test(sql)){taskCount++;writes.push(sql);return [{insertId:taskCount}]}
   if(/INSERT INTO inbound_task_items/.test(sql)){writes.push(sql);return [{affectedRows:1}]}

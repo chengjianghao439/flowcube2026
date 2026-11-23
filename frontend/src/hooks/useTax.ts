@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { payloadClient } from '@/api/client'
 
-export interface VatReport {
+interface VatReport {
   period: string
   salesTaxAmount: number
   inputTaxAmount: number
@@ -9,7 +9,7 @@ export interface VatReport {
   taxDue: number
   adjustments: Array<{ item: string; amount: number }>
 }
-export interface IncomeTaxReport {
+interface IncomeTaxReport {
   period: string
   revenue: number
   expense: number
@@ -28,19 +28,19 @@ export interface TaxAdjustment {
   remark: string | null
 }
 
-export function getTaxVatApi(companyId: number, period: string) {
+function getTaxVatApi(companyId: number, period: string) {
   return payloadClient.get<VatReport>('/accounting/tax/vat', { params: { companyId, period } })
 }
-export function getTaxIncomeApi(companyId: number, period: string) {
+function getTaxIncomeApi(companyId: number, period: string) {
   return payloadClient.get<IncomeTaxReport>('/accounting/tax/income', { params: { companyId, period } })
 }
-export function getTaxAdjustmentsApi(companyId: number, period: string, taxType: number) {
+function getTaxAdjustmentsApi(companyId: number, period: string, taxType: number) {
   return payloadClient.get<TaxAdjustment[]>('/accounting/tax/adjustments', { params: { companyId, period, taxType } })
 }
-export function createTaxAdjustmentApi(data: { companyId: number; period: string; taxType: number; adjustItem: string; amount: number }) {
+function createTaxAdjustmentApi(data: { companyId: number; period: string; taxType: number; adjustItem: string; amount: number }) {
   return payloadClient.post('/accounting/tax/adjustments', data)
 }
-export function deleteTaxAdjustmentApi(id: number, companyId: number) {
+function deleteTaxAdjustmentApi(id: number, companyId: number) {
   return payloadClient.delete(`/accounting/tax/adjustments/${id}`, { params: { companyId } })
 }
 

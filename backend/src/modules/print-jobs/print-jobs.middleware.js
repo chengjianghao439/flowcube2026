@@ -2,7 +2,6 @@ const { pool } = require('../../config/db')
 const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const { authenticateClient, SAFE_CLIENT_ID } = require('../printers/print-client-auth')
-const SAFE_PRINTER_CODE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,49}$/
 const SAFE_STATION_CLIENT_ID = SAFE_CLIENT_ID
 
 /** Public printer codes are routing metadata, never workstation authentication. */
@@ -16,4 +15,4 @@ async function validateJobPrinterHeader(req, res, next) {
     next()
   } catch (e) { next(e) }
 }
-module.exports = { SAFE_PRINTER_CODE, SAFE_STATION_CLIENT_ID, validateJobPrinterHeader }
+module.exports = { SAFE_STATION_CLIENT_ID, validateJobPrinterHeader }

@@ -41,7 +41,7 @@ export async function createUserApi(data: CreateUserParams): Promise<{ id: numbe
   return res
 }
 
-export interface MyInfo {
+interface MyInfo {
   id: number
   username: string
   realName: string
@@ -59,7 +59,7 @@ export async function getMyInfoApi(): Promise<MyInfo | null> {
   return res ?? null
 }
 
-export interface WarehouseScopeItem {
+interface WarehouseScopeItem {
   warehouseId: number
   warehouseName?: string
   [key: string]: unknown

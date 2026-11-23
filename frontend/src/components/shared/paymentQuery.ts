@@ -24,8 +24,3 @@ export const EMPTY_PAYMENT_QUERY: PaymentQueryValues = {
   startDate: todayYmd(), endDate: '', dueStart: '', dueEnd: '',
   minAmount: '', maxAmount: '',
 }
-
-/** 判断是否有生效的筛选条件 */
-export function hasActiveQuery(v: PaymentQueryValues): boolean {
-  return Object.values(v).some(x => String(x || '').trim() !== '')
-}

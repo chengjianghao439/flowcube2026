@@ -26,7 +26,7 @@ export function isUncertainError(e: unknown) {
   return typeof status === 'number' && status >= 500 && status <= 599
 }
 
-export type SubmitFailure = 'period-closed' | 'uncertain' | 'rejected'
+type SubmitFailure = 'period-closed' | 'uncertain' | 'rejected'
 
 /**
  * 「查到的回执」对应的下一步动作，是这段逻辑里唯一允许换请求键的判定点。抽成纯函数以便直接测。

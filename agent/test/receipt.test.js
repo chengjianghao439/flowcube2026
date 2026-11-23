@@ -12,7 +12,7 @@ const FULL = { username: 't', realName: '测试员', roleId: 2, roleName: '全�
 function makeMock({ accounts = [{ id: 5, name: '基本户' }], settled = false } = {}) {
   const state = {
     records: [
-      { id: 11, orderNo: 'SL20261025001', totalAmount: 1000, paidAmount: settled ? 1000 : 0, balance: settled ? 0 : 1000, status: settled ? 3 : 1, dueDate: null, createdAt: '2026-10-25 10:00:00' },
+      { id: 11, orderId: 51, orderNo: 'SL20261025001', totalAmount: 1000, paidAmount: settled ? 1000 : 0, balance: settled ? 0 : 1000, status: settled ? 3 : 1, dueDate: null, createdAt: '2026-10-25 10:00:00' },
       { id: 12, orderNo: 'SL20261025002', totalAmount: 1152, paidAmount: settled ? 1152 : 0, balance: settled ? 0 : 1152, status: settled ? 3 : 1, dueDate: null, createdAt: '2026-10-25 11:00:00' },
     ],
     receipts: [], settleCalls: 0,
@@ -109,6 +109,8 @@ test('图 D 全链（不写金额=全额）：登记预览 → 确认① 落收�
   assert.equal(state.receipts.length, 1);
   assert.equal(state.receipts[0].settledAmount, 0); // 第一段只登记未核销
   assert.equal(stage2.preview.totalCents, 215200);
+  assert.equal(stage2.preview.receiptBalanceBeforeCents, 215200);
+  assert.deepEqual(stage2.preview.allocations.map(row => row.orderId), [51, undefined]);
   const done = await confirmTask(store, client, stage2.task.id, FULL);
   assert.equal(done.task.state, 'DONE');
   assert.equal(state.settleCalls, 1);
@@ -213,4 +215,27 @@ test('图 D 无资金账户：停步引导建账，零登记', async () => {
   assert.match(out.reply, /资金账户/);
   assert.equal(state.receipts.length, 0);
   server.close();
+});
+
+test('撤回续办边界 两段式核销失去响应后有独立退款，仍用原回执还原当次结果', async t => {
+  const { server, state, client, store } = await ctx();
+  t.after(() => server.close());
+  const registered = await handleMessage(store, client, FULL, '演示客户甲公司到账 1000 元 核销');
+  const stage = await confirmTask(store, client, registered.task.id, FULL);
+  let hidden = true;
+  client.requestStatus = async key => hidden ? null : { status: 'success', resourceId: 90, resourceType: 'payment_receipt', data: state.byKey.get(key)?.result };
+  state.dropNextSettlePost = true;
+  const unknown = await confirmTask(store, client, stage.task.id, FULL);
+  assert.match(unknown.task.state, /ESCALATED|RESULT_UNKNOWN/);
+  state.records[0].paidAmount = 990; state.records[0].balance = 10; state.records[0].status = 2;
+  state.receipts[0].settlements = [{ entryId: 50, recordId: 11, orderNo: state.records[0].orderNo,
+    orderId: 51, type: 2, amount: 1000, orderBalance: 10, orderPaid: 990, orderTotal: 1000 }];
+  const get = client.get.bind(client);
+  client.get = path => path === '/api/payments/11/entries?trace=1'
+    ? Promise.resolve([{ id: 51, recordId: 11, receiptId: null, method: 'refund', amount: -10 }]) : get(path);
+  hidden = false;
+  const done = await confirmTask(store, client, stage.task.id, FULL);
+  assert.equal(done.task.state, 'DONE', done.reply);
+  assert.match(done.reply, /当时已核销 ¥1000\.00.*本次仍有效 ¥1000\.00.*退款分录 ¥10\.00.*欠款 ¥10\.00/s);
+  assert.equal(state.settleCalls, 1);
 });

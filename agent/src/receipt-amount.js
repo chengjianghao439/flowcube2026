@@ -14,7 +14,7 @@ export function assertReceiptPreviewAmount(preview, originalText) {
 }
 
 function amountRemainder(text) {
-  return text.replace(/核销|收款|到账|收到|帮我|帮忙|请|把|给|了|入账|登记|块钱|人民币|元|块|金额|到账额|收款额|并|进行|全部|全额|按未结总额|RMB|CNY/gi, '')
+  return text.replace(/核销|收款|到账|收到|帮我|帮忙|麻烦|请|把|给|了|入账|登记|块钱|人民币|元|块|金额|到账额|收款额|并|再|进行|全部|全额|按未结总额|RMB|CNY/gi, '')
     .replace(/[¥￥，,。:：、\s]+/g, '');
 }
 
@@ -38,11 +38,12 @@ function amountBeforeMarker(prefix) {
 
 export function parseReceiptAmount(input) {
   const text = String(input).normalize('NFKC').replace(/[−﹣－–—]/g, '-');
-  const marker = /到账|收到|打款|打来|打了|打过来/.exec(text) || /收款/.exec(text);
+  const incoming = /收到[^，,。！？?]{1,60}?(?:打过来|打来|支付|转来|转入|汇来)的?/.exec(text);
+  const marker = incoming || /到账|收到|打款|打来|打了|打过来|来了/.exec(text) || /收款/.exec(text);
   let offset = marker ? marker.index + marker[0].length : 0;
   let region = text.slice(offset);
   if (marker) {
-    const before = amountBeforeMarker(text.slice(0, marker.index));
+    const before = !incoming && amountBeforeMarker(text.slice(0, marker.index));
     if (before) {
       if (amountRemainder(region)) throw formatError();
       offset = before.index;

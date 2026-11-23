@@ -147,7 +147,7 @@ export const LABEL_FIELD_DEFS_BY_TYPE: Record<number, PrintFieldDef[]> = {
 }
 
 /** 单据明细表格列选项（type 1–3），key 与后端商品行字段一致 */
-export interface TableColumnOption {
+interface TableColumnOption {
   key: string
   label: string
   align?: 'left' | 'center' | 'right'

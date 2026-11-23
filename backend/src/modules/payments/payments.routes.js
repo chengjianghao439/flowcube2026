@@ -24,6 +24,27 @@ const allocationRule = z.array(z.object({
   amount: z.number().positive('核销金额必须大于 0'),
 }).refine(a => !!a.recordId !== !!a.statementId, '核销目标必须且只能指定账款或对账单其中之一')).default([])
 
+const safeCents = z.number().int().nonnegative().safe()
+const originalId = z.number().int().positive().safe()
+const originalNo = z.string().min(1).max(50)
+const expectedAllocationSchema = z.object({
+  partyId: originalId,
+  receiptNo: originalNo,
+  receiptBalanceCents: safeCents,
+  settledCents: safeCents,
+  receiptLedgerFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  reversalEntryId: originalId.optional(),
+  reversalProofVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  statement: z.object({
+    id: originalId, no: originalNo, totalCents: safeCents, paidCents: safeCents, balanceCents: safeCents,
+    confirmedAt: z.string().datetime().nullable(),
+  }).strict().optional(),
+  targets: z.array(z.object({
+    recordId: originalId, orderId: originalId, orderNo: originalNo,
+    balanceCents: safeCents, paidCents: safeCents, totalCents: safeCents,
+  }).strict()).min(1),
+}).strict().refine(value => Boolean(value.statement) || value.targets.length <= 20, '现结核销预览最多 20 张销售单')
+
 // 跨期补录（2026-09-26 一致性审查 · 任务 7）：显式请求把业务登记进已结账的会计期间。
 // 走的是**先审批、后动账**：本次提交只落一张待审批申请单（响应 202），批准是**他人**的操作，
 // 执行时才真正写业务数据、并把调整凭证做在补录当期。
@@ -55,6 +76,7 @@ router.post('/receipts',     requirePermission(PERMISSIONS.PAYMENT_EXECUTE), val
 })), ctrl.receiptCreate)
 router.post('/receipts/:id/settle', requirePermission(PERMISSIONS.PAYMENT_EXECUTE), vParams(idParam), validateBody(z.object({
   allocations: allocationRule,
+  expectedAllocation: expectedAllocationSchema.optional(),
   ...backfillFields,
 })), ctrl.receiptSettle)
 

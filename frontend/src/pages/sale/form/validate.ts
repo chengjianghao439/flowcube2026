@@ -18,7 +18,7 @@ export function parsePrice(value: string) {
 }
 
 /** 仅供界面解释本次取得的单价，不作为定价凭据或金额事实源。 */
-export type PriceExplanation =
+type PriceExplanation =
   | { kind: 'price_list'; name: string }
   | { kind: 'price_level'; name: string; level: string | null }
   | { kind: 'default' | 'manual' | 'saved' | 'unknown' }

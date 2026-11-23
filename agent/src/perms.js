@@ -1,6 +1,6 @@
 // 角色权限：与 Flow 后端 constants/permissions.js 及各 routes 的 requirePermission 一一对齐（2026-10-26 源码核对）。
 // 原则：Agent 的权限 = 发起人权限（后端仍会再验一次，Agent 侧先验是为了明确拒绝、零无谓调用）。
-export const PERM_LABELS = {
+const PERM_LABELS = {
   'dashboard.view': '经营看板查看',
   'inventory.view': '库存查看',
   'report.view': '报表查看',
@@ -12,6 +12,7 @@ export const PERM_LABELS = {
   'sale.order.reserve': '销售单占库',
   'purchase.order.create': '采购单新建',
   'purchase.order.view': '采购单查看',
+  'return.order.view': '退货单查看',
   'payment.view': '收付款查看',
   'payment.execute': '收付款执行',
   'finance.account.view': '资金账户查看',
@@ -36,7 +37,7 @@ export function hasPerm(actor, code) {
   return Array.isArray(actor.permissions) && actor.permissions.includes(code);
 }
 
-export function permLabel(code) {
+function permLabel(code) {
   return PERM_LABELS[code] || code;
 }
 

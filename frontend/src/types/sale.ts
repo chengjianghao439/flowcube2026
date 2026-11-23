@@ -1,5 +1,5 @@
 import type { CommercialGroup, CommercialDispatchFact } from './sale-commercial'
-export interface ScanLog {
+interface ScanLog {
   barcode: string
   qty: number
   operatorName: string | null
@@ -57,7 +57,7 @@ export interface SaleOrderTask {
   adjustmentRequestedAt?: string | null
   shippedAt?: string | null
 }
-export interface SaleOrderTimelineEvent {
+interface SaleOrderTimelineEvent {
   id: number | string
   eventType: string
   title: string
@@ -187,7 +187,7 @@ export interface AdjustSaleResult {
 }
 
 /** 占库弹窗：某产品在某仓库的可用量。expected=已提交采购单预计到货量（在途，支撑占库） */
-export interface ReserveWarehouseOption {
+interface ReserveWarehouseOption {
   warehouseId: number
   warehouseName: string
   available: number
@@ -201,7 +201,7 @@ export interface ReserveWarehouseOption {
 }
 
 /** 占库预览（GET /sale/:id/reserve-preview）：逐行商品 + 各仓可用量，供占库弹窗选仓库/数量 */
-export interface ReservePreviewItem {
+interface ReservePreviewItem {
   allowDecimalQty?: boolean
   itemId: number
   productId: number

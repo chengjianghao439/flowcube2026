@@ -205,9 +205,8 @@ async function main() {
       JSON.stringify(payA.data).slice(0, 200),
     )
     log.assert(
-      '★ 拒绝消息给出可操作的出路（改日期 / 跨期补录）',
-      String(payA.data?.message || '').includes('未结账的日期')
-        && String(payA.data?.message || '').includes('跨期补录'),
+      '★ 拒绝消息要求保留实际业务日期，并说明跨期补录流程',
+      /保留实际业务日期.*跨期补录.*审批/.test(String(payA.data?.message || '')),
       String(payA.data?.message || '').slice(0, 240),
     )
 

@@ -10,8 +10,9 @@ const {
 
 async function main() {
   const ctx = await prepareSmokeContext()
-  const { pool, http, customer, warehouse, product } = ctx
+  const { pool, http, customer, warehouse, product, supplier } = ctx
   const ids = []
+  const purchaseIds = []
   try {
     const { token } = await login(http, 'smoke_admin', 'SmokeAdmin123!')
     assert.ok(token, '隔离测试账号登录成功')
@@ -72,6 +73,24 @@ async function main() {
         [],
       )
     assert.equal(noScope.pendingSaleOrders, 0)
+    assert.equal(noScope.totalSkus, 0, '空仓库范围不计其他仓有库存商品')
+    const { beijingYmdAddDays } = require('../backend/src/utils/backendTime')
+    for (const [bucket, days] of [['overdue', -1], ['dueToday', 0], ['dueThisWeek', 7]]) {
+      const expectedDate = beijingYmdAddDays(days)
+      const response = await http.post('/api/purchase/', {
+        token,
+        json: {
+          supplierId: supplier.id, supplierName: supplier.name,
+          warehouseId: warehouse.id, warehouseName: warehouse.name, expectedDate,
+          items: [{ productId: product.id, productCode: product.code, productName: product.name, unit: product.unit, quantity: 1, unitPrice: 10 }],
+        },
+      })
+      assert.ok(response.ok, JSON.stringify(response.data))
+      const { id, orderNo } = response.data.data
+      purchaseIds.push(id)
+      const incoming = await dashboard.getIncomingPurchases([warehouse.id])
+      assert.equal(incoming[bucket].find(order => order.orderNo === orderNo)?.expectedDate, expectedDate)
+    }
     const {
       loadSalePresentation,
     } = require('../backend/src/modules/sale/sale.presentation')
@@ -224,6 +243,10 @@ async function main() {
       'PASS: 销售状态计数、仓库范围、混合单位、小数、待办优先级、风险分页、应收到期边界与总额守恒',
     )
   } finally {
+    if (purchaseIds.length) {
+      await pool.query('DELETE FROM purchase_order_items WHERE order_id IN (?)', [purchaseIds])
+      await pool.query('DELETE FROM purchase_orders WHERE id IN (?)', [purchaseIds])
+    }
     // 本测试直接构造展示投影，不能把无出库事实的 shipped_qty 留给后续会计回归。
     if (ids.length) {
       await pool.query('DELETE FROM sale_credit_overrides WHERE sale_order_id IN (?)', [ids])

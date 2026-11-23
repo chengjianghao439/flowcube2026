@@ -147,5 +147,5 @@ function requireAnyPermission(permissionCodes = [], options = {}) {
 }
 
 module.exports = {
-  authMiddleware, permissionMiddleware, requirePermission, requireAnyPermission, hasPermission,
+  authMiddleware, requirePermission, requireAnyPermission, hasPermission,
 }

@@ -55,7 +55,7 @@ function buildPrintCss(t: PrintTemplate | null, rootId: string): string {
 `
 }
 
-export interface OrderPrintOverlayProps {
+interface OrderPrintOverlayProps {
   templateType: number
   title: string
   data: Record<string, string>

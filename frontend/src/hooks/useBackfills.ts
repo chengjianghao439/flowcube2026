@@ -28,7 +28,7 @@ type ExecutionInput = number | {id:number;refundContext?:SupplierRefundBackfillC
 const executionId = (v: ExecutionInput) => typeof v === 'number' ? v : v.id
 const executionContext = (v: ExecutionInput) => typeof v === 'number' ? undefined : v.refundContext
 
-export type BackfillReadRow = BackfillApplication & { refundContext?: SupplierRefundBackfillContext }
+type BackfillReadRow = BackfillApplication & { refundContext?: SupplierRefundBackfillContext }
 function useBackfillList(params: BackfillListQuery, captureRefundRead?: () => SupplierRefundBackfillContext, all = false, active = true) {
   const queryKey = useCompanyQueryKey([QK, all ? 'all' : 'list', params])
   const companyId = queryKey[1] as number
@@ -56,8 +56,6 @@ function useBackfillList(params: BackfillListQuery, captureRefundRead?: () => Su
     return { ...result, list }
   }, retry: captureRefundRead ? false : undefined })
 }
-export const useBackfills = (params: BackfillListQuery, captureRefundRead?: () => SupplierRefundBackfillContext) =>
-  useBackfillList(params, captureRefundRead)
 
 /** 仅跨期补录列表使用；保留旧分页读取合同与各页原退款上下文。 */
 export const useAllBackfills = (params: Omit<BackfillListQuery, 'page' | 'pageSize'>, captureRefundRead?: () => SupplierRefundBackfillContext, active = true) =>

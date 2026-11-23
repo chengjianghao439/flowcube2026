@@ -71,4 +71,4 @@ function assertActualCash(row,frozen){
   for(const allocation of frozen.own)storedCashCents(allocation.amount,'原供应商退款分配金额')
   for(const proof of frozen.payment.proofs){storedCashCents(proof.originalAmount,'原付款分配金额');storedCashCents(proof.out.amount,'原付款资金流水金额');if(proof.receipt)storedCashCents(proof.receipt.amount,'原付款单本金')}
 }
-module.exports={assertActualCash,company,context,paymentContext,income,head,allocationsFromSnapshot,frozenContext}
+module.exports={assertActualCash,company,context,paymentContext,income,head,frozenContext}

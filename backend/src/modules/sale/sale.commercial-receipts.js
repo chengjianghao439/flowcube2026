@@ -35,5 +35,10 @@ async function assertReceiptScope(conn,receipt,scope,context={}) {
     if(!taskReturnReceipt || r.task_type!=='sale_out')assertInScope(scope,r.head_warehouse_id,'套单操作回执')
     assertInScope(scope,r.warehouse_id ?? r.head_warehouse_id,'套单操作回执')
   }
+  if(receipt.status==='success' && receipt.resourceType==='sale_order'
+    && context.matchedAction===`sale.reserve.${receipt.resourceId}` && receipt.data?.releaseEventId != null){
+    const {assertReserveEvent}=require('./sale.ordinary-receipt')
+    await assertReserveEvent(conn,receipt,scope)
+  }
 }
 module.exports={assertReceiptScope}

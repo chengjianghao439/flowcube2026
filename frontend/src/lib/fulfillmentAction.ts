@@ -7,7 +7,7 @@ export function fulfillmentDocumentPath(issue: Pick<FulfillmentIssue, 'document_
   const path = Object.hasOwn(paths, issue.document_type) ? paths[issue.document_type] : null
   return path && safeId(issue.document_id) ? `${path}/${issue.document_id}?focus=fulfillment` : null
 }
-export type FulfillmentAction = { path: string | null; label: string; note?: string; itemId?: number }
+type FulfillmentAction = { path: string | null; label: string; note?: string; itemId?: number }
 /** 明确系统键是交接契约；标题、原因与 action_path 仅为历史数据，不能执行。 */
 export function explainFulfillmentAction(issue: FulfillmentIssue, can: (permission: PermissionCode) => boolean): FulfillmentAction {
   const original = fulfillmentDocumentPath(issue)

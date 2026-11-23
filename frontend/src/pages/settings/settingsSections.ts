@@ -1,6 +1,6 @@
 import type { SettingItem } from '@/api/settings'
 
-export interface SettingsSection {
+interface SettingsSection {
   id: 'company' | 'numbering' | 'business'
   title: string
   items: SettingItem[]

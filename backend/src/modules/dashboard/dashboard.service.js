@@ -1,17 +1,17 @@
 const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
-const { getInventoryDisplayProjectionSql, getProductInventoryProjectionSql } = require('../inventory/inventoryProjection')
+const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProjection')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const { beijingTodayYmd, beijingYmdAddDays } = require('../../utils/backendTime')
 
 async function getSummary(scopeWarehouseIds = null) {
   const inventoryDisplayProjectionSql = getInventoryDisplayProjectionSql()
-  const productInventoryProjectionSql = getProductInventoryProjectionSql()
   const wh = scopeFilter(scopeWarehouseIds, 'ip.warehouse_id')
   const [[{ totalSkus }]] = await pool.query(
-    `SELECT COUNT(*) AS totalSkus
-     FROM ${productInventoryProjectionSql} ip
-     WHERE ip.quantity > 0`
+    `SELECT COUNT(DISTINCT ip.product_id) AS totalSkus
+     FROM ${inventoryDisplayProjectionSql} ip
+     WHERE ip.quantity > 0${wh.sql}`,
+    wh.params,
   )
   const [[{ totalQty }]] = await pool.query(
     `SELECT COALESCE(SUM(ip.quantity),0) AS totalQty FROM ${inventoryDisplayProjectionSql} ip WHERE 1=1${wh.sql}`,
@@ -103,7 +103,7 @@ async function getTopStockByValue(limit = 10, scopeWarehouseIds = null) {
 async function getIncomingPurchases(scopeWarehouseIds = null) {
   const sc = scopeFilter(scopeWarehouseIds, 'po.warehouse_id')
   const [rows] = await pool.query(
-    `SELECT po.id, po.order_no, po.supplier_name, po.expected_date,
+    `SELECT po.id, po.order_no, po.supplier_name, DATE_FORMAT(po.expected_date, '%Y-%m-%d') AS expected_date,
             po.total_amount,
             COALESCE(recv.received, 0) AS received_qty,
             ordered.ordered AS ordered_qty
@@ -132,12 +132,9 @@ async function getIncomingPurchases(scopeWarehouseIds = null) {
     expectedDate: r.expected_date, totalAmount: Number(r.total_amount),
   })
   return {
-    dueToday: rows.filter(r => String(r.expected_date).slice(0, 10) === today).map(mapRow),
-    dueThisWeek: rows.filter(r => {
-      const d = String(r.expected_date).slice(0, 10)
-      return d > today && d <= weekLater
-    }).map(mapRow),
-    overdue: rows.filter(r => String(r.expected_date).slice(0, 10) < today).map(mapRow),
+    dueToday: rows.filter(r => r.expected_date === today).map(mapRow),
+    dueThisWeek: rows.filter(r => r.expected_date > today && r.expected_date <= weekLater).map(mapRow),
+    overdue: rows.filter(r => r.expected_date < today).map(mapRow),
   }
 }
 

@@ -2,13 +2,13 @@ import { useVisibleQuery } from './useVisibleQuery'
 import { useWarehouseHandoffQuery } from './useWarehouseHandoffQuery'
 import { useId, useRef, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { getSaleListApi, getSaleDetailApi, getSaleReservePreviewApi, createSaleApi, updateSaleApi, adjustSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
+import { getSaleListApi, getSaleDetailApi, getSaleReservePreviewApi, createSaleApi, cancelSaleApi, deleteSaleApi } from '@/api/sale'
 import { useInvalidate } from '@/hooks/useInvalidate'
 import { toast } from '@/lib/toast'
 import { ApiClientError } from '@/api/client'
 import { createRequestKey } from '@/lib/requestKey'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import type { CreateSaleParams, UpdateSaleParams, ReserveItemOverride, ShipItemRequest } from '@/types/sale'
+import type { CreateSaleParams, ReserveItemOverride, ShipItemRequest } from '@/types/sale'
 import { captureKitReadOwner } from './useKits'
 import { useKitOperation } from './useKitOperation'
 import { useActiveWorkspaceTab } from './useActiveWorkspaceTab'
@@ -33,28 +33,6 @@ export const useCreateSale = () => {
       invalidate('sale_create')
       toast.success('销售单已创建')
       keyRef.current = createRequestKey('sale')
-    },
-  })
-}
-
-export const useUpdateSale = () => {
-  const invalidate = useInvalidate()
-  const keyRef = useRef(createRequestKey('sale-update'))
-  return useMutation({
-    mutationFn: (data: UpdateSaleParams) => updateSaleApi(data, keyRef.current),
-    onSuccess: () => { invalidate('sale_update'); toast.success('销售单已保存'); keyRef.current = createRequestKey('sale-update') },
-  })
-}
-
-export const useAdjustSale = () => {
-  const invalidate = useInvalidate()
-  const keyRef = useRef(createRequestKey('sale-adjust'))
-  return useMutation({
-    mutationFn: (data: UpdateSaleParams) => adjustSaleApi(data, keyRef.current),
-    onSuccess: (res) => {
-      invalidate('sale_adjust')
-      keyRef.current = createRequestKey('sale-adjust')
-      toast.success(res?.pending ? '改单已提交，等待仓库确认' : '销售单已保存')
     },
   })
 }

@@ -1,0 +1,101 @@
+{
+  "source": "合成业务夹具与拟真的员工输入",
+  "cases": [
+    {
+      "id": "sales-copy",
+      "split": "practice",
+      "intent": "handoff",
+      "turns": [{"text": "帮我交接下销售单 SL 20261122011，看看还缺谁这一步", "expect": "sale"}]
+    },
+    {
+      "id": "sales-voice-continuation",
+      "split": "practice",
+      "intent": "handoff",
+      "turns": [
+        {"text": "交接一下这张销售单，谁接？", "expect": "askSale"},
+        {"text": "语音转写：嗯，ＳＬ ２０２６１１２２ ０１１", "expect": "sale"}
+      ]
+    },
+    {
+      "id": "two-sales",
+      "split": "practice",
+      "intent": "handoff",
+      "turns": [
+        {"text": "麻烦交接销售单 SL 20261122011 和 SL20261122 013", "expect": "chooseSale"},
+        {"text": "销售单号 SL 20261122013", "expect": "otherSale"}
+      ]
+    },
+    {
+      "id": "returns-copy",
+      "split": "practice",
+      "intent": "return",
+      "turns": [{"text": "看下销售退货 SR　20261122009 到哪了", "expect": "return"}]
+    },
+    {
+      "id": "receipts-voice",
+      "split": "practice",
+      "intent": "receipt",
+      "turns": [{"text": "语音转文字：额，小满，查下收款单 ＲＣ２０２６１１２２０６１，核销了没", "expect": "receipt"}]
+    },
+    {
+      "id": "pasted-customer-chat",
+      "split": "practice",
+      "intent": "quoted",
+      "turns": [{"text": "客户发微信：「确认发货，销售单 SL 20261122011」", "expect": "quoted"}]
+    },
+    {
+      "id": "handoff-spoken-where",
+      "split": "practice",
+      "intent": "handoff",
+      "turns": [
+        {"text": "交接销售单 SL20261122011", "expect": "sale"},
+        {"text": "这单现在到哪了？", "after": "pack", "expect": "saleNow"}
+      ]
+    },
+    {
+      "id": "sales-amount-boundary",
+      "split": "holdout",
+      "intent": "handoff",
+      "turns": [{"text": "交接销售单 SL 20261122 011元的那笔，查进度", "expect": "askSale"}]
+    },
+    {
+      "id": "sales-tab-copy",
+      "split": "holdout",
+      "intent": "handoff",
+      "turns": [{"text": "交接销售单号 ｓｌ\t２０２６１１２２０１３，接下来谁来", "expect": "otherSale"}]
+    },
+    {
+      "id": "returns-separated",
+      "split": "holdout",
+      "intent": "return",
+      "turns": [{"text": "销售退货 ｓｒ ２０２６１１２２　００９，查一下状态", "expect": "return"}]
+    },
+    {
+      "id": "receipt-spoken-followup",
+      "split": "holdout",
+      "intent": "receipt",
+      "turns": [
+        {"text": "查这笔收款单的分次核销", "expect": "askReceipt"},
+        {"text": "ＲＣ ２０２６１１２２０６１", "expect": "receipt"}
+      ]
+    },
+    {
+      "id": "copied-customer-ack",
+      "split": "holdout",
+      "intent": "quoted",
+      "turns": [{"text": "客户发微信：收到，那就直接发货好了，销售单 ＳＬ ２０２６１１２２０１１", "expect": "quoted"}]
+    },
+    {
+      "id": "sales-newline-boundary",
+      "split": "holdout",
+      "intent": "handoff",
+      "turns": [{"text": "交接当前销售单 SL 20261122\n011 是金额，单号我再补", "expect": "askSale"}]
+    },
+    {
+      "id": "sale-width-in-transcript",
+      "split": "holdout",
+      "intent": "handoff",
+      "turns": [{"text": "语音转写：那个，帮我交接这个销售单 ＳＬ２０２６１１２２　０１１ 呗", "expect": "sale"}]
+    }
+  ]
+}

@@ -93,6 +93,6 @@ export async function verifyInboundEditPurchaseSelection(id: number, ids: number
 export const updateInboundTaskApi = (id: number, data: UpdateInboundTaskParams, requestKey: string, config?: Parameters<typeof client.put>[2]) =>
   client.put<UpdateInboundTaskResult>(`/inbound-tasks/${id}`, data, { ...config, headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey) } })
 
-export interface InboundReprintResult { taskId: number; mode: string; count: number; jobIds: number[]; failedJobIds: number[]; noPrinterCount: number; requestId: number }
+interface InboundReprintResult { taskId: number; mode: string; count: number; jobIds: number[]; failedJobIds: number[]; noPrinterCount: number; requestId: number }
 export const reprintInboundTaskApi = (id: number, payload: { mode: 'task' | 'item' | 'barcode'; itemId?: number; barcode?: string }, requestKey: string, config?: Parameters<typeof client.post>[2]) =>
   client.post<InboundReprintResult>(`/inbound-tasks/${id}/reprint`, payload, { ...config, headers: withRequestKeyHeaders(requestKey, config?.headers as Record<string, string>) })

@@ -510,4 +510,4 @@ async function removeInvoice(id, operator, companyId = 1) {
   logger.info(`删除发票 ${cur.invoiceNo}`, { operatorId: operator?.userId }, 'accounting')
 }
 
-module.exports = { listInvoices, getInvoice, createInvoice, updateInvoice, changeStatus, removeInvoice, assertInvoiceQuota }
+module.exports = { listInvoices, getInvoice, createInvoice, updateInvoice, changeStatus, removeInvoice }

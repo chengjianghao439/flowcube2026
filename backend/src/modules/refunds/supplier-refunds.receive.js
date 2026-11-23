@@ -129,4 +129,4 @@ async function receive(refundId,raw,options,readOwn) {
   await afterReceiveCommit(ack,options.postCommit)
   return ack
 }
-module.exports={receive,receiveInTransaction,lookupOwnedReceiveAck}
+module.exports={receive,receiveInTransaction}

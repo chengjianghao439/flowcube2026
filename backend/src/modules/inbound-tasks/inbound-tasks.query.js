@@ -608,8 +608,6 @@ async function listAllPendingPutawayContainers(scopeWarehouseIds = null) {
 module.exports = {
   buildTaskWithClosure,
   loadInboundTaskClosureSummary,
-  loadInboundTimeline,
-  loadInboundRecentPrintJobs,
   findAll,
   findById,
   findPurchasableItems,

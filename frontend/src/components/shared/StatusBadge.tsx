@@ -5,7 +5,7 @@ import { PURCHASE_STATUS_NAME, SALE_STATUS_NAME, SALE_STATUS_TONE } from '@/gene
 import { WT_STATUS_NAME, WT_STATUS_CLASS } from '@/constants/warehouseTaskStatus'
 import type { WtStatus } from '@/constants/warehouseTaskStatus'
 
-export type OrderType = 'purchase' | 'sale' | 'transfer' | 'task' | 'stockcheck' | 'returns'
+type OrderType = 'purchase' | 'sale' | 'transfer' | 'task' | 'stockcheck' | 'returns'
 
 interface StatusConfig {
   label: string

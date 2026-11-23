@@ -1,52 +1,48 @@
-// 使用 Chromium 网络栈与桌面 API 相同的严格 HTTPS 证书校验。
-const { dialog, shell, net } = require('electron')
+// Windows 安装版。后台准备更新，重启由用户明确发起。
+const { net } = require('electron')
 const fs = require('fs').promises
 const fssync = require('fs')
 const path = require('path')
 const crypto = require('crypto')
+const { execFile } = require('node:child_process')
 const { pipeline } = require('stream/promises')
-const { Readable, Transform } = require('stream')
+const { Transform } = require('stream')
 const semver = require('semver')
-
-/** 调试：设为 1 时跳过版本比较，只要接口与下载地址有效即弹更新提示 */
-const FORCE_UPDATE = process.env.FORCE_UPDATE === '1'
-
-/**
- * 诊断模式（默认关闭）：开启后强制弹窗 + 跳过版本判断，仅用于排障。
- * 启用：FLOWCUBE_UPDATE_DIAG=1
- */
-const UPDATE_DIAG_MODE = process.env.FLOWCUBE_UPDATE_DIAG === '1'
 
 const IGNORE_STATE_FILE = 'app-update-state.json'
 const HEAD_TIMEOUT_MS = 12_000
 const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000
-const MAX_DOWNLOAD_RETRIES = 3
-/** 留给系统拉起 NSIS / exe 安装器后再退出，避免安装程序尚未启动就释放句柄 */
-const QUIT_AFTER_OPEN_MS = 600
-// 按 webContents 保存快照；晚挂载/重载的前端通过 preload 获取，不依赖延时猜测。
-const pendingUpdates = new WeakMap()
-function getPendingUpdate(webContents) {
-  return pendingUpdates.get(webContents) || null
-}
-function clearPendingUpdate(webContents, version) {
-  if (pendingUpdates.get(webContents)?.version === version) pendingUpdates.delete(webContents)
-}
-
-/** 更新流程占用（下载 / 安装确认），防止重复触发 */
-let updateFlowLocked = false
-
-/** GitHub 对短 UA / 仅 HEAD 常返回 403/404；与主进程 GET 下载保持一致 */
+const MAX_REDIRECTS = 5
+const MANAGED_CACHE_NAME = /^[a-f0-9]{64}(?:\.exe|-[a-f0-9-]{36}\.part)$/
 const DOWNLOAD_REQUEST_HEADERS = {
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 FlowCube-ERP-Desktop',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) FlowCube-ERP-Desktop',
   Accept: '*/*',
+}
+
+let state = { stage: 'idle' }
+let active = null
+let prepared = null
+
+function getUpdateState() {
+  return state
+}
+
+function supportsWindowsUpdate(app) {
+  return app.isPackaged && process.platform === 'win32'
+}
+
+function publish(win, next) {
+  state = next
+  if (win && !win.isDestroyed() && !win.webContents.isDestroyed()) {
+    try { win.webContents.send('flowcube:update-state', state) } catch { /* 窗口重载后读取主进程快照 */ }
+  }
 }
 
 function isGitHubReleaseOrCdnUrl(urlString) {
   try {
     const u = new URL(urlString)
     if (u.hostname === 'github.com' && u.pathname.includes('/releases/download/')) return true
-    if (u.hostname.endsWith('githubusercontent.com')) return true
+    if (u.hostname === 'githubusercontent.com' || u.hostname.endsWith('.githubusercontent.com')) return true
     return false
   } catch {
     return false
@@ -69,36 +65,12 @@ async function loadIgnoredVersions(app) {
   }
 }
 
-async function ignoreVersion(app, version) {
-  const v = String(version).trim()
-  if (!v) return
-  const list = await loadIgnoredVersions(app)
-  if (list.includes(v)) return
-  list.push(v)
-  const filePath = getStatePath(app)
-  await fs.writeFile(filePath, JSON.stringify({ ignoredVersions: list }, null, 2), 'utf8')
-}
-
-/**
- * 服务端版本是否高于当前安装版本（semver）；无法解析时回退为规范化字符串不等。
- */
-function isRemoteVersionNewer(currentRaw, latestRaw) {
-  const current = String(currentRaw).trim()
-  const latest = String(latestRaw).trim()
-  const c = semver.coerce(current)
-  const l = semver.coerce(latest)
-  if (c && l) {
-    return semver.gt(l, c)
-  }
-  return latest !== current
-}
-
 function isValidDownloadUrl(url) {
   if (typeof url !== 'string' || !url.trim()) return false
   try {
     const u = new URL(url.trim())
     if (u.protocol !== 'https:') return false
-    if (!u.hostname) return false
+    if (!u.hostname || u.username || u.password) return false
     return true
   } catch {
     return false
@@ -129,148 +101,6 @@ function resolveDownloadUrl(payload, origin) {
   return ''
 }
 
-/**
- * 尽量确认远程资源存在：HEAD；405/501 时尝试 GET Range 首字节。
- * @returns {Promise<'ok'|'missing'|'unknown'>}
- */
-function filenameFromUrl(urlString) {
-  try {
-    const u = new URL(urlString)
-    let base = path.basename(String(u.pathname).replace(/\\/g, '/'))
-    base = base.split('?')[0] || ''
-    base = base.replace(/[<>:"|?*\x00-\x1f]/g, '_').trim()
-    if (!base || base === '.' || base === '..') {
-      return `FlowCube-Update-${Date.now()}.exe`
-    }
-    return base
-  } catch {
-    return `FlowCube-Update-${Date.now()}.bin`
-  }
-}
-
-async function resolveSaveDir(app) {
-  const downloads = app.getPath('downloads')
-  try {
-    await fs.mkdir(downloads, { recursive: true })
-    await fs.access(downloads, fssync.constants.W_OK)
-    return downloads
-  } catch {
-    const sub = path.join(app.getPath('userData'), 'updates')
-    await fs.mkdir(sub, { recursive: true })
-    return sub
-  }
-}
-
-/**
- * 使用 Node 流式下载（http/https，随重定向）。
- * @param {string} downloadUrl
- * @param {string} destPath
- * @param {AbortSignal} signal
- */
-async function downloadUpdateFile(downloadUrl, destPath, signal) {
-  const res = await net.fetch(downloadUrl, {
-    method: 'GET',
-    redirect: 'follow',
-    signal,
-    headers: { ...DOWNLOAD_REQUEST_HEADERS },
-  })
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} ${res.statusText || ''}`.trim())
-  }
-  const lenHeader = res.headers.get('content-length')
-  const total = lenHeader ? parseInt(lenHeader, 10) : 0
-  const body = res.body
-  if (!body) throw new Error('下载响应为空')
-
-  let received = 0
-  let lastLoggedPct = -1
-  let lastUnknownLogBytes = 0
-  const progressTransform = new Transform({
-    transform(chunk, _enc, cb) {
-      received += chunk.length
-      if (total > 0) {
-        const pct = Math.min(100, Math.floor((received / total) * 100))
-        if (pct >= lastLoggedPct + 5 || pct === 100) {
-          console.log(
-            `[FlowCube] 更新包下载进度: ${pct}% (${received} / ${total} bytes)`
-          )
-          lastLoggedPct = pct
-        }
-      } else if (
-        lastUnknownLogBytes === 0 ||
-        received - lastUnknownLogBytes >= 512 * 1024
-      ) {
-        lastUnknownLogBytes = received
-        console.log(
-          `[FlowCube] 更新包已接收 ${received} bytes（服务器未提供总大小）`
-        )
-      }
-      cb(null, chunk)
-    },
-  })
-
-  const nodeIn = Readable.fromWeb(body)
-  await pipeline(nodeIn, progressTransform, fssync.createWriteStream(destPath))
-  console.log('[FlowCube] 更新包已保存:', destPath)
-}
-
-function showBox(parentWindow, options) {
-  const parent =
-    parentWindow &&
-    !parentWindow.isDestroyed() &&
-    parentWindow.webContents &&
-    !parentWindow.webContents.isDestroyed()
-      ? parentWindow
-      : undefined
-  return dialog.showMessageBox(parent, options)
-}
-
-async function probeDownloadUrl(url) {
-  try {
-    // GitHub Release 直链对 HEAD 常 404；objects.githubusercontent.com 亦同。用 GET Range 探测首字节。
-    if (isGitHubReleaseOrCdnUrl(url)) {
-      const res = await net.fetch(url, {
-        method: 'GET',
-        headers: { ...DOWNLOAD_REQUEST_HEADERS, Range: 'bytes=0-0' },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
-      })
-      if (res.ok || res.status === 206) return 'ok'
-      if (res.status === 404) return 'missing'
-      console.warn('[FlowCube] probeDownloadUrl GitHub/CDN 状态:', res.status, url)
-      return 'unknown'
-    }
-
-    let res = await net.fetch(url, {
-      method: 'HEAD',
-      headers: { ...DOWNLOAD_REQUEST_HEADERS },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
-    })
-    if (res.ok) return 'ok'
-    if (res.status === 405 || res.status === 501) {
-      res = await net.fetch(url, {
-        method: 'GET',
-        headers: { ...DOWNLOAD_REQUEST_HEADERS, Range: 'bytes=0-0' },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
-      })
-      if (res.ok || res.status === 206) return 'ok'
-      if (res.status === 404) return 'missing'
-      return 'unknown'
-    }
-    if (res.status === 404) return 'missing'
-    return 'unknown'
-  } catch (err) {
-    console.warn('[FlowCube] probeDownloadUrl 异常:', err && err.message ? err.message : err)
-    return 'unknown'
-  }
-}
-
-/**
- * 校验下载文件的 SHA-256，与 manifest 中的预期值比对。
- * 不匹配时抛出异常，阻止安装被篡改的安装包。
- */
 function verifyFileIntegrity(filePath, expectedSha256) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256')
@@ -295,13 +125,15 @@ async function fetchUpdateManifest(origin) {
   const base = new URL(origin).origin
   const res = await net.fetch(`${base}/api/app-update/latest`, {
     redirect: 'error',
+    cache: 'no-store',
+    credentials: 'omit',
     signal: AbortSignal.timeout(HEAD_TIMEOUT_MS),
   })
   if (!res.ok) throw new Error(`读取更新清单失败（HTTP ${res.status}）`)
   const body = await res.json()
   if (!body || body.success === false) throw new Error('读取更新清单失败')
   const payload = body.data != null ? body.data : body
-  const version = typeof payload.version === 'string' ? payload.version.trim() : ''
+  const version = semver.valid(typeof payload.version === 'string' ? payload.version.trim() : '')
   const sha256 = typeof payload.sha256 === 'string' ? payload.sha256.trim().toLowerCase() : ''
   const downloadUrl = resolveDownloadUrl(payload, base)
   if (!version || !/^[a-f0-9]{64}$/.test(sha256) || !isValidDownloadUrl(downloadUrl)) {
@@ -310,492 +142,196 @@ async function fetchUpdateManifest(origin) {
   return { version, sha256, downloadUrl, notes: typeof payload.notes === 'string' ? payload.notes : '' }
 }
 
-/** 校验失败时清除损坏文件，并阻止后续安装。 */
-async function verifyInstallerOrWarn(parentWindow, destPath, sha256) {
-  try {
-    await verifyFileIntegrity(destPath, sha256)
-    return true
-  } catch (err) {
-    await fs.unlink(destPath).catch(() => {})
-    await showBox(parentWindow, {
-      type: 'error', title: '安全校验失败',
-      message: '下载的安装包校验失败，请重新检查更新并下载。',
-      detail: err.message, buttons: ['确定'], defaultId: 0, noLink: true,
-    })
-    return false
-  }
+function isNewer(current, latest) {
+  return Boolean(semver.valid(current) && semver.gt(latest, current))
 }
 
-/**
- * 下载更新包到本机；完成后询问是否安装并拉起安装程序。
- * @param {import('electron').App} app
- * @param {import('electron').BrowserWindow | null | undefined} parentWindow
- * @param {{ downloadUrl: string, version: string }} request
- * @param {{ apiOrigin: string, quitForInstall?: Function }} options
- */
-async function startUpdateDownload(app, parentWindow, request, options = {}) {
-  if (updateFlowLocked) {
-    await showBox(parentWindow, {
-      type: 'info',
-      title: 'FlowCube 更新',
-      message: '正在下载或安装更新，请稍候。当前无法开始另一项更新任务。',
-      buttons: ['确定'],
-      defaultId: 0,
-      noLink: true,
-    })
-    return
-  }
-
-  updateFlowLocked = true
-  try {
-    const manifest = await fetchUpdateManifest(options.apiOrigin)
-    if (!request || request.downloadUrl !== manifest.downloadUrl || request.version !== manifest.version) {
-      throw new Error('所选更新的版本或下载地址与服务器清单不一致，请重新检查更新')
+function fetchInstaller(url, signal) {
+  signal.throwIfAborted()
+  return new Promise((resolve, reject) => {
+    const request = net.request({ url, method: 'GET', redirect: 'manual', credentials: 'omit',
+      cache: 'no-store', headers: DOWNLOAD_REQUEST_HEADERS })
+    const abort = () => {
+      reject(signal.reason)
+      request.abort()
     }
-    if (!FORCE_UPDATE && !isRemoteVersionNewer(app.getVersion(), manifest.version)) {
-      throw new Error('服务器清单中的版本不高于当前版本，无需安装')
-    }
-    await runUpdateDownloadAndInstall(app, parentWindow, manifest.downloadUrl, { ...options, sha256: manifest.sha256 })
-  } finally {
-    updateFlowLocked = false
-  }
-}
-
-/**
- * @param {import('electron').App} app
- * @param {import('electron').BrowserWindow | null | undefined} parentWindow
- * @param {string} downloadUrl
- */
-async function runUpdateDownloadAndInstall(app, parentWindow, downloadUrl, options = {}) {
-  const dir = await resolveSaveDir(app)
-  const baseName = filenameFromUrl(downloadUrl)
-  const destPath = path.join(dir, baseName)
-
-  let lastError
-  for (let attempt = 1; attempt <= MAX_DOWNLOAD_RETRIES; attempt++) {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS)
-    try {
-      await downloadUpdateFile(downloadUrl, destPath, controller.signal)
-      clearTimeout(timer)
-      lastError = null
-      break
-    } catch (err) {
-      clearTimeout(timer)
-      lastError = err
-      try {
-        await fs.unlink(destPath)
-      } catch {
-        /* 忽略 */
-      }
-      const msg =
-        err && err.name === 'AbortError'
-          ? '下载超时，请检查网络后重试。'
-          : (err && err.message) || String(err)
-      console.error(`[FlowCube] 更新包下载失败（第 ${attempt} 次）:`, msg)
-
-      if (attempt >= MAX_DOWNLOAD_RETRIES) {
-        await showBox(parentWindow, {
-          type: 'error',
-          title: '下载失败',
-          message: `已重试 ${MAX_DOWNLOAD_RETRIES} 次仍无法完成下载。`,
-          detail: msg,
-          buttons: ['确定'],
-          defaultId: 0,
-          noLink: true,
-        })
+    signal.addEventListener('abort', abort, { once: true })
+    request.once('close', () => signal.removeEventListener('abort', abort))
+    request.on('error', reject)
+    let redirects = 0
+    request.on('redirect', (_status, _method, destination) => {
+      if (++redirects > MAX_REDIRECTS || !isValidDownloadUrl(destination)) {
+        reject(new Error(redirects > MAX_REDIRECTS ? '安装包重定向次数过多' : '安装包重定向不是有效的 HTTPS 地址'))
+        request.abort()
         return
       }
-
-      const retry = await showBox(parentWindow, {
-        type: 'warning',
-        title: '下载失败',
-        message: '无法完成更新包下载，是否重试？',
-        detail: msg,
-        buttons: ['重试', '取消'],
-        defaultId: 0,
-        cancelId: 1,
-        noLink: true,
-      })
-      if (retry.response !== 0) return
-    }
-  }
-
-  if (lastError) return
-
-  // 摘要由主进程清单提供，安装前必须通过，不存在省略摘要的路径。
-  if (!(await verifyInstallerOrWarn(parentWindow, destPath, options.sha256))) return
-
-  const installChoice = await showBox(parentWindow, {
-    type: 'info',
-    title: 'FlowCube 更新',
-    message: '下载完成，是否立即安装？',
-    detail: `文件已保存至：\n${destPath}\n\n选择「立即安装」后，将提示您保存数据并再次确认，再关闭本应用并启动安装程序。`,
-    buttons: ['立即安装', '稍后'],
-    defaultId: 0,
-    cancelId: 1,
-    noLink: true,
-  })
-
-  if (installChoice.response !== 0) return
-
-  const saveConfirm = await showBox(parentWindow, {
-    type: 'warning',
-    title: '确认安装',
-    message: '即将关闭本应用并启动安装程序。',
-    detail:
-      '请务必先保存当前所有工作内容（未保存的表单、单据等可能丢失）。\n\n确认已保存后，再点击「继续安装」。',
-    buttons: ['继续安装', '取消'],
-    defaultId: 1,
-    cancelId: 1,
-    noLink: true,
-  })
-  if (saveConfirm.response !== 0) return
-
-  try {
-    await fs.access(destPath, fssync.constants.F_OK)
-  } catch {
-    await showBox(parentWindow, {
-      type: 'error',
-      title: '安装失败',
-      message: '找不到已下载的安装文件，请重新下载更新。',
-      buttons: ['确定'],
-      defaultId: 0,
-      noLink: true,
+      request.followRedirect()
     })
-    return
-  }
-
-  const finalConfirm = await showBox(parentWindow, {
-    type: 'question',
-    title: '开始安装',
-    message: '确定要立即退出并运行安装程序吗？',
-    detail: `安装文件：\n${destPath}`,
-    buttons: ['确定退出并安装', '再等等'],
-    defaultId: 1,
-    cancelId: 1,
-    noLink: true,
-  })
-  if (finalConfirm.response !== 0) return
-
-  // 下载完成到确认之间文件可能被修改，再次校验最终将执行的文件。
-  if (!(await verifyInstallerOrWarn(parentWindow, destPath, options.sha256))) return
-  const openErr = await shell.openPath(destPath)
-  if (openErr) {
-    await showBox(parentWindow, {
-      type: 'error',
-      title: '无法启动安装程序',
-      message: openErr,
-      detail: destPath,
-      buttons: ['确定'],
-      defaultId: 0,
-      noLink: true,
-    })
-    return
-  }
-
-  setTimeout(() => {
-    if (typeof options.quitForInstall === 'function') {
-      try {
-        options.quitForInstall()
+    request.once('response', response => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`下载更新失败（HTTP ${response.statusCode}）`))
+        request.abort()
         return
-      } catch (err) {
-        console.error('[FlowCube] 自定义退出安装流程失败，回退 app.quit():', err)
       }
-    }
-    app.quit()
-  }, QUIT_AFTER_OPEN_MS)
+      resolve(response)
+    })
+    request.end()
+  })
 }
 
-function buildNotesDetail(notes) {
-  const text = typeof notes === 'string' ? notes.trim() : ''
-  if (text) {
-    return `更新内容：\n${text}`
-  }
-  return '更新内容：\n暂无说明'
+async function downloadInstaller(url, file, signal, progress) {
+  const response = await fetchInstaller(url, signal)
+  const length = Number(response.headers['content-length'])
+  const total = Number.isSafeInteger(length) && length > 0 ? length : 0
+  let received = 0
+  let lastPercent
+  let lastReport = 0
+  const meter = new Transform({
+    transform(chunk, _encoding, callback) {
+      received += chunk.length
+      const percent = total ? Math.min(100, Math.floor(received * 100 / total)) : undefined
+      const now = Date.now()
+      if (percent !== lastPercent || now - lastReport >= 250) {
+        lastPercent = percent
+        lastReport = now
+        progress({ received, total, percent })
+      }
+      callback(null, chunk)
+    },
+  })
+  await pipeline(response, meter, fssync.createWriteStream(file, { flags: 'wx', mode: 0o600 }), { signal })
 }
 
-/**
- * 强制诊断：不依赖 semver，一定走 fetch + 打全量日志 + 无条件弹窗（用于定位为何未弹窗）。
- */
-async function runDiagnosticUpdateCheck(app, parentWindow, origin) {
-  const base = origin.replace(/\/$/, '')
-  const endpoint = `${base}/api/app-update/latest`
-
-  console.log('[FlowCube] 【诊断】开始检查更新')
-  console.log('[FlowCube] 【诊断】API 根:', base)
-  console.log('[FlowCube] 【诊断】完整请求 URL:', endpoint)
-  console.log('[FlowCube] ⚠️ 强制触发更新（已跳过版本比较）')
-
-  const needUpdate = true
-  console.log('[FlowCube] 【诊断】needUpdate (固定):', needUpdate)
-
-  let latest = {
-    _diag: true,
-    _endpoint: endpoint,
-    _error: null,
-    version: null,
-    notes: null,
-    url: null,
-    filename: null,
-  }
-
-  try {
-    const res = await net.fetch(endpoint)
-    console.log('[FlowCube] 【诊断】fetch 完成 | HTTP:', res.status, res.statusText)
-
-    let body
-    try {
-      body = await res.json()
-    } catch (parseErr) {
-      latest._error = `响应非 JSON: ${parseErr && parseErr.message}`
-      console.error('[FlowCube] 【诊断】解析 JSON 失败:', parseErr)
-      body = null
-    }
-
-    console.log('[FlowCube] 接口返回数据(原始):', body)
-
-    if (body && body.data != null && typeof body.data === 'object') {
-      const d = body.data
-      latest = {
-        ...latest,
-        version: d.version != null ? d.version : null,
-        notes: d.notes != null ? d.notes : null,
-        url: d.url != null ? d.url : null,
-        filename: d.filename != null ? d.filename : null,
-      }
-    } else if (body && typeof body === 'object') {
-      latest = {
-        ...latest,
-        version: body.version != null ? body.version : null,
-        notes: body.notes != null ? body.notes : null,
-        url: body.url != null ? body.url : null,
-        filename: body.filename != null ? body.filename : null,
-      }
-    }
-
-    let url =
-      typeof latest.url === 'string' && latest.url.trim()
-        ? latest.url.trim()
-        : ''
-    const fn =
-      typeof latest.filename === 'string' && latest.filename.trim()
-        ? latest.filename.trim()
-        : ''
-
-    if (!url && fn) {
-      url = `${base}/current/${encodeURIComponent(fn)}`
-      latest._constructedUrl = true
-    } else if (url && url.startsWith('/') && !/^https?:\/\//i.test(url)) {
-      url = `${base}${url}`
-      latest._constructedUrl = true
-    } else if (url && !/^https?:\/\//i.test(url) && fn) {
-      url = `${base}/current/${encodeURIComponent(fn)}`
-      latest._constructedUrl = true
-    }
-
-    latest._finalDownloadUrl = url || null
-    console.log('[FlowCube] 接口返回数据(latest):', latest)
-    console.log('[FlowCube] 最终下载地址:', latest._finalDownloadUrl || '(无)')
-  } catch (err) {
-    latest._error = err && err.message ? err.message : String(err)
-    console.error('[FlowCube] 【诊断】fetch 异常:', err)
-  }
-
-  const boxOpts = {
-    type: 'info',
-    title: 'FlowCube 更新诊断',
-    message: '检测到更新（强制模式）',
-    detail: JSON.stringify(latest, null, 2).slice(0, 32000),
-    buttons: ['确定'],
-  }
-  await showBox(parentWindow, boxOpts)
-  console.log('[FlowCube] 已强制弹出更新窗口')
+async function verifyInstaller(file, sha256) {
+  const stat = await fs.lstat(file)
+  if (!stat.isFile()) throw new Error('安装包不是普通文件')
+  await verifyFileIntegrity(file, sha256)
 }
 
-/**
- * @param {{ ui?: 'native' | 'ipc' }} [options] ui=ipc 时由渲染进程全局弹窗承接，主进程仅发 IPC
- */
-async function checkAppUpdate(app, parentWindow, apiOriginFn, options = {}) {
-  const ui = options.ui === 'ipc' ? 'ipc' : 'native'
-  const origin = apiOriginFn().replace(/\/$/, '')
-  console.log('[FlowCube] 开始检查更新 | API 根:', origin, '| UI:', ui)
+async function removeStaleCache(directory, retainedFile) {
+  const names = await fs.readdir(directory).catch(() => [])
+  const stale = names.filter(name => name !== path.basename(retainedFile) && MANAGED_CACHE_NAME.test(name))
+  await Promise.allSettled(stale.map(name => fs.unlink(path.join(directory, name))))
+}
 
-  if (UPDATE_DIAG_MODE) {
-    try {
-      await runDiagnosticUpdateCheck(app, parentWindow, origin)
-    } catch (err) {
-      console.error('[FlowCube] 【诊断】runDiagnosticUpdateCheck 失败:', err)
-    }
+function versionInfo(app, manifest) {
+  return { current: app.getVersion(), version: manifest.version, notes: manifest.notes }
+}
+
+async function checkAppUpdate(app, win, apiOriginFn, { manual = false } = {}) {
+  if (!supportsWindowsUpdate(app)) {
+    if (manual) publish(win, { stage: 'unsupported', current: app.getVersion(), message: '自动更新适用于 Windows 安装版。' })
     return
   }
-
-  if (FORCE_UPDATE) {
-    console.log('[FlowCube] FORCE_UPDATE=1，版本比较将跳过（仅用于调试）')
-  }
-
+  if (active || state.stage === 'installing' || (!manual && state.stage !== 'idle')) return
+  const controller = new AbortController()
+  active = controller
+  let info = { current: app.getVersion() }
+  let partial
+  let downloading = false
+  prepared = null
+  publish(win, { stage: 'checking', ...info })
   try {
-    if (updateFlowLocked) {
-      await showBox(parentWindow, {
-        type: 'info',
-        title: 'FlowCube 更新',
-        message: '正在下载或安装更新，请稍候。完成前无法再次检查或下载更新。',
-        buttons: ['确定'],
-        defaultId: 0,
-        noLink: true,
-      })
-      return
-    }
-
+    const origin = await apiOriginFn()
     const manifest = await fetchUpdateManifest(origin)
-    const { version: latest, notes, sha256, downloadUrl: resolvedUrl } = manifest
-    options = { ...options, apiOrigin: origin }
-
-    const current = app.getVersion()
-    const cSem = semver.coerce(current)
-    const lSem = semver.coerce(latest)
-    const semverGt =
-      cSem && lSem ? semver.gt(lSem, cSem) : isRemoteVersionNewer(current, latest)
-
-    console.log('[FlowCube] 当前版本:', current)
-    console.log('[FlowCube] 最新版本:', latest)
-    console.log(
-      '[FlowCube] 是否需要更新(semver.gt):',
-      semverGt,
-      '| coerce 当前:',
-      cSem ? cSem.version : '(无法解析)',
-      '| coerce 最新:',
-      lSem ? lSem.version : '(无法解析)',
-    )
-
-    const needUpdate = FORCE_UPDATE || semverGt
-    console.log('[FlowCube] 是否需要更新(最终):', needUpdate, FORCE_UPDATE ? '(含 FORCE_UPDATE)' : '')
-
-    if (!needUpdate) {
-      console.log('[FlowCube] 不弹窗：当前已是最新或未启用强制更新')
+    info = versionInfo(app, manifest)
+    if (process.env.FLOWCUBE_UPDATE_DIAG === '1') console.info('[FlowCube] 更新检查', info.current, '→', info.version)
+    if (!isNewer(info.current, info.version)) {
+      publish(win, { stage: 'current', ...info })
       return
     }
-
-    if (!isValidDownloadUrl(resolvedUrl)) {
-      console.error(
-        '[FlowCube] 更新检查中止：下载地址无效（需完整 http/https）。payload.url / filename 均未解析出可用链接。',
-      )
-      if (FORCE_UPDATE) {
-        await showBox(parentWindow, {
-          type: 'warning',
-          title: 'FlowCube 更新（调试）',
-          message: 'FORCE_UPDATE=1 已开启，但接口未返回可下载的安装包链接。',
-          detail: '请检查后端 latest.json 的 url / filename，或设置 APP_PUBLIC_URL。',
-          buttons: ['确定'],
-          defaultId: 0,
-          noLink: true,
-        })
-      }
+    if (!manual && (await loadIgnoredVersions(app)).includes(manifest.version)) {
+      publish(win, { stage: 'idle', ...info })
       return
     }
-
-    const ignored = await loadIgnoredVersions(app)
-    if (ignored.includes(latest) && !FORCE_UPDATE && !options.manual) {
-      console.log('[FlowCube] 用户已忽略版本:', latest)
-      return
-    }
-
+    const directory = path.join(app.getPath('userData'), 'update-cache')
+    await fs.mkdir(directory, { recursive: true, mode: 0o700 })
+    if (!(await fs.lstat(directory)).isDirectory()) throw new Error('更新缓存目录不可用')
+    const file = path.join(directory, `${manifest.sha256}.exe`)
+    let cached = true
     try {
-      new URL(resolvedUrl)
-    } catch (e) {
-      console.error('[FlowCube] new URL 解析失败:', e)
-      return
+      await verifyInstaller(file, manifest.sha256)
+    } catch (error) {
+      cached = false
+      if (error.code !== 'ENOENT') await fs.unlink(file)
     }
-
-    const probe = await probeDownloadUrl(resolvedUrl)
-    console.log('[FlowCube] 下载链接探测结果:', probe, '|', resolvedUrl)
-
-    if (probe === 'missing') {
-      console.error('[FlowCube] 更新检查中止：远程文件不存在 (404)', resolvedUrl)
-      return
+    if (!cached) {
+      downloading = true
+      partial = path.join(directory, `${manifest.sha256}-${crypto.randomUUID()}.part`)
+      publish(win, { stage: 'downloading', ...info, received: 0, total: 0 })
+      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)])
+      await downloadInstaller(manifest.downloadUrl, partial, signal, data => {
+        if (!controller.signal.aborted) publish(win, { stage: 'downloading', ...info, ...data })
+      })
+      try { await verifyInstaller(partial, manifest.sha256) }
+      catch { throw new Error('安装包 SHA-256 校验失败，请重新下载。') }
+      controller.signal.throwIfAborted()
+      await fs.rename(partial, file)
+      partial = undefined
     }
-    if (probe === 'unknown') {
-      console.warn(
-        '[FlowCube] 无法确认文件是否存在（HEAD 受限等），仍尝试提示用户:',
-        resolvedUrl,
-      )
-    }
-
-    console.log('[FlowCube] 弹出更新提示（', ui, '）')
-
-    if (ui === 'ipc') {
-      const wc =
-        parentWindow &&
-        !parentWindow.isDestroyed() &&
-        parentWindow.webContents &&
-        !parentWindow.webContents.isDestroyed()
-          ? parentWindow.webContents
-          : null
-      if (wc) {
-        const payload = {
-          version: latest,
-          notes,
-          downloadUrl: resolvedUrl,
-          sha256,
-          current,
-          forceDebug: !!FORCE_UPDATE,
-        }
-        pendingUpdates.set(wc, payload)
-        wc.send('flowcube:update-available', payload)
-      } else {
-        console.warn('[FlowCube] 无可用 webContents，回退为原生弹窗')
-        const boxOptions = {
-          type: 'info',
-          title: FORCE_UPDATE ? '发现新版本（调试强制）' : '发现新版本',
-          message: FORCE_UPDATE
-            ? `【调试】将显示更新流程（当前 ${current}，服务端标记 ${latest}）。`
-            : `新版本 ${latest} 已发布（当前 ${current}）。`,
-          detail: buildNotesDetail(notes),
-          buttons: ['立即更新', '忽略此版本', '稍后提醒'],
-          defaultId: 0,
-          cancelId: 2,
-          noLink: true,
-        }
-        const result = await showBox(parentWindow, boxOptions)
-        if (result.response === 0) {
-          await startUpdateDownload(app, parentWindow, { downloadUrl: resolvedUrl, version: latest }, options)
-        } else if (result.response === 1 && !FORCE_UPDATE) {
-          await ignoreVersion(app, latest)
-        }
-      }
+    await removeStaleCache(directory, file)
+    controller.signal.throwIfAborted()
+    prepared = { origin: new URL(origin).origin, manifest, file }
+    publish(win, { stage: 'ready', ...info })
+  } catch (error) {
+    if (partial) await fs.unlink(partial).catch(() => {})
+    if (controller.signal.aborted) {
+      publish(win, { stage: 'cancelled', ...info })
     } else {
-      const boxOptions = {
-        type: 'info',
-        title: FORCE_UPDATE ? '发现新版本（调试强制）' : '发现新版本',
-        message: FORCE_UPDATE
-          ? `【调试】将显示更新流程（当前 ${current}，服务端标记 ${latest}）。`
-          : `新版本 ${latest} 已发布（当前 ${current}）。`,
-        detail: buildNotesDetail(notes),
-        buttons: ['立即更新', '忽略此版本', '稍后提醒'],
-        defaultId: 0,
-        cancelId: 2,
-        noLink: true,
-      }
-      const result = await showBox(parentWindow, boxOptions)
-
-      if (result.response === 0) {
-        await startUpdateDownload(app, parentWindow, { downloadUrl: resolvedUrl, version: latest }, options)
-      } else if (result.response === 1 && !FORCE_UPDATE) {
-        await ignoreVersion(app, latest)
-      }
+      const message = error.name === 'TimeoutError' ? '更新请求超时，请重试。' : error.message || '更新失败，请重试。'
+      console.warn('[FlowCube] 更新未完成:', message)
+      publish(win, { stage: 'error', ...info, message, showNotice: manual || downloading })
     }
-  } catch (err) {
-    console.error('[FlowCube] 更新失败:', err)
+  } finally {
+    active = null
   }
 }
 
-module.exports = {
-  checkAppUpdate,
-  getPendingUpdate,
-  clearPendingUpdate,
-  /** 供测试或后续自动下载模块复用 */
-  isRemoteVersionNewer,
-  isValidDownloadUrl,
-  startUpdateDownload,
-  ignoreVersion,
+function cancelUpdateDownload(win) {
+  if (state.stage !== 'downloading' || !active) return
+  publish(win, { ...state, stage: 'cancelling' })
+  active.abort()
 }
+
+function launchInstaller(file) {
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
+  const powershell = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+  // RunAs 返回时系统已接受安装器启动。路径经环境变量传递，与固定脚本分开。
+  const script = "$ErrorActionPreference='Stop'; Start-Process -FilePath $env:FLOWCUBE_INSTALLER_PATH -ArgumentList @('--updated','/S','--force-run') -Verb RunAs"
+  return new Promise((resolve, reject) => {
+    execFile(powershell, ['-NoProfile', '-NonInteractive', '-Command', script],
+      { windowsHide: true, env: { ...process.env, FLOWCUBE_INSTALLER_PATH: file } },
+      error => error ? reject(error) : resolve())
+  })
+}
+
+async function restartToUpdate(app, win, origin, quitForInstall) {
+  if (active || state.stage === 'installing') return
+  if (!supportsWindowsUpdate(app) || !prepared || state.stage !== 'ready') throw new Error('更新包尚未下载并通过校验')
+  const { manifest, file } = prepared
+  const info = versionInfo(app, manifest)
+  publish(win, { stage: 'installing', ...info })
+  try {
+    if (!isValidDownloadUrl(origin) || new URL(origin).origin !== prepared.origin) throw new Error('更新服务器已变化，请重新检查。')
+    const fresh = await fetchUpdateManifest(origin)
+    if (!isNewer(info.current, fresh.version) || fresh.version !== manifest.version
+        || fresh.sha256 !== manifest.sha256 || fresh.downloadUrl !== manifest.downloadUrl) {
+      throw new Error('更新清单已变化，请重新检查。')
+    }
+    try { await verifyInstaller(file, fresh.sha256) }
+    catch { throw new Error('本地安装包丢失或校验失败，请重新下载。') }
+  } catch (error) {
+    prepared = null
+    publish(win, { stage: 'error', ...info, message: error.message, showNotice: true })
+    return
+  }
+  try {
+    await launchInstaller(file)
+  } catch {
+    publish(win, { stage: 'ready', ...info, message: '安装程序未启动。若取消了系统授权，可以再次点击重启升级。' })
+    return
+  }
+  quitForInstall()
+}
+
+module.exports = { supportsWindowsUpdate, getUpdateState, checkAppUpdate, cancelUpdateDownload, restartToUpdate }

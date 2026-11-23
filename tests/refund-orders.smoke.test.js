@@ -73,7 +73,7 @@ async function scenarioRefundListScope(ctx, log) {
 
 async function scenarioRefundExecutes(ctx, log, token) {
   const { http, pool } = ctx
-  const { orderId, orderNo } = await seedSaleWithPaid(pool, 1000, 800)
+  const { orderId, orderNo, paymentRecordId } = await seedSaleWithPaid(pool, 1000, 800)
 
   // 建账户（退款出账目标）
   const acc = await http.post('/api/finance/accounts', { token, json: { name: randomRef('退款账户').slice(0, 30), type: 2, openingBalance: 500 } })
@@ -95,8 +95,25 @@ async function scenarioRefundExecutes(ctx, log, token) {
   // 3. 确认 → 执行
   const sub = await http.post(`/api/refunds/${refundId}/submit`, { token })
   log.assert('确认退款 200', sub.status === 200, `status=${sub.status}`)
-  const exec = await http.post(`/api/refunds/${refundId}/execute`, { token })
+  const detail = await http.get(`/api/refunds/${refundId}?trace=1`, { token })
+  const expectations = { refundNo: create.data.data.refundNo, saleOrderNo: orderNo, saleOrderId: orderId, paymentRecordId,
+    accountId, amountCents: 30000, effectiveDate: detail.data.data.trace.effectiveDate, totalCents: 100000, paidCents: 80000,
+    balanceCents: 20000, statement: null }
+  const endpoint = `/api/refunds/${refundId}/execute`
+  const stale = await http.post(endpoint, { token, headers: { 'X-Request-Key': randomRef('RF') },
+    json: { expectedPreview: { ...expectations, paidCents: 79999, balanceCents: 20001 } } })
+  const accountBefore = await dbQuery(pool, 'SELECT id FROM finance_account_transactions WHERE account_id=? AND biz_type=5 AND biz_id=?', [accountId, refundId])
+  log.assert('退款原应收预览失效时返回409，零出账',
+    stale.status === 409 && stale.data?.code === 'REFUND_PREVIEW_CONFLICT' && accountBefore.length === 0
+      && (await readPaid(pool, orderId)).paid === 800, `status=${stale.status}`)
+  const opts = { token, headers: { 'X-Request-Key': randomRef('RF') }, json: { expectedPreview: expectations } }
+  const exec = await http.post(endpoint, opts)
   log.assert('执行退款 200', exec.status === 200, `status=${exec.status} msg=${exec.message}`)
+  const replay = await http.post(endpoint, opts)
+  const issued = await http.get(`/api/refunds/${refundId}?trace=1`, { token })
+  log.assert('同键退款回放沿原回执，一笔可核出账',
+    replay.ok && JSON.stringify(exec.data?.data) === JSON.stringify(replay.data?.data)
+      && JSON.stringify(issued.data?.data?.trace?.outgoing) === '[300]', `status=${replay.status}`)
 
   // 4. 已收 800 → 500；余额 200 → 500；状态重算
   const after = await readPaid(pool, orderId)
@@ -125,7 +142,7 @@ async function scenarioRefundExecutes(ctx, log, token) {
 
 async function scenarioRefundThenReturnPasses(ctx, log, token) {
   const { http, pool } = ctx
-  const { orderId, orderNo, paymentRecordId } = await seedSaleWithPaid(pool, 1000, 800)
+  const { orderId } = await seedSaleWithPaid(pool, 1000, 800)
 
   // 退款前：退货守卫应拦截（paid 800 > 退货冲减后总额）。这里直接用 returns.helpers 的守卫函数验证
   const { assertReturnPaymentHeadroom } = require('../backend/src/modules/returns/returns.helpers')

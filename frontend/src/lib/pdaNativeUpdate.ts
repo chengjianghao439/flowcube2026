@@ -1,6 +1,6 @@
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 
-export type PdaNativeUpdateProgress = {
+type PdaNativeUpdateProgress = {
   operationId: string
   status: 'starting' | 'downloading' | 'downloaded' | 'installing' | 'permission_required' | 'error'
   progress: number

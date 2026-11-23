@@ -30,7 +30,7 @@ export function briefingReply(data) {
       const counts = [value?.overCount != null ? `超限 ${value.overCount} 位` : '', value?.highRiskCount != null ? `高占用 ${value.highRiskCount} 位` : ''].filter(Boolean);
       lines.push(`${label}：${counts.join('，') || sampleNote(value, customers)}${customers.length ? '；' + top(customers).map(row => `${row.customerName || row.name || identity(row)} 已用 ${money(row.used)}${row.creditLimit != null ? ` / 限额 ${money(row.creditLimit)}` : ''}${row.usageRatePct != null ? `（占用 ${row.usageRatePct}%）` : ''}`).join('；') : ''}`);
     } else if (key === 'incomingPurchases' && value && !Array.isArray(value) && ['overdue', 'dueToday', 'dueThisWeek'].some(group => Array.isArray(value[group]))) {
-      for (const [group, groupLabel] of Object.entries({ overdue: '逾期待到货', dueToday: '今日待到货', dueThisWeek: '本周后续待到货' })) {
+      for (const [group, groupLabel] of Object.entries({ overdue: '逾期待到货', dueToday: '今日待到货', dueThisWeek: '未来 7 天待到货' })) {
         const purchases = Array.isArray(value[group]) ? value[group] : [];
         lines.push(`${groupLabel}：${purchases.length} 单${purchases.length ? '；' + top(purchases).map(row => `${identity(row)}${row.supplierName ? `（${row.supplierName}）` : ''}${row.expectedDate ? ` 预计 ${row.expectedDate}` : ''}`).join('；') : ''}${purchases.length > 5 ? '；仅列前 5 单' : ''}`);
       }

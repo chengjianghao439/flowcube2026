@@ -18,7 +18,7 @@ import { secureStorage } from '@/lib/secureStorage'
 const CREDENTIAL_KEY = 'flowcube-pda-device'
 const SESSION_KEY = 'flowcube-pda-session'
 
-export interface PdaDeviceCredential {
+interface PdaDeviceCredential {
   deviceCode: string
   deviceSecret: string
   boundAt: string

@@ -8,4 +8,4 @@ function normalizeProduct(platform, value) {
   if (platform === 'deppon' && DEPPON_PRODUCTS.includes(code)) return code
   throw new AppError('发货产品与承运商不匹配，请选择已开通的官方产品', 400)
 }
-module.exports = { normalizeProduct, DEPPON_PRODUCTS }
+module.exports = { normalizeProduct }

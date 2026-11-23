@@ -11,3 +11,9 @@ export function getElectronBridge(): Window['flowcubeDesktop'] {
 export function isElectronRuntime(): boolean {
   return Boolean(getElectronBridge())
 }
+
+export const DESKTOP_UPDATE_OPEN_EVENT = 'flowcube-open-update'
+
+export function openDesktopUpdateCenter() {
+  window.dispatchEvent(new Event(DESKTOP_UPDATE_OPEN_EVENT))
+}

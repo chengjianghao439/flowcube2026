@@ -5,21 +5,23 @@ import { Worker } from 'node:worker_threads';
 import { TaskFiles } from './task-files.js';
 import { ownsTask } from './task-access.js';
 import { config } from './config.js';
+import { conversationScope, taskConversationId } from './conversation-journal.js';
 
 export const STATES = [
-  'CREATED', 'DISAMBIGUATING', 'PLANNED', 'DRY_RUNNING', 'AWAITING_CONFIRM',
+  'CREATED', 'DISAMBIGUATING', 'PAUSED', 'PLANNED', 'DRY_RUNNING', 'AWAITING_CONFIRM',
   'CONFIRMED', 'EXECUTING', 'RESULT_UNKNOWN', 'VERIFYING', 'DONE',
   'FAILED_FINAL', 'ESCALATED', 'EXPIRED', 'CANCELLED',
 ];
 
 const TRANSITIONS = {
   CREATED: ['DISAMBIGUATING', 'PLANNED', 'DRY_RUNNING', 'CANCELLED'],
-  DISAMBIGUATING: ['PLANNED', 'DRY_RUNNING', 'CANCELLED', 'FAILED_FINAL'],
+  DISAMBIGUATING: ['PAUSED', 'PLANNED', 'DRY_RUNNING', 'CANCELLED', 'FAILED_FINAL'],
+  PAUSED: ['DISAMBIGUATING', 'DRY_RUNNING'],
   PLANNED: ['DRY_RUNNING', 'AWAITING_CONFIRM', 'CANCELLED'],
-  DRY_RUNNING: ['AWAITING_CONFIRM', 'VERIFYING', 'DONE', 'FAILED_FINAL', 'CANCELLED'],
-  AWAITING_CONFIRM: ['CONFIRMED', 'EXPIRED', 'CANCELLED'],
+  DRY_RUNNING: ['PAUSED', 'AWAITING_CONFIRM', 'VERIFYING', 'DONE', 'FAILED_FINAL', 'CANCELLED'],
+  AWAITING_CONFIRM: ['DISAMBIGUATING', 'CONFIRMED', 'EXPIRED', 'CANCELLED'],
   CONFIRMED: ['EXECUTING', 'EXPIRED'],
-  EXECUTING: ['VERIFYING', 'RESULT_UNKNOWN', 'FAILED_FINAL', 'ESCALATED'],
+  EXECUTING: ['VERIFYING', 'RESULT_UNKNOWN', 'FAILED_FINAL', 'ESCALATED', 'EXPIRED'],
   RESULT_UNKNOWN: ['EXECUTING', 'VERIFYING', 'ESCALATED'],
   VERIFYING: ['DONE', 'ESCALATED', 'FAILED_FINAL', 'RESULT_UNKNOWN'],
   DONE: [], FAILED_FINAL: [], ESCALATED: ['RESULT_UNKNOWN'], EXPIRED: ['DRY_RUNNING'], CANCELLED: [],
@@ -180,6 +182,7 @@ export class TaskStore {
 
   create(init) {
     const task = new Task(init);
+    task.conversationId = conversationScope.getStore();
     this.#saveGroup(task.id, [task]);
     this.#groupSize.set(task.id, 1);
     this.#register(task, task.id);
@@ -190,6 +193,7 @@ export class TaskStore {
   createRelated(parent, init, prepare) {
     if (this.get(parent.id) !== parent || this.#groupSize.get(parent.id) !== 1) throw storageUnavailable();
     const child = new Task(init);
+    child.conversationId = taskConversationId(parent) ?? conversationScope.getStore();
     const preparedParent = restoreTask(structuredClone(parent));
     prepare(child, preparedParent);
     const owner = typeof preparedParent.actor === 'string' ? { username: preparedParent.actor } : preparedParent.actor;
@@ -226,7 +230,7 @@ export class TaskStore {
     }
   }
 
-  // 选择、改量、确认和原结果恢复用同一把任务锁，拒绝交错变更预览或重复执行。
+  // 选择、重选、作废、改量、确认和原结果恢复共用任务锁。
   async exclusive(id, operation) {
     if (this.locks.has(id)) throw Object.assign(new Error('此任务正在处理中，请稍候查询原结果'), { status: 409, code: 'TASK_BUSY' });
     this.locks.add(id);

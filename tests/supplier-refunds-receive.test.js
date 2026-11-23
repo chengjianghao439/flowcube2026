@@ -1,7 +1,7 @@
 'use strict'
 const {test}=require('node:test')
 const assert=require('node:assert/strict')
-const {fixture,required,input,uuid,copy,money}=require('./helpers/supplier-refunds-receive-fixture')
+const {fixture,required,input,uuid,copy}=require('./helpers/supplier-refunds-receive-fixture')
 async function prepared(options={}) {
   const f=fixture(options),service=f.module('service')
   await service.create(options.createBody||input(),f.options)

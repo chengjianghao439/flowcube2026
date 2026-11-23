@@ -210,8 +210,14 @@ async function main() {
       return recv.containerId
     }
 
+    const createBox = (taskId, requestKey) => http.post('/api/packages', {
+      token,
+      headers: pdaHeaders(requestKey ? { 'X-Request-Key': requestKey } : {}),
+      json: { warehouseTaskId: taskId },
+    })
+
     /** 造一个到「待打包(5) + 已装箱 + 箱已 finish（产生箱贴 job）」的任务 */
-    async function packedTask(qty) {
+    async function packedTask(qty, openBox = async taskId => must(await createBox(taskId), '建箱')) {
       const src = await makeWholeContainer(qty)
       const box = must(await http.post('/api/plastic-boxes', {
         token, json: { productId: Number(product.id), warehouseId: Number(warehouse.id), locationId: Number(location?.id) },
@@ -266,7 +272,7 @@ async function main() {
       const [tk5] = await q('SELECT status FROM warehouse_tasks WHERE id=?', [taskId])
       assert.equal(Number(tk5.status), 5, `前置：应进入待打包(5)，实际 ${tk5.status}`)
 
-      const pkg = must(await http.post('/api/packages', { token, headers: pdaHeaders(), json: { warehouseTaskId: taskId } }), '建箱')
+      const pkg = await openBox(taskId)
       must(await http.post(`/api/packages/${pkg.id}/add-item`, {
         token, headers: { ...pdaHeaders(), 'X-Request-Key': key('add') }, json: { labelBarcode: newI.barcode },
       }), '装箱')
@@ -299,6 +305,34 @@ async function main() {
         token, headers: { ...pdaHeaders(), ...(k ? { 'X-Request-Key': k } : {}) }, json: {},
       })
     const taskStatusOf = async (taskId) => Number((await q('SELECT status FROM warehouse_tasks WHERE id=?', [taskId]))[0].status)
+
+    await check('PC 建箱原响应丢失后，同键并发重发只生成一只箱，并能找回原回执', async () => {
+      const createKey = key('create-box')
+      const t = await packedTask(10, async taskId => {
+        // 首次响应模拟客户端丢弃。后续以数据库和原键独立核对。
+        const first = await createBox(taskId, createKey)
+        assert.equal(first.status, 200)
+        const replies = await Promise.all([createBox(taskId, createKey), createBox(taskId, createKey)])
+        const boxes = await q('SELECT id FROM packages WHERE warehouse_task_id=?', [taskId])
+        assert.equal(boxes.length, 1, '同一次建箱必须只产生一个箱码')
+        const data = must(replies[0], '建箱重放')
+        assert.deepEqual(must(replies[1], '并行建箱重放'), data)
+        assert.equal(data.id, Number(boxes[0].id))
+        const route = `/api/system/request-status/${createKey}?action=package.create.${taskId}`
+        const receipt = must(await http.get(route, { token, headers: pdaHeaders() }), '查询建箱回执')
+        assert.equal(receipt.status, 'success')
+        assert.equal(receipt.resourceType, 'warehouse_task')
+        assert.equal(receipt.resourceId, taskId)
+        assert.deepEqual(receipt.data, data)
+        const noDevice = await http.get(route, { token })
+        assert.equal(noDevice.status, 403, '回执查询也必须有设备会话')
+        return data
+      })
+      await consumePackageLabelJob(t.printJobId)
+      must(await packDoneReq(t.taskId, key('packdone')), '完成打包')
+      assert.equal(must(await createBox(t.taskId, createKey), '推进后仍能取原箱').id, t.pkgId)
+      assert.equal((await createBox(t.taskId, key('create-box-new'))).status, 400)
+    })
 
     // ══ P1【正确语义】原 key 重放 ⇒ 200 且回原回执 ══════════════════════════
     await check('P1 pack-done 原 key 重放应返回原回执（同 taskId/status）', async () => {
@@ -536,8 +570,9 @@ async function main() {
     // ══ PL2【红】设备仓与箱所属仓不匹配的 PDA 不得补打 ═════════════════════════
     // 现状：`print-label` 路由只挂 requirePermission，既无 scope 也无设备会话校验；
     // controller 也没传 scopeWarehouseIds / pdaWarehouseId → 拿着 A 仓的 PDA 能给 B 仓的箱补打。
-    await check('PL2 设备仓与箱所属仓不匹配时补打应被拒（403）', async () => {
-      const t = await packedTask(40)
+    await check('PL2 异仓设备拒绝箱贴补打、建箱原键重放和建箱回执查询', async () => {
+      const createKey = key('create-box-device')
+      const t = await packedTask(40, async taskId => must(await createBox(taskId, createKey), '建箱'))
       const w2 = must(await http.post('/api/warehouses', {
         token, json: { name: `PB-C4-异仓-${rnd().toUpperCase()}`, type: 1 },
       }), '建异仓')
@@ -560,6 +595,17 @@ async function main() {
       console.log(`        [证据] 异仓(仓 ${w2.id})设备补打本仓箱 ${t.pkgId} → HTTP ${r.status} ${JSON.stringify(r.data).slice(0, 180)}`)
       assert.equal(r.status, 403, `设备仓不匹配应 403，实际 ${r.status}`)
       assert.equal(r.data?.code, 'PDA_WAREHOUSE_MISMATCH', `应为设备仓不匹配，实际 code=${r.data?.code}`)
+      const otherPda = { 'X-Client': 'pda', 'X-PDA-Session': s2.session_token }
+      const createReplay = await http.post('/api/packages', {
+        token, headers: { ...otherPda, 'X-Request-Key': createKey }, json: { warehouseTaskId: t.taskId },
+      })
+      const createReceipt = await http.get(`/api/system/request-status/${createKey}?action=package.create`, {
+        token, headers: otherPda,
+      })
+      for (const denied of [createReplay, createReceipt]) {
+        assert.equal(denied.status, 403)
+        assert.equal(denied.data?.code, 'PDA_WAREHOUSE_MISMATCH')
+      }
 
       // 补 1：带 PDA 标记但**缺票**必须被拒 —— 不能因为「没票就当 PC」把设备身份放行
       const noTok = await http.post(`/api/packages/${t.pkgId}/print-label`, {

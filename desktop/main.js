@@ -11,7 +11,7 @@ log.transports.file.level = 'info'
 log.transports.console.level = 'debug' // 开发时控制台仍可见
 log.info('🔥 当前 main.js 已加载')
 const { pathToFileURL } = require('url')
-const { checkAppUpdate, startUpdateDownload, ignoreVersion, getPendingUpdate, clearPendingUpdate } = require('./lib/updateCheck')
+const { supportsWindowsUpdate, checkAppUpdate, getUpdateState, cancelUpdateDownload, restartToUpdate } = require('./lib/updateCheck')
 const { printZpl } = require('./lib/localPrint')
 const { validatePrintBudget, printBoundedBatch } = require('./lib/printBudget')
 const { createPrintClientIdentity } = require('./lib/printClientIdentity')
@@ -186,12 +186,12 @@ const PACKAGED_UPDATE_CHECK_DELAY_MS = Math.min(
 /** 安装包仅触发一次自动更新检查（IPC 优先，避免引导写入 localStorage 晚于主进程定时器） */
 let packagedUpdateCheckStarted = false
 function triggerPackagedUpdateCheck(win, originRaw) {
-  if (!app.isPackaged || packagedUpdateCheckStarted) return
+  if (!supportsWindowsUpdate(app) || packagedUpdateCheckStarted) return
   const origin = normalizeApiOrigin(originRaw)
   if (!origin) return
   packagedUpdateCheckStarted = true
   setTimeout(() => {
-    checkAppUpdate(app, win, () => origin, { ui: 'ipc', quitForInstall: quitForInstaller }).catch((err) => {
+    checkAppUpdate(app, win, () => origin).catch((err) => {
       log.error('[FlowCube] 自动更新检查失败:', err)
     })
   }, PACKAGED_UPDATE_CHECK_DELAY_MS)
@@ -209,33 +209,21 @@ handleRenderer('flowcube:is-packaged', () => app.isPackaged)
 handleRenderer('flowcube:trigger-update-check', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win.isDestroyed()) return
-  try {
-    const origin = await getRendererApiOrigin(win)
-    if (!origin) {
-      log.warn('[FlowCube] 手动更新检查：无法获取 API 根地址')
-      return
-    }
-    await checkAppUpdate(app, win, () => origin, { ui: 'ipc', manual: true, quitForInstall: quitForInstaller })
-  } catch (err) {
-    log.error('[FlowCube] 手动更新检查失败:', err)
-  }
+  await checkAppUpdate(app, win, () => getRendererApiOrigin(win), { manual: true })
 })
 
-handleRenderer('flowcube:get-pending-update', (event) => getPendingUpdate(event.sender))
+handleRenderer('flowcube:get-update-state', () => getUpdateState())
 
-handleRenderer('flowcube:start-update-download', async (event, request) => {
+handleRenderer('flowcube:cancel-update-download', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win && !win.isDestroyed()) cancelUpdateDownload(win)
+})
+
+handleRenderer('flowcube:restart-to-update', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win.isDestroyed()) throw new Error('更新窗口不可用')
   const apiOrigin = await getRendererApiOrigin(win)
-  // 只接受用户选中的版本与地址；摘要必须由主进程重新读取 HTTPS 清单。
-  await startUpdateDownload(app, win, request, { apiOrigin, quitForInstall: quitForInstaller })
-})
-
-handleRenderer('flowcube:ignore-update-version', async (event, version) => {
-  const v = typeof version === 'string' ? version.trim() : ''
-  if (!v) return
-  await ignoreVersion(app, v)
-  clearPendingUpdate(event.sender, v)
+  await restartToUpdate(app, win, apiOrigin, quitForInstaller)
 })
 
 onRenderer('flowcube:close-accept', (event) => {
@@ -371,7 +359,7 @@ function createWindow() {
     log.error('[FlowCube] 无法加载界面文件:', indexHtml, err)
   })
 
-  if (app.isPackaged) {
+  if (supportsWindowsUpdate(app)) {
     win.webContents.once('did-finish-load', () => {
       setTimeout(async () => {
         if (packagedUpdateCheckStarted) return
@@ -389,15 +377,6 @@ function createWindow() {
             log.warn(
               '[FlowCube] 更新检查已禁用：未解析到 API 根地址（API_BASE_URL runtime override 或构建期默认值）',
             )
-            void dialog.showMessageBox(win, {
-              type: 'warning',
-              title: '更新检查未启用',
-              message: '桌面端未解析到 ERP API 根地址，已拒绝启用自动更新检查。',
-              detail: '请确认安装包已注入默认 ERP 地址，或已在运行时保存 API_BASE_URL。',
-              buttons: ['知道了'],
-              defaultId: 0,
-              noLink: true,
-            }).catch(() => {})
             return
           }
           triggerPackagedUpdateCheck(win, origin)

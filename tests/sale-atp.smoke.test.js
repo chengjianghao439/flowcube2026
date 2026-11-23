@@ -14,6 +14,8 @@
  * 依赖真实 MySQL（与其它 smoke 一致），用全新商品实例保证现货=0，测完清理。
  */
 
+const { randomUUID } = require('node:crypto')
+
 const {
   createLogger,
   prepareSmokeContext,
@@ -65,10 +67,21 @@ async function main() {
     const [itemRow] = await dbQuery(pool, 'SELECT id FROM sale_order_items WHERE order_id=? AND product_id=?', [saleId, productId])
     const itemId = Number(itemRow.id)
 
-    const rv = await http.post(`/api/sale/${saleId}/reserve`, {
-      token,
-      json: { items: [{ id: itemId, warehouseId: ctx.warehouse.id, warehouseName: ctx.warehouse.name, qty: 5 }] },
-    })
+    const reservePath = `/api/sale/${saleId}/reserve`
+    const headers = { 'X-Request-Key': randomUUID() }
+    const expectedConflict = await http.post(reservePath, { token, headers, json: { expectedReserveFingerprint: 'a'.repeat(64) } })
+    log.assert('★ 订单预览失效时整单占库拒绝', expectedConflict.status === 409 && expectedConflict.data?.code === 'SALE_RESERVATION_PREVIEW_CONFLICT', `status=${expectedConflict.status} code=${expectedConflict.data?.code}`)
+    if (expectedConflict.status !== 409) throw new Error('旧预览不得写入占库')
+    const [unreserved] = await dbQuery(pool, 'SELECT reserved_qty FROM sale_order_items WHERE id=?', [itemId])
+    log.assert('失效预览零预占', Number(unreserved.reserved_qty) === 0, `reserved=${unreserved.reserved_qty}`)
+
+    const preview = await http.get(`/api/sale/${saleId}/reserve-preview`, { token })
+    const expectedReserveFingerprint = preview.data?.data?.reserveFingerprint
+    log.assert('★ 从正式预览读取占库依据', /^[a-f0-9]{64}$/.test(expectedReserveFingerprint ?? ''), `status=${preview.status}`)
+    const json = { expectedReserveFingerprint, items: [{ id: itemId, warehouseId: ctx.warehouse.id, warehouseName: ctx.warehouse.name, qty: 5 }] }
+    const rv = await http.post(reservePath, { token, headers, json })
+    const replay = await http.post(reservePath, { token, headers, json })
+    log.assert('原预览与请求键重放仍可返回原成功', replay.ok, `status=${replay.status}`)
     log.assert('★ 现货 0 也可占库（采购单预计量支撑）', rv.ok,
       `status=${rv.status} ${JSON.stringify(rv.data?.message || '')}`)
 

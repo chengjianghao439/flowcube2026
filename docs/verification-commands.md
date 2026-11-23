@@ -66,6 +66,64 @@
 
 `npm run test:agent` 运行 `agent/test/*.test.js`，已接入 Tests CI 的 static job，位于后端依赖安装之后。使用 Node 22、合成模型/Flow 数据及真实回环 HTTP，验证业务图、当前权限与归属、请求边界、仓库筛选、数量政策、账款覆盖范围、候选接续、版本冲突、分页及原任务恢复；人物与交流范围回归区分极序讨论、实际业务请求和禁止的无关话题。正式 Express 包装另验当前认证/权限先于32KiB解析、当前仓库范围、成功信封、固定本机 Flow API、持久恢复与损坏文件保全、Docker 同后端镜像及私有卷配置；不读取本机模型配置或连接数据库。
 
+小满会话日志由 `agent/test/embedded-api.test.js` 复验正式路由下的无任务回复、跨账号隔离、续办与拒绝、服务重启、凭据过滤、写入故障和半行恢复。前端工作区用例核对新对话换号及历史重开。使用合成运行目录运行 `npm run assistant:conversations -- --data-dir <目录>` 查看汇总，再按汇总编号用 `--session` 复核逐轮记录。
+
+岗位对话评测由同一命令发现。可单跑 `node --test agent/test/role-conversation.eval.test.js`，用 `XIAOMAN_EVAL_SPLIT=practice` 或 `XIAOMAN_EVAL_SPLIT=holdout` 选取样本集。素材覆盖认可夹具的全部 13 个岗位；每个场景跑规则和受控模型响应，未注入响应的样本走规则回退。断言任务状态、权限提示、查询仓、库存、候选、金额和正式写入次数，另验撤权回看、数量区间、库存故障与条件草稿改品或单位变化。真实模型使用合成样本单独对照，隔离测试库和浏览器单独验收。
+
+非标准输入可单跑 `node --test agent/test/input-variants.eval.test.js`，已由 `npm run test:agent` 收录。五岗位同题对照规则与受控错路由，检查语音转写、客户和商品简称、分店及仓库编号、缺项续办、引号边界与转发造成的零业务写入。正式回环 API 复验时使用已迁移的隔离 MySQL，按真实岗位权限、合成仓库和商品核对候选、跨仓拒绝与本人确认后单据唯一。
+
+多对象切换可单跑 `node --test agent/test/context-switch.eval.test.js`，已由 `npm run test:agent` 收录。五岗位用同题与受控错路由核对两张草稿、客户应收引用、仓库顺位、候选版本及歧义后的确认卡。隔离实库验收按任务编号及当前权限核对选中的对象、撤仓和跨账号，显式确认及重放后核对独立单据数量。工作区组件另验当前及上一条引用和确认请求的对应关系。
+
+冷会话和隔时续办可单跑 `node --test agent/test/history-resume.eval.test.js`，已由 `npm run test:agent` 收录。五岗位同题对照及持久化重开覆盖历史筛选、过期与价格漂移、撤权、旧版本、原回执身份和零重复写入。隔离 MySQL 验证重新认证和正式续办接口，浏览器验收实际刷新与退出重登。另检查收款已核销时旧确认入口失效。
+
+销售单交接可单跑 `node --test agent/test/sale-handoff.eval.test.js`，已由 `npm run test:agent` 收录。五岗位同题与多轮对照覆盖来源权限、单号追问、来源关联冲突、限仓及撤仓、仓库挂起和重用等待确认的占库。隔离 MySQL 校验正式创建、确认占库、派发后的仓库任务、关联应收及重复确认的写入次数。工作区组件校验只读结果按当前权限打开原单。
+
+跨班次交接同用该专项。检查同一原单复核在原任务，已完成的交接恢复前只给身份和复核标记，重开持久记录后同单去重，两个原单时仅追问销售单号。组件和浏览器分别校验刷新、重新登录及读失败时的当前结果。隔离 MySQL 正式 API 使用合成角色及人工注入的读取状态变更，核对跨账号拒绝、仓库范围变化、来源金额差和业务写入计数。
+
+交接异常同用该专项，覆盖五岗位看到的四类异常、处理责任、假解除、历史精度、权限变化、旧确认卡和原回执恢复。隔离 MySQL 用同批订单抢占及释放造成和解除真实缺货，连同挂起、待审批及应收差异状态复查同一原单，检查原版本拒绝及只补占一次。
+
+沿销售原单追查可单跑 `node --test agent/test/sale-trace.eval.test.js`，由 `npm run test:agent` 收录。覆盖五岗位分批实发、部分退货、分笔核销、来源冲突与续查。销售改单和财务 smoke 分别核对历史退货原单关联与同一收款单的原账款分录。隔离链路用正式出库、退货入仓、收款及核销接口回读数额和回执，浏览器检查原退货链接。
+
+从原收款单追查及分次续办可单跑 `node --test agent/test/receipt-allocation.eval.test.js`，由 `npm run test:agent` 收录。对照五岗位的规则和受控错路由，检查逐单金额、分录归属、缺项追问、撤权、旧预览和原回执。 `npm run smoke:finance` 在隔离 MySQL 核对第二笔账款过期时整次回滚，以及合法分配同键重放只落一次。正式小满 API 另验事务复核期间的并发变化，浏览器复核两张销售单的金额和确认卡。
+
+同单并发续办用小满销售交接、收款核销、月结、退款和正式传输套件中名称含「同单续办」的回归。覆盖五岗位、原单号消歧、已办与原回执的区分、过期版本、已新增核销分录及未知响应。工作区组件回归覆盖过期卡和 408 核对入口。隔离 MySQL 正式 API 用两账号同时确认同单，记录库存净变动、收款分录、原请求回执及越权拒绝。
+
+撤回后的续办回归在小满销售交接、收款核销及月结套件中以「撤回续办」筛选，覆盖五岗位、部分和全量释放、同源负向分录、独立退款、重办与原回执重查。另运行普通销售回执和工作区组件专项。隔离 MySQL 通过正式接口执行占库、全量及部分释放、退款和重新核销。没有正式核销冲回写入口的历史形态在专属测试库使用合成负向分录验收读取。
+
+同单多轮对照以「多轮撤回」筛选销售交接、收款核销和月结的评价用例。确认旧预览后另一个经办人先重占再释放，或收款单新增相抵分录，分别用隔离库验证数量及余额回到原值时仍拒绝旧确认。财务锁内分录校验守卫随原会计套件运行，反向移除校验应使该拒绝断言失败。
+
+客户月结及分次收款可单跑 `node --test agent/test/monthly-reconciliation.eval.test.js`，由 `npm run test:agent` 收录。五岗位按规则和受控错路由对照确认状态、原收款分录、逐单金额差异、缺项追问和续办。 `npm run smoke:finance` 验证未落入本次分配的账款变化也阻止核销、老账顺序和原键重放。正式小满 API 用隔离 MySQL 复核跨账号、同名不同客户、半途并发写入和已提交应答丢失。浏览器核对月结预览上两个来源单号及逐单金额。
+
+销售退货后应收与退款可单跑 `node --test agent/test/return-finance.eval.test.js`。五岗位对照退货实物及冲减、原收款和月结、部分退款、权限及仓库变化。 `npm run smoke:refund-orders` 覆盖实际退款锁内拒绝旧账款预览、同键回执及唯一出账。隔离正式 API 跑销售发货、退货质检上架、月结核销和分次退款，复核最后一次重查后的账款变化、应答丢失和旧任务重放。浏览器核对退款确认卡涉及的单据、账户、日期及金额。
+
+客户退款跨期补录可单跑 `node --test agent/test/cross-period.eval.test.js`。五岗位分别验证期间解释、补号、权限和受控错路由。隔离 MySQL 复核 `tests/finance-backfill-approval.smoke.test.js`、`tests/finance-period-guard.smoke.test.js` 及 `tests/finance-period-lock-order.smoke.test.js`，并以正式小满 API 对照闭期原凭证、付款日期、原审批月份、重复确认和原键恢复。浏览器检查补录卡显示的实际业务日期、调整凭证期间和待审批状态。
+
+复合请求和失败续办可单跑 `node --test agent/test/composite-conversation.eval.test.js`，已由 `npm run test:agent` 收录。按五岗位比较规则与受控错路由，检查步骤顺序、未执行标记、候选续接、持久进度、重新核验权限和原条件。真实回环 API 可注入库存读取 503、提交后响应丢失、回执及详情暂不可读，再用同一任务续办并核对业务写入次数。
+
+小满多轮同题对照可单跑 `node --test agent/test/multiturn.eval.test.js`，已由 `npm run test:agent` 收录。对照销售主管、客服专员、财务专员、仓库作业员及只读查看的规则和受控模型结果。检查原任务与行数据、当前仓库范围、改口与换话题、单位核对、候选作废、旧版本拒绝及预览前零业务写入。页面更换当前记录的回归沿小满组件单测。
+
+一线口语和粘贴单号评测可单跑 `node --test agent/test/workplace-language.eval.test.js`，由 `npm run test:agent` 收录。环境变量 `XIAOMAN_WORKPLACE_SPLIT=holdout` 可仅运行保留样本及独立边界回归。样本使用拟真表述与合成单据，按五岗位分别核对首轮准确获取、额外追问、错误目标、授权与业务写入。孤立编号、两单冲突、独立金额和客户转发设负例。
+
+小满客户身份与只读经营查询可单跑 `node --test agent/test/read-only-operations.test.js`，已由 `npm run test:agent` 收录。断言模型缩短客户名时恢复原话、按岗位调用和过滤来源、仓库作业队列、退货聚合与详情、收款单金额解释，以及历史撤权和零业务写入。真实模型使用合成问句独立对照，正式 API 和浏览器在独立测试库验收。
+
+同一释放或冲回批次跨同事分次续办由五岗位对照及 `tests/ordinary-sale-receipt.test.js`、`tests/payment-tail-allocation.test.js` 守卫。隔离 MySQL 用不同账号和正式接口核对各次办理、原批剩余及锁内回执变化。历史冲回复用合成分录。 多批交叉续办还覆盖五岗位按序号和稳定编号选择、单独关闭的原批、同序号、缺失候选以及另一批抢先确认后的原批重预览。 回执疑点专项核对已圈定原批的缺失与金额错配、跨批冲突、无可信归属、锁内发生证据变化及恢复原回执。 更正专项还覆盖更正前后同一回执锚点、同事期间办理、单方更正仍待核、批次余量不变时锁内旧证据拒绝、已提交原键改归后恢复。正式 API 验收中的更正由隔离夹具将同一事件和对应回执一致更新模拟。 再次更正专项覆盖同一回执先改归、撤回、再改回，统计同事期间的有效补办，并验证时间戳和业务量均相同时旧卡仍由原事务拒绝。迁移 301 随现有迁移编号及严格对账检查执行，复跑 DDL 验证幂等。
+
+同单多笔回执交叉更正可用 `node --test --test-name-pattern=交叉更正 agent/test/sale-handoff.eval.test.js agent/test/receipt-allocation.eval.test.js tests/ordinary-sale-receipt.test.js tests/payment-tail-allocation.test.js` 复验。五岗位执行带原单号的单轮及交叉切换回执的多轮对照。后端覆盖多笔冲突、倒序关联、超出原批、同批其他有效办理，以及按具体编号缩小待核范围。隔离 MySQL 复验用合成回执更正和撤回，补占及核销走正式接口，同时验证余额相同时旧预览仍被事务拒绝。
+
+部分核清后续办可用 `node --test --test-name-pattern=部分核清 agent/test/sale-handoff.eval.test.js agent/test/receipt-allocation.eval.test.js` 复验。五岗位对照同事部分补办与全部补办、在两笔回执间切换、再次冲突及权限。隔离 MySQL 用不同账号完成期间补办，核验旧卡分别在提交前与正式事务内被拦、重复确认零新增和仍有余量的其他批次不被自动选中。
+
+已完批改归可用 `node --test --test-name-pattern=完批改归 agent/test/sale-handoff.eval.test.js agent/test/receipt-allocation.eval.test.js tests/ordinary-sale-receipt.test.js tests/payment-tail-allocation.test.js` 复验。五岗位覆盖待核回执恢复与改归已满批。后端覆盖保留可证办理、超量额、无成功回执不能缩小待核范围及多人修订共同待核。隔离 MySQL 验证同秒且库存与账款未变时，正式事务仍拦截旧卡，恢复后只按原批重新预览。
+
+部分超额更正可用 `node --test --test-name-pattern=部分超额修正 agent/test/sale-handoff.eval.test.js agent/test/receipt-allocation.eval.test.js` 复验。五岗位覆盖仍超额、证据一致的部分撤回和改归。另验其他回执解除超额、当前回执临时缺失和原批金额下调但改归未证实。隔离实库模拟改归及回执暂缺，用正式接口执行同事补办与新预览确认。部分金额变更在隔离库回滚探针中核验正式读取逻辑。
+
+分次改归多批可用 `node --test --test-name-pattern=分次改归多批 agent/test/sale-handoff.eval.test.js agent/test/receipt-allocation.eval.test.js` 复验。五岗位覆盖同组已补完、待核、有无另一可办批、同单但组外有余量、缺少回执范围和明确选批。隔离 MySQL 在确认预检和业务提交之间用同事账号补满，随后验证旧卡 409、待核回执核实后只给相应批次出新卡。
+
+满批重开并核清可用 `node --test --test-name-pattern=满批重开并核清 agent/test/sale-handoff.eval.test.js agent/test/receipt-allocation.eval.test.js` 复验。五岗位覆盖两批可办、部分撤回的回执仍有疑点、原批指代和后续改归。隔离 MySQL 在一笔夹具事务中模拟合成历史记录部分撤回及另一笔核清，再用正式接口验两批余量、预览失效、并发同事补满、跨账号确认拒绝和重复确认零新增。
+
+多批口语可用 `node --test --test-name-pattern=多批口语对照 agent/test/sale-handoff.eval.test.js agent/test/receipt-allocation.eval.test.js` 复验。销售、客服、财务、仓库作业员和只读账号对照直接查询、口语重查和指定批次预览，另验暂缓、切单、撤权和同一待核回执只追问一次。隔离正式 API 分别复跑口语和原问法，沿同一原单和正式写事务验预览与回执。
+
+小满占库与核销确认卡在 `agent/test/receipt*.test.js`、`agent/test/monthly-reconciliation.eval.test.js` 及 `frontend/src/components/agent/AgentWorkspace.test.tsx` 核对整数分来源、小数占库、原单入口权限和过期重查。浏览器可用合成销售与财务账号复验预计差额及直接打开正式原单，预览和查看产生的业务写入为零。
+
 `npm --prefix frontend run test:unit -- src/components/agent/AgentWorkspace.test.tsx src/router/assistant.test.ts` 验证实际大页面、当前用户任务恢复、候选选择、改量唯一预览、账户选择、两段确认、旧版本回读、未知结果、读取失败与登录会话隔离；这些文件也由 Tests CI 原前端全量单测入口覆盖。前端另执行 lint、`./frontend/node_modules/.bin/tsc -p frontend/tsconfig.app.json --noEmit` 和 build；路由/KeepAlive/登录落地需补相关回归，UI 约定由 `test:frontend-conventions` 校验。真实模型、本地 API/GUI 和未验范围见 `local-preview-acceptance.md`。
 
 `npm --prefix frontend run test:unit -- src/api/assistant.test.ts src/api/client.refresh.test.ts` 使用真实 Axios 与合成 adapter，核对浏览器相对 API、Electron 绝对 API、原确认同服务器续期、网络失败不改址重放、换服务器/换用户的迟到结果及旧服务器401不续期或登出。组件另覆盖传输状态0进入原任务恢复。修改共享续期边界后须运行前端全量单测；样式沿既有 `src/lib/textWrapping.test.ts`，不能新增标题截断豁免。
@@ -149,6 +207,8 @@ npm run test:permissions
 
 `test:permissions` 同时运行权限码一致性、岗位角色预置授权边界、用户自助接口的身份绑定回归（“我的信息”和“我的仓库权限”只能读取当前登录者），以及部门负责人启用校验与审批流引用删除护栏。
 
+`npm run test:development-visibility` 在 Tests CI 的静态检查任务中运行。它用模拟数据库验证开发账号过滤在操作日志、用户列表、下拉选项和导出中的一致性，以及操作日志排除成功打印轮询的筛选。
+
 按改动影响选择验证：
 
 安全扫描整改入口（2026-10-06）：`npm run test:security-scan-remediation` 是离线真实函数/HTTP/子进程及发布契约回归，需安装前后端依赖，不连接数据库；`npm run smoke:security-scan-remediation` 串行验证新增迁移重放/schema、资源范围、会话族和随机打印凭据，必须先按下文加载显式独立测试环境并完成迁移，不能连接生产。两者分别接入 Tests 的 static / MySQL job；本地通过不代表远端已运行。原主链路、打印、认证及导入回归仍需按受影响范围补跑，完整发版门禁保持。27 项证据及部署边界见 `docs/security-scan-remediation-2026-10-06.md`。
@@ -167,7 +227,7 @@ npm run test:permissions
 
 前端 C4 专项：`src/pages/pda/inbound.test.tsx` / `putaway.test.tsx`、`src/hooks/useCloseReceivingInbound.test.tsx`、`src/pages/inbound-tasks/CloseReceivingDialog.test.tsx`。真实组件通过网络边界验证双入口、开放扫码/完成语义、原键/原端点、不自洽回执、撤权后可查询、换账号旧回调与真实弹窗恢复；还验证未知后重试 4xx 保留原键、切换端点的原成功不刷新新服务器、显式错误归属的 failed 回执保持未知。GUI、真机、物理出纸、CI与生产部署各有独立证据边界，自动化专项不能代替它们。
 
-`smoke:sale-adjustment` 会为连续创建的销售任务建立本轮专用分拣格，并在结束时按 ID 清理；分拣完成必须先有已分配的分拣格。
+`smoke:sale-adjustment` 会为连续创建的销售任务建立本轮专用分拣格，并在结束时按 ID 清理；分拣完成必须先有已分配的分拣格。套件读取隔离 MySQL 的 `performance_schema.data_lock_waits`，以真实等锁控制单任务和波次完成、重复创建波次的并发顺序。
 
 `npm run test:fulfillment`、`test:procurement-planning` 为履约与采购净额纯规则回归；`smoke:fulfillment`、`smoke:procurement-planning` 必须使用本节独立测试库，已加入 Tests CI 专项矩阵。
 `npm run test:fulfillment-refresh` 检查履约提交后合并通知、有界队列、失败退避与执行中再变更；`smoke:fulfillment` 同时验证业务单号筛选、仓库权限及提交后供应依赖刷新，仍仅允许独立测试库。
@@ -253,6 +313,7 @@ AST 文案和数量覆盖守卫依赖 frontend 的 TypeScript，必须在安装�
 - `npm run smoke:qa-followup-browser`：真实 Chromium 使用合成扫码响应，验证拣货、分拣和库存查询拒绝后保留原码、恢复焦点并全选，重复提交只发一次。分拣错误必须在当前视口内紧邻扫码框上方，拣货与库存查询保留标题下的反馈断言。
 - `npm run smoke:nginx-headers`：需要 Docker，可通过 `DOCKER_CONTEXT` 选择本机环境；使用独立命名容器，不连接业务数据库。
 - `test:audit-client` 同时检查实际启动入口先初始化历史拦截器再渲染 Router，并包含移除/后移初始化的反向验证。
+- Windows 更新回归用 `npm run test:audit-client` 检查主进程和 preload 的清单校验、下载进度与取消、缓存复用、下载后及安装前的摘要校验，以及 UAC 失败后保留客户端；用 `npm --prefix frontend run test:unit -- src/components/desktop/DesktopUpdateBridge.test.tsx` 检查更新状态、延期重开与未保存表单确认。Windows 真机需单独用包含新更新器的旧测试包升级到更高版本，验证允许或取消 UAC 时的行为，并核对安装完成后自动重开的实际版本。
 
 ### 已确认审计问题回归（2026-09-23）
 
@@ -329,7 +390,7 @@ Tests CI 的 `regression-plastic-box` job 使用独立 MySQL 8 service（**映�
 
 ### 2026-09-29 批 C4：打包末尾两入口（`pack-done` / 箱贴补打）
 
-`npm run smoke:pack-done-replay`（`tests/pack-done-replay.smoke.test.js`，**8 项断言**）：与前几批同一专库/回环约定（开头硬断言库名/回环/端口），在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**，不另造 job。
+`npm run smoke:pack-done-replay`（`tests/pack-done-replay.smoke.test.js`）：与前几批同一专库/回环约定（开头硬断言库名/回环/端口），在同一 CI job `regression-plastic-box`（**3307 service**）内**顺序执行**。建箱回归覆盖响应丢失后的同键并发重发、原箱回执、任务推进后重放及异仓设备拒绝。前端 `useCriticalPdaAction.recovery.test.tsx` 覆盖刷新重挂后错任务回执阻断及原箱回执恢复。
 **不使用 `prepareSmokeContext()`** —— 它会 upsert 共享 `SMOKE-PRN` 并 `DELETE` 该打印机下 `status=0` 的任务，与本批「不核销他人历史 job」的边界冲突；改为自建本批独立仓 / 库位 / 分类 / 供应商 / 客户 / 商品 / 分拣格 / 打印机 + 客户端绑定 / PDA 设备，收尾全走合法 API 并**断言终态**（失败计 `failed`，进程非 0）。
 覆盖：**`pack-done` 原 key 重放回原回执**（并断言 `PACK_DONE` 事件与直接运单数**不增**）、**新 key 对已推进状态仍 400 且无残留回执行**、**箱贴同 requestKey 跨箱不串 job**（同 key 重放回原 job 且数不增；新 key 恰增 1）、**缺箱在 begin 之前 404**（回执 0 行、原 key 可重试）、**设备仓不匹配 / PDA 缺票 / ERP 无标记合法路径**、**限仓用户范围外 403**（先证明范围内可成功，再改范围，原 key 与新 key 均 `WAREHOUSE_SCOPE_DENIED`）、**历史错误回执经写重放与 `GET request-status` 两个入口都被 409 拦下**、**故障注入**（`UPDATE operation_requests` 抛错 ⇒ 整体回滚、队列无残留、原 key 重试成功）。
 **红证据（先红后修）**：`pack-done` 原 key 重放与新 key 对旧状态**同为 400**；箱贴 B 箱拿到 **A 箱的 job**（`refId` 不符）；缺箱后回执行停在 `PENDING(0)`；`GET request-status` 对历史行返回 `success` 而 `resourceId` 与 `data.job.refId` 不符。

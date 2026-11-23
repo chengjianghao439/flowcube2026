@@ -1,4 +1,4 @@
-import { Package, Boxes, Wallet, ShoppingCart, ClipboardList, Truck, ScanLine, HandCoins, CreditCard, Landmark, Gauge } from 'lucide-react'
+import { Boxes, Wallet, ShoppingCart, ClipboardList, Truck, ScanLine, HandCoins, CreditCard, Landmark, Gauge } from 'lucide-react'
 import { StatTile } from '../StatTile'
 import { money } from '../chartTheme'
 import {
@@ -9,10 +9,6 @@ import {
 // React Query 自动去重——一行 5 个库存 KPI 只发一次 /dashboard/summary。
 
 // —— 库存 / 单据（dashboard.view）——
-export function KpiTotalSkus() {
-  const { data, isLoading, error, refetch } = useDashboardSummary()
-  return <StatTile label="在库 SKU 数" value={data?.totalSkus ?? '—'} hint="种商品有库存" icon={Package} loading={isLoading} error={error} onRetry={() => void refetch()} />
-}
 export function KpiTotalQty() {
   const { data, isLoading, error, refetch } = useDashboardSummary()
   return <StatTile label="库存总数量" value={data ? data.totalQty.toFixed(0) : '—'} hint="各仓库汇总" icon={Boxes} tone="info" loading={isLoading} error={error} onRetry={() => void refetch()} />

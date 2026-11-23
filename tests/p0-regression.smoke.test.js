@@ -17,7 +17,6 @@
  * 运行：node tests/p0-regression.smoke.test.js
  */
 
-const path = require('path')
 const {
   createLogger,
   prepareSmokeContext,
@@ -417,7 +416,7 @@ async function scenarioMultiWarehouseNoFanout(ctx, log, token) {
 // ───────────────────────────────────────────────────────────────────────────
 async function scenarioOperationReceiptLookup(ctx, log, token) {
   log.section('P0-6 幂等回执查询接口（PDA 断网后确认上次提交结果）')
-  const { http, warehouse, location, supplier, pdaHeaders } = ctx
+  const { http, warehouse, supplier, pdaHeaders } = ctx
   const product = await createTestProduct(ctx.pool, 'receipt')
 
   const poResp = await createPurchaseOrder(http, token, { supplier, warehouse, product, quantity: 20 })

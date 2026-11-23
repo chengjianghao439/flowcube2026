@@ -26,6 +26,7 @@ async function bodyFingerprint(body: unknown) {
 }
 const requestIdentity = (record: PendingRequestRecord) => ({ action: record.action, requestAction: record.requestAction, taskId: record.metadata?.taskId ?? null, checkId: record.metadata?.checkId ?? null, itemId: record.metadata?.itemId ?? null, body: record.metadata?.requestBody })
 const resource = (record: PendingRequestRecord) => {
+  if (record.action === 'package.create') return { type: 'warehouse_task', id: Number(record.metadata?.taskId), kind: 'packageCreate' }
   const receive = /^inbound\.receive\.([1-9]\d*)$/.exec(record.action)
   const count = /^stockcheck\.scan\.([1-9]\d*)$/.exec(record.action)
   return receive ? { type: 'inbound_task', id: Number(receive[1]), kind: 'receive' } : count ? { type: 'stockcheck', id: Number(count[1]), kind: 'stockcheck' } : null
@@ -38,12 +39,19 @@ function assertReceiptIdentity(record: PendingRequestRecord, receipt: OperationR
     const data = receipt.data as { itemId?: unknown } | null
     if (data?.itemId !== record.metadata?.itemId) throw Error('返回结果与原盘点商品不一致，请保留原记录并核对')
   }
+  if (receipt.status === 'success' && expected.kind === 'packageCreate') {
+    const data = receipt.data as { warehouseTaskId?: unknown; id?: unknown; barcode?: unknown } | null
+    if (!data || data.warehouseTaskId !== expected.id || !Number.isSafeInteger(data.id) || Number(data.id) <= 0
+        || typeof data.barcode !== 'string' || !/^L\d+$/.test(data.barcode)) {
+      throw Error('建箱结果与原任务不一致，请保留原记录并核对')
+    }
+  }
 }
 const sameDevice = (record: PendingRequestRecord) => !record.endpoint || record.deviceCode === deviceIdentity().deviceCode && record.deviceWarehouseId === deviceIdentity().deviceWarehouseId
 
 type ConfirmContext = { recovered: boolean; requestKey: string }
 export type CriticalPdaActionPhase = 'idle' | 'submitting' | 'pending' | 'confirming' | 'failed'
-export type CriticalPdaConfirmResult = OperationRequestStatus | {
+type CriticalPdaConfirmResult = OperationRequestStatus | {
   status: 'state_confirmed'; data: unknown; message: string
 } | {
   status: 'state_unconfirmed'; data: null; message: string; reason: 'receipt_missing' | 'state_not_advanced'

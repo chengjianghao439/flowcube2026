@@ -4,8 +4,8 @@ import type { Pagination } from '@/types'
 
 export interface PaymentRecord { readonly orderId?:number|null; id:number; type:1|2; typeName:string; orderNo:string; partyName:string; totalAmount:number; paidAmount:number; balance:number; status:1|2|3; statusName:string; confirmStatus?:0|1; confirmedByName?:string|null; confirmedAt?:string|null; dueDate?:string; remark?:string; createdAt:string }
 export interface PaymentEntry { id:number; amount:number; paymentDate:string; method?:string; remark?:string; operatorName:string; createdAt:string }
-export interface PaymentSummary { totalAmount:number; paidAmount:number; balance:number }
-export interface SettlementDetail {
+interface PaymentSummary { totalAmount:number; paidAmount:number; balance:number }
+interface SettlementDetail {
   record: PaymentRecord
   lines: Array<{ taskNo:string; productName:string; articleNumber?:string|null; putawayQty:number; unitPrice:number; amount:number }>
   returns: Array<{ returnNo:string; amount:number }>
@@ -16,13 +16,13 @@ export const getPaymentsApi  = (p:object) => client.get<{list:PaymentRecord[];pa
 // 手工建账款（POST /api/payments）在 2026-07-27 曾因无任何页面调用而删掉封装；2026-09-26
 // 一致性审查任务 3b 补回「新建应付账款」入口时一并恢复。手工**应付**必须逐笔指定借方科目，
 // 否则这笔负债永远入不了账、只能挂在勾稽的「未分类」里（见后端 createManual）。
-export interface DebitAccountOption { code:string; name:string; category:number }
+interface DebitAccountOption { code:string; name:string; category:number }
 
 /** 手工应付可选的借方科目：默认账套下启用、可记账的明细科目 */
 export const getDebitAccountOptionsApi = () =>
   client.get<DebitAccountOption[]>('/payments/debit-account-options')
 
-export interface CreatePaymentParams {
+interface CreatePaymentParams {
   type: 1 | 2
   orderNo: string
   partyName: string
@@ -65,7 +65,7 @@ export interface AgingSide {
   overdueAmount: number; overdueCount: number
   topParties: AgingParty[]
 }
-export interface AgingReport { asOf: string; receivable: AgingSide; payable: AgingSide }
+interface AgingReport { asOf: string; receivable: AgingSide; payable: AgingSide }
 
 /** 应收/应付账龄（as-of 今天，跨结算方式汇总全量敞口） */
 export const getAgingApi = (topLimit = 8) =>
@@ -111,7 +111,7 @@ export interface ReceiptSettlement {
 }
 
 /** 核销目标二选一：recordId 直接核账款（现结），statementId 核对账单（月结） */
-export type ReceiptAllocation =
+type ReceiptAllocation =
   | { recordId: number; amount: number }
   | { statementId: number; amount: number }
 
@@ -167,7 +167,7 @@ export interface ReconciliationStatement {
   createdAt: string
 }
 
-export interface StatementItem {
+interface StatementItem {
   readonly orderId?: number | null
   readonly type?: 1 | 2
   recordId: number
@@ -181,7 +181,7 @@ export interface StatementItem {
 }
 
 /** 待建对账单的原始账款；与已建对账单明细的 recordId 分开。 */
-export interface StatementCandidate {
+interface StatementCandidate {
   id: number
   orderNo: string
   totalAmount: number

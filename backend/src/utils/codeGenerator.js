@@ -255,4 +255,4 @@ async function generateContainerCodes(conn, prefix = 'I', count = 1) {
   }
 }
 
-module.exports = { generateMasterCode, generateDailyCode, generateContainerCode, generateContainerCodes, resolvePrefix }
+module.exports = { generateMasterCode, generateDailyCode, generateContainerCode, generateContainerCodes }

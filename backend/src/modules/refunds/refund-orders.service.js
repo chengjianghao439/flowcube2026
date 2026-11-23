@@ -34,7 +34,8 @@ const statementSvc = require('../payments/reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
 const { normalizePagination } = require('../../utils/pagination')
 const { saleDocumentScopeFilter, assertSaleDocumentInScope } = require('../../utils/saleDocumentScope')
-const { assertFinancePeriodOpen, tryRecordBackfillApplication } = require('../accounting/finance-period.guard')
+const { assertFinancePeriodOpen, recordBackfillApplication, APPLICATION_NO_SQL } = require('../accounting/finance-period.guard')
+const { lockAccountingCompanyShared } = require('../accounting/accounting.period-lock')
 
 const STATUS = { 1: '草稿', 2: '已确认', 3: '已完成', 4: '已取消' }
 const genNo = conn => generateDailyCode(conn, 'RF', 'refund_orders', 'refund_no')
@@ -71,11 +72,12 @@ const fmt = r => ({
   createdAt: r.created_at,
 })
 
-async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
+async function findAll({ page = 1, pageSize = 20, keyword = '', saleOrderNo = '', status = null, startDate = null, endDate = null, scopeWarehouseIds = null } = {}) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['ro.deleted_at IS NULL']
   const params = []
   if (keyword) { conds.push('(ro.refund_no LIKE ? OR ro.sale_order_no LIKE ? OR ro.customer_name LIKE ?)'); const k = `%${keyword}%`; params.push(k, k, k) }
+  if (saleOrderNo) { conds.push('ro.sale_order_no = ?'); params.push(saleOrderNo) }
   if (status) { conds.push('ro.status = ?'); params.push(Number(status)) }
   if (startDate) { conds.push('ro.created_at >= ?'); params.push(`${startDate} 00:00:00`) }
   if (endDate) { conds.push('ro.created_at <= ?'); params.push(`${endDate} 23:59:59`) }
@@ -91,11 +93,52 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, s
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total: Number(total) } }
 }
 
-async function findById(id, scopeWarehouseIds = null) {
-  const [[row]] = await pool.query('SELECT * FROM refund_orders WHERE id = ? AND deleted_at IS NULL', [Number(id)])
+async function readRefund(db, id, scopeWarehouseIds, trace) {
+  const [[row]] = await db.query('SELECT * FROM refund_orders WHERE id = ? AND deleted_at IS NULL', [Number(id)])
   if (!row) throw new AppError('退款单不存在', 404)
-  await assertSaleDocumentInScope(pool, scopeWarehouseIds, row.sale_order_id, { entityName: '退款单' })
-  return fmt(row)
+  await assertSaleDocumentInScope(db, scopeWarehouseIds, row.sale_order_id, { entityName: '退款单' })
+  const data = fmt(row)
+  if (!trace) return data
+  const [warehouses] = await db.query(
+    `SELECT warehouse_id FROM sale_orders WHERE id=?
+     UNION SELECT COALESCE(i.warehouse_id, s.warehouse_id) FROM sale_order_items i
+       JOIN sale_orders s ON s.id=i.order_id WHERE i.order_id=?`, [row.sale_order_id, row.sale_order_id],
+  )
+  const [funds] = await db.query(
+    'SELECT id,amount,account_id,direction,biz_no,happened_at,voucher_date_override,backfill_id FROM finance_account_transactions WHERE biz_type=? AND biz_id=? ORDER BY id',
+    [accountSvc.BIZ_TYPE.REFUND, id],
+  )
+  const matching = funds.filter(fund => Number(fund.direction) === accountSvc.DIRECTION.OUT && fund.biz_no === row.refund_no
+    && Number(fund.account_id) === Number(row.account_id))
+  const effectiveDate = ymdOf(row.refund_date) || beijingTodayYmd()
+  const businessPeriod = effectiveDate.replaceAll('-', '').slice(0, 6)
+  const [[period]] = await db.query('SELECT status FROM acct_periods WHERE company_id=1 AND period=?', [businessPeriod])
+  return { ...data, trace: {
+    warehouseIds: warehouses.map(item => Number(item.warehouse_id)),
+    effectiveDate, businessPeriod, periodClosed: Number(period?.status) === 2,
+    outgoing: matching.map(fund => Number(fund.amount)), fundConflict: matching.length !== funds.length,
+    fundTransactions: matching.map(fund => ({
+      id: Number(fund.id), businessDate: ymdOf(fund.happened_at),
+      postingDate: ymdOf(fund.voucher_date_override || fund.happened_at),
+      backfillId: fund.backfill_id == null ? null : Number(fund.backfill_id),
+    })),
+  } }
+}
+
+async function findById(id, scopeWarehouseIds = null, { trace = false } = {}) {
+  if (!trace) return readRefund(pool, id, scopeWarehouseIds, false)
+  const conn = await pool.getConnection()
+  try {
+    await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY')
+    const result = await readRefund(conn, id, scopeWarehouseIds, true)
+    await conn.commit()
+    return result
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally {
+    conn.release()
+  }
 }
 
 /**
@@ -191,86 +234,106 @@ async function submit(id, operator, scopeWarehouseIds = null) {
  * 执行退款：已确认 → 已完成。事务内做四件事（同生共死）：
  *   锁账款 → 校验 → 冲减已收 → 写退款流水 + 账户出账 → 状态推进。
  */
-async function execute(id, operator, scopeWarehouseIds = null, requestKey = null, { backfill = null, conn: sharedConn = null, expectedRefund = null } = {}) {
-  // 跨期补录的**申请**分支（2026-09-26 一致性审查 · 任务 7）：只落待审批申请单，业务数据一行不写。
-  // 放在业务事务**之前**——申请单必须独立提交，业务回滚不能把它一起抹掉。
-  // 仓库范围与状态照常校验：申请的是「执行这笔退款」，越权的、状态不对的单子连申请都不该建。
-  if (backfill?.mode === 'apply') {
-    const [[target]] = await pool.query(
-      'SELECT refund_no, refund_date, amount, account_id, status, payment_record_id, sale_order_no, customer_name'
-      + ' FROM refund_orders WHERE id = ?',
-      [id],
-    )
-    if (!target) throw new AppError('退款单不存在', 404)
-    await assertRefundInScope(pool, scopeWarehouseIds, id)
-    assertStatusAction('refundOrder', 'execute', target.status)
-    storedCashCents(target.amount, '原退款金额')
-    // 没有退款账户就不写资金流水，也就没有凭证来源：批准执行后只会留下一个永远补不出凭证的
-    // 差异。预先拒绝，让申请人先指定退款账户。
-    if (!target.account_id) {
-      throw new AppError(
-        '这张退款单没有指定退款账户，不会产生资金流水，跨期补录也就生成不了调整凭证。'
-        + '请先指定退款账户再申请补录。',
-        400, 'FINANCE_BACKFILL_NO_FUND_ACCOUNT',
-      )
-    }
-    // 申请期的**只读**可执行性预检：退款真正的约束是「退款额不能超过该账款此刻的已收金额」
-    // （执行侧校验见下面 REFUND_EXCEED_PAID）。审批期间这笔收款可能又被别的退款冲掉一部分，
-    // 那时执行会失败、停在「已批准 · 待执行」——所以这里只做尽力而为的预检，真正的兜底是
-    // 作废/退回重提（finance-backfills.service.cancel），不是假装这里能保证。
-    if (!target.payment_record_id) {
-      throw new AppError(
-        `退款单 ${target.refund_no} 未关联账款记录，无法执行退款，也不能申请补录`,
-        400, 'FINANCE_BACKFILL_NOT_APPLICABLE',
-      )
-    }
-    const [[linkedRecord]] = await pool.query(
-      'SELECT order_no,total_amount,paid_amount,balance FROM payment_records WHERE id = ?',
-      [target.payment_record_id],
-    )
-    if (!linkedRecord) {
-      throw new AppError(`退款单 ${target.refund_no} 关联的账款记录已不存在，无法申请补录`, 409, 'FINANCE_BACKFILL_NOT_APPLICABLE')
-    }
-    for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(linkedRecord[field], `原账款${field}`)
-    if (Number(target.amount) > Number(linkedRecord.paid_amount) + 1e-6) {
-      throw new AppError(
-        `退款金额 ¥${Number(target.amount).toFixed(2)} 超过账款 ${linkedRecord.order_no} 当前已收金额 ¥${Number(linkedRecord.paid_amount).toFixed(2)}，无法申请补录`,
-        409, 'FINANCE_BACKFILL_NOT_APPLICABLE',
-      )
-    }
-    const applied = await tryRecordBackfillApplication({
-      businessDate: target.refund_date || beijingTodayYmd(),
-      bizType: 'refund',
-      bizId: Number(id),
-      bizNo: target.refund_no,
-      amount: Number(target.amount),
-      reason: backfill.reason,
-      requestKey,
-      applicantId: backfill.applicantId,
-      applicantName: backfill.applicantName,
-      // 快照 = 批准后重放这次调用所需的入参（形状见 finance-backfills.replay）。
-      // warehouseIds 也要存：执行时以申请人的仓库范围重新校验，不能因为走了审批就跳过范围。
-      //
-      // body 存的是「审批人当时批的那笔退款长什么样」：出款账户、金额、退款日期、客户与原单。
-      // 少了它，审批人只看得见一个退款单号，钱从哪个账户出去、退给谁全靠自己去别处翻；
-      // 同时它也是执行时的核对基准（execute 的 FINANCE_BACKFILL_SOURCE_DRIFT），
-      // 免得单据在申请之后被改动、批的和执行的却是两笔。
-      requestSnapshot: {
-        kind: 'refund',
-        orderId: Number(id),
-        warehouseIds: Array.isArray(scopeWarehouseIds) ? scopeWarehouseIds : null,
-        body: {
-          accountId: target.account_id != null ? Number(target.account_id) : null,
-          amount: Number(target.amount),
-          refundDate: ymdOf(target.refund_date),
-          saleOrderNo: target.sale_order_no ?? null,
-          customerName: target.customer_name ?? null,
-        },
-      },
-      // 指纹不含日期：refund_date 由 DB 返回 Date 或字符串两种形态，掺进去会让同一次重放的
-      // 指纹不稳定（误报「键被复用」）。金额与单据 id 已足以识别「这是不是同一笔业务」。
-      fingerprintPayload: { refundOrderId: Number(id), amount: Number(target.amount) },
+const REFUND_EXECUTION_COLUMNS = 'id, refund_no, sale_order_id, sale_order_no, customer_name, amount, status, payment_record_id, account_id, refund_date'
+
+function assertRefundPreviewIdentity(row, expected) {
+  if (expected && (row.refund_no !== expected.refundNo || row.sale_order_no !== expected.saleOrderNo
+    || Number(row.sale_order_id) !== expected.saleOrderId || Number(row.payment_record_id) !== expected.paymentRecordId
+    || Number(row.account_id) !== expected.accountId || (ymdOf(row.refund_date) || beijingTodayYmd()) !== expected.effectiveDate
+    || storedCashCents(row.amount) !== BigInt(expected.amountCents))) throw refundPreviewConflict()
+}
+
+async function assertNoActiveBackfill(conn, refundId) {
+  // 只做一致性读。审批及执行先锁申请行再锁退款单，不能反过来等待申请行锁。
+  const [[active]] = await conn.query(
+    "SELECT id FROM finance_period_backfills WHERE company_id=1 AND biz_type='refund' AND biz_id=? AND status IN (0,1) LIMIT 1",
+    [refundId],
+  )
+  if (active) throw new AppError('原退款单已有补录申请，请财务核对并续办原申请', 409, 'FINANCE_BACKFILL_ALREADY_ACTIVE')
+}
+
+async function queueRefundBackfill(id, scopeWarehouseIds, requestKey, backfill, expectedPreview) {
+  await assertRefundInScope(pool, scopeWarehouseIds, id)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const row = await lockStatusRow(conn, {
+      table: 'refund_orders', id, columns: REFUND_EXECUTION_COLUMNS, entityName: '退款单',
     })
+    await assertRefundInScope(conn, scopeWarehouseIds, id)
+    if (requestKey) {
+      const [[previous]] = await conn.query(
+        `SELECT id, biz_id, biz_no, applicant_id, period, business_date, reason, ${APPLICATION_NO_SQL} AS application_no
+           FROM finance_period_backfills WHERE company_id=1 AND biz_type='refund' AND request_key=?`,
+        [requestKey],
+      )
+      if (previous) {
+        if (Number(previous.biz_id) !== Number(id) || previous.biz_no !== row.refund_no
+          || Number(previous.applicant_id) !== Number(backfill.applicantId) || expectedPreview && previous.reason !== backfill.reason) {
+          throw new AppError('请求键与原退款补录不符，请核对原任务', 409, 'FINANCE_BACKFILL_REQUEST_KEY_REUSED')
+        }
+        await conn.commit()
+        return { id: Number(previous.id), applicationNo: previous.application_no, period: previous.period,
+          businessDate: ymdOf(previous.business_date), reused: true }
+      }
+    }
+    await assertNoActiveBackfill(conn, id)
+    assertStatusAction('refundOrder', 'execute', row.status)
+    assertRefundPreviewIdentity(row, expectedPreview)
+    const businessDate = ymdOf(row.refund_date) || beijingTodayYmd()
+    const period = businessDate.replaceAll('-', '').slice(0, 6)
+    await lockAccountingCompanyShared(conn, 1)
+    const [[periodRow]] = await conn.query('SELECT status FROM acct_periods WHERE company_id=1 AND period=? FOR SHARE', [period])
+    if (Number(periodRow?.status) !== 2) {
+      if (expectedPreview) throw new AppError('原退款业务期间已开放，请核对原单后重新选择办理方式', 409, 'FINANCE_BACKFILL_PERIOD_OPEN')
+      await conn.commit()
+      return null
+    }
+    if (!row.account_id) {
+      throw new AppError('请先在原退款单指定出账账户再申请补录', 400, 'FINANCE_BACKFILL_NO_FUND_ACCOUNT')
+    }
+    const stmtRows = expectedPreview?.statement ? [{ statement_id: expectedPreview.statement.id }] : []
+    if (stmtRows.length) {
+      await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR SHARE', [stmtRows[0].statement_id])
+    }
+    const [[record]] = await conn.query(
+      'SELECT order_id,order_no,type,status,total_amount,paid_amount,balance FROM payment_records WHERE id=? FOR SHARE',
+      [row.payment_record_id],
+    )
+    if (!record || record.order_no !== row.sale_order_no) {
+      throw new AppError('原退款未能核实所关联的账款，无法申请补录', 409, 'FINANCE_BACKFILL_NOT_APPLICABLE')
+    }
+    if (storedCashCents(row.amount, '原退款金额') > storedCashCents(record.paid_amount, '原账款已收金额')) {
+      throw new AppError('退款金额超过原账款当前已收金额，无法申请补录', 409, 'FINANCE_BACKFILL_NOT_APPLICABLE')
+    }
+    if (expectedPreview) await assertRefundPreviewLedger(conn, record, stmtRows, expectedPreview)
+    const applied = await recordBackfillApplication(conn, {
+      period, businessDate, bizType: 'refund', bizId: Number(id), bizNo: row.refund_no, amount: Number(row.amount),
+      reason: backfill.reason, requestKey, applicantId: backfill.applicantId, applicantName: backfill.applicantName,
+      requestSnapshot: {
+        kind: 'refund', orderId: Number(id), warehouseIds: scopeWarehouseIds,
+        body: {
+          accountId: Number(row.account_id), amount: Number(row.amount), refundDate: ymdOf(row.refund_date),
+          saleOrderNo: row.sale_order_no, customerName: row.customer_name ?? null,
+        },
+        ...(expectedPreview ? { expectedPreview } : {}),
+      },
+      fingerprintPayload: { refundOrderId: Number(id), amount: Number(row.amount) },
+    })
+    await conn.commit()
+    return { ...applied, period, businessDate }
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally {
+    conn.release()
+  }
+}
+
+async function execute(id, operator, scopeWarehouseIds = null, requestKey = null, { backfill = null, conn: sharedConn = null, expectedRefund = null, expectedPreview = null } = {}) {
+  if (expectedPreview && !requestKey) throw new AppError('退款预览须使用原请求键', 400)
+  if (backfill?.mode === 'apply') {
+    const applied = await queueRefundBackfill(id, scopeWarehouseIds, requestKey, backfill, expectedPreview)
     if (applied) return { backfillApplication: applied }
   }
 
@@ -281,7 +344,7 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
     if (own) await conn.beginTransaction()
     const row = await lockStatusRow(conn, {
       table: 'refund_orders', id,
-      columns: 'id, refund_no, sale_order_id, sale_order_no, customer_name, amount, status, payment_record_id, account_id, refund_date',
+      columns: REFUND_EXECUTION_COLUMNS,
       entityName: '退款单',
     })
     await assertRefundInScope(conn, scopeWarehouseIds, id)
@@ -298,6 +361,8 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
       return requestState.responseData
     }
     const rule = assertStatusAction('refundOrder', 'execute', row.status)
+    if (backfill?.mode !== 'execute') await assertNoActiveBackfill(conn, id)
+    assertRefundPreviewIdentity(row, expectedPreview)
 
     // 补录执行：核对「审批人当时批的那笔」就是「现在要执行的这笔」。
     // 退款单本身没有编辑接口，正常流程改不动它；但 DB 直改、以后新增的编辑功能、或别的模块
@@ -377,6 +442,12 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
     if (row.account_id) {
       await conn.query('SELECT id FROM finance_accounts WHERE id=? FOR UPDATE', [row.account_id])
     }
+    if (expectedPreview) {
+      const [funds] = await conn.query(
+        'SELECT id FROM finance_account_transactions WHERE biz_type=? AND biz_id=? FOR SHARE', [accountSvc.BIZ_TYPE.REFUND, id],
+      )
+      if (funds.length) throw refundPreviewConflict()
+    }
     const [stmtRows] = await conn.query(
       'SELECT DISTINCT statement_id FROM reconciliation_statement_items WHERE record_id = ? ORDER BY statement_id',
       [row.payment_record_id],
@@ -390,6 +461,7 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
     )
     if (!record) throw new AppError('关联账款记录不存在，无法执行退款', 404)
     for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(record[field], `原账款${field}`)
+    if (expectedPreview) await assertRefundPreviewLedger(conn, record, stmtRows, expectedPreview)
     const paid = Number(record.paid_amount)
     if (amount > paid + 1e-6) {
       throw new AppError(`退款金额 ¥${amount.toFixed(2)} 超过该账款已收金额 ¥${paid.toFixed(2)}，无法退款`, 409, 'REFUND_EXCEED_PAID')
@@ -469,6 +541,36 @@ async function execute(id, operator, scopeWarehouseIds = null, requestKey = null
   } finally {
     if (own) conn.release()
   }
+}
+
+function refundPreviewConflict() {
+  return new AppError('原退款单、应收或对账单已变化，请重新核对', 409, 'REFUND_PREVIEW_CONFLICT')
+}
+
+async function assertRefundPreviewLedger(conn, record, stmtRows, preview) {
+  const status = preview.balanceCents === 0 ? 3 : preview.paidCents > 0 ? 2 : 1
+  if (Number(record.type) !== 2 || Number(record.order_id) !== preview.saleOrderId || record.order_no !== preview.saleOrderNo
+    || Number(record.status) !== status || preview.totalCents !== preview.paidCents + preview.balanceCents
+    || storedCashCents(record.total_amount) !== BigInt(preview.totalCents)
+    || storedCashCents(record.paid_amount) !== BigInt(preview.paidCents)
+    || storedCashCents(record.balance) !== BigInt(preview.balanceCents)) throw refundPreviewConflict()
+  const [memberships] = await conn.query(
+    'SELECT statement_id FROM reconciliation_statement_items WHERE record_id=? FOR SHARE', [preview.paymentRecordId],
+  )
+  const expected = preview.statement
+  if (memberships.length !== (expected ? 1 : 0)) throw refundPreviewConflict()
+  if (!expected) return
+  if (Number(memberships[0].statement_id) !== expected.id || !stmtRows.some(row => Number(row.statement_id) === expected.id)) {
+    throw refundPreviewConflict()
+  }
+  const [[statement]] = await conn.query(
+    'SELECT statement_no,type,total_amount,settled_amount,balance,status FROM reconciliation_statements WHERE id=? AND deleted_at IS NULL FOR SHARE',
+    [expected.id],
+  )
+  if (!statement || Number(statement.type) !== 2 || statement.statement_no !== expected.no || Number(statement.status) !== expected.status
+    || storedCashCents(statement.total_amount) !== BigInt(expected.totalCents)
+    || storedCashCents(statement.settled_amount) !== BigInt(expected.paidCents)
+    || storedCashCents(statement.balance) !== BigInt(expected.balanceCents)) throw refundPreviewConflict()
 }
 
 /** 取消：草稿/已确认 → 已取消 */

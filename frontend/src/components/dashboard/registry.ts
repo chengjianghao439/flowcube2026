@@ -30,9 +30,9 @@ import type { DashboardLayout } from '@/types/dashboard'
 
 export type WidgetCategory = 'kpi' | 'chart' | 'list' | 'fun' | 'system'
 // 高度档：sm 占 1 个网格行、lg 占 2 个（正好是 sm 的两倍高，好排版）。
-export type WidgetSize = 'sm' | 'lg'
+type WidgetSize = 'sm' | 'lg'
 
-export interface WidgetDef {
+interface WidgetDef {
   id: string
   title: string
   description: string

@@ -9,7 +9,7 @@ export interface DashboardSummary {
 export interface LowStockItem { warehouseId?:number; spec?:string; color?:string; id: number; code: string; name: string; unit: string; warehouseName: string; quantity: number }
 export interface TrendPoint { date: string; inbound: number; outbound: number }
 export interface TopStockItem { code: string; name: string; unit: string; qty: number; value: number }
-export interface IncomingPurchaseItem { id: number; orderNo: string; supplierName: string; expectedDate: string; totalAmount: number }
+interface IncomingPurchaseItem { id: number; orderNo: string; supplierName: string; expectedDate: string; totalAmount: number }
 export interface IncomingPurchases { dueToday: IncomingPurchaseItem[]; dueThisWeek: IncomingPurchaseItem[]; overdue: IncomingPurchaseItem[] }
 
 /** 授信预警（文档05）：dashboard 看板磁贴数据 */

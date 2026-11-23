@@ -63,4 +63,4 @@ function netPay(gross, socialPersonal, tax) {
   return Math.max(0, Math.round((Number(gross) - Number(socialPersonal) - Number(tax)) * 100) / 100)
 }
 
-module.exports = { calcMonthlyTax, netPay, TAX_TABLE, MONTHLY_DEDUCTION }
+module.exports = { calcMonthlyTax, netPay }

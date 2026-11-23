@@ -6,6 +6,8 @@ const { WT_STATUS, WT_STATUS_ACTIVE } = require('../../constants/warehouseTaskSt
 const {
   assertTaskPickScanClosure,
   readyToShipWithinTransaction,
+  getPickingSaleId,
+  lockPickingSales,
   cancel: cancelWarehouseTask,
 } = require('../warehouse-tasks/warehouse-tasks.service')
 const { getInboundClosureThresholds } = require('../../utils/inboundThresholds')
@@ -291,12 +293,13 @@ async function create({ taskIds, remark, priority = 2 }, scopeWarehouseIds = nul
       throw new AppError('部分任务不存在', 400)
     }
 
+    // 目标任务锁已串行化创建。首次一致性读在取得任务锁之后，
+    // 这里无需再锁波次行，否则与持有波次锁后核对任务的入口形成反向等待。
     const [activeWaveRows] = await conn.query(
       `SELECT pwt.task_id, pw.wave_no, pw.status
        FROM picking_wave_tasks pwt
        INNER JOIN picking_waves pw ON pw.id = pwt.wave_id
-       WHERE pwt.task_id IN (?) AND pw.status <> 5
-       FOR UPDATE`,
+       WHERE pwt.task_id IN (?) AND pw.status <> 5`,
       [uniqueTaskIds],
     )
     if (activeWaveRows.length) {
@@ -446,21 +449,39 @@ async function finishPicking(id, scopeWarehouseIds = null) {
 async function finish(id, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
+    // 事务前读取成员归属。锁住波次、销售单和任务以后，再按当前行复核。
+    const [members] = await conn.query(
+      `SELECT wt.id AS task_id, wt.task_type, wt.sale_order_id, wt.warehouse_id
+       FROM picking_wave_tasks pwt JOIN warehouse_tasks wt ON wt.id = pwt.task_id
+       WHERE pwt.wave_id = ?`,
+      [id],
+    )
     await conn.beginTransaction()
     const wave = await lockWaveForTransition(conn, id)
     assertInScope(scopeWarehouseIds, wave.warehouse_id, '波次')
     if (Number(wave.status) !== WAVE_STATUS_CODE.SORTING) {
       throw new AppError('只有「待分拣」状态可以完成批次', 409)
     }
-    await refreshWavePickedFromTasks(conn, id)
-
+    for (const member of members) {
+      if (Number(member.warehouse_id) !== Number(wave.warehouse_id)) {
+        throw new AppError('批次成员仓库已变化，请刷新后核对', 409, 'PICKING_WAVE_MEMBER_CHANGED')
+      }
+    }
+    const salesByTask = new Map(members.map(member => [Number(member.task_id), getPickingSaleId(member)]))
+    await lockPickingSales(conn, [...salesByTask.values()])
     const [waveTasks] = await conn.query(
-      `SELECT wt.id AS task_id, wt.status, wt.cancel_requested_at, wt.adjustment_requested_at
+      `SELECT wt.id AS task_id, wt.task_type, wt.sale_order_id, wt.warehouse_id,
+              wt.status, wt.cancel_requested_at, wt.adjustment_requested_at
        FROM picking_wave_tasks pwt
        JOIN warehouse_tasks wt ON wt.id = pwt.task_id
        WHERE pwt.wave_id = ? ORDER BY wt.id ASC FOR UPDATE`,
       [id],
     )
+    if (waveTasks.length !== salesByTask.size || waveTasks.some(t =>
+      Number(t.warehouse_id) !== Number(wave.warehouse_id) || salesByTask.get(Number(t.task_id)) !== getPickingSaleId(t))) {
+      throw new AppError('批次成员或销售单已变化，请刷新后核对', 409, 'PICKING_WAVE_MEMBER_CHANGED')
+    }
+    await refreshWavePickedFromTasks(conn, id)
     for (const t of waveTasks) {
       // 成员任务可能已经脱离波次被单独取消（/warehouse-tasks/:id/cancel 不会通知所属波次），
       // 此时它不再是 WT_STATUS_ACTIVE，强行推进会因非法状态迁移抛异常，导致整个波次永久卡在
@@ -477,7 +498,8 @@ async function finish(id, scopeWarehouseIds = null) {
       // 单任务/PDA 入口可以先完成拣货；已进入分拣或后续阶段的成员无需再次推进。
       // 波次只把仍在拣货的任务交接到待分拣，不能令已推进成员倒退或卡住整批。
       if ([WT_STATUS.SORTING, WT_STATUS.CHECKING, WT_STATUS.PACKING, WT_STATUS.SHIPPING].includes(taskStatus)) continue
-      await readyToShipWithinTransaction(conn, Number(t.task_id))
+      const taskId = Number(t.task_id)
+      await readyToShipWithinTransaction(conn, taskId, { lockedSaleId: salesByTask.get(taskId), scopeWarehouseIds })
     }
 
     await casWaveStatus(conn, {
@@ -544,5 +566,4 @@ module.exports = {
   finishPicking,
   finish,
   cancel,
-  refreshWavePickedFromTasks,
 }

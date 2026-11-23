@@ -3,9 +3,9 @@ import { WT_STATUS_NAME } from '@/constants/warehouseTaskStatus'
 import { SALE_STATUS_NAME, SALE_STATUS_TONE } from '@/generated/status'
 import { STATUS_TONE_CLASS, type StatusTone } from '@/lib/statusTone'
 
-export type WorkflowTone = StatusTone
+type WorkflowTone = StatusTone
 
-export interface WorkflowStatus {
+interface WorkflowStatus {
   label: string
   tone: WorkflowTone
   className: string

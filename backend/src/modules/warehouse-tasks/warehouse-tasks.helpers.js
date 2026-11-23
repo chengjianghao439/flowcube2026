@@ -280,6 +280,7 @@ const fmt = r => ({
   sortingBinId:   r.sorting_bin_id   || null,
   sortingBinCode: r.sorting_bin_code || null,
   cancelRequestedAt: r.cancel_requested_at || null,
+  adjustmentPending: Boolean(r.adjustment_requested_at),
   shippedAt: r.shipped_at,
   createdAt: r.created_at,
   updatedAt: r.updated_at,
@@ -288,7 +289,6 @@ const fmt = r => ({
 const genTaskNo = conn => generateDailyCode(conn, 'WT', 'warehouse_tasks', 'task_no')
 
 module.exports = {
-  PRIORITY,
   fmt,
   genTaskNo,
   logSideEffectFailure,

@@ -35,7 +35,7 @@ export interface FixedAsset {
   }>
 }
 
-export interface CreateFixedAssetParams {
+interface CreateFixedAssetParams {
   assetName: string
   category?: string | null
   departmentId?: number | null
@@ -47,7 +47,7 @@ export interface CreateFixedAssetParams {
   remark?: string | null
 }
 
-export interface DeprResult {
+interface DeprResult {
   period: string
   ran: number
   skipped: number

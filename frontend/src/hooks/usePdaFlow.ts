@@ -33,7 +33,7 @@ function removeFlowDraft(key: string): void {
 export type BarcodeType = 'product' | 'container' | 'box' | 'bin' | 'any'
 
 // ── 步骤扫码结果 ──────────────────────────────────────────────────────────────
-export interface ScanResult<C = Record<string, unknown>> {
+interface ScanResult<C = Record<string, unknown>> {
   ok:        boolean
   message:   string
   nextStep?: string        // undefined = 保持当前步骤

@@ -77,7 +77,7 @@
 - 发布辅助负载边界：Docker 请求由 `scripts/lib/runtime-guards.sh` 设时限；处于 CI 总时限内时共享信号范围，保证停止应用和证据收尾可执行，宽限为 600 秒；页面验收顺序执行，每次 1 CPU / 1 GiB（不额外交换）/ 256 进程，容器内 14 分钟，超时/中断清理本次容器，失败停止应用并保持停写。浏览器镜像须预装，部署前检查存在且 `--pull never`；磁盘不足直接失败，禁止门禁自动 prune。监控用独占锁拒绝重叠，Docker 5 秒、TLS 10 秒，失败必须记为异常。详见 `docs/DEPLOY.md` 和 `tests/deployment-resources.test.js`。这些改动已随 v0.9.3 于 2026-09-05 正式部署；候选 89 项部署/运维/CORS/客户端回归通过，同 SHA 的 Tests、Security 与实际生产页面/对账门禁均成功。实际容器资源限制、镜像提交号、线上清单与发布结果见 `docs/release-v0.9.3-result.md`。
 - 生产权限验收账号（2026-09-09 用户明确长期保留）：`smoke_limited`（ID 8）恢复启用，仅保留 dashboard.view / inbound.order.view 两项权限，发布完成后不删除。口令已轮换为随机值，原会话撤销；发布脚本通过 `SMOKE_LIMITED_USERNAME` / `SMOKE_LIMITED_PASSWORD` 安全配置读取，不再内置固定口令，也不自动恢复其他已删除账号或跳过权限验证。GitHub Secrets 在部署时注入门禁容器，缺少任一配置立即失败。该长期授权替代 v0.9.10 的一次性恢复约定，见 `docs/release-v0.9.13-result.md`。
 - 桌面更新清单由 `scripts/release-desktop.js` 写入 `/var/www/flowcube-downloads/latest.json`；`backend/downloads/` 已废弃。
-- 桌面更新使用可信 HTTPS 清单，由主进程重新取清单并绑定 version、URL、sha256；下载后及启动安装前均验摘要。无摘要不能自动安装，系统证书校验失败默认拒绝；取消按 IP/域名放行任意证书的旧行为。根组件消费更新事件，preload 保留订阅前待通知结果并支持清理监听。
+- Windows 安装版启动后检查可信 HTTPS 清单并在后台下载，主进程保存进度和结果，页面重载后通过 preload 读取当前状态。安装包按 SHA-256 缓存，下载后和启动安装前都校验摘要。用户点击「重启升级」后，主进程重新拉取清单、核对版本/URL/摘要，再向 Windows 请求启动安装器。启动安装器成功后退出，授权被取消时保留客户端和已验证的安装包。安装包重定向逐跳校验 HTTPS，沿用系统证书校验。用户流程见[桌面端自动更新说明](换服务器与桌面端自动更新说明.md#windows-桌面端怎样更新)。
 - PDA 已发布状态由不入 Git 的 `backend/apk/published-version.json` 指向唯一 APK；CI 先落安装包再原子替换清单。`backend/apk/version.json` 是构建目标/旧部署兼容清单，不能让浏览器 git reset 把未发布 APK 的版本提前对外公布。PDA 发布只更新挂载产物，不重置 Git 或重建后端；发布失败不改写 version.json 或启动旧镜像；published-version.json 继续指向实际发布包。
 - 审计目录中的原始`.log`保留工具输出字节与摘要，`.gitattributes`仅对这两轮归档日志关闭源码空白检查；业务源码、配置和Markdown继续检查空白。
 - Gitleaks 审计证据误报只允许豁免经核实的固定非认证值，不能排除整个证据目录；当前四个测试调拨幂等键及一份源码SHA256采用精确匹配，原因写在`.gitleaks.toml`。

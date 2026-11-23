@@ -547,7 +547,7 @@ async function main() {
     assert.equal(total, 20, `可退量合计必须是实发 20；修复前每行各算 20、合计 40（超退 20）`)
   })
 
-  test('★P1 发票查询/详情/红冲/删除必须按账套过滤（单边过滤可跨账套改数）', async f => {
+  test('★P1 发票查询/详情/红冲/删除必须按账套过滤（单边过滤可跨账套改数）', async () => {
     const otherCompany = 9001 + (Number(String(Date.now()).slice(-3)) % 90)
     await conn.query('INSERT INTO acct_companies (id, code, name) VALUES (?, ?, ?)',
       [otherCompany, unique('CO'), '审计他账套'])
@@ -657,7 +657,7 @@ async function main() {
     assert.equal(Number(ctx.totalAmount), 5 * 10 + 3 * 25, '金额按行精确计算，不得翻倍')
   })
 
-  test('★P2 演示用 mock 平台不得在未显式开启时启用（生产会签出假快递单号）', async f => {
+  test('★P2 演示用 mock 平台不得在未显式开启时启用（生产会签出假快递单号）', async () => {
     const carrierSvc = require('../backend/src/modules/carriers/carriers.service')
     // mock 适配器无 HTTP、无凭据即可签出「假单号 + 假面单」并推进运单状态，必须默认关闭
     await assert.rejects(
@@ -1032,7 +1032,7 @@ async function main() {
     assert.notEqual(second.id, first.id, '同键换内容必须真的新建，不能回放上一单结果（修复前返回的是第一单 id）')
   })
 
-  test('★P2 track_status 只能有一个解释：1=已签收（导出曾读成「已揽收/在途」）', async f => {
+  test('★P2 track_status 只能有一个解释：1=已签收（导出曾读成「已揽收/在途」）', async () => {
     const logiSvc = require('../backend/src/modules/logistics/logistics.service')
     assert.equal(logiSvc.trackStatusLabel(0), '未签收')
     assert.equal(logiSvc.trackStatusLabel(1), '已签收')

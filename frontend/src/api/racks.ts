@@ -31,7 +31,7 @@ export type PrintDispatchHint = {
   sseClients?: number
 }
 
-export interface PrintRackLabelResult {
+interface PrintRackLabelResult {
   queued: boolean
   jobId: number | null
   printerCode: string | null
@@ -58,7 +58,7 @@ export async function printRackLabelApi(id: number): Promise<PrintRackLabelResul
   )
 }
 
-export type RackScanHintResult = {
+type RackScanHintResult = {
   kind: 'invalid' | 'ok' | 'warn' | 'binding'
   message: string
 }

@@ -24,7 +24,6 @@ async function main() {
   const log = createLogger()
   const ctx = await prepareSmokeContext()
   const { pool } = ctx
-  const pid = null // 测试创建后自行清理
   let testPrinterId = null
   try {
     const [printer] = await pool.query("INSERT INTO printers (code, name) VALUES (?, '历史清理测试打印机')", [randomRef('PURGE').slice(0, 30)])
