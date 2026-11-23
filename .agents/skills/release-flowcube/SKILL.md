@@ -126,7 +126,7 @@ Mac 的现有 HTTP 代理应由 `HTTPS_PROXY` 提供；SSH 别名默认 `flowcub
   `/api/pda/version`（版本 / versionCode / 是否可下载）与 `/api/health`，随后实际下载 EXE/APK 并核对 SHA256，任何一项不一致就退出 1。
   **PDA 落后必须当成发版未完成**：早期版本（v0.9.19）就出现过代码、镜像、桌面清单都已发布、
   唯独 PDA 一直停在上一版而无人发现。
-- 桌面端：在比新版本旧的客户端上启动，应弹「发现新版本 <version>」并显示更新内容。
+- 桌面端：用装有旧版的 Windows 设备走一次更新并核对重启后的版本。验收后台下载逻辑时，起点客户端需包含新更新器，再用更高版本的可信 HTTPS 测试安装包验证进度、取消、稍后、未保存表单保护、UAC 取消重试与「重启升级」。
 
 ### 7. 记录结果与性能
 
@@ -185,7 +185,7 @@ gh workflow run build-pda-apk.yml --ref main -f checkout_ref=<完整的40位发�
 2. **没打 tag**：只 push 了 main。`Build Desktop Installer` 即使因 push main 跑过，也**不发布 latest.json**。补打 tag：`npm run release:tag-desktop`。
 3. **CI 构建失败**：`gh run list` 看 `Build Desktop Installer` 是否 success；失败常见于 tag 与 `desktop/package.json` 不一致、或 NSIS 校验失败。
 4. **latest.json 没更新**：`curl /latest.json` 看 version 是否真的变了。没变说明服务器发布步骤没跑（多半是 SSH/部署配置缺失，看该 run 日志）。
-5. **桌面端侧诊断**：在桌面端设 `FLOWCUBE_UPDATE_DIAG=1` 启动，会强制走一次检查并把接口返回、解析出的下载地址全部打日志 + 弹窗，用于定位是「没拿到 manifest」还是「版本判断没过」还是「下载地址无效」。调试还可用 `FORCE_UPDATE=1` 跳过版本比较强制弹窗。
+5. **桌面端侧诊断**：设置 `FLOWCUBE_UPDATE_DIAG=1` 后启动客户端，可在日志核对清单版本与本机版本。检查或下载失败时结合更新详情及客户端日志查明原因。测试完整升级时使用版本号更高的可信 HTTPS 测试包。
 6. **GitHub Release 里没有安装包**：查 `Publish EXE to canonical download directory` 的预检、草稿准备、服务器写入和转正阶段。发布来源由 tag、原始完整提交和 EXE 的 SHA256 绑定。未发布完时保留原运行和 artifact ID。
    - 服务器或 GitHub 任一环节尚未收尾，运行 **Build Desktop Installer** 的手动恢复，提供原 `source_run_id`、`source_artifact_id`，`release_tag` 和 `checkout_ref` 都填原 tag，并勾选附件发布。工作流先核同 SHA 门禁，直接复用原 EXE。
    - 只有草稿尚未转正时可走下面的恢复入口。两种恢复均核对现有摘要，摘要冲突或原产物已过期时停止。
