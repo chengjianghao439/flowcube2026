@@ -68,11 +68,11 @@ test('收款第一段响应丢失，重查返回已经持久化的第二段核�
 test('重启遗留的销售执行任务只查原回执，绝不重新提交', async () => {
   const store = new TaskStore(null);
   const task = store.create({ graph: 'B-sale-draft', actor });
-  task.state = 'EXECUTING'; task.preview = { totalCents: 100 };
+  task.state = 'EXECUTING'; task.preview = { totalCents: 100, customer: { id: 9 }, warehouseId: 1, lines: [{ productId: 2, qty: 1 }] };
   const calls = [];
   const client = {
     requestStatus: async (...args) => { calls.push(args); return { status: 'success', resourceId: 8 }; },
-    get: async () => ({ id: 8, orderNo: 'SYNTHETIC-8', totalAmount: 1 }),
+    get: async () => ({ id: 8, orderNo: 'SYNTHETIC-8', totalAmount: 1, customerId: 9, warehouseId: 1, items: [{ productId: 2, quantity: 1 }] }),
     post: () => assert.fail('不得重新提交'),
   };
   const output = await confirmTask(store, client, task.id, actor);

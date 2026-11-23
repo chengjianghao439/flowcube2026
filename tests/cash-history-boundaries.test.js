@@ -57,8 +57,12 @@ test('account real monetary edit and adjustment still reject old fractional sour
  assert.equal(f.sql.some(s=>s.q.startsWith('UPDATE')),false)
 })
 test('customer refund backfill denies wrong warehouse before raw stored amount and application writes',async()=>{
- let applications=0;const pool={query:async q=>q.includes('SELECT refund_no')?[[{amount:'0.0067',status:2,account_id:2}]]:[[{sale_order_id:1}]]}
- const svc=load('modules/refunds/refund-orders.service.js',{'../../utils/cashMoney':cash,'../../config/db':{pool},'../../utils/AppError':AppError,'../../utils/backendTime':{},'../../utils/codeGenerator':{},'../../utils/statusTransition':{},'../../utils/operationRequest':{},'../../constants/documentStatusRules':{assertStatusAction(){}},'../../utils/requestContext':{},'../payments/payment-events.service':{},'../payments/reconciliation-statements.service':{},'../finance/finance-accounts.service':{},'../../utils/pagination':{},'../../utils/saleDocumentScope':{async assertSaleDocumentInScope(){throw new AppError('范围拒绝',403,'WAREHOUSE_SCOPE_DENIED')}},'../accounting/finance-period.guard':{async tryRecordBackfillApplication(){applications++}}})
+ let applications=0
+ const pool={
+  query:async()=>[[{sale_order_id:1}]],
+  async getConnection(){assert.fail('退款仓库范围拒绝后应在业务事务前停下')},
+ }
+ const svc=load('modules/refunds/refund-orders.service.js',{'../../utils/cashMoney':cash,'../../config/db':{pool},'../../utils/AppError':AppError,'../../utils/backendTime':{},'../../utils/codeGenerator':{},'../../utils/statusTransition':{},'../../utils/operationRequest':{},'../../constants/documentStatusRules':{assertStatusAction(){}},'../../utils/requestContext':{},'../payments/payment-events.service':{},'../payments/reconciliation-statements.service':{},'../finance/finance-accounts.service':{},'../../utils/pagination':{},'../../utils/saleDocumentScope':{async assertSaleDocumentInScope(){throw new AppError('范围拒绝',403,'WAREHOUSE_SCOPE_DENIED')}},'../accounting/finance-period.guard':{async recordBackfillApplication(){applications++}},'../accounting/accounting.period-lock':{async lockAccountingCompanyShared(){assert.fail('不应获取账套锁')}}})
  await assert.rejects(svc.execute(1,{},[2],'key',{backfill:{mode:'apply'}}),e=>e.statusCode===403&&e.code==='WAREHOUSE_SCOPE_DENIED'&&!e.data?.rawAmount);assert.equal(applications,0)
 })
 test('RT receive/check/putaway deny wrong scope/PDA before money proof or RT locks',async()=>{

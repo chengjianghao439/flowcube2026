@@ -19,13 +19,16 @@ interface ImportMetaEnv {
   readonly VITE_PDA_FALLBACK_API_ORIGIN?: string
 }
 
-interface DesktopUpdateAvailable {
-  version: string
-  notes: string
-  downloadUrl: string
-  current: string
-  sha256?: string
-  forceDebug?: boolean
+interface DesktopUpdateState {
+  stage: 'idle' | 'checking' | 'downloading' | 'cancelling' | 'cancelled' | 'current' | 'ready' | 'installing' | 'error' | 'unsupported'
+  version?: string
+  notes?: string
+  current?: string
+  received?: number
+  total?: number
+  percent?: number
+  message?: string
+  showNotice?: boolean
 }
 
 interface Window {
@@ -35,12 +38,12 @@ interface Window {
   /** Electron 预加载脚本注入 */
   flowcubeDesktop?: {
     isDesktop: boolean
-    /** 主进程发现新版本时推送；返回取消订阅函数 */
-    subscribeUpdateAvailable?: (cb: (payload: DesktopUpdateAvailable) => void) => () => void
+    /** 订阅主进程的更新进度和结果，返回取消订阅函数 */
+    subscribeUpdateState?: (cb: (state: DesktopUpdateState) => void) => () => void
     getAppVersion?: () => Promise<string>
     isPackaged?: () => Promise<boolean>
-    startUpdateDownload?: (request: { downloadUrl: string; version: string }) => Promise<void>
-    ignoreUpdateVersion?: (version: string) => Promise<void>
+    cancelUpdateDownload?: () => Promise<void>
+    restartToUpdate?: () => Promise<void>
     /** 手动触发更新检查（仪表盘「检查更新」按钮） */
     triggerUpdateCheck?: () => Promise<void>
     notifyApiOriginReady?: (origin: string) => void

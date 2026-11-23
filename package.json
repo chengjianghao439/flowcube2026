@@ -10,6 +10,7 @@
     "dev:erp": "bash scripts/with-dev-env.sh npm --prefix frontend run dev",
     "dev:pda": "bash scripts/with-dev-env.sh env PORT=5174 npm --prefix frontend run dev:pda",
     "dev:agent": "bash scripts/with-dev-env.sh npm --prefix agent start",
+    "assistant:conversations": "node agent/src/conversation-report.js",
     "dev:check": "bash scripts/with-dev-env.sh bash scripts/check-local-dev.sh",
     "dev:setup": "bash scripts/with-dev-env.sh bash scripts/setup-worktree.sh",
     "dev:mysql8": "bash scripts/with-dev-env.sh bash scripts/mysql8-dev.sh start",

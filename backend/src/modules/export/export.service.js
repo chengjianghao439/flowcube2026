@@ -580,6 +580,7 @@ async function getStatementsExportPayload(query) {
     partyName: query.partyName || '',
     customerId: optionalFilterId(query.customerId),
     partyId: optionalFilterId(query.partyId),
+    recordId: optionalFilterId(query.recordId),
     startDate: query.startDate || '',
     endDate: query.endDate || '',
     minAmount: query.minAmount ?? '',

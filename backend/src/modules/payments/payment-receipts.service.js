@@ -1,17 +1,20 @@
+const { createHash } = require('node:crypto')
 const { moneyUnits, moneyText } = require('../../utils/decimalMoney')
 const { cashCents, storedCashCents, cashNumber, sumCashCents } = require('../../utils/cashMoney')
 const moneyNumber = units => cashNumber(storedCashCents(moneyText(units)))
-const { assertAllocationParty, resolveReceiptParty } = require('./party-identity')
+const { assertAllocationParty, resolveReceiptParty, recordParties } = require('./party-identity')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { getRequestId } = require('../../utils/requestContext')
 const { beginCreationOperationRequest, beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { PAYMENT_EVENT, record: recordPaymentEvent } = require('./payment-events.service')
+const { reversalBatches } = require('./payment-reapply-batches')
 const statementSvc = require('./reconciliation-statements.service')
 const accountSvc = require('../finance/finance-accounts.service')
 const { normalizePagination } = require('../../utils/pagination')
 const { assertFinancePeriodOpen, tryRecordBackfillApplication } = require('../accounting/finance-period.guard')
+const { normalizeSettlementType, SETTLEMENT_TYPE } = require('../../constants/settlementType')
 
 /**
  * 收付款单（汇款）与核销。
@@ -55,7 +58,7 @@ function fmtReceipt(row) {
  * 按账款创建时间从早到晚依次填满（先清老账），最后一笔可能是部分核销。
  * 对账单必须是已确认状态——草稿单还能改明细，此时核销会让钱对不上账。
  */
-async function expandStatementAllocation(conn, statementId, amount, receipt) {
+async function expandStatementAllocation(conn, statementId, amount, receipt, expected) {
   const [[st]] = await conn.query(
     'SELECT * FROM reconciliation_statements WHERE id=? AND deleted_at IS NULL FOR UPDATE',
     [statementId],
@@ -65,6 +68,7 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
   if (receipt.party_id == null && st.party_name !== receipt.party_name) {
     throw new AppError(`${st.statement_no} 属于「${st.party_name}」，与本单往来方「${receipt.party_name}」不一致`, 400)
   }
+  const lockedItems = expected ? await lockExpectedStatementItems(conn, st, expected) : null
   if (Number(st.status) === statementSvc.ST.DRAFT) {
     throw new AppError(`${st.statement_no} 还是草稿，请先确认后再核销`, 409)
   }
@@ -76,14 +80,14 @@ async function expandStatementAllocation(conn, statementId, amount, receipt) {
     throw new AppError(`核销 ¥${amount.toFixed(2)} 超出 ${st.statement_no} 未核销余额 ¥${Number(st.balance).toFixed(2)}`, 400)
   }
 
-  const [items] = await conn.query(
+  const items = lockedItems ?? (await conn.query(
     `SELECT r.id, r.total_amount, r.paid_amount, r.balance
        FROM reconciliation_statement_items i
        JOIN payment_records r ON r.id = i.record_id
       WHERE i.statement_id = ? AND r.status <> 3
       ORDER BY r.created_at ASC, r.id ASC`,
     [statementId],
-  )
+  ))[0]
   const parts = []
   let left = amountUnits
   for (const it of items) {
@@ -187,13 +191,66 @@ async function precheckAllocations(allocations, { type, partyId = null, partyNam
   }
 }
 
+function allocationPreviewConflict() {
+  return new AppError('原收款单或目标账款已变化，请重新核对当前预览', 409, 'RECEIPT_ALLOCATION_PREVIEW_CONFLICT')
+}
+
+function checkAllocationTarget(record, expected, settlementType = SETTLEMENT_TYPE.CASH) {
+  const storedType = settlementType === SETTLEMENT_TYPE.MONTHLY ? Number(record.settlement_type) : normalizeSettlementType(record.settlement_type)
+  if (!expected || Number(record.type) !== 2 || Number(record.order_id) !== expected.orderId
+    || record.order_no !== expected.orderNo || storedType !== settlementType
+    || storedCashCents(record.balance) !== BigInt(expected.balanceCents)
+    || storedCashCents(record.paid_amount) !== BigInt(expected.paidCents)
+    || storedCashCents(record.total_amount) !== BigInt(expected.totalCents)) throw allocationPreviewConflict()
+}
+
+async function lockExpectedStatementItems(conn, row, { statement, targets, partyId }) {
+  if (Number(row.status) !== statementSvc.ST.CONFIRMED || row.statement_no !== statement.no
+    || (row.confirmed_at == null ? null : new Date(row.confirmed_at).toISOString()) !== statement.confirmedAt
+    || storedCashCents(row.total_amount) !== BigInt(statement.totalCents)
+    || storedCashCents(row.settled_amount) !== BigInt(statement.paidCents)
+    || storedCashCents(row.balance) !== BigInt(statement.balanceCents)) throw allocationPreviewConflict()
+
+  // 已持对账单行锁。先当前读成员，再按正式账款锁序锁住全部成员，包括本次尚未分配的销售单。
+  const [members] = await conn.query(
+    'SELECT record_id, order_no FROM reconciliation_statement_items WHERE statement_id=? ORDER BY record_id FOR SHARE', [row.id],
+  )
+  if (members.length !== targets.size || members.some(member => targets.get(Number(member.record_id))?.orderNo !== member.order_no)) {
+    throw allocationPreviewConflict()
+  }
+  const memberIds = members.map(member => Number(member.record_id))
+  const [records] = await conn.query(
+    'SELECT * FROM payment_records FORCE INDEX (PRIMARY) WHERE id IN (?) ORDER BY id ASC FOR UPDATE', [memberIds],
+  )
+  if (records.length !== members.length) throw allocationPreviewConflict()
+  let total = 0n, paid = 0n, balance = 0n
+  for (const record of records) {
+    const target = targets.get(Number(record.id))
+    checkAllocationTarget(record, target, SETTLEMENT_TYPE.MONTHLY)
+    const status = target.balanceCents === 0 ? 3 : target.paidCents > 0 ? 2 : 1
+    if (Number(record.status) !== status || target.paidCents + target.balanceCents !== target.totalCents) throw allocationPreviewConflict()
+    total += BigInt(target.totalCents)
+    paid += BigInt(target.paidCents)
+    balance += BigInt(target.balanceCents)
+  }
+  if (total !== BigInt(statement.totalCents) || paid !== BigInt(statement.paidCents) || balance !== BigInt(statement.balanceCents)) {
+    throw allocationPreviewConflict()
+  }
+  const parties = await recordParties(conn, memberIds, 2)
+  if (parties.some(id => id !== partyId)) throw allocationPreviewConflict()
+  const ordered = records.sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || Number(a.id) - Number(b.id))
+  const expectedOrder = [...targets.keys()]
+  if (ordered.some((record, index) => Number(record.id) !== expectedOrder[index])) throw allocationPreviewConflict()
+  return ordered.filter(record => Number(record.status) !== 3)
+}
+
 /**
  * 把一笔汇款分配核销到若干账款。调用方已开启事务并锁好 receipt 行。
  *
  * 加锁顺序：账款按 id 升序逐行 FOR UPDATE，与 payments.service.recordPayment 的单行锁
  * 共存时不会形成环路（见 docs/claude-md-archive-2026-09-04.md 第 11 节「加锁顺序统一」）。
  */
-async function applyAllocations(conn, receipt, allocations, operator) {
+async function applyAllocations(conn, receipt, allocations, operator, expectedTargets, expectedStatement, ledgerFingerprint, supplement) {
   allocations.forEach(a => cashCents(a.amount, { label: '核销金额' }))
   storedCashCents(receipt.amount, '原收付款本金')
   storedCashCents(receipt.settled_amount, '原收付款已核销金额')
@@ -229,7 +286,7 @@ async function applyAllocations(conn, receipt, allocations, operator) {
   const flattened = []
   for (const a of allocations) {
     if (a.statementId) {
-      flattened.push(...await expandStatementAllocation(conn, Number(a.statementId), Number(a.amount), receipt))
+      flattened.push(...await expandStatementAllocation(conn, Number(a.statementId), Number(a.amount), receipt, expectedStatement))
     } else {
       flattened.push({ recordId: Number(a.recordId), amount: Number(a.amount), statementId: null })
     }
@@ -247,6 +304,29 @@ async function applyAllocations(conn, receipt, allocations, operator) {
     const allocUnits = moneyUnits(alloc.amount)
     const [[record]] = await conn.query('SELECT * FROM payment_records WHERE id=? FOR UPDATE', [alloc.recordId])
     if (!record) throw new AppError(`账款记录 ${alloc.recordId} 不存在`, 404)
+    if (ledgerFingerprint) {
+      // 已持原收款单和原应收的锁。当前读校验分录，覆盖余额回到同值却发生过新操作的情况。
+      const [entries] = await conn.query('SELECT id, record_id, statement_id, amount FROM payment_entries WHERE receipt_id=? ORDER BY id FOR SHARE', [receipt.id])
+      let fingerprint
+      try {
+        fingerprint = createHash('sha256').update(JSON.stringify(entries.map(row => [Number(row.id), Number(row.record_id),
+          Number(row.statement_id ?? 0), String(storedCashCents(row.amount))]))).digest('hex')
+      } catch {
+        throw allocationPreviewConflict()
+      }
+      if (fingerprint !== ledgerFingerprint) throw allocationPreviewConflict()
+      if (supplement) {
+        if (entries.reduce((sum, row) => sum + storedCashCents(row.amount), 0n) !== storedCashCents(receipt.settled_amount)) {
+          throw allocationPreviewConflict()
+        }
+        const ownEntries = entries.filter(row => Number(row.record_id) === Number(record.id))
+          .map(row => ({ ...row, order_no: record.order_no }))
+        const batch = (await reversalBatches(conn, receipt.id, ownEntries, true)).find(row => row.id === supplement.reversalId)
+        if (!batch || batch.issue || batch.proofVersion !== supplement.proofVersion
+            || !(batch.open >= Number(storedCashCents(alloc.amount)))) throw allocationPreviewConflict()
+      }
+    }
+    if (expectedTargets && !expectedStatement) checkAllocationTarget(record, expectedTargets.get(alloc.recordId))
     for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(record[field], `原账款${field}`)
     if (Number(record.type) !== Number(receipt.type)) {
       throw new AppError(`${record.order_no} 与本${receipt.type === 1 ? '付款' : '收款'}单类型不符`, 400)
@@ -274,7 +354,7 @@ async function applyAllocations(conn, receipt, allocations, operator) {
       'UPDATE payment_records SET paid_amount=?,balance=?,status=? WHERE id=?',
       [moneyText(newPaid), moneyText(newBalance > 0n ? newBalance : 0n), newStatus, alloc.recordId],
     )
-    await conn.query(
+    const [entry] = await conn.query(
       `INSERT INTO payment_entries (record_id,receipt_id,statement_id,amount,payment_date,method,remark,operator_id,operator_name)
        VALUES (?,?,?,?,?,?,?,?,?)`,
       [
@@ -292,11 +372,14 @@ async function applyAllocations(conn, receipt, allocations, operator) {
       operatorId: operator.operatorId,
       operatorName: operator.operatorName,
       requestId: getRequestId(),
-      payload: { receiptId: receipt.id, receiptNo: receipt.receipt_no, amount: alloc.amount, balanceAfter: moneyNumber(newBalance > 0n ? newBalance : 0n) },
+      payload: { receiptId: receipt.id, receiptNo: receipt.receipt_no, amount: alloc.amount, balanceAfter: moneyNumber(newBalance > 0n ? newBalance : 0n),
+        ...(supplement ? { reapply: { reversalId: supplement.reversalId, receiptId: supplement.receiptId, amount: alloc.amount, entryId: Number(entry.insertId) } } : {}) },
     })
 
     allocatedUnits += allocUnits
-    applied.push({ recordId: alloc.recordId, orderNo: record.order_no, amount: alloc.amount, settled: newStatus === 3 })
+    applied.push({ recordId: alloc.recordId, orderNo: record.order_no, amount: alloc.amount, settled: newStatus === 3,
+      ...(expectedTargets ? { entryId: Number(entry.insertId) } : {}),
+      ...(expectedStatement ? { statementId: alloc.statementId } : {}) })
   }
 
   const newSettled = moneyUnits(receipt.settled_amount) + allocatedUnits
@@ -475,9 +558,22 @@ async function create({ type, partyId, partyName, amount, paymentDate, method, a
 }
 
 /** 用某张收付款单的剩余余额继续核销（预收款后续冲抵订单走这里） */
-async function settle(receiptId, { allocations = [] }, operator, requestKey, { backfill = null, conn: sharedConn = null } = {}) {
+async function settle(receiptId, { allocations = [], expectedAllocation }, operator, requestKey, { backfill = null, conn: sharedConn = null } = {}) {
   allocations.forEach(a => cashCents(a.amount, { label: '核销金额' }))
   if (!allocations.length) throw new AppError('请至少选择一笔账款进行核销', 400)
+  let expectedTargets, expectedStatement
+  if (expectedAllocation) {
+    const { statement, partyId } = expectedAllocation
+    expectedTargets = new Map(expectedAllocation.targets.map(row => [row.recordId, row]))
+    const bound = statement
+      ? allocations.length === 1 && allocations[0].statementId === statement.id
+      : expectedTargets.size === allocations.length && new Set(allocations.map(row => row.recordId)).size === allocations.length
+        && allocations.every(row => !row.statementId && expectedTargets.has(row.recordId))
+    if (!requestKey || backfill || !bound || expectedTargets.size !== expectedAllocation.targets.length) {
+      throw new AppError('核销预览必须绑定同一原对账单或逐笔现结账款，并使用原请求键', 400)
+    }
+    if (statement) expectedStatement = { statement, partyId, targets: expectedTargets }
+  }
   // 跨期补录的**申请**分支（2026-09-26 一致性审查 · 任务 7）：只落待审批申请单，不进业务事务。
   // 金额是本次核销的合计（各分配额之和），不是整张单的余额。
   if (backfill?.mode === 'apply') {
@@ -539,7 +635,14 @@ async function settle(receiptId, { allocations = [] }, operator, requestKey, { b
       resourceId: receiptId,
     })
     if (reqState.replay) {
-      // 重放命中已成功的请求：直接返回原响应，绝不重复核销
+      // 分次补办的同键回放须仍指向原冲回及原分配。
+      const ack = reqState.responseData
+      if (expectedAllocation?.reversalEntryId != null || ack?.reversalEntryId != null) {
+        if (ack?.reversalEntryId !== expectedAllocation?.reversalEntryId || allocations.length !== 1 || ack?.applied?.length !== 1
+            || ack.applied[0].recordId !== allocations[0].recordId || ack.applied[0].amount !== allocations[0].amount) {
+          throw allocationPreviewConflict()
+        }
+      }
       if (own) await conn.commit()
       return reqState.responseData ?? { replayed: true }
     }
@@ -565,15 +668,25 @@ async function settle(receiptId, { allocations = [] }, operator, requestKey, { b
       [receiptId],
     )
     if (!receipt) throw new AppError('收付款单不存在', 404)
+    if (expectedAllocation && (Number(receipt.type) !== 2 || Number(receipt.party_id) !== expectedAllocation.partyId
+      || receipt.receipt_no !== expectedAllocation.receiptNo
+      || storedCashCents(receipt.balance) !== BigInt(expectedAllocation.receiptBalanceCents)
+      || storedCashCents(receipt.settled_amount) !== BigInt(expectedAllocation.settledCents))) throw allocationPreviewConflict()
     if (Number(receipt.status) === RECEIPT_STATUS.SETTLED) throw new AppError('该单已核销完毕', 400)
 
-    const result = await applyAllocations(conn, receipt, allocations, operator)
+    if (expectedAllocation?.receiptLedgerFingerprint && (allocations.length !== 1 || expectedStatement)) throw allocationPreviewConflict()
+    const reversalId = expectedAllocation?.reversalEntryId
+    if (reversalId != null && (!expectedAllocation.receiptLedgerFingerprint || !reqState.id || !operator.operatorId)) throw allocationPreviewConflict()
+    const supplement = reversalId == null ? undefined : { reversalId, receiptId: reqState.id, proofVersion: expectedAllocation.reversalProofVersion }
+    const result = await applyAllocations(conn, receipt, allocations, operator, expectedTargets, expectedStatement,
+      expectedAllocation?.receiptLedgerFingerprint, supplement)
     const data = {
       id: Number(receiptId),
       receiptNo: receipt.receipt_no,
       settledAmount: result.settledAmount,
       balance: result.receiptBalance,
       applied: result.applied,
+      ...(supplement ? { reversalEntryId: reversalId } : {}),
     }
     await completeOperationRequest(conn, reqState, { data, resourceType: 'payment_receipt', resourceId: Number(receiptId) })
     if (own) await conn.commit()
@@ -633,14 +746,14 @@ async function findAll({
 }
 
 /** 收付款单详情：含核销到哪些账款 */
-async function findById(id) {
+async function findById(id, { trace = false } = {}) {
   const [[row]] = await pool.query(
     `SELECT r.*, a.name AS account_name FROM payment_receipts r
        LEFT JOIN finance_accounts a ON a.id = r.account_id
       WHERE r.id=? AND r.deleted_at IS NULL`, [id])
   if (!row) throw new AppError('收付款单不存在', 404)
   const [entries] = await pool.query(
-    `SELECT e.id, e.amount, e.payment_date, e.created_at,
+    `SELECT e.id, e.amount, e.payment_date, e.created_at, e.statement_id,
             r.id AS record_id, r.order_id, r.type, r.order_no, r.total_amount, r.paid_amount, r.balance, r.status
        FROM payment_entries e
        JOIN payment_records r ON r.id = e.record_id
@@ -648,11 +761,22 @@ async function findById(id) {
       ORDER BY e.id ASC`,
     [id],
   )
+  let fundSourceId = null
+  if (trace && Number(row.type) === 2 && row.account_id) {
+    const [funds] = await pool.query(
+      'SELECT id FROM finance_account_transactions WHERE biz_type=? AND biz_id=? AND biz_no=? AND account_id=? AND direction=? LIMIT 2',
+      [accountSvc.BIZ_TYPE.RECEIPT, id, row.receipt_no, row.account_id, accountSvc.DIRECTION.IN],
+    )
+    if (funds.length === 1) fundSourceId = Number(funds[0].id)
+  }
   return {
     ...fmtReceipt(row),
+    ...(trace ? { fundSourceId } : {}),
+    ...(Number(row.type) === 2 ? { reversalBatches: await reversalBatches(pool, id, entries) } : {}),
     settlements: entries.map(e => ({
       entryId: Number(e.id),
       recordId: Number(e.record_id),
+      ...(e.statement_id == null ? {} : { statementId: Number(e.statement_id) }),
       orderId: e.order_id == null ? null : Number(e.order_id),
       type: Number(e.type),
       orderNo: e.order_no,

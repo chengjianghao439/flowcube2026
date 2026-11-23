@@ -29,6 +29,7 @@ router.get('/tasks', ctrl.list)
 router.get('/tasks/:id', ctrl.detail)
 router.post('/chat', requireAnyPermission(entryPermissions), ctrl.chat)
 router.post('/tasks/:id/confirm', requireAnyPermission(entryPermissions), ctrl.confirm)
+router.post('/tasks/:id/resume', requireAnyPermission(entryPermissions), ctrl.resume)
 router.post('/tasks/:id/sale-draft', requireAnyPermission(entryPermissions), ctrl.saleDraft)
 router.use((_req, _res, next) => next(new AppError('接口不存在', 404, 'NOT_FOUND')))
 

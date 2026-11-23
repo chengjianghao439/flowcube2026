@@ -34,9 +34,9 @@ const viewScopeOf = (req) => (canApproveOf(req) ? {} : { applicantId: req.user?.
 
 const list = async (req, res, next) => {
   try {
-    const { status = '', bizType = '', page = 1, pageSize = 20 } = req.query
+    const { status = '', bizType = '', page = 1, pageSize = 20, bizId, applicationNo, requestKey } = req.query
     return successResponse(res, await svc.findAll(
-      { status, bizType, ...viewScopeOf(req), page, pageSize },
+      { status, bizType, bizId, applicationNo, requestKey, ...viewScopeOf(req), page, pageSize },
       companyOf(req),
     ), '查询成功')
   } catch (e) { next(e) }
@@ -54,6 +54,7 @@ const approve = async (req, res, next) => {
   try {
     const data = await svc.approve(+req.params.id, getOperatorFromRequest(req), {
       remark: req.body?.remark ?? null,
+      expected: req.body?.expected ?? null,
     }, companyOf(req))
     // 执行失败时凭证仍可能没就绪（voucherError），列表页据此显示「已记账 · 凭证待重试」，
     // 不用另一句「批准成功」把它盖过去。
@@ -85,7 +86,7 @@ const cancel = async (req, res, next) => {
 /** 重试执行「已批准但业务没写进去」的单子（业务已漂移的单子会再次失败，届时请作废重报） */
 const execute = async (req, res, next) => {
   try {
-    const data = await svc.execute(+req.params.id, getOperatorFromRequest(req), companyOf(req))
+    const data = await svc.execute(+req.params.id, getOperatorFromRequest(req), companyOf(req), { expected: req.body?.expected ?? null })
     const msg = data?.voucherError
       ? '已记账，但调整凭证未生成成功，请重试生成'
       : '已记账'

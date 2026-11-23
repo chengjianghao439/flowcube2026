@@ -209,6 +209,12 @@ async function scenarioReceiptAllocation(ctx, log, token, accountId) {
 
   const entries = await dbQuery(pool, 'SELECT * FROM payment_entries WHERE receipt_id=?', [receiptId])
   log.assert('三条核销明细各自落到对应账款', entries.length === 3, `entries=${entries.length}`)
+  const traced = await http.get(`/api/payments/${r1}/entries?trace=1`, { token })
+  const originalEntries = traced.data?.data
+  log.assert('收款追查按原账款返回同一收款单中仅属于该账款的分录',
+    traced.ok && originalEntries?.length === 1 && originalEntries[0].recordId === r1
+      && originalEntries[0].receiptId === receiptId && originalEntries[0].receiptNo === rec.receipt_no && originalEntries[0].amount === 100,
+    `status=${traced.status}`)
 
   // 预收款余额继续核销
   const settled = await http.post(`/api/payments/receipts/${receiptId}/settle`, {
@@ -234,6 +240,104 @@ async function scenarioReceiptAllocation(ctx, log, token, accountId) {
   log.assert('★ 已核销完的汇款单不能再核销', over.status === 400, `status=${over.status}`)
 
   return { party, openRecordId: r3 }
+}
+
+async function seedGuardedReceiptTargets(ctx, settlementType, totals) {
+  const { pool, warehouse, customer } = ctx
+  const targets = []
+  for (const total of totals) {
+    // 核销测试需要已有的销售来源。模拟历史应收时沿用其空 cash_policy，独立于实际出库金额的冻结流程。
+    const orderNo = randomRef('ARSALE')
+    const [sale] = await pool.query(
+      `INSERT INTO sale_orders(order_no,customer_id,customer_name,warehouse_id,warehouse_name,status,total_amount,operator_id,operator_name,cash_policy)
+         VALUES (?,?,?,?,?,3,?,1,'核销测试',NULL)`,
+      [orderNo, customer.id, customer.name, warehouse.id, warehouse.name, total],
+    )
+    const orderId = sale.insertId
+    const [record] = await pool.query(
+      'INSERT INTO payment_records(type,order_id,order_no,party_name,total_amount,paid_amount,balance,status,settlement_type) VALUES (2,?,?,?,?,0,?,1,?)',
+      [orderId, orderNo, customer.name, total, total, settlementType],
+    )
+    targets.push({ recordId: record.insertId, orderId, orderNo, balanceCents: total * 100, paidCents: 0, totalCents: total * 100 })
+  }
+  return targets
+}
+
+async function scenarioGuardedReceiptAllocation(ctx, log, token, accountId) {
+  log.section('原收款单核销预览：锁内验证目标与回执重放')
+  const { http, pool, customer } = ctx
+  const targets = await seedGuardedReceiptTargets(ctx, 1, [20, 30])
+  const registered = await http.post('/api/payments/receipts', { token, headers: { 'X-Request-Key': randomRef('KEY') },
+    json: { type: 2, partyId: customer.id, partyName: customer.name, amount: 10, paymentDate: today(), accountId } })
+  if (!registered.ok) throw new Error('无法登记带客户编号的收款夹具')
+  const { id, receiptNo } = registered.data.data
+  const endpoint = '/api/payments/receipts/' + id + '/settle'
+  const json = { allocations: targets.map(({ recordId }) => ({ recordId, amount: 2.01 })),
+    expectedAllocation: { partyId: customer.id, receiptNo, receiptBalanceCents: 1000, settledCents: 0, targets } }
+  const mismatched = { ...json, expectedAllocation: { ...json.expectedAllocation,
+    targets: [targets[0], { ...targets[1], balanceCents: 2900, paidCents: 100 }] } }
+  const stale = await http.post(endpoint, { token, headers: { 'X-Request-Key': randomRef('KEY') }, json: mismatched })
+  const readReceipt = () => http.get('/api/payments/receipts/' + id, { token })
+  const before = (await readReceipt()).data?.data
+  const firstRecord = await getRecord(pool, targets[0].recordId)
+  log.assert('第二笔预览过期时整次核销回滚',
+    stale.status === 409 && stale.data?.code === 'RECEIPT_ALLOCATION_PREVIEW_CONFLICT'
+    && before?.balance === 10 && before?.settlements?.length === 0 && money(firstRecord.paid_amount) === 0,
+    `status=${stale.status}`)
+  const options = { token, headers: { 'X-Request-Key': randomRef('KEY') }, json }
+  const succeeded = await http.post(endpoint, options)
+  const replayed = await http.post(endpoint, options)
+  const after = (await readReceipt()).data?.data
+  log.assert('最新逐单预览提交并按原键重放只写两个分录',
+    succeeded.ok && replayed.ok && JSON.stringify(succeeded.data?.data) === JSON.stringify(replayed.data?.data)
+    && after?.settledAmount === 4.02 && after?.balance === 5.98 && after?.settlements?.length === 2,
+    `status=${succeeded.status}/${replayed.status}, balance=${after?.balance}`)
+}
+
+async function scenarioGuardedMonthlyAllocation(ctx, log, token, accountId) {
+  log.section('月结原对账单核销预览：完整明细约束和同键回放')
+  const { http, customer } = ctx
+  const targets = await seedGuardedReceiptTargets(ctx, 2, [11, 27])
+  const created = await http.post('/api/payments/statements', { token,
+    json: { type: 2, partyName: customer.name, recordIds: targets.map(row => row.recordId) } })
+  if (!created.ok) throw new Error('无法创建合成月结对账单')
+  const endpoint = '/api/payments/statements/' + created.data.data.id
+  const locked = await http.post(endpoint + '/confirm', { token })
+  if (!locked.ok) throw new Error('无法确认合成月结对账单')
+  const detail = () => http.get(endpoint + '?trace=1', { token })
+  const before = (await detail()).data.data
+  const registered = await http.post('/api/payments/receipts', { token, headers: { 'X-Request-Key': randomRef('KEY') },
+    json: { type: 2, partyId: customer.id, partyName: customer.name, amount: 18, paymentDate: today(), accountId } })
+  if (!registered.ok) throw new Error('无法登记月结核销夹具收款')
+  const receipt = registered.data.data
+  const settle = (json, key = randomRef('KEY')) => http.post('/api/payments/receipts/' + receipt.id + '/settle',
+    { token, headers: { 'X-Request-Key': key }, json })
+  const snapshot = { partyId: customer.id, receiptNo: receipt.receiptNo, receiptBalanceCents: 1800, settledCents: 0,
+    statement: { id: before.id, no: before.statementNo, totalCents: 3800, paidCents: 0, balanceCents: 3800,
+      confirmedAt: new Date(before.confirmedAt).toISOString() }, targets }
+  const stale = await settle({ allocations: [{ statementId: before.id, amount: 1 }], expectedAllocation: {
+    ...snapshot, targets: [targets[0], { ...targets[1], balanceCents: 2600, paidCents: 100 }],
+  } })
+  log.assert('月结第二笔应收过期，即使本次只冲第一笔，也拒绝并保持零明细',
+    stale.status === 409 && stale.data?.code === 'RECEIPT_ALLOCATION_PREVIEW_CONFLICT'
+    && (await detail()).data.data.trace.entries.length === 0, `status=${stale.status}`)
+  const orderConflict = await settle({ allocations: [{ statementId: before.id, amount: 1 }],
+    expectedAllocation: { ...snapshot, targets: [...targets].reverse() } })
+  log.assert('月结预览核销顺序与当前老账顺序不符时拒绝',
+    orderConflict.status === 409 && orderConflict.data?.code === 'RECEIPT_ALLOCATION_PREVIEW_CONFLICT'
+    && (await detail()).data.data.trace.entries.length === 0, `status=${orderConflict.status}`)
+  const key = randomRef('KEY')
+  const payload = { allocations: [{ statementId: before.id, amount: 12.34 }], expectedAllocation: snapshot }
+  const success = await settle(payload, key)
+  const replay = await settle(payload, key)
+  const after = (await detail()).data.data
+  const applied = success.data?.data?.applied
+  log.assert('月结分配按老账顺序落明细，同键只返回原结果',
+    success.ok && replay.ok && JSON.stringify(replay.data?.data) === JSON.stringify(success.data?.data)
+      && applied?.length === 2 && applied[0].amount === 11 && applied[1].amount === 1.34
+      && after.balance === 25.66 && after.trace.entries.length === 2
+      && after.trace.entries.every(row => row.statementId === before.id && row.receiptId === receipt.id),
+    `status=${success.status}/${replay.status}, balance=${after.balance}`)
 }
 
 async function scenarioAllocationGuards(ctx, log, token, accountId) {
@@ -859,6 +963,8 @@ async function main() {
 
     const { accountId } = await scenarioAccountProjection(ctx, log, token)
     await scenarioReceiptAllocation(ctx, log, token, accountId)
+    await scenarioGuardedReceiptAllocation(ctx, log, token, accountId)
+    await scenarioGuardedMonthlyAllocation(ctx, log, token, accountId)
     await scenarioAllocationGuards(ctx, log, token, accountId)
     await scenarioMonthlyPayableConfirmation(ctx, log, token)
     await scenarioIdempotency(ctx, log, token, accountId)

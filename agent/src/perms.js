@@ -12,6 +12,7 @@ const PERM_LABELS = {
   'sale.order.reserve': '销售单占库',
   'purchase.order.create': '采购单新建',
   'purchase.order.view': '采购单查看',
+  'return.order.view': '退货单查看',
   'payment.view': '收付款查看',
   'payment.execute': '收付款执行',
   'finance.account.view': '资金账户查看',

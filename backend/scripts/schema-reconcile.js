@@ -165,6 +165,31 @@ async function main() {
       columnProblems.push('payment_records.cash_projection 列定义不符（期望 JSON NULL，默认 NULL，无额外属性）')
     }
   }
+  if (executedSet.has('301_batch_receipt_proof_revision.sql')) {
+    const proofTables = ['operation_requests', 'sale_order_events', 'payment_record_events']
+    const [columns] = await conn.query(
+      `SELECT TABLE_NAME AS tbl, COLUMN_TYPE AS columnType, IS_NULLABLE AS isNullable, COLUMN_DEFAULT AS defaultValue, EXTRA AS extra
+         FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE()
+          AND TABLE_NAME IN (?) AND COLUMN_NAME='batch_proof_revision'`, [proofTables],
+    )
+    const [triggers] = await conn.query(
+      `SELECT TRIGGER_NAME AS name, EVENT_OBJECT_TABLE AS tbl, ACTION_TIMING AS timing,
+              EVENT_MANIPULATION AS action, ACTION_STATEMENT AS body
+         FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND EVENT_OBJECT_TABLE IN (?)`, [proofTables],
+    )
+    for (const table of proofTables) {
+      const column = columns.find(row => row.tbl === table)
+      const trigger = triggers.find(row => row.tbl === table && row.name === 'trg_' + table + '_batch_proof')
+      if (!column || column.columnType !== 'bigint unsigned' || column.isNullable !== 'NO'
+          || column.defaultValue == null || Number(column.defaultValue) !== 0 || column.extra !== '') {
+        columnProblems.push(`${table}.batch_proof_revision 列定义不符（期望 BIGINT UNSIGNED NOT NULL DEFAULT 0）`)
+      }
+      if (!trigger || trigger.timing !== 'BEFORE' || trigger.action !== 'UPDATE'
+          || !/setnew\.batch_proof_revision=old\.batch_proof_revision\+if\(/.test(String(trigger.body).toLowerCase().replace(/[\s`]/g, ''))) {
+        columnProblems.push(`trg_${table}_batch_proof 触发器不符合回执证据版本约定`)
+      }
+    }
+  }
   const ok = missing.length === 0 && uniqueProblems.length === 0 && columnProblems.length === 0
   console.log('═'.repeat(60))
   console.log('  Schema 对账')

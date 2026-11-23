@@ -38,6 +38,10 @@ function fixture({ lines = [1, 2], header = 1, replay = false, status = 1, missi
       if (/^\s*SELECT\b/.test(sql) && /FROM sale_credit_overrides/.test(sql)) return sql.includes('status IN') ? [[]] : [[credit]]
       if (/FROM reconciliation_statement_items/.test(sql)) return [[]]
       if (/FROM payment_records/.test(sql)) return [[{ id: 41, order_no: 'SO11', total_amount:100, paid_amount:paid, balance:100-paid }]]
+      if (/^SELECT id FROM finance_period_backfills WHERE company_id=1 AND biz_type='refund' AND biz_id=\? AND status IN \(0,1\) LIMIT 1$/.test(sql)) {
+        assert.deepEqual(copy(params), [21])
+        return [[]]
+      }
       if (/INSERT INTO refund_orders/.test(sql)) { events.push('refund-create'); return [{ insertId: 21 }] }
       if (/INSERT INTO sale_credit_overrides/.test(sql)) { events.push('credit-create'); return [{ insertId: 31 }] }
       if (/INSERT|UPDATE/.test(sql)) { events.push('write'); return [{ affectedRows: 1 }] }
@@ -62,7 +66,14 @@ function fixture({ lines = [1, 2], header = 1, replay = false, status = 1, missi
     '../payments/reconciliation-statements.service': { async refreshSettlement() {} }, '../finance/finance-accounts.service': {},
     '../../utils/pagination': { normalizePagination: ({ page = 1, pageSize = 20 }) => ({ page, pageSize, offset: (page - 1) * pageSize }) },
     '../../utils/warehouseScope': warehouseScope, '../../utils/saleDocumentScope': saleScope,
-    '../accounting/finance-period.guard': { async assertFinancePeriodOpen() { events.push('period'); if (periodClosed) throw new AppError('期间已结账', 409, 'FINANCE_PERIOD_CLOSED'); return {} }, async tryRecordBackfillApplication() { events.push('backfill'); return { id: 91 } } },
+    '../accounting/accounting.period-lock': { async lockAccountingCompanyShared(conn, companyId) {
+      assert.equal(conn, db); assert.equal(companyId, 1); events.push('lock-accounting-company')
+    } },
+    '../accounting/finance-period.guard': {
+      APPLICATION_NO_SQL: 'application_no',
+      async assertFinancePeriodOpen() { events.push('period'); if (periodClosed) throw new AppError('期间已结账', 409, 'FINANCE_PERIOD_CLOSED'); return {} },
+      async recordBackfillApplication() { events.push('backfill'); return { id: 91 } },
+    },
   })
   const creditPolicy = { ...require('../backend/src/modules/credit-overrides/credit-overrides.policy'),async orderBasis(){return 'synthetic-basis'},async loadActor(){return {...actor,warehouseIds:null,permissions:[],allowSelfApprove:false}} }
   const creditActions = load('modules/credit-overrides/credit-overrides.actions.js',{'../../config/db':{pool},'../../utils/AppError':AppError,'../../engine/approvalEngine':{},'../../utils/saleDocumentScope':saleScope,'../../utils/operationRequest':{},'./credit-overrides.policy':creditPolicy})

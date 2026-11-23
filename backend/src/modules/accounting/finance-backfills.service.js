@@ -24,6 +24,8 @@ const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
 const { normalizeOperator } = require('../../utils/operator')
+const { beijingTodayYmd } = require('../../utils/backendTime')
+const { PERMISSIONS } = require('../../constants/permissions')
 const { APPLICATION_NO_SQL, resolvePostingPeriod, markBackfillExecuted, STATUS } = require('./finance-period.guard')
 const paymentsSvc = require('../payments/payments.service')
 const receiptsSvc = require('../payments/payment-receipts.service')
@@ -47,7 +49,9 @@ const SELECT_FIELDS = `
   applicant_id, applicant_name, approver_id, approver_name, approved_at, approve_remark,
   executed_at, executed_biz_id, posting_period,
   voucher_generated_at, voucher_generate_error,
-  void_reason, voided_by, voided_by_name, voided_at, created_at`
+  void_reason, voided_by, voided_by_name, voided_at, created_at,
+  (SELECT ap.status FROM acct_periods ap WHERE ap.company_id=finance_period_backfills.company_id
+     AND ap.period=DATE_FORMAT(finance_period_backfills.approved_at,'%Y%m')) AS approval_period_status`
 
 function fmt(row, { withSnapshot = false } = {}) {
   const out = {
@@ -103,6 +107,7 @@ function fmt(row, { withSnapshot = false } = {}) {
     out.voucherNotRequired = out.voucherResult === 'notRequired'
     out.voucherPending = !!out.executedAt && out.voucherResult === 'pending'
   }
+  if (row.biz_type === 'refund' && row.approved_at) out.approvalPeriodClosed = Number(row.approval_period_status) === 2
   if (withSnapshot) {
     out.requestSnapshot = row.request_snapshot
       ? (typeof row.request_snapshot === 'string' ? JSON.parse(row.request_snapshot) : row.request_snapshot)
@@ -114,11 +119,14 @@ function fmt(row, { withSnapshot = false } = {}) {
 /** 待审批优先、然后待执行/已批准、最后是收尾的单子；同级按申请时间倒序（最近的在上面） */
 const ORDER_SQL = `ORDER BY CASE status WHEN 0 THEN 0 WHEN 1 THEN 1 ELSE 2 END, id DESC`
 
-async function findAll({ status = '', bizType = '', applicantId = null, page = 1, pageSize = 20 } = {}, companyId = 1) {
+async function findAll({ status = '', bizType = '', bizId, applicationNo, requestKey, applicantId = null, page = 1, pageSize = 20 } = {}, companyId = 1) {
   const conds = ['company_id = ?']
   const params = [companyId]
   if (status !== '' && status != null) { conds.push('status = ?'); params.push(Number(status)) }
   if (bizType) { conds.push('biz_type = ?'); params.push(String(bizType)) }
+  if (bizId != null) { conds.push('biz_id = ?'); params.push(bizId) }
+  if (applicationNo) { conds.push(`${APPLICATION_NO_SQL} = ?`); params.push(applicationNo) }
+  if (requestKey) { conds.push('request_key = ?'); params.push(requestKey) }
   // applicantId 由 controller 按「是否持审批权限」决定传不传（见 finance-backfills.controller）：
   // 传了就是「只看我提交的」，出纳提交完能回查自己的单子，又看不到别人的补录金额与原因。
   if (applicantId != null) { conds.push('applicant_id = ?'); params.push(Number(applicantId)) }
@@ -205,11 +213,12 @@ async function lockApplicable(conn, id, operator, companyId, { actionLabel }) {
  * 批准并执行。批准（status 0→1）与执行分两个事务：
  * 审批结论一旦落定就不该因执行失败而回退——执行失败时停在「已批准 · 待执行」，可重试。
  */
-async function approve(id, operator, { remark = null } = {}, companyId = 1) {
+async function approve(id, operator, { remark = null, expected = null } = {}, companyId = 1) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
     const row = await lockApplicable(conn, id, operator, companyId, { actionLabel: '批准' })
+    if (expected) assertFollowupSnapshot(row, expected, 'approve')
     const status = Number(row.status)
     if (status === STATUS.REJECTED) {
       throw new AppError('该补录申请已被驳回，不能再次批准。如需补录请重新提交申请。', 409, 'FINANCE_BACKFILL_REJECTED')
@@ -387,6 +396,21 @@ async function cancel(id, operator, { reason, canApprove = false } = {}, company
  * 请求键取自申请单的 request_key **列**，不是快照里的字段：这个键是这笔操作的永久身份
  * （见 finance-period.guard），漏了它，重放就会被业务侧当成一笔新业务，同一笔钱记两次。
  */
+async function currentRefundApplicantScope(conn, applicantId, originalScope) {
+  const [[user]] = await conn.query('SELECT role_id, is_active FROM sys_users WHERE id=? AND deleted_at IS NULL FOR SHARE', [applicantId])
+  const denied = () => new AppError('原申请人的退款办理权限已变化，请财务负责人核对原申请', 403, 'FINANCE_BACKFILL_APPLICANT_AUTH_CHANGED')
+  if (Number(user?.is_active) !== 1 || !Number(user.role_id)) throw denied()
+  if (Number(user.role_id) === 1) return originalScope ?? null
+  const [grants] = await conn.query('SELECT permission FROM sys_role_permissions WHERE role_id=? FOR SHARE', [user.role_id])
+  const codes = new Set(grants.map(row => row.permission))
+  if (![PERMISSIONS.REFUND_ORDER_VIEW, PERMISSIONS.REFUND_ORDER_EXECUTE, PERMISSIONS.PAYMENT_VIEW,
+    PERMISSIONS.FINANCE_PERIOD_BACKFILL].every(code => codes.has(code))) throw denied()
+  const [warehouses] = await conn.query('SELECT warehouse_id FROM user_warehouse_scope WHERE user_id=? FOR SHARE', [applicantId])
+  const current = warehouses.map(row => Number(row.warehouse_id))
+  if (!current.length) return originalScope ?? null
+  return Array.isArray(originalScope) ? originalScope.filter(value => current.includes(Number(value))) : current
+}
+
 async function replay(conn, row, snapshot, postingPeriod) {
   const backfill = { mode: 'execute', approvedId: Number(row.id), postingPeriod, postingDate: row.approved_date, reason: row.reason }
   const applicant = normalizeOperator({ userId: row.applicant_id ?? null, realName: row.applicant_name ?? null })
@@ -402,10 +426,14 @@ async function replay(conn, row, snapshot, postingPeriod) {
       return receiptsSvc.create(snapshot.body, applicant, requestKey, { backfill, conn })
     case 'receipt_settle':
       return receiptsSvc.settle(snapshot.receiptId, snapshot.body, applicant, requestKey, { backfill, conn })
-    case 'refund':
-      return refundSvc.execute(snapshot.orderId, applicant, snapshot.warehouseIds ?? null, requestKey, {
-        backfill, conn, expectedRefund: snapshot.body ?? null,
+    case 'refund': {
+      const scope = snapshot.expectedPreview
+        ? await currentRefundApplicantScope(conn, row.applicant_id, snapshot.warehouseIds)
+        : snapshot.warehouseIds ?? null
+      return refundSvc.execute(snapshot.orderId, applicant, scope, requestKey, {
+        backfill, conn, expectedRefund: snapshot.body ?? null, expectedPreview: snapshot.expectedPreview ?? null,
       })
+    }
     case 'expense_pay':
       return require('../finance/expense-claims.service').pay(snapshot.claimId, snapshot.body, applicant, requestKey, { backfill, conn })
     default:
@@ -450,7 +478,20 @@ function savedVoucherOutcome(row) {
     voucherError: noVoucher || checked ? null : row.voucher_generate_error || '调整凭证仍待核对' }
 }
 
-async function execute(id, operator, companyId = 1) {
+function assertFollowupSnapshot(row, expected, action) {
+  const snapshot = typeof row.request_snapshot === 'string' ? JSON.parse(row.request_snapshot) : row.request_snapshot
+  const businessDate = typeof row.business_date === 'string' ? row.business_date.slice(0, 10)
+    : beijingTodayYmd(row.business_date)
+  if (row.biz_type !== 'refund' || Number(row.biz_id) !== expected.bizId || row.biz_no !== expected.bizNo
+    || row.period !== expected.period || businessDate !== expected.businessDate || snapshot?.body?.saleOrderNo !== expected.saleOrderNo
+    || Number(row.applicant_id) !== expected.applicantId
+    || Number(row.amount) !== expected.amount || Number(row.status) !== (action === 'approve' ? STATUS.PENDING : STATUS.APPROVED)
+    || row.executed_at || action === 'execute' && row.approved_date !== expected.approvedDate) {
+    throw new AppError('原退款补录申请或审批阶段已变化，请重新核对原申请', 409, 'FINANCE_BACKFILL_FOLLOWUP_CHANGED')
+  }
+}
+
+async function execute(id, operator, companyId = 1, { expected = null } = {}) {
   const conn = await pool.getConnection()
   let result, postingPeriod, committedRow, alreadyExecuted = false
   try {
@@ -462,6 +503,7 @@ async function execute(id, operator, companyId = 1) {
       [Number(id), companyId],
     )
     if (!row) throw new AppError('补录申请不存在', 404)
+    if (expected) assertFollowupSnapshot(row, expected, 'execute')
     if (Number(row.status) !== STATUS.APPROVED) {
       throw new AppError('只有已批准的补录申请才能执行', 409, 'FINANCE_BACKFILL_NOT_APPROVED')
     }

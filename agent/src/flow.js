@@ -20,7 +20,7 @@ export class FlowClient {
   async request(method, path, { body, requestKey, timeoutMs = 15000 } = {}) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    let res;
+    let res, payload, invalidBody = false;
     try {
       res = await fetch(this.baseUrl + path, {
         method,
@@ -33,15 +33,17 @@ export class FlowClient {
         body: body ? JSON.stringify(body) : undefined,
         signal: ctrl.signal,
       });
+      try { payload = await res.json(); }
+      catch (error) {
+        if (ctrl.signal.aborted) throw error;
+        invalidBody = true;
+      }
     } catch (e) {
       // 断网/超时：写操作可能已落库 → unknown
       throw new FlowError('unknown', { message: `网络异常（${e.name}），结果未知` });
     } finally { clearTimeout(timer); }
 
-    let payload = null;
-    try { payload = await res.json(); } catch { /* 非 JSON 响应按状态码处理 */ }
-
-    if (res.status >= 500) {
+    if (res.status >= 500 || (method !== 'GET' && (res.status === 408 || (res.ok && res.status !== 204 && invalidBody)))) {
       throw new FlowError('unknown', { status: res.status, message: payload?.message || `服务异常 ${res.status}，结果未知` });
     }
     if (res.status === 401 || res.status === 403) {

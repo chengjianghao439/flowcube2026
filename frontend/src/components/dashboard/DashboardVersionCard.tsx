@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Package, BellRing, Download, RefreshCw } from 'lucide-react'
 import { WidgetShell } from './WidgetShell'
@@ -6,17 +6,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { getAppUpdateLatestApi } from '@/api/appUpdate'
 import { CURRENT_ERP_WEB_VERSION } from '@/constants/appVersion'
-import { getApiBase } from '@/config/api'
 import { normalizeVersion, isRemoteNewer } from '@/lib/appVersionCompare'
-import { resolveAppUpdateDownloadUrl } from '@/lib/resolveAppUpdateDownloadUrl'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 import { STATUS_TONE_CLASS } from '@/lib/statusTone'
-import { getElectronBridge } from '@/lib/platform'
+import { getElectronBridge, openDesktopUpdateCenter } from '@/lib/platform'
 
 export default function DashboardVersionCard() {
-  const qc = useQueryClient()
-  const [updateBusy, setUpdateBusy] = useState(false)
   const [checking, setChecking] = useState(false)
   const desktop = getElectronBridge()
 
@@ -32,7 +28,7 @@ export default function DashboardVersionCard() {
     staleTime: Infinity,
   })
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['app-update-latest'],
     queryFn: async () => {
       const res = await getAppUpdateLatestApi()
@@ -44,13 +40,14 @@ export default function DashboardVersionCard() {
   })
 
   async function handleCheckUpdate() {
+    if (desktop?.triggerUpdateCheck) {
+      openDesktopUpdateCenter()
+      return
+    }
     setChecking(true)
     try {
-      await qc.invalidateQueries({ queryKey: ['app-update-latest'] })
-      // 等待 React Query 重新获取最新数据
-      await new Promise(r => setTimeout(r, 800))
-      const fresh = qc.getQueryData<typeof data>(['app-update-latest'])
-      const freshVer = (fresh as any)?.version
+      const result = await refetch({ throwOnError: true })
+      const freshVer = result.data?.version
 
       if (freshVer && isRemoteNewer(currentDisplay, freshVer)) {
         toast.success(`发现新版本 v${normalizeVersion(freshVer)}，可在下方查看更新内容`)
@@ -59,8 +56,6 @@ export default function DashboardVersionCard() {
       } else {
         toast.warning('暂无法获取最新版本，请稍后重试')
       }
-
-      await desktop?.triggerUpdateCheck?.()
     } catch {
       toast.error('检查更新失败，请检查网络连接')
     } finally {
@@ -77,25 +72,7 @@ export default function DashboardVersionCard() {
   const showNewAvailable =
     latestVer != null && isRemoteNewer(currentDisplay, latestVer)
 
-  const origin = getApiBase()
-  const downloadUrl =
-    data && origin ? resolveAppUpdateDownloadUrl(data, origin) : ''
-
-  const showDesktopUpdateButton =
-    Boolean(desktopRuntime?.packaged) && showNewAvailable && Boolean(downloadUrl)
-
-  async function handleDesktopUpdate() {
-    const start = desktop?.startUpdateDownload
-    if (!downloadUrl || !latestVer || !start) return
-    setUpdateBusy(true)
-    try {
-      await start({ downloadUrl, version: latestVer })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '无法开始下载更新')
-    } finally {
-      setUpdateBusy(false)
-    }
-  }
+  const showDesktopUpdateButton = Boolean(desktopRuntime?.packaged && desktop?.triggerUpdateCheck)
 
   return (
     <WidgetShell title="系统版本" icon={Package} scrollBody
@@ -111,7 +88,7 @@ export default function DashboardVersionCard() {
         </dl>
         {showNewAvailable && <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className={cn('gap-1 text-xs font-medium', STATUS_TONE_CLASS.warning)}><BellRing className="h-3 w-3" />有新版本可用</Badge>
-          {showDesktopUpdateButton ? <Button size="sm" disabled={updateBusy} onClick={() => void handleDesktopUpdate()}><Download />{updateBusy ? '处理中…' : '立即更新'}</Button> : <p className="text-xs leading-5 text-muted-foreground">请在极序 Flow 桌面客户端完成自动更新。</p>}
+          {showDesktopUpdateButton ? <Button type="button" size="sm" onClick={openDesktopUpdateCenter}><Download />查看更新</Button> : <p className="text-xs leading-5 text-muted-foreground">请在极序 Flow 桌面客户端完成自动更新。</p>}
         </div>}
         <div>
           <h4 className="mb-2 text-xs font-medium text-muted-foreground">更新内容</h4>

@@ -21,7 +21,7 @@ const { z } = require('zod')
 const ctrl = require('./finance-backfills.controller')
 const { requirePermission, requireAnyPermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
-const { validateBody, validateParams } = require('../../utils/route')
+const { validateBody, validateParams, validateQuery } = require('../../utils/route')
 
 const router = Router()
 
@@ -37,12 +37,21 @@ const rejectSchema = z.object({
 const cancelSchema = z.object({
   reason: z.string().min(2, '请填写作废/撤回原因').max(300),
 })
+const positiveId = z.number().int().positive().safe()
+const followupSchema = z.object({
+  bizId: positiveId, bizNo: z.string().min(1).max(50), applicantId: positiveId,
+  period: z.string().regex(/^\d{6}$/), businessDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), saleOrderNo: z.string().min(1).max(50), amount: z.number().positive(), approvedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+}).strict().optional()
+const listSchema = z.object({
+  status: z.string().optional(), bizType: z.string().max(40).optional(), page: z.string().optional(), pageSize: z.string().optional(),
+  applicationNo: z.string().max(50).optional(), bizId: z.coerce.number().int().positive().safe().optional(), requestKey: z.string().max(100).optional(),
+})
 
-router.get('/',    requireAnyPermission([PERMISSIONS.FINANCE_PERIOD_BACKFILL, PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE]), ctrl.list)
+router.get('/',    requireAnyPermission([PERMISSIONS.FINANCE_PERIOD_BACKFILL, PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE]), validateQuery(listSchema), ctrl.list)
 router.get('/:id', vParams, requireAnyPermission([PERMISSIONS.FINANCE_PERIOD_BACKFILL, PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE]), ctrl.detail)
 
 router.post('/:id/approve', vParams, requirePermission(PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE),
-  validateBody(z.object({ remark: z.string().max(300).optional().nullable() })), ctrl.approve)
+  validateBody(z.object({ remark: z.string().max(300).optional().nullable(), expected: followupSchema })), ctrl.approve)
 router.post('/:id/reject', vParams, requirePermission(PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE),
   validateBody(rejectSchema), ctrl.reject)
 // 作废对两档权限都开放：待审批时申请人自己撤回（持 BACKFILL），已批准的单子由审批侧作废
@@ -50,7 +59,8 @@ router.post('/:id/reject', vParams, requirePermission(PERMISSIONS.FINANCE_PERIOD
 router.post('/:id/cancel', vParams,
   requireAnyPermission([PERMISSIONS.FINANCE_PERIOD_BACKFILL, PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE]),
   validateBody(cancelSchema), ctrl.cancel)
-router.post('/:id/execute', vParams, requirePermission(PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE), ctrl.execute)
+router.post('/:id/execute', vParams, requirePermission(PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE),
+  validateBody(z.object({ expected: followupSchema }).default({})), ctrl.execute)
 router.post('/:id/regenerate-voucher', vParams, requirePermission(PERMISSIONS.FINANCE_PERIOD_BACKFILL_APPROVE), ctrl.regenerateVoucher)
 
 module.exports = router

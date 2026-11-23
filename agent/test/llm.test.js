@@ -64,7 +64,7 @@ function makeFlowMock() {
       const kw = url.searchParams.get('q') || '';
       let hits = [];
       if (kw.includes('上翻支撑')) hits = [{ id: 3, type: 'product', title: '上翻支撑·标准型' }];
-      else if (kw.includes('演示客户')) hits = [{ id: 1, type: 'customer', title: '演示客户甲公司' }];
+      else if ('演示客户甲公司'.includes(kw) && kw) hits = [{ id: 1, type: 'customer', title: '演示客户甲公司' }];
       return ok(res, hits);
     }
     if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, allowDecimalQty: false }); }
@@ -107,9 +107,10 @@ test('意图校验：D-receipt 合法/缺客户/超精度', () => {
   assert.equal(validateIntent({ graph: 'D-receipt', customerKeyword: '甲公司', amount: -5 }), null);
 });
 
-test('LLM 意图 → 执行：核销落到任务图 D-receipt 并出登记预览', async () => {
+test('LLM 意图 → 执行：核销落到任务图 D-receipt 并出登记预览', async t => {
   const { server } = makeFlowMock();
   await new Promise(r => server.listen(0, '127.0.0.1', r));
+  t.after(() => new Promise(resolve => server.close(resolve)));
   const client = new FlowClient(`http://127.0.0.1:${server.address().port}`, 't');
   const store = new TaskStore(null);
   const fakeParse = async () => ({ graph: 'D-receipt', customerKeyword: '演示客户甲公司' });
@@ -117,7 +118,6 @@ test('LLM 意图 → 执行：核销落到任务图 D-receipt 并出登记预览
   assert.equal(out.task.graph, 'D-receipt');
   assert.equal(out.task.state, 'AWAITING_CONFIRM');
   assert.equal(out.preview.totalCents, 10000);
-  server.close();
 });
 
 test('LLM 判 none（注入类请求）→ 婉拒且零任务', async () => {

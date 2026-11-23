@@ -1,11 +1,37 @@
 import { collectList } from './pagination.js';
+import { hasPerm } from './perms.js';
+import { readWorkbench, readReturns, readReceiptStatus } from './operations-read.js';
+import { readSaleHandoff } from './sale-handoff.js';
 // 工具注册表（契约见《极序Agent-工具契约-MVP14》）。
 // 注册表之外无接口可调；新增工具必须同步契约与评估集。
 // 每个工具：{ name, level: 'L1'|'L2', run(client, args) }，run 只返回结构化事实。
 
 const q = obj => new URLSearchParams(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null && v !== '')).toString();
 
+export const TASK_PROGRESS_PERMISSIONS = {
+  warehouseTaskStats: 'warehouse.task.view',
+  sortingBinPending: 'warehouse.task.assign',
+  inboundTasks: 'inbound.order.view',
+};
+
 export const TOOLS = {
+  'operations.sale_handoff': {
+    level: 'L1', desc: '按授权来源核对指定销售单的交接事实',
+    run: (client, { no, financeFocus, trace }, actor) => readSaleHandoff(client, actor, no, financeFocus, trace),
+  },
+  'operations.workbench': {
+    level: 'L1', desc: '按当前权限读取岗位待办',
+    run: (client, { keys, stage }, actor) => readWorkbench(client, actor, keys, stage),
+  },
+  'operations.returns': {
+    level: 'L1', desc: '查询退货单进度与关联仓库任务', requires: 'return.order.view',
+    run: (client, { no, returnType }, actor) => readReturns(client, actor, no, returnType),
+  },
+  'operations.receipt_status': {
+    level: 'L1', desc: '按单号核对收款单登记及核销状态', requires: 'payment.view',
+    run: (client, { no }) => readReceiptStatus(client, no),
+  },
+
   'search.global': {
     level: 'L1', desc: '全局搜索：商品/客户/供应商/单据消歧定位',
     requires: 'dashboard.view',
@@ -90,19 +116,23 @@ export const TOOLS = {
 
   'tasks.progress': {
     level: 'L1', desc: '作业进度与卡点：出库/收货/退货任务',
-    async run(c, { warehouseId } = {}) {
-      const [stats, binPending, inbound, returns] = await Promise.allSettled([
-        c.get(`/api/warehouse-tasks/stats?${q({ warehouseId })}`),
-        c.get(`/api/warehouse-tasks/sorting-bin-pending?${q({ warehouseId })}`),
-        c.get(`/api/inbound-tasks/?${q({ warehouseId, page: 1, pageSize: 20 })}`),
-        Promise.reject(new Error('当前接口不支持完整退货任务汇总，请到退货页面核对')),
-      ]);
-      const pick = r => (r.status === 'fulfilled' ? r.value : null);
-      return {
-        warehouseTaskStats: pick(stats), sortingBinPending: pick(binPending),
-        inboundTasks: pick(inbound), returnTasks: pick(returns),
-        errors: [stats, binPending, inbound, returns].filter(r => r.status === 'rejected').map(r => r.reason?.message),
+    async run(c, { warehouseId } = {}, actor) {
+      const result = {
+        warehouseTaskStats: null, sortingBinPending: null, inboundTasks: null, returnTasks: null,
+        errors: ['当前接口不支持完整退货任务汇总，请到退货页面核对'],
       };
+      const paths = {
+        warehouseTaskStats: `/api/warehouse-tasks/stats?${q({ warehouseId })}`,
+        sortingBinPending: `/api/warehouse-tasks/sorting-bin-pending?${q({ warehouseId })}`,
+        inboundTasks: `/api/inbound-tasks/?${q({ warehouseId, page: 1, pageSize: 20 })}`,
+      };
+      const sources = Object.keys(paths).filter(key => hasPerm(actor, TASK_PROGRESS_PERMISSIONS[key]));
+      const rows = await Promise.allSettled(sources.map(key => c.get(paths[key])));
+      rows.forEach((row, index) => {
+        if (row.status === 'fulfilled') result[sources[index]] = row.value;
+        else result.errors.push(row.reason?.message || '取数失败');
+      });
+      return result;
     },
   },
 
@@ -219,8 +249,9 @@ export const TOOLS = {
       return { created };
     },
     // 核销分配（图 D 第二段）：allocations [{recordId, amount}]，后端同键幂等、重放回原结果
-    async settle(c, { receiptId, allocations, requestKey }) {
-      const result = await c.post(`/api/payments/receipts/${receiptId}/settle`, { allocations }, { requestKey });
+    async settle(c, { receiptId, allocations, requestKey, expectedAllocation }) {
+      const result = await c.post(`/api/payments/receipts/${receiptId}/settle`,
+        expectedAllocation ? { allocations, expectedAllocation } : { allocations }, { requestKey });
       return { result };
     },
   },

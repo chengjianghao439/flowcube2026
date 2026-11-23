@@ -218,3 +218,17 @@ test('启动服务不自动写模型密钥文件', async () => {
   try { await readFile(join(directory, '.env.local')); } catch (e) { if (e.code === 'ENOENT') exists = false; else throw e; }
   assert.equal(exists, false);
 });
+
+test('同单续办边界 写入响应正文损坏或超时均保持结果未知', async t => {
+  const server = createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    if (req.url === '/broken') return res.end('invalid-json');
+    res.write('{');
+    setTimeout(() => res.end('"success":true,"data":null}'), 180);
+  }).listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  t.after(() => { server.closeAllConnections(); server.close(); });
+  const client = new FlowClient('http://127.0.0.1:' + server.address().port, 'synthetic-owner');
+  await assert.rejects(client.request('POST', '/broken', { body: {}, requestKey: 'formal-original', timeoutMs: 1500 }), { kind: 'unknown' });
+  await assert.rejects(client.request('POST', '/stalled', { body: {}, requestKey: 'formal-other', timeoutMs: 70 }), { kind: 'unknown' });
+});

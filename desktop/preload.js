@@ -5,8 +5,8 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('flowcubeDesktop', {
   isDesktop: true,
-  /** 订阅主进程推送的可用更新（仅打包安装版） */
-  subscribeUpdateAvailable: (cb) => {
+  /** 订阅主进程的更新状态，窗口重载后也能看到原下载。 */
+  subscribeUpdateState: (cb) => {
     if (typeof cb !== 'function') return () => {}
     let active = true
     let receivedEvent = false
@@ -18,22 +18,20 @@ contextBridge.exposeInMainWorld('flowcubeDesktop', {
       receivedEvent = true
       deliver(payload)
     }
-    ipcRenderer.on('flowcube:update-available', handler)
+    ipcRenderer.on('flowcube:update-state', handler)
     // 先监听再读取快照；读取期间收到新事件时丢弃旧快照，避免倒退或重复弹窗。
-    ipcRenderer.invoke('flowcube:get-pending-update').then(payload => {
+    ipcRenderer.invoke('flowcube:get-update-state').then(payload => {
       if (!receivedEvent) deliver(payload)
     }).catch(() => {})
     return () => {
       active = false
-      ipcRenderer.removeListener('flowcube:update-available', handler)
+      ipcRenderer.removeListener('flowcube:update-state', handler)
     }
   },
   getAppVersion: () => ipcRenderer.invoke('flowcube:get-app-version'),
   isPackaged: () => ipcRenderer.invoke('flowcube:is-packaged'),
-  startUpdateDownload: (request) =>
-    ipcRenderer.invoke('flowcube:start-update-download', request),
-  ignoreUpdateVersion: (version) =>
-    ipcRenderer.invoke('flowcube:ignore-update-version', version),
+  cancelUpdateDownload: () => ipcRenderer.invoke('flowcube:cancel-update-download'),
+  restartToUpdate: () => ipcRenderer.invoke('flowcube:restart-to-update'),
   /** 手动触发更新检查（仪表盘「检查更新」按钮） */
   triggerUpdateCheck: () =>
     ipcRenderer.invoke('flowcube:trigger-update-check'),

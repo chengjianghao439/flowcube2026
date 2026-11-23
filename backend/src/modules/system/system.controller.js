@@ -64,6 +64,9 @@ const requestStatus = async (req, res, next) => {
     if (/^sale\.(reserve|release|ship):/.test(String(receiptContext.matchedAction ?? ''))) {
       await require('../sale/sale.ordinary-receipt').assertOrdinarySaleReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     }
+    if (data.resourceId && receiptContext.matchedAction === `sale.reserve.${data.resourceId}`) {
+      await require('../sale/sale.ordinary-receipt').assertReserveEvent(require('../../config/db').pool, data)
+    }
     if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => String(action ?? '').startsWith('disposal.dispose'))) {
       await require('../disposal/disposal.receipt').assertDisposalReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     }

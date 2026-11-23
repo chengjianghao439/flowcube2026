@@ -9,6 +9,7 @@ const vParams=s=>(req,res,next)=>{const r=s.safeParse(req.params);if(!r.success)
 const vQuery=s=>(req,res,next)=>{const r=s.safeParse(req.query);if(!r.success)return res.status(400).json({success:false,message:r.error.issues.map(e=>e.message).join('；'),data:null});req.query=r.data;next()}
 const idParam=z.object({id:z.coerce.number().int().positive('id 必须为正整数')})
 const sourceOrderQuery=z.object({orderNo:z.string().trim().min(1,'原单号不能为空')})
+const saleReturnListQuery=z.object({saleOrderNo:z.string().trim().min(1).max(50).optional()}).passthrough()
 const itemSchema=z.object({sourceItemId:z.number().int().positive().optional(),productId:z.number().int().positive(),productCode:z.string(),productName:z.string(),articleNumber:z.string().optional().nullable(),spec:z.string().optional().nullable(),color:z.string().optional().nullable(),unit:z.string(),entryUnit:z.string().optional(),quantity:z.number().positive(),unitPrice:z.number().nonnegative()})
 const prSchema=z.object({disposalSource:disposalSourceSchema.optional(),supplierId:z.number().int().positive(),supplierName:z.string(),warehouseId:z.number().int().positive(),warehouseName:z.string(),purchaseOrderId:z.number().int().positive().optional(),purchaseOrderNo:z.string().optional(),remark:z.string().optional(),items:z.array(itemSchema).min(1)})
 
@@ -21,7 +22,7 @@ router.post('/purchase/:id/confirm', requirePermission(PERMISSIONS.RETURN_ORDER_
 router.post('/purchase/:id/cancel',  requirePermission(PERMISSIONS.RETURN_ORDER_CANCEL), vParams(idParam),ctrl.cancelPR)
 
 // 销售退货
-router.get('/sale',              requirePermission(PERMISSIONS.RETURN_ORDER_VIEW), ctrl.listSR)
+router.get('/sale',              requirePermission(PERMISSIONS.RETURN_ORDER_VIEW), vQuery(saleReturnListQuery), ctrl.listSR)
 router.get('/sale/source-order', requirePermission(PERMISSIONS.RETURN_ORDER_CREATE), vQuery(sourceOrderQuery), ctrl.loadSRSsourceOrder)
 router.get('/sale/:id',          requirePermission(PERMISSIONS.RETURN_ORDER_VIEW), vParams(idParam),ctrl.detailSR)
 router.post('/sale',             requirePermission(PERMISSIONS.RETURN_ORDER_CREATE), validateBody(require('./returns.contracts').saleReturnSchema),ctrl.createSR)

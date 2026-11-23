@@ -89,7 +89,8 @@ test('按本人分页，账号编号压过同名；旧无编号记录继续按�
 });
 
 test('导入后的未知销售结果沿原请求键只查回执，重启可读原最终结果', async t => {
-  const row = { ...valid, actor: owner, state: 'RESULT_UNKNOWN', preview: { totalCents: 830 }, requestKey: 'persisted-synthetic-sale-key' };
+  const row = { ...valid, actor: owner, state: 'RESULT_UNKNOWN', requestKey: 'persisted-synthetic-sale-key',
+    preview: { totalCents: 830, customer: { id: 6 }, warehouseId: 1, lines: [{ productId: 3, qty: 2 }] } };
   const { file } = diskStore(t, [row]);
   const restarted = new TaskStore(file);
   const client = {
@@ -99,7 +100,7 @@ test('导入后的未知销售结果沿原请求键只查回执，重启可读�
     },
     get: async path => {
       assert.equal(path, '/api/sale/8');
-      return { totalAmount: 8.30, orderNo: 'SL-SYNTHETIC-8' };
+      return { id: 8, totalAmount: 8.30, orderNo: 'SL-SYNTHETIC-8', customerId: 6, warehouseId: 1, items: [{ productId: 3, quantity: 2 }] };
     },
     post: () => assert.fail('未知结果只能查原回执'),
   };

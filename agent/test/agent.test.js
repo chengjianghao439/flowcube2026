@@ -58,7 +58,9 @@ function makeMock() {
       const chunks = []; for await (const ch of req) chunks.push(ch);
       const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
       const total = body.items.reduce((s, i) => s + Math.round(i.unitPrice * 100) * i.quantity, 0) / 100;
-      const order = { id: 100 + state.orders.length + 1, orderNo: `SO-MOCK-${state.orders.length + 1}`, totalAmount: total, status: 1 };
+      const order = { id: 100 + state.orders.length + 1, orderNo: `SO-MOCK-${state.orders.length + 1}`, totalAmount: total, status: 1,
+        customerId: body.customerId, warehouseId: body.warehouseId,
+        items: body.items.map(item => ({ productId: item.productId, warehouseId: item.warehouseId ?? body.warehouseId, quantity: item.quantity })) };
       state.orders.push(order);
       if (key) state.byRequestKey.set(key, order);
       if (state.dropNextSalePost) { state.dropNextSalePost = false; res.socket.destroy(); return; }
@@ -145,15 +147,15 @@ test('A3 新鲜度：预览后价格变化，确认被拦截且零建单', async
   server.close();
 });
 
-test('A4 结果未知：响应丢失后查回执恢复，不重复建单', async () => {
+test('A4 结果未知：响应丢失后查回执恢复，不重复建单', async t => {
   const { server, state, client, store } = await setup();
+  t.after(() => new Promise(resolve => server.close(resolve)));
   const out = await handleMessage(store, client, FULL_ACTOR, '给演示客户甲公司开单：缓冲铰链 10个');
   state.dropNextSalePost = true; // 服务端已执行，但响应在路上丢失
   const done = await confirmTask(store, client, out.task.id, FULL_ACTOR);
   assert.equal(done.task.state, 'DONE');
   assert.equal(done.task.result.recoveredViaReceipt, true);
   assert.equal(state.orders.length, 1); // 只落一单
-  server.close();
 });
 
 test('图外意图：明确婉拒，不拼凑操作', async () => {

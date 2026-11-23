@@ -37,6 +37,7 @@ function fmtVoucher(row) {
     sourceTypeName: SOURCE_TYPE_LABELS[row.source_type] || row.source_type,
     sourceId: row.source_id ?? null,
     sourceNo: row.source_no ?? null,
+    sourceRootId: row.source_root_id ?? null,
     summary: row.summary ?? null,
     totalDebit: Number(row.total_debit),
     totalCredit: Number(row.total_credit),

@@ -14,6 +14,9 @@ export const ASSISTANT_GUIDE_LINKS = [
 const GUIDE_PATHS = new Set<string>([
   ...ASSISTANT_GUIDE_LINKS.map(link => link.path),
   '/payments/payable', '/approvals/pending', '/warehouse-shipping', '/products',
+  '/inbound-tasks', '/returns/purchase', '/returns/sale',
+  '/reports/reconciliation/receivable',
+  '/refunds', '/accounting/backfills',
 ])
 
 export function useOpenWorkspacePath() {

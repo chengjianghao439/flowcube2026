@@ -100,7 +100,7 @@ async function setup() {
 const CASES = [
   { graph: 'A-inventory', ruleText: '缓冲铰链还剩多少', llmText: '那个铰链仓库里还有货吗', intent: { graph: 'A-inventory', productKeyword: '缓冲铰链' } },
   { graph: 'B-sale-draft', ruleText: '给演示客户甲公司开单：缓冲铰链 10个', llmText: '帮甲公司订 10 个铰链', intent: { graph: 'B-sale-draft', customerKeyword: '演示客户', lines: [{ productKeyword: '缓冲铰链', qty: 10 }] } },
-  { graph: 'B2-reserve', ruleText: '给 SL20261026005 占库', llmText: '把那张五号销售单的货先占上', intent: { graph: 'B2-reserve', orderNo: 'SL20261026005' } },
+  { graph: 'B2-reserve', ruleText: '给 SL20261026005 占库', llmText: '把销售单 SL20261026005 的货先占上', intent: { graph: 'B2-reserve', orderNo: 'SL20261026005' } },
   { graph: 'C-replenishment', ruleText: '补货建议', llmText: '哪些货该补了', intent: { graph: 'C-replenishment' } },
   { graph: 'C-purchase-draft', ruleText: '按补货建议建采购草稿', llmText: '照着补货建议把采购草稿建出来', intent: { graph: 'C-purchase-draft' } },
   { graph: 'D-ledger', ruleText: '查一下演示客户甲公司应收', llmText: '甲公司那边的账怎么样', intent: { graph: 'D-ledger', customerKeyword: '演示客户' } },
@@ -115,22 +115,40 @@ test('门：用例表覆盖 GRAPHS 全部实图（加图必须同步加用例）
 });
 
 for (const c of CASES) {
-  test(`门·规则规划器：${c.graph}`, async () => {
+  test(`门·规则规划器：${c.graph}`, async t => {
     const { server, client, store } = await setup();
+    t.after(() => new Promise(resolve => server.close(resolve)));
     // 注入恒 null 的 parseIntent：LLM 分支落空 → 强制走规则规划器（与是否配 key 无关）
     const out = await handleMessage(store, client, FULL, c.ruleText, { parseIntent: async () => null });
     assert.ok(out.task, `规则问法未建任务（回复：${out.reply}）`);
     assert.equal(out.task.graph, c.graph, `规则问法落到了 ${out.task.graph}（回复：${out.reply}）`);
-    server.close();
   });
 
-  test(`门·LLM 规划器（mock 模型）：${c.graph}`, async () => {
+  test(`门·LLM 规划器（mock 模型）：${c.graph}`, async t => {
     const { server, client, store } = await setup();
+    t.after(() => new Promise(resolve => server.close(resolve)));
     const validated = validateIntent(c.intent);
     assert.ok(validated, `用例意图未通过 validateIntent：${JSON.stringify(c.intent)}`);
     const out = await handleMessage(store, client, FULL, c.llmText, { parseIntent: async () => validated });
     assert.ok(out.task, `LLM 意图未建任务（回复：${out.reply}）`);
     assert.equal(out.task.graph, c.graph, `LLM 意图落到了 ${out.task.graph}（回复：${out.reply}）`);
-    server.close();
   });
 }
+
+test('占库从明确单号绑定对象，模型不能补造尾号对应单据', async t => {
+  const { server, client, store, state } = await setup();
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  const parseIntent = async () => ({ graph: 'B2-reserve', orderNo: 'SL20261026005' });
+  const vague = await handleMessage(store, client, FULL, '把五号销售单的货先占上', { parseIntent });
+  assert.equal(vague.task, null);
+  assert.match(vague.reply, /完整.*单号/);
+  const ambiguous = await handleMessage(store, client, FULL, '给 SL20261026005 和 SL20261026009 占库', { parseIntent });
+  assert.equal(ambiguous.task, null);
+  assert.match(ambiguous.reply, /一张.*单号/);
+  const exact = await handleMessage(store, client, FULL, '把 SL20261026009 的货先占上', { parseIntent });
+  assert.match(exact.reply, /SL20261026009/);
+  assert.notEqual(exact.preview?.orderNo, 'SL20261026005');
+  assert.equal(store.tasks.size, 1);
+  assert.equal(state.orders.length, 0);
+  assert.equal(state.reserved, false);
+});

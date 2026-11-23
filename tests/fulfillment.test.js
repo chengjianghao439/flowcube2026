@@ -1,5 +1,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const { readFileSync } = require('node:fs')
+const { runInNewContext } = require('node:vm')
 let rules = {}
 try { rules = require('../backend/src/modules/fulfillment/fulfillment.rules') } catch (error) { if (error.code !== 'MODULE_NOT_FOUND') throw error }
 
@@ -36,4 +38,46 @@ test('仓库时效未知，但确定的采购到货晚于承诺时应提前预�
   assert.equal(typeof rules.isDeliveryLate, 'function')
   assert.equal(rules.isDeliveryLate({ remaining: 10, promisedDate: '2026-09-07', allDate: null, sources: [{ quantity: 6, date: '2026-09-16', bound: true }], today: '2026-09-06' }), true)
   assert.equal(rules.isDeliveryLate({ remaining: 0, promisedDate: '2026-09-07', allDate: null, sources: [], today: '2026-09-08' }), false)
+})
+
+test('销售履约详情在异常尚未登记时返回实时种类，不带来源编号', async () => {
+  const user = { userId: 5, warehouseIds: [3] }
+  const row = { id: 41, warehouse_id: 3 }
+  const stored = [{ source_key: 'adjust:821', status: 'open' }, { source_key: 'credit:999', status: 'open' }]
+  const active = [{ key: 'shortage:1242' }, { key: 'credit:34' }, { key: 'adjust:821' }]
+  const pool = { async query(sql, ids) {
+    assert.match(sql, /FROM order_fulfillment_issues/)
+    assert.deepEqual(Array.from(ids), ['sale', 41])
+    return [stored]
+  } }
+  const deps = {
+    './fulfillment.refresh': {}, '../../config/db': { pool }, '../../utils/AppError': Error,
+    '../../utils/operationRequest': {}, './fulfillment.events': {}, './fulfillment.query': { createIssueReader: () => null },
+    './fulfillment.access': {
+      async authorize(conn, type, id, actor) {
+        assert.equal(conn, pool)
+        assert.equal(type, 'sale')
+        assert.equal(id, 41)
+        assert.equal(actor, user)
+        return row
+      },
+      definition: () => ({ write: 'sale.order.update' }), can: () => false, eligibleOwners: async () => [],
+    },
+    './fulfillment.delivery': { saleDelivery: async () => ({ commitments: [] }) },
+    './fulfillment.detect': { detect: async (_conn, _type, order) => {
+      assert.equal(order, row)
+      return active
+    } },
+    './fulfillment.rules': rules,
+  }
+  const file = require.resolve('../backend/src/modules/fulfillment/fulfillment.service')
+  const loaded = { exports: {} }
+  runInNewContext(readFileSync(file, 'utf8'), { module: loaded, require(name) {
+    assert.ok(Object.hasOwn(deps, name), name)
+    return deps[name]
+  } }, { filename: file })
+  const result = await loaded.exports.getDocument('sale', 41, user)
+  assert.deepEqual(Array.from(result.activeIssueKinds ?? []), ['shortage', 'credit', 'adjust'])
+  assert.equal(result.detectedCount, 3)
+  assert.deepEqual(Array.from(result.issues, issue => issue.conditionActive), [true, false])
 })

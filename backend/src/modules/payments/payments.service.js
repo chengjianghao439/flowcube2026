@@ -570,14 +570,20 @@ async function settlementDetail(id) {
   }
 }
 
-async function findEntries(recordId) {
+async function findEntries(recordId, includeReceipt = false) {
   const [rows] = await pool.query(
-    'SELECT * FROM payment_entries WHERE record_id=? ORDER BY created_at ASC',
+    includeReceipt
+      ? `SELECT e.*, r.receipt_no FROM payment_entries e
+         LEFT JOIN payment_receipts r ON r.id=e.receipt_id AND r.type=2 AND r.deleted_at IS NULL
+         WHERE e.record_id=? ORDER BY e.created_at ASC, e.id ASC`
+      : 'SELECT * FROM payment_entries WHERE record_id=? ORDER BY created_at ASC',
     [recordId],
   )
   return rows.map((row) => ({
     id: row.id,
     amount: Number(row.amount),
+    ...(includeReceipt ? { recordId: Number(row.record_id), receiptId: row.receipt_id == null ? null : Number(row.receipt_id), receiptNo: row.receipt_no || null,
+      ...(row.statement_id == null ? {} : { statementId: Number(row.statement_id) }) } : {}),
     paymentDate: row.payment_date,
     method: row.method,
     remark: row.remark,

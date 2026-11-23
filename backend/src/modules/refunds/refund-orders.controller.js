@@ -11,6 +11,7 @@ async function list(req, res, next) {
       page: +q.page || 1,
       pageSize: +q.pageSize || 20,
       keyword: q.keyword || '',
+      saleOrderNo: typeof q.saleOrderNo === 'string' ? q.saleOrderNo : '',
       status: q.status ? +q.status : null,
       startDate: q.startDate || null,
       endDate: q.endDate || null,
@@ -22,7 +23,7 @@ async function list(req, res, next) {
 
 async function detail(req, res, next) {
   try {
-    return successResponse(res, await svc.findById(+req.params.id, req.user?.warehouseIds ?? null), '查询成功')
+    return successResponse(res, await svc.findById(+req.params.id, req.user?.warehouseIds ?? null, { trace: req.query.trace === '1' }), '查询成功')
   } catch (e) { next(e) }
 }
 
@@ -49,6 +50,7 @@ async function execute(req, res, next) {
     const r = resolveBackfillRequest(req)
     const result = await svc.execute(+req.params.id, getOperatorFromRequest(req), req.user?.warehouseIds ?? null, extractRequestKey(req), {
       backfill: r ? { mode: 'apply', ...r } : null,
+      expectedPreview: req.body?.expectedPreview,
     })
     return result?.backfillApplication
       ? successResponse(res, result.backfillApplication, '已提交跨期补录申请，审批通过后才会记账', 202)

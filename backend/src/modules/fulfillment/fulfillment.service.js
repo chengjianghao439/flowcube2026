@@ -20,6 +20,7 @@ async function getDocument(type, id, user) {
   return { type, id, canManage: can(user, definition(type).write), issues: issues.map(i => ({ ...i, conditionActive: active.some(a => a.key === i.source_key) })),
     owners: await eligibleOwners(pool, type, row), commitments: delivery?.commitments || await commitments(pool, type, id), delivery,
     expectedDate: type === 'purchase' ? dateOnly(row.expected_date) : null,
+    ...(type === 'sale' ? { activeIssueKinds: active.map(issue => issue.key.split(':')[0]) } : {}),
     impacts: type === 'purchase' ? await purchaseImpacts(pool, id, user) : [], detectedCount: active.length }
 }
 async function transact(type, id, user, key, action, fn) {

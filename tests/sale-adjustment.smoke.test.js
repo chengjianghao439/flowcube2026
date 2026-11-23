@@ -553,6 +553,15 @@ async function scenarioSaleReturnQualifiedQty(log, ctx, token) {
     Number(ar1.total_amount) === 70, `total=${ar1.total_amount}`)
   log.assert('★ 销售退货冲减应收后 confirm_status 打回 0（业务决策）',
     Number(ar1.confirm_status) === 0, `confirm_status=${ar1.confirm_status}`)
+  const [origin] = await dbQuery(pool, 'SELECT order_no FROM sale_orders WHERE id=?', [saleId])
+  const exact = await http.get(`/api/returns/sale?saleOrderNo=${encodeURIComponent(origin.order_no)}`, { token })
+  const similar = await http.get(`/api/returns/sale?saleOrderNo=${encodeURIComponent(origin.order_no + '0')}`, { token })
+  const detail = await http.get(`/api/returns/sale/${srId}?trace=1`, { token })
+  log.assert('原单追查按稳定销售 ID 找到未留原单号快照的退货，排除近似单号',
+    exact.ok && exact.data?.data?.list?.some(row => Number(row.id) === srId && row.saleOrderNo === origin.order_no)
+      && similar.ok && similar.data?.data?.list?.length === 0, `status=${exact.status}/${similar.status}`)
+  log.assert('已执行退货按原任务回执返回实际冲减 30，沿用原销售单号',
+    detail.ok && detail.data?.data?.executedAmount === 30 && detail.data?.data?.saleOrderNo === origin.order_no, `status=${detail.status}`)
 }
 
 async function scenarioDiscountGuard(log, ctx, token) {

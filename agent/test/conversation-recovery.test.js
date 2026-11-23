@@ -224,7 +224,8 @@ test('结果未知时允许新的只读问题，但继续写入仍不能另换�
 });
 test('卡点报告给出当前工具返回的任务号和待分配事实，不编原因', async () => {
   const { client, store } = fixture();
-  const out = await handleMessage(store, client, FULL, '仓库有什么卡点', rule);
+  const supervisor = { ...FULL, permissions: [...FULL.permissions, 'warehouse.task.assign', 'inbound.order.view'] };
+  const out = await handleMessage(store, client, supervisor, '仓库有什么卡点', rule);
   assert.match(out.reply, /WT-SYNTHETIC-21/);
   assert.match(out.reply, /IT-SYNTHETIC-31/);
   assert.match(out.reply, /分拣格待分配/);

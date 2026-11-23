@@ -9,6 +9,7 @@ const { snapshotItemCommitments, restoreItemCommitments } = require('../fulfillm
 const { loadSalePresentation } = require('./sale.presentation')
 const { insertSaleItems } = require('./sale.items')
 const { appendSaleEvent } = require('./sale.events')
+const { releaseBatches, canSupplementRelease } = require('./sale.release-batches')
 const { pool } = require('../../config/db')
 const { scopeFilter, assertInScope } = require('../../utils/warehouseScope')
 const { normalizePagination } = require('../../utils/pagination')
@@ -315,7 +316,7 @@ async function syncShippedByWarehouseTaskWithinTransaction(conn, id, options) {
   return { ...fmt(orderRow), status, statusName: SALE_STATUS_NAME[status] }
 }
 
-function mapTimeline(rows, order) {
+function mapTimeline(rows, order, scopeWarehouseIds) {
   const base = rows.some(r => r.event_type === 'created') ? [] : [{
     id: `created-${order.id}`,
     eventType: 'created',
@@ -340,6 +341,18 @@ function mapTimeline(rows, order) {
         : r.payload_json)
       : null,
   }))
+  for (const event of mapped) {
+    if (event.payload?.supplement) {
+      event.payload = { ...event.payload }
+      delete event.payload.supplement
+    }
+    if (!Array.isArray(scopeWarehouseIds)) continue
+    const field = event.eventType === 'reserved' ? 'reserved' : event.eventType === 'released' ? 'released' : null
+    if (field && Array.isArray(event.payload?.[field]) && event.payload[field].some(line => line.warehouseId != null
+      && !scopeWarehouseIds.some(id => Number(id) === Number(line.warehouseId)))) {
+      delete event.payload[field]
+    }
+  }
   return [...base, ...mapped].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
 
@@ -567,11 +580,12 @@ async function findById(id, scopeWarehouseIds = null) {
   }
   order.packages = packages
   const [events] = await pool.query(
-    `SELECT id,event_type,title,description,payload_json,created_by,created_by_name,created_at
+    `SELECT id,event_type,title,description,payload_json,created_by,created_by_name,created_at,batch_proof_revision
      FROM sale_order_events WHERE sale_order_id=? ORDER BY created_at DESC, id DESC`,
     [id],
   )
-  order.timeline = mapTimeline(events, order)
+  order.timeline = mapTimeline(events, order, scopeWarehouseIds)
+  order.releaseBatches = await releaseBatches(pool, id, events, scopeWarehouseIds)
   return order
 }
 
@@ -1132,6 +1146,12 @@ async function adjustReservedWithinTransaction(conn, { orderRow, items, operator
 }
 
 // 占库前的分仓预览：按明细行的产品，列出各仓库当前可用量，供占库弹窗逐行选仓库。
+async function latestReservationEventId(db, id, locking = false) {
+  const [[event]] = await db.query(`SELECT id FROM sale_order_events
+    WHERE sale_order_id=? AND event_type IN ('reserved', 'released') ORDER BY id DESC LIMIT 1${locking ? ' FOR SHARE' : ''}`, [id])
+  return Number(event?.id ?? 0)
+}
+
 async function getReservePreview(id, scopeWarehouseIds = null) {
   const [[orderRow]] = await pool.query(
     'SELECT * FROM sale_orders WHERE id = ? AND deleted_at IS NULL', [id],
@@ -1209,6 +1229,7 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
     commercialModel: orderRow.commercial_model ?? null,
     commercialRevision: orderRow.commercial_revision == null ? null : Number(orderRow.commercial_revision),
     reserveFingerprint: editFingerprint(orderRow, itemRows),
+    reservationEventId: await latestReservationEventId(pool, id),
     items: itemRows.map(item => ({
       itemId: item.id,
       allowDecimalQty: qtyPolicies.get(Number(item.product_id))?.allowDecimal !== false,
@@ -1238,7 +1259,7 @@ async function getReservePreview(id, scopeWarehouseIds = null) {
 //
 // items: [{ id, warehouseId, warehouseName, qty }]（qty 为本次要占的数量，>0）
 // 先做一次全量可用量检查（不实际预占），把所有不足的商品一次性收集进错误明细。
-async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null, requestKey = null, commercialModel, expectedRevision, expectedReserveFingerprint } = {}) {
+async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null, requestKey = null, commercialModel, expectedRevision, expectedReserveFingerprint, expectedReservationEventId, releaseEventId, releaseProofVersion } = {}) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -1259,8 +1280,20 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
       userId: operator?.userId ?? null,
     })
     if (requestState.replay) {
+      const ack = requestState.responseData
+      if (releaseEventId != null || ack?.releaseEventId != null) {
+        const saved = ack?.reserved
+        if (ack?.releaseEventId !== releaseEventId || !Array.isArray(saved) || saved.length !== items.length
+            || new Set(items.map(row => row.id)).size !== items.length || !items.every(row => saved.some(line =>
+              line.itemId === row.id && line.warehouseId === row.warehouseId && line.qty === row.qty))) {
+          throw new AppError('补占请求键已绑定其他批次或数量，请核对原回执', 409, 'SALE_RESERVATION_PREVIEW_CONFLICT')
+        }
+      }
       await conn.rollback()
-      return requestState.responseData ?? null
+      return null
+    }
+    if (expectedReservationEventId != null && await latestReservationEventId(conn, id, true) !== expectedReservationEventId) {
+      throw new AppError('原销售单此后已有占库或释放，请重新核对待占量', 409, 'SALE_RESERVATION_PREVIEW_CONFLICT')
     }
     commercialStore.assertRevision(orderRow,commercialInput)
     const rule = assertStatusAction('sale', 'reserve', orderRow.status)
@@ -1357,6 +1390,19 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
       reserveItems.push({ ...row, reserveQty: qty, warehouseId: whId })
     }
     if (!reserveItems.length) throw new AppError('本次没有有效的占库数量', 400)
+    if (releaseEventId != null) {
+      if (!requestState.id || !operator?.userId || !expectedReserveFingerprint || expectedReservationEventId == null || !items.length) {
+        throw new AppError('分次补占须绑定原释放批次、新预览及本次请求回执', 400)
+      }
+      const [events] = await conn.query(
+        `SELECT id,event_type,payload_json,created_by,created_by_name,batch_proof_revision FROM sale_order_events
+          WHERE sale_order_id=? AND event_type IN ('reserved','released') ORDER BY id FOR SHARE`, [id],
+      )
+      const batch = (await releaseBatches(conn, id, events, scopeWarehouseIds, true)).find(row => row.id === releaseEventId)
+      if (batch?.proofVersion !== releaseProofVersion || !canSupplementRelease(batch, reserveItems)) {
+        throw new AppError('原释放批次的回执或剩余量已变化，请核对原批次', 409, 'SALE_RESERVATION_PREVIEW_CONFLICT')
+      }
+    }
     // 「只能整数」的商品不得按小数占库（迁移 254）。先校验两位精度，
     // 再检查商品整数策略；不依赖数据库舍入。
     await assertQtyPrecision(conn, reserveItems.map((item, index) => ({
@@ -1460,15 +1506,19 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
     })
     const wasPartial = wasExecuting || Number(orderRow.status) === SALE_STATUS.PARTIAL_RESERVED
     const nowFull = Number(unfilled) === 0
-    await appendSaleEvent(conn, id, 'reserved',
+    const reserved = reserveItems.map(item => ({
+      itemId: Number(item.id), qty: Number(item.reserveQty), warehouseId: itemWh(item), unit: item.unit,
+    }))
+    const reservationEventId = await appendSaleEvent(conn, id, 'reserved',
       nowFull ? (wasPartial ? '补占完成' : '确认占库') : (wasPartial ? '补充占库' : '部分占库'),
       nowFull
         ? (wasPartial ? `补占后已全部占满` : `已预占全部库存`)
         : `本次预占 ${reserveItems.length} 行，仍有未占部分`,
       operator,
-      { reserveCount: reserveItems.length, fullReserved: nowFull })
+      { reserveCount: reserveItems.length, fullReserved: nowFull, reserved,
+        ...(releaseEventId != null ? { supplement: { releaseId: releaseEventId, receiptId: requestState.id } } : {}) })
     await completeOperationRequest(conn, requestState, {
-      data: null,
+      data: { reservationEventId, ...(releaseEventId != null ? { releaseEventId, reserved } : {}) },
       message: nowFull ? (wasPartial ? '补占完成' : '确认占库') : (wasPartial ? '补充占库' : '部分占库'),
       resourceType: 'sale_order',
       resourceId: id,
@@ -1697,10 +1747,13 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
       await appendSaleEvent(conn, id, 'released',
         toStatus === SALE_STATUS.DRAFT ? '取消占库' : '部分取消占库',
         toStatus === SALE_STATUS.DRAFT ? `销售单 ${orderRow.order_no} 已取消占库并恢复草稿` : `销售单 ${orderRow.order_no} 已释放部分预占`,
-        operator)
+        operator, { released: [...processedById].map(([itemId, qty]) => {
+          const row = itemById.get(itemId)
+          return { itemId, qty, warehouseId: Number(row.warehouse_id ?? orderRow.warehouse_id), unit: row.unit }
+        }) })
     } else {
       // 整单释放
-      const [scopeRows] = await conn.query('SELECT warehouse_id FROM sale_order_items WHERE order_id = ? FOR UPDATE', [id])
+      const [scopeRows] = await conn.query('SELECT id, warehouse_id, reserved_qty, unit FROM sale_order_items WHERE order_id = ? FOR UPDATE', [id])
       for (const row of scopeRows) assertInScope(scopeWarehouseIds, row.warehouse_id ?? orderRow.warehouse_id, '销售单')
       await releaseByRef(conn, 'sale_order', id)
       await conn.query('UPDATE sale_order_items SET reserved_qty = 0 WHERE order_id = ?', [id])
@@ -1708,7 +1761,9 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
         table: 'sale_orders', id,
         fromStatus: rule.from, toStatus: SALE_STATUS.DRAFT, entityName: '销售单',
       })
-      await appendSaleEvent(conn, id, 'released', '取消占库', `销售单 ${orderRow.order_no} 已取消占库并恢复草稿`, operator)
+      const released = scopeRows.filter(row => Number(row.reserved_qty) > 0)
+        .map(row => ({ itemId: Number(row.id), qty: Number(row.reserved_qty), warehouseId: Number(row.warehouse_id ?? orderRow.warehouse_id), unit: row.unit }))
+      await appendSaleEvent(conn, id, 'released', '取消占库', `销售单 ${orderRow.order_no} 已取消占库并恢复草稿`, operator, { released })
     }
     await completeOperationRequest(conn, requestState, {
       data: null,

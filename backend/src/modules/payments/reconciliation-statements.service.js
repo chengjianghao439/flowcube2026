@@ -272,13 +272,19 @@ async function removeItem(id, recordId) {
 
 async function findAll({
   page = 1, pageSize = 20, type = '', status = '', keyword = '',
-  statementNo = '', partyName = '', customerId = null, partyId = null,
+  statementNo = '', partyName = '', customerId = null, partyId = null, recordId = null,
   startDate = '', endDate = '', minAmount = '', maxAmount = '',
 } = {}, conn = pool) {
   const { page: p, pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const conds = ['s.deleted_at IS NULL']
   const params = []
   if (type) { conds.push('s.type=?'); params.push(Number(type)) }
+  if (recordId != null) {
+    const id = Number(recordId)
+    if (!Number.isSafeInteger(id) || id < 1) throw new AppError('账款编号无效', 400)
+    conds.push('EXISTS(SELECT 1 FROM reconciliation_statement_items i WHERE i.statement_id=s.id AND i.record_id=?)')
+    params.push(id)
+  }
   if (customerId != null) {
     const id = Number(customerId)
     if (!Number.isSafeInteger(id) || id <= 0) throw new AppError('客户编号无效', 400)
@@ -350,17 +356,43 @@ async function findAll({
 }
 
 /** 详情：含明细（实时读账款当前余额，不用入单时的快照，便于看到已收多少） */
-async function findById(id) {
-  const [[row]] = await pool.query('SELECT * FROM reconciliation_statements WHERE id=? AND deleted_at IS NULL', [id])
+async function readDetail(conn, id, trace) {
+  const [[row]] = await conn.query('SELECT * FROM reconciliation_statements WHERE id=? AND deleted_at IS NULL', [id])
   if (!row) throw new AppError('对账单不存在', 404)
-  const [items] = await pool.query(
+  const traced = trace && Number(row.type) === 2
+  const [items] = await conn.query(
     `SELECT i.record_id, i.order_no, r.order_id, r.type, r.total_amount, r.paid_amount, r.balance, r.status, r.due_date, r.created_at
+            ${traced ? ', r.settlement_type, r.order_no AS record_order_no, so.order_no AS source_order_no, so.customer_id' : ''}
        FROM reconciliation_statement_items i
-       JOIN payment_records r ON r.id = i.record_id
+       ${traced ? 'LEFT JOIN' : 'JOIN'} payment_records r ON r.id = i.record_id
+       ${traced ? 'LEFT JOIN sale_orders so ON r.type = 2 AND so.id = r.order_id' : ''}
       WHERE i.statement_id = ?
-      ORDER BY r.created_at ASC`,
+      ORDER BY r.created_at ASC, r.id ASC`,
     [id],
   )
+  let sourceTrace
+  if (traced) {
+    const [entries] = await conn.query(
+      `SELECT e.id, e.record_id, e.amount, e.method, e.statement_id, e.receipt_id, rr.receipt_no, rr.party_id, rr.type,
+              rr.amount AS receipt_amount, rr.settled_amount AS receipt_settled, rr.balance AS receipt_balance
+         FROM reconciliation_statement_items i
+         JOIN payment_entries e ON e.record_id = i.record_id
+         LEFT JOIN payment_receipts rr ON rr.id = e.receipt_id AND rr.deleted_at IS NULL
+        WHERE i.statement_id = ? ORDER BY e.id ASC`, [id],
+    )
+    sourceTrace = {
+      projection: { totalAmount: Number(row.total_amount), settledAmount: Number(row.settled_amount), balance: Number(row.balance), status: Number(row.status) },
+      entries: entries.map(e => ({
+        entryId: Number(e.id), recordId: Number(e.record_id), amount: Number(e.amount), method: e.method,
+        statementId: e.statement_id == null ? null : Number(e.statement_id),
+        receiptId: e.receipt_id == null ? null : Number(e.receipt_id), receiptNo: e.receipt_no ?? null,
+        receiptPartyId: e.party_id == null ? null : Number(e.party_id), receiptType: e.type == null ? null : Number(e.type),
+        receiptAmount: e.receipt_amount == null ? null : Number(e.receipt_amount),
+        receiptSettledAmount: e.receipt_settled == null ? null : Number(e.receipt_settled),
+        receiptBalance: e.receipt_balance == null ? null : Number(e.receipt_balance),
+      })),
+    }
+  }
   // 抬头金额与状态改走实时口径，和上面的明细、列表、导出四处同源（修复前抬头读存储投影，
   // 会与自身明细对不上：明细显示已收 100，抬头却还写未核销）
   const realTotal = items.reduce((a, x) => a + moneyUnits(x.total_amount ?? 0), 0n)
@@ -378,7 +410,28 @@ async function findById(id) {
       status: Number(x.status),
       dueDate: x.due_date,
       createdAt: x.created_at,
+      ...(traced ? {
+        sourceOrderNo: x.source_order_no === x.record_order_no ? x.source_order_no : null,
+        customerId: x.customer_id == null ? null : Number(x.customer_id), settlementType: Number(x.settlement_type),
+      } : {}),
     })),
+    ...(traced ? { trace: sourceTrace } : {}),
+  }
+}
+
+async function findById(id, { trace = false } = {}) {
+  if (!trace) return readDetail(pool, id, false)
+  const conn = await pool.getConnection()
+  try {
+    await conn.query('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY')
+    const data = await readDetail(conn, id, true)
+    await conn.commit()
+    return data
+  } catch (error) {
+    await conn.rollback()
+    throw error
+  } finally {
+    conn.release()
   }
 }
 

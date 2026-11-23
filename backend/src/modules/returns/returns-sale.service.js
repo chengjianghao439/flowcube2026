@@ -154,10 +154,14 @@ async function validateSaleReturnItems(conn, saleOrderId, items) {
   }
 }
 
-async function findAllSR({ page=1, pageSize=20, keyword='', status=null, productId=null, customerId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null, scopeWarehouseIds=null }) {
+async function findAllSR({ page=1, pageSize=20, keyword='', saleOrderNo='', status=null, productId=null, customerId=null, warehouseId=null, operatorId=null, startDate=null, endDate=null, remark=null, scopeWarehouseIds=null }) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize }), like=`%${keyword}%`
   const params=[like,like]
   let whereExtra=''
+  if (saleOrderNo) {
+    whereExtra += ' AND EXISTS (SELECT 1 FROM sale_orders so WHERE so.id=sale_returns.sale_order_id AND so.order_no=? AND so.deleted_at IS NULL)'
+    params.push(saleOrderNo)
+  }
   if (status) { whereExtra += ' AND status=?'; params.push(status) }
   if (productId) {
     whereExtra += ' AND EXISTS (SELECT 1 FROM sale_return_items sri WHERE sri.return_id = sale_returns.id AND sri.product_id = ?)'
@@ -176,11 +180,12 @@ async function findAllSR({ page=1, pageSize=20, keyword='', status=null, product
   const [[{total}]]=await pool.query(`SELECT COUNT(*) AS total FROM sale_returns WHERE ${where}`,params)
   return { list:rows.map(r=>{
     if(r.ordinary_net_basis_order_id!=null&&Number(r.has_ordinary_net_source)!==1)throw new AppError('退货净额来源标记需核对',409,'SALE_RETURN_NET_BASIS_REQUIRED')
-    return {...fmtSR(r),...(Number(r.has_ordinary_net_source)===1?{moneyModel:'ordinary-net-v1',amountBasis:Number(r.status)===3?'executed_net':'estimated_net',...(r.cash_policy===ordinaryReturnMoney.CASH_POLICY?{moneyPrecision:2,cashPolicy:r.cash_policy}:{})}:{})}
+    return {...fmtSR(r), ...(saleOrderNo && !r.sale_order_no ? { saleOrderNo } : {}),
+      ...(Number(r.has_ordinary_net_source)===1?{moneyModel:'ordinary-net-v1',amountBasis:Number(r.status)===3?'executed_net':'estimated_net',...(r.cash_policy===ordinaryReturnMoney.CASH_POLICY?{moneyPrecision:2,cashPolicy:r.cash_policy}:{})}:{})}
   }), pagination:{page,pageSize:ps,total} }
 }
 
-async function findByIdSR(id, scopeWarehouseIds = null) {
+async function findByIdSR(id, scopeWarehouseIds = null, includeExecution = false) {
   const [rows]=await pool.query('SELECT sr.*, EXISTS (SELECT 1 FROM sale_ordinary_return_bases b WHERE b.order_id=sr.sale_order_id AND b.order_id=sr.ordinary_net_basis_order_id) AS has_ordinary_net_source FROM sale_returns sr WHERE sr.id=? AND sr.deleted_at IS NULL',[id])
   if(!rows[0]) throw new AppError('退货单不存在',404)
   assertInScope(scopeWarehouseIds, rows[0].warehouse_id, '销售退货单')
@@ -217,6 +222,31 @@ async function findByIdSR(id, scopeWarehouseIds = null) {
     }
   } else {
     ret.task = null
+  }
+  if (includeExecution) {
+    if (!ret.saleOrderNo && ret.saleOrderId) {
+      const [[source]] = await pool.query('SELECT order_no FROM sale_orders WHERE id=? AND deleted_at IS NULL', [ret.saleOrderId])
+      ret.saleOrderNo = source?.order_no ?? null
+    }
+    ret.executedAmount = null
+    ret.executedAt = null
+    ret.postingBasisDate = null
+    if (Number(ret.status) === 3 && ret.task?.status === 5) {
+      const [events] = await pool.query(
+        `SELECT JSON_EXTRACT(payload_json, '$.taskId') AS taskId,
+                JSON_UNQUOTE(JSON_EXTRACT(payload_json, '$.totalAmount')) AS amount, created_at
+           FROM return_order_events
+          WHERE return_type='sale' AND return_id=? AND return_no=? AND event_type=?
+          ORDER BY id DESC LIMIT 2`,
+        [id, ret.returnNo, RETURN_EVENT.EXECUTED],
+      )
+      const event = events[0]
+      if (events.length === 1 && Number(event.taskId) === ret.task.id && /^\d+(?:\.\d{1,4})?$/.test(String(event.amount))) {
+        ret.executedAmount = Number(event.amount)
+        ret.executedAt = event.created_at
+        ret.postingBasisDate = rows[0].updated_at
+      }
+    }
   }
 
   // 返货出库单（2026-09-26 一致性审查 · 任务 1 第二期）：取消时若已有合格品入库，退货单不会直接

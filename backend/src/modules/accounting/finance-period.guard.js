@@ -131,8 +131,7 @@ async function assertFinancePeriodOpen(conn, businessDate, opts = {}) {
     + (backfillHint === 'supplier_refund'
       ? '请保留真实收回日期，由持跨期补录权限的人员提交申请，再由他人审批执行。'
       : backfillHint
-      ? '请改用未结账的日期登记；若这笔业务确实发生在该期间，'
-        + '需由持「跨期补录」权限的财务主管填写原因后补录。'
+      ? '请保留实际业务日期，由有「跨期补录」权限的财务填写原因申请，再由他人审批。'
       // 没有补录出路时**也不能**提示「改用别的日期」——那等于诱导操作人把真实发生的
       // 付款日期填成假的（事实失真比账实不符更难查）。改为请其找财务处理。
       : '请联系财务负责人核实处理方式；请勿为了让系统接受而改动真实付款日期。'),
@@ -163,7 +162,7 @@ function resolveBackfillRequest(req) {
   if (!hasPermission(req, PERMISSIONS.FINANCE_PERIOD_BACKFILL)) {
     throw new AppError(
       '当前账号没有跨期补录权限，不能申请把业务登记进已结账的会计期间。'
-      + '请改选未结账的日期，或让持该权限的财务主管操作。',
+      + '请保留实际业务日期，由持该权限的财务人员提交申请。',
       403,
       'FINANCE_BACKFILL_FORBIDDEN',
     )
