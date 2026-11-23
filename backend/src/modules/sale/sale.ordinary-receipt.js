@@ -25,7 +25,7 @@ async function assertReserveEvent(db, receipt, scopeWarehouseIds) {
       || JSON.stringify(movementLines(payload?.reserved)) !== JSON.stringify(movementLines(receipt.data.reserved))) invalid()
     if (Array.isArray(scopeWarehouseIds) && receipt.data.reserved.some(row =>
       !scopeWarehouseIds.some(id => Number(id) === Number(row.warehouseId)))) {
-      throw new AppError('销售补占回执的历史发货仓不在当前范围', 403, 'WAREHOUSE_SCOPE_DENIED')
+      throw new AppError('原补占记录中的发货仓不在当前权限范围', 403, 'WAREHOUSE_SCOPE_DENIED')
     }
   }
 }

@@ -139,7 +139,7 @@ test('建箱丢响应并重挂后，只接受属于原仓库任务的箱码', as
   await act(async () => root.unmount())
   api.receipt.mockResolvedValue({ ...receipt, data: { ...box, warehouseTaskId: 42 } })
   await mount()
-  await vi.waitFor(() => expect(critical.phaseMessage).toContain('建箱回执与原任务不一致'))
+  await vi.waitFor(() => expect(critical.phaseMessage).toContain('建箱结果与原任务不一致'))
   expect(critical.pendingRecord?.requestKey).toBe(original.requestKey)
   expect(critical.submitBlocked).toBe(true)
   expect(api.confirmed).not.toHaveBeenCalled()

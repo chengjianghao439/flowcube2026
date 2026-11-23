@@ -1286,7 +1286,7 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
         if (ack?.releaseEventId !== releaseEventId || !Array.isArray(saved) || saved.length !== items.length
             || new Set(items.map(row => row.id)).size !== items.length || !items.every(row => saved.some(line =>
               line.itemId === row.id && line.warehouseId === row.warehouseId && line.qty === row.qty))) {
-          throw new AppError('补占请求键已绑定其他批次或数量，请核对原回执', 409, 'SALE_RESERVATION_PREVIEW_CONFLICT')
+          throw new AppError('这次补占已对应其他批次或数量，请核对办理记录', 409, 'SALE_RESERVATION_PREVIEW_CONFLICT')
         }
       }
       await conn.rollback()
@@ -1392,7 +1392,7 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
     if (!reserveItems.length) throw new AppError('本次没有有效的占库数量', 400)
     if (releaseEventId != null) {
       if (!requestState.id || !operator?.userId || !expectedReserveFingerprint || expectedReservationEventId == null || !items.length) {
-        throw new AppError('分次补占须绑定原释放批次、新预览及本次请求回执', 400)
+        throw new AppError('请从原释放批次重新预览，再确认补占', 400)
       }
       const [events] = await conn.query(
         `SELECT id,event_type,payload_json,created_by,created_by_name,batch_proof_revision FROM sale_order_events
@@ -1400,7 +1400,7 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
       )
       const batch = (await releaseBatches(conn, id, events, scopeWarehouseIds, true)).find(row => row.id === releaseEventId)
       if (batch?.proofVersion !== releaseProofVersion || !canSupplementRelease(batch, reserveItems)) {
-        throw new AppError('原释放批次的回执或剩余量已变化，请核对原批次', 409, 'SALE_RESERVATION_PREVIEW_CONFLICT')
+        throw new AppError('原释放批次的办理记录或剩余量已变化，请核对原批次', 409, 'SALE_RESERVATION_PREVIEW_CONFLICT')
       }
     }
     // 「只能整数」的商品不得按小数占库（迁移 254）。先校验两位精度，

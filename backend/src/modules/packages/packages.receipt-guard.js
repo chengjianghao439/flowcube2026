@@ -56,7 +56,7 @@ async function assertCreatePackageReceipt(conn, receipt, context, req, res) {
   if (receipt.status !== 'success') return
   const { data, resourceType, resourceId } = receipt
   const scopedAction = `${CREATE_PACKAGE_ACTION}.${resourceId}`
-  const invalid = () => new AppError('建箱回执与原任务或箱码不一致，请保留记录并核对', 409, 'PACKAGE_CREATE_RECEIPT_INVALID')
+  const invalid = () => new AppError('建箱结果与原任务或箱码不一致，请保留记录并核对', 409, 'PACKAGE_CREATE_RECEIPT_INVALID')
   if (matchedAction !== scopedAction || resourceType !== 'warehouse_task'
       || !Number.isSafeInteger(resourceId) || resourceId <= 0 || data?.warehouseTaskId !== resourceId
       || !Number.isSafeInteger(data?.id) || data.id <= 0 || !/^L\d+$/.test(data.barcode)

@@ -97,7 +97,7 @@ function Conversation() {
           <div className="xiaoman-input-box"><textarea ref={input} aria-label="告诉小满要做什么" placeholder="说说你想查什么，或想办哪件事…" rows={2} maxLength={4000} value={state.input} disabled={busy || loading}
             onChange={event => state.setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); followEnd.current = true; void state.send(state.input) } }} />
             <button className="xiaoman-send" type="submit" aria-label="发送" disabled={busy || loading || !state.input.trim()}><ArrowUp size={19} aria-hidden="true" /></button>
-          </div><p className="xiaoman-input-hint">会话保存在本系统，用于改进小满。Enter 发送，Shift + Enter 换行</p>
+          </div><p className="xiaoman-input-hint">对话保存在本系统，用于改进小满。Enter 发送，Shift + Enter 换行</p>
         </form>
       </section>
     {draftToCancel && <ConfirmDialog

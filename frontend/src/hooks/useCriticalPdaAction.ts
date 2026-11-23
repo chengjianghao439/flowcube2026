@@ -43,7 +43,7 @@ function assertReceiptIdentity(record: PendingRequestRecord, receipt: OperationR
     const data = receipt.data as { warehouseTaskId?: unknown; id?: unknown; barcode?: unknown } | null
     if (!data || data.warehouseTaskId !== expected.id || !Number.isSafeInteger(data.id) || Number(data.id) <= 0
         || typeof data.barcode !== 'string' || !/^L\d+$/.test(data.barcode)) {
-      throw Error('建箱回执与原任务不一致，请保留原记录并核对')
+      throw Error('建箱结果与原任务不一致，请保留原记录并核对')
     }
   }
 }
