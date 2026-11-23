@@ -35,6 +35,7 @@ function fixture({ status = 3, quantity = 10, reserved = 4, shipped = 4, allowDe
       if (sql.includes('FROM warehouse_tasks')) return [pending ? [{ id: 30 }] : []]
       if (sql.includes('SELECT warehouse_id FROM sale_order_items')) return [[{ warehouse_id: 2 }]]
       if (sql.includes('SELECT * FROM sale_order_items')) return [[item]]
+      if (sql.includes('SELECT id FROM sale_order_events')) return [[]]
       if (sql.includes('FROM inventory_warehouses')) return [[{ id: 2, name: '合成仓', is_active: 1 }, { id: 3, name: '第二合成仓', is_active: 1 }]]
       if (sql.includes('UPDATE sale_order_items SET warehouse_id')) { item.warehouse_id = params[0]; return [{ affectedRows: 1 }] }
       if (sql.includes('UPDATE sale_order_items SET reserved_qty = reserved_qty +')) { item.reserved_qty += params[0]; return [{ affectedRows: 1 }] }
@@ -62,6 +63,7 @@ function fixture({ status = 3, quantity = 10, reserved = 4, shipped = 4, allowDe
     '../../engine/containerEngine': { getStockProjection: async () => ({ available: 10 }) },
     '../../engine/reservationEngine': { reserve: async (current, args) => { assert.equal(current, conn); reserves.push(args) } },
     './sale.contracts': { getNetOrderAmount: (total, discount) => total - discount, saleOperationAction: (action, id) => `sale.${action}:${id}` },
+    './sale.edit-baseline': require('../backend/src/modules/sale/sale.edit-baseline'),
     './sale.events': require('../backend/src/modules/sale/sale.events'),
     '../inventory/inventory.service': { getAvailabilityByProducts: async () => { calls.push('availability'); return [] } },
   }
@@ -132,6 +134,8 @@ test('执行中占库预览仍展示原未占6，当前全部明细仓范围必�
   const preview = await f.svc.getReservePreview(9, [2])
   assert.equal(preview.items[0].remainToReserve, 6)
   assert.equal(preview.items[0].quantity, 10)
+  assert.match(preview.reserveFingerprint, /^[a-f0-9]{64}$/)
+  assert.equal(preview.reservationEventId, 0)
   const denied = fixture()
   denied.item.warehouse_id = 3
   await assert.rejects(denied.svc.getReservePreview(9, [2]), { code: 'WAREHOUSE_SCOPE_DENIED' })
