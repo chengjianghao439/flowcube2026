@@ -8,10 +8,16 @@
  *  - 有绑定商品时不能删除（只能停用）
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
+import { Plus } from 'lucide-react'
+import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Power, FolderOpen } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { TreeTableFilters, TreeTableName } from '@/components/shared/TreeTable'
+import { useTreeTable, type TreeTableRow } from '@/hooks/useTreeTable'
+import type { TableColumn } from '@/types'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { Button }  from '@/components/ui/button'
@@ -32,8 +38,6 @@ import type { Category, CreateCategoryParams, UpdateCategoryParams } from '@/typ
 
 // ─── 常量 ────────────────────────────────────────────────────────────────────
 
-// 层级标识统一走 StatusBadge 体系的 info tone（分类标识），层级由「L1~L4 + 一级~四级」文字
-// 与树形缩进表达，不再各自硬编码 bg-*-100 调色板（那样暗色主题不受控、与全站语义色脱节）。
 const LEVEL_LABEL: Record<number, string> = { 1: '一级', 2: '二级', 3: '三级', 4: '四级' }
 
 const EMPTY_FORM: CreateCategoryParams & { status?: boolean } = {
@@ -53,6 +57,7 @@ interface FormDialogProps {
 
 function CategoryFormDialog({ open, mode, parentCat, editCat, onClose, onCreated }: FormDialogProps) {
   const { can } = usePermission()
+  const formId = useId()
   const canSave = can(mode === 'create' ? PERMISSIONS.CATEGORY_CREATE : PERMISSIONS.CATEGORY_UPDATE)
   const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM)
   const [baseline, setBaseline] = useState(EMPTY_FORM)
@@ -119,7 +124,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose, onCreated
   return (
     <>
     <Dialog open={open} onOpenChange={value => { if (!value) draft.requestClose() }}>
-      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="sm:max-w-2xl">
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog sm:max-w-2xl">
         <DialogHeader description={mode === 'edit' && editCat ? <>
               正在编辑：<span className="font-medium text-foreground">{editCat.code ? `${editCat.code} · ` : ''}{editCat.name}</span>
             </> : ("填写分类名称、上级与排序。")}>
@@ -134,7 +139,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose, onCreated
 
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-1">
+        <form id={formId} onSubmit={handleSubmit} className="fc-form-dialog-body space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="category-name">分类名称 *</Label>
@@ -184,11 +189,11 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose, onCreated
             />
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={draft.requestClose} disabled={isPending}>取消</Button>
-            {canSave && <Button type="submit" disabled={isPending || !form.name}>{isPending ? '保存中…' : (mode === 'edit' ? '保存修改' : '保存')}</Button>}
-          </DialogFooter>
         </form>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={draft.requestClose} disabled={isPending}>取消</Button>
+          {canSave && <Button type="submit" form={formId} disabled={isPending || !form.name}>{isPending ? '保存中…' : (mode === 'edit' ? '保存修改' : '保存')}</Button>}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
     <ConfirmDialog {...draft.discardProps} confirmText="放弃本次修改" />
@@ -196,141 +201,13 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose, onCreated
   )
 }
 
-// ─── 单个分类节点 ─────────────────────────────────────────────────────────────
-
-interface NodeProps {
-  cat: Category
-  onAddChild:     (cat: Category) => void
-  onEdit:         (cat: Category) => void
-  onDelete:       (cat: Category) => void
-  onToggleStatus: (cat: Category) => void
-  expandedIds: Set<number>
-  onToggle: (cat: Category) => void
-}
-
-function findPathToCategory(nodes: Category[], targetId: number, trail: Category[] = []): Category[] | null {
-  for (const node of nodes) {
-    const next = [...trail, node]
-    if (node.id === targetId) return next
-    if (node.children?.length) {
-      const found = findPathToCategory(node.children, targetId, next)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-function CategoryNode({ cat, onAddChild, onEdit, onDelete, onToggleStatus, expandedIds, onToggle }: NodeProps) {
-  const { can } = usePermission()
-  const hasChildren = !!(cat.children && cat.children.length > 0)
-  const expanded = expandedIds.has(cat.id)
-
-  return (
-    <div className="space-y-2">
-      <div
-        className={cn(
-          'group flex items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-3 transition-colors hover:border-primary/30 hover:bg-primary/5',
-          cat.status === 0 && 'opacity-50',
-          expanded && 'border-primary/30 bg-primary/5',
-        )}
-      >
-        <button
-          type="button"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-muted-foreground"
-          onClick={() => onToggle(cat)}
-          disabled={!hasChildren}
-          aria-label={`${expanded ? '收起' : '展开'}${cat.name}`}
-          aria-expanded={hasChildren ? expanded : undefined}
-        >
-          {hasChildren
-            ? expanded
-              ? <ChevronDown className="h-3.5 w-3.5" />
-              : <ChevronRight className="h-3.5 w-3.5" />
-            : <span className="h-3.5 w-3.5" />}
-        </button>
-
-        <SoftStatusLabel label={`L${cat.level}`} tone="info" className="shrink-0" />
-
-        {cat.code && (
-          <span className="shrink-0 text-doc-code-muted">{cat.code}</span>
-        )}
-
-        <span className="flex-1 min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium">{cat.name}</span>
-
-        <SoftStatusLabel
-          label={cat.status ? '启用' : '停用'}
-          tone={activeTone(cat.status)}
-          className="shrink-0"
-        />
-
-        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          {can(PERMISSIONS.CATEGORY_CREATE) && cat.level < 4 && (
-            <Button
-              size="sm" variant="ghost"
-              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-              title="新增子分类"
-              onClick={() => onAddChild(cat)}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {can(PERMISSIONS.CATEGORY_UPDATE) && <Button
-            size="sm" variant="ghost"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-            title="编辑"
-            onClick={() => onEdit(cat)}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>}
-          {can(PERMISSIONS.CATEGORY_UPDATE) && <Button
-            size="sm" variant="ghost"
-            className={cn(
-              'h-7 w-7 p-0',
-              cat.status
-                ? 'text-muted-foreground hover:text-orange-500'
-                : 'text-muted-foreground hover:text-green-600',
-            )}
-            title={cat.status ? '停用' : '启用'}
-            onClick={() => onToggleStatus(cat)}
-          >
-            <Power className="h-3.5 w-3.5" />
-          </Button>}
-          {can(PERMISSIONS.CATEGORY_DELETE) && <Button
-            size="sm" variant="ghost"
-            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink"
-            title="删除"
-            onClick={() => onDelete(cat)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>}
-        </div>
-      </div>
-
-      {hasChildren && expanded && (
-        <div className="space-y-2 rounded-lg border border-border/60 bg-muted/15 p-3">
-          {cat.children!.map(child => (
-            <CategoryNode
-              key={child.id}
-              cat={child}
-              onAddChild={onAddChild}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onToggleStatus={onToggleStatus}
-              expandedIds={expandedIds}
-              onToggle={onToggle}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ─── 主页面 ───────────────────────────────────────────────────────────────────
-
 export default function CategoriesPage() {
   const { can } = usePermission()
-  const { data: tree = [], isLoading } = useCategoryTree()
+  const { data: tree = [], isLoading, isError, error, refetch } = useCategoryTree()
+  const hierarchy = useTreeTable(tree)
+  const canCreate = can(PERMISSIONS.CATEGORY_CREATE)
+  const canUpdate = can(PERMISSIONS.CATEGORY_UPDATE)
+  const canDelete = can(PERMISSIONS.CATEGORY_DELETE)
   const { mutate: del,    isPending: deleting  } = useDeleteCategory()
   const { mutate: toggle, isPending: toggling  } = useToggleCategoryStatus()
 
@@ -345,11 +222,9 @@ export default function CategoriesPage() {
 
   // 停用/启用确认
   const [toggleTarget, setToggleTarget] = useState<Category | null>(null)
-  const [expandedPath, setExpandedPath] = useState<number[]>([])
-  const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
 
   function handleAddRoot() {
-    if (!can(PERMISSIONS.CATEGORY_CREATE)) return
+    if (!canCreate) return
     setFormMode('create')
     setParentCat(null)
     setEditCat(null)
@@ -357,7 +232,7 @@ export default function CategoriesPage() {
   }
 
   function handleAddChild(cat: Category) {
-    if (!can(PERMISSIONS.CATEGORY_CREATE)) return
+    if (!canCreate) return
     setFormMode('create')
     setParentCat(cat)
     setEditCat(null)
@@ -365,7 +240,7 @@ export default function CategoriesPage() {
   }
 
   function handleEdit(cat: Category) {
-    if (!can(PERMISSIONS.CATEGORY_UPDATE)) return
+    if (!canUpdate) return
     setFormMode('edit')
     setEditCat(cat)
     setParentCat(null)
@@ -381,79 +256,72 @@ export default function CategoriesPage() {
   }
 
   function confirmDelete() {
-    if (!deleteTarget || !can(PERMISSIONS.CATEGORY_DELETE)) return
+    if (!deleteTarget || !canDelete) return
     del(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) })
   }
 
   function confirmToggle() {
-    if (!toggleTarget || !can(PERMISSIONS.CATEGORY_UPDATE)) return
+    if (!toggleTarget || !canUpdate) return
     toggle(
       { id: toggleTarget.id, status: toggleTarget.status === 0 },
       { onSuccess: () => setToggleTarget(null) },
     )
   }
 
-  // 统计
-  const flatCount = (nodes: Category[]): number =>
-    nodes.reduce((s, n) => s + 1 + flatCount(n.children ?? []), 0)
-  const totalCount = flatCount(tree)
+  const columns: TableColumn<TreeTableRow<Category>>[] = [
+    { key: 'name', title: '分类名称', width: 270, render: (_, row) => <TreeTableName {...row} searching={hierarchy.searching}
+      label={row.node.name} onToggle={() => hierarchy.toggle(row.id)}>{row.node.name}</TreeTableName> },
+    { key: 'code', title: '分类编码', width: 150, render: (_, { node }) => node.code ? <span className="text-doc-code">{node.code}</span> : '—' },
+    { key: 'level', title: '层级', width: 90, render: (_, { node }) => LEVEL_LABEL[node.level] },
+    { key: 'status', title: '状态', width: 88, render: (_, { node }) => <SoftStatusLabel
+      label={node.status ? '启用' : '停用'} tone={activeTone(node.status)} /> },
+  ]
+  if (canCreate || canUpdate || canDelete) {
+    columns.push({
+      key: 'actions', title: '操作', width: 214, render: (_, { node }) => (
+        <div className="flex items-center gap-2">
+          {canCreate && node.level < 4 && <Button type="button" size="sm" variant="ghost" title="新增子分类"
+            className="h-8 px-2 text-xs text-primary hover:text-primary" onClick={() => handleAddChild(node)}>
+            <Plus aria-hidden />新增子分类
+          </Button>}
+          {(canUpdate || canDelete) && <TableActionsMenu
+            primaryLabel={canUpdate ? '编辑' : '删除'}
+            primaryVariant={canUpdate ? 'outline' : 'destructive'}
+            onPrimaryClick={() => canUpdate ? handleEdit(node) : handleDelete(node)}
+            items={canUpdate ? [
+              { label: node.status ? '停用' : '启用', afterMenuClose: true, onClick: () => handleToggleStatus(node) },
+              ...(canDelete ? [{ label: '删除', destructive: true, separatorBefore: true, afterMenuClose: true, onClick: () => handleDelete(node) }] : []),
+            ] : []}
+          />}
+        </div>
+      ),
+    })
+  }
+
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="商品分类"
-        description="维护商品分类层级与归属。"
+        description="维护商品分类层级，商品可绑定四级分类。"
         actions={
-          can(PERMISSIONS.CATEGORY_CREATE) && <Button onClick={handleAddRoot}>
+          canCreate && <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />
             新增一级分类
           </Button>
         }
       />
 
-      {/* 图例说明 */}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <span>支持 4 级分类，共 {totalCount} 个</span>
-        {[1, 2, 3, 4].map(l => (
-          <span key={l} className="flex items-center gap-1">
-            <SoftStatusLabel label={`L${l}`} tone="info" />
-            {LEVEL_LABEL[l]}分类
-            {l === 4 && <span className="text-info-ink">（可绑定商品）</span>}
-          </span>
-        ))}
-        <span className="ml-auto">默认显示一级分类，点击当前分类展开或收起下一级</span>
-      </div>
+      <TreeTableFilters label="搜索分类编码或名称" value={hierarchy.search} onChange={hierarchy.setSearch}
+        searching={hierarchy.searching} expandAll={hierarchy.expandAll} collapseAll={hierarchy.collapseAll} />
 
-      {/* 分类列表 */}
-      <div className="card-base p-2">
-        {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
-            加载中…
-          </div>
-        ) : tree.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <FolderOpen className="mb-3 h-10 w-10 opacity-30" />
-            <EmptyState variant="no-data" title="暂无分类" description="点击右上角「新增一级分类」开始" compact />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {tree.map(cat => (
-              <CategoryNode
-                key={cat.id}
-                cat={cat}
-                onAddChild={handleAddChild}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onToggleStatus={handleToggleStatus}
-                expandedIds={expandedIds}
-                onToggle={(target) => {
-                  const path = findPathToCategory(tree, target.id)?.map(item => item.id) ?? [target.id]
-                  setExpandedPath(prev => prev.includes(target.id) ? path.slice(0, -1) : path)
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {isError ? <QueryErrorState title="商品分类加载失败" error={error} onRetry={() => void refetch()} /> : (
+        <DataTable columns={columns} data={hierarchy.rows} loading={isLoading} virtualized preserveFocus retainFocusedRow
+          scrollLabel="商品分类表格" emptyText="没有匹配的分类"
+          emptyState={hierarchy.searching ? undefined : <EmptyState variant="empty-folder" title="暂无分类"
+            description={canCreate ? '点击右上角「新增一级分类」开始' : '当前账号没有新增分类权限'} />} />
+      )}
+      {!isError && !isLoading && <ListSummary total={hierarchy.searching ? hierarchy.rows.length : hierarchy.total}
+        unit={hierarchy.searching ? '个可见分类' : '个分类'} />}
 
       {/* 新增/编辑弹窗 */}
       <CategoryFormDialog
@@ -462,16 +330,14 @@ export default function CategoriesPage() {
         parentCat={parentCat}
         editCat={editCat}
         onCreated={parentId => {
-          if (parentId == null) return
-          const path = findPathToCategory(tree, parentId)?.map(item => item.id)
-          if (path) setExpandedPath(prev => prev.includes(parentId) ? prev : path)
+          if (parentId != null) hierarchy.revealChildren(parentId)
         }}
         onClose={() => setFormOpen(false)}
       />
 
       {/* 删除确认 */}
       <ConfirmDialog
-        open={!!deleteTarget && can(PERMISSIONS.CATEGORY_DELETE)}
+        open={!!deleteTarget && canDelete}
         variant="destructive"
         title={`删除分类「${deleteTarget?.name}」`}
         description="删除后不可恢复。若该分类下存在子分类或已绑定商品，将无法删除。"
@@ -483,7 +349,7 @@ export default function CategoriesPage() {
 
       {/* 停用/启用确认 */}
       <ConfirmDialog
-        open={!!toggleTarget && can(PERMISSIONS.CATEGORY_UPDATE)}
+        open={!!toggleTarget && canUpdate}
         title={`${toggleTarget?.status ? '停用' : '启用'}分类「${toggleTarget?.name}」`}
         description={
           toggleTarget?.status

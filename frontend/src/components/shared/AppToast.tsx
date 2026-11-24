@@ -9,7 +9,7 @@
  *   toast.warning('请先选择客户')
  *
  * 特性：
- *   - 右上角堆叠，最多同时显示 5 条
+ *   - 桌面提示堆叠在工作区顶端，最多同时显示 5 条
  *   - success 默认 3s、error 默认 4s（可覆盖，见 resolveToastDurationMs）
  *   - 使用自建定时关闭，避免 Radix 在 pointermove / 窗口失焦 时暂停计时导致不自动消失
  *   - 底部倒计时条与关闭时长同步
@@ -192,8 +192,10 @@ export function AppToast({ placement = 'desktop' }: { placement?: 'desktop' | 'p
       ))}
 
       <Toast.Viewport className={cn(
-        'fixed top-4 z-[9999] flex flex-col gap-2 outline-none',
-        placement === 'pda' ? 'left-1/2 w-[calc(100vw-2rem)] max-w-[320px] -translate-x-1/2 [&_.fc-toast]:w-full' : 'right-4',
+        'flex flex-col gap-2 outline-none',
+        placement === 'pda'
+          ? 'fixed top-4 left-1/2 z-[9999] w-[calc(100vw-2rem)] max-w-[320px] -translate-x-1/2 [&_.fc-toast]:w-full'
+          : 'desktop-toast-viewport absolute top-2 right-4 z-[var(--desktop-layer-toast,35)] max-w-[calc(100vw-2rem)] [&_.fc-toast]:max-w-full',
       )} />
     </Toast.Provider>
   )

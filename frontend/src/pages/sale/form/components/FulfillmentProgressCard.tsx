@@ -65,7 +65,7 @@ export function FulfillmentProgressCard({ order, targetTaskId }: { order: SaleOr
         {reverseNotice}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-foreground">仓库任务进度</h3>
+            <h2 className="text-sm font-semibold text-foreground">仓库任务进度</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
               共 {tasks.length} 个仓库任务，各任务独立推进作业。
             </p>
@@ -96,7 +96,7 @@ export function FulfillmentProgressCard({ order, targetTaskId }: { order: SaleOr
       {reverseNotice}
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-foreground">作业进度</h3>
+          <h2 className="text-sm font-semibold text-foreground">作业进度</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">仓库任务：{order.taskNo}</p>
           {tasks[0] && binLabel(tasks[0])}
         </div>

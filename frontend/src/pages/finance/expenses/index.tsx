@@ -469,7 +469,7 @@ export default function ExpenseClaimsPage() {
               {items.map((it, idx) => (
                 <div key={idx} className="grid grid-cols-12 items-center gap-2">
                   <Select value={it.categoryId} onValueChange={v => setItems(p => p.map((x, i) => i === idx ? { ...x, categoryId: v } : x))}>
-                    <SelectTrigger className="col-span-3 h-9"><SelectValue placeholder="费用类别" /></SelectTrigger>
+                    <SelectTrigger className="col-span-3 h-9" aria-label={`第 ${idx + 1} 行费用类别`}><SelectValue placeholder="费用类别" /></SelectTrigger>
                     <SelectContent>
                       {(categories ?? []).map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                     </SelectContent>

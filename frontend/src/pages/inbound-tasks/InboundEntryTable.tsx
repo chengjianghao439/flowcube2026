@@ -1,7 +1,9 @@
-import { useCallback, useRef, type ReactElement, type HTMLAttributes, type RefAttributes } from 'react'
+import { useCallback, useImperativeHandle, useLayoutEffect, useRef, type Ref, type ReactElement, type HTMLAttributes, type RefAttributes } from 'react'
 import { useTableColumns } from '@/components/shared/useTableColumns'
 import { TableColumnHeader } from '@/components/shared/TableColumnHeader'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import type { TableColumn } from '@/types'
 
 const pickerColumns: TableColumn<Record<string, unknown>>[] = [
@@ -22,13 +24,37 @@ const entryColumns: TableColumn<Record<string, unknown>>[] = [
 ]
 
 type RowElement = ReactElement<HTMLAttributes<HTMLTableRowElement> & RefAttributes<HTMLTableRowElement>>
-export function InboundEntryTable<T>({ data, getRowKey, renderRow, picker = false }: {
-  data: T[]; getRowKey: (row: T) => number; renderRow: (row: T, index: number) => RowElement; picker?: boolean
+export type InboundEntryFocus = (index: number, target: string) => void
+
+export function InboundEntryTable<T>({ data, getRowKey, renderRow, picker = false, focusRowRef }: {
+  data: T[]; getRowKey: (row: T) => number; renderRow: (row: T, index: number) => RowElement; picker?: boolean; focusRowRef?: Ref<InboundEntryFocus>
 }) {
   const columns = picker ? pickerColumns : entryColumns
   const scrollToIndex = useRef<((index: number) => void) | null>(null)
   const registerScroll = useCallback((scroll: ((index: number) => void) | null) => { scrollToIndex.current = scroll }, [])
   const layout = useTableColumns({ columns, fluid: true, columnStorageKey: picker ? 'inbound-picker-items' : 'inbound-entry-items', isSelectEnabled: false })
+  const active = useSectionActive()
+  const frame = useRef<number | null>(null)
+  const cancelFocus = useCallback(() => {
+    if (frame.current !== null) cancelAnimationFrame(frame.current)
+    frame.current = null
+  }, [])
+  useLayoutEffect(() => cancelFocus, [active, cancelFocus])
+  const { tableRef } = layout
+  useImperativeHandle(focusRowRef, () => (index, target) => {
+    cancelFocus()
+    if (!active || !tableRef.current || tableRef.current.closest('[hidden],[inert]')) return
+    scrollToIndex.current?.(index)
+    if (focusOrderEntryField(tableRef.current, target) || !scrollToIndex.current) return
+
+    let attempts = 0
+    const focusWhenMounted = () => {
+      frame.current = null
+      if (!tableRef.current?.isConnected || tableRef.current.closest('[hidden],[inert]')) return
+      if (!focusOrderEntryField(tableRef.current, target) && ++attempts < 20) frame.current = requestAnimationFrame(focusWhenMounted)
+    }
+    frame.current = requestAnimationFrame(focusWhenMounted)
+  }, [active, cancelFocus, tableRef])
   return <table ref={layout.tableRef} aria-rowcount={data.length + 1} data-inbound-entry-table
     className="isolate table-fixed text-sm [&_td]:px-3 [&_td]:py-2 [&_td]:align-middle [&_td]:[overflow-wrap:anywhere]"
     style={layout.usesPercent ? { width: '100%', minWidth: layout.percentMinWidth } : { width: layout.tableWidth, minWidth: layout.hasCustomWidths ? 0 : '100%' }}

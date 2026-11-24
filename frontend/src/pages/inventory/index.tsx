@@ -6,13 +6,15 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
+import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep, quantityInputError } from '@/lib/qtyStep'
 import { ImportSteps } from '@/components/shared/ImportSteps'
 import { useEffect, useState, useRef, useContext, useId, useMemo } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Package, Warehouse, Lock, CheckCircle, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
@@ -46,20 +48,15 @@ import type { Category } from '@/types/categories'
 import { readNullableIntParam, readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { getStockImportStatusApi, importStockApi, stockImportRequestKey, type ImportStockResult } from '@/api/inventory'
 
-const [codeColumn, articleColumn, specColumn, nameColumn, colorColumn] = productIdentityColumns()
 const inventoryColumns: (TableColumn<object> & { headerTitle?: string })[] = [
-  { ...codeColumn, width: 142 },
-  { ...nameColumn, width: 168 },
-  { key: 'warehouseName', title: '仓库', width: 104 },
-  { key: 'onHand', title: '在库数量', width: 104, align: 'right' },
-  { key: 'reserved', title: '已预占', width: 96, align: 'right' },
-  { key: 'available', title: '可用库存', headerTitle: '可用库存 = 在库 − 已预占', width: 104, align: 'right' },
-  { key: 'unit', title: '单位', width: 80 },
-  { ...articleColumn, width: 132 },
-  { ...specColumn, width: 120 },
-  { ...colorColumn, width: 88 },
-  { key: 'categoryPath', title: '分类路径', width: 160 },
-  { key: 'updatedAt', title: '最近更新', width: 150 },
+  { key: 'productName', title: '商品', width: 330 },
+  { key: 'warehouseName', title: '仓库', width: 136 },
+  { key: 'onHand', title: '在库数量', width: 94, align: 'right' },
+  { key: 'reserved', title: '已预占', width: 88, align: 'right' },
+  { key: 'available', title: '可用库存', headerTitle: '可用库存 = 在库 − 已预占', width: 94, align: 'right' },
+  { key: 'unit', title: '单位', width: 60 },
+  { key: 'categoryPath', title: '分类路径', width: 132 },
+  { key: 'updatedAt', title: '最近更新', width: 148 },
   { key: 'actions', title: '操作', width: 112 },
 ]
 
@@ -74,27 +71,10 @@ const emptyOp = {
   quantity: '', unitPrice: '', remark: '',
 }
 
-// ─── 统计卡片 ─────────────────────────────────────────────────────────────────
-
-function StatCard({ icon, label, value, sub, accent = 'text-foreground' }: {
-  icon: React.ReactNode; label: string; value: React.ReactNode; sub?: string; accent?: string
-}) {
-  return (
-    <div className="desktop-stock-stat card-base flex items-start gap-4 p-5">
-      <div className="desktop-stock-stat-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/60">{icon}</div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
-        <div className={`desktop-stock-stat-value mt-1 text-2xl font-bold ${accent}`}>{value}</div>
-        {sub && <p className="mt-0.5 text-xs text-muted-foreground">{sub}</p>}
-      </div>
-    </div>
-  )
-}
-
 function AvailableBadge({ available, onHand }: { available: number; onHand: number }) {
   if (available <= 0) return <span className="font-semibold text-destructive-ink">0</span>
   const ratio = onHand > 0 ? available / onHand : 1
-  const cls = ratio < 0.2 ? 'text-amber-600 font-medium' : 'text-emerald-600 font-medium'
+  const cls = ratio < 0.2 ? 'text-warning-ink font-medium' : 'text-success-ink font-medium'
   return <span className={cls}>{formatQty(available)}</span>
 }
 
@@ -194,7 +174,8 @@ export default function InventoryPage() {
   const logReadState = logPaused ? 'paused' : logFetching || logLoading ? 'loading'
     : logError ? 'failed' : logs ? 'ready' : 'loading'
   const { data: warehouses } = useWarehousesActive()
-  const { data: categoryTree = [] } = useCategoryTree()
+  const canViewCategory = can(PERMISSIONS.CATEGORY_VIEW)
+  const { data: categoryTree = [] } = useCategoryTree(undefined, active && tab === 'overview' && canViewCategory && categoryId != null)
   const { mutate: outbound, isPending, recovery } = useOutbound({ productName: form.productName, warehouseName: form.warehouseName || (warehouses ?? []).find(w => w.id === Number(form.warehouseId))?.name || '' })
   const opFrozen = isPending || !!recovery?.blocked
   const outboundDisabled = opFrozen || !form.productId || !form.warehouseId || !form.quantity || !!outboundQuantityError
@@ -232,7 +213,7 @@ export default function InventoryPage() {
   const TYPE_TONE: Record<number, StatusTone> = { 1: 'success', 2: 'danger', 3: 'info' }
   const TYPE_NAMES: Record<number, string> = { 1: '入库', 2: '出库', 3: '调整' }
 
-  const catName = categoryId ? findCatName(categoryTree, categoryId) : null
+  const catName = canViewCategory && categoryId ? findCatName(categoryTree, categoryId) : null
   const overviewWarehouseName = warehouseId ? (warehouseName || (warehouses ?? []).find((w: { id: number; name: string }) => w.id === warehouseId)?.name) || null : null
   const logsWarehouseName = logWarehouseId ? (warehouses ?? []).find((w: { id: number; name: string }) => w.id === logWarehouseId)?.name ?? null : null
   // ── 查询弹窗初始值 / 应用 ──
@@ -294,16 +275,16 @@ export default function InventoryPage() {
   }
 
   const logCols: TableColumn<InventoryLog>[] = [
-    { key: 'createdAt', title: '时间', width: 160, noWrap: true, render: v => formatDisplayDateTime(v) },
-    { key: 'typeName', title: '类型', width: 80, render: (_, r) => <SoftStatusLabel label={TYPE_NAMES[r.type]} tone={TYPE_TONE[r.type] ?? 'info'} /> },
-    ...productIdentityColumns(),
-    { key: 'warehouseName', title: '仓库', width: 140 },
-    { key: 'quantity', title: '数量', width: 90, render: (_, r) => <span>{r.type === 2 ? `-${r.quantity}` : r.quantity}</span> },
-    { key: 'beforeQty', title: '变动前', width: 90, render: v => <span className="text-muted-foreground">{v as number}</span> },
-    { key: 'afterQty', title: '变动后', width: 90, render: v => <span>{v as number}</span> },
-    { key: 'supplierName', title: '供应商', width: 140, render: v => (v as string) || '-' },
+    { key: 'createdAt', title: '时间', width: 154, noWrap: true, render: v => formatDisplayDateTime(v) },
+    { key: 'typeName', title: '类型', width: 76, render: (_, r) => <SoftStatusLabel label={TYPE_NAMES[r.type]} tone={TYPE_TONE[r.type] ?? 'info'} /> },
+    { ...productIdentityColumns({ compact: true })[0], width: 238 },
+    { key: 'warehouseName', title: '仓库', width: 136 },
+    { key: 'quantity', title: '数量', width: 86, align: 'right', render: (_, r) => <span className="tabular-nums">{r.type === 2 ? `-${r.quantity}` : r.quantity}</span> },
+    { key: 'beforeQty', title: '变动前', width: 86, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{v as number}</span> },
+    { key: 'afterQty', title: '变动后', width: 86, align: 'right', render: v => <span className="tabular-nums">{v as number}</span> },
+    { key: 'supplierName', title: '供应商', width: 112, render: v => (v as string) || '-' },
     { key: 'operatorName', title: '操作人', width: 112, minWidth: 112 },
-    { key: 'remark', title: '备注', expandableText: true, render: v => (v as string) || '-' },
+    { key: 'remark', title: '备注', width: 132, expandableText: true, render: v => (v as string) || '-' },
   ]
 
   // 库存初始化导入：下载模板 → 填数上传 → 后端逐行建容器/落库（POST /import/stock）
@@ -339,16 +320,12 @@ export default function InventoryPage() {
 
   const renderInventoryRow = (row: InventoryOverviewItem) => (
     <tr key={row.id} data-selected={drawerItem?.id === row.id && drawerOpen || undefined} className={`border-b border-border/40 transition-colors hover:bg-muted/20 ${drawerItem?.id === row.id && drawerOpen ? 'bg-primary/5' : ''}`}>
-      <td className="px-4 py-3"><div className="whitespace-normal [overflow-wrap:anywhere] font-mono text-xs" title={row.productCode}>{row.productCode || '—'}</div></td>
-      <td className="px-4 py-3 [overflow-wrap:anywhere]">{row.productName || '—'}</td>
+      <td className="px-4 py-3"><ProductIdentitySummary product={row} /></td>
       <td className="px-4 py-3 text-muted-foreground [overflow-wrap:anywhere]">{row.warehouseName}</td>
       <td className="px-4 py-3 text-right tabular-nums"><span className="font-medium">{formatQty(row.onHand)}</span></td>
       <td className="px-4 py-3 text-right tabular-nums"><Button variant="link" size="sm" className="h-auto p-0 tabular-nums" aria-label={`查看${row.productName}在${row.warehouseName}的预占明细`} onClick={() => setReservationItem(row)}>{formatQty(row.reserved)}</Button></td>
       <td className="px-4 py-3 text-right tabular-nums"><AvailableBadge available={row.available} onHand={row.onHand} /></td>
       <td className="px-4 py-3">{row.unit || '—'}</td>
-      {[row.articleNumber, row.spec, row.color].map((value, index) => (
-        <td key={['articleNumber', 'spec', 'color'][index]} className="px-4 py-3 [overflow-wrap:anywhere]">{value || '—'}</td>
-      ))}
       <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
       <td className="px-4 py-3 text-left text-xs text-muted-foreground"><div className="whitespace-normal [overflow-wrap:anywhere] tabular-nums" title={formatDisplayDateTime(row.updatedAt)}>{formatDisplayDateTime(row.updatedAt)}</div></td>
       <td className="px-4 py-3 text-left">
@@ -374,7 +351,7 @@ export default function InventoryPage() {
               ...(effectiveLogEndDate ? { endDate: effectiveLogEndDate } : {}),
             } : undefined,
           ).catch(e => toast.error((e as Error).message))}>{tab === 'logs' ? '导出流水 Excel' : '导出当前库存'}</Button>
-          {can(PERMISSIONS.STOCKCHECK_VIEW) && <Button variant="ghost" asChild><Link to="/stockcheck">查看盘点</Link></Button>}
+          {can(PERMISSIONS.STOCKCHECK_VIEW) && <Button variant="outline" asChild><Link to="/stockcheck">查看盘点</Link></Button>}
         </div>
         {(can(PERMISSIONS.IMPORT_STOCK_EXECUTE) || can(PERMISSIONS.INVENTORY_ADJUST)) &&
           <div role="group" aria-label="库存录入操作" className="flex flex-wrap items-center gap-2 sm:border-l sm:border-border sm:pl-2">
@@ -412,28 +389,23 @@ export default function InventoryPage() {
 
       <KeepAliveSection active={tab === 'overview'} className="space-y-4">
           {overviewError && <QueryErrorState error={overviewError} title="库存数量读取失败" compact onRetry={() => { if (active && tab === 'overview') void retryOverview() }} />}
-          {/* 统计卡片 */}
-          <div className="desktop-stock-summary grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <StatCard icon={<Package className="h-5 w-5 text-muted-foreground" />} label="商品 SKU 数"
-              value={overviewLoading ? '—' : (stats?.totalSkus ?? 0).toLocaleString()} sub="当前筛选条件下" />
-            <StatCard icon={<Warehouse className="h-5 w-5 text-blue-500" />} label="在库数量"
-              value={<InventoryQuantitySummary summary={quantitySummary} field="onHand" label="在库数量" readState={quantityReadState} />} accent="text-blue-600" />
-            <StatCard icon={<Lock className="h-5 w-5 text-amber-500" />} label="已预占"
-              value={<InventoryQuantitySummary summary={quantitySummary} field="reserved" label="已预占" readState={quantityReadState} />} sub="销售单已占用" accent="text-amber-600" />
-            <StatCard icon={<CheckCircle className="h-5 w-5 text-emerald-500" />} label="可用库存"
-              value={<InventoryQuantitySummary summary={quantitySummary} field="available" label="可用库存" readState={quantityReadState} />} sub="在库 − 已预占" accent="text-emerald-600" />
-          </div>
+          <SummaryStrip items={[
+            { label: '商品 SKU 数', value: overviewLoading ? '—' : (stats?.totalSkus ?? 0).toLocaleString() },
+            { label: '在库数量', tone: 'text-primary', value: <InventoryQuantitySummary summary={quantitySummary} field="onHand" label="在库数量" readState={quantityReadState} /> },
+            { label: '已预占', tone: 'text-warning-ink', value: <InventoryQuantitySummary summary={quantitySummary} field="reserved" label="已预占" readState={quantityReadState} /> },
+            { label: '可用库存', tone: 'text-success-ink', value: <InventoryQuantitySummary summary={quantitySummary} field="available" label="可用库存" readState={quantityReadState} /> },
+          ]} />
 
           {/* 库存表格 */}
           <div className="desktop-table desktop-inventory-table card-base overflow-hidden">
             <div className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               role="region" aria-label="库存总览表格，可横向滚动" tabIndex={0} data-table-scroll>
-              <ResizableTable columns={inventoryColumns} columnStorageKey="inventory-overview" aria-rowcount={list.length + 1}>
-                {!overviewLoading && list.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={list} columns={13} getRowKey={inventoryRowKey} renderRow={renderInventoryRow} /> : <tbody>
+              <ResizableTable columns={inventoryColumns} columnStorageKey="inventory-overview-v2" aria-rowcount={list.length + 1}>
+                {!overviewLoading && list.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={list} columns={inventoryColumns.length} getRowKey={inventoryRowKey} renderRow={renderInventoryRow} /> : <tbody>
                   {overviewLoading ? (
-                    <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
+                    <tr><td colSpan={inventoryColumns.length} className="py-16 text-center text-sm text-muted-foreground">加载中…</td></tr>
                   ) : list.length === 0 ? (
-                    <tr><td colSpan={13} className="py-16 text-center text-sm text-muted-foreground">暂无库存数据</td></tr>
+                    <tr><td colSpan={inventoryColumns.length} className="py-16 text-center text-sm text-muted-foreground">暂无库存数据</td></tr>
                   ) : (
                     list.map(renderInventoryRow)
                   )}
@@ -553,6 +525,7 @@ export default function InventoryPage() {
 
       <InventoryOverviewQueryDialog
         open={overviewQueryOpen}
+        canSelectCategory={active && tab === 'overview' && canViewCategory}
         initial={initialOverviewQuery}
         onClose={() => setOverviewQueryOpen(false)}
         onApply={applyOverviewQuery}

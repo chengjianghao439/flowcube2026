@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { toast } from '@/lib/toast'
@@ -27,6 +29,7 @@ const STATUS_TONE: Record<number, StatusTone> = { 1:'active', 2:'success', 3:'da
 export default function StockCheckPage() {
   // 2026-09-17 验收修复（G-10）：新建盘点按钮按权限渲染
   const { can } = usePermission()
+  const createFormId = useId()
   const [keyword, setKeyword] = useState('')
   const [search, setSearch] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
@@ -36,11 +39,19 @@ export default function StockCheckPage() {
   const [checkType, setCheckType] = useState<'1'|'2'>('1')
   const [abcClass, setAbcClass] = useState<'A'|'B'|'C'>('A')
   const [createLocked, setCreateLocked] = useState(false)
+  const [validationAttempted, setValidationAttempted] = useState(false)
 
   const { data, isLoading, error, refetch } = useCheckList({ page: 1, pageSize: 20, keyword })
   const total = data?.pagination?.total ?? 0
   const { data: warehouses } = useWarehousesActive()
   const create = useCreateCheck()
+  const selectedWarehouse = warehouses?.find(warehouse => String(warehouse.id) === whId)
+  const warehouseError = validationAttempted && !selectedWarehouse ? '请选择仓库' : ''
+
+  function showCreate(open: boolean) {
+    setCreateOpen(open)
+    if (!open) setValidationAttempted(false)
+  }
 
   const columns: TableColumn<StockCheck>[] = [
     { key:'checkNo', title:'盘点单号', width:160, render:(v)=><span className="text-doc-code">{String(v)}</span> },
@@ -49,16 +60,17 @@ export default function StockCheckPage() {
     { key:'status', title:'状态', width:90, render:(v,row)=><SoftStatusLabel label={(row as StockCheck).statusName} tone={STATUS_TONE[v as number] ?? 'draft'} /> },
     { key:'operatorName', title:'经办人', width:100 },
     { key:'createdAt', title:'创建时间', width:160, render:(v)=>formatDisplayDateTime(v) },
-    { key:'id', title:'操作', width:100, render:(_,row)=>(
+    { key:'id', title:'操作', width:128, render:(_,row)=>(
       <Button size="sm" variant="outline" onClick={()=>setDetailId((row as StockCheck).id)}>查看/填写</Button>
     )}
   ]
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (createLocked || create.isPending) return
-    const wh = warehouses?.find(w=>String(w.id)===whId)
-    if(!wh) { toast.warning('请选择仓库'); return }
+    const wh = selectedWarehouse
+    setValidationAttempted(true)
+    if (!wh) { focusOrderEntryField(e.currentTarget, 'warehouse'); return }
     try {
       setCreateLocked(true)
       if (checkType === '2') {
@@ -68,7 +80,7 @@ export default function StockCheckPage() {
       } else {
         await create.mutateAsync({ warehouseId:wh.id, warehouseName:wh.name, remark:remark||undefined })
       }
-      setCreateOpen(false); setWhId(''); setRemark(''); setCheckType('1')
+      showCreate(false); setWhId(''); setRemark(''); setCheckType('1')
     } finally {
       setCreateLocked(false)
     }
@@ -88,14 +100,15 @@ export default function StockCheckPage() {
         : <DataTable virtualized preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list||[]} loading={isLoading} />}
       {!error && !isLoading && data && !data.truncated && <ListSummary total={total} unit="单" />}
 
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-2xl">
+      <Dialog open={createOpen} onOpenChange={showCreate}>
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{checkType==='2'?'分批盘点：只拉该档位到期未盘的商品（不停机）':'全盘：拉该仓库所有有库存的商品'}作为盘点明细</>}><DialogTitle>新建盘点单</DialogTitle></DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label>选择仓库 *</Label>
+          <form id={createFormId} onSubmit={handleCreate} className="fc-form-dialog-body desktop-entry-controls space-y-4">
+            <div className="space-y-1" data-entry-field="warehouse">
+              <Label htmlFor={`${createFormId}-warehouse`}>选择仓库 <span aria-hidden="true">*</span></Label>
               <Select value={whId || '__none__'} onValueChange={v => setWhId(v === '__none__' ? '' : v)}>
-                <SelectTrigger className="h-10 w-full">
+                <SelectTrigger id={`${createFormId}-warehouse`} aria-required="true" className="h-10 w-full"
+                  aria-invalid={!!warehouseError} aria-describedby={warehouseError ? `${createFormId}-warehouse-error` : undefined}>
                   <SelectValue placeholder="请选择" />
                 </SelectTrigger>
                 <SelectContent>
@@ -105,11 +118,12 @@ export default function StockCheckPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <OrderFieldError id={`${createFormId}-warehouse-error`}>{warehouseError}</OrderFieldError>
             </div>
             <div className="space-y-1">
-              <Label>盘点方式</Label>
+              <Label htmlFor={`${createFormId}-method`}>盘点方式</Label>
               <Select value={checkType} onValueChange={v => setCheckType(v as '1'|'2')}>
-                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id={`${createFormId}-method`} className="h-10 w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">全盘（盘全仓所有有货商品）</SelectItem>
                   <SelectItem value="2">分批盘点（按档位，不停机）</SelectItem>
@@ -119,32 +133,32 @@ export default function StockCheckPage() {
             {checkType==='2' && (
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
-                  <Label>档位</Label>
+                  <Label htmlFor={`${createFormId}-abc`}>档位</Label>
                   <Button type="button" size="sm" variant="ghost" className="h-7 text-xs" disabled={!whId} onClick={async () => {
                     const w = warehouses?.find(x=>String(x.id)===whId); if(!w){ toast.warning('请先选仓库'); return }
                     try { const r = await recomputeAbcApi({ warehouseId: w.id }); toast.success(`已重算 ${r!.classified} 个商品的分档`) } catch { toast.error('重算失败') }
                   }}>重算本仓分档</Button>
                 </div>
                 <Select value={abcClass} onValueChange={v => setAbcClass(v as 'A'|'B'|'C')}>
-                  <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id={`${createFormId}-abc`} aria-describedby={`${createFormId}-abc-help`} className="h-10 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="A">A 类（高周转，盘点更频繁）</SelectItem>
                     <SelectItem value="B">B 类（中周转）</SelectItem>
                     <SelectItem value="C">C 类（低周转，盘点频率低）</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">只盘该类到期未盘的商品。首次分批盘点前请先「重算本仓分档」。</p>
+                <p id={`${createFormId}-abc-help`} className="text-xs text-muted-foreground">只盘该类到期未盘的商品。首次分批盘点前请先「重算本仓分档」。</p>
               </div>
             )}
             <div className="space-y-1">
-              <Label>备注</Label>
-              <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRemark(e.target.value)} />
+              <Label htmlFor={`${createFormId}-remark`}>备注</Label>
+              <Input id={`${createFormId}-remark`} value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRemark(e.target.value)} />
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={()=>setCreateOpen(false)} disabled={create.isPending || createLocked}>取消</Button>
-              <Button type="submit" disabled={create.isPending || createLocked}>{create.isPending || createLocked?'创建中…':'创建盘点'}</Button>
-            </DialogFooter>
           </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={()=>showCreate(false)} disabled={create.isPending || createLocked}>取消</Button>
+            <Button type="submit" form={createFormId} disabled={create.isPending || createLocked}>{create.isPending || createLocked?'创建中…':'创建盘点'}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

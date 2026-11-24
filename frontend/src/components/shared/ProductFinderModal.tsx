@@ -45,6 +45,7 @@ export interface ProductFinderModalProps {
 }
 
 const PAGE_SIZE = 30
+const productKey = (product: ProductFinderResult) => product.id
 function CategoryTree({ nodes, selectedId, onSelect, depth = 0, compact = false }: {
   nodes: Category[]; selectedId: number | null; onSelect: (id: number, name: string) => void; depth?: number; compact?: boolean
 }) {
@@ -120,8 +121,9 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
   // 不会把"选中那一刻"的旧对象回传出去（原缺陷：页脚确认回传过期行）。
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const categoryPermission = () => explicitContext ? permission(PERMISSIONS.CATEGORY_VIEW) : mayReorder(PERMISSIONS.CATEGORY_VIEW)
-  const categoryReadable = explicitContext ? readable && categoryPermission() : !readOwner || (readable && categoryPermission())
-  const categories = useCategoryTree(readContext ? { ...readContext, enabled: categoryReadable, assertCurrent: () => { assertCurrent(); if (!categoryPermission()) throw new Error('当前没有分类查看权限') } } : undefined)
+  const canReadCategories = useAuthStore(state => hasPermission(state.user?.permissions, PERMISSIONS.CATEGORY_VIEW, state.user?.roleId))
+  const categoryReadable = open && active && readable && canReadCategories
+  const categories = useCategoryTree(readContext ? { ...readContext, assertCurrent: () => { assertCurrent(); if (!categoryPermission()) throw new Error('当前没有分类查看权限') } } : undefined, categoryReadable)
   const query = useProductFinder({ page: 1, pageSize: PAGE_SIZE, keyword: searchText, categoryId: category?.id ?? null, warehouseId: warehouseId ?? null }, true, readContext)
   useEffect(() => { const timer = setTimeout(() => setSearchText(keyword.trim()), 300); return () => clearTimeout(timer) }, [keyword])
   const pending = keyword.trim() !== searchText || query.isFetching || query.isPlaceholderData
@@ -129,8 +131,8 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
   const total = query.data?.pagination.total ?? 0
   const errorStatus = query.error as { status?: number; response?: { status?: number } } | null
   const forbidden = (errorStatus?.status ?? errorStatus?.response?.status) === 403
-  const incomplete = compact && query.data?.truncated === true
-  const allowIncompleteSelection = compact && mode === 'purchase' && !!explicitContext
+  const incomplete = query.data?.truncated === true
+  const allowIncompleteSelection = !compact || (mode === 'purchase' && !!explicitContext)
   const blockedIncomplete = incomplete && !allowIncompleteSelection
   const selected = selectedId != null ? products.find(p => p.id === selectedId) ?? null : null
   const canConfirm = selected != null && !pending && !query.isError && !blockedIncomplete && (!compact || !delivery.current.closed)
@@ -158,20 +160,21 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
   const purchaseLayout = compact && mode === 'purchase' && !!explicitContext
   const compactWidths = purchaseLayout ? [104, 132, 112, 232, 80, 56, 140] : [104, 132, 116, 208, 84, 74, 114]
   const columnCount = 7 + (hasStock ? 1 : 0) + (mode === 'sale' ? 1 : 0)
+  const virtual = !query.isLoading && products.length >= VIRTUAL_TABLE_THRESHOLD
   const scrollToIndex = useRef<((index: number) => void) | null>(null)
   const registerScroll = useCallback((scroll: ((index: number) => void) | null) => { scrollToIndex.current = scroll }, [])
   const renderRow = (product: ProductFinderResult, index: number) => <tr key={product.id} data-finder-key={product.id} aria-selected={selectedId === product.id} tabIndex={pending ? -1 : 0} onClick={() => { if (current() && !pending) setSelectedId(product.id) }} onDoubleClick={() => confirm(product)} onKeyDown={e => {
     if (!current() || pending) return
     if (e.key === ' ') { e.preventDefault(); setSelectedId(product.id) }
     if (e.key === 'Enter') { e.preventDefault(); if (compact || selectedId === product.id) confirm(product); else setSelectedId(product.id) }
-    if (compact) moveFinderFocus(e, products, index, row => row.id, scrollToIndex.current)
-  }} className={cn('cursor-pointer align-top outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring', compact && 'border-b', pending ? 'opacity-50' : selectedId === product.id ? 'bg-primary/[0.07]' : 'hover:bg-muted/50')}>
+    moveFinderFocus(e, products, index, productKey, scrollToIndex.current)
+  }} className={cn('cursor-pointer align-top outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring', compact ? 'border-b' : virtual && 'border-b border-border last:border-b-0', pending ? 'opacity-50' : selectedId === product.id ? 'bg-primary/[0.07]' : 'hover:bg-muted/50')}>
     <ProductIdentityCells product={product} nameContent={<><span>{product.name}</span>{!pending && searchText && product.searchMatch && <span className="block text-xs leading-5 text-muted-foreground">命中：{product.searchMatch}</span>}</>} />
     <td className="px-2 py-3 text-muted-foreground"><span>{product.unit || '—'}</span>{product.allowDecimalQty === false && <span className={cn('rounded bg-warning/10 px-1 text-xs text-warning-ink', compact ? 'mt-0.5 inline-block' : 'ml-1')}>只能整数</span>}</td><td className="break-words px-3 py-3 text-xs leading-5 text-muted-foreground">{mode === 'purchase' ? product.supplierName || '—' : product.categoryName || '未分类'}</td>
     {hasStock && <td className="px-3 py-3 text-right tabular-nums">{product.stock}</td>}{mode === 'sale' && <td className="px-3 py-3 text-right tabular-nums">{product.salePrice == null ? '—' : compact ? unitPrice(product.salePrice) : money(product.salePrice)}</td>}
   </tr>
 
-  return <AppDialog descriptionInHeader description={localPaused ? <span role="status">{explicitContext ? permission(PERMISSIONS.PRODUCT_VIEW) ? '读取已暂停，输入已保留。请关闭后重新选择商品。' : '当前没有商品查看权限，输入已保留。' : '读取来源已变化，输入已保留。请关闭后重新选择商品。'}</span> : incomplete && !pending && !query.isError ? <span role="status">已读取 {products.length.toLocaleString()} / {total.toLocaleString()} 个匹配商品。{allowIncompleteSelection ? '请缩小搜索范围以查看其余匹配商品。' : '请缩小搜索范围后再确认选择。'}</span> : compact ? '按商品资料查找，确认所需商品。' : '按商品资料查找；单击选择，双击或选中后按 Enter 确认。'} captureFocusOnOpen open={readable || localPaused} onOpenChange={value => { if (!value) close() }} dialogId={dialogId ?? (compact ? 'sale-product-finder' : 'product-finder-v2')} defaultWidth={compact ? 1240 : 1200} defaultHeight={compact ? 660 : 730} minWidth={compact ? 900 : 960} minHeight={compact ? 480 : 560}
+  return <AppDialog descriptionInHeader description={localPaused ? <span role="status">{explicitContext ? permission(PERMISSIONS.PRODUCT_VIEW) ? '读取已暂停，输入已保留。请关闭后重新选择商品。' : '当前没有商品查看权限，输入已保留。' : '读取来源已变化，输入已保留。请关闭后重新选择商品。'}</span> : incomplete && !pending && !query.isError ? <span role="status">已读取 {products.length.toLocaleString()} / {total.toLocaleString()} 个匹配商品。{allowIncompleteSelection ? '请缩小搜索范围以查看其余匹配商品。' : '请缩小搜索范围后再确认选择。'}</span> : compact ? '按商品资料查找，确认所需商品。' : '双击商品确认，或用方向键浏览，空格选择后按 Enter 确认。'} captureFocusOnOpen open={readable || localPaused} onOpenChange={value => { if (!value) close() }} dialogId={dialogId ?? (compact ? 'sale-product-finder' : 'product-finder-v2')} defaultWidth={compact ? 1240 : 1200} defaultHeight={compact ? 660 : 730} minWidth={compact ? 900 : 960} minHeight={compact ? 480 : 560}
     onOpenAutoFocus={event => {
       if (!searchInput.current || searchInput.current.disabled) return
       event.preventDefault()
@@ -193,7 +196,7 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">
           <div className={cn('flex shrink-0 items-center justify-between gap-3 px-4 text-xs text-muted-foreground', compact ? 'py-2' : 'py-2.5')}><span>{category ? `${category.name}（含子分类）` : '全部商品'}</span><span aria-live="polite">{pending ? '正在查询…' : query.isError ? '查询失败' : `共 ${total.toLocaleString()} 个匹配商品`}</span></div>
-          <div className="min-h-0 flex-1 overflow-auto" data-table-scroll={compact ? '' : undefined} aria-busy={!!pending}>
+          <div className="min-h-0 flex-1 overflow-auto" data-table-scroll aria-busy={!!pending}>
             {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} title={explicitContext && forbidden ? '没有商品查看权限' : '商品加载失败'} compact /> : <ResizableTable columns={[
               ...productIdentityColumns({ code: 'code', name: 'name' }).map((column, index) => ({ ...column, width: compact ? compactWidths[index] : column.width })),
               { key: 'unit', title: '单位', width: compact ? compactWidths[5] : 80 },
@@ -201,8 +204,9 @@ function ProductFinderContent({ open, compact = false, context: suppliedContext,
               ...(hasStock ? [{ key: 'stock', title: '可用库存', width: 86, align: 'right' as const }] : []),
               ...(mode === 'sale' ? [{ key: 'salePrice', title: compact ? '价格 A 参考' : '参考售价', width: 106, align: 'right' as const }] : []),
             ]} columnStorageKey={`product-finder:${compact ? purchaseLayout ? 'compact-purchase' : 'compact' : 'full'}:${mode}:${hasStock ? 'stock' : 'plain'}`}
-              minWidth={compact ? purchaseLayout ? hasStock ? 940 : 860 : 1024 : 1200} stickyHeader className={purchaseLayout ? 'text-[13px]' : 'text-sm'}>
-              {compact && !query.isLoading && products.length >= VIRTUAL_TABLE_THRESHOLD ? <VirtualTableBody data={products} columns={columnCount} getRowKey={product => product.id} renderRow={renderRow} onScrollToIndexReady={registerScroll} /> : <tbody className="divide-y divide-border">{query.isLoading ? <tr><td colSpan={columnCount} className="py-20 text-center text-muted-foreground">正在加载商品…</td></tr> : !products.length ? <tr><td colSpan={columnCount} className="py-16 text-center"><PackageSearch className="mx-auto mb-3 h-7 w-7 text-muted-foreground/50" /><p className="font-medium">没有匹配的商品</p>{!compact && <p className="mt-1 text-xs text-muted-foreground">试试其他关键词，或切换到全部分类。</p>}</td></tr> : products.map(renderRow)}</tbody>}
+              minWidth={compact ? purchaseLayout ? hasStock ? 940 : 860 : 1024 : 1200} stickyHeader className={purchaseLayout ? 'text-[13px]' : 'text-sm'}
+              aria-label="商品查询结果" aria-rowcount={virtual ? products.length + 1 : undefined}>
+              {virtual ? <VirtualTableBody data={products} columns={columnCount} getRowKey={productKey} renderRow={renderRow} onScrollToIndexReady={registerScroll} preserveFocus /> : <tbody className="divide-y divide-border">{query.isLoading ? <tr><td colSpan={columnCount} className="py-20 text-center text-muted-foreground">正在加载商品…</td></tr> : !products.length ? <tr><td colSpan={columnCount} className="py-16 text-center"><PackageSearch className="mx-auto mb-3 h-7 w-7 text-muted-foreground/50" /><p className="font-medium">没有匹配的商品</p>{!compact && <p className="mt-1 text-xs text-muted-foreground">试试其他关键词，或切换到全部分类。</p>}</td></tr> : products.map(renderRow)}</tbody>}
             </ResizableTable>}
           </div>
         </div>

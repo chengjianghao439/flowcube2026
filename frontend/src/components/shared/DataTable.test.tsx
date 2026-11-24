@@ -46,6 +46,61 @@ test('空态保留表格语义，自定义操作可用，加载和有数据时�
   expect(host.querySelector('tbody button')).toBeNull()
   expect(host.querySelector('tbody')!.textContent).toContain('商品')
 })
+test('实际横滚的单元格可键盘聚焦，充分展开后退出 Tab 顺序，操作按钮可继续使用', () => {
+  let nameWidth = 90
+  const observers = new Set<{ callback: ResizeObserverCallback; targets: Set<Element> }>()
+  vi.stubGlobal('ResizeObserver', class {
+    private record: { callback: ResizeObserverCallback; targets: Set<Element> }
+    constructor(callback: ResizeObserverCallback) { this.record = { callback, targets: new Set() }; observers.add(this.record) }
+    observe(target: Element) { this.record.targets.add(target) }
+    unobserve(target: Element) { this.record.targets.delete(target) }
+    disconnect() { observers.delete(this.record) }
+  })
+  const parentColumn = (element: HTMLElement) => element.parentElement?.dataset.columnKey
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (this: HTMLElement) {
+    return parentColumn(this) === 'name' ? nameWidth : 120
+  })
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+    return parentColumn(this) === 'name' ? 160 : 120
+  })
+  const open = vi.fn()
+  render([
+    { key: 'name', title: '名称', width: 100, noWrap: true },
+    { key: 'code', title: '编码', width: 100, noWrap: true },
+    { key: 'actions', title: '操作', width: 150, render: () => <button onClick={open}>办理</button> },
+  ])
+  const cell = (key: string) => host.querySelector<HTMLElement>('tbody td[data-column-key="' + key + '"] > div')!
+  expect(cell('name').tabIndex).toBe(0)
+  expect(cell('code').hasAttribute('tabindex')).toBe(false)
+  expect(cell('actions').hasAttribute('tabindex')).toBe(false)
+  cell('name').focus()
+  expect(document.activeElement).toBe(cell('name'))
+  const action = cell('actions').querySelector('button')!
+  action.focus()
+  act(() => action.click())
+  expect(document.activeElement).toBe(action)
+  expect(open).toHaveBeenCalledOnce()
+
+  nameWidth = 180
+  act(() => observers.forEach(({ callback, targets }) => {
+    callback(Array.from(targets, target => ({ target } as ResizeObserverEntry)), {} as ResizeObserver)
+  }))
+  expect(cell('name').hasAttribute('tabindex')).toBe(false)
+})
+
+test('单元格改用换行时移除之前横滚留下的 Tab 停靠点', async () => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(90)
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(160)
+  const data = [{ id: 1, name: '合成名称' }]
+  const column = { key: 'name', title: '名称' }
+  act(() => root!.render(<DataTable columns={[{ ...column, noWrap: true }]} data={data} />))
+  const cell = host.querySelector<HTMLElement>('tbody td > div')!
+  expect(cell.tabIndex).toBe(0)
+  await act(async () => root!.render(<DataTable columns={[column]} data={data} />))
+  expect(host.querySelector('tbody td > div')).toBe(cell)
+  expect(cell.hasAttribute('tabindex')).toBe(false)
+})
+
 // jsdom 不排版：只替代浏览器测量结果，拖拽仍调用真实组件事件处理。
 function measure(widths: number[]) {
   host.querySelectorAll('col').forEach((col, i) => vi.spyOn(col, 'getBoundingClientRect').mockReturnValue({ width: widths[i] } as DOMRect))

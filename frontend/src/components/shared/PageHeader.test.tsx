@@ -6,6 +6,7 @@ import { expect, test, vi } from 'vitest'
 import PageHeader from './PageHeader'
 import { PageHeaderContext } from './PageHeaderContext'
 import { ActionBar } from './ActionBar'
+import { SectionCard } from './SectionCard'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -65,5 +66,21 @@ test('document headers use the same description and retain inline state and acti
     expect(getByRole(host, 'heading', { name: '新建采购单' }).parentElement?.textContent).toContain('未保存')
     act(() => getByRole(host, 'button', { name: '保存' }).click())
     expect(save).toHaveBeenCalledTimes(1)
+  } finally { act(() => root.unmount()); host.remove() }
+})
+
+test('单据页标题下的卡片使用二级标题', () => {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  try {
+    act(() => root.render(<>
+      <ActionBar title="新建采购单" description="核对采购信息与商品明细。" />
+      <SectionCard title="订单信息"><p>采购说明</p></SectionCard>
+      <SectionCard title="商品明细"><p>明细说明</p></SectionCard>
+    </>))
+    expect(getByRole(host, 'heading', { name: '新建采购单', level: 1 })).toBeTruthy()
+    expect(getByRole(host, 'heading', { name: '订单信息', level: 2 })).toBeTruthy()
+    expect(getByRole(host, 'heading', { name: '商品明细', level: 2 })).toBeTruthy()
   } finally { act(() => root.unmount()); host.remove() }
 })

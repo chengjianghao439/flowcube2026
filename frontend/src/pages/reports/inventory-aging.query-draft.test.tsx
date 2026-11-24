@@ -23,6 +23,7 @@ const listPath = '/reports/inventory-aging', listKey = 'inventory-aging', apiPat
 const applied = { keyword: '', warehouse: '全部仓库', staleDays: '90 天' }
 const draft = { keyword: '未应用存放查询', warehouse: '合成仓B', staleDays: '120 天' }
 const warehouses = [{ id: 8, name: '合成仓A' }, { id: 9, name: '合成仓B' }]
+const longWarehouseName = '合成仓库-GL96d92411'
 
 let host: HTMLDivElement, root: Root, query: QueryClient
 let respondList: (url: URL) => Response | Promise<Response>
@@ -40,9 +41,9 @@ const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
   return response({ success: true, data: { list: [], warnDays: 30 } })
 })
 function response(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }) }
-function row(revision = 1) { return { id: 'SYN'+revision, productId: 42, productCode: `R-SYN${revision}`, productName: `合成报表商品${revision}`, unit: '个', warehouseId: 9, warehouseName: '合成仓B', qty0_30: 1, qty30_60: 0, qty60_90: 0, qty90p: 0, totalQty: 1, totalValue: 1, avgAgeDays: 10, maxAgeDays: 10, lastOutboundAt: null, daysSinceOutbound: null, isStale: false } }
-function listResponse(revision = 0) {
-  const list = revision ? [row(revision)] : []
+function row(revision = 1, warehouseName = '合成仓B') { return { id: 'SYN'+revision, productId: 42, productCode: `R-SYN${revision}`, productName: `合成报表商品${revision}`, unit: '个', warehouseId: 9, warehouseName, qty0_30: 1, qty30_60: 0, qty60_90: 0, qty90p: 0, totalQty: 1, totalValue: 1, avgAgeDays: 10, maxAgeDays: 10, lastOutboundAt: null, daysSinceOutbound: null, isStale: false } }
+function listResponse(revision = 0, warehouseName?: string) {
+  const list = revision ? [row(revision, warehouseName)] : []
   return response({ success: true, data: { list, pagination: { page: 1, pageSize: 200, total: list.length }, buckets: [], staleDays: 90 } })
 }
 function failure() { return response({ success: false, code: 'SYNTHETIC_READ_FAILURE', message: '合成查询失败' }, 503) }
@@ -87,6 +88,15 @@ afterEach(async () => {
   await act(async () => root.unmount()); host.remove(); query.clear(); disposeWorkspaceHistoryGuard()
   apiClient.defaults.adapter = oldAdapter; apiClient.defaults.env = oldEnv; setApiClientBaseURL('/api')
   useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key }); vi.restoreAllMocks(); vi.unstubAllGlobals(); expect(unexpected).toEqual([])
+})
+test('存放明细保留长仓名原文及足够的默认列宽', async () => {
+  respondList = () => listResponse(1, longWarehouseName)
+  await ready()
+  const table = host.querySelector('table')!
+  const cell = table.querySelector<HTMLTableCellElement>('tbody td[data-column-key="warehouseName"]')!
+  expect(cell.textContent).toBe(longWarehouseName)
+  const column = table.querySelectorAll('col')[cell.cellIndex]
+  expect(Number.parseFloat(column.style.width)).toBeGreaterThanOrEqual(132)
 })
 test.each([200, 503])('AGING-Q01 首次读取以 %i 完成保留尚未应用草稿', async status => {
   let release!: (value: Response) => void; respondList = () => new Promise(resolve => { release = resolve })
@@ -160,7 +170,12 @@ test('明确从未出库的记录也进入滞销口径，库龄单独从本仓�
   await ready()
   expect(document.body.textContent).toContain('从未出库的库存纳入滞销')
   expect(document.body.textContent).toContain('自入库本仓起算')
-  const statuses = [...host.querySelectorAll('tbody tr')].map(row => row.lastElementChild?.textContent)
-  expect(statuses).toEqual(['从未出库', '91 天未出库', '正常'])
+  const outbound = [...host.querySelectorAll('tbody td[data-column-key="lastOutboundAt"] > div > div')]
+    .map(cell => [...cell.children].map(field => field.textContent))
+  expect(outbound).toEqual([
+    ['—', '从未出库'],
+    ['2026-08-11 00:00', '91 天未出库'],
+    ['2026-08-12 00:00', '正常'],
+  ])
   expect(host.textContent).not.toContain('（积压）')
 })

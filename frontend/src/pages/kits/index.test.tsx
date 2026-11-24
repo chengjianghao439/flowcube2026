@@ -45,15 +45,18 @@ test('资料列表沿自己的Tab查询有界取齐；只读账号查看但不�
   useAuthStore.setState({ user: { ...useAuthStore.getState().user!, permissions: [PERMISSIONS.PRODUCT_VIEW] } })
   await mount(async host => {
     expect(host.textContent).toContain('成套配件'); expect(host.textContent).toContain('铰链套')
-    for (const title of ['分类', '供应商', '单位', '型号', '颜色', '进价', '价格A', '价格B', '价格C', '价格D']) expect(host.textContent).toContain(title)
-    for (const value of ['五金配件', '配件供应商', 'H-10', '银色']) expect(host.textContent).toContain(value)
+    const headers = [...host.querySelectorAll('thead th')].map(header => header.textContent?.trim())
+    expect(headers).toEqual(['成套配件', '分类 / 供应商', '单位', '进价', '价格A', '组件数', '状态', '操作'])
+    for (const value of ['五金配件', '配件供应商', 'K7', 'H-10', '银色', 'SUP-H10']) expect(host.textContent).toContain(value)
     expect(host.querySelector('input[name="keyword"]')?.getAttribute('placeholder')).toBe('按编码、名称、型号、颜色或供应商型号搜索')
     expect(fixtures.list.mock.calls[0][0]).toEqual({ page: 1, pageSize: 100, keyword: '套' })
     expect(host.textContent).not.toContain('新增配件'); expect(host.textContent).not.toContain('删除')
     await click('查看'); expect(document.body.textContent).toContain('采样时间未单独保存')
     expect(document.body.textContent).toContain('0.000001')
     expect(document.body.textContent).not.toContain('保存修改')
-    expect(document.querySelector<HTMLInputElement>('input[aria-label="价格A"]')?.matches(':disabled')).toBe(true)
+    for (const tier of ['A', 'B', 'C', 'D']) {
+      expect(document.querySelector<HTMLInputElement>(`input[aria-label="价格${tier}"]`)?.matches(':disabled')).toBe(true)
+    }
   })
 })
 test('报价独立修改省略组成并展示服务端新版本/revision，原A价参考不变', async () => {

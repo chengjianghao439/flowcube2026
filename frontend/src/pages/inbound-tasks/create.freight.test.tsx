@@ -17,18 +17,47 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let host: HTMLDivElement, root: ReturnType<typeof createRoot>
 beforeEach(() => { state.can = true; state.pending = null; state.context = 'original-account-server'; state.save.mockReset(); host = document.createElement('div'); document.body.append(host); root = createRoot(host); vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} unobserve() {} }) })
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); useDirtyGuardStore.setState({ dirtyTabs: {}, pendingConfirm: null }); vi.unstubAllGlobals() })
-const render = () => act(async () => root.render(<MemoryRouter><TabPathContext.Provider value="/inbound-tasks/new"><Page /></TabPathContext.Provider></MemoryRouter>))
+const render = () => act(async () => root.render(<MemoryRouter initialEntries={['/inbound-tasks/new']}><TabPathContext.Provider value="/inbound-tasks/new"><Page /></TabPathContext.Provider></MemoryRouter>))
 const input = (name: string) => { const label = [...host.querySelectorAll('label')].find(l => l.textContent === name)!; return document.getElementById(label.htmlFor) as HTMLInputElement }
 const fill = async (name: string, value: string) => act(async () => { const el = input(name); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value); el.dispatchEvent(new Event('input', { bubbles: true })) })
 const click = async (name: string) => act(async () => [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === name)!.click())
 async function chosen() { await render(); await act(async () => input('供应商 *').click()); await click('确定供应商'); await click('选择商品'); await click('确定来源') }
+test('首次创建将缺失供应商和明细标在表单内，修正后聚焦选商品', async () => {
+  await render()
+  await click('创建收货订单')
+  const supplier = input('供应商 *')
+  expect(document.activeElement).toBe(supplier)
+  expect(supplier.getAttribute('aria-invalid')).toBe('true')
+  expect(document.getElementById(supplier.getAttribute('aria-describedby')!)?.textContent).toBe('请先选择供应商')
+  await act(async () => supplier.click())
+  await click('确定供应商')
+  await click('创建收货订单')
+  const add = [...host.querySelectorAll('button')].find(button => button.textContent?.trim() === '选择商品')!
+  expect(document.activeElement).toBe(add)
+  expect(document.getElementById(add.getAttribute('aria-describedby')!)?.textContent).toBe('请至少填写一条收货数量')
+  expect(state.save).not.toHaveBeenCalled()
+})
+
+test('超过可建单数量显示在对应明细，并阻止保存旧数量', async () => {
+  await chosen()
+  const quantity = host.querySelector<HTMLInputElement>('[data-purchase-item-id="41"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(quantity, '11')
+    quantity.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await click('创建收货订单')
+  expect(document.activeElement).toBe(quantity)
+  expect(quantity.getAttribute('aria-invalid')).toBe('true')
+  expect(document.getElementById(quantity.getAttribute('aria-describedby')!)?.textContent).toContain('超出可建单数量')
+  expect(state.save).not.toHaveBeenCalled()
+})
 test('新建无默认运费方式，空金额传null；0按0保存', async () => {
   await chosen(); expect(host.textContent).toContain('运费方式'); expect(input('运费金额').value).toBe(''); expect(host.textContent).toContain('请选择')
   await click('创建收货订单'); expect(state.save.mock.calls[0][0]).toMatchObject({ freightType: null, freightAmount: null })
   await fill('运费金额', '0'); await click('创建收货订单'); expect(state.save.mock.calls[1][0]).toMatchObject({ freightType: null, freightAmount: 0 })
 })
 test.each(['-1', '1.001', 'abc'])('新建非法金额%s保留原输入不保存或round', async value => {
-  await chosen(); await fill('运费金额', value); await click('创建收货订单'); expect(input('运费金额').value).toBe(value); expect(state.save).not.toHaveBeenCalled()
+  await chosen(); await fill('运费金额', value); await click('创建收货订单'); expect(input('运费金额').value).toBe(value); expect(state.save).not.toHaveBeenCalled(); expect(document.activeElement).toBe(input('运费金额')); expect(input('运费金额').getAttribute('aria-invalid')).toBe('true')
 })
 test('只填运费即登记dirty，取消沿用防丢保护；无创建权限无保存入口', async () => {
   await render(); await fill('运费金额', '12.34'); await click('取消新建'); expect(useDirtyGuardStore.getState().pendingConfirm).not.toBeNull()

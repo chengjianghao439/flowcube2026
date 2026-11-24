@@ -89,3 +89,34 @@ test.each(samples)('$name 已进入 pending 后数量、选择与关闭入口均
   expect(quantity().disabled).toBe(true)
   expect([...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].every(field => field.disabled)).toBe(true)
 })
+
+test('普通销售出库全选保留已输入的数量，并按原行编号提交', async () => {
+  const onConfirm = vi.fn()
+  const first = { ...item, quantity: 10, reservedQty: 10 }
+  const second = { ...first, id: 18, productId: 28, productName: '合成商品乙' }
+  await mount(<ShipSelectDialog open order={{ ...order, items: [first, second] }} onClose={vi.fn()} onConfirm={onConfirm} />)
+  const all = document.querySelector<HTMLInputElement>('input[aria-label="选择全部可出库明细"]')!
+  const secondCheck = document.querySelector<HTMLInputElement>('input[aria-label="选择 合成商品乙"]')!
+  await type('2')
+  await act(async () => secondCheck.click())
+  expect(quantity().value).toBe('2')
+  await act(async () => all.click())
+  expect(quantity().value).toBe('2')
+  expect(secondCheck.checked).toBe(true)
+  await act(async () => button('确认发起出库').click())
+  expect(onConfirm).toHaveBeenCalledExactlyOnceWith([{ id: 17, qty: 2 }, { id: 18, qty: 10 }])
+})
+
+test('普通销售出库选择部分明细时表头显示半选', async () => {
+  const second = { ...item, id: 18, productId: 28, productName: '合成商品乙' }
+  await mount(<ShipSelectDialog open order={{ ...order, items: [item, second] }} onClose={vi.fn()} onConfirm={vi.fn()} />)
+  const all = document.querySelector<HTMLInputElement>('input[aria-label="选择全部可出库明细"]')!
+  const secondCheck = document.querySelector<HTMLInputElement>('input[aria-label="选择 合成商品乙"]')!
+  expect(all.indeterminate).toBe(false)
+  await act(async () => secondCheck.click())
+  expect(all.checked).toBe(false)
+  expect(all.indeterminate).toBe(true)
+  await act(async () => all.click())
+  expect(all.checked).toBe(true)
+  expect(all.indeterminate).toBe(false)
+})

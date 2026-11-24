@@ -8,6 +8,7 @@ import { toast } from '@/lib/toast'
 export const useCustomers = (params: object, keepPrevious = false, readOwner?: KitReadOwner, readCurrent?: () => boolean, readSignal?: AbortSignal) => useQuery({
   queryKey: readOwner ? ['customers', params, readOwner.baseURL, readOwner.userId, readOwner.sessionGeneration] : ['customers', params],
   enabled: !readCurrent || readCurrent(),
+  subscribed: !readCurrent || readCurrent(),
   queryFn: async () => {
     if (readCurrent && !readCurrent()) throw Error("当前读取已暂停")
     if (!readOwner) return getCustomersApi(params).then(r => r!)

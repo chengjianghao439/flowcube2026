@@ -88,6 +88,24 @@ test('空白页菜单可以打开销售订单', async () => {
   await click('销售订单')
   expect(useWorkspaceStore.getState().tabs.some(tab => tab.path === '/sale')).toBe(true)
 })
+test('欢迎区停在顶部，已有对话跟随最新消息，新对话回到顶部', async () => {
+  const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(500)
+  try {
+    await render()
+    const thread = host.querySelector<HTMLDivElement>('.xiaoman-thread')!
+    expect(thread.scrollTop).toBe(0)
+
+    chat = { reply: '合成库存结果' }
+    await send('查库存')
+    expect(thread.scrollTop).toBe(500)
+
+    await click('新对话')
+    expect(thread.scrollTop).toBe(0)
+    expect(getByRole(host, 'heading', { name: '今天想先办哪件事？' })).toBeTruthy()
+  } finally {
+    scrollHeight.mockRestore()
+  }
+})
 test('拒答里的菜单可以点开，不把路径当普通文字丢掉', async () => {
   useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key, recentKeys: [HOME_TAB.key] })
   chat = { reply: '请到[[销售订单|/sale]]办理，我不会替你提交。' }

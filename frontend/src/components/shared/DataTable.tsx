@@ -45,6 +45,15 @@ interface DataTableProps<T extends object> {
   scrollLabel?: string
 }
 
+const scrollCellClass = 'overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+
+function updateCellScrollTabStop(cell: HTMLElement) {
+  const width = cell.clientWidth
+  const overflow = width > 0 && cell.scrollWidth > width
+  if (overflow && cell.tabIndex !== 0) cell.tabIndex = 0
+  if (!overflow && cell.hasAttribute('tabindex')) cell.removeAttribute('tabindex')
+}
+
 export default function DataTable<T extends object>({
   columns, data, loading = false, virtualized = false, preserveFocus = false, retainFocusedRow = false,
   rowKey = 'id' as keyof T, emptyText = '暂无数据', emptyState,
@@ -71,6 +80,40 @@ export default function DataTable<T extends object>({
     observer.observe(table)
     return () => observer.disconnect()
   }, [scrollLabel, tableRef, percentMinWidth, tableWidth])
+
+  const hasScrollableCells = orderedColumns.some(col => col.noWrap || isAction(String(col.key), col.title))
+  useEffect(() => {
+    const table = tableRef.current
+    if (!table || !hasScrollableCells) return
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(entries => {
+      entries.forEach(({ target }) => updateCellScrollTabStop(target as HTMLElement))
+    })
+    let measured = new Set<HTMLElement>()
+    const measureCells = () => {
+      const cells = new Set(table.querySelectorAll<HTMLElement>(':scope > tbody > tr > td > [data-table-cell-scroll]'))
+      for (const cell of measured) {
+        if (cells.has(cell)) continue
+        resize?.unobserve(cell)
+        cell.removeAttribute('tabindex')
+      }
+      for (const cell of cells) {
+        if (!measured.has(cell)) resize?.observe(cell)
+        updateCellScrollTabStop(cell)
+      }
+      measured = cells
+    }
+    measureCells()
+    // 虚拟行挂载与内容换字会改变溢出，即使容器尺寸未变也重新测量。
+    const content = new MutationObserver(measureCells)
+    content.observe(table, {
+      subtree: true, childList: true, characterData: true, attributeFilter: ['data-table-cell-scroll'],
+    })
+    return () => {
+      content.disconnect()
+      resize?.disconnect()
+      for (const cell of measured) cell.removeAttribute('tabindex')
+    }
+  }, [hasScrollableCells, tableRef])
 
   const enabledIds = useMemo(() => data.filter(row => !selectableCheck || selectableCheck(row))
     .map(row => Number((row as Record<string, unknown>)[String(rowKey)])), [data, rowKey, selectableCheck])
@@ -134,19 +177,20 @@ export default function DataTable<T extends object>({
         {orderedColumns.map((col) => {
           const rawValue = (row as Record<string, unknown>)[String(col.key)]
           const textValue = String(rawValue ?? '')
+          const actionColumn = isAction(String(col.key), col.title)
           const alignClass = col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : ''
           return (
           <td
             key={String(col.key)}
             data-column-key={String(col.key)}
-            onDoubleClick={isAction(String(col.key), col.title) ? e => e.stopPropagation() : undefined}
+            onDoubleClick={actionColumn ? e => e.stopPropagation() : undefined}
             className="overflow-hidden px-4 py-2.5 text-foreground align-middle"
           >
-            {isAction(String(col.key), col.title)
+            {actionColumn
               // 极窄操作列在格内滚动，保留所有按钮的可达性，避免越界覆盖相邻列。
-              ? <div className={`min-w-0 overflow-x-auto ${alignClass}`}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</div>
+              ? <div data-table-cell-scroll className={`min-w-0 ${scrollCellClass} ${alignClass}`}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</div>
               : (
-                <div className={`min-w-0 ${col.noWrap ? 'overflow-x-auto whitespace-nowrap tabular-nums' : 'whitespace-normal [overflow-wrap:anywhere]'} ${alignClass}`} title={textValue}>
+                <div data-table-cell-scroll={col.noWrap || undefined} className={`min-w-0 ${col.noWrap ? `${scrollCellClass} whitespace-nowrap tabular-nums` : 'whitespace-normal [overflow-wrap:anywhere]'} ${alignClass}`} title={textValue}>
                   {col.expandableText && typeof rawValue === 'string' && rawValue.trim().length > 0 ? (
                     <TableTextPreview title={col.title} value={textValue}>{col.render ? (col.render(rawValue, row) as ReactNode) : textValue}</TableTextPreview>
                   ) : col.render ? (col.render(rawValue, row) as ReactNode) : textValue}

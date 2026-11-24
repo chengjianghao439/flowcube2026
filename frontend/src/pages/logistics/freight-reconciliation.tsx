@@ -3,13 +3,14 @@
  * 路由：/logistics/freight-reconciliation
  * 录入承运商运费账单 → 按「承运商 + 账期」汇总生成对承运商的应付（月结，待财务确认）。
  */
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { FilterCard } from '@/components/shared/FilterCard'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
@@ -30,6 +31,7 @@ function currentPeriod(): string {
 
 export default function FreightReconciliationPage() {
   const qc = useQueryClient()
+  const filterId = useId()
   const [carrierId, setCarrierId] = useState<string>('')
   const [period, setPeriod] = useState<string>(currentPeriod())
   const [billDialog, setBillDialog] = useState(false)
@@ -99,14 +101,29 @@ export default function FreightReconciliationPage() {
       <PageHeader
         title="运费对账"
         description="按承运商和账期汇总已匹配寄付运单的账单。未匹配的账单留待核对；应付需财务确认后付款。"
+        actions={<>
+            <Button variant="outline" onClick={() => { setBillForm({ carrierId: carrierId || '', trackingNo: '', actualFreight: '', billPeriod: period || currentPeriod() }); setBillDialog(true) }}>
+              录入账单
+            </Button>
+            <Button
+              disabled={!canGenerate || generateMut.isPending}
+              onClick={() => confirmAction({
+                title: '生成承运商应付',
+                description: `按已匹配的寄付运单生成「${carrierList.find(c => String(c.id) === carrierId)?.name ?? ''}」${period} 的运费应付？未匹配的账单留待核对。`,
+                confirmText: '生成应付',
+                onConfirm: () => generateMut.mutate(),
+              })}
+            >
+              生成 / 重算应付
+            </Button>
+        </>}
       />
 
-
-      <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card p-4">
+      <FilterCard className="items-end">
         <div>
-          <Label className="text-xs text-muted-foreground">承运商</Label>
+          <Label htmlFor={`${filterId}-carrier`} className="text-xs text-muted-foreground">承运商</Label>
           <Select value={carrierId || 'all'} onValueChange={v => setCarrierId(v === 'all' ? '' : v)}>
-            <SelectTrigger className="mt-1 w-44"><SelectValue /></SelectTrigger>
+            <SelectTrigger id={`${filterId}-carrier`} className="mt-1 h-9 min-h-9 w-44 py-1.5" aria-label="筛选承运商"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">全部承运商</SelectItem>
               {carrierList.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
@@ -114,38 +131,28 @@ export default function FreightReconciliationPage() {
           </Select>
         </div>
         <div>
-          <Label className="text-xs text-muted-foreground">账期（YYYY-MM）</Label>
-          <Input className="mt-1 w-32" placeholder="2026-07" value={period} onChange={e => setPeriod(e.target.value)} />
+          <Label htmlFor={`${filterId}-period`} className="text-xs text-muted-foreground">账期（YYYY-MM）</Label>
+          <Input id={`${filterId}-period`} className="mt-1 h-9 w-32" placeholder="2026-07" value={period} onChange={e => setPeriod(e.target.value)} />
         </div>
-        <Button variant="outline" onClick={() => { setBillForm({ carrierId: carrierId || '', trackingNo: '', actualFreight: '', billPeriod: period || currentPeriod() }); setBillDialog(true) }}>
-          录入账单
-        </Button>
-        <Button
-          disabled={!canGenerate || generateMut.isPending}
-          onClick={() => confirmAction({
-            title: '生成承运商应付',
-            description: `按已匹配的寄付运单生成「${carrierList.find(c => String(c.id) === carrierId)?.name ?? ''}」${period} 的运费应付？未匹配的账单留待核对。`,
-            confirmText: '生成应付',
-            onConfirm: () => generateMut.mutate(),
-          })}
-        >
-          生成 / 重算应付
-        </Button>
         {!canGenerate && <span className="text-xs text-muted-foreground">选择承运商并填写账期后，可生成应付</span>}
-      </div>
+      </FilterCard>
 
       <section aria-label="运费账单">
-      <SectionCard title="运费账单" noPadding>
-        <DataTable columns={billColumns} data={bills?.list ?? []} loading={billsLoading} rowKey="id" emptyText="暂无运费账单（点「录入账单」添加，或对接平台回传）" />
-      </SectionCard>
-      {bills && !billsLoading && <ListSummary total={bills.pagination.total} unit="张" />}
+        <SectionCard title="运费账单" noPadding>
+          <DataTable columns={billColumns} data={bills?.list ?? []} loading={billsLoading} rowKey="id" emptyText="暂无运费账单（点「录入账单」添加，或对接平台回传）" />
+          {bills && !billsLoading && (
+            <div className="border-t border-border px-4"><ListSummary total={bills.pagination.total} unit="张" /></div>
+          )}
+        </SectionCard>
       </section>
 
       <section aria-label="月结汇总单（应付）">
-      <SectionCard title="月结汇总单（应付）" noPadding>
-        <DataTable columns={settlementColumns} data={settlements?.list ?? []} loading={settlementsLoading} rowKey="id" emptyText="暂无汇总单（选承运商 + 账期后「生成应付」）" />
-      </SectionCard>
-      {settlements && !settlementsLoading && <ListSummary total={settlements.pagination.total} unit="单" />}
+        <SectionCard title="月结汇总单（应付）" noPadding>
+          <DataTable columns={settlementColumns} data={settlements?.list ?? []} loading={settlementsLoading} rowKey="id" emptyText="暂无汇总单（选承运商 + 账期后「生成应付」）" />
+          {settlements && !settlementsLoading && (
+            <div className="border-t border-border px-4"><ListSummary total={settlements.pagination.total} unit="单" /></div>
+          )}
+        </SectionCard>
       </section>
 
       <Dialog open={billDialog} onOpenChange={v => !v && setBillDialog(false)}>
@@ -155,7 +162,7 @@ export default function FreightReconciliationPage() {
             <div>
               <Label>承运商</Label>
               <Select value={billForm.carrierId} onValueChange={v => setBillForm(f => ({ ...f, carrierId: v }))}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="选择承运商" /></SelectTrigger>
+                <SelectTrigger className="mt-1" aria-label="导入账单承运商"><SelectValue placeholder="选择承运商" /></SelectTrigger>
                 <SelectContent>
                   {carrierList.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
                 </SelectContent>

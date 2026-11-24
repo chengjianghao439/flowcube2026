@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import type { ComponentType } from 'react'
+import { act, type ComponentType } from 'react'
+import { getByRole, queryByRole } from '@testing-library/dom'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import { retentionHarness } from './workspaceRetention'
 import { clearReadFixtures, readData, lastRead, paged, writeCalls } from './readOnlyApi'
 import SuppliersPage from '@/pages/suppliers'
 import CarriersPage from '@/pages/carriers'
 import WarehouseStructurePage from '@/pages/warehouse-structure'
+import { useWorkspaceStore } from '@/store/workspaceStore'
 const routes=vi.hoisted(()=>({values:{} as Record<string,ComponentType>}))
 vi.mock('@/router/routeRegistry',async original=>({...await original<typeof import('@/router/routeRegistry')>(),resolveRouteComponent:(path:string)=>routes.values[path]||null}))
 vi.mock('@/api/suppliers',async original=>(await import('./readOnlyApi')).mockReadApi(await original(),'suppliers'))
@@ -33,4 +35,47 @@ for(const item of [{api:'suppliers',operation:'getSuppliersApi',dialogQuery:fals
  expect(lastRead(item.api,item.operation)?.args[0]).toEqual(params);expect(h.activeText()).toContain('SYN42')
  if(item.dialogQuery){await h.click('查询');expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!.value).toBe('KEEP');await h.click('取消')}
  else expect(h.host.querySelector<HTMLInputElement>('input[aria-label^="搜索"]')!.value).toBe('KEEP')
+})
+
+
+test('仓库结构在页头下显示当前视图链接，切换时保留独立工作区和库位筛选', async () => {
+ await h.render('/locations')
+ const active = () => [...h.host.querySelectorAll<HTMLElement>('[data-workspace-scroll]')].find(h.visible)!
+ const heading = getByRole(active(), 'heading', { name: '仓库结构' })
+ const nav = getByRole(active(), 'navigation', { name: '仓库结构视图' })
+ expect(heading.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+ expect(getByRole(nav, 'link', { name: '库位管理' }).getAttribute('aria-current')).toBe('page')
+ await h.click('查询')
+ const input = document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!
+ await h.input(input, 'KEEP')
+ await h.enter(input)
+ const follow = async (name:string) => {
+   await act(async () => getByRole(getByRole(active(), 'navigation', { name: '仓库结构视图' }), 'link', { name }).click())
+   await h.settle()
+ }
+ await follow('货架管理')
+ expect(h.current()).toBe('/racks')
+ expect(getByRole(active(), 'button', { name: '新建货架' })).toBeTruthy()
+ await follow('库位管理')
+ expect(h.current()).toBe('/locations')
+ expect(lastRead('locations','getLocationsApi')?.args[0]).toMatchObject({keyword:'KEEP'})
+ await h.closeActive()
+ expect(h.current()).toBe('/dashboard')
+ expect(queryByRole(h.host, 'tab', { name: '库位管理' })).toBeNull()
+ expect(getByRole(h.host, 'tab', { name: '货架管理' })).toBeTruthy()
+})
+
+test('普通分拣格导航不会再次进入旧订单分配交接', async () => {
+ useWorkspaceStore.setState(state => ({ tabs: [
+   ...state.tabs,
+   { key: '/sorting-bins', title: '分拣格管理', path: '/sorting-bins?taskId=91&warehouseId=42', closable: true },
+ ] }))
+ await h.render('/locations')
+ const nav = getByRole(h.host, 'navigation', { name: '仓库结构视图' })
+ const link = getByRole(nav, 'link', { name: '分拣格管理' })
+ expect(link.getAttribute('href')).toBe('/sorting-bins')
+ await act(async () => link.click())
+ await h.settle()
+ expect(h.current()).toBe('/sorting-bins')
+ expect(queryByRole(document.body, 'dialog')).toBeNull()
 })

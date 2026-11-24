@@ -148,6 +148,27 @@ test('采购导出按经办人编号和逾期状态筛选，原经办人名称�
   assert.deepEqual(queries[1].params, ['%合成经办人%'])
 })
 
+test('销售导出按已应用的经办人编号查询并保留整单仓库范围', async () => {
+  const { pool } = require(offlineDbPath)
+  const queries = []
+  pool.query = async (sql, params) => { queries.push({ sql, params }); return [[]] }
+  try {
+    await exportService.getSaleExportPayload({ operatorId: '19', scopeWarehouseIds: [5], startDate: '2026-11-13' })
+    await exportService.getSaleExportPayload({ operatorId: '', scopeWarehouseIds: [] })
+  } finally {
+    pool.query = unexpectedDbCall
+  }
+  assert.equal(queries.length, 2)
+  const [filtered, unfiltered] = queries
+  assert.match(filtered.sql, /o\.warehouse_id IN \(\?\)/)
+  assert.match(filtered.sql, /NOT EXISTS \(SELECT 1 FROM sale_order_items si WHERE si\.order_id=o\.id AND si\.warehouse_id NOT IN \(\?\)\)/)
+  assert.match(filtered.sql, /o\.operator_id\s*=\s*\?/)
+  assert.deepEqual(filtered.params, [[5], [5], 19, '2026-11-13 00:00:00'])
+  assert.match(unfiltered.sql, /AND 1=0/)
+  assert.doesNotMatch(unfiltered.sql, /operator_id/)
+  assert.deepEqual(unfiltered.params, [])
+})
+
 test('库存流水导出同时保留授权范围、业务筛选和单边日期', async () => {
   const { pool } = require(offlineDbPath)
   const queries = []

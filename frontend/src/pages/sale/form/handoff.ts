@@ -1,4 +1,4 @@
-type SaleHandoff = { focus: 'fulfillment' | 'progress'; taskId?: number }
+type SaleHandoff = { focus: 'info' | 'progress'; taskId?: number }
 /** 仅读取本标签的本单交接；空值和重复值都不能被容错成有效任务。 */
 export function readSaleHandoff(path: string, saleId: number): SaleHandoff | 'invalid' | null {
   const [pathname, search = ''] = path.split('?')
@@ -13,5 +13,6 @@ export function readSaleHandoff(path: string, saleId: number): SaleHandoff | 'in
     if (!Number.isSafeInteger(taskId) || taskId <= 0) return 'invalid'
     return { focus: 'progress', taskId }
   }
-  return { focus: focus[0] as SaleHandoff['focus'] }
+  // 旧发货安排书签沿原单落到订单信息。
+  return { focus: focus[0] === 'fulfillment' ? 'info' : 'progress' }
 }

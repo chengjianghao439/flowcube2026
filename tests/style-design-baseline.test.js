@@ -33,3 +33,33 @@ test('approved desktop projection changes only its 96 exact light material slots
   changed['1280-light'].primary.backgroundColor = 'rgb(200, 0, 0)'
   assert.throws(() => desktopBaseline(changed), /Reviewed desktop slot changed/)
 })
+
+test('ERP 顶栏叠菜单位于列宽调节手柄上方并低于模态遮罩', () => {
+  const read = path => require('node:fs').readFileSync(require('node:path').join(__dirname, '..', path), 'utf8')
+  const css = read('frontend/src/styles/desktop-page-samples.css')
+  const resize = read('frontend/src/components/shared/TableColumnResizeHandle.tsx')
+  const dialog = read('frontend/src/components/ui/dialog.tsx')
+  const headerLayer = Number(css.match(/--desktop-layer-header:\s*(\d+)/)?.[1])
+  const resizeLayer = Number(resize.match(/right-0 z-(\d+)/)?.[1])
+  const overlayLayer = Number(dialog.match(/fc-dialog-overlay fixed inset-0 z-(\d+)/)?.[1])
+  assert.ok(resizeLayer < headerLayer && headerLayer < overlayLayer)
+  assert.match(css, /\.fc-topnav-menu > ul\s*\{[^}]*max-height:\s*var\(--topnav-menu-height/)
+  assert.match(css, /\.fc-topnav-menu > ul\s*\{[^}]*overflow-y:\s*auto/)
+})
+
+test('ERP 工作区 Toast 层级在列宽手柄和顶栏之间', () => {
+  const read = path => require('node:fs').readFileSync(require('node:path').join(__dirname, '..', path), 'utf8')
+  const css = read('frontend/src/styles/desktop-page-samples.css')
+  const resize = read('frontend/src/components/shared/TableColumnResizeHandle.tsx')
+  const headerLayer = Number(css.match(/--desktop-layer-header:\s*(\d+)/)?.[1])
+  const toastLayer = Number(css.match(/\.desktop-shell-sample\s*\{\s*--desktop-layer-toast:\s*(\d+)/)?.[1])
+  const resizeLayer = Number(resize.match(/right-0 z-(\d+)/)?.[1])
+  assert.ok(resizeLayer < toastLayer && toastLayer < headerLayer)
+})
+
+test('ERP 临时浮层使用菜单阴影，层叠对话框只让最上方遮罩着色', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../frontend/src/styles/desktop-page-samples.css'), 'utf8')
+  assert.match(css, /\[data-radix-popper-content-wrapper\] > :is\(\[role="menu"\],\[role="listbox"\],\[role="dialog"\]\)\s*\{[^}]*box-shadow:\s*var\(--desktop-shadow-menu\)/)
+  assert.match(css, /\[data-radix-popper-content-wrapper\] :is\(\[role="menu"\],\[role="listbox"\]\)\s*\{[^}]*box-shadow:\s*var\(--desktop-shadow-menu\)/)
+  assert.match(css, /body:has\(\.desktop-shell-sample\) > \.fc-dialog-overlay:has\(~ \.fc-dialog-overlay\)\s*\{[^}]*background:\s*transparent/)
+})

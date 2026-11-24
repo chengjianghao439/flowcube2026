@@ -231,7 +231,7 @@ export default function BarcodePrintQueryPage() {
       {
         key: 'barcode',
         title: '条码',
-        width: 150,
+        width: 128,
         render: (_, row) => (
           <div className="space-y-1">
             <div className="text-doc-code-strong whitespace-normal [overflow-wrap:anywhere]" title={row.barcode}>{row.barcode}</div>
@@ -252,13 +252,13 @@ export default function BarcodePrintQueryPage() {
       {
         key: 'bizNo',
         title: bizTitle,
-        width: 140,
+        width: 122,
         render: (_, row) => row.bizNo ? <span className="text-doc-code block whitespace-normal [overflow-wrap:anywhere]" title={row.bizNo}>{row.bizNo}</span> : <span className="text-muted-foreground">—</span>,
       },
       {
         key: 'warehouseName',
         title: '仓库 / 位置',
-        width: 160,
+        width: 124,
         render: (_, row) => (
           <div className="space-y-1 text-sm">
             <div className="whitespace-normal [overflow-wrap:anywhere]" title={row.warehouseName ?? undefined}>{row.warehouseName ?? '—'}</div>
@@ -269,7 +269,7 @@ export default function BarcodePrintQueryPage() {
       {
         key: 'barcodeStatusKey',
         title: '业务状态',
-        width: 136,
+        width: 116,
         render: (_, row) => (
           <div className="space-y-1">
             {barcodeStatusBadge(row)}
@@ -283,7 +283,7 @@ export default function BarcodePrintQueryPage() {
       {
         key: 'latestJob',
         title: '打印任务状态',
-        width: 158,
+        width: 128,
         render: (_, row) => (
           <div className="space-y-1">
             {jobStatusBadge(row.latestJob)}
@@ -296,7 +296,7 @@ export default function BarcodePrintQueryPage() {
       {
         key: 'printer',
         title: '打印机 / 记录',
-        width: 160,
+        width: 130,
         render: (_, row) => {
           const job = row.latestJob
           return (
@@ -320,13 +320,13 @@ export default function BarcodePrintQueryPage() {
       {
         key: 'createdAt',
         title: '最近变化',
-        width: 168,
+        width: 154,
         render: (_, row) => <span className="whitespace-nowrap tabular-nums">{formatDisplayDateTime(row.latestJob?.updatedAt || row.createdAt)}</span>,
       },
       {
         key: 'action',
         title: '操作',
-        width: 210,
+        width: 155,
         render: (_, row) => {
           const isReprinting = reprinting && reprintingRequest?.row.recordId === row.recordId
           const intent = storedIntents.find(info => info.resource === `barcode:${row.category}:${row.recordId}`) ?? null
@@ -407,6 +407,10 @@ export default function BarcodePrintQueryPage() {
       <PageHeader
         title="条码打印查询"
         description={`${recovery ? '按库存条码、商品或收货单号查询。仅恢复有有效收货单及明细的现存条码；不新建库存。请先核对现场标签。' : currentCategory?.hint ?? ''} 业务完成与条码业务状态不代表已出纸；最近打印任务单独展示。客户端成功回报后仍需现场核对纸张，失败或超时先核对工作站、打印机和纸张。`}
+        actions={<>
+          {category === 'inbound' && <Button variant="outline" onClick={() => { setRecovery(v => !v); setStatus('__all__') }}>{recovery ? '返回打印历史' : '恢复收货标签'}</Button>}
+          <Button ref={queryTrigger} variant="outline" onClick={() => setQueryOpen(true)}><Search className="mr-1.5 h-4 w-4" aria-hidden />查询</Button>
+        </>}
       />
 
       <section className="fc-list-workbench min-w-0 rounded-xl border border-border bg-card" aria-label="条码打印记录">
@@ -425,10 +429,6 @@ export default function BarcodePrintQueryPage() {
                 <span>{item.label}</span>
               </button>
             ))}
-          </div>
-          <div className="fc-list-toolbar-actions">
-            {category === 'inbound' && <Button variant="ghost" onClick={() => { setRecovery(v => !v); setStatus('__all__') }}>{recovery ? '返回打印历史' : '恢复收货标签'}</Button>}
-            <Button ref={queryTrigger} variant="outline" onClick={() => setQueryOpen(true)}><Search className="mr-1.5 h-4 w-4" aria-hidden />查询</Button>
           </div>
         </div>
         {(initialInboundTaskId || initialInboundTaskItemId) && category === 'inbound' && <div className="fc-list-query-context">

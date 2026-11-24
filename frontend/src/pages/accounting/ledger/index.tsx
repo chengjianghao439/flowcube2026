@@ -6,14 +6,14 @@ import { ReportTable } from '@/components/shared/ReportTable'
  * 科目余额表：期初/本期发生/期末，借贷两栏；底部合计 + 借贷平衡指示。点科目看明细账。
  * 前端不算会计（余额方向/平衡一律以接口为准）。
  */
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Scale, FileText } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import PageHeader from '@/components/shared/PageHeader'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { cn } from '@/lib/utils'
-import { useTrialBalance, useAccountLedger } from '@/hooks/useLedger'
+import { isLedgerPeriod, useTrialBalance, useAccountLedger } from '@/hooks/useLedger'
 import type { TrialBalanceRow } from '@/types/accounting'
 import { beijingPeriod, formatDisplayDate } from '@/lib/dateTime'
 
@@ -69,7 +69,9 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
 }
 
 export default function LedgerPage() {
-  const [period, setPeriod] = useState(beijingPeriod())
+  const [period, setPeriod] = useState(beijingPeriod)
+  const periodId = useId()
+  const validPeriod = isLedgerPeriod(period)
   const { data, isLoading } = useTrialBalance(period)
   const [detail, setDetail] = useState<TrialBalanceRow | null>(null)
   const list = data?.list ?? []
@@ -82,9 +84,12 @@ export default function LedgerPage() {
 
 
       <FilterCard className="mb-4">
-        <span className="text-sm text-muted-foreground">会计期间</span>
-        <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-36 font-mono" />
-        {data && (
+        <label htmlFor={periodId} className="text-sm text-muted-foreground">会计期间</label>
+        <Input id={periodId} value={period} onChange={e => setPeriod(e.target.value)} inputMode="numeric"
+          placeholder="YYYYMM" aria-invalid={!validPeriod || undefined}
+          aria-describedby={!validPeriod ? `${periodId}-error` : undefined} className="h-9 w-36 font-mono" />
+        {!validPeriod && <p id={`${periodId}-error`} role="alert" className="text-xs text-destructive-ink">请输入六位会计期间（YYYYMM），月份为 01–12。</p>}
+        {validPeriod && data && (
           <span className="ml-2 flex items-center gap-2">
             {data.balanced.period && data.balanced.closing
               ? <SoftStatusLabel label="试算平衡" tone="success" />
@@ -93,7 +98,7 @@ export default function LedgerPage() {
         )}
       </FilterCard>
 
-      <div className="card-base overflow-x-auto p-0">
+      {validPeriod && <div className="card-base overflow-x-auto p-0">
         <ReportTable className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
@@ -150,7 +155,7 @@ export default function LedgerPage() {
             </tfoot>
           )}
         </ReportTable>
-      </div>
+      </div>}
 
       <LedgerDialog accountId={detail?.accountId ?? null} code={detail?.code} name={detail?.name} period={period} onClose={() => setDetail(null)} />
     </div>

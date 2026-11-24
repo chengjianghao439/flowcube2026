@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
-import PdaScanner from '@/components/pda/PdaScanner'
+import PdaScanner, { type PdaScanOutcome } from '@/components/pda/PdaScanner'
 import PdaFlash from '@/components/pda/PdaFlash'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
@@ -113,15 +113,24 @@ function CheckWork({ checkId }: { checkId: number }) {
   })
 
   // 扫到容器码：先查容器——个体直接计 1；数量容器预填账面剩余、现场可改
-  const addContainer = useCallback(async (raw: string) => {
+  const addContainer = useCallback(async (raw: string): Promise<PdaScanOutcome> => {
     const bc = raw.trim()
-    if (!bc || !activeItem || checking) return
-    if (scanned.some(s => s.barcode.toUpperCase() === bc.toUpperCase())) { err(`条码 ${bc} 已扫过`); return }
+    if (!bc || !activeItem || checking) return 'ignored'
+    if (scanned.some(s => s.barcode.toUpperCase() === bc.toUpperCase())) {
+      err(`条码 ${bc} 已扫过`)
+      return 'rejected'
+    }
     setChecking(true)
     try {
       const d = await getContainerByBarcodeApi(bc, { skipGlobalError: true })
-      if (d.productId !== activeItem.productId) { err(`条码 ${bc} 不是商品「${activeItem.productName}」的库存条码`); return }
-      if (d.containerStatus !== 'stored') { err(`${bc} 不是在库条码，不能盘点`); return }
+      if (d.productId !== activeItem.productId) {
+        err(`条码 ${bc} 不是商品「${activeItem.productName}」的库存条码`)
+        return 'rejected'
+      }
+      if (d.containerStatus !== 'stored') {
+        err(`${bc} 不是在库条码，不能盘点`)
+        return 'rejected'
+      }
       if (d.individual) {
         setScanned(prev => [...prev, { barcode: d.barcode, individual: true, bookQty: 1, countedQty: 1 }])
         ok(`单件 ${d.barcode} 计 1（已扫 ${scanned.length + 1} 个）`)
@@ -129,8 +138,10 @@ function CheckWork({ checkId }: { checkId: number }) {
         setScanned(prev => [...prev, { barcode: d.barcode, individual: false, bookQty: d.remainingQty, countedQty: d.remainingQty }])
         ok(`已扫 ${d.barcode}（账面 ${d.remainingQty}，请核对实物数量）`)
       }
+      return 'accepted'
     } catch (e: unknown) {
       err(formatPdaActionError(e, '条码查询失败'))
+      return 'rejected'
     } finally {
       setChecking(false)
     }
@@ -218,7 +229,7 @@ function CheckWork({ checkId }: { checkId: number }) {
           </PdaCard>
         </div>
         <PdaBottomBar>
-          <PdaScanner onScan={(code) => { void addContainer(code) }} placeholder="扫描在架库存条码" disabled={checking || saveAction.submitBlocked} />
+          <PdaScanner onScan={addContainer} placeholder="扫描在架库存条码" disabled={checking || saveAction.submitBlocked} />
           <Button size="lg" className="px-3 w-full" disabled={saveAction.submitBlocked || saveAction.phase === 'submitting' || checking} onClick={submit}>
             {saveAction.phase === 'submitting' ? '提交中…' : `提交本商品（${scanned.length} 个条码 / 实盘 ${totalCounted}）`}
           </Button>

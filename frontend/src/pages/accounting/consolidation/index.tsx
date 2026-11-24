@@ -129,7 +129,7 @@ export default function ConsolidationPage() {
       {/* 合并报表 */}
       <FilterCard className="mb-4">
         <div className="text-sm font-medium">合并期间</div>
-        <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="w-32 text-center" />
+        <Input aria-label="合并期间" value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-32 text-center" />
         <div className="text-sm text-muted-foreground">
           {group ? `合并根：${group.name}` : '选择集团账套后可查看合并报表'}
         </div>

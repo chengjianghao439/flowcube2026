@@ -5,7 +5,7 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+
 import { toast } from '@/lib/toast'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { Button } from '@/components/ui/button'
@@ -26,6 +26,7 @@ import SortingBinQueryDialog, { type SortingBinQueryValues } from './SortingBinQ
 import { SORTING_BIN_STATUS_TONE, SORTING_BIN_STATUS_LABEL } from './constants'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 import { downloadExport } from '@/lib/exportDownload'
+import { AppliedFilters } from '@/pages/warehouse-structure/AppliedFilters'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import AssignSortingBinDialog from './AssignSortingBinDialog'
@@ -109,8 +110,8 @@ export default function SortingBinsPage() {
   }, [path, active])
   return <>
     {canView ? <SortingBinsManagementPage notice={handoffNotice} /> : <div className="space-y-3">
-      <PageHeader title="分拣格管理" description={handoffNotice ?? '查看任务交接并补分配分拣格。'} />
-      {canAssign && <Button variant="outline" onClick={() => setNormalOpen(true)}>补分配分拣格</Button>}
+      <PageHeader title="分拣格管理" description={handoffNotice ?? '查看任务交接并补分配分拣格。'}
+        actions={canAssign && <Button variant="outline" onClick={() => setNormalOpen(true)}>补分配分拣格</Button>} />
       {canAssign && <AssignSortingBinDialog open={normalOpen} onClose={() => setNormalOpen(false)} />}
     </div>}
     {context && context !== 'invalid' && canAssign && <AssignSortingBinDialog
@@ -227,21 +228,7 @@ function SortingBinsManagementPage({ notice }: { notice?: ReactNode }) {
             {can(PERMISSIONS.SORTING_BIN_MANAGE) && <Button variant="outline" onClick={() => setBatchOpen(true)}>批量创建</Button>}
           </>
         }
-        renderToolbar={
-          chips.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {chips.map(c => (
-                <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                  {c.label}
-                  <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-              <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-            </div>
-          ) : null
-        }
+        renderToolbar={chips.length > 0 ? <AppliedFilters chips={chips} onClear={clearAll} /> : null}
         renderActions={(row, helpers) => (
           !can(PERMISSIONS.SORTING_BIN_MANAGE) ? null : row.status === 2 ? (
             <TableActionsMenu

@@ -16,10 +16,10 @@ it('未启用紧凑模式的商品区保持既有说明', () => {
 })
 
 
-it('紧凑空明细在添加操作附近提示缺失，默认布局不新增错误', () => {
+it('空明细在两种布局的添加操作附近显示调用方提供的错误', () => {
   const compact = renderToStaticMarkup(<SaleOrderItemsSection compact addError="请添加至少一条商品明细" hasItems={false} onAdd={() => {}}>{null}</SaleOrderItemsSection>)
   expect(compact).toContain('role="alert"')
   expect(compact).toContain('请添加至少一条商品明细')
   const standard = renderToStaticMarkup(<SaleOrderItemsSection addError="请添加至少一条商品明细" hasItems={false} onAdd={() => {}}>{null}</SaleOrderItemsSection>)
-  expect(standard).not.toContain('role="alert"')
+  expect(standard).toContain('role="alert"')
 })

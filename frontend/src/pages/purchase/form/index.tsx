@@ -1,9 +1,10 @@
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { ReturnSourceButton } from '@/pages/returns/ReturnSourceButton'
 import { money, qty, unitPrice } from '@/lib/format'
-import { roundQuantity } from '@/lib/qtyStep'
-import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
+import { quantityInputError, roundQuantity } from '@/lib/qtyStep'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { collectOrderIssues } from '@/lib/orderEntry'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { PurchaseProductIdentity } from './PurchaseProductIdentity'
 import { PurchaseEntryTable } from './PurchaseEntryTable'
@@ -72,20 +73,29 @@ import type { FinderResult } from '@/types/finder'
 import { INBOUND_STATUS_LABEL, type InboundTaskStatus } from '@/types/inbound-tasks'
 import { getProductApi } from '@/api/products'
 
-interface DraftItem extends Omit<PurchaseOrderItem, 'id' | 'amount'> {
+interface DraftItem extends Omit<PurchaseOrderItem, 'id' | 'amount' | 'quantity'> {
   _key: number
+  quantityInput: string
   units?: ProductUnit[]   // UI-only：该商品多计量单位（供单位下拉），不发后端；后端按 product_units 折算权威
   priceWarning?: string | null
   originalAmount?: number
   unitReadFailed?: boolean
 }
 
+type ParsedDraftItem = DraftItem & { quantity: number }
+
+function purchaseQuantity(input: string): number {
+  const parsed = Number(input)
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || quantityInputError(input, true)) return Number.NaN
+  return parsed
+}
+
 /** 录入单位下的数量折算成基本单位量（仅前端呈现；权威折算在后端）。 */
-function baseQtyOf(item: DraftItem): number | null {
+function baseQtyOf(item: ParsedDraftItem): number | null {
   const u = (item.units || []).find(x => x.unitName === (item.entryUnit || item.unit))
   const rate = (item.entryUnit || item.unit) === item.unit ? 1 : item.conversionRate ?? (u ? Number(u.conversionRate) : null)
   if (rate == null || !Number.isFinite(rate) || rate <= 0) return null
-  return roundQuantity((Number(item.quantity) || 0) * rate)
+  return roundQuantity(item.quantity * rate)
 }
 
 /**
@@ -142,7 +152,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
       _key: idx, productId: it.productId, productCode: it.productCode, productName: it.productName,
       unit: it.unit, entryUnit: it.entryUnit ?? it.unit, units: [], conversionRate: it.conversionRate,
       // 保留历史换算快照与四位录入报价；金额只有两位，不能 amount/entryQty 反推报价。
-      quantity: it.entryQty ?? it.quantity,
+      quantityInput: String(it.entryQty ?? it.quantity),
       unitPrice: restorePurchaseEntryPrice(it).verified ? restorePurchaseEntryPrice(it).entryUnitPrice! : Number.NaN,
       priceWarning: restorePurchaseEntryPrice(it).warning, originalAmount: it.amount,
       remark: it.remark ?? '',
@@ -158,7 +168,6 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   }, [paused])
   const [submitLocked, setSubmitLocked] = useState(false)
   const [validationAttempted, setValidationAttempted] = useState(false)
-  const quantityRefs = useRef<Map<number, HTMLInputElement>>(new Map())
   const entryRef = useRef<HTMLDivElement>(null)
   const scrollToIndex = useRef<((index: number) => void) | null>(null)
   const focusEpoch = useRef(0)
@@ -168,10 +177,6 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   const active = useActiveWorkspaceTab(), activeRef = useRef(active)
   activeRef.current = active
   useEffect(() => () => { focusEpoch.current++ }, [])
-  const [supplierError, setSupplierError] = useState(false)
-  const [warehouseError, setWarehouseError] = useState(false)
-
-
   // 编辑态：初始值本就非空，"是否非空"不能代表"是否改过"；改成与编辑开始时的快照比较
   // 明细行只比对用户可改字段（units 是多计量单位投影，编辑态由接口异步回填）
   const dirtyComparable = () => JSON.stringify({ supplierId, warehouseId, expectedDate, remark, items: dirtyItems(items.map(({ priceWarning: _warning, originalAmount: _amount, unitReadFailed: _unitError, ...item }) => item)) })
@@ -206,19 +211,12 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   }
 
   const focusField = useCallback((target: string) => {
-    const field = () => [...(entryRef.current?.querySelectorAll<HTMLElement>('[data-entry-field]') ?? [])].find(el => el.dataset.entryField === target)
-    const focus = () => {
-      const container = field()
-      const control = container?.matches('input,button,select,textarea') ? container : container?.querySelector<HTMLElement>('input,button,select,textarea')
-      if (!control?.isConnected || control.closest('[hidden]')) return false
-      control.focus(); if (control instanceof HTMLInputElement) control.select()
-      control.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
-      return true
-    }
-    const index = items.findIndex(i => target.startsWith(`item-${i._key}-`))
-    if (index >= 0) scrollToIndex.current?.(index)
     const epoch = ++focusEpoch.current
-    if (focus()) return
+    const focus = () => activeRef.current && focusOrderEntryField(entryRef.current, target)
+    if (!activeRef.current || focus()) return
+    const index = items.findIndex(i => target.startsWith(`item-${i._key}-`))
+    if (index < 0 || !scrollToIndex.current) return
+    scrollToIndex.current(index)
     let tries = 0
     const retry = () => {
       if (epoch !== focusEpoch.current || !activeRef.current || !entryRef.current?.isConnected || focus() || ++tries > 30) return
@@ -251,19 +249,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   const updateItem = (k: number, field: string, val: string | number) =>
     setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val, ...(field === 'unitPrice' ? { priceWarning: null } : {}), ...(field === 'entryUnit' ? { conversionRate: val === i.unit ? 1 : i.units?.find(u => u.unitName === val)?.conversionRate } : {}) } : i)))
 
-  const parsePositiveInteger = (value: string) => {
-    if (!value.trim()) return 0
-    const num = Number(value)
-    return Number.isSafeInteger(num) ? num : 0
-  }
-
   function handleFinderConfirm(product: ProductFinderResult) {
     if (finderItemKey === null) return
     const k = finderItemKey
     pendingFocus.current = `item-${k}-quantity`
     setItems(prev => {
       const replacement = {
-              ...(prev.find(i => i._key === k) ?? { _key: k, quantity: 1, remark: '' }),
+              ...(prev.find(i => i._key === k) ?? { _key: k, quantityInput: '1', remark: '' }),
               productId: product.id,
               productCode: product.code,
               productName: product.name,
@@ -290,21 +282,23 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   function handleSupplierConfirm(result: FinderResult) {
     setSupplierId(String(result.id))
     setSupplierName(result.name)
-    setSupplierError(false)
   }
 
   const invalidExpectedDate = expectedDate !== '' && formatDisplayDate(expectedDate, '') !== expectedDate
-  const allIssues = collectOrderIssues({ kind: 'purchase', partyId: supplierId, partyName: supplierName, warehouseId, warehouseName, items })
-  const issues = validationAttempted ? allIssues : []
+  const parsedItems = items.map(item => ({ ...item, quantity: purchaseQuantity(item.quantityInput) }))
+  const allIssues = collectOrderIssues({ kind: 'purchase', partyId: supplierId, partyName: supplierName, warehouseId, warehouseName, items: parsedItems })
+  const issues = new Map((validationAttempted ? allIssues : []).map(issue => [issue.target, issue.message]))
+  const supplierError = issues.get('party')
+  const warehouseError = issues.get('warehouse')
+  const addError = issues.get('add')
 
   async function handleSubmit() {
     if (submitLocked || submitting || paused) return
     setValidationAttempted(true)
-    setSupplierError(allIssues.some(i => i.target === 'party'))
-    setWarehouseError(allIssues.some(i => i.target === 'warehouse'))
-    if (allIssues.length) return
-    if (invalidExpectedDate) {
-      focusField('expected-date')
+    const headerIssue = allIssues.find(issue => issue.target === 'party' || issue.target === 'warehouse')
+    const target = headerIssue?.target ?? (invalidExpectedDate ? 'expected-date' : allIssues[0]?.target)
+    if (target) {
+      focusField(target)
       return
     }
     const payload = {
@@ -314,7 +308,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
       warehouseName,
       expectedDate: expectedDate || undefined,
       remark: remark || undefined,
-      items: items.map(({ _key, units, priceWarning, originalAmount, unitReadFailed, conversionRate, ...rest }) => rest),
+      items: parsedItems.map(({ _key, units, priceWarning, originalAmount, unitReadFailed, conversionRate, quantityInput, ...rest }) => rest),
     }
     try {
       setSubmitLocked(true)
@@ -334,21 +328,31 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
     }
   }
 
-  const summary = summarizePurchaseDraft(items)
+  const summary = summarizePurchaseDraft(parsedItems)
 
-  function renderItem(item: DraftItem) {
+  function renderItem(item: ParsedDraftItem) {
     const currentRate = item.units?.find(u => u.unitName === item.entryUnit)?.conversionRate
     const changedRate = item.entryUnit !== item.unit && item.conversionRate != null && currentRate != null && currentRate !== item.conversionRate
+    const quantityError = Number.isNaN(item.quantity) ? (item.quantityInput.trim() ? '采购数量必须是正整数' : '请输入采购数量') : null
+    const quantityErrorId = fieldId(`item-${item._key}-quantity-error`)
+    const priceError = issues.get(`item-${item._key}-price`)
+    const priceErrorId = fieldId(`item-${item._key}-price-error`)
+    const productError = issues.get(`item-${item._key}-product`)
+    const productErrorId = fieldId(`item-${item._key}-product-error`)
+    const baseQty = !quantityError && item.entryUnit && item.entryUnit !== item.unit ? baseQtyOf(item) : null
     return <tr key={item._key} className="border-b border-border/40">
       <td><PurchaseProductIdentity item={item} name={<button type="button" data-entry-field={`item-${item._key}-product`}
+        aria-invalid={!!productError} aria-describedby={productError ? productErrorId : undefined}
         onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-        className="max-w-full text-left font-medium text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [overflow-wrap:anywhere]">{item.productName}</button>} /></td>
-      <td><Input quantity type="number" min="1" step="1" data-entry-input data-entry-field={`item-${item._key}-quantity`}
-        aria-label={`${item.productName}数量`} aria-invalid={issues.some(i => i.target === `item-${item._key}-quantity`)}
-        ref={el => { if (el) quantityRefs.current.set(item._key, el); else quantityRefs.current.delete(item._key) }}
-        value={item.quantity} onChange={e => updateItem(item._key, 'quantity', parsePositiveInteger(e.target.value))}
-        className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')} />
-        {item.entryUnit && item.entryUnit !== item.unit && <div className="mt-0.5 text-right text-xs text-muted-foreground tabular-nums">{baseQtyOf(item) == null ? '换算待确认' : `= ${qty(baseQtyOf(item))} ${item.unit}`}</div>}
+        className="max-w-full text-left font-medium text-foreground underline-offset-2 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [overflow-wrap:anywhere]">{item.productName || '选择商品'}</button>} />
+        <OrderFieldError id={productErrorId} className="mt-1">{productError}</OrderFieldError>
+      </td>
+      <td><Input type="text" inputMode="numeric" data-entry-input data-entry-field={`item-${item._key}-quantity`}
+        aria-label={`${item.productName}数量`} aria-invalid={!!quantityError} aria-describedby={quantityError ? quantityErrorId : undefined}
+        value={item.quantityInput} onChange={e => updateItem(item._key, 'quantityInput', e.target.value)}
+        className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums', quantityError && 'border-destructive/60 bg-destructive/5')} />
+        <OrderFieldError id={quantityErrorId} className="mt-1">{quantityError}</OrderFieldError>
+        {!quantityError && item.entryUnit && item.entryUnit !== item.unit && <div className="mt-0.5 text-right text-xs text-muted-foreground tabular-nums">{baseQty == null ? '换算待确认' : `= ${qty(baseQty)} ${item.unit}`}</div>}
       </td>
       <td>{item.units?.some(u => !u.isBase)
         ? <select aria-label={`${item.productName}录入单位`} value={item.entryUnit || item.unit} onChange={e => updateItem(item._key, 'entryUnit', e.target.value)} className={cn(EDIT_CELL_CLASS, 'px-1 text-center')}>
@@ -356,8 +360,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
           {item.units.map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
         </select> : <span className="text-muted-body">{item.entryUnit || item.unit}</span>}</td>
       <td><Input type="number" min="0" step="0.0001" data-entry-input data-entry-field={`item-${item._key}-price`}
-        aria-label={`${item.productName}单价`} aria-invalid={issues.some(i => i.target === `item-${item._key}-price`)}
-        value={Number.isFinite(item.unitPrice) ? item.unitPrice : ''} onChange={e => updateItem(item._key, 'unitPrice', e.target.value === '' ? Number.NaN : +e.target.value)} className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums')} />
+        aria-label={`${item.productName}单价`} aria-invalid={!!priceError} aria-describedby={priceError ? priceErrorId : undefined}
+        value={Number.isFinite(item.unitPrice) ? item.unitPrice : ''} onChange={e => updateItem(item._key, 'unitPrice', e.target.value === '' ? Number.NaN : +e.target.value)} className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums', priceError && 'border-destructive/60 bg-destructive/5')} />
+        <OrderFieldError id={priceErrorId} className="mt-1">{priceError}</OrderFieldError>
         {item.priceWarning && <p role="alert" className="mt-1 text-xs text-warning-ink">{item.priceWarning}；原行金额 {money(item.originalAmount)}</p>}
         {changedRate && <p role="alert" className="mt-1 text-xs text-warning-ink">换算已变化：当前 1 {item.entryUnit} = {currentRate} {item.unit}，保存按当前换算。</p>}
         {item.unitReadFailed && item.entryUnit !== item.unit && <p role="alert" className="mt-1 text-xs text-warning-ink">当前单位资料读取失败，请核对换算后再保存。</p>}
@@ -368,7 +373,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   }
 
   return (
-    <div ref={entryRef} data-order-entry onKeyDown={handleEntryKeyDown} className="desktop-purchase-form flex min-w-0 flex-col gap-3">
+    <div ref={entryRef} data-order-entry onKeyDown={handleEntryKeyDown} className="desktop-purchase-form desktop-entry-controls flex min-w-0 flex-col gap-3">
       <ActionBar
         title={isEdit ? '编辑采购单' : '新建采购单'}
         description="填写供应商、仓库与采购明细。"
@@ -395,7 +400,6 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
         }
       />
 
-      <OrderEntryIssues issues={issues} onLocate={focusField} />
       <SectionCard title="订单信息" compact>
         <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
           <div data-entry-field="party" className="space-y-1.5">
@@ -404,6 +408,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
               id={fieldId('supplier')}
               value={supplierName}
               placeholder="点击选择供应商…"
+              aria-invalid={!!supplierError}
+              aria-describedby={supplierError ? fieldId('supplier-error') : undefined}
               onOpen={() => setSupplierFinderOpen(true)}
               onDoubleClick={() => {
                 setSupplierFinderOpen(false)
@@ -411,7 +417,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
               }}
               className={cn(supplierError && 'border-destructive/60 bg-destructive/5')}
             />
-            {supplierError && <p className="text-xs text-destructive-ink">请选择供应商</p>}
+            <OrderFieldError id={fieldId('supplier-error')}>{supplierError}</OrderFieldError>
           </div>
 
           <div data-entry-field="warehouse" className="space-y-1.5">
@@ -419,11 +425,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
             <WarehouseSelect
               id={fieldId('warehouse')}
               value={warehouseId ? +warehouseId : null}
-              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
+              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name) }}
               placeholder="选择仓库"
+              aria-invalid={!!warehouseError}
+              aria-describedby={warehouseError ? fieldId('warehouse-error') : undefined}
               className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
             />
-            {warehouseError && <p className="text-xs text-destructive-ink">请选择仓库</p>}
+            <OrderFieldError id={fieldId('warehouse-error')}>{warehouseError}</OrderFieldError>
           </div>
 
           <div className="space-y-1.5">
@@ -432,7 +440,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
               <DatePicker id={fieldId('expected-date')} value={expectedDate} onChange={setExpectedDate}
                 aria-invalid={invalidExpectedDate} aria-describedby={invalidExpectedDate ? fieldId('expected-date-error') : undefined} />
             </div>
-            {invalidExpectedDate && <p id={fieldId('expected-date-error')} role="alert" className="text-xs text-destructive-ink">请重新选择预计到货日期，或清空此选填项。</p>}
+            <OrderFieldError id={fieldId('expected-date-error')}>{invalidExpectedDate && '请重新选择预计到货日期，或清空此选填项。'}</OrderFieldError>
           </div>
 
           <div className="space-y-1.5">
@@ -452,22 +460,26 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
         title="商品明细"
         compact
         actions={
-          <Button data-entry-add data-entry-field="add" type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">
-            <Plus className="h-4 w-4" />
-            添加商品
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <OrderFieldError id={fieldId('add-error')}>{addError}</OrderFieldError>
+            <Button data-entry-add data-entry-field="add" type="button" size="sm" variant="outline" onClick={addItem}
+              aria-describedby={addError ? fieldId('add-error') : undefined} className="gap-1.5">
+              <Plus className="h-4 w-4" />
+              添加商品
+            </Button>
+          </div>
         }
       >
         {items.length === 0 ? <p className="py-6 text-center text-sm text-muted-foreground">暂无商品明细</p> : <>
           <div className="overflow-x-auto" data-table-scroll>
             <PurchaseEntryTable rowCount={items.length + 1} stickyHeader={items.length >= VIRTUAL_TABLE_THRESHOLD}>
               {items.length >= VIRTUAL_TABLE_THRESHOLD
-                ? <VirtualTableBody data={items} columns={6} getRowKey={rowKey} renderRow={renderItem} onScrollToIndexReady={registerScroll} />
-                : <tbody>{items.map(renderItem)}</tbody>}
+                ? <VirtualTableBody data={parsedItems} columns={6} getRowKey={rowKey} renderRow={renderItem} onScrollToIndexReady={registerScroll} />
+                : <tbody>{parsedItems.map(renderItem)}</tbody>}
             </PurchaseEntryTable>
           </div>
           <div className="desktop-order-total flex flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-sm">
-            <div className="min-w-0 space-y-1"><p className="text-muted-body">商品明细：{items.length} 行{summary.invalidLineCount > 0 && <span className="ml-2 text-warning-ink">{summary.invalidLineCount} 行待核对，金额仅含有效明细</span>}</p><PurchaseQuantitySummary groups={summary.quantityGroups} /></div>
+            <div className="min-w-0 space-y-1"><p className="text-muted-body">商品明细：{items.length} 行{summary.invalidLineCount > 0 && <span className="ml-2 text-warning-ink">金额仅含有效明细</span>}</p><PurchaseQuantitySummary groups={summary.quantityGroups} /></div>
             <p className="tabular-nums"><span className="mr-3 text-muted-foreground">采购金额</span><strong>{money(summary.amount)}</strong></p>
           </div>
         </>}

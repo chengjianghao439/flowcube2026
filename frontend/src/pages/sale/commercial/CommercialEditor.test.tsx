@@ -31,15 +31,17 @@ vi.mock('../form/components/SaleOrderHeaderFields', () => ({
     receiverPhone: string
     setReceiverPhone: (value: string) => void
     phoneError?: string
+    customerError?: boolean
     setCustomerFinderOpen: (b: boolean) => void
     setWarehouseId: (s: string) => void
     setWarehouseName: (s: string) => void
   }) => (
     <div data-header-readonly={p.headerReadOnly}>
       <div data-entry-field="phone"><input aria-label="联系电话" value={p.receiverPhone} onChange={e => p.setReceiverPhone(e.target.value)} />{p.phoneError && <p role="alert">{p.phoneError}</p>}</div>
-      <button disabled={p.headerReadOnly} onClick={() => p.setCustomerFinderOpen(true)}>
-        选择客户
-      </button>
+      <div data-entry-field="party">
+        <button disabled={p.headerReadOnly} onClick={() => p.setCustomerFinderOpen(true)}>选择客户</button>
+        {p.customerError && <p role="alert">请选择客户</p>}
+      </div>
       <button
         disabled={p.headerReadOnly}
         onClick={() => {
@@ -574,7 +576,6 @@ vi.mock('@/api/sale', async original => ({
   ...await original<typeof import('@/api/sale')>(),
   getSaleDetailApi: async (id: number) => ({ ...order, id, orderNo: 'SO' + id, status: 1, totalAmount: 24.69 })
 }))
-vi.mock('@/pages/sale/commercial/CommercialFulfillmentSummary', () => ({ default: () => null }))
 vi.mock('@/pages/sale/form/components/SaleOrderOverview', () => ({ SaleOrderOverview: () => null }))
 vi.mock('@/pages/sale/form/components/FulfillmentProgressCard', () => ({ FulfillmentProgressCard: () => null }))
 vi.mock('@/components/print/SaleOrderPrintTemplate', () => ({ PrintPreviewOverlay: () => null }))
@@ -825,6 +826,15 @@ test('entry sample has a useful empty state and keeps missing lines beside the a
   }, undefined, false, () => {}, true)
 })
 
+test('成套新建空单可触发销售样板的字段校验且不写入', async () => {
+  await actualGate(async (_, host) => {
+    await click('保存草稿')
+    expect(host.querySelector('[data-entry-field="party"] [role="alert"]')?.textContent).toBe('请选择客户')
+    expect(document.activeElement?.closest('[data-entry-field]')?.getAttribute('data-entry-field')).toBe('party')
+    expect(mocks.execute).not.toHaveBeenCalled()
+  }, '/sale/new-kit')
+})
+
 test('entry sample collapses general supply explanations but keeps server prices and full totals', async () => {
   mocks.preview.mockImplementation(async body => {
     const result = fixturePreview(body)
@@ -1004,7 +1014,12 @@ test('saved ordinary rows use original quantity policy and reject fractional inp
       expect(mocks.qtyPolicies).not.toHaveBeenCalled()
       await change('整数商品数量', '1.5')
       expect(quantity.value).toBe('3')
-      expect(rejected).toHaveBeenCalledWith(expect.stringContaining('整数'))
+      expect(rejected).not.toHaveBeenCalled()
+      expect(quantity.getAttribute('aria-invalid')).toBe('true')
+      const hint = document.getElementById(quantity.getAttribute('aria-describedby')!)
+      expect(hint?.textContent).toContain('整数')
+      await change('整数商品数量', '4')
+      expect(quantity.getAttribute('aria-invalid')).toBe('false')
       expect(mocks.execute).not.toHaveBeenCalled()
     }, ordinary)
   } finally { rejected.mockRestore(); mocks.qtyPolicies.mockResolvedValue([]) }

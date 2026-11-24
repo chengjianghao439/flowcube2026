@@ -1,6 +1,6 @@
-import { Suspense, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
-  Pencil, Save, X, RotateCcw, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles,
+  Pencil, Save, X, RotateCcw, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles, ArrowUp, ArrowDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/shared/IconButton'
@@ -55,13 +55,35 @@ export default function DashboardPage() {
   const saveMut = useSaveDashboardLayout()
 
   const merged = useMemo(() => mergeLayout(saved), [saved])
+  const allLayout = useMemo(buildAllLayout, [])
 
   const [layoutMode, setLayoutMode] = useState<'view' | 'edit' | 'preview'>('view')
-  const editing = layoutMode !== 'view'
+  const editing = layoutMode === 'edit'
+  const previewing = layoutMode === 'preview'
   const [draft, setDraft] = useState<DashboardLayout | null>(null)
+  const [editBaseline, setEditBaseline] = useState<DashboardLayout | null>(null)
+  const hasChanges = !!(draft && editBaseline && (
+    draft.widgets.length !== editBaseline.widgets.length || draft.widgets.some((widget, index) => {
+      const initial = editBaseline.widgets[index]
+      return widget.id !== initial.id || widget.visible !== initial.visible || widget.w !== initial.w
+    })
+  ))
   const [libOpen, setLibOpen] = useState(false)
   const dragId = useRef<string | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
+  const editorGrid = useRef<HTMLDivElement>(null)
+  const movedFocus = useRef<{ id: string; direction: 'up' | 'down' } | null>(null)
+  const [moveAnnouncement, setMoveAnnouncement] = useState('')
+  useLayoutEffect(() => {
+    const moved = movedFocus.current
+    if (!moved) return
+    movedFocus.current = null
+    const widget = Array.from(editorGrid.current?.querySelectorAll<HTMLElement>('[data-widget-id]') ?? [])
+      .find(element => element.dataset.widgetId === moved.id)
+    const buttons = Array.from(widget?.querySelectorAll<HTMLButtonElement>('[data-widget-move]:not(:disabled)') ?? [])
+    const target = buttons.find(button => button.dataset.widgetMove === moved.direction) ?? buttons[0]
+    target?.focus()
+  }, [draft])
 
   // 有权限访问某小组件？无 permission 字段=所有登录用户可见。
   const allowed = useMemo(() => {
@@ -84,7 +106,7 @@ export default function DashboardPage() {
     else if (Notification.permission !== 'denied') Notification.requestPermission().then(p => { if (p === 'granted') send() })
   }, [lowStock])
 
-  const layout = editing && draft ? draft : merged
+  const layout = previewing ? allLayout : editing && draft ? draft : merged
 
   // 渲染的可见小组件：显示 + 有权限
   const visible = layout.widgets.filter(w => WIDGET_MAP[w.id] && w.visible && allowed[w.id])
@@ -92,12 +114,25 @@ export default function DashboardPage() {
   const addable = layout.widgets.filter(w => WIDGET_MAP[w.id] && !w.visible && allowed[w.id])
 
   // ── 编辑操作 ──────────────────────────────────────────────────────────────
-  function startEdit() { setDraft(mergeLayout(saved)); setLayoutMode('edit') }
-  function cancelEdit() { setLayoutMode('view'); setDraft(null); setLibOpen(false) }
-  function showAll() { setDraft(buildAllLayout()); setLayoutMode('preview'); setLibOpen(false) }
-  function resetDefault() { setDraft(buildDefaultLayout()); toast.success('已载入推荐布局预览，保存后生效') }
+  function startEdit(layout = merged) {
+    setEditBaseline(merged)
+    setDraft(layout)
+    setLayoutMode('edit')
+  }
+  function cancelEdit() {
+    setLayoutMode('view')
+    setDraft(null)
+    setEditBaseline(null)
+    setLibOpen(false)
+    setMoveAnnouncement('')
+  }
+  function editPreview() {
+    const original = new Map(merged.widgets.map(widget => [widget.id, widget]))
+    startEdit({ widgets: allLayout.widgets.map(widget => allowed[widget.id] ? widget : original.get(widget.id) ?? widget) })
+  }
+  function resetDefault() { setDraft(buildDefaultLayout()); toast.success('已载入推荐布局，保存后生效') }
   async function save() {
-    if (!draft) return
+    if (!draft || !hasChanges || saveMut.isPending) return
     try {
       await saveMut.mutateAsync(draft)
       toast.success('仪表盘布局已保存')
@@ -107,9 +142,8 @@ export default function DashboardPage() {
     }
   }
 
-  // 未保存变更保护：进入编辑模式即视为有草稿待保存（关闭标签拦截）
   const tabPath = useContext(TabPathContext) || ''
-  useDirtyGuard(tabPath, editing && draft != null)
+  useDirtyGuard(tabPath, editing && hasChanges)
 
   const patch = (fn: (ws: DashboardWidgetLayout[]) => DashboardWidgetLayout[]) =>
     setDraft(prev => prev ? { widgets: fn([...prev.widgets]) } : prev)
@@ -123,9 +157,8 @@ export default function DashboardPage() {
     rest.push({ id, visible: true, w: cur?.w ?? WIDGET_MAP[id]?.defaultW ?? 2 })
     return rest
   })
-  const reorder = (overId: string) => {
-    const from = dragId.current
-    if (!from || from === overId) return
+  const reorder = (from: string, overId: string) => {
+    if (from === overId) return
     patch(ws => {
       const fi = ws.findIndex(w => w.id === from)
       const ti = ws.findIndex(w => w.id === overId)
@@ -136,18 +169,32 @@ export default function DashboardPage() {
     })
   }
 
+  function moveWidget(index: number, step: -1 | 1) {
+    const current = visible[index]
+    const target = visible[index + step]
+    if (!target) return
+    movedFocus.current = { id: current.id, direction: step < 0 ? 'up' : 'down' }
+    setMoveAnnouncement(WIDGET_MAP[current.id].title + '已移到第 ' + (index + step + 1) + ' 位')
+    reorder(current.id, target.id)
+  }
+
   // ── 渲染 ──────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
       <PageHeader title="仪表盘"
-        description={layoutMode === 'preview' ? '预览当前权限下的全部卡片，可以调整布局。保存后应用，取消返回原布局。'
-          : editing ? '拖拽调整卡片顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : '查看待办、经营指标与个人工具。'}
-        status={layoutMode === 'preview' ? <EditModeBadge label="布局预览" /> : editing ? <EditModeBadge /> : undefined}
+        description={previewing ? '查看当前权限下的全部卡片。'
+          : editing ? '拖拽卡片或使用上移、下移按钮调整顺序，完成后保存。' : '查看待办、经营指标与个人工具。'}
+        status={previewing ? <EditModeBadge label="布局预览" /> : editing ? <EditModeBadge /> : undefined}
         actions={<div className="flex flex-wrap items-center gap-2">
-          {!editing ? (
+          {previewing ? (
             <>
-              <Button variant="outline" size="sm" onClick={showAll}><LayoutGrid className="h-3.5 w-3.5" /> 预览全部卡片</Button>
-              <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>
+              <Button variant="outline" size="sm" onClick={() => setLayoutMode('view')}>返回原布局</Button>
+              <Button size="sm" onClick={editPreview}>编辑此布局</Button>
+            </>
+          ) : !editing ? (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setLayoutMode('preview')}><LayoutGrid className="h-3.5 w-3.5" /> 预览全部卡片</Button>
+              <Button variant="outline" size="sm" onClick={() => startEdit()}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>
             </>
           ) : (
             <>
@@ -161,7 +208,7 @@ export default function DashboardPage() {
               <Button variant="outline" size="sm" onClick={cancelEdit}>
                 <X className="h-3.5 w-3.5" /> 取消
               </Button>
-              <Button size="sm" onClick={() => void save()} disabled={saveMut.isPending}>
+              <Button size="sm" onClick={() => void save()} disabled={!hasChanges || saveMut.isPending}>
                 <Save className="h-3.5 w-3.5" /> {saveMut.isPending ? '保存中…' : '保存'}
               </Button>
             </>
@@ -216,7 +263,7 @@ export default function DashboardPage() {
       )}
 
       {/* 加载骨架 */}
-      {isLoading && !editing ? (
+      {isLoading && layoutMode === 'view' ? (
         <div className="space-y-8">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => <div key={i} className="card-base h-36 animate-pulse bg-muted/40" />)}
@@ -229,13 +276,13 @@ export default function DashboardPage() {
         <div className="card-base flex flex-col items-center gap-3 py-16 text-center">
           <LayoutGrid className="h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            {editing ? '还没有显示任何小组件，点「组件库」添加' : '仪表盘为空，点右上角「编辑仪表盘」添加小组件'}
+            {editing ? '还没有显示任何小组件，点「组件库」添加' : previewing ? '当前没有可用卡片' : '仪表盘为空，点右上角「编辑仪表盘」添加小组件'}
           </p>
-          {!editing && <Button size="sm" variant="outline" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>}
+          {layoutMode === 'view' && <Button size="sm" variant="outline" onClick={() => startEdit()}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>}
         </div>
       ) : editing ? (
-        <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {visible.map(w => {
+        <div ref={editorGrid} className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {visible.map((w, index) => {
             const def = WIDGET_MAP[w.id]
             const Body = def.Component
             return (
@@ -245,29 +292,29 @@ export default function DashboardPage() {
                 data-widget-sizing={def.category === 'list' ? 'content' : undefined}
                 style={{ height: widgetHeight(w.id, true) }}
                 className={cn(SPAN[w.w] ?? SPAN[2], 'desktop-widget-editor relative flex min-w-0 flex-col', dragging === w.id && 'opacity-40')}
-                draggable={editing}
-                onDragStart={editing ? () => { dragId.current = w.id; setDragging(w.id) } : undefined}
-                onDragEnter={editing ? () => reorder(w.id) : undefined}
-                onDragOver={editing ? (e) => e.preventDefault() : undefined}
-                onDragEnd={editing ? () => { dragId.current = null; setDragging(null) } : undefined}
+                draggable
+                onDragStart={() => { dragId.current = w.id; setDragging(w.id) }}
+                onDragEnter={() => { if (dragId.current) reorder(dragId.current, w.id) }}
+                onDragOver={e => e.preventDefault()}
+                onDragEnd={() => { dragId.current = null; setDragging(null) }}
               >
-                {editing && (
-                  <>
-                    <div className="pointer-events-none absolute inset-0 z-10 rounded-lg border-2 border-dashed border-primary/40" />
-                    <div className="desktop-widget-controls relative z-20 flex shrink-0 items-center gap-0.5 px-2 py-1">
-                      <span title="拖拽排序" className="mr-auto flex h-7 w-7 cursor-grab items-center justify-center rounded text-muted-foreground active:cursor-grabbing">
-                        <GripVertical aria-hidden="true" className="h-3.5 w-3.5" />
-                      </span>
-                      <IconButton label={`减小${def.title}宽度`} icon={Minus} onClick={() => resize(w.id, -1)} disabled={w.w <= 1}
-                        className="h-7 w-7 rounded-md text-muted-foreground disabled:opacity-30" />
-                      <span className="w-4 text-center text-xs tabular-nums text-muted-foreground">{w.w}</span>
-                      <IconButton label={`增大${def.title}宽度`} icon={Plus} onClick={() => resize(w.id, 1)} disabled={w.w >= 4}
-                        className="h-7 w-7 rounded-md text-muted-foreground disabled:opacity-30" />
-                      <IconButton label={`隐藏${def.title}`} icon={X} onClick={() => hide(w.id)}
-                        className="h-7 w-7 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive-ink" />
-                    </div>
-                  </>
-                )}
+                <div className="pointer-events-none absolute inset-0 z-10 rounded-lg border-2 border-dashed border-primary/40" />
+                <div className="desktop-widget-controls relative z-20 flex shrink-0 items-center gap-0.5 px-2 py-1">
+                  <span title="拖拽排序" className="mr-auto flex h-7 w-7 cursor-grab items-center justify-center rounded text-muted-foreground active:cursor-grabbing">
+                    <GripVertical aria-hidden="true" className="h-3.5 w-3.5" />
+                  </span>
+                  <IconButton data-widget-move="up" label={'上移' + def.title} icon={ArrowUp} onClick={() => moveWidget(index, -1)} disabled={index === 0}
+                    className="h-7 w-7 rounded-md text-muted-foreground disabled:opacity-30" />
+                  <IconButton data-widget-move="down" label={'下移' + def.title} icon={ArrowDown} onClick={() => moveWidget(index, 1)} disabled={index === visible.length - 1}
+                    className="h-7 w-7 rounded-md text-muted-foreground disabled:opacity-30" />
+                  <IconButton label={`减小${def.title}宽度`} icon={Minus} onClick={() => resize(w.id, -1)} disabled={w.w <= 1}
+                    className="h-7 w-7 rounded-md text-muted-foreground disabled:opacity-30" />
+                  <span className="w-4 text-center text-xs tabular-nums text-muted-foreground">{w.w}</span>
+                  <IconButton label={`增大${def.title}宽度`} icon={Plus} onClick={() => resize(w.id, 1)} disabled={w.w >= 4}
+                    className="h-7 w-7 rounded-md text-muted-foreground disabled:opacity-30" />
+                  <IconButton label={`隐藏${def.title}`} icon={X} onClick={() => hide(w.id)}
+                    className="h-7 w-7 rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive-ink" />
+                </div>
                 {/* Suspense：图表 widget 为 lazy（recharts 按需加载），fallback 占位避免白屏 */}
                 <Suspense fallback={<div className="flex h-full items-center justify-center text-xs text-muted-foreground">加载中…</div>}>
                   <Body />
@@ -282,11 +329,12 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {editing && (
+      {editing && <>
+        <p role="status" className="sr-only">{moveAnnouncement}</p>
         <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
           <Check className="h-3.5 w-3.5" /> 布局保存到你的账号，桌面端与网页端同步
         </p>
-      )}
+      </>}
     </div>
   )
 }

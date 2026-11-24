@@ -68,7 +68,7 @@ export function SectionCard({
           compact ? 'px-4 py-2.5' : 'px-5 py-3',
         )}>
           {title && (
-            <h3 className="min-w-0 break-words text-card-title">{title}</h3>
+            <h2 className="min-w-0 break-words text-card-title">{title}</h2>
           )}
           {actions && (
             <div className="flex flex-wrap items-center gap-2">{actions}</div>

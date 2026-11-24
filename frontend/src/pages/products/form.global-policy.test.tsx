@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { getByRole } from '@testing-library/dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import ProductFormPage from './form'
@@ -51,4 +52,15 @@ test('new ordinary product remains creatable without writing either global defau
   expect(state.create).toHaveBeenCalledTimes(1)
   expect(Object.hasOwn(state.create.mock.calls[0][0], 'safetyStock')).toBe(false)
   expect(Object.hasOwn(state.create.mock.calls[0][0], 'reorderPoint')).toBe(false)
+})
+
+
+test('商品新增表单为核心输入及库存策略提供可辨识名称', async () => {
+  await render('/products/new')
+  for (const name of ['名称 *', '单位 *', '型号 *', '颜色 *', '供应商型号']) {
+    expect(getByRole(host, 'textbox', { name })).toBe(input(name))
+  }
+  for (const name of ['进价 *', '价格A', '安全库存', '补货点']) {
+    expect(getByRole(host, 'spinbutton', { name })).toBe(input(name))
+  }
 })

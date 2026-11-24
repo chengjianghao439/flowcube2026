@@ -1,8 +1,8 @@
-import { qty } from '@/lib/format'
 import { ReportQueryFeedback } from './ReportQueryFeedback'
-import { money } from '@/lib/format'
+import { money, qty } from '@/lib/format'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -63,24 +63,28 @@ export default function InventoryAgingPage() {
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const agingCols: TableColumn<AgingItem>[] = [
-    ...productIdentityColumns(),
-    { key: 'warehouseName', title: '仓库', width: 100 },
-    { key: 'qty0_30', title: '0-30天', width: 80, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
-    { key: 'qty30_60', title: '30-60天', width: 82, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
-    { key: 'qty60_90', title: '60-90天', width: 82, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
-    { key: 'qty90p', title: '90+天', width: 82, align: 'right', render: v => Number(v) > 0 ? <span className="tabular-nums font-medium text-amber-600">{fmtQty(v)}</span> : <span className="tabular-nums text-muted-foreground">—</span> },
-    { key: 'totalQty', title: '合计', width: 80, align: 'right', render: v => <span className="tabular-nums font-medium">{fmtQty(v)}</span> },
-    { key: 'avgAgeDays', title: '平均存放时长', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
+    { ...productIdentityColumns({ compact: true })[0], width: 330 },
+    { key: 'warehouseName', title: '仓库', width: 136 },
+    { key: 'qty0_30', title: '0-30天', width: 72, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
+    { key: 'qty30_60', title: '30-60天', width: 72, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
+    { key: 'qty60_90', title: '60-90天', width: 72, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
+    { key: 'qty90p', title: '90+天', width: 72, align: 'right', render: v => Number(v) > 0 ? <span className="tabular-nums font-medium text-warning-ink">{fmtQty(v)}</span> : <span className="tabular-nums text-muted-foreground">—</span> },
+    { key: 'totalQty', title: '合计', width: 74, align: 'right', render: v => <span className="tabular-nums font-medium">{fmtQty(v)}</span> },
+    { key: 'avgAgeDays', title: '平均存放时长', width: 105, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
     { key: 'totalValue', title: '金额', width: 110, align: 'right', render: v => <span className="tabular-nums">{money(Number(v))}</span> },
-    { key: 'lastOutboundAt', title: '最后出库', width: 150, render: v => formatDisplayDateTime(v) },
-    { key: 'isStale', title: '滞销情况', width: 122, render: (_, r) => r.isStale
-      ? <SoftStatusLabel label={r.daysSinceOutbound == null ? '从未出库' : `${r.daysSinceOutbound} 天未出库`} tone="danger" />
-      : <span className="text-xs text-muted-foreground">正常</span> },
+    { key: 'lastOutboundAt', title: '最后出库 / 滞销', width: 166, render: (v, r) => (
+      <div className="space-y-1">
+        <div className="tabular-nums">{formatDisplayDateTime(v)}</div>
+        {r.isStale
+          ? <SoftStatusLabel label={r.daysSinceOutbound == null ? '从未出库' : `${r.daysSinceOutbound} 天未出库`} tone="danger" />
+          : <div className="text-xs text-muted-foreground">正常</div>}
+      </div>
+    ) },
   ]
 
   const expiryCols: TableColumn<ExpiryAlert>[] = [
-    ...productIdentityColumns(),
-    { key: 'warehouseName', title: '仓库', width: 100 },
+    { ...productIdentityColumns({ compact: true })[0], width: 248 },
+    { key: 'warehouseName', title: '仓库', width: 136 },
     { key: 'batchNo', title: '批次', width: 130, render: v => (v as string) || '—' },
     { key: 'expDate', title: '到期日', width: 110, render: v => v ? String(v).slice(0, 10) : '—' },
     { key: 'daysToExpiry', title: '距到期', width: 90, align: 'right', render: v => <span className="tabular-nums">{Number(v)} 天</span> },
@@ -117,15 +121,14 @@ export default function InventoryAgingPage() {
       )}
 
       <ReportQueryFeedback title="存放明细" hasData={!!agingQ.data} isError={agingQ.isError} isFetching={agingQ.isFetching} error={agingQ.error} onRetry={() => void agingQ.refetch()} />
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {buckets.map(b => (
-          <div key={b.bucket} className="card-base p-4">
-            <p className="text-xs text-muted-foreground">存放 {b.bucket} 天</p>
-            <p className={`mt-1 text-2xl font-bold ${b.bucket === '90+' ? 'text-amber-600' : 'text-foreground'}`}>{money(b.totalValue)}</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">{b.skuCount} SKU · {fmtQty(b.totalQty)} 件</p>
-          </div>
-        ))}
-      </div>
+      {buckets.length > 0 && <SummaryStrip items={buckets.map(bucket => ({
+        label: `存放 ${bucket.bucket} 天`,
+        tone: bucket.bucket === '90+' ? 'text-warning-ink' : undefined,
+        value: <>
+          {money(bucket.totalValue)}
+          <span className="block text-xs font-normal leading-5 text-muted-foreground">{bucket.skuCount} SKU · {fmtQty(bucket.totalQty)} 件</span>
+        </>,
+      }))} />}
 
       <div className="flex gap-1 border-b border-border">
         {([{ k: 'aging', l: '存放明细' }, { k: 'expiry', l: '效期预警' }] as const).map(t => (
@@ -135,11 +138,11 @@ export default function InventoryAgingPage() {
       </div>
 
       <KeepAliveSection active={tab === 'aging' && (!agingQ.isError || !!agingQ.data)}>
-        <DataTable columns={agingCols} data={list} loading={agingQ.isLoading} rowKey="id" emptyText="暂无库存数据" />
+        <DataTable columns={agingCols} data={list} loading={agingQ.isLoading} rowKey="id" scrollLabel="存放明细表格" emptyText="暂无库存数据" />
       </KeepAliveSection>
       <KeepAliveSection active={tab === 'expiry'}>
         <ReportQueryFeedback title="效期预警" hasData={!!expiryQ.data} isError={expiryQ.isError} isFetching={expiryQ.isFetching} error={expiryQ.error} onRetry={() => void expiryQ.refetch()} />
-        {(!expiryQ.isError || !!expiryQ.data) && <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />}
+        {(!expiryQ.isError || !!expiryQ.data) && <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" scrollLabel="效期预警表格" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />}
       </KeepAliveSection>
 
       <InventoryAgingQueryDialog

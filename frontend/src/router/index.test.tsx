@@ -108,3 +108,30 @@ test.each([true, false])('独立 PDA 构建复用认证与业务路由 authentic
   expect(host.textContent).toContain(authenticated ? '仓库作业' : 'PDA 登录')
   expect(host.querySelector('[data-client="erp"]')).toBeNull()
 })
+
+test.each([
+  ['/sales', '/sale'],
+  ['/payments', '/payments/payable'],
+  ['/reports/reconciliation', '/reports/reconciliation/payable'],
+  ['/returns', '/returns/purchase'],
+  ['/inventory/overview', '/inventory'],
+  ['/reports/exception-workbench', '/reports/role-workbench'],
+])('已登录直达 %s 保留兼容地址的查询参数', async (alias, canonical) => {
+  const search = '?range=all&keyword=%E5%90%88%E6%88%90&warehouseId=7'
+  await renderAt(alias + search)
+  expect(window.location.hash).toBe('#' + canonical + search)
+  expect(host.querySelector('[data-client="erp"]')?.textContent).toBe(canonical + search)
+})
+
+test('从 ERP 内进入兼容地址时保留查询，替换旧地址的历史项', async () => {
+  await renderAt('/dashboard')
+  await navigate('/sales?range=all')
+  expect(window.location.hash).toBe('#/sale?range=all')
+  await navigate(-1)
+  expect(window.location.hash).toBe('#/dashboard')
+})
+
+test('ERP 标准地址原样保留其查询参数', async () => {
+  await renderAt('/sale?range=all')
+  expect(host.querySelector('[data-client="erp"]')?.textContent).toBe('/sale?range=all')
+})

@@ -47,6 +47,8 @@ test('准确PR原价/两位现金预算和原付款分配，实际页面POSTunkn
     await click('保存退款草稿');
     expect((document.querySelector('[aria-label="原付款分配21退款金额"]') as HTMLInputElement)?.value).toBe('0.01');
     expect(document.body.textContent).toContain('原请求退款合计');
+    expect(document.querySelector('fieldset [aria-invalid="true"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('请至少填写一笔退款金额');
     expect(readRefundRecords()[0].body).toMatchObject({ purchaseReturnId: 11, incomeAccountId: 42, refundDate: '2026-10-01', amount: '0.0100', allocations: [{ entryId: 21, amount: '0.0100' }] });
     await click('查询原结果');
     expect(calls.filter(c => c.method === 'post')).toHaveLength(1);
@@ -173,7 +175,10 @@ test.each(['0.0049', '0.0067', '0.8999', '1.001', '1.23456'])('new supplier refu
  try {
   await fill('真实银行回款日','2026-10-01');await fill('收入账户','42');await fill('原付款分配21退款金额',value);await click('保存退款草稿')
   expect(calls.filter(c=>c.method==='post')).toEqual([]);expect(readRefundRecords()).toEqual([])
-  expect(document.body.textContent).toContain('准确两位退款分配')
+  const field = document.querySelector<HTMLInputElement>('[aria-label="原付款分配21退款金额"]')!
+  expect(field.getAttribute('aria-invalid')).toBe('true')
+  expect(document.getElementById(field.getAttribute('aria-describedby')!)?.textContent).toContain('最多两位小数')
+  expect(document.activeElement).toBe(field)
   expect((document.querySelector('[aria-label="原付款分配21退款金额"]') as HTMLInputElement).value).toBe(value)
  }finally{await m.close()}
 })

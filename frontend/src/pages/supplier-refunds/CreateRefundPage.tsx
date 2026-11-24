@@ -1,4 +1,6 @@
-import { useContext, useId, useState } from 'react';
+import { useContext, useId, useRef, useState } from 'react';
+import { OrderFieldError } from '@/components/shared/OrderFieldError';
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { TabPathContext } from '@/components/layout/TabPathContext';
 import { Button } from '@/components/ui/button';
@@ -27,6 +29,8 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
     identity: string;
 }) {
     const fieldId = useId();
+    const formRef = useRef<HTMLFieldSetElement>(null);
+    const [validationAttempted, setValidationAttempted] = useState(false);
     const [submitted, setSubmitted] = useState<{ source: SupplierRefundSource; amount: string; account: { id: number; name: string } } | null>(null);
     const scope = useSupplierRefundRead(), navigate = useNavigate(), [operationUuid] = useState(() => crypto.randomUUID()), [requestKey] = useState(() => createRequestKey('supplier-refund'));
     const write = useSupplierRefundOperation(identity, scope.active, () => scope.current() && mayRefund(P.SUPPLIER_REFUND_CREATE, P.FINANCE_ACCOUNT_VIEW));
@@ -39,13 +43,35 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
     const sum = canonical.reduce((n, a) => n + refundMoney(a.amount)!, 0n), amount = `${sum / 10000n}.${String(sum % 10000n).padStart(4, '0')}`;
     const sourceCashReady = !!source.data && [source.data.grossAmount, source.data.availableAmount, source.data.currentPaidAmount, ...source.data.entries.flatMap(e => [e.originalAmount, e.availableAmount])].every(v => refundCashMoney(v) !== null);
     const ready = sourceCashReady && source.ready && accounts.ready && scope.current() && !write.blocked && mayRefund(P.SUPPLIER_REFUND_CREATE, P.FINANCE_ACCOUNT_VIEW);
+    const selectedAccount = accounts.data?.find(a => a.id === Number(account));
+    const showFieldErrors = validationAttempted && ready && !write.busy;
+    const dateError = !date ? '请填写真实银行回款日' : '';
+    const accountError = !selectedAccount ? '请选择收入账户' : '';
+    const invalidAmounts = Object.entries(amounts).filter(([, value]) => value !== '' && !inputRefundCashMoney(value));
+    const allocations = source.data?.entries ?? [];
+    const allocationErrors = new Map<number, string>();
+    for (const entry of allocations) {
+        const raw = amounts[entry.entryId] || '';
+        const parsed = raw && inputRefundCashMoney(raw);
+        if (raw && !parsed) allocationErrors.set(entry.entryId, '请输入正数退款金额，最多两位小数');
+        else if (parsed && sourceCashReady && refundMoney(parsed)! > refundMoney(entry.availableAmount)!) {
+            allocationErrors.set(entry.entryId, '本笔退款金额不能超过原分配剩余额度');
+        }
+    }
+    const totalError = invalidAmounts.some(([id]) => !allocations.some(entry => entry.entryId === Number(id))) ? '请核对原付款分配中的退款金额'
+        : allocationErrors.size ? ''
+        : !sum ? '请至少填写一笔退款金额'
+        : source.data && sourceCashReady && (sum > refundMoney(source.data.availableAmount)! || sum > refundMoney(source.data.currentPaidAmount)!)
+            ? '退款合计不能超过本退货剩余额度或当前净已付' : '';
     async function save() {
         if (!ready || !source.data)
             return;
+        setValidationAttempted(true);
         const s = source.data;
-        const selectedAccount = accounts.data?.find(a => a.id === Number(account));
-        if (!date || !selectedAccount || !sum || Object.entries(amounts).some(([, v]) => v !== '' && !inputRefundCashMoney(v)) || sum > refundMoney(s.availableAmount)! || sum > refundMoney(s.currentPaidAmount)! || canonical.some(a => refundMoney(a.amount)! > refundMoney(s.entries.find(e => e.entryId === a.entryId)!.availableAmount)!)) {
-            setError('请填写真实日期、收入账户与准确两位退款分配，不能超过各自剩余额度和当前已付金额');
+        if (dateError || !selectedAccount || allocationErrors.size || totalError) {
+            const firstAllocation = allocationErrors.keys().next().value;
+            const target = dateError ? 'date' : !selectedAccount ? 'account' : firstAllocation !== undefined ? `allocation-${firstAllocation}` : 'total';
+            focusOrderEntryField(formRef.current, target);
             return;
         }
         setError('');
@@ -85,22 +111,48 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
           { key: 'unitPrice', title: '原成交单价', width: 140, align: 'right', render: value => <span className="tabular-nums">{sourceUnitPriceLabel(value)}</span> },
         ]} />
       </section>}
-      <fieldset disabled={!ready || write.busy} className="space-y-4 rounded-lg border border-border bg-card p-4">
+      <fieldset ref={formRef} disabled={!ready || write.busy} className="space-y-4 rounded-lg border border-border bg-card p-4">
         <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5"><Label htmlFor={`${fieldId}-date`}>真实银行回款日 *</Label><Input id={`${fieldId}-date`} type="date" aria-label="真实银行回款日" value={date} onChange={e => { if (scope.current()) setDate(e.target.value); }} /></div>
-          <div className="space-y-1.5"><Label htmlFor={`${fieldId}-account`}>收入账户 *</Label><select id={`${fieldId}-account`} aria-label="收入账户" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50" value={account} onChange={e => { if (scope.current()) setAccount(e.target.value); }}><option value="">请选择收入账户</option>{displayAccounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+          <div className="space-y-1.5" data-entry-field="date">
+            <Label htmlFor={`${fieldId}-date`}>真实银行回款日 *</Label>
+            <Input id={`${fieldId}-date`} type="date" aria-label="真实银行回款日" value={date} onChange={e => { if (scope.current()) setDate(e.target.value); }}
+              aria-invalid={showFieldErrors && !!dateError} aria-describedby={showFieldErrors && dateError ? `${fieldId}-date-error` : undefined} />
+            <OrderFieldError id={`${fieldId}-date-error`}>{showFieldErrors && dateError}</OrderFieldError>
+          </div>
+          <div className="space-y-1.5" data-entry-field="account">
+            <Label htmlFor={`${fieldId}-account`}>收入账户 *</Label>
+            <select id={`${fieldId}-account`} aria-label="收入账户" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+              aria-invalid={showFieldErrors && !!accountError} aria-describedby={showFieldErrors && accountError ? `${fieldId}-account-error` : undefined}
+              value={account} onChange={e => { if (scope.current()) setAccount(e.target.value); }}><option value="">请选择收入账户</option>{displayAccounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
+            <OrderFieldError id={`${fieldId}-account-error`}>{showFieldErrors && accountError}</OrderFieldError>
+          </div>
         </div>
         <section aria-label="准确原付款分配" className="space-y-3">
           <h2 className="text-sm font-semibold">原付款分配</h2>
           <p className="text-sm text-muted-foreground">逐笔填写退款金额（最多两位小数），不新增负付款。</p>
-          {displaySource?.entries.map(e => <div key={e.entryId} className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
+          {displaySource?.entries.map(e => {
+            const allocationError = showFieldErrors && allocationErrors.get(e.entryId);
+            const errorId = `${fieldId}-allocation-${e.entryId}-error`;
+            return <div key={e.entryId} className="grid gap-3 border-t border-border pt-3 sm:grid-cols-[minmax(0,1fr)_14rem]">
             <div className="space-y-1 text-sm"><p><span className="font-medium">{e.receipt?.receiptNo || e.out.bizNo}</span> · 原分配 {e.entryId}</p><p className="text-xs text-muted-foreground">原日期 {e.paymentDate} · 原本金 {refundCashLabel(e.originalAmount)} · 剩余 {refundCashLabel(e.availableAmount)}</p></div>
-            <div className="space-y-1.5"><Label htmlFor={`${fieldId}-allocation-${e.entryId}`}>本笔退款金额</Label><Input id={`${fieldId}-allocation-${e.entryId}`} aria-label={`原付款分配${e.entryId}退款金额`} className="text-right tabular-nums" inputMode="decimal" value={amounts[e.entryId] || ''} onChange={event => { if (scope.current()) setAmounts(a => ({ ...a, [e.entryId]: event.target.value })); }} /></div>
-          </div>)}
+            <div className="space-y-1.5" data-entry-field={`allocation-${e.entryId}`}>
+              <Label htmlFor={`${fieldId}-allocation-${e.entryId}`}>本笔退款金额</Label>
+              <Input id={`${fieldId}-allocation-${e.entryId}`} aria-label={`原付款分配${e.entryId}退款金额`} className="text-right tabular-nums" inputMode="decimal"
+                aria-invalid={!!allocationError} aria-describedby={allocationError ? errorId : undefined}
+                value={amounts[e.entryId] || ''} onChange={event => { if (scope.current()) setAmounts(a => ({ ...a, [e.entryId]: event.target.value })); }} />
+              <OrderFieldError id={errorId}>{allocationError}</OrderFieldError>
+            </div>
+          </div>})}
         </section>
         <div className="max-w-3xl space-y-1.5"><Label htmlFor={`${fieldId}-remark`}>退款事由</Label><Input id={`${fieldId}-remark`} aria-label="退款事由" value={remark} maxLength={500} onChange={e => { if (scope.current()) setRemark(e.target.value); }} /></div>
         {error && <p role="alert" className="text-sm text-destructive-ink">{error}</p>}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-sm">{frozenDisplay ? '原请求退款合计' : '本次退款合计'} <span className="ml-2 text-base font-semibold tabular-nums">{refundCashLabel(displayAmount)}</span></p><Button disabled={!ready || write.busy} onClick={() => void save()}>{write.busy ? '保存中…' : '保存退款草稿'}</Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <div data-entry-field="total" tabIndex={-1}>
+            <p className="text-sm">{frozenDisplay ? '原请求退款合计' : '本次退款合计'} <span className="ml-2 text-base font-semibold tabular-nums">{refundCashLabel(displayAmount)}</span></p>
+            <OrderFieldError>{showFieldErrors && totalError}</OrderFieldError>
+          </div>
+          <Button disabled={!ready || write.busy} onClick={() => void save()}>{write.busy ? '保存中…' : '保存退款草稿'}</Button>
+        </div>
       </fieldset>
       <RefundRecoveryPanel write={write} />
       {write.result && <section className="space-y-2"><p role="status">退款单 {write.result.refundNo} 已创建，尚未实际收款。</p><Button onClick={openCreated}>查看已创建退款单</Button></section>}

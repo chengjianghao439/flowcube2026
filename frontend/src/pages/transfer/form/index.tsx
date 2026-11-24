@@ -1,6 +1,8 @@
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
@@ -14,7 +16,7 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
  * 结构参照采购单 pages/purchase/form/index.tsx：FormView + DetailView。
  */
 
-import { useContext, useRef, useState, useMemo } from 'react'
+import { useContext, useId, useRef, useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
@@ -47,7 +49,7 @@ import {
 import type { TransferOrder, TransferItem } from '@/api/transfer'
 import type { ProductFinderResult } from '@/types/products'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
-import { qtyStep } from '@/lib/qtyStep'
+import { quantityInputError, qtyStep } from '@/lib/qtyStep'
 
 interface DraftItem extends Omit<TransferItem, 'id'> {
   _key: number
@@ -115,11 +117,23 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
   const [discardOpen, setDiscardOpen] = useState(false)
   const [submitLocked, setSubmitLocked] = useState(false)
-  const [fromError, setFromError] = useState(false)
-  const [toError, setToError] = useState(false)
-  const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
+  const entryRef = useRef<HTMLDivElement>(null)
+  const fieldPrefix = useId()
+  const [validationAttempted, setValidationAttempted] = useState(false)
+  const [rejectedQuantities, setRejectedQuantities] = useState<Record<number, string | undefined>>({})
 
   const sameWarehouse = !!fromWarehouseId && fromWarehouseId === toWarehouseId
+  const fromIssue = !fromWarehouseId || !fromWarehouseName ? '请选择调出仓库' : null
+  const toIssue = !toWarehouseId || !toWarehouseName ? '请选择调入仓库' : sameWarehouse ? '与调出仓库不能相同' : null
+  const addIssue = !items.length ? '请添加至少一条明细' : null
+  const rowIssues = items.map(item => ({
+    product: !item.productId ? '请选择商品' : null,
+    quantity: rejectedQuantities[item._key] ?? (!(item.quantity > 0) ? '调拨数量必须大于 0' : quantityInputError(String(item.quantity), allowDecimalOf(item.productId) === false)),
+  }))
+  const fromError = validationAttempted ? fromIssue : null
+  const toError = validationAttempted || sameWarehouse ? toIssue : null
+  const addError = validationAttempted ? addIssue : null
+  const errorId = (field: string) => `${fieldPrefix}-${field}-error`
   // 编辑态：初始值本就非空，"是否非空"不能代表"是否改过"；改成与进入编辑时的快照比较
   const editSnapshotRef = useRef(isEdit ? JSON.stringify({ fromWarehouseId, toWarehouseId, remark, items }) : null)
   const isDirty = isEdit
@@ -137,7 +151,16 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     setFinderOpen(true)
   }
 
-  const removeItem = (k: number) => setItems(p => p.filter(i => i._key !== k))
+  function reportQuantityError(key: number, error: string | null) {
+    setRejectedQuantities(previous => previous[key] === (error ?? undefined)
+      ? previous
+      : { ...previous, [key]: error ?? undefined })
+  }
+
+  const removeItem = (k: number) => {
+    setItems(p => p.filter(i => i._key !== k))
+    reportQuantityError(k, null)
+  }
   const updateItem = (k: number, field: string, val: string | number) =>
     setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val } : i)))
 
@@ -160,28 +183,23 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     } else {
       setItems(prev => prev.map(item => item._key === k ? { ...item, ...fields } : item))
     }
-    setInvalidItemKeys(prev => {
-      if (!prev.has(k)) return prev
-      const next = new Set(prev)
-      next.delete(k)
-      return next
-    })
+    reportQuantityError(k, null)
   }
 
   async function handleSubmit() {
-    if (saving) return
-    const missingFrom = !fromWarehouseId || !fromWarehouseName
-    const missingTo = !toWarehouseId || !toWarehouseName
-    setFromError(missingFrom)
-    setToError(missingTo)
-    if (missingFrom) { toast.warning('请选择调出仓库'); return }
-    if (missingTo) { toast.warning('请选择调入仓库'); return }
-    if (sameWarehouse) { toast.warning('调出仓库和调入仓库不能相同'); return }
-    if (!items.length) { toast.warning('请添加至少一条明细'); return }
-    const missingProductKeys = new Set(items.filter(i => !i.productId).map(i => i._key))
-    setInvalidItemKeys(missingProductKeys)
-    if (missingProductKeys.size) { toast.warning('请完整填写所有明细'); return }
-    if (items.find(i => !(i.quantity > 0))) { toast.warning('调拨数量必须大于 0'); return }
+    if (!active || saving) return
+    setValidationAttempted(true)
+    const headerField = fromIssue ? 'from' : toIssue ? 'to' : addIssue ? 'add' : null
+    if (headerField) {
+      focusOrderEntryField(entryRef.current, headerField)
+      return
+    }
+    const invalidIndex = rowIssues.findIndex(issue => issue.product || issue.quantity)
+    if (invalidIndex >= 0) {
+      const field = rowIssues[invalidIndex].product ? 'product' : 'quantity'
+      focusOrderEntryField(entryRef.current, `item-${items[invalidIndex]._key}-${field}`)
+      return
+    }
 
     const payload = {
       fromWarehouseId: +fromWarehouseId,
@@ -219,13 +237,15 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
     setRemark(incomingDraft.remark || '')
     setItems(incomingDraft.items.map((item, index) => ({ ...item, _key: index })))
     setCounter(incomingDraft.items.length)
+    setRejectedQuantities({})
+    setValidationAttempted(false)
     setAppliedProcurementKey(incomingKey)
   }
 
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
 
   return (
-    <div className="desktop-document-form flex flex-col gap-3">
+    <div ref={entryRef} className="desktop-document-form desktop-entry-controls flex flex-col gap-3">
       {incomingDraft && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3 text-sm"><p>收到采购调拨建议：{incomingDraft.fromWarehouseName} → {incomingDraft.toWarehouseName}。{isDirty ? '当前有未保存内容，带入将替换当前表单。' : '核对后带入表单。'}</p><div className="flex gap-2"><Button size="sm" variant="outline" disabled={saving} onClick={() => setAppliedProcurementKey(incomingKey)}>保留当前表单</Button><Button size="sm" disabled={saving} onClick={applyProcurementDraft}>带入采购建议</Button></div></div>}
       <ActionBar
         title={isEdit ? '编辑调拨单' : '新建调拨单'}
@@ -254,37 +274,40 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
       <SectionCard title="调拨信息" compact>
         <div className="desktop-form-fields desktop-transfer-fields flex items-start gap-4">
-          <div className="w-56 shrink-0 space-y-1.5">
-            <Label htmlFor="transfer-from">调出仓库 *</Label>
+          <div data-entry-field="from" className="w-56 shrink-0 space-y-1.5">
+            <Label htmlFor={`${fieldPrefix}-from`}>调出仓库 *</Label>
             <WarehouseSelect
-              id="transfer-from"
+              id={`${fieldPrefix}-from`}
               disabled={saving}
               value={fromWarehouseId ? +fromWarehouseId : null}
-              onChange={(id, name) => { setFromWarehouseId(id ? String(id) : ''); setFromWarehouseName(name); setFromError(false) }}
+              onChange={(id, name) => { setFromWarehouseId(id ? String(id) : ''); setFromWarehouseName(name) }}
               placeholder="选择调出仓库"
+              aria-invalid={!!fromError}
+              aria-describedby={fromError ? errorId('from') : undefined}
               className={cn(fromError && 'border-destructive/60 bg-destructive/5')}
             />
-            {fromError && <p className="text-xs text-destructive-ink">请选择调出仓库</p>}
+            <OrderFieldError id={errorId('from')}>{fromError}</OrderFieldError>
           </div>
 
-          <div className="w-56 shrink-0 space-y-1.5">
-            <Label htmlFor="transfer-to">调入仓库 *</Label>
+          <div data-entry-field="to" className="w-56 shrink-0 space-y-1.5">
+            <Label htmlFor={`${fieldPrefix}-to`}>调入仓库 *</Label>
             <WarehouseSelect
-              id="transfer-to"
+              id={`${fieldPrefix}-to`}
               disabled={saving}
               value={toWarehouseId ? +toWarehouseId : null}
-              onChange={(id, name) => { setToWarehouseId(id ? String(id) : ''); setToWarehouseName(name); setToError(false) }}
+              onChange={(id, name) => { setToWarehouseId(id ? String(id) : ''); setToWarehouseName(name) }}
               placeholder="选择调入仓库"
-              className={cn((toError || sameWarehouse) && 'border-destructive/60 bg-destructive/5')}
+              aria-invalid={!!toError}
+              aria-describedby={toError ? errorId('to') : undefined}
+              className={cn(toError && 'border-destructive/60 bg-destructive/5')}
             />
-            {toError && <p className="text-xs text-destructive-ink">请选择调入仓库</p>}
-            {!toError && sameWarehouse && <p className="text-xs text-destructive-ink">与调出仓库不能相同</p>}
+            <OrderFieldError id={errorId('to')}>{toError}</OrderFieldError>
           </div>
 
           <div className="desktop-field-wide flex-1 space-y-1.5">
-            <Label htmlFor="transfer-remark">备注</Label>
+            <Label htmlFor={`${fieldPrefix}-remark`}>备注</Label>
             <Input
-              id="transfer-remark"
+              id={`${fieldPrefix}-remark`}
               disabled={saving}
               maxLength={200}
               value={remark}
@@ -299,9 +322,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         title="调拨明细"
         compact
         actions={
-          <Button type="button" size="sm" variant="outline" disabled={saving} onClick={addItem} className="gap-1.5">
-            <Plus className="h-4 w-4" />添加商品
-          </Button>
+          <div data-entry-field="add" className="flex flex-wrap items-center gap-2">
+            <OrderFieldError id={errorId('add')}>{addError}</OrderFieldError>
+            <Button type="button" size="sm" variant="outline" disabled={saving} onClick={addItem} className="gap-1.5"
+              aria-describedby={addError ? errorId('add') : undefined}>
+              <Plus className="h-4 w-4" />添加商品
+            </Button>
+          </div>
         }
       >
         {items.length === 0 ? (
@@ -314,25 +341,32 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
           <div className="overflow-x-auto">
             <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '调拨数量', width: 96, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="transfer-entry-items" minWidth={760}>
               <tbody>
-                {items.map(item => (
-                  <tr key={item._key} className="border-b border-border/40">
-                    <ProductIdentityCells compact product={item} nameContent={<button
+                {items.map((item, index) => {
+                  const productField = `item-${item._key}-product`
+                  const quantityField = `item-${item._key}-quantity`
+                  const productError = validationAttempted ? rowIssues[index].product : null
+                  const quantityError = rejectedQuantities[item._key] ?? (validationAttempted ? rowIssues[index].quantity : null)
+                  return <tr key={item._key} className="border-b border-border/40">
+                    <ProductIdentityCells compact product={item} nameContent={<><button
                         type="button"
                         disabled={saving}
+                        data-entry-field={productField}
+                        aria-invalid={!!productError}
+                        aria-describedby={productError ? errorId(productField) : undefined}
                         onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
                         className={cn(
                           'block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                          invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5',
+                          productError && 'border-destructive/60 bg-destructive/5',
                         )}
                       >
                         {item.productName
                           ? <span className="break-words font-medium">{item.productName}</span>
                           : <span className="text-muted-foreground">点击选择商品…</span>}
-                      </button>} />
+                      </button><OrderFieldError id={errorId(productField)} className="mt-1">{productError}</OrderFieldError></>} />
 
                     <td className="py-2.5 text-center text-muted-body">{item.unit || '—'}</td>
 
-                    <td className="py-2.5">
+                    <td data-entry-field={quantityField} className="py-2.5">
                       <Input quantity
                         type="number"
                         disabled={saving}
@@ -340,9 +374,14 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                         step={qtyStep(allowDecimalOf(item.productId))}
                         placeholder="数量"
                         value={item.quantity}
+                        aria-invalid={!!quantityError}
+                        aria-describedby={quantityError ? errorId(quantityField) : undefined}
+                        aria-label={`${item.productName}调拨数量`}
+                        onQuantityError={error => reportQuantityError(item._key, error)}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositive(e.target.value))}
                         className="text-right text-sm"
                       />
+                      <OrderFieldError id={errorId(quantityField)} className="mt-1">{quantityError}</OrderFieldError>
                     </td>
 
                     <td className="py-2.5 text-center">
@@ -359,7 +398,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
                       </Button>
                     </td>
                   </tr>
-                ))}
+                })}
               </tbody>
             </ResizableTable>
           </div>

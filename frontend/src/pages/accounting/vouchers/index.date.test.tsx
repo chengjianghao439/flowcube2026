@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import React, { act } from 'react'
+import { fireEvent, getByRole } from '@testing-library/dom'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -86,4 +87,22 @@ it.each([
   expect(requests).toContain('get /accounting/vouchers/901')
   expect(dateLabel.parentElement?.textContent).toBe(`日期：${expected}`)
   expect(dialog.querySelector('[title="asset_depreciation"]')?.textContent).toBe('来源：固定资产折旧')
+})
+
+
+it('手工凭证先聚焦标题，主动进入记账日期才打开日历，分录可按行识别', async () => {
+  const user = useAuthStore.getState().user!
+  useAuthStore.setState({ user: { ...user, permissions: [P.ACCOUNTING_VOUCHER_VIEW, P.ACCOUNTING_VOUCHER_MANAGE] } })
+  await act(async () => root.render(<MemoryRouter><QueryClientProvider client={qc}><Page /></QueryClientProvider></MemoryRouter>))
+  await settleUntil(() => host.textContent?.includes(voucher.voucherNo) === true)
+  await act(async () => getByRole(host, 'button', { name: '手工录入' }).click())
+  const dialog = getByRole(document.body, 'dialog', { name: '手工凭证录入' })
+  expect(document.activeElement).toBe(getByRole(dialog, 'heading', { name: '手工凭证录入' }))
+  expect(document.querySelector('.fc-date-menu')).toBeNull()
+  expect(getByRole(dialog, 'combobox', { name: '第 1 行科目' })).toBeTruthy()
+  expect(getByRole(dialog, 'combobox', { name: '第 2 行借贷方向' })).toBeTruthy()
+  expect(getByRole(dialog, 'spinbutton', { name: '第 1 行金额' })).toBeTruthy()
+  expect(getByRole(dialog, 'textbox', { name: '第 2 行摘要' })).toBeTruthy()
+  await act(async () => { fireEvent.focusIn(getByRole(dialog, 'textbox', { name: '记账日期 *' })) })
+  expect(document.querySelector('.fc-date-menu')).not.toBeNull()
 })

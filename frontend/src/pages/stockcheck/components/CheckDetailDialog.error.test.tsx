@@ -229,3 +229,37 @@ it('同单结束后只读实盘与差异同取服务端事实，不混入未保�
     expect(host.textContent).not.toContain('-1.00')
   } finally { await act(async () => root.unmount()) }
 })
+
+it('盘点数量不合规时在本行提示，保存与提交都会定位且不发请求', async () => {
+  const { host, root, input, click } = await mount()
+  try {
+    await input('-1')
+    const field = host.querySelector<HTMLInputElement>('input[aria-label="测试品实盘数量"]')!
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe('实盘数量不能为负数')
+    await click('保存实盘数')
+    expect(document.activeElement).toBe(field)
+    expect(f.save).not.toHaveBeenCalled()
+    await click('提交盘点')
+    expect(document.activeElement).toBe(field)
+    expect(f.submit).not.toHaveBeenCalled()
+    expect(field.value).toBe('3')
+  } finally { await act(async () => root.unmount()) }
+})
+
+it('后台改为扫码明细后，旧手填错误不会挡住其他行保存', async () => {
+  f.check!.items!.push({ ...f.check!.items![0], id: 12, productId: 2, productName: '扫码品' })
+  const { host, root, input, click, draw } = await mount()
+  try {
+    await input('4')
+    const second = host.querySelector<HTMLInputElement>('input[aria-label="扫码品实盘数量"]')!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(second, '1.5')
+      second.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(second.getAttribute('aria-invalid')).toBe('true')
+    f.check = { ...f.check!, items: [f.check!.items![0], { ...f.check!.items![1], scanDriven: true }] }
+    await draw()
+    await click('保存实盘数')
+    expect(f.save).toHaveBeenCalledExactlyOnceWith({ id: 1, items: [{ id: 11, actualQty: 4 }] })
+  } finally { await act(async () => root.unmount()) }
+})

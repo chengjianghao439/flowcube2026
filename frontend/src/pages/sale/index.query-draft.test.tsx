@@ -178,3 +178,11 @@ test('SALE-Q09 真实列表双击导航与返回保留原全部筛选', async ()
   await wait(() => expect(path()).toBe('/sale/42')); await click('返回原列表')
   expect(path()).toBe(original); expect(listRequests()).toHaveLength(before); await openQuery(); expect(fields()).toEqual(applied)
 })
+
+test('销售默认仓名列为常用仓名留出比经办人更大的宽度', async () => {
+  await ready()
+  const table = host.querySelector('table')!
+  const keys = [...table.querySelectorAll<HTMLElement>('thead th')].map(th => th.dataset.columnKey)
+  const widths = [...table.querySelectorAll('col')].map(col => parseFloat(col.style.width))
+  expect(widths[keys.indexOf('warehouseName')]).toBeGreaterThan(widths[keys.indexOf('operatorName')])
+})

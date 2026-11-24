@@ -1,3 +1,4 @@
+import { quantityInputError } from '@/lib/qtyStep'
 import type { InboundQuantityField, InboundQuantityGroup } from '@/types/inbound-tasks'
 
 const fields = ['orderedQty', 'receivedQty', 'putawayQty'] as const
@@ -37,4 +38,13 @@ export function inboundQuantityValue(group: InboundQuantityGroup, field: Inbound
 
 export function areInboundQuantitiesZero(groups: readonly InboundQuantityGroup[], field: InboundQuantityField): boolean {
   return groups.length > 0 && groups.every(group => inboundQuantityValue(group, field) === 0 && (!group.quantityState || group.quantityState[field].allZero))
+}
+
+export function inboundDraftQuantityError(raw: string, remainingQty: number): string | null {
+  const precisionError = quantityInputError(raw)
+  if (precisionError) return precisionError
+  const quantity = Number(raw.trim())
+  if (quantity <= 0) return '本次到货数量必须大于 0'
+  if (quantity > remainingQty) return '超出可建单数量'
+  return null
 }

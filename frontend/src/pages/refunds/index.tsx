@@ -1,5 +1,8 @@
 import { money } from '@/lib/format'
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
+import { quantityInputError } from '@/lib/qtyStep'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
@@ -145,6 +148,7 @@ export default function RefundsPage() {
 /** 新建退款单弹窗：销售单号 → 金额 → 退款账户 → 日期 */
 function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const fieldId = useId()
+  const formRef = useRef<HTMLDivElement>(null)
   const { data: accounts } = useQuery({ queryKey: ['finance-accounts-active'], queryFn: getActiveAccountsApi })
   const create = useCreateRefund()
   const [saleOrderNo, setSaleOrderNo] = useState('')
@@ -153,16 +157,26 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [refundDate, setRefundDate] = useState(() => todayYmd())
   const [remark, setRemark] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [validationAttempted, setValidationAttempted] = useState(false)
+  const amt = Number(amount)
+  const missingSale = !saleOrderNo.trim()
+  const amountIssue = !Number.isFinite(amt) || amt <= 0 ? '退款金额必须大于 0'
+    : quantityInputError(amount) ? '退款金额最多保留两位小数' : ''
+  const saleError = validationAttempted && missingSale ? '请输入销售单号' : ''
+  const amountError = validationAttempted ? amountIssue : ''
 
   function reset() {
     setSaleOrderNo(''); setAmount(''); setAccountId(''); setRefundDate(todayYmd()); setRemark('')
+    setValidationAttempted(false)
   }
 
   async function handleCreate() {
-    if (!saleOrderNo.trim()) { toast.warning('请输入销售单号'); return }
-    const amt = Number(amount)
-    if (!Number.isFinite(amt) || amt <= 0) { toast.warning('退款金额必须大于 0'); return }
     if (submitting || create.isPending) return
+    setValidationAttempted(true)
+    if (missingSale || amountIssue) {
+      focusOrderEntryField(formRef.current, missingSale ? 'sale' : 'amount')
+      return
+    }
     try {
       setSubmitting(true)
       await create.mutateAsync({
@@ -186,14 +200,18 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
     <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose() } }}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader description="系统按单号反查该销售单已收金额，退款不能超过已收金额"><DialogTitle>新建退款单</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
-          <div className="space-y-1">
+        <div ref={formRef} className="space-y-4 py-2">
+          <div className="space-y-1" data-entry-field="sale">
             <Label htmlFor={`${fieldId}-sale`}>销售单号 *</Label>
-            <Input id={`${fieldId}-sale`} value={saleOrderNo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSaleOrderNo(e.target.value)} placeholder="输入销售单号" className="font-mono" />
+            <Input id={`${fieldId}-sale`} value={saleOrderNo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSaleOrderNo(e.target.value)} placeholder="输入销售单号" className="font-mono"
+              aria-invalid={!!saleError} aria-describedby={saleError ? `${fieldId}-sale-error` : undefined} />
+            <OrderFieldError id={`${fieldId}-sale-error`}>{saleError}</OrderFieldError>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1" data-entry-field="amount">
             <Label htmlFor={`${fieldId}-amount`}>退款金额 *</Label>
-            <Input id={`${fieldId}-amount`} type="number" min="0" step="0.01" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} className="text-right tabular-nums" />
+            <Input id={`${fieldId}-amount`} type="number" min="0" step="0.01" value={amount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAmount(e.target.value)} className="text-right tabular-nums"
+              aria-invalid={!!amountError} aria-describedby={amountError ? `${fieldId}-amount-error` : undefined} />
+            <OrderFieldError id={`${fieldId}-amount-error`}>{amountError}</OrderFieldError>
           </div>
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-account`}>退款账户</Label>

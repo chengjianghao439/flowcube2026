@@ -2,13 +2,19 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, test } from 'vitest'
-import { OrderEntryIssues } from './OrderEntryIssues'
-import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
+import { OrderFieldError } from './OrderFieldError'
+import { focusOrderEntryField, handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-test('错误定位只在当前表单内查找，修正后清空提示', () => {
- const host=document.createElement('div'); document.body.append(host); const root=createRoot(host)
- const render=(issues:{target:string;message:string}[])=>act(()=>root.render(<><div data-order-entry><input data-entry-field="party" /></div><div data-order-entry><OrderEntryIssues issues={issues} /><input data-entry-field="party" /></div></>))
- try { render([{target:'party',message:'请选择客户'}]); act(()=>host.querySelector('button')!.click()); expect(document.activeElement).toBe(host.querySelectorAll('input')[1]); render([]); expect(host.querySelector('[role="alert"]')).toBeNull() } finally {act(()=>root.unmount());host.remove()}
+test('普通销售单式字段提示按 id 关联，并在纠正后清除', () => {
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host)
+  const render = (error: string) => act(() => root.render(<OrderFieldError id="field-error">{error}</OrderFieldError>))
+  try {
+    render('请选择客户')
+    expect(host.querySelector('#field-error[role="alert"]')?.textContent).toBe('请选择客户')
+    render('')
+    expect(host.querySelector('[role="alert"]')).toBeNull()
+  } finally { act(() => root.unmount()); host.remove() }
 })
 test('Enter连续录入、Shift反向、跳过禁用控件、末行只聚焦添加，不影响IME或其他表单', () => {
  const host=document.createElement('div');document.body.append(host);const root=createRoot(host)
@@ -18,6 +24,6 @@ test('Enter连续录入、Shift反向、跳过禁用控件、末行只聚焦添�
 })
 test('改单只读折扣仍可定位查看，不擅自开放编辑', () => {
  const host=document.createElement('div');document.body.append(host);const root=createRoot(host)
- act(()=>root.render(<div data-order-entry><OrderEntryIssues issues={[{target:'discount',message:'折扣超过当前合计'}]}/><span data-entry-field="discount" tabIndex={-1}>原单折扣 10</span></div>))
- try {act(()=>host.querySelector('button')!.click());expect(document.activeElement).toBe(host.querySelector('span'))}finally{act(()=>root.unmount());host.remove()}
+ act(()=>root.render(<div data-order-entry><span data-entry-field="discount" tabIndex={-1}>原单折扣 10</span></div>))
+ try {expect(focusOrderEntryField(host, 'discount')).toBe(true);expect(document.activeElement).toBe(host.querySelector('span'))}finally{act(()=>root.unmount());host.remove()}
 })

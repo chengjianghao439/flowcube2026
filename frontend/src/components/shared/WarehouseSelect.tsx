@@ -1,3 +1,4 @@
+import type { AriaAttributes } from 'react'
 import type { KitReadOwner } from '@/api/kits'
 import { assertKitReadOwner } from '@/hooks/useKits'
 import { toast } from '@/lib/toast'
@@ -5,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useWarehousesActive } from '@/hooks/useWarehouses'
 import { cn } from '@/lib/utils'
 
-interface WarehouseSelectProps {
+interface WarehouseSelectProps extends Pick<AriaAttributes, 'aria-invalid' | 'aria-describedby'> {
   readOwner?: KitReadOwner
   id?: string
   value: number | null
@@ -31,6 +32,8 @@ export function WarehouseSelect({
   className,
   disabled,
   showReadStatus = false,
+  'aria-invalid': invalid,
+  'aria-describedby': describedBy,
 }: WarehouseSelectProps) {
   const { data: warehouses, isLoading, isError, isPaused, refetch } = useWarehousesActive(readOwner)
   const loadFailed = showReadStatus && (isError || isPaused)
@@ -55,7 +58,7 @@ export function WarehouseSelect({
         }}
         disabled={disabled || (!warehouses?.length && (loadFailed || loading))}
       >
-        <SelectTrigger id={id} className={cn('h-10 w-full', className)}>
+        <SelectTrigger id={id} aria-invalid={invalid} aria-describedby={describedBy} className={cn('h-10 w-full', className)}>
           <SelectValue placeholder={prompt} />
         </SelectTrigger>
         <SelectContent>

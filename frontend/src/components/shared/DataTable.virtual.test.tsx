@@ -43,6 +43,22 @@ test('虚拟备注只测量已挂载行，滚动与隐藏返回后展开入口�
   expect(host.querySelectorAll('tbody details').length).toBeLessThan(50)
   expect(host.querySelectorAll('[data-table-text-measure]')).toHaveLength(0)
 })
+test('虚拟滚动后新挂载的横滚单元格也可键盘聚焦', async () => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(90)
+  vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.parentElement?.dataset.columnKey === 'name' ? 160 : 90
+  })
+  await act(async () => root.render(<DataTable columns={[{ ...columns[0], noWrap: true }]} data={rows} virtualized />))
+  const first = host.querySelector<HTMLElement>('tbody td[data-column-key="name"] > div')!
+  expect(first.tabIndex).toBe(0)
+  await act(async () => { host.scrollTop = 48000 - 480; host.dispatchEvent(new Event('scroll')) })
+  expect(first.isConnected).toBe(false)
+  const last = [...host.querySelectorAll<HTMLElement>('tbody td[data-column-key="name"] > div')].find(cell => cell.textContent === '商品 1000')!
+  expect(last.tabIndex).toBe(0)
+  last.focus()
+  expect(document.activeElement).toBe(last)
+})
+
 test('滚动到远处能访问末行，隐藏再显示保留位置', () => {
   render(); act(() => { host.scrollTop = 48000 - 480; host.dispatchEvent(new Event('scroll')) })
   expect(host.textContent).toContain('商品 1000'); render(false); render(true)

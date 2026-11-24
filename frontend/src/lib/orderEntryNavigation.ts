@@ -1,4 +1,22 @@
 import type { KeyboardEvent } from 'react'
+
+const entryControl = 'input:not([type="hidden"]),button,select,textarea,[tabindex]'
+
+export function focusOrderEntryField(root: HTMLElement | null, target: string): boolean {
+  if (!root?.isConnected || root.closest('[hidden],[inert]')) return false
+  for (const field of root.querySelectorAll<HTMLElement>('[data-entry-field]')) {
+    if (field.dataset.entryField !== target || field.closest('[hidden],[inert]')) continue
+    const candidates = field.matches(entryControl) ? [field] : [...field.querySelectorAll<HTMLElement>(entryControl)]
+    const control = candidates.find(element => !element.matches(':disabled,[aria-disabled="true"]') && !element.closest('[hidden],[inert]'))
+    if (!control) continue
+    control.focus({ preventScroll: true })
+    if (control instanceof HTMLInputElement) control.select()
+    control.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    return true
+  }
+  return false
+}
+
 /** 只接管明细数字输入的 Enter，保持原生 Tab、输入法和按钮激活行为。 */
 export function handleEntryKeyDown(event: KeyboardEvent<HTMLElement>) {
   if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229 || event.ctrlKey || event.altKey || event.metaKey) return

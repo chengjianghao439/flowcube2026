@@ -69,6 +69,16 @@ it('R9无分类查看权不读分类，商品查看权合法时仍可选品', as
   useAuthStore.setState(s => ({ user: { ...s.user!, permissions: [P.SALE_ORDER_CREATE, P.PRODUCT_VIEW] } })); owner = captureReorderOwner()
   await draw(); await flush(); expect(row()).toBeTruthy(); expect(requests.map(r => r.url)).toEqual(['/products/finder'])
 })
+it('普通商品选择器无分类权限时只读取商品', async () => {
+  useAuthStore.setState(s => ({ user: { ...s.user!, permissions: [P.PRODUCT_VIEW] } }))
+  await act(async () => root.render(
+    <QueryClientProvider client={cache}><ProductFinder open onConfirm={confirmed} onClose={closed} /></QueryClientProvider>,
+  ))
+  await flush()
+  expect(requests.map(request => request.url)).toEqual(['/products/finder'])
+  expect(row()).toBeTruthy()
+  expect(document.body.textContent).toContain('当前没有分类查看权限')
+})
 it('R9首批挂起后隐藏，不让自动取齐发第二批；默认完整列表契约保留', async () => {
   api.defaults.adapter = (async config => {
     requests.push(config)

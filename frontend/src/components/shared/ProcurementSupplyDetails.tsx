@@ -2,7 +2,7 @@ import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qty } from '@/lib/format'
 import { qtyStep } from '@/lib/qtyStep'
 import { ProcurementSupplyExplanation } from './ProcurementSupplyExplanation'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
@@ -17,15 +17,28 @@ import { toast } from '@/lib/toast'
 import { getPurchasePolicyApi, savePurchasePolicyApi, prepareProcurementTransfer, type ProcurementSupply, type PurchasePolicy } from '@/api/procurement-supply'
 
 
-export default function ProcurementSupplyDetails({ supply, supplierId, snapshot, mode = 'plan' }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId?: number | null; mode?: 'plan' | 'replenishment' }) {
+export default function ProcurementSupplyDetails({ supply, supplierId, snapshot, mode = 'plan', children }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId?: number | null; mode?: 'plan' | 'replenishment'; children?: ReactNode }) {
   const [open, setOpen] = useState(false)
-  return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>需求与覆盖</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl"><DialogHeader description={<>{<>按本次读取的数据核对需求、已有供给与交期，查看包装规则。</>}</>}><DialogTitle>{supply.productName} · {supply.warehouseName}</DialogTitle></DialogHeader>{open && <SupplyBody snapshot={snapshot} supply={supply} supplierId={supplierId ?? supply.supplierId} mode={mode} onNavigate={() => setOpen(false)} />}</DialogContent></Dialog></>
+  return <>
+    <Button size="sm" variant="outline" onClick={() => setOpen(true)}>需求与覆盖</Button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+        <DialogHeader description="按本次读取的数据核对需求、已有供给与交期，查看包装规则。">
+          <DialogTitle>{supply.productName} · {supply.warehouseName}</DialogTitle>
+        </DialogHeader>
+        {open && <SupplyBody snapshot={snapshot} supply={supply} supplierId={supplierId ?? supply.supplierId} mode={mode} onNavigate={() => setOpen(false)}>
+          {children}
+        </SupplyBody>}
+      </DialogContent>
+    </Dialog>
+  </>
 }
-function SupplyBody({ supply: r, supplierId, snapshot, mode, onNavigate }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId: number | null; mode: 'plan' | 'replenishment'; onNavigate: () => void }) {
+function SupplyBody({ supply: r, supplierId, snapshot, mode, onNavigate, children }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId: number | null; mode: 'plan' | 'replenishment'; onNavigate: () => void; children?: ReactNode }) {
   const navigate = useNavigate()
   const { can } = usePermission()
   return <div className="space-y-5 text-sm">
     <ProcurementSupplyExplanation supply={r} snapshot={snapshot} mode={mode} />
+    {children}
     <div className="space-y-2 border-t pt-4"><h3 className="font-medium">可调拨候选</h3>{r.transferCandidates?.length ? r.transferCandidates.map(c => <div key={c.warehouseId} className="flex items-start justify-between gap-4"><div><p>{c.warehouseName}：最多 {qty(c.quantity)} {r.unit}</p><p className="mt-1 text-xs text-muted-foreground">{c.arrivalCondition}</p></div>{can(PERMISSIONS.TRANSFER_ORDER_CREATE) && <Button size="sm" variant="outline" onClick={() => { onNavigate(); navigate(prepareProcurementTransfer(r, c)) }}>核对调拨单</Button>}</div>) : <p className="text-muted-foreground">授权仓库内暂无可推荐余量。</p>}<p className="text-xs text-muted-foreground">来源仓先保留自身未发需求、预测、有效预占和目标/安全库存；未确认候选不抵扣采购量。</p></div>
     {supplierId && can(PERMISSIONS.PROCUREMENT_PLAN_MANAGE) ? <PolicyEditor productId={r.productId} supplierId={supplierId} /> : <p className="text-xs text-muted-foreground">选择供应商后，可由采购计划管理员维护该供应商与商品的包装、起订规则。</p>}
   </div>

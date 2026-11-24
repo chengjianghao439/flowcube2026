@@ -1,3 +1,5 @@
+import { useId } from 'react'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { Button } from '@/components/ui/button'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -27,18 +29,26 @@ export function SourceComponents({
   items,
   cashProof,
   disabled,
-  onSelect
+  onSelect,
+  selectionError,
+  choiceError
 }: {
   items: ReturnSourceOrderItem[]
   cashProof?: CashMoneyProof
   disabled: boolean
   onSelect: (item: ReturnSourceOrderItem) => void
+  selectionError?: string
+  choiceError?: { sourceId?: number; message: string } | null
 }) {
+  const errorPrefix = useId()
+  const selectionErrorId = selectionError ? `${errorPrefix}-selection` : undefined
+  const choiceErrorId = `${errorPrefix}-choice`
   return (
     <div className="overflow-x-auto rounded-md border">
       <p className="px-3 py-2 text-xs text-muted-foreground">
         请选择本次实际退回的原出库配件。同商品、同仓库的不同来源需分单，不合并平均价。来源全量参考不代表本次退款，本次金额以保存后系统估算为准，合格入仓后确定。
       </p>
+      <OrderFieldError id={selectionErrorId} className="px-3 pb-2">{selectionError}</OrderFieldError>
       <ReportTable className="w-full min-w-[1000px] text-sm">
         <thead>
           <tr className="border-y bg-muted/30 text-xs">
@@ -51,47 +61,53 @@ export function SourceComponents({
           </tr>
         </thead>
         <tbody>
-          {items.map((item) => (
-            <tr
-              key={item.dispatchComponentId}
-              className="border-b last:border-b-0"
-            >
-              <td className="p-2">
-                <p className="font-medium">
-                  {item.productCode} · {item.productName}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  <SourceLabel source={item} />
-                </p>
-              </td>
-              <td className="p-2 text-right tabular-nums">
-                {item.sourceQuantity} / {item.returnedQty} / {item.remainingQty}{' '}
-                {item.unit}
-              </td>
-              <td className="p-2 text-right tabular-nums">
-                {Number(item.sourceBudgetAmount).toFixed(2)}
-              </td>
-              <td className="p-2 text-right tabular-nums">
-                {returnNet(item.sourceFinancialEstimate ?? 0, cashProof)}
-              </td>
-              <td className="p-2 text-right tabular-nums">
-                {item.actualQualifiedQty ?? 0} /{' '}
-                {Number(item.actualRefundGross ?? 0).toFixed(2)} /{' '}
-                {returnNet(item.actualRefundAmount ?? 0, cashProof)}
-              </td>
-              <td className="p-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={disabled || item.remainingQty <= 0}
-                  onClick={() => onSelect(item)}
-                >
-                  选择 {item.taskNo || `#${item.taskId}`} ·{' '}
-                  {item.kitName || '普通成交行'} · {item.productName}
-                </Button>
-              </td>
-            </tr>
-          ))}
+          {items.map((item) => {
+            const error = choiceError && choiceError.sourceId === item.dispatchComponentId ? choiceError.message : undefined
+            return (
+              <tr
+                key={item.dispatchComponentId}
+                className="border-b last:border-b-0"
+              >
+                <td className="p-2">
+                  <p className="font-medium">
+                    {item.productCode} · {item.productName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    <SourceLabel source={item} />
+                  </p>
+                </td>
+                <td className="p-2 text-right tabular-nums">
+                  {item.sourceQuantity} / {item.returnedQty} / {item.remainingQty}{' '}
+                  {item.unit}
+                </td>
+                <td className="p-2 text-right tabular-nums">
+                  {Number(item.sourceBudgetAmount).toFixed(2)}
+                </td>
+                <td className="p-2 text-right tabular-nums">
+                  {returnNet(item.sourceFinancialEstimate ?? 0, cashProof)}
+                </td>
+                <td className="p-2 text-right tabular-nums">
+                  {item.actualQualifiedQty ?? 0} /{' '}
+                  {Number(item.actualRefundGross ?? 0).toFixed(2)} /{' '}
+                  {returnNet(item.actualRefundAmount ?? 0, cashProof)}
+                </td>
+                <td className="p-2">
+                  <Button
+                    data-entry-field="source-selection"
+                    size="sm"
+                    variant="outline"
+                    disabled={disabled || item.remainingQty <= 0}
+                    aria-describedby={error ? choiceErrorId : selectionErrorId}
+                    onClick={() => onSelect(item)}
+                  >
+                    选择 {item.taskNo || `#${item.taskId}`} ·{' '}
+                    {item.kitName || '普通成交行'} · {item.productName}
+                  </Button>
+                  <OrderFieldError id={error ? choiceErrorId : undefined} className="mt-1">{error}</OrderFieldError>
+                </td>
+              </tr>
+            )
+          })}
         </tbody>
       </ReportTable>
     </div>

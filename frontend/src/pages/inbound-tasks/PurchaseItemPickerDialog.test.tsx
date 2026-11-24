@@ -110,12 +110,43 @@ test('逐键退格保留1.中间状态，不吞点；修改到1.05后失焦和�
   expect(ui.confirm.mock.calls[0][0].map((entry: PickedPurchaseItem) => [entry.item.purchaseItemId, entry.qty])).toEqual([[1, 1.05], [2, 0.25]])
   await ui.click('清空'); expect(pickerInput(ui.host).value).toBe('1.05')
 })
-test.each(['1.251', '-1', '11', '.'])('原始无效数量%s失焦和确认均拒绝，保留输入，不改成另一个数', async raw => {
+test.each([
+  ['1.251', '数量最多保留两位小数'],
+  ['-1', '本次收货数量不能为负数'],
+  ['11', '超出可建单数量'],
+  ['.', '请输入有效数量'],
+])('原始无效数量%s失焦保留，确认聚焦该行并提示%s', async (raw, message) => {
   const ui = await setup(), input = pickerInput(ui.host)
-  await keys(input, raw); await blur(input); expect(input.value).toBe(raw)
-  await ui.click('确定'); expect(ui.confirm).not.toHaveBeenCalled(); expect(fixture.verify).not.toHaveBeenCalled()
-  expect(input.value).toBe(raw); expect(ui.host.textContent).toContain('核对')
+  await keys(input, raw)
+  await blur(input)
+  expect(input.value).toBe(raw)
+  expect(input.getAttribute('aria-invalid')).toBe('true')
+  expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent).toBe(message)
+  await ui.click('确定')
+  expect(document.activeElement).toBe(input)
+  expect(input.value).toBe(raw)
+  expect(ui.confirm).not.toHaveBeenCalled()
+  expect(fixture.verify).not.toHaveBeenCalled()
 })
+
+test('确认带回筛选隐藏的无效选中行并保留搜索，修复后核对完整选择', async () => {
+  const ui = await setup()
+  await ui.fill('input[data-purchase-item-id="1"]', '11')
+  await ui.fill('[aria-label="搜索采购单或商品"]', '2')
+  await ui.click('搜索')
+  expect(pickerInput(ui.host, 1)).toBeNull()
+  await ui.fill('input[data-purchase-item-id="2"]', '3')
+  await ui.click('确定')
+  expect(document.activeElement?.getAttribute('data-purchase-item-id')).toBe('1')
+  expect(pickerInput(ui.host, 1).value).toBe('11')
+  expect(pickerInput(ui.host, 2).value).toBe('3')
+  expect(ui.host.querySelector<HTMLInputElement>('[aria-label="搜索采购单或商品"]')?.value).toBe('2')
+  expect(fixture.verify).not.toHaveBeenCalled()
+  await ui.fill('input[data-purchase-item-id="1"]', '2')
+  await ui.click('确定')
+  expect(ui.confirm.mock.calls[0][0].map((entry: PickedPurchaseItem) => [entry.item.purchaseItemId, entry.qty])).toEqual([[1, 2], [2, 3]])
+})
+
 test('合法小数确认仍用当前服务端来源余量，不足时不交付或缩小原数量', async () => {
   const ui = await setup(), input = pickerInput(ui.host)
   await keys(input, '0.25'); fixture.verify.mockResolvedValue([{ ...row(1), remainingQty: 0.2 }]); await ui.click('确定')

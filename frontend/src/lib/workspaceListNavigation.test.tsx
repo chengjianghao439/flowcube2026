@@ -34,7 +34,7 @@ test.each(routeRegistry.filter(route => route.tabIdentity.kind === 'pathname'))(
  save(route.path + suffix); expect(getWorkspaceListPath(route.path)).toBe(route.path + suffix)
  expect(getWorkspaceListPath(route.path + '?range=all')).toBe(route.path + '?range=all')
 })
-const menuCases = buildTopNavSections().flatMap(section => section.kind === 'link' ? [{group: '', label: section.label, path: section.path}] : section.children.map(child => ({group: section.children.length === 1 ? '' : section.label, ...child, label: section.children.length === 1 ? section.label : child.label})))
+const menuCases = buildTopNavSections().flatMap(section => section.kind === 'link' ? [{group: '', label: section.label, path: section.path}] : section.children.map(child => ({...child, group: section.children.length === 1 ? '' : section.label})))
 test.each(menuCases)('真实菜单 $path 恢复当前列表路径（共享组件层）', async item => {
  save(item.path + suffix); await render(item.path === '/dashboard' ? '/settings' : '/dashboard');
  if (item.group) await act(async () => { [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === item.group)!.dispatchEvent(new MouseEvent('mouseover',{bubbles:true})) })

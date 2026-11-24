@@ -33,7 +33,7 @@ export function WidgetShell({
         <span className={cn('dashboard-widget-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', TONE_ICON[tone])}>
           <Icon className="h-4 w-4" aria-hidden />
         </span>
-        <h3 className="min-w-0 flex-1 text-sm font-semibold leading-5 text-foreground">{title}</h3>
+        <h2 className="min-w-0 flex-1 text-sm font-semibold leading-5 text-foreground">{title}</h2>
         {action && <div className="dashboard-widget-action flex shrink-0 items-center">{action}</div>}
       </div>
       <div className={cn('min-h-0 flex-1', scrollBody && 'overflow-y-auto', bodyClassName)}>

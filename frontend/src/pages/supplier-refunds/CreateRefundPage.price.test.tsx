@@ -138,7 +138,7 @@ test('八位来源价格不放宽现金分位，原金额输入及未提交草�
     expect(save.disabled).toBe(false)
     save.click()
   })
-  expect(host.textContent).toContain('准确两位退款分配')
+  expect(host.querySelector('[data-entry-field="allocation-997206"] [role="alert"]')?.textContent).toContain('最多两位小数')
   expect((host.querySelector('[aria-label="原付款分配997206退款金额"]') as HTMLInputElement).value).toBe('0.001')
   expect(readRefundRecords()).toEqual([])
 })

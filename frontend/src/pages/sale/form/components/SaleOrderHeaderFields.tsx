@@ -11,6 +11,7 @@ import { Label }  from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/lib/toast'
 import { PickerField } from '@/components/shared/PickerField'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { LimitedInput } from '@/components/shared/LimitedInput'
@@ -77,8 +78,9 @@ export function SaleOrderHeaderFields({
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div data-entry-field="party" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label htmlFor={`${fieldId}-customer`}>客户 *</Label>
-          <PickerField id={`${fieldId}-customer`} value={customerName} placeholder="点击选择客户…" onOpen={() => apply(() => setCustomerFinderOpen(true))} onDoubleClick={() => apply(() => { setCustomerFinderOpen(false); navigate('/customers') })} disabled={headerReadOnly} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
-          {compact && customerError && <p role="alert" className="text-xs text-destructive-ink">请选择客户</p>}
+          <PickerField id={`${fieldId}-customer`} value={customerName} placeholder="点击选择客户…" onOpen={() => apply(() => setCustomerFinderOpen(true))} onDoubleClick={() => apply(() => { setCustomerFinderOpen(false); navigate('/customers') })} disabled={headerReadOnly}
+            aria-invalid={customerError} aria-describedby={customerError ? `${fieldId}-customer-error` : undefined} className={cn('h-9', customerError && 'border-destructive/60 bg-destructive/5')} />
+          <OrderFieldError id={`${fieldId}-customer-error`}>{customerError && '请选择客户'}</OrderFieldError>
         </div>
         <div data-entry-field="warehouse" className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label htmlFor={`${fieldId}-warehouse`}>出库仓库 *</Label>
@@ -90,9 +92,11 @@ export function SaleOrderHeaderFields({
             onChange={(id, name) => apply(() => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) })}
             placeholder="选择仓库"
             disabled={headerReadOnly}
+            aria-invalid={warehouseError}
+            aria-describedby={warehouseError ? `${fieldId}-warehouse-error` : undefined}
             className={cn('h-9', warehouseError && 'border-destructive/60 bg-destructive/5')}
           />}
-          {compact && warehouseError && <p role="alert" className="text-xs text-destructive-ink">请选择仓库</p>}
+          <OrderFieldError id={`${fieldId}-warehouse-error`}>{warehouseError && '请选择仓库'}</OrderFieldError>
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground">
           <Label htmlFor={`${fieldId}-carrier`}>承运商</Label>
@@ -143,8 +147,10 @@ export function SaleOrderHeaderFields({
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-2">
           <Label htmlFor={`${fieldId}-phone`}>联系电话</Label>
-          <LimitedInput id={`${fieldId}-phone`} data-entry-field="phone" aria-label="联系电话" maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverPhone(e.target.value))} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
-          {phoneError && <p role="alert" className="text-xs text-destructive-ink">{phoneError}</p>}
+          <LimitedInput id={`${fieldId}-phone`} data-entry-field="phone" aria-label="联系电话"
+            aria-invalid={!!phoneError} aria-describedby={phoneError ? `${fieldId}-phone-error` : undefined}
+            maxLength={30} value={receiverPhone} onChange={(e: React.ChangeEvent<HTMLInputElement>) => apply(() => setReceiverPhone(e.target.value))} placeholder="手机、座机或国际号码" inputMode="tel" disabled={headerReadOnly} className="h-9" />
+          <OrderFieldError id={`${fieldId}-phone-error`}>{phoneError}</OrderFieldError>
         </div>
         <div className="space-y-1.5 [&_label]:text-xs [&_label]:text-muted-foreground xl:col-span-5">
           <Label htmlFor={`${fieldId}-address`} className="inline-flex items-center gap-1.5"><MapPin aria-hidden="true" className="h-3.5 w-3.5 text-muted-foreground" />收货地址</Label>

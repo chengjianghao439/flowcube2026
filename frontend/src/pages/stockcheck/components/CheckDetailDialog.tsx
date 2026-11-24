@@ -1,7 +1,9 @@
 import { ReportTable } from '@/components/shared/ReportTable'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useId, useMemo, useRef } from 'react'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -31,6 +33,9 @@ function showActionError(error: unknown) {
 
 export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   const visible = useSectionActive()
+  const formRef = useRef<HTMLDivElement>(null)
+  const errorPrefix = useId()
+  const [formError, setFormError] = useState('')
   const { data: loadedCheck, isLoading, error, refetch } = useCheckDetail(checkId || 0, open && visible)
   const check = !error && loadedCheck?.id === checkId ? loadedCheck : undefined
   const currentEditableId = useRef<number | null>(null)
@@ -71,6 +76,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   useEffect(() => {
     setSubmitConfirm(false)
     setCancelConfirm(false)
+    setFormError('')
   }, [checkId, error, open, check?.status])
 
   function setActuals(update: (previous: Record<number, string>) => Record<number, string>) {
@@ -93,8 +99,8 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
 
   function validateActuals() {
     if (!check?.items?.length) return { ok: true as const, items: [] as { id: number; actualQty: number }[] }
-    const firstFieldError = Object.values(fieldErrors).find(Boolean)
-    if (firstFieldError) return { ok: false as const, items: [] as { id: number; actualQty: number }[], message: firstFieldError }
+    const firstFieldError = check.items.find(item => !item.scanDriven && fieldErrors[item.id])
+    if (firstFieldError) return { ok: false as const, itemId: firstFieldError.id, message: fieldErrors[firstFieldError.id] }
     // 2026-09-17 验收修复（G-13）：只提交用户真正填写的行。
     // 此前对每个非扫码行都调用 parseActualQty('')，而空值被当作 0，于是「保存实盘数」
     // 会把整单未填写行写成实盘 0（差异 = -账面量），提交后会把全仓库存按盘亏清零
@@ -106,7 +112,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       .map(i => ({ id: i.id, actualQty: parseActualQty(i.raw) }))
     const invalid = items.find(i => Number.isNaN(i.actualQty) || i.actualQty < 0)
     if (invalid) {
-      return { ok: false as const, items, message: '实盘数量必须为大于或等于 0 的数字' }
+      return { ok: false as const, itemId: invalid.id, message: '实盘数量必须为大于或等于 0 的数字' }
     }
     if (!items.length) {
       // 全部明细由 PDA 扫码盘点时没有任何"手工填写行"，但这并不代表单据是空的：
@@ -115,12 +121,24 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
       //（2026-09-17 验收续测发现），盘点链断在最后一步。
       const scannedRows = check.items.filter(i => i.scanDriven && i.actualQty != null)
       if (scannedRows.length) return { ok: true as const, items }
-      return { ok: false as const, items, message: '请至少填写一行实盘数量后再保存' }
+      return { ok: false as const, itemId: null, message: '请至少填写一行实盘数量' }
     }
     return { ok: true as const, items }
   }
 
+  function showValidationError(message: string, itemId: number | null) {
+    if (itemId !== null) {
+      setFieldErrors(previous => ({ ...previous, [itemId]: message }))
+      focusOrderEntryField(formRef.current, `actual-${itemId}`)
+    } else {
+      setFormError(message)
+      const first = check?.items?.find(item => !item.scanDriven)
+      focusOrderEntryField(formRef.current, first ? `actual-${first.id}` : 'actuals')
+    }
+  }
+
   function handleActualChange(itemId: number, raw: string) {
+    setFormError('')
     if (raw === '') {
       setActuals(prev => ({ ...prev, [itemId]: '' }))
       setFieldErrors(prev => ({ ...prev, [itemId]: '' }))
@@ -154,11 +172,11 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     if(!check || currentEditableId.current !== check.id || saveLocked || updateItems.isPending) return
     const validation = validateActuals()
     if (!validation.ok) {
-      toast.warning(validation.message || '实盘数量必须大于或等于 0')
+      showValidationError(validation.message, validation.itemId)
       return
     }
     if (!validation.items.length) {
-      toast.warning('没有可保存的行')
+      showValidationError('没有可保存的行', null)
       return
     }
     try {
@@ -181,7 +199,7 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
     if(!check || currentEditableId.current !== check.id || submitLocked || submit.isPending) return
     const validation = validateActuals()
     if (!validation.ok) {
-      toast.warning(validation.message || '实盘数量必须大于或等于 0，修正后才能提交')
+      showValidationError(validation.message, validation.itemId)
       return
     }
     try {
@@ -228,99 +246,105 @@ export default function CheckDetailDialog({ open, onClose, checkId }: Props) {
   return (
     <>
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose() }}>
-      <DialogContent className="grid-cols-1 max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="fc-form-dialog max-w-6xl max-h-[90vh]">
         <DialogHeader description={"核对盘点商品、账面量、实盘量与差异。"}>
           <DialogTitle className="flex items-center gap-3">
             盘点单详情
             {check && <SoftStatusLabel label={check.statusName} tone={check.status===1?'active':check.status===2?'success':'danger'} />}
           </DialogTitle>
         </DialogHeader>
-        {error && <QueryErrorState error={error} title={readTitle} onRetry={() => { void refetch() }} />}
-        {!error && isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
-        {check && (
-          <OrderDetailSections type="stockcheck" id={checkId || 0}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-x-6 gap-y-3 rounded-lg bg-muted/30 p-4 text-sm">
-              <div><span className="text-muted-foreground">盘点单号：</span><span className="text-doc-code-strong">{check.checkNo}</span></div>
-              <div><span className="text-muted-foreground">仓库：</span>{check.warehouseName}</div>
-              <div><span className="text-muted-foreground">经办人：</span>{check.operatorName}</div>
-              {check.remark && <div className="col-span-3"><span className="text-muted-foreground">备注：</span>{check.remark}</div>}
+        <div ref={formRef} className="fc-form-dialog-body space-y-4">
+          {error && <QueryErrorState error={error} title={readTitle} onRetry={() => { void refetch() }} />}
+          {!error && isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
+          {check && (
+            <OrderDetailSections type="stockcheck" id={checkId || 0}>
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-x-6 gap-y-3 rounded-lg bg-muted/30 p-4 text-sm">
+                <div><span className="text-muted-foreground">盘点单号：</span><span className="text-doc-code-strong">{check.checkNo}</span></div>
+                <div><span className="text-muted-foreground">仓库：</span>{check.warehouseName}</div>
+                <div><span className="text-muted-foreground">经办人：</span>{check.operatorName}</div>
+                {check.remark && <div className="col-span-3"><span className="text-muted-foreground">备注：</span>{check.remark}</div>}
+              </div>
+              <div data-entry-field="actuals" tabIndex={-1}>
+                <OrderFieldError className="mb-2">{formError}</OrderFieldError>
+                <div className="overflow-x-auto"><ReportTable className="w-full min-w-[1440px] text-sm"><thead><tr>
+                  <ProductIdentityHeaders />
+                  <th className="w-20">单位</th>
+                  <th className="w-32">账面数量</th>
+                  <th className="w-44">实盘数量</th>
+                  <th className="w-32">差异</th>
+                  {check.status === 1 && <th className="w-28">操作</th>}
+                </tr></thead><tbody>
+                {check.items?.map((item: CheckItem)=>{
+                  const actualRaw = actuals[item.id]
+                  const actual = actualRaw!==''&&actualRaw!==undefined ? parseFloat(actualRaw) : null
+                  const hasError = !!fieldErrors[item.id]
+                  const diff = item.scanDriven || check.status !== 1
+                    ? (item.diffQty ?? null)
+                    : (actual!=null && !hasError ? actual - item.bookQty : null)
+                  return (
+                    <tr key={item.id} className="border-b last:border-0">
+                      <ProductIdentityCells product={item} />
+                      <td className="text-sm text-muted-foreground">{item.unit}</td>
+                      <td className="text-sm">{item.bookQty}</td>
+                      <td>
+                        {item.scanDriven ? (
+                          <div className="space-y-0.5">
+                            <span className="text-sm block">
+                              {item.actualQty!=null ? `${item.actualQty}（扫码）` : <span className="text-muted-foreground">待 PDA 扫码</span>}
+                            </span>
+                            <p className="text-xs text-muted-foreground">PDA 扫码盘点 · 已扫 {item.scannedContainerCount ?? 0} 个条码</p>
+                          </div>
+                        ) : check.status===1 ? (
+                          <div className="space-y-1" data-entry-field={`actual-${item.id}`}>
+                            <Input quantity
+                              onQuantityError={message => setFieldErrors(previous => ({ ...previous, [item.id]: message ?? '' }))}
+                              type="number"
+                              min="0"
+                              step={qtyStep(allowDecimalOf(item.productId))}
+                              className="h-9 text-right text-sm tabular-nums" aria-label={`${item.productName}实盘数量`}
+                              value={actuals[item.id]??''}
+                              onChange={(e: React.ChangeEvent<HTMLInputElement>)=>handleActualChange(item.id, e.target.value)}
+                              aria-invalid={hasError}
+                              aria-describedby={hasError ? `${errorPrefix}-${item.id}-error` : undefined}
+                            />
+                            <OrderFieldError id={`${errorPrefix}-${item.id}-error`}>{fieldErrors[item.id]}</OrderFieldError>
+                          </div>
+                        ) : (
+                          <span className="text-sm block">{item.actualQty??'-'}</span>
+                        )}
+                      </td>
+                      <td className={`text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
+                        {diff!=null ? (diff>0?'+':'')+diff.toFixed(2) : '-'}
+                      </td>
+                      {check.status === 1 && <td>
+                        {check.status===1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground"
+                            title="盘点期间该商品发生过出入库时，刷新账面数并重盘"
+                            onClick={() => handleRefreshItem(item.id)}
+                            disabled={refreshItem.isPending}
+                          >刷新账面</Button>
+                        )}
+                      </td>}
+                    </tr>
+                  )
+                })}
+              </tbody></ReportTable></div>
+              </div>
             </div>
-            <div className="overflow-x-auto">
-              <ReportTable className="w-full min-w-[1440px] text-sm"><thead><tr>
-                <ProductIdentityHeaders />
-                <th className="w-20">单位</th>
-                <th className="w-32">账面数量</th>
-                <th className="w-44">实盘数量</th>
-                <th className="w-32">差异</th>
-                {check.status === 1 && <th className="w-28">操作</th>}
-              </tr></thead><tbody>
-              {check.items?.map((item: CheckItem)=>{
-                const actualRaw = actuals[item.id]
-                const actual = actualRaw!==''&&actualRaw!==undefined ? parseFloat(actualRaw) : null
-                const hasError = !!fieldErrors[item.id]
-                const diff = item.scanDriven || check.status !== 1
-                  ? (item.diffQty ?? null)
-                  : (actual!=null && !hasError ? actual - item.bookQty : null)
-                return (
-                  <tr key={item.id} className="border-b last:border-0">
-                    <ProductIdentityCells product={item} />
-                    <td className="text-sm text-muted-foreground">{item.unit}</td>
-                    <td className="text-sm">{item.bookQty}</td>
-                    <td>
-                      {item.scanDriven ? (
-                        <div className="space-y-0.5">
-                          <span className="text-sm block">
-                            {item.actualQty!=null ? `${item.actualQty}（扫码）` : <span className="text-muted-foreground">待 PDA 扫码</span>}
-                          </span>
-                          <p className="text-xs text-muted-foreground">PDA 扫码盘点 · 已扫 {item.scannedContainerCount ?? 0} 个条码</p>
-                        </div>
-                      ) : check.status===1 ? (
-                        <div className="space-y-1">
-                          <Input quantity
-                            type="number"
-                            min="0"
-                            step={qtyStep(allowDecimalOf(item.productId))}
-                            className="h-9 text-right text-sm tabular-nums" aria-label={`${item.productName}实盘数量`}
-                            value={actuals[item.id]??''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>)=>handleActualChange(item.id, e.target.value)}
-                            aria-invalid={hasError}
-                          />
-                          {hasError ? <p className="text-xs text-destructive-ink">{fieldErrors[item.id]}</p> : null}
-                        </div>
-                      ) : (
-                        <span className="text-sm block">{item.actualQty??'-'}</span>
-                      )}
-                    </td>
-                    <td className={`text-sm font-medium ${diff!=null&&diff>0?'text-green-600':diff!=null&&diff<0?'text-red-600':''}`}>
-                      {diff!=null ? (diff>0?'+':'')+diff.toFixed(2) : '-'}
-                    </td>
-                    {check.status === 1 && <td>
-                      {check.status===1 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs text-muted-foreground"
-                          title="盘点期间该商品发生过出入库时，刷新账面数并重盘"
-                          onClick={() => handleRefreshItem(item.id)}
-                          disabled={refreshItem.isPending}
-                        >刷新账面</Button>
-                      )}
-                    </td>}
-                  </tr>
-                )
-              })}
-            </tbody></ReportTable></div>
-          </div>
-          </OrderDetailSections>
-        )}
+            </OrderDetailSections>
+          )}
+        </div>
         <DialogFooter className="gap-2">
           {canOperate && <>
             <Button variant="outline" onClick={handleSave} disabled={updateItems.isPending || saveLocked}>保存实盘数</Button>
             <Button onClick={() => {
               const validation = validateActuals()
               if (!validation.ok) {
-                toast.warning(validation.message || '实盘数量必须大于或等于 0，修正后才能提交')
+                showValidationError(validation.message, validation.itemId)
                 return
               }
               setSubmitConfirm(true)

@@ -102,7 +102,13 @@ test('完整mixed旧单签认展示所有历史行与批准；漂移保原previe
 test('来源报废实际原CreateDisposalDialog仅原商品/仓，员工量创建新草稿而非旧批准执行',async()=>{
  posts.length=0;actualAdapter({scrap:true})
  await leaf(HandlingScrapPage,'/disposals/new?handlingSourceId=11',async()=>{
-  await click('载入来源商品');const quantity=document.querySelector<HTMLInputElement>('input[title*="平均成本"]')!;expect(quantity).not.toBeNull();await input(quantity,'1')
+  await click('载入来源商品');const quantity=document.querySelector<HTMLInputElement>('input[title*="平均成本"]')!;expect(quantity).not.toBeNull()
+  await click('创建报废草稿')
+  expect(posts).toHaveLength(0)
+  expect(quantity.getAttribute('aria-invalid')).toBe('true')
+  expect(document.activeElement).toBe(quantity)
+  expect(document.getElementById(quantity.getAttribute('aria-describedby')!)?.textContent).toContain('处置数量')
+  await input(quantity,'1')
   expect(document.body.textContent).toContain('源型号');expect(document.body.textContent).toContain('源色号');expect(document.body.textContent).toContain('¥10.00')
   await click('创建报废草稿');expect(posts).toHaveLength(1);expect(posts[0].path).toBe('/disposals');expect(posts[0].body).toMatchObject({warehouseId:8,items:[{productId:3,quantity:1,disposeType:3}],disposalSource:{sourceId:11,expectedRevision:1}})
   expect(posts.some(p=>p.path.includes('/dispose'))).toBe(false)

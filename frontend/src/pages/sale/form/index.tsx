@@ -24,11 +24,9 @@ import { assertKitReadOwner } from '@/hooks/useKits'
 import { readSaleHandoff } from './handoff'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { money } from '@/lib/format'
-import { OrderEntryIssues } from '@/components/shared/OrderEntryIssues'
 import { collectOrderIssues } from '@/lib/orderEntry'
-import { handleEntryKeyDown } from '@/lib/orderEntryNavigation'
+import { focusOrderEntryField, handleEntryKeyDown } from '@/lib/orderEntryNavigation'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
-import { OrderFulfillmentPanel } from '@/components/shared/OrderFulfillmentPanel'
 import { DocumentActivityPanel } from '@/components/shared/DocumentActivityPanel'
 import SaleCancelDialog from '../components/SaleCancelDialog'
 import OrdinarySaleRecoveryNotice from '../components/OrdinarySaleRecoveryNotice'
@@ -78,7 +76,7 @@ import { SaleOrderOverview } from './components/SaleOrderOverview'
 import { SaleOrderDetailTabs, type SaleDetailTab } from './components/SaleOrderDetailTabs'
 import { SaleOrderInfoCard } from './components/SaleOrderInfoCard'
 import { SaleOrderScanDetails, SaleOrderPackingDetails, SaleOrderPickingProgress } from './components/SaleOrderWarehouseViews'
-import { validateSaleForm, serializeSaleItems } from './validate'
+import { serializeSaleItems } from './validate'
 import { useSaleOrderForm } from './useSaleOrderForm'
 import { useSaleEditEntry } from './useSaleEditEntry'
 
@@ -177,8 +175,7 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
     items, priceLoading, priceErrors,
     finderOpen, setFinderOpen, setFinderItemKey,
     customerFinderOpen, setCustomerFinderOpen,
-    setCustomerError, setWarehouseError,
-    setInvalidItemKeys,
+    setWarehouseError,
     isDirty, addItem, removeItem, updateItem,
     handleCustomerConfirm, handleFinderConfirm, initializeIdentities, initializeHandling,
   } = useSaleOrderForm(tabPath, undefined, reorder?.source.owner ?? handling?.source.owner, reorder ? () => reorder.source.isActiveCurrent() && !reorder.write.blocked && mayCreateReorder() : handling ? () => handling.source.isCurrent() && !handling.write.blocked && mayHandle(PERMISSIONS.INVENTORY_DISPOSAL_VIEW, PERMISSIONS.SALE_ORDER_CREATE) : undefined, !!handling)
@@ -190,18 +187,35 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
   }
   const confirmed = () => { if (reorder?.source.isActiveCurrent()) closeTab() }
 
+  const entryRef = useRef<HTMLDivElement>(null)
   const [validationAttempted, setValidationAttempted] = useState(false)
+  const [rejectedQuantity, setRejectedQuantity] = useState<string | null>(null)
+  const source = handling?.source.data?.source
+  const sourceItem = source ? items[0] : undefined
   const allIssues = collectOrderIssues({ kind: 'sale', partyId: customerId, partyName: customerName, warehouseId, warehouseName, items, receiverPhone, discountAmount, priceLoading, priceErrors })
-  const issues = validationAttempted ? allIssues : []
+  const sourceQuantityError = rejectedQuantity || (source && sourceItem && sourceItem.quantity > source.budget.availableQuantity
+    ? `数量不能超过可关联的 ${source.budget.availableQuantity} ${source.unit}` : null)
+  const sourceQuantityTarget = sourceItem ? `item-${sourceItem._key}-quantity` : undefined
+  if (sourceItem && sourceQuantityTarget && sourceQuantityError) {
+    const issue = { target: sourceQuantityTarget, itemKey: sourceItem._key, message: sourceQuantityError }
+    const originalIndex = allIssues.findIndex(({ target }) => target === sourceQuantityTarget)
+    if (originalIndex >= 0) allIssues[originalIndex] = issue
+    else allIssues.push(issue)
+  }
+  const issues = validationAttempted ? allIssues : allIssues.filter(issue => rejectedQuantity && issue.target === sourceQuantityTarget)
+  const fieldError = (target: string) => issues.find(issue => issue.target === target)?.message
 
   async function handleSubmit() {
     if ((reorder || handling) && (frozen || !imported)) return
     setValidationAttempted(true)
-    const filledItems = validateSaleForm({
-      items, customerId, customerName, warehouseId, warehouseName, receiverPhone, discountAmount, priceLoading, priceErrors,
-      setCustomerError, setWarehouseError, setInvalidItemKeys,
-    })
-    if (!filledItems) return
+    const firstIssue = allIssues.find(({ target }) => ['party', 'warehouse', 'phone'].includes(target))
+      ?? allIssues.find(({ target }) => target === sourceQuantityTarget)
+      ?? allIssues[0]
+    if (firstIssue) {
+      focusOrderEntryField(entryRef.current, firstIssue.target)
+      return
+    }
+    const filledItems = items.filter(item => item.productId > 0)
     try {
       const payload = {
         customerId: +customerId, customerName,
@@ -217,9 +231,8 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
         items: serializeSaleItems(filledItems),
         ...(handling?.source.data ? { disposalSource: { sourceId: handling.source.data.source.id, expectedRevision: handling.source.data.source.revision, operationUuid: handling.operationUuid } } : {}),
       }
-      if (handling?.source.data) {
-        const source = handling.source.data.source
-        if (!handling.source.isCurrent() || filledItems.length !== 1 || filledItems[0].productId !== source.productId || filledItems[0].unit !== source.unit || filledItems[0].entryUnit !== source.unit || +warehouseId !== source.warehouseId || filledItems[0].quantity > source.budget.availableQuantity) { toast.warning('请核对来源商品、原仓及可关联基本量'); return }
+      if (handling && source) {
+        if (!handling.source.isCurrent() || filledItems.length !== 1 || filledItems[0].productId !== source.productId || filledItems[0].unit !== source.unit || filledItems[0].entryUnit !== source.unit || +warehouseId !== source.warehouseId) { toast.warning('请核对来源商品、原仓及可关联基本量'); return }
         const result = await handling.write.submit({ kind: 'sale', draftIdentity: buildWorkspaceTabRegistrationFromPath(tabPath).key, sourceId: source.id, intentUuid: source.intentUuid, operationUuid: handling.operationUuid, requestKey: handling.requestKey, action: 'disposal.handling.sale.create', path: '/sale', body: payload }, (body, key, config) => createSaleApi(body, key, config))
         if (result && handling.write.canApply(result)) { toast.success('销售草稿已关联，仍按原流程执行'); closeTab() }
         return
@@ -230,7 +243,7 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
   }
 
   return (
-    <div data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
+    <div ref={entryRef} data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title="新建销售单"
         description={handling ? `处理来源：${handling.source.data?.source.productName ?? '核对中'}；仅原商品、原仓、基本单位，客户由员工选择。可关联 ${handling.source.data?.source.budget.availableQuantity ?? '—'}` : '填写客户、商品与发货信息。'}
@@ -251,41 +264,41 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
       {reorder && <><ReorderSourcePanel data={reorder.source.data} error={reorder.source.error} loading={reorder.source.loading} imported={imported} disabled={frozen} onImport={importSource} onReload={reorder.source.reload} /><RepeatCreateRecoveryPanel write={reorder.write} active={reorder.source.active} onConfirmed={confirmed} /></>}
       <fieldset disabled={frozen} className="contents">
 
-      <OrderEntryIssues issues={issues} />
       <SaleOrderHeaderFields
         readOwner={reorder?.source.owner ?? handling?.source.owner}
         warehouseReadOnly={!!handling}
         warehouseName={warehouseName}
         headerReadOnly={frozen}
         interactionGuard={reorder ? { epoch: reorder.source.owner.epoch, isCurrent: () => reorder.source.isActiveCurrent() && !reorder.write.blocked && mayCreateReorder() && mayReorder(PERMISSIONS.CUSTOMER_VIEW) } : handling ? { epoch: handling.source.owner.epoch, isCurrent: () => handling.source.isCurrent() && !handling.write.blocked && mayHandle(PERMISSIONS.INVENTORY_DISPOSAL_VIEW, PERMISSIONS.SALE_ORDER_CREATE) } : undefined}
-        customerId={customerId} customerName={customerName} customerError={issues.some(i => i.target === 'party')} setCustomerFinderOpen={setCustomerFinderOpen}
+        customerId={customerId} customerName={customerName} customerError={!!fieldError('party')} setCustomerFinderOpen={setCustomerFinderOpen}
         warehouseId={warehouseId} setWarehouseId={handling ? () => {} : setWarehouseId} setWarehouseName={handling ? () => {} : setWarehouseName}
-        warehouseError={issues.some(i => i.target === 'warehouse')} setWarehouseError={setWarehouseError}
+        warehouseError={!!fieldError('warehouse')} setWarehouseError={setWarehouseError}
         carrierId={carrierId} setCarrierId={setCarrierId} carrierOptions={carrierOptions}
         carrierLoading={carrierLoading} carrierError={carrierError} retryCarriers={retryCarriers}
         shippingProduct={shippingProduct} setShippingProduct={setShippingProduct}
         shippingProductDisabled={frozen}
         freightType={freightType} setFreightType={setFreightType}
         receiverName={receiverName} setReceiverName={setReceiverName}
-        receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone}
+        receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone} phoneError={fieldError('phone')}
         receiverAddress={receiverAddress} setReceiverAddress={setReceiverAddress}
         remark={remark} setRemark={setRemark}
       />
 
       {/* 商品明细：跟采购单/调拨单/退货单一致，点击"添加商品"弹出选品对话框 */}
-      <SaleOrderItemsSection allowAdd={!handling} hasItems={items.length > 0} onAdd={handling ? () => toast.warning("处理来源仅允许一条原商品明细") : addItem}>
+      <SaleOrderItemsSection allowAdd={!handling} hasItems={items.length > 0} addError={fieldError('add')} onAdd={addItem}>
           <SaleOrderItemsTable
             lockedIdentity={!!handling}
             quantityRead={handling ? { owner: handling.source.owner, isCurrent: () => handling.source.isCurrent() && !handling.write.blocked && mayHandle(PERMISSIONS.PRODUCT_VIEW) } : undefined}
             readEnabled={!handling || (handling.source.current && handling.source.active && !handling.write.blocked)}
-            items={items} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}
+            items={items} issues={issues} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}
+            onQuantityError={handling ? setRejectedQuantity : undefined}
             setFinderItemKey={setFinderItemKey} setFinderOpen={setFinderOpen}
             updateItem={updateItem} removeItem={removeItem}
           />
       </SaleOrderItemsSection>
 
       <SaleOrderSummaryCard items={items} total={total} discount={discount} discountedTotal={discountedTotal}
-        discountAmount={discountAmount} onDiscountChange={setDiscountAmount}
+        discountAmount={discountAmount} onDiscountChange={setDiscountAmount} discountError={fieldError('discount')}
         warningText="存在低于进价的销售行，提交后会记录到时间线" />
 
       {/* 商品选择中心 */}
@@ -333,7 +346,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
   if (order?.commercialModel === 'kit-v1') commercialResource.current.identified = true
   const needsCommercialRead = commercialResource.current.identified
   const handoff = readSaleHandoff(tabPath, saleId)
-  const hasHandoff = handoff !== null && handoff !== 'invalid'
+  const hasHandoff = handoff !== null && handoff !== 'invalid' && handoff.focus === 'progress'
   const [checkedPath, setCheckedPath] = useState('')
   useEffect(() => {
     setCheckedPath('')
@@ -370,10 +383,11 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
     open: boolean; title: string; description: string; variant: 'default' | 'destructive'; confirmText: string; onConfirm: () => void
   }>({ open: false, title: '', description: '', variant: 'default', confirmText: '确认', onConfirm: () => {} })
 
-  const isPending = shipMutate.isPending || !!shipMutate.recovery?.blocked || deleteMutate.isPending || cancelMutate.isPending || !!cancelMutate.recovery?.blocked
+  const otherOperationsPending = deleteMutate.isPending || cancelMutate.isPending || !!cancelMutate.recovery?.blocked
+  const isPending = shipMutate.isPending || !!shipMutate.recovery?.blocked || otherOperationsPending
   // 分仓、已部分发货或仓库执行阻断的订单不能进入改单。
   const canAdjust = !!order && canStartSaleAdjustment(order)
-  useDirtyGuard(tabPath, isPending || !!cancelReason.trim())
+  useDirtyGuard(tabPath, shipMutate.isPending || !!shipMutate.recovery?.requiresLeaveProtection || otherOperationsPending || !!cancelReason.trim())
   useSaleEditEntry(tabPath, !needsCommercialRead && !!order && !isFetching && !isPaused && !isError, mode => {
     if (!can(PERMISSIONS.SALE_ORDER_UPDATE) || isPending || editing || adjustMode) return
     if (mode === 'edit' && order?.status === 1) setEditing(true)
@@ -418,7 +432,7 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
       {handoff === 'invalid' && <p role="alert" className="text-sm text-destructive-ink">交接参数无效，请从原事项重新打开；当前只显示本单信息。</p>}
       <ActionBar
         title={order.orderNo}
-        description="查看销售明细、回款与履约进度。"
+        description="查看销售明细、回款与仓库作业进度。"
         subtitle={
           <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} />
         }
@@ -560,10 +574,6 @@ function DetailView({ saleId, closeTab, tabPath }: { saleId: number; tabPath: st
             </div>
           </SectionCard>
         </></KeepAliveSection>
-
-      <KeepAliveSection active={detailTab === 'fulfillment'} className="space-y-3">
-        <OrderFulfillmentPanel key={order.id} type="sale" id={order.id} />
-      </KeepAliveSection>
 
       <KeepAliveSection active={detailTab === 'progress'} className="space-y-3"><div className="card-base space-y-4 p-4">
           {!handoffReady || isError ? <div className="space-y-2 text-sm" role={isError ? 'alert' : 'status'}><p>{isError ? '原单读取失败，无法核对最新任务；请重新读取后交接。' : isPaused ? '网络已暂停，等待恢复后重新读取原单任务。' : '正在重新读取原单任务…'}</p>{isError && <Button variant="outline" onClick={() => { setCheckedPath(''); void refetch().then(result => { if (!result.isError) setCheckedPath(tabPath) }) }}>重新读取原单</Button>}</div> : (

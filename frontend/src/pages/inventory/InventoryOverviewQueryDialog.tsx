@@ -20,12 +20,13 @@ const EMPTY: InventoryOverviewQueryValues = {
 
 interface Props {
   open: boolean
+  canSelectCategory: boolean
   initial: InventoryOverviewQueryValues
   onClose: () => void
   onApply: (values: InventoryOverviewQueryValues) => void
 }
 
-export default function InventoryOverviewQueryDialog({ open, initial, onClose, onApply }: Props) {
+export default function InventoryOverviewQueryDialog({ open, canSelectCategory, initial, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<InventoryOverviewQueryValues>(EMPTY)
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
@@ -52,7 +53,7 @@ export default function InventoryOverviewQueryDialog({ open, initial, onClose, o
           />
         </label>
 
-        <label className="flex flex-col gap-1 col-span-2">
+        {open && canSelectCategory && <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">分类</span>
           <CategoryTreeSelect
             value={draft.categoryId}
@@ -61,7 +62,7 @@ export default function InventoryOverviewQueryDialog({ open, initial, onClose, o
             leafOnly
             className="h-9 w-full"
           />
-        </label>
+        </label>}
 
         <label className="flex flex-col gap-1 col-span-2">
           <span className="text-xs font-medium text-muted-foreground">仓库</span>

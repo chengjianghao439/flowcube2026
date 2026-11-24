@@ -65,3 +65,16 @@ test('受控输入拒绝三位小数后仍能继续修改合法值', () => {
   enter('1.234')
   expect(enter('1.24').value).toBe('1.24')
 })
+
+test('录入表单可把数量拒绝原因交给本字段显示，修正后清除', () => {
+  const onQuantityError = vi.fn()
+  const change = vi.fn()
+  act(() => root.render(<Input quantity type="number" step="1" value="1" onQuantityError={onQuantityError} onChange={change} />))
+  expect(enter('1.5').value).toBe('1')
+  expect(onQuantityError).toHaveBeenLastCalledWith('该商品数量只能是整数')
+  expect(change).not.toHaveBeenCalled()
+  expect(toast.error).not.toHaveBeenCalled()
+  enter('2')
+  expect(onQuantityError).toHaveBeenLastCalledWith(null)
+  expect(change).toHaveBeenCalledOnce()
+})

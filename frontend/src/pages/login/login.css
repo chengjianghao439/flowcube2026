@@ -106,6 +106,17 @@
   .erp-login-workspace-footer { bottom: 16px; }
 }
 
+@media (max-height: 640px) and (min-width: 900px) {
+  .erp-login-story { padding-block: 22px; }
+  .erp-login-story-content { padding-block: 14px; }
+  .erp-login-flow { margin-top: 22px; padding-top: 16px; }
+  .erp-login-workspace { padding-block: 24px 40px; }
+  .erp-login-heading { margin-bottom: 16px; }
+  .erp-login-form { gap: 16px; }
+  .erp-login-help { margin-top: 16px; padding-top: 12px; }
+  .erp-login-workspace-footer { bottom: 10px; }
+}
+
 @media (max-width: 899px) {
   .erp-login { display: flex; flex-direction: column; padding: 0; }
   .erp-login-story { display: none; }

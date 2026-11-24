@@ -8,7 +8,7 @@
  *
  * 密钥只在「新增」和「重置密钥」之后显示这一次，关掉就再也拿不到（库里只存哈希）。
  */
-import { useState, useId } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import {
@@ -39,6 +39,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { toast } from '@/lib/toast'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 
@@ -49,17 +51,31 @@ const STATUS_LABEL: Record<PdaDeviceStatus, string> = {
 }
 
 const NO_WAREHOUSE = '__none__'
+const EMPTY_FORM = { deviceName: '', warehouseId: NO_WAREHOUSE }
 const UNRESTRICTED_DEVICE_LABEL = '不限仓（按账号权限作业）'
 const DEVICE_SCOPE_HELP = '选择仓库后，设备仅限本仓作业。设备不限仓时，作业仍受登录账号的权限和仓库范围约束。'
 
 export default function PdaDevicesPage() {
   const qc = useQueryClient(), inputId = useId()
+  const { can } = usePermission()
+  const canManage = can(PERMISSIONS.PDA_DEVICE_MANAGE)
+  const managePermission = useRef(canManage)
+  managePermission.current = canManage
   const [keyword, setKeyword] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
-  const [form, setForm] = useState<{ deviceName: string; warehouseId: string }>({ deviceName: '', warehouseId: NO_WAREHOUSE })
+  const [form, setForm] = useState(EMPTY_FORM)
   const [secretView, setSecretView] = useState<PdaDeviceWithSecret | null>(null)
   const [editing, setEditing] = useState<PdaDevice | null>(null)
   const [resetTarget, setResetTarget] = useState<PdaDevice | null>(null)
+
+  useEffect(() => {
+    if (canManage) return
+    setCreateOpen(false)
+    setForm(EMPTY_FORM)
+    setSecretView(null)
+    setEditing(null)
+    setResetTarget(null)
+  }, [canManage])
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ['pda-devices', keyword],
@@ -68,6 +84,7 @@ export default function PdaDevicesPage() {
   const { data: warehouses } = useQuery({
     queryKey: ['warehouse-options'],
     queryFn: () => getWarehousesActiveApi(),
+    enabled: canManage,
   })
 
   const refresh = () => qc.invalidateQueries({ queryKey: ['pda-devices'] })
@@ -79,8 +96,8 @@ export default function PdaDevicesPage() {
     }),
     onSuccess: (device) => {
       setCreateOpen(false)
-      setForm({ deviceName: '', warehouseId: NO_WAREHOUSE })
-      setSecretView(device!)
+      setForm(EMPTY_FORM)
+      if (managePermission.current) setSecretView(device!)
       void refresh()
     },
   })
@@ -104,7 +121,7 @@ export default function PdaDevicesPage() {
     mutationFn: (id: number) => resetPdaDeviceSecretApi(id),
     onSuccess: (device) => {
       setResetTarget(null)
-      setSecretView(device!)
+      if (managePermission.current) setSecretView(device!)
       void refresh()
     },
   })
@@ -125,7 +142,9 @@ export default function PdaDevicesPage() {
       render: v => Number(v) > 0 ? <span className="text-emerald-600">{v as number}</span> : <span className="text-muted-foreground">0</span>,
     },
     { key: 'lastSeenAt', title: '最后在线', width: 14, render: v => v ? formatDisplayDateTime(v as string) : '从未连接' },
-    {
+  ]
+  if (canManage) {
+    columns.push({
       key: 'id', title: '操作', width: 20,
       render: (_, row) => {
         const items: TableActionItem[] = [
@@ -134,15 +153,15 @@ export default function PdaDevicesPage() {
         ]
         return <TableActionsMenu primaryLabel="编辑" primaryVariant="outline" onPrimaryClick={() => setEditing(row)} items={items} />
       },
-    },
-  ]
+    })
+  }
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="PDA 设备"
-        description="登记设备并指定作业范围。停用设备或重置密钥会让设备立即退出登录。"
-        actions={<Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
+        description={canManage ? '登记设备并指定作业范围。停用设备或重置密钥会让设备立即退出登录。' : '查看设备、所属仓库及在线登录情况。'}
+        actions={canManage && <Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
       />
       <FilterCard>
           <Input
@@ -169,15 +188,15 @@ export default function PdaDevicesPage() {
       )}
 
       {/* 登记新设备 */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-2xl">
+      <Dialog open={canManage && createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{<>
               登记后会生成设备码与密钥，密钥只显示一次，请立刻拿 PDA 扫码绑定。
             </>}</>}>
             <DialogTitle>登记新 PDA 设备</DialogTitle>
 
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="fc-form-dialog-body space-y-3">
             <div>
               <Label htmlFor={`${inputId}-create-deviceName`} className="mb-1 block">设备名称</Label>
               <Input
@@ -216,7 +235,7 @@ export default function PdaDevicesPage() {
       </Dialog>
 
       {/* 密钥与绑定二维码：仅此一次 */}
-      <Dialog open={!!secretView} onOpenChange={open => { if (!open) setSecretView(null) }}>
+      <Dialog open={canManage && !!secretView} onOpenChange={open => { if (!open) setSecretView(null) }}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader description={<>{<>
               密钥仅显示一次，关闭后不可再查看；如遗失，需重置密钥后重新绑定。
@@ -257,8 +276,8 @@ export default function PdaDevicesPage() {
       </Dialog>
 
       {/* 编辑 */}
-      <Dialog open={!!editing} onOpenChange={open => { if (!open) setEditing(null) }}>
-        <DialogContent className="sm:max-w-2xl">
+      <Dialog open={canManage && !!editing} onOpenChange={open => { if (!open) setEditing(null) }}>
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{editing && (<>
                 正在编辑：<span className="font-medium text-foreground">{editing.deviceName || editing.deviceCode}</span>
               </>)} {<>{<>改绑仓库会让这台设备退出登录，需要重新登录。</>}</>}</>}>
@@ -270,7 +289,7 @@ export default function PdaDevicesPage() {
 
           </DialogHeader>
           {editing && (
-            <div className="space-y-3">
+            <div className="fc-form-dialog-body space-y-3">
               <div>
                 <Label htmlFor={`${inputId}-edit-deviceName`} className="mb-1 block">设备名称</Label>
                 <Input
@@ -314,11 +333,11 @@ export default function PdaDevicesPage() {
       </Dialog>
 
       <ConfirmDialog
-        open={!!resetTarget}
+        open={canManage && !!resetTarget}
         title="重置设备密钥"
         description={`「${resetTarget?.deviceName ?? ''}」的旧密钥将立即作废，这台设备会退出登录、必须重新扫码绑定才能继续作业。确定要重置吗？`}
         confirmText="重置密钥"
-        onConfirm={() => resetTarget && resetMut.mutate(resetTarget.id)}
+        onConfirm={() => { if (managePermission.current && resetTarget) resetMut.mutate(resetTarget.id) }}
         onCancel={() => setResetTarget(null)}
       />
     </div>

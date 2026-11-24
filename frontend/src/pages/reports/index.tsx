@@ -5,7 +5,7 @@ import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { useState } from 'react'
+import { Fragment, useId, useReducer, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts'
 import type { InventoryStats, TurnoverUnavailableReason } from '@/api/reports'
@@ -71,9 +71,15 @@ const turnoverColumns: TableColumn<InventoryStats['turnover'][number] & { rank: 
 export default function ReportsPage() {
   const active = useActiveWorkspaceTab()
   const [tab, setTab] = useState<SummaryTab>('purchase')
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
-  const [applied, setApplied] = useState({ startDate: todayYmd(), endDate: todayYmd() })
+  const [applied, setApplied] = useState(() => {
+    const today = todayYmd()
+    return { startDate: today, endDate: today }
+  })
+  const [startDate, setStartDate] = useState(applied.startDate)
+  const [endDate, setEndDate] = useState(applied.endDate)
+  const [dateReset, resetDateFields] = useReducer((version: number) => version + 1, 0)
+  const dateInputId = useId()
+  const rangeInvalid = !!(startDate && endDate && startDate > endDate)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [priceProduct, setPriceProduct] = useState<{ id: number; name: string } | null>(null)
 
@@ -83,7 +89,9 @@ export default function ReportsPage() {
     { key: 'inventory', label: '库存周转' },
   ]
 
-  const apply = () => setApplied({ startDate, endDate })
+  const appliedRange = applied.startDate && applied.endDate
+    ? `${applied.startDate} 至 ${applied.endDate}`
+    : applied.startDate ? `自 ${applied.startDate} 起` : applied.endDate ? `截至 ${applied.endDate}` : '不限'
 
   const purchaseQ = useQuery({
     queryKey: ['report-purchase', applied],
@@ -117,50 +125,56 @@ export default function ReportsPage() {
         description="查看采购、销售与库存统计。"
       />
 
-      <section className="rounded-lg border border-border bg-card p-5 space-y-4">
+      <section className="space-y-4" aria-label="经营总览">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="space-y-1">
             <h2 className="text-card-title">经营总览</h2>
+            <p role="status" className="text-xs text-muted-foreground">已应用日期：{appliedRange}</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-muted-body">日期范围：</span>
-            <DatePicker
-              value={startDate}
-              onChange={setStartDate}
-              max={endDate || undefined}
-              className="w-40"
-            />
-            <span className="text-muted-body">至</span>
-            <DatePicker
-              value={endDate}
-              onChange={setEndDate}
-              min={startDate || undefined}
-              className="w-40"
-            />
-            <Button onClick={apply}>查询</Button>
-            <Button
-              variant="outline"
+          <form className="flex flex-wrap items-start gap-2"
+            onInvalid={event => event.preventDefault()}
+            onSubmit={event => {
+              event.preventDefault()
+              if (!rangeInvalid) setApplied({ startDate, endDate })
+            }}>
+            <span className="self-center text-muted-body">日期范围：</span>
+            <Fragment key={dateReset}>
+              <div className="w-40">
+                <label htmlFor={`${dateInputId}-start`} className="sr-only">开始日期</label>
+                <DatePicker className="h-9" id={`${dateInputId}-start`} value={startDate} onChange={setStartDate}
+                  max={endDate || undefined} aria-invalid={rangeInvalid}
+                  aria-describedby={rangeInvalid ? `${dateInputId}-error` : undefined} />
+              </div>
+              <span className="self-center text-muted-body">至</span>
+              <div className="w-40">
+                <label htmlFor={`${dateInputId}-end`} className="sr-only">结束日期</label>
+                <DatePicker className="h-9" id={`${dateInputId}-end`} value={endDate} onChange={setEndDate}
+                  min={startDate || undefined} aria-invalid={rangeInvalid}
+                  aria-describedby={rangeInvalid ? `${dateInputId}-error` : undefined} />
+              </div>
+            </Fragment>
+            <Button type="submit" className="h-9" disabled={rangeInvalid}>查询</Button>
+            <Button type="button" variant="outline" className="h-9"
               onClick={() => {
                 setStartDate('')
                 setEndDate('')
                 setApplied({ startDate: '', endDate: '' })
-              }}
-            >
+                resetDateFields()
+              }}>
               重置
             </Button>
-          </div>
+            {rangeInvalid && <p id={`${dateInputId}-error`} role="alert" className="basis-full text-xs text-destructive-ink">开始日期不能晚于结束日期。</p>}
+          </form>
         </div>
 
-        <div className="flex gap-1 border-b">
+        <div className="fc-segmented-control w-fit" role="group" aria-label="统计维度">
           {summaryTabs.map(item => (
             <button
               key={item.key}
+              type="button"
+              aria-pressed={tab === item.key}
               onClick={() => setTab(item.key)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                tab === item.key
-                  ? 'border-b-2 border-primary text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className="fc-segmented-option"
             >
               {item.label}
             </button>

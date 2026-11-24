@@ -227,8 +227,11 @@ test('分类创建、更新、删除分别授权，查看仍显示树', async ()
   expect(getByRole(host, 'button', { name: '新增子分类' })).toBeTruthy()
   expect(queryByRole(host, 'button', { name: '编辑' })).toBeNull()
   await act(async () => authorize([P.CATEGORY_UPDATE, P.CATEGORY_DELETE]))
-  for (const name of ['编辑', '停用', '删除']) expect(getByRole(host, 'button', { name })).toBeTruthy()
+  expect(getByRole(host, 'button', { name: '编辑' })).toBeTruthy()
   expect(queryByRole(host, 'button', { name: '新增一级分类' })).toBeNull()
+  await menu()
+  expect(getByRole(document.body, 'menuitem', { name: '停用' })).toBeTruthy()
+  expect(getByRole(document.body, 'menuitem', { name: '删除' })).toBeTruthy()
 })
 
 test('分类表单已打开后撤权，原生提交不能发送写请求', async () => {

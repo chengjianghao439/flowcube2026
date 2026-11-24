@@ -3,16 +3,15 @@ import { chartGrid, chartBarCursor, CHART_TONES, axisTick, CHART_COLORS as PIE_C
 import { ChartTooltipContent, ChartLegendContent, ChartValueLegend } from '@/components/shared/ChartPresentation'
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { money } from '@/lib/format'
 import { useNavigate } from 'react-router-dom'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell, BarChart,
 } from 'recharts'
-import { Wallet, ArrowDownLeft, ArrowUpRight, ArrowUpDown } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import { Button } from '@/components/ui/button'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -24,7 +23,6 @@ import { getFinanceDashboardApi } from '@/api/finance'
 import { getAgingApi } from '@/api/payments'
 import type { AgingSide } from '@/api/payments'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
-import { StatTile } from '@/components/dashboard/StatTile'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import { limitTopSeries } from '@/lib/topSeries'
@@ -123,21 +121,26 @@ export default function FinanceDashboardPage() {
   const addTab = useWorkspaceStore(s => s.addTab)
   const { can } = usePermission()
   const canViewAging = can(PERMISSIONS.PAYMENT_VIEW)
+  const canViewExpenses = can(PERMISSIONS.FINANCE_EXPENSE_VIEW)
   const recent6m = { startDate: getRelativeDateRange(180).startDate, endDate: getRelativeDateRange(0).endDate }
   const [startDate, setStartDate] = useState(recent6m.startDate)
   const [endDate, setEndDate] = useState(recent6m.endDate)
   const [applied, setApplied] = useState(recent6m)
+  const [rangeVersion, setRangeVersion] = useState(0)
+  const rangeErrorId = useId()
+  const rangeInvalid = Boolean(startDate && endDate && startDate > endDate)
 
   const { data, isLoading, isError, error, refetch } = useVisibleQuery({
     queryKey: ['finance-dashboard', applied],
     queryFn: () => getFinanceDashboardApi(applied),
   })
   // 账龄是 as-of 今天、与区间无关；仅在有账款查看权限时拉取（看板路由只要求账户查看权限）
-  const { data: aging } = useVisibleQuery({
+  const agingQuery = useVisibleQuery({
     queryKey: ['finance-dashboard', 'aging'],
     queryFn: () => getAgingApi(6),
     enabled: canViewAging,
   })
+  const aging = agingQuery.isError ? undefined : agingQuery.data
 
   function openPath(path: string, title: string) {
     addTab({ key: path, title, path })
@@ -170,59 +173,64 @@ export default function FinanceDashboardPage() {
   })
 
   return (
-    <div className="fc-finance-dashboard space-y-5">
+    <div className="fc-finance-dashboard space-y-4">
       <PageHeader
         title="资金看板"
-        description="查看账户余额、现金流与账龄。"
+        description={<>账户余额、现金流与账龄。<span role="status">收支区间 {applied.startDate || '不限'} 至 {applied.endDate || '不限'}。</span></>}
         actions={(
-          <div className="flex gap-2">
-            <Button variant="outline"
-              onClick={() => downloadExport('/export/aging').catch(e => toast.error((e as Error).message))}>
-              导出账龄 Excel
-            </Button>
+          <>
+            <form className="flex flex-wrap items-center gap-2" aria-label="现金流区间"
+              onInvalid={event => event.preventDefault()}
+              onSubmit={event => {
+                event.preventDefault()
+                if (!rangeInvalid) setApplied({ startDate, endDate })
+              }}>
+              {([
+                ['近 90 天', () => getRelativeDateRange(90)],
+                ['近 180 天', () => getRelativeDateRange(180)],
+                ['本月', () => getMonthDateRange()],
+              ] as const).map(([label, range]) => (
+                <Button key={label} type="button" variant="outline" onClick={() => {
+                  const r = range()
+                  setStartDate(r.startDate)
+                  setEndDate(r.endDate)
+                  setApplied(r)
+                  setRangeVersion(version => version + 1)
+                }}>{label}</Button>
+              ))}
+              <div className="flex flex-wrap items-center gap-2" key={rangeVersion}>
+                <DatePicker value={startDate} onChange={setStartDate} max={endDate} aria-label="开始日期" className="h-9 w-36"
+                  aria-invalid={rangeInvalid} aria-describedby={rangeInvalid ? rangeErrorId : undefined} />
+                <span className="text-muted-foreground">至</span>
+                <DatePicker value={endDate} onChange={setEndDate} min={startDate} aria-label="结束日期" className="h-9 w-36"
+                  aria-invalid={rangeInvalid} aria-describedby={rangeInvalid ? rangeErrorId : undefined} />
+                <Button type="submit" disabled={rangeInvalid}>查询</Button>
+              </div>
+              {rangeInvalid && <p id={rangeErrorId} role="alert" className="basis-full text-xs text-destructive-ink">开始日期不能晚于结束日期。</p>}
+            </form>
             <Button variant="outline" onClick={() => openPath('/finance/accounts', '账户管理')}>账户管理</Button>
-            <Button variant="outline" onClick={() => openPath('/finance/expenses', '费用报销')}>费用报销</Button>
-          </div>
+            {canViewExpenses && <Button variant="outline" onClick={() => openPath('/finance/expenses', '费用报销')}>费用报销</Button>}
+          </>
         )}
       />
-
-      <FilterCard>
-        <div className="flex flex-wrap gap-2">
-          {([
-            ['近 90 天', () => getRelativeDateRange(90)],
-            ['近 180 天', () => getRelativeDateRange(180)],
-            ['本月', () => getMonthDateRange()],
-          ] as const).map(([label, range]) => (
-            <Button key={label} size="sm" variant="outline" onClick={() => {
-              const r = range()
-              setStartDate(r.startDate); setEndDate(r.endDate); setApplied({ startDate: r.startDate, endDate: r.endDate })
-            }}>{label}</Button>
-          ))}
-        </div>
-        <DatePicker value={startDate} onChange={setStartDate} max={endDate} className="h-9 w-40" />
-        <span className="text-muted-foreground">至</span>
-        <DatePicker value={endDate} onChange={setEndDate} min={startDate} className="h-9 w-40" />
-        <Button size="sm" onClick={() => setApplied({ startDate, endDate })}>查询</Button>
-      </FilterCard>
 
       {isError && <QueryErrorState error={error} onRetry={() => void refetch()} title="资金数据加载失败" compact />}
       {isLoading && <p className="py-10 text-center text-sm text-muted-foreground">加载中…</p>}
 
       {data && !isError && (
         <>
-          {/* 顶部 KPI */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatTile icon={Wallet} label="账户余额合计" value={money(data.summary.totalBalance)} hint={`${data.summary.accountCount} 个启用账户`} />
-            <StatTile icon={ArrowDownLeft} label="区间收入" value={money(data.summary.inAmount)} tone="success" hint="收款 + 供应商退款 + 余额调整入账" />
-            <StatTile icon={ArrowUpRight} label="区间支出" value={money(data.summary.outAmount)} tone="danger" hint="付款 + 费用报销 + 退货退款 + 余额调整出账" />
-            <StatTile
-              icon={ArrowUpDown}
-              label="区间净现金流"
-              value={money(data.summary.netAmount)}
-              tone={data.summary.netAmount >= 0 ? 'success' : 'danger'}
-              hint="收入 − 支出"
-            />
-          </div>
+          <SummaryStrip items={[
+            { label: '账户余额合计', value: money(data.summary.totalBalance) },
+            { label: '区间收入', value: <>
+              {money(data.summary.inAmount)}
+              <span className="block text-xs font-normal text-muted-foreground">收款 + 供应商退款 + 余额调整入账</span>
+            </>, tone: 'text-success-ink' },
+            { label: '区间支出', value: <>
+              {money(data.summary.outAmount)}
+              <span className="block text-xs font-normal text-muted-foreground">付款 + 费用报销 + 退货退款 + 余额调整出账</span>
+            </>, tone: 'text-destructive-ink' },
+            { label: '区间净现金流', value: money(data.summary.netAmount), tone: data.summary.netAmount >= 0 ? 'text-success-ink' : 'text-destructive-ink' },
+          ]} />
 
           {/* 报销待办 */}
           {(data.pending.approveCount > 0 || data.pending.payCount > 0) && (
@@ -234,23 +242,40 @@ export default function FinanceDashboardPage() {
               {data.pending.payCount > 0 && (
                 <SoftStatusLabel label={`待付款 ${data.pending.payCount} 笔 · ${money(data.pending.payAmount)}`} tone="active" />
               )}
-              <Button size="sm" variant="outline" className="ml-auto" onClick={() => openPath('/finance/expenses', '费用报销')}>
-                去处理
-              </Button>
+              {canViewExpenses && (
+                <Button size="sm" variant="outline" className="ml-auto" onClick={() => openPath('/finance/expenses', '费用报销')}>
+                  去处理
+                </Button>
+              )}
             </div>
           )}
+        </>
+      )}
 
-          {/* 应收 / 应付账龄 */}
-          {canViewAging && aging && (
-            <section className="space-y-4">
-              <div className="flex items-baseline justify-between">
-                <h2 className="text-section-title">应收 / 应付账龄</h2>
-                <span className="text-xs text-muted-foreground">截至 {aging.asOf} · 全量未结清敞口</span>
-              </div>
-
+      {canViewAging && (
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h2 className="text-section-title">应收 / 应付账龄</h2>
+              {aging && <span className="text-xs text-muted-foreground">截至 {aging.asOf} · 全量未结清敞口</span>}
+            </div>
+            <Button variant="outline"
+              onClick={() => downloadExport('/export/aging').catch(e => toast.error((e as Error).message))}>
+              导出账龄 Excel
+            </Button>
+          </div>
+          {agingQuery.isError && <QueryErrorState error={agingQuery.error} onRetry={() => void agingQuery.refetch()} title="账龄数据加载失败" compact />}
+          {agingQuery.isLoading && <p className="text-sm text-muted-foreground">正在读取账龄…</p>}
+          {aging && (
+            <>
               <div className="grid gap-4 md:grid-cols-2">
                 <ExposureTile title="应收账款（待收回）" side={aging.receivable} tone="info" />
                 <ExposureTile title="应付账款（待支付）" side={aging.payable} tone="warning" />
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <PartyList title="催收 Top（应收敞口）" parties={aging.receivable.topParties} emptyText="暂无应收敞口" />
+                <PartyList title="催付 Top（应付敞口）" parties={aging.payable.topParties} emptyText="暂无应付敞口" />
               </div>
 
               <div className="card-base p-4">
@@ -271,16 +296,15 @@ export default function FinanceDashboardPage() {
                   </ChartContainer>
                 )}
               </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <PartyList title="催收 Top（应收敞口）" parties={aging.receivable.topParties} emptyText="暂无应收敞口" />
-                <PartyList title="催付 Top（应付敞口）" parties={aging.payable.topParties} emptyText="暂无应付敞口" />
-              </div>
-            </section>
+            </>
           )}
+        </section>
+      )}
 
+      {data && !isError && (
+        <>
           {/* 月度收支 + 账户余额分布 */}
-          <div className="fc-finance-charts grid gap-4 lg:grid-cols-2">
+          <div className="fc-finance-charts grid gap-4 xl:grid-cols-2">
             <div className="card-base p-4">
               <h3 className="text-card-title">月度收支</h3>
               {monthlyData.length === 0 ? (
@@ -302,10 +326,8 @@ export default function FinanceDashboardPage() {
             </div>
 
             <div className="card-base p-4">
-              <div className="flex items-baseline justify-between">
-                <h3 className="text-card-title">账户余额分布</h3>
-                <span className="tabular-nums text-xs text-muted-foreground">合计 {money(data.summary.totalBalance)}</span>
-              </div>
+              <h3 className="text-card-title">账户余额分布</h3>
+              <p className="text-xs text-muted-foreground">{data.summary.accountCount} 个启用账户</p>
               {accounts.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">还没有启用的资金账户</p>
               ) : (
@@ -336,7 +358,7 @@ export default function FinanceDashboardPage() {
           </div>
 
           {/* 费用构成 + 业务类型 */}
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 xl:grid-cols-2">
             <div className="card-base p-4">
               <h3 className="text-card-title">费用构成（已付款）</h3>
               <div className="mt-3 space-y-3">

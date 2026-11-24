@@ -1,6 +1,5 @@
 import { approvalSource, approvalNavigationPath, pendingApprovalRowKey, pendingApprovalProgress, pendingApprovalTime, pendingApprovalAmountLabel, pendingApprovalAmount } from '@/lib/approvalBusiness'
 import { usePermission } from '@/hooks/usePermission'
-import { FulfillmentTodos } from '@/components/shared/FulfillmentTodos'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle, Truck, ScanLine, HandCoins, Wallet, ListTodo, Users, Building2, TriangleAlert, ChevronRight, ClipboardCheck,
@@ -165,7 +164,6 @@ export function BoardWorkbench() {
         {data && data.summary.totalAlerts > 0 && <SoftStatusLabel label="有岗位关注事项" tone="warning" />}
         <button type="button" className="text-sm text-primary hover:underline" onClick={() => go('/reports/role-workbench', '待办中心')}>进入待办中心</button>
       </div>}>
-      <FulfillmentTodos summary />
       {cards.length === 0 ? <p className={EMPTY_HINT}>暂无岗位关注事项；财务与系统提醒可在待办中心查看。</p> : (
         <div className="grid gap-x-4 gap-y-1 grid-cols-[repeat(auto-fit,minmax(min(100%,240px),1fr))]">
           {cards.map(c => (

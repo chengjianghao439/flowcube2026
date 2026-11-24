@@ -77,16 +77,18 @@ export function useOrdinarySaleOperation(saleId: number, active = true) {
   const frozen = useRef<{query: OrdinarySaleQuery; body: OrdinarySaleBody} | null>(null), observed = useRef<OrdinarySaleQuery | null>(null)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
-  const current = () => mounted.current && latest.current.saleId === saleId && latest.current.active && inboundEditOwnerCurrent(owner)
+  const ownsOrder = () => mounted.current && latest.current.saleId === saleId && inboundEditOwnerCurrent(owner)
+  const current = () => ownsOrder() && latest.current.active
   const readCurrent = () => read(owner, saleId)
   let pending: OrdinarySaleQuery | null = null, missing: OrdinarySaleQuery | null = null, storageError = ''
-  try {
-    if (current()) {
+  // 本地回执仍用于隐藏标签的离开保护。发起操作和核对接口依旧要求标签激活。
+  if (ownsOrder()) {
+    try {
       pending = readCurrent()
       if (pending) observed.current = pending
       else if (observed.current?.saleId === saleId) missing = pending = observed.current
-    }
-  } catch (e) { storageError = e instanceof Error ? e.message : '原操作查询身份不可读取' }
+    } catch (e) { storageError = e instanceof Error ? e.message : '原操作查询身份不可读取' }
+  }
   useEffect(() => {
     if (!missing) return
     let cancelled = false
@@ -188,7 +190,9 @@ export function useOrdinarySaleOperation(saleId: number, active = true) {
     mayWrite(r.kind); const reservation = await reserveTerminalSlot(terminalKey(r),r,true)
     return send(r,reservation,false)
   })
-  return { pending, busy, error:storageError || error, storageBlocked:!!storageError, blocked:!!pending || busy || !!storageError || !current(),
+  const requiresLeaveProtection = !!pending || busy || !!storageError
+  return { pending, busy, error:storageError || error, storageBlocked:!!storageError, blocked:requiresLeaveProtection || !current(),
+    requiresLeaveProtection,
     canRetry:!!pending && !!frozen.current && snapshot(frozen.current.query) === snapshot(pending) && current(),
     run, queryOriginal:()=>recover(false), retry:()=>recover(true) }
 }

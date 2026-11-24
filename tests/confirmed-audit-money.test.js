@@ -10,7 +10,9 @@ function load(file, stubs) {
   return module.exports
 }
 test('account refresh stores exact cent balances in compatible DECIMAL4 after signed accumulation', async () => {
-  const svc = load('modules/finance/finance-accounts.service.js', { '../../config/db': {}, '../../utils/codeGenerator': {} })
+  const svc = load('modules/finance/finance-accounts.service.js', {
+    '../../config/db': {}, '../../utils/codeGenerator': {}, '../../utils/operationRequest': {},
+  })
   for (const [opening, delta, expected] of [['0.1','0.2','0.3000'],['-0.2','0.1','-0.1000'],['9999999999.98','0.01','9999999999.9900']]) {
     let saved
     await svc.refreshBalance({ query: async (sql, args) => {

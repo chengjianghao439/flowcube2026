@@ -7,7 +7,9 @@ import { createDisposalApi } from '@/api/disposal'
 import { money, qty } from '@/lib/format'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -36,6 +38,7 @@ interface PendingRow {
   suggestion: Pick<DisposalSuggestion, 'productId' | 'productCode' | 'productName' | 'articleNumber' | 'spec' | 'color' | 'unit' | 'valuationBasis'>
     & { unitValue: number | null; totalQty: number | null }
   quantity: string
+  quantityInputError?: string
   disposeType: 3
   remark?: string
 }
@@ -50,6 +53,9 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
   const [remark, setRemark] = useState('')
   const [keyword, setKeyword] = useState('')
   const [rows, setRows] = useState<PendingRow[]>([])
+  const [validationAttempted, setValidationAttempted] = useState(false)
+  const fieldId = useId()
+  const formRef = useRef<HTMLDivElement>(null)
   // 「只能整数」的商品把处置数量框的 step 切成 1（迁移 254）
   const allowDecimalOf = useProductQtyPolicies(canCreate && readable ? rows.map(r => r.suggestion.productId) : [], handling ? { owner: handling.source.owner, isCurrent: () => current() && mayHandle(PERMISSIONS.PRODUCT_VIEW) } : undefined)
   const [submitting, setSubmitting] = useState(false)
@@ -60,7 +66,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
   const warehouse = handling?.source.data ? { id: handling.source.data.source.warehouseId, name: handling.source.data.source.warehouseName } : warehouses?.find(w => String(w.id) === whId)
 
   function reset() {
-    setWhId(''); setRemark(''); setKeyword(''); setRows([])
+    setWhId(''); setRemark(''); setKeyword(''); setRows([]); setValidationAttempted(false)
   }
 
   function toggleSuggestion(s: DisposalSuggestion) {
@@ -87,19 +93,25 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
   const hasQuantity = !handling || rows.every(r => handlingQty(Number(r.quantity)))
   const totalValue = rows.reduce((sum, r) => sum + (Number(r.quantity) || 0) * (r.suggestion.unitValue ?? 0), 0)
 
+  function rowQuantityError(row: PendingRow) {
+    if (row.quantityInputError) return row.quantityInputError
+    const value = Number(row.quantity)
+    if (!handlingQty(value)) return '请输入大于 0 的有效处置数量，最多两位小数'
+    if (handling && value > (handling.source.data?.source.budget.availableQuantity ?? 0)) return '处置数量不能超过来源可关联数量'
+    return ''
+  }
+  const warehouseError = validationAttempted && !warehouse ? '请选择仓库' : ''
+  const itemsError = validationAttempted && !!warehouse && !rows.length ? (handling ? '请先载入来源商品' : '请至少圈选一件滞销商品') : ''
+
   async function handleCreate() {
-    if (!current() || !canCreate) return
-    if (!warehouse) { toast.warning('请选择仓库'); return }
-    if (!rows.length) { toast.warning('请至少圈选一件滞销商品'); return }
-    const invalid = rows.find(r => {
-      const q = Number(r.quantity)
-      return !handlingQty(q) || (handling && q > (handling.source.data?.source.budget.availableQuantity ?? 0))
-    })
-    if (invalid) {
-      toast.warning(`「${invalid.suggestion.productName}」的处置数量无效，必须大于 0`)
+    if (!current() || !canCreate || submitting || mutation.create.isPending) return
+    setValidationAttempted(true)
+    const invalid = rows.find(row => rowQuantityError(row))
+    if (!warehouse || !rows.length || invalid) {
+      const target = !warehouse ? 'warehouse' : !rows.length ? 'items' : `quantity-${invalid!.suggestion.productId}`
+      focusOrderEntryField(formRef.current, target)
       return
     }
-    if (submitting || mutation.create.isPending) return
     try {
       setSubmitting(true)
       const payload = {
@@ -134,7 +146,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
 
   return (
     <Dialog open={open && (!handling || (handling.source.current && handling.source.active))} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="fc-form-dialog grid-cols-1 max-w-6xl max-h-[90vh]">
+      <DialogContent ref={formRef} className="fc-form-dialog grid-cols-1 max-w-6xl max-h-[90vh]">
         <DialogHeader description={!disposalOwnerCurrent(owner) ? <span role="alert">账号、权限或服务器已变化。原圈选保留，不转入当前上下文；请关闭本页后重新查看最新建议。</span> : handling ? '按本来源的商品基本单位填写数量。草稿使用当前参考价估值，实际执行按当时的实物、预占和权限核定。' : '选择仓库和商品，再核对本次处理数量。'}><DialogTitle>{mode === 'create' ? '新建报废单' : '滞销建议'}</DialogTitle></DialogHeader>
         {!disposalOwnerCurrent(owner) ? null : <div className="fc-form-dialog-body space-y-4 py-2">
           {!handling && <><div className="flex gap-2 flex-wrap">
@@ -145,15 +157,17 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
           <p className="text-xs text-muted-foreground">这些入口只打开原正常业务并保留圈选，不携带参考价、供应商或采购行，不表示已关联或处理完成。</p>
           {/* 仓库 + 滞销建议列表 */}
           <div className="grid grid-cols-2 gap-5">
-            <div className="space-y-1">
-              <Label>选择仓库 *</Label>
+            <div className="space-y-1" data-entry-field="warehouse">
+              <Label htmlFor={`${fieldId}-warehouse`}>选择仓库 *</Label>
               <Select value={whId || '__none__'} onValueChange={v => { if (!current()) return; if (rows.length) { toast.warning('已有圈选，先主动移除或清空圈选后再换仓；原数量保留'); return }; setWhId(v === '__none__' ? '' : v) }}>
-                <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
+                <SelectTrigger id={`${fieldId}-warehouse`} className="h-10 w-full" aria-invalid={!!warehouseError}
+                  aria-describedby={warehouseError ? `${fieldId}-warehouse-error` : undefined}><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">请选择</SelectItem>
                   {warehouses?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <OrderFieldError id={`${fieldId}-warehouse-error`}>{warehouseError}</OrderFieldError>
               <p className="text-xs text-muted-foreground">建议包含本仓从未出库的商品，以及最近一次出库距今超过 90 天的商品</p>
             </div>
             <div className="space-y-1 col-span-2">
@@ -175,7 +189,9 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
           </details>
 
           {/* 建议列表 */}
-          <div className="border rounded-lg max-h-56 overflow-auto">
+          <div data-entry-field="items" tabIndex={-1}>
+            <OrderFieldError className="mb-2">{itemsError}</OrderFieldError>
+            <div className="border rounded-lg max-h-56 overflow-auto">
             <ReportTable className="w-full min-w-[1480px] text-sm"><thead className="sticky top-0 z-10"><tr>
               <th className="w-14 text-center">选择</th>
               <ProductIdentityHeaders />
@@ -210,10 +226,11 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                 {whId ? '没有符合筛选的滞销商品' : '请先选择仓库'}
               </td></tr>
             )}
-          </tbody></ReportTable></div>
+            </tbody></ReportTable></div>
+          </div>
 
           </>}
-          {handling && <><p>来源商品与原仓固定，可关联基本量 {handling.source.data?.source.budget.availableQuantity ?? '—'}；不会继承旧批准。</p><Button disabled={!current() || !handling.source.data || rows.length > 0} onClick={() => {
+          {handling && <><p>来源商品与原仓固定，可关联基本量 {handling.source.data?.source.budget.availableQuantity ?? '—'}；不会继承旧批准。</p><div className="flex flex-wrap items-center gap-2" data-entry-field="items"><Button disabled={!current() || !handling.source.data || rows.length > 0} onClick={() => {
             const data = handling.source.data
             if (!data || !current() || rows.length || whId || remark || keyword) { toast.warning('已有输入，来源未覆盖草稿'); return }
             const { source, product } = data
@@ -227,7 +244,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
               },
               quantity: '', disposeType: 3,
             }])
-          }}>载入来源商品</Button><HandlingOperationPanel write={handling.write} /></>}
+          }}>载入来源商品</Button><OrderFieldError>{itemsError}</OrderFieldError></div><HandlingOperationPanel write={handling.write} /></>}
           {/* 已选明细：数量 + 处置方式 */}
           {rows.length > 0 && (
             <div className="space-y-2">
@@ -240,12 +257,16 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                   <th className="w-60">备注</th>
                   <th className="w-24">操作</th>
                 </tr></thead><tbody>
-                {rows.map(r => (
-                  <tr key={r.suggestion.productId} className="border-b last:border-0 text-sm">
+                {rows.map(r => {
+                  const error = r.quantityInputError || (validationAttempted ? rowQuantityError(r) : '')
+                  const errorId = `${fieldId}-quantity-${r.suggestion.productId}-error`
+                  return <tr key={r.suggestion.productId} className="border-b last:border-0 text-sm">
                     <ProductIdentityCells product={r.suggestion} />
-                    <td>
+                    <td data-entry-field={`quantity-${r.suggestion.productId}`}>
                       <div className="flex items-center gap-1">
-                        <Input quantity
+                        <Input quantity aria-label={`${r.suggestion.productName}处置数量`}
+                          aria-invalid={!!error} aria-describedby={error ? errorId : undefined}
+                          onQuantityError={message => updateRow(r.suggestion.productId, { quantityInputError: message ?? undefined })}
                           type="number" min="0" step={qtyStep(allowDecimalOf(r.suggestion.productId))} className="h-8 text-sm"
                           title={`${r.suggestion.totalQty == null ? '' : `原参考量 ${r.suggestion.totalQty} ${r.suggestion.unit}，`}${basis[r.suggestion.valuationBasis]}${r.suggestion.valuationBasis === 'none' ? '' : ` ¥${r.suggestion.unitValue}`}`}
                           value={r.quantity}
@@ -253,6 +274,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                         />
                         <span className="text-xs text-muted-foreground">{r.suggestion.unit}</span>
                       </div>
+                      <OrderFieldError className="mt-1" id={errorId}>{error}</OrderFieldError>
                     </td>
                     <td>
                       <span>报废（新独立单）</span>
@@ -265,7 +287,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                       <Button type="button" size="sm" variant="ghost" className="h-7 px-2 text-xs text-destructive-ink" onClick={() => removeRow(r.suggestion.productId)}>移除</Button>
                     </td>
                   </tr>
-                ))}
+                })}
               </tbody></ReportTable></div>
               <p className="text-sm text-muted-foreground">
                 选中数量参考估值：<span className="text-doc-code-strong tabular-nums">{!hasValuation ? '暂无参考价' : hasQuantity ? money(totalValue) : '待填写数量'}</span>
