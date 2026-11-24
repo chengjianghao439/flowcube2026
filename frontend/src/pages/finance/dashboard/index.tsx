@@ -265,7 +265,7 @@ export default function FinanceDashboardPage() {
             </Button>
           </div>
           {agingQuery.isError && <QueryErrorState error={agingQuery.error} onRetry={() => void agingQuery.refetch()} title="账龄数据加载失败" compact />}
-          {agingQuery.isLoading && <p className="text-sm text-muted-foreground">正在读取账龄…</p>}
+          {agingQuery.isLoading && <p className="text-sm text-muted-foreground">正在加载账龄…</p>}
           {aging && (
             <>
               <div className="grid gap-4 md:grid-cols-2">

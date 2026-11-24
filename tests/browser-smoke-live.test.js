@@ -6,9 +6,17 @@ const { spawn } = require('node:child_process')
 const path = require('node:path')
 const fs = require('node:fs')
 const root = path.resolve(__dirname, '..')
-// 使用实际 HashRouter 的别名跳转，避免夹具接受生产必定会重定向的旧地址。
+// HashRouter 从共用路由注册装配别名。夹具按同一注册模拟兼容地址。
 const router = fs.readFileSync(path.join(root, 'frontend/src/router/index.tsx'), 'utf8')
-const redirects = Object.fromEntries([...router.matchAll(/<Route path="([^"]+)" element=\{<Navigate to="([^"]+)"/g)].map(m => [m[1], m[2]]))
+assert.match(router, /Object\.entries\(ROUTE_ALIASES\)/)
+const routeDefinitions = fs.readFileSync(path.join(root, 'frontend/src/router/routeDefinitions.ts'), 'utf8')
+const redirects = Object.fromEntries(routeDefinitions.split(/^  \{\s*$/m).flatMap(entry => {
+  const aliases = /^    aliases:\s*\[([^\]]*)\]/m.exec(entry)
+  if (!aliases) return []
+  const route = /^    path:\s*'([^']+)'/m.exec(entry)
+  assert.ok(route, '别名条目必须有标准路由')
+  return [...aliases[1].matchAll(/'([^']+)'/g)].map(([, alias]) => [alias, route[1]])
+}))
 assert.equal(redirects['/reports/reconciliation'], '/reports/reconciliation/payable')
 assert.equal(redirects['/payments'], '/payments/payable')
 
@@ -76,12 +84,12 @@ async function runFixture(script, scenario = 'success') {
       const pda=location.hash.startsWith('#/pda');
       function render(){
         const auth=JSON.parse(sessionStorage.getItem('flowcube-auth-v3')||'null');
-        let route=location.hash.slice(1).split('?')[0];
+        const original=location.hash.slice(1), route=original.split(/[?#]/)[0];
         if(!auth){ document.body.innerText='登录'; return }
         if(route==='/login'&&scenario==='limited-login-403'&&auth.state.user.username==='fixture-limited'){location.hash='/403';return}
         if(route==='/login'||route==='/pda/login'){location.hash=pda?'/pda':'/dashboard';return}
         if(route.startsWith('/pda')!==pda){location.hash=pda?'/pda':'/dashboard';return}
-        if(redirects[route]){location.hash=redirects[route];return}
+        if(redirects[route]){location.hash=redirects[route]+original.slice(route.length);return}
         if(scenario==='blocked-reconciliation'&&route==='/purchase/1'){location.hash='/403';return}
         if(route==='/picking-waves'&&auth.state.user.username==='fixture-limited'&&scenario!=='broken-permission'){location.hash='/403';return}
         if(mergedViews[route]){
