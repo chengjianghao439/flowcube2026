@@ -1,7 +1,7 @@
 import { SaleEntryTable } from '../form/components/SaleEntryTable'
 import { Plus, Save, Trash2 } from 'lucide-react'
 import { commercialWarehouseName } from './warehouseName'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MAX_WORKSPACE_TABS, useWorkspaceStore } from '@/store/workspaceStore'
 import type { SaleOrder } from '@/types/sale'
@@ -22,6 +22,7 @@ import { Input } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
 import { summarizeSaleQuantities } from '@/lib/salePresentation'
 import { commercialUnit } from '@/lib/saleCommercialDisplay'
@@ -78,6 +79,17 @@ export default function CommercialEditor({
   const compositionCache = useRef(new Map<string, { versionId: number; components: CommercialComponent[] }>())
   const [imported, setImported] = useState(false)
   const [validationAttempted, setValidationAttempted] = useState(false)
+  const errorPrefix = useId()
+  const [rejectedQuantity, setRejectedQuantity] = useState<Record<string, string>>({})
+  function showQuantityError(line: string, message: string | null) {
+    setRejectedQuantity(previous => {
+      if (previous[line] === (message ?? undefined)) return previous
+      if (message) return { ...previous, [line]: message }
+      const next = { ...previous }
+      delete next[line]
+      return next
+    })
+  }
   const [rows, setRows] = useState<CommercialDraftRow[]>(() => draftFromOrder(order)),
     [picker, setPicker] = useState<'kit' | 'ordinary' | null>(null),
     [error, setError] = useState(''),
@@ -265,6 +277,9 @@ export default function CommercialEditor({
       return [{ lineKey: row.input.lineKey, target: message.startsWith('成交价') ? 'price' : 'quantity', message }]
     }
   }), [entryRows])
+  const firstRejectedQuantity = rows.find(row => rejectedQuantity[row.input.lineKey])
+  const headerFormatInvalid = bodyResult.error === '联系电话格式不正确' || bodyResult.error === '折扣金额须为非负数'
+  const canShowCreateErrors = !order && (entryIssues.length > 0 || rowIssues.length > 0 || headerFormatInvalid || !!firstRejectedQuantity)
   const showFieldErrors = !!order || validationAttempted
   const visibleIssues = showFieldErrors ? entryIssues : []
   const priceRequired = preview.data?.commercialGroups.some((g) => !(g.unitPrice > 0))
@@ -309,9 +324,10 @@ export default function CommercialEditor({
     setError('')
     const focusField = focusEntryField
     if (entryIssues.length) { focusField(entryIssues[0].target); return }
-    if (bodyResult.error === '联系电话格式不正确' || bodyResult.error === '折扣金额须为非负数') {
+    if (headerFormatInvalid) {
       focusField(bodyResult.error === '联系电话格式不正确' ? 'phone' : 'discount'); return
     }
+    if (firstRejectedQuantity) { focusField(`item-${firstRejectedQuantity.input.lineKey}-quantity`); return }
     if (rowIssues.length) { focusField(`item-${rowIssues[0].lineKey}-${rowIssues[0].target}`); return }
     if (!valid || !bodyResult.body || !preview.data) {
       setError(bodyResult.error || preview.error || (priceRequired ? '请填写大于零的成交单价' : '请等待系统完成报价核对'))
@@ -363,7 +379,9 @@ export default function CommercialEditor({
       <td className="text-right tabular-nums">{componentDisplayQuantity(component.baseQty, row.quantity) ?? '—'}</td>
       <td>{component.unit}</td><td className="text-right">—</td><td className="text-right">—</td><td>—</td><td />
     </tr>
-    const quantityError = showFieldErrors ? rowIssues.find(issue => issue.lineKey === row.input.lineKey && issue.target === 'quantity')?.message : undefined
+    const quantityError = rejectedQuantity[row.input.lineKey] ?? (showFieldErrors ? rowIssues.find(issue => issue.lineKey === row.input.lineKey && issue.target === 'quantity')?.message : undefined)
+    const quantityErrorId = `${errorPrefix}-${row.input.lineKey}-quantity-error`
+    const priceErrorId = `${errorPrefix}-${row.input.lineKey}-price-error`
     const priceError = showFieldErrors ? rowIssues.find(issue => issue.lineKey === row.input.lineKey && issue.target === 'price')?.message : undefined
     const integerQuantity =
       row.input.kind === 'kit' || (row.input.kind === 'ordinary' && (row.allowDecimalQty ?? allowsDecimal(row.input.productId)) === false && row.unit === row.baseUnit)
@@ -387,7 +405,9 @@ export default function CommercialEditor({
             data-entry-input
             ref={input => consumePendingFocus(`item-${row.input.lineKey}-quantity`, input)}
             aria-invalid={!!quantityError}
+            aria-describedby={quantityError ? quantityErrorId : undefined}
             quantity
+            onQuantityError={message => showQuantityError(row.input.lineKey, message)}
             aria-label={`${row.name}数量`}
             type="number"
             step={integerQuantity ? 1 : 0.01}
@@ -397,7 +417,7 @@ export default function CommercialEditor({
             onChange={(e) => update(row.input.lineKey, { quantity: e.target.value })}
             className="h-9 w-full text-right tabular-nums"
           />
-          {quantityError && <p role="alert" className="mt-1 text-xs text-destructive-ink">{quantityError}</p>}
+          <OrderFieldError className="mt-1" id={quantityErrorId}>{quantityError}</OrderFieldError>
         </td>
         <td className="p-2">
           {row.input.kind === 'kit' && resolved ? commercialUnit(resolved) : row.unit}
@@ -406,6 +426,7 @@ export default function CommercialEditor({
           <Input
             data-entry-input
             aria-invalid={!!priceError}
+            aria-describedby={priceError ? priceErrorId : undefined}
             ref={input => consumePendingFocus(`item-${row.input.lineKey}-price`, input)}
             disabled={row.input.kind === 'ordinary' && row.unit !== row.baseUnit}
             aria-label={`${row.name}成交单价`}
@@ -431,7 +452,7 @@ export default function CommercialEditor({
             }
             className="h-9 w-full text-right tabular-nums"
           />
-          {priceError && <p role="alert" className="mt-1 text-xs text-destructive-ink">{priceError}</p>}
+          <OrderFieldError className="mt-1" id={priceErrorId}>{priceError}</OrderFieldError>
         </td>
         <td className="p-2 text-right tabular-nums">{resolved ? money(resolved.amount) : '待预览'}</td>
         <td className="p-2">
@@ -445,7 +466,10 @@ export default function CommercialEditor({
             size="sm"
             aria-label="删除商品行"
             className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink"
-            onClick={() => setRows((old) => old.filter((r) => r.input.lineKey !== row.input.lineKey))}
+            onClick={() => {
+              showQuantityError(row.input.lineKey, null)
+              setRows((old) => old.filter((r) => r.input.lineKey !== row.input.lineKey))
+            }}
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -460,7 +484,7 @@ export default function CommercialEditor({
     <div ref={entryRef} data-order-entry onKeyDown={navigateEntry} className="sample-order-editor flex flex-col gap-4">
       <ActionBar
         title={order ? `${order.orderNo} · ${adjust ? '修改订单' : '编辑'}` : '新建销售单'}
-        description="核对客户、商品与发货安排。"
+        description="核对客户、商品及收货信息。"
         subtitle={<UnsavedBadge show={snapshot !== original.current} />}
         rightActions={
           <>
@@ -475,7 +499,7 @@ export default function CommercialEditor({
               {order ? (adjust ? '取消' : '取消编辑') : '取消'}
             </Button>
             {can(permission) && (
-              <Button disabled={locked || (!ordinaryOnlySave && !valid) || preview.loading || (!!reorder && !imported)} onClick={() => void save()}>
+              <Button disabled={locked || (!ordinaryOnlySave && !valid && !canShowCreateErrors) || preview.loading || (!!reorder && !imported)} onClick={() => void save()}>
                 <Save className="mr-1.5 h-4 w-4" />{order ? (adjust ? '提交改单' : '保存修改') : '保存草稿'}
               </Button>
             )}
@@ -547,7 +571,7 @@ export default function CommercialEditor({
         />
         <SectionCard title="商品明细" compact noPadding actions={
           <div data-entry-field="add" className="flex flex-wrap items-center gap-2">
-            {visibleIssues.some(issue => issue.target === 'add') && <p role="alert" className="text-xs text-destructive-ink">请添加至少一条商品明细</p>}
+            <OrderFieldError>{visibleIssues.find(issue => issue.target === 'add')?.message}</OrderFieldError>
             <Button
               data-entry-add
               size="sm"
@@ -592,8 +616,7 @@ export default function CommercialEditor({
                 aria-label="折扣金额" data-entry-input type="number" min="0" step="0.01" value={h.discountAmount}
                 onChange={(e) => h.setDiscountAmount(e.target.value)} className="h-9 w-28 text-right tabular-nums"
               /></label>
-              {visibleIssues.some(issue => issue.target === 'discount') && <p role="alert" className="mt-1 text-xs text-destructive-ink">折扣金额不能超过商品金额</p>}
-              {showFieldErrors && bodyResult.error === '折扣金额须为非负数' && <p role="alert" className="mt-1 text-xs text-destructive-ink">{bodyResult.error}</p>}
+              <OrderFieldError className="mt-1">{visibleIssues.find(issue => issue.target === 'discount')?.message || (showFieldErrors && bodyResult.error === '折扣金额须为非负数' ? bodyResult.error : null)}</OrderFieldError>
             </div>
             <p className="flex items-baseline gap-3 pt-1.5"><span className="font-medium">订单金额</span><strong className="text-lg tabular-nums">{shownPreview ? money(Math.max(0, shownPreview.amount - Number(h.discountAmount || 0))) : '—'}</strong></p>
           </div>

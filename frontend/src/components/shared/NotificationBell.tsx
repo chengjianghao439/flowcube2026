@@ -59,8 +59,9 @@ export default function NotificationBell() {
     return (
       <button
         key={item.dedupeKey}
+        type="button"
         onClick={() => { setOpen(false); navigate(item.path) }}
-        className={`w-full text-left px-4 py-3 transition-colors flex items-start gap-3 ${style.row}`}
+        className={`w-full text-left px-4 py-3 transition-colors flex items-start gap-3 [@media(max-height:640px)]:py-2 ${style.row}`}
       >
         <Icon className={`size-4 shrink-0 mt-0.5 ${style.icon}`} />
         <span className="min-w-0 flex-1">
@@ -93,9 +94,9 @@ export default function NotificationBell() {
       />
 
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-[420px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg p-0" aria-label="通知中心">
+      <PopoverContent align="end" className="flex max-h-[var(--radix-popover-content-available-height)] w-[420px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg p-0" aria-label="通知中心">
             {/* 头部 */}
-            <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
+            <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b bg-muted/20">
               <div className="flex items-center gap-2">
                 <Bell className="size-4 text-muted-foreground" />
                 <h3 className="font-semibold text-sm">通知中心</h3>
@@ -122,13 +123,13 @@ export default function NotificationBell() {
                 <p className="mt-0.5 text-xs text-muted-foreground">此处仅显示你有权限查看的事项。</p>
               </div>
             ) : (
-              <div className="max-h-[60vh] divide-y divide-border/60 overflow-y-auto">
+              <div role="region" aria-label="待处理通知" tabIndex={0} className="min-h-0 max-h-[60vh] divide-y divide-border/60 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
                 {sorted.map(renderItem)}
               </div>
             )}
 
             {/* 尾部 */}
-            <div className="flex items-center justify-center gap-1.5 px-4 py-2 border-t text-xs text-muted-foreground">
+            <div className="flex shrink-0 items-center justify-center gap-1.5 px-4 py-2 border-t text-xs text-muted-foreground">
               <span className="inline-block size-1.5 rounded-full bg-success" />
               每分钟自动刷新
             </div>

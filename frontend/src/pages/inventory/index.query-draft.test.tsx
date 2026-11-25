@@ -13,7 +13,8 @@ import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { disposeWorkspaceHistoryGuard } from '@/router/workspaceHistoryGuard'
 import { HOME_TAB, useWorkspaceStore } from '@/store/workspaceStore'
 import { defaultRangeYmds } from '@/lib/dateTime'
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }))
+const permissions = vi.hoisted(() => ({ category: true }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (code: string) => code !== 'category.view' || permissions.category }) }))
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
 vi.mock('@/router/routeRegistry', async original => ({
   ...await original<typeof import('@/router/routeRegistry')>(),
@@ -106,6 +107,7 @@ async function openQuery() { await click('查询'); await wait(() => expect(fiel
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   localStorage.clear(); requests.length = 0; unexpected.length = 0; transport.mockClear()
+  permissions.category = true
   useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
   setApiClientBaseURL('http://query-draft-02.fixture.invalid/api')
   apiClient.defaults.adapter = 'fetch'; apiClient.defaults.env = { ...oldEnv, fetch: transport }
@@ -121,6 +123,26 @@ afterEach(async () => {
   apiClient.defaults.adapter = oldAdapter; apiClient.defaults.env = oldEnv; setApiClientBaseURL('/api')
   useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key }); vi.restoreAllMocks(); vi.unstubAllGlobals()
   expect(unexpected).toEqual([])
+})
+
+test('无分类权限时保留已应用分类，打开查询也不读取分类树', async () => {
+  permissions.category = false
+  await draw()
+  await wait(() => expect(listRequests().at(-1)?.searchParams.get('categoryId')).toBe('3'))
+  expect(host.textContent).toContain('分类：3')
+  await click('查询')
+  expect(category()).toBeNull()
+  await click('查询', dialog())
+  await wait(() => expect(params().categoryId).toBe('3'))
+  expect(requests.filter(url => url.pathname === '/api/categories/tree')).toHaveLength(0)
+})
+
+test('有分类权限但无已应用分类时，打开查询前不读取分类树', async () => {
+  await draw(0, '?tab=overview')
+  await wait(() => expect(listRequests()).toHaveLength(1))
+  expect(requests.filter(url => url.pathname === '/api/categories/tree')).toHaveLength(0)
+  await click('查询')
+  await wait(() => expect(requests.filter(url => url.pathname === '/api/categories/tree')).toHaveLength(1))
 })
 
 test.each([200, 503])('INVENTORY-Q01 首次后台读取以 %i 完成时保留尚未应用的全部草稿', async status => {
@@ -235,4 +257,12 @@ test('库存流水单边日期在列表可见，清除只改变日期而保留�
   expect(latestLogs()?.get('type')).toBe('2')
   expect(latestLogs()?.get('warehouseId')).toBe('8')
   expect(host.textContent).toContain('未限日期')
+})
+
+test('库存总览默认仓名列宽留出 132px 以上的空间', async () => {
+  await ready()
+  const table = host.querySelector('[aria-label="库存总览表格，可横向滚动"] table')!
+  const keys = [...table.querySelectorAll<HTMLElement>('thead th')].map(th => th.dataset.columnKey)
+  const widths = [...table.querySelectorAll('col')].map(col => parseFloat(col.style.width))
+  expect(widths[keys.indexOf('warehouseName')]).toBeGreaterThanOrEqual(132)
 })

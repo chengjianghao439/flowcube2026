@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { useAuthStore } from '@/store/authStore'
 import ProductFinderModal from './ProductFinderModal'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -20,7 +22,15 @@ async function mount(context: { mode?: 'lookup' | 'sale' | 'purchase'; warehouse
   await act(async () => root.render(<ProductFinderModal open {...context} onClose={() => {}} onConfirm={() => {}} />))
   return { host, root }
 }
-afterEach(() => { hosts.splice(0).forEach(h => h.remove()); finder.isFetching = false; finder.isPlaceholderData = false })
+beforeEach(() => {
+  useAuthStore.setState({ user: { id: 9, username: 'fixture', realName: '商品测试', roleId: 2, roleName: '测试角色', permissions: [PERMISSIONS.PRODUCT_VIEW, PERMISSIONS.CATEGORY_VIEW] } })
+})
+afterEach(() => {
+  hosts.splice(0).forEach(h => h.remove())
+  finder.isFetching = false
+  finder.isPlaceholderData = false
+  useAuthStore.setState({ user: null })
+})
 it('完整商品列表无翻页，筛选变化清空选择，默认不显示价格和无仓库存列', async () => {
   const { host, root } = await mount()
   const next = Array.from(host.querySelectorAll('button')).find(b => b.textContent?.includes('下一页'))!

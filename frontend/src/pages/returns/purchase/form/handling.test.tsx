@@ -7,6 +7,7 @@ import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import client, { setApiClientBaseURL } from '@/api/client'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
 import { useAuthStore } from '@/store/authStore'
+import { toast } from '@/lib/toast'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 const original = client.defaults.adapter, unknown: string[] = [], calls: string[] = []
@@ -49,6 +50,22 @@ function actualAdapter(delayed = false) {
 function reply(c: import('axios').InternalAxiosRequestConfig,data:unknown) { return {config:c,status:200,statusText:'OK',headers:{},data:{success:true,data}} }
 async function click(text: string) { const b=[...document.querySelectorAll('button')].find(b=>b.textContent?.trim() === text || b.textContent?.startsWith(text)); expect(b,text).toBeTruthy(); await act(async()=>b!.click()); await act(async()=>{await new Promise(r=>setTimeout(r,10))}) }
 async function input(el:HTMLInputElement,value:string) { await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}))}) }
+test('采购退货空表提交在供应商和仓库下标记错误，并聚焦供应商', async () => {
+  const warning = vi.spyOn(toast, 'warning')
+  try {
+    await page('/returns/purchase/new', async host => {
+      await click('创建退货单')
+      const picker = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('点击选择供应商'))!
+      expect(document.activeElement).toBe(picker)
+      const error = document.getElementById(picker.getAttribute('aria-describedby') ?? '')
+      expect(error?.getAttribute('role')).toBe('alert')
+      expect(error?.textContent).toBe('请选择供应商')
+      expect(host.querySelector('[role="combobox"]')?.parentElement?.querySelector('[role="alert"]')?.textContent).toBe('请选择仓库')
+      expect(warning).not.toHaveBeenCalled()
+    })
+  } finally { warning.mockRestore() }
+})
+
 test('真实PR加载完整原PO但重复SKU不自动选；员工第2行精确sourceItemId/原价/基本量创建',async()=>{
   posts.length=0;actualAdapter()
   await page('/returns/purchase/new?handlingSourceId=11',async host=>{
@@ -72,7 +89,11 @@ test('来源模式不能清PO降手工/换仓/第2SKU，数量超sourcefree不PO
     await input(host.querySelector<HTMLInputElement>('input[placeholder="输入原单号"]')!,'PO31');await click('载入');await click('选择原采购第 1 行')
     expect([...host.querySelectorAll('button')].find(b=>b.textContent==='清除')!.disabled).toBe(true)
     expect(host.querySelector('input[placeholder="输入原单号"]')!.hasAttribute('disabled')).toBe(true)
-    await input(host.querySelector<HTMLInputElement>('input[placeholder="数量"]')!,'7');await click('创建退货单');expect(posts).toEqual([])
+    const quantity = host.querySelector<HTMLInputElement>('input[placeholder="数量"]')!
+    await input(quantity, '7'); await click('创建退货单')
+    expect(posts).toEqual([])
+    expect(document.activeElement).toBe(quantity)
+    expect(quantity.closest('td')?.querySelector('[role="alert"]')?.textContent).toBe('不得超过可关联及剩余可退数量')
   })
 })
 test('慢PO在serverABA后不覆盖原单号、不显示旧供应商/选择行、不另读或POST',async()=>{
@@ -164,8 +185,11 @@ test('PROC08 普通原行可移除；全零、负量和超余量不创建，精�
     expect(remove.disabled).toBe(false);await act(async()=>remove.click())
     const quantity=host.querySelector<HTMLInputElement>('[placeholder="数量"]')!
     expect(quantity.step).toBe('0.01')
-    await input(quantity,'0');await click('创建退货单');expect(posts).toEqual([])
-    await input(quantity,'10');await click('创建退货单');expect(posts).toEqual([])
+    await input(quantity, '0'); await click('创建退货单'); expect(posts).toEqual([])
+    expect(quantity.closest('td')?.querySelector('[role="alert"]')?.textContent).toBe('请填写至少一条正数退货明细')
+    await input(quantity, '10'); await click('创建退货单'); expect(posts).toEqual([])
+    expect(document.activeElement).toBe(quantity)
+    expect(quantity.closest('td')?.querySelector('[role="alert"]')?.textContent).toBe('不得超过原行剩余可退数量')
     await input(quantity,'-1');await click('创建退货单');expect(posts).toEqual([])
     await input(quantity,'1.001');expect(quantity.value).toBe('-1');expect(posts).toEqual([])
   })
@@ -178,7 +202,8 @@ test('PROC08 整数商品继续拒绝小数退货输入',async()=>{
   await page('/returns/purchase/new',async host=>{
     await input(host.querySelector<HTMLInputElement>('[placeholder="输入原单号"]')!,'PO31');await click('载入')
     const quantity=host.querySelector<HTMLInputElement>('[placeholder="数量"]')!
-    expect(quantity.step).toBe('1');await input(quantity,'2.5');expect(quantity.value).toBe('10')
+    expect(quantity.step).toBe('1'); await input(quantity, '2.5'); expect(quantity.value).toBe('10')
+    expect(quantity.closest('td')?.querySelector('[role="alert"]')?.textContent).toBe('该商品数量只能是整数')
     expect(posts).toEqual([])
   })
 })

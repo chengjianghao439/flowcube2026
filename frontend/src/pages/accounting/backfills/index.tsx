@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import PageHeader from '@/components/shared/PageHeader'
+import { FilterCard } from '@/components/shared/FilterCard'
+import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -265,20 +267,6 @@ function SnapshotFields({ raw, accountName, warehouseName }: {
   )
 }
 
-function CountCard({ label, value, hint }: { label: string; value: number; hint: string }) {
-  const active = value > 0
-  return (
-    <div className="card-base p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        {active && <SoftStatusLabel label="待处理" tone="warning" />}
-      </div>
-      <div className={`mt-2 text-xl tabular-nums ${active ? 'text-warning-ink' : 'text-muted-foreground'}`}>{value}</div>
-      <div className="mt-0.5 text-xs text-muted-foreground">{hint}</div>
-    </div>
-  )
-}
-
 /**
  * 批准 / 驳回 / 撤回三种「要写一句话」的动作共用一个弹窗。
  * 备注必填与否不同（批准选填、驳回与撤回必填），由 required 决定。
@@ -508,32 +496,34 @@ export default function BackfillsPage() {
 
 
       {summary && (
-        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <CountCard label="待审批" value={summary.pending} hint="批准前一分钱都不动账" />
-          <CountCard label="已批准 · 待记账" value={summary.pendingExecution} hint="批准了但还没记上，可重试" />
-          <CountCard label="调整凭证待生成" value={summary.voucherPending} hint="业务已记账，账上还差一张凭证" />
+        <div className="mb-3">
+          <SummaryStrip items={[
+            { label: '待审批', value: summary.pending, tone: summary.pending > 0 ? 'text-warning-ink' : undefined },
+            { label: '已批准 · 待记账', value: summary.pendingExecution, tone: summary.pendingExecution > 0 ? 'text-warning-ink' : undefined },
+            { label: '调整凭证待生成', value: summary.voucherPending, tone: summary.voucherPending > 0 ? 'text-warning-ink' : undefined },
+          ]} />
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <FilterCard className="mb-3">
         <Select value={status === '' ? 'all' : String(status)} onValueChange={v => setStatus(v === 'all' ? '' : Number(v))}>
-          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="状态" /></SelectTrigger>
+          <SelectTrigger className="h-9 min-h-9 w-36 py-1.5" aria-label="补录状态"><SelectValue placeholder="状态" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部状态</SelectItem>
             {BACKFILL_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={bizType || 'all'} onValueChange={v => setBizType(v === 'all' ? '' : v)}>
-          <SelectTrigger className="h-9 w-40"><SelectValue placeholder="业务类型" /></SelectTrigger>
+          <SelectTrigger className="h-9 min-h-9 w-40 py-1.5" aria-label="补录业务类型"><SelectValue placeholder="业务类型" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">全部业务</SelectItem>
             {BACKFILL_BIZ_TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
-      </div>
+      </FilterCard>
 
       {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : (
-        <DataTable virtualized preserveFocus retainFocusedRow={!!(detailRow || approveTarget || rejectTarget || cancelTarget || executeTarget || regenTarget)} columns={columns} data={list} loading={isLoading} emptyText="暂无补录申请" columnStorageKey="acct-backfills" />
+        <DataTable virtualized preserveFocus retainFocusedRow={!!(detailRow || approveTarget || rejectTarget || cancelTarget || executeTarget || regenTarget)} columns={columns} data={list} loading={isLoading} emptyText="暂无补录申请" scrollLabel="跨期补录申请表格" columnStorageKey="acct-backfills" />
       )}
 
       {!isError && !isLoading && data && !data.truncated && <ListSummary total={total} />}

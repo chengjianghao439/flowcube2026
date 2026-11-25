@@ -59,7 +59,7 @@ export function ChartTopStock() {
   const { data, isLoading, error, refetch } = useTopStock()
   const rows = (data ?? []).slice(0, 10).map(d => ({
     name: d.name, fullName: d.name,
-    价值: Math.round(d.value),
+    价值: d.value,
   }))
   return (
     <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="库存价值 Top 10" icon={BarChart3} tone="primary" scrollBody>
@@ -85,7 +85,7 @@ export function ChartWarehouseStock() {
   // 按价值取 Top 8，其余合并为「其他 N 个仓」，与「库存价值 Top 10」同一口径
   //（2026-09-17 验收 ISSUE-010）。
   const rows = limitTopSeries(
-    (data?.byWarehouse ?? []).map(w => ({ name: w.warehouseName, 价值: Math.round(w.totalValue) })),
+    (data?.byWarehouse ?? []).map(w => ({ name: w.warehouseName, 价值: w.totalValue })),
     {
       value: w => w.价值,
       makeRest: (rest, restValue) => ({ name: `其他 ${rest.length} 个仓`, 价值: restValue }),

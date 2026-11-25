@@ -34,6 +34,7 @@ import type { Category } from '@/types/categories'
 
 const ProductsTable = memo(DataTable<Product>)
 const EMPTY_PRODUCTS: Product[] = []
+const PRODUCT_IDENTITY_WIDTHS: Record<string, number> = { articleNumber: 136, spec: 112, color: 88 }
 
 function buildCategoryPathMap(nodes: Category[], ancestors: string[] = [], map = new Map<number, string>()) {
   for (const node of nodes) {
@@ -180,9 +181,9 @@ export default function ProductsPage() {
     ...productIdentityColumns({code: 'code', name: 'name'}).map(column => column.key === 'name' ? {
       ...column,
       render: (_: unknown, row: Product) => <><span className="block break-words leading-6">{row.name || '—'}</span>{hasKeyword && row.searchMatch && <span className="block text-xs leading-5 text-muted-foreground">命中：{row.searchMatch}</span>}</>,
-    } : column),
-    { key:'categoryName', title:'分类', width:180, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
-    { key:'unit', title:'单位', width:140, render:(_,r)=>{
+    } : { ...column, width: PRODUCT_IDENTITY_WIDTHS[String(column.key)] ?? column.width }),
+    { key:'categoryName', title:'分类', width:152, render:(_, r)=><CategoryPathDisplay path={r.categoryId ? categoryPathMap.get(r.categoryId) ?? null : null} fallback={r.categoryName} /> },
+    { key:'unit', title:'单位', width:132, render:(_,r)=>{
       const aux=(r.units||[]).filter(u=>!u.isBase)
       return <div className="flex flex-wrap items-center gap-1"><span>{r.unit}</span>{aux.map(u=><span key={u.unitName} className="rounded bg-muted px-1 text-xs text-muted-foreground tabular-nums">{u.unitName}×{u.conversionRate}</span>)}{
         // 展示当前出货数量规则；存量商品的设置不因新建默认值改变。
@@ -232,7 +233,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <ProductsTable virtualized columns={cols} data={data?.list ?? EMPTY_PRODUCTS} loading={isLoading} rowKey="id" />
+      <ProductsTable virtualized columns={cols} data={data?.list ?? EMPTY_PRODUCTS} loading={isLoading} rowKey="id" scrollLabel="商品管理表格" />
       <ListSummary total={total} unit="件" />
 
       {/* 批量导入弹窗 */}

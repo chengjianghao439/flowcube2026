@@ -48,6 +48,67 @@ test('替换取消保留原商品、数量和价格', async () => {
   await click('标准商品'); await click('取消选品')
   expect(numbers()[0].value).toBe('7'); expect(numbers()[1].value).toBe('3.4567')
 })
+test('新采购的必填问题显示在字段和添加商品旁，保存聚焦供应商', async () => {
+  await render()
+  expect(host.querySelector('[role="alert"]')).toBeNull()
+  await click('保存草稿')
+  const supplier = host.querySelector('[data-entry-field="party"]')!
+  expect(supplier.querySelector('[role="alert"]')?.textContent).toBe('请选择供应商')
+  expect(document.activeElement).toBe(supplier.querySelector('button'))
+  expect(host.querySelector('[data-entry-field="warehouse"] [role="alert"]')?.textContent).toBe('请选择仓库')
+  expect(button('添加商品').parentElement?.querySelector('[role="alert"]')?.textContent).toBe('请添加至少一条商品明细')
+  expect(host.textContent).not.toContain('点击可定位')
+})
+
+test('编辑采购价无效时在原单元格提示并聚焦，保留数量', async () => {
+  state.order = order()
+  await render('/purchase/12')
+  await click('编辑')
+  const [quantity, price] = numbers()
+  setValue(quantity, '3')
+  setValue(price, '')
+  await click('保存修改')
+  const error = document.getElementById(price.getAttribute('aria-describedby') ?? '')
+  expect(error?.closest('td')).toBe(price.closest('td'))
+  expect(error?.textContent).toMatch(/单价.*不小于 0/)
+  expect(document.activeElement).toBe(price)
+  expect(quantity.value).toBe('3')
+  expect(state.update).not.toHaveBeenCalled()
+  expect(host.textContent).not.toContain('点击可定位')
+})
+
+test('新建采购保留小数、清空及零数量，提示正整数要求', async () => {
+  await render()
+  await click('添加商品'); await click('选择标准商品')
+  const quantity = numbers()[0]
+  for (const input of ['1.5', '0.123', '', '0', '-2']) {
+    setValue(quantity, input)
+    expect(quantity.value).toBe(input)
+    expect(quantity.getAttribute('aria-invalid')).toBe('true')
+    const description = document.getElementById(quantity.getAttribute('aria-describedby') ?? '')
+    expect(description?.textContent).toMatch(/正整数|请输入采购数量/)
+    expect(host.textContent).toContain('金额仅含有效明细')
+    expect(host.textContent).not.toContain('行待核对')
+  }
+  setValue(quantity, '2')
+  expect(quantity.getAttribute('aria-invalid')).toBe('false')
+  expect(host.textContent).not.toContain('金额仅含有效明细')
+})
+test('编辑采购拒绝无效数量并保留原录入，修正后发送数字', async () => {
+  state.order = order()
+  await render('/purchase/12'); await click('编辑')
+  const quantity = numbers()[0]
+  setValue(quantity, '1.00000000000000000001')
+  await click('保存修改')
+  expect(quantity.value).toBe('1.00000000000000000001')
+  expect(state.update).not.toHaveBeenCalled()
+  setValue(quantity, '3')
+  await click('保存修改')
+  expect(state.update).toHaveBeenCalledWith({ id: 12, data: expect.objectContaining({
+    items: [expect.objectContaining({ quantity: 3 })],
+  }) })
+  expect(state.update.mock.calls[0][0].data.items[0]).not.toHaveProperty('quantityInput')
+})
 test('新建取消入口使用现有防丢稿确认', async () => {
   await render(); await click('添加商品'); await click('选择标准商品')
   expect(button('取消')).toBeTruthy(); await click('取消')
@@ -174,6 +235,45 @@ test('长明细汇总使用整单800行与原采购总额，不随虚拟挂载�
   expect(summary.textContent).toContain('800 米')
   expect(scroll.querySelector('table')!.getAttribute('aria-rowcount')).toBe('801')
   expect(scroll.querySelectorAll('tbody tr[data-index]').length).toBeLessThan(800)
+})
+
+test('保存采购单跳转到虚拟列表外的第一条错误明细', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  host.dataset.workspaceScroll = ''
+  Object.defineProperties(host, {
+    clientHeight: { value: 480 },
+    offsetHeight: { value: 480 },
+    offsetWidth: { value: 800 },
+    scrollHeight: { value: 201 * 48 },
+  })
+  host.scrollTo = options => {
+    if (typeof options === 'number') return
+    host.scrollTop = options?.top ?? 0
+    requestAnimationFrame(() => host.dispatchEvent(new Event('scroll')))
+  }
+  const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    const top = this === host ? 0 : -host.scrollTop
+    const height = this === host ? 480 : this.tagName === 'TR' ? 48 : 0
+    return { x: 0, y: top, top, left: 0, bottom: top + height, right: 800, width: 800, height, toJSON() {} }
+  })
+  const base = order()
+  state.order = { ...base, items: Array.from({ length: 201 }, (_, index) => ({
+    ...base.items![0], id: index + 1, quantity: index === 200 ? 0 : 1,
+  })) }
+  const target = () => host.querySelector<HTMLInputElement>('input[data-entry-field="item-200-quantity"]')
+  try {
+    await render('/purchase/12')
+    await click('编辑')
+    expect(target()).toBeNull()
+    await click('保存修改')
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 80)) })
+    expect(target()?.getAttribute('aria-invalid')).toBe('true')
+    expect(document.activeElement).toBe(target())
+    expect(host.scrollTop).toBeGreaterThan(9000)
+    expect(state.update).not.toHaveBeenCalled()
+  } finally {
+    geometry.mockRestore()
+  }
 })
 
 test('空采购明细仍显示整单0行与原总额，金额口径不由明细重算', async () => {

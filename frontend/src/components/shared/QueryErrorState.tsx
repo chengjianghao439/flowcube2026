@@ -33,7 +33,7 @@ function resolveErrorDetail(error: unknown): { rawMessage: string; code: string;
   const payload = maybeResponse?.response?.data
   const rawMessage = typeof payload?.message === 'string' ? payload.message : ''
   const code = typeof payload?.code === 'string' ? payload.code : ''
-  const data = payload && 'data' in payload ? safeStringify(payload.data) : ''
+  const data = payload && typeof payload === 'object' && 'data' in payload ? safeStringify(payload.data) : ''
 
   return {
     rawMessage,

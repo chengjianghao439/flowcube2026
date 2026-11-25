@@ -293,7 +293,7 @@ npm run test:permissions
 列表导出筛选透传回归：`npm run test:export-filters`（static job，2026-09-27 新增）——从每个列表接口 `findAll` 的函数签名解析出它支持的筛选键，断言对应的导出函数把其中**每一个**都原样透传，纯离线（stub `findAll`，不连数据库）。判定依据是「列表接口支持什么」而非「导出实现里写了什么」。同时 `smoke:prelaunch-scope-export` 的导出循环补了同一断言（真实服务 + 真实库）。背景：对账单与收付款单导出曾只透传 `type/status/keyword`，页面筛了往来方/单号/日期/金额却拿到全量；旧循环恰好只断言了 `keyword`（当时唯一被正确透传的参数），故缺陷长期不可见。
 
 
-发布页面脚本回归：`npm ci --prefix scripts/browser-smoke --ignore-scripts` 安装锁定依赖，`node scripts/browser-smoke/node_modules/playwright-core/cli.js install chromium` 安装匹配浏览器，再运行 `npm run test:browser-smoke`。该测试使用真实 Chromium 和随机回环端口夹具，覆盖 ERP/PDA、受限权限、错页/渲染错误、对账重定向失败及进程退出，不连接数据库或生产。Tests CI 的独立 `browser-smoke-runtime` job 执行它；生产依赖从 CI 构建镜像复制，不运行安装命令。
+发布页面脚本回归由 `npm run test:browser-smoke` 执行。先用 `npm ci --prefix scripts/browser-smoke --ignore-scripts` 安装锁定依赖，再用 `node scripts/browser-smoke/node_modules/playwright-core/cli.js install chromium` 安装匹配浏览器。测试使用真实 Chromium 和随机回环端口夹具，覆盖 ERP/PDA、受限权限、错页、对账重定向失败及进程退出。旧地址由共用路由注册提供，实际 HashRouter 保留查询参数的行为由前端路由测试覆盖。此套件在 Tests CI 的 `browser-smoke-runtime` 中使用本地合成数据。
 
 发布工具离线回归由 `npm run test:audit-tooling` 验证页面运行时、HTTPS 归档验证与回退，以及 main、PDA 和桌面 tag 的顺序。`npm run test:release-tooling` 覆盖下载流的 SHA256、404、损坏包和缺摘要。CI 浏览器夹具使用 `ubuntu-24.04`，与固定 Playwright 版本的 Noble 发布验收镜像一致。工作流语法可用 `actionlint -shellcheck=''` 核对。线上可用 `npm run release:verify -- --origin https://<生产域名>` 下载并校验两种安装包，每包最多 120 秒。
 

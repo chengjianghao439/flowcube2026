@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { fireEvent, getByRole } from '@testing-library/dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import LedgerPage from './index'
 
@@ -48,4 +49,25 @@ it.each([
   expect(row.cells[3].textContent).toBe('100.00')
   expect(row.cells[5].textContent).toBe('100.00')
   expect(voucherDate).toBe(raw)
+})
+
+it('期间不完整或月份非法时保留输入并提示，不读取试算，也不显示空结果', async () => {
+  await act(async () => root.render(<QueryClientProvider client={client}><LedgerPage /></QueryClientProvider>))
+  await vi.waitFor(() => expect(host.textContent).toContain('合成现金科目'))
+  const input = host.querySelector('input')!
+  const originalReads = mockAxios.get.mock.calls.length
+
+  for (const invalid of ['20261', '202613', '2026A1']) {
+    await act(async () => { fireEvent.change(input, { target: { value: invalid } }) })
+    expect(input.value).toBe(invalid)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(getByRole(host, 'alert').textContent).toContain('YYYYMM')
+    expect(host.textContent).not.toContain('该期间暂无发生额')
+    expect(mockAxios.get).toHaveBeenCalledTimes(originalReads)
+  }
+
+  expect(getByRole(host, 'textbox', { name: '会计期间' })).toBe(input)
+  await act(async () => { fireEvent.change(input, { target: { value: '202512' } }) })
+  await vi.waitFor(() => expect(mockAxios.get).toHaveBeenLastCalledWith('/accounting/ledger/trial-balance?period=202512'))
+  expect(input.getAttribute('aria-invalid')).not.toBe('true')
 })

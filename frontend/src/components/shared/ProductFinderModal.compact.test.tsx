@@ -354,3 +354,47 @@ test('purchase context remains readable through StrictMode effect replay', async
   await act(async () => row().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
   expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ costPrice: 2 }))
 })
+
+async function drawFull() {
+  await act(async () => root.render(<QueryClientProvider client={cache}><ProductFinderModal open mode="lookup" onConfirm={confirmed} onClose={closed} /></QueryClientProvider>))
+}
+
+test('完整版 205 条商品只挂载窗口行，End 可到达并确认最后一行', async () => {
+  const products = Array.from({ length: 205 }, (_, i) => ({ ...product, id: i + 1, code: `FULL-${i + 1}`, name: `完整合成商品 ${i + 1}` }))
+  respond = async config => config.url === '/categories/tree' ? categories : page(products.slice((config.params.page - 1) * 200, config.params.page * 200), config.params.page, products.length)
+  await drawFull(); await ready('完整合成商品 1')
+  expect(reads().map(request => request.params.page)).toEqual([1, 2])
+  expect(document.querySelectorAll('[data-finder-key]').length).toBeLessThan(50)
+  expect(document.querySelector('table')?.getAttribute('aria-rowcount')).toBe('206')
+  const scroll = document.querySelector<HTMLElement>('[data-table-scroll]')!
+  Object.defineProperties(scroll, { clientHeight: { value: 480 }, scrollHeight: { value: 205 * 48 } })
+  scroll.scrollTo = (options?: ScrollToOptions | number, top?: number) => {
+    scroll.scrollTop = typeof options === 'object' ? options.top ?? 0 : top ?? 0
+    scroll.dispatchEvent(new Event('scroll'))
+  }
+  const first = row('完整合成商品 1')
+  await act(async () => { first.focus(); first.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })) })
+  await vi.waitFor(() => expect(document.activeElement?.getAttribute('data-finder-key')).toBe('205'))
+  const last = document.activeElement!
+  expect(last.getAttribute('aria-rowindex')).toBe('206')
+  await act(async () => {
+    last.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }))
+  })
+  await click('确认选择')
+  expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ id: 205, code: 'FULL-205' }))
+})
+
+test('完整版清楚披露现有读取上限，已加载商品仍可选择', async () => {
+  respond = async config => {
+    if (config.url === '/categories/tree') return categories
+    const n = Number(config.params.page)
+    return page(Array.from({ length: 200 }, (_, i) => ({ ...product, id: (n - 1) * 200 + i + 1 })), n, 5100)
+  }
+  await drawFull(); await ready()
+  expect(reads()).toHaveLength(25)
+  expect(document.body.textContent).toContain('已读取 5,000 / 5,100 个匹配商品')
+  expect(document.body.textContent).toContain('缩小搜索范围')
+  await act(async () => row().click())
+  await click('确认选择')
+  expect(confirmed).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }))
+})

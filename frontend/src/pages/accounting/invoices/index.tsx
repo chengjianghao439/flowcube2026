@@ -238,7 +238,7 @@ export default function InvoicesPage() {
     { key: 'invoiceDate', title: '开票日期', width: 122, minWidth: 122, render: (_v, r) => <span className="whitespace-nowrap">{formatDisplayDate(r.invoiceDate, '')}</span> },
     { key: 'sourceNo', title: '关联单号', width: 120, render: (_v, r) => r.sourceNo || '—' },
     { key: 'status', title: '状态', width: 90, render: (_v, r) => <SoftStatusLabel label={r.statusName} tone={statusTone(r.invoiceType, r.status)} /> },
-    { key: 'actions', title: '操作', width: 190, render: (_v, r) => {
+    { key: 'actions', title: '操作', width: 126, render: (_v, r) => {
       if (!canManage) return null
       const primary = r.invoiceType === 1 && r.status === 1 ? { label: '认证', action: 'certify' as const }
         : r.invoiceType === 1 && r.status === 2 ? { label: '抵扣', action: 'deduct' as const }
@@ -290,7 +290,7 @@ export default function InvoicesPage() {
       {isError ? (
           <QueryErrorState error={error} onRetry={() => void refetch()} title="发票列表加载失败" compact />
         ) : (
-          <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" columnStorageKey={`acct-invoices-${invoiceType}`} />
+          <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" scrollLabel="发票列表表格" columnStorageKey={`acct-invoices-${invoiceType}`} />
         )}
 
       {!isError && <ListSummary total={total} unit="张" />}

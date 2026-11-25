@@ -204,6 +204,8 @@ test.each(['sale', 'purchase'])('%s auto read cannot overwrite a remark edited w
     expect(host.textContent).not.toContain('停用历史商品'); expect((host.querySelector('input[placeholder="选填"]') as HTMLInputElement).value).toBe('我的草稿')
     expect(host.textContent).toContain('草稿已修改')
     await click(host, '载入'); expect(host.textContent).toContain('停用历史商品')
+    const field = kind === 'sale' ? 'customer' : 'supplier'
+    expect(host.querySelector<HTMLButtonElement>(`[data-entry-field="${field}"] button`)?.disabled).toBe(true)
   })
 })
 test.each(['sale', 'purchase'])('%s late source response after clear, order switch, owner/server change or unmount is isolated', async kind => {
@@ -349,7 +351,12 @@ test.each(['sale', 'purchase'])('%s carried source identity failure blocks manua
     await click(host, kind === 'sale' ? '点击选择客户…' : '点击选择供应商…'); await click(host, kind === 'sale' ? '选手工客户' : '选手工供应商')
     await click(host, '选手工仓'); await click(host, '+ 添加商品'); await click(host, '选手工商品')
     await click(host, '创建退货单'); expect(mocks.create).not.toHaveBeenCalled()
-    expect(mocks.warning).toHaveBeenCalledWith('请先载入并核对原单，或清除来源后按手工退货填写')
+    const sourceInput = host.querySelector<HTMLInputElement>('[placeholder="输入原单号"]')!
+    const error = document.getElementById(sourceInput.getAttribute('aria-describedby') ?? '')
+    expect(document.activeElement).toBe(sourceInput)
+    expect(error?.getAttribute('role')).toBe('alert')
+    expect(error?.textContent).toBe('请先载入并核对原单，或清除来源后按手工退货填写')
+    expect(mocks.warning).not.toHaveBeenCalledWith('请先载入并核对原单，或清除来源后按手工退货填写')
   })
 })
 

@@ -71,6 +71,51 @@ test('运费空值按null，金额三位或负数阻止保存并保持原输入'
   await fill(field('运费金额'), ''); await click('保存修改'); expect(state.put.mock.calls[0][1].freightAmount).toBeNull()
 })
 
+test('编辑只定位当前表单的明细错误，修正后按原采购行和指纹保存', async () => {
+  await render([21, 22])
+  const first = view(21).querySelector<HTMLInputElement>('[data-purchase-item-id="41"]')!
+  const second = view(22).querySelector<HTMLInputElement>('[data-purchase-item-id="41"]')!
+  await fill(second, '2.001')
+  await click('保存修改', 22)
+  expect(document.activeElement).toBe(second)
+  expect(first.getAttribute('aria-invalid')).not.toBe('true')
+  expect(document.getElementById(second.getAttribute('aria-describedby')!)?.textContent).toBe('数量最多保留两位小数')
+  expect(state.put).not.toHaveBeenCalled()
+  await fill(second, '3')
+  expect(second.getAttribute('aria-invalid')).not.toBe('true')
+  await click('保存修改', 22)
+  expect(state.put.mock.calls[0][1]).toMatchObject({ expectedEditFingerprint: 'baseline-22', items: [{ purchaseItemId: 41, qty: 3 }] })
+})
+
+test('末行无效时定位当前虚拟明细并显示数量原因', async () => {
+  const original = context()
+  original.candidates = Array.from({ length: 220 }, (_, i) => candidate(i + 1000))
+  original.task.items = original.candidates.map((c, i) => ({ ...original.task.items![0], id: i + 2000, purchaseItemId: c.purchaseItemId, purchaseOrderId: c.purchaseOrderId, purchaseOrderNo: c.purchaseOrderNo, orderedQty: i === 219 ? 0 : 2 }))
+  state.contexts[21] = original
+  const getHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-workspace-scroll') ? 480 : 0 })
+  const clientHeight = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-workspace-scroll') ? 480 : 0 })
+  const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockImplementation(function (this: HTMLElement) { return this.hasAttribute('data-workspace-scroll') ? 220 * 48 : 0 })
+  const getWidth = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(1200)
+  const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    const scroll = this.closest<HTMLElement>('[data-workspace-scroll]')
+    const height = this === scroll ? 480 : 48
+    return { height, width: 1200, top: this === scroll ? 0 : -(scroll?.scrollTop ?? 0), left: 0, bottom: height, right: 1200, x: 0, y: 0, toJSON() {} }
+  })
+  try {
+    await render()
+    const scroll = view().querySelector<HTMLElement>('[data-workspace-scroll]')!
+    scroll.scrollTo = ((options: ScrollToOptions) => { scroll.scrollTop = options.top ?? 0; scroll.dispatchEvent(new Event('scroll')) }) as typeof scroll.scrollTo
+    expect(view().querySelector('[data-purchase-item-id="1219"]')).toBeNull()
+    await click('保存修改')
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 60)) })
+    expect(document.activeElement?.getAttribute('data-purchase-item-id')).toBe('1219')
+    expect(document.getElementById(document.activeElement?.getAttribute('aria-describedby') ?? '')?.textContent).toBe('本次到货数量必须大于 0')
+    expect(state.put).not.toHaveBeenCalled()
+  } finally {
+    getHeight.mockRestore(); clientHeight.mockRestore(); scrollHeight.mockRestore(); getWidth.mockRestore(); rect.mockRestore()
+  }
+})
+
 test('成功mock保存完成原标签并刷新可查看原单；不把旧body重新应用', async () => {
   act(() => useAuthStore.getState().updateUser({ permissions: [PERMISSIONS.INBOUND_ORDER_UPDATE, PERMISSIONS.INBOUND_ORDER_VIEW] })); await render()
   state.put.mockResolvedValue({ taskId: 21, taskNo: 'IN-21', expectedEditFingerprint: 'saved-21' }); await click('保存修改')

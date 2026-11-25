@@ -66,3 +66,47 @@ test('另一个页面丢失未终结的请求身份时仍保持冻结', async ()
   expect(detail.blocked).toBe(true)
   expect(detail.pending).toMatchObject({ requestKey: originalKey('reserve') })
 })
+
+test('隐藏仅暂停操作，已读取的原请求与存储错误仍保护离开', async () => {
+  await mount()
+  await mount(7, false)
+  expect(write.blocked).toBe(true)
+  expect(write.requiresLeaveProtection).toBe(false)
+
+  await mount()
+  await fail('reserve')
+  const key = saved()[0]
+  expect(write.requiresLeaveProtection).toBe(true)
+  await mount(7, false)
+  expect(write.requiresLeaveProtection).toBe(true)
+  expect(api.receipt).not.toHaveBeenCalled()
+  await mount()
+  api.receipt.mockResolvedValue(success('reserve'))
+  await act(async () => { await write.queryOriginal() })
+  expect(write.requiresLeaveProtection).toBe(false)
+
+  localStorage.setItem(key, '损坏的合成请求记录')
+  await mount()
+  expect(write.storageBlocked).toBe(true)
+  await mount(7, false)
+  expect(write.requiresLeaveProtection).toBe(true)
+  localStorage.removeItem(key)
+  await mount()
+  expect(write.requiresLeaveProtection).toBe(false)
+})
+
+test('隐藏详情仍看见列表为同一订单发起及确认的原操作', async () => {
+  let detail!: ReturnType<typeof useOrdinarySaleOperation>
+  function Detail() { detail = useOrdinarySaleOperation(7, false); return null }
+  await act(async () => root.render(<><Probe /><Detail /></>))
+  expect(detail.requiresLeaveProtection).toBe(false)
+  await fail('reserve')
+  expect(detail.requiresLeaveProtection).toBe(true)
+  await act(async () => { await expect(detail.queryOriginal()).rejects.toThrow('当前页面已变化') })
+  expect(api.receipt).not.toHaveBeenCalled()
+
+  api.receipt.mockResolvedValue(success('reserve'))
+  await act(async () => { await write.queryOriginal() })
+  await vi.waitFor(() => expect(detail.requiresLeaveProtection).toBe(false))
+  expect(api.receipt).toHaveBeenCalledOnce()
+})

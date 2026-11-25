@@ -6,7 +6,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
  */
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,6 +23,7 @@ import { RACK_STATUS_OPTIONS } from '@/types/racks'
 import { getLocalPrintEnvironmentKind } from '@/lib/desktopLocalPrint'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import { downloadExport } from '@/lib/exportDownload'
+import { AppliedFilters } from '@/pages/warehouse-structure/AppliedFilters'
 import RackQueryDialog, { type RackQueryValues } from './RackQueryDialog'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 
@@ -177,23 +178,7 @@ export default function RacksPage() {
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
-        renderToolbar={
-          <>
-            {chips.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
-                {chips.map(c => (
-                  <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                    {c.label}
-                    <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-              </div>
-            )}
-          </>
-        }
+        renderToolbar={chips.length > 0 ? <AppliedFilters chips={chips} onClear={clearAll} /> : null}
         renderActions={(row, helpers) => (
           <TableActionsMenu
             primaryLabel="打印"

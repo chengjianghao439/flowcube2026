@@ -23,6 +23,7 @@ export interface TableActionItem {
 
 interface TableActionsMenuProps {
   primaryLabel: string
+  rowLabel?: string
   onPrimaryClick: () => void
   primaryVariant?: 'default' | 'outline' | 'destructive'
   primaryDisabled?: boolean
@@ -33,6 +34,7 @@ interface TableActionsMenuProps {
 
 export default function TableActionsMenu({
   primaryLabel,
+  rowLabel,
   onPrimaryClick,
   primaryVariant = 'default',
   primaryDisabled = false,
@@ -84,10 +86,12 @@ export default function TableActionsMenu({
         ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
         : 'bg-primary text-primary-foreground hover:bg-primary/90',
   )
+  const primaryAccessibleLabel = rowLabel ? `${primaryLabel} ${rowLabel}` : undefined
+  const menuLabel = rowLabel ? `更多操作 ${rowLabel}` : '更多操作'
 
   if (items.length === 0 && !menuInitialized) {
     return (
-      <button ref={node => { actionRoot.current = node }} type="button" disabled={primaryDisabled} onClick={onPrimaryClick}
+      <button ref={node => { actionRoot.current = node }} type="button" disabled={primaryDisabled} aria-label={primaryAccessibleLabel} onClick={onPrimaryClick}
         className={cn('fc-table-actions inline-flex items-center rounded-md border border-border', primaryClass)}>
         {primaryLabel}
       </button>
@@ -99,6 +103,7 @@ export default function TableActionsMenu({
       <button
         type="button"
         disabled={primaryDisabled}
+        aria-label={primaryAccessibleLabel}
         onClick={onPrimaryClick}
         className={cn('border-r border-border/60', primaryClass)}
       >
@@ -108,7 +113,7 @@ export default function TableActionsMenu({
         <button
           type="button"
           disabled={primaryDisabled}
-          aria-label="更多操作"
+          aria-label={menuLabel}
           aria-haspopup="menu"
           aria-expanded={false}
           onClick={event => {
@@ -134,7 +139,7 @@ export default function TableActionsMenu({
             type="button"
             ref={menuTrigger}
             disabled={primaryDisabled || items.length === 0}
-            aria-label="更多操作"
+            aria-label={menuLabel}
             className="px-1.5 py-1.5 text-muted-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
             <ChevronDown className="size-3.5" />
@@ -166,6 +171,7 @@ export default function TableActionsMenu({
               {item.separatorBefore && <DropdownMenuSeparator />}
               <DropdownMenuItem
                 disabled={item.disabled}
+                aria-label={rowLabel ? `${item.label} ${rowLabel}` : undefined}
                 className={cn('text-xs', item.destructive && 'text-destructive-ink focus:text-destructive-ink')}
                 onClick={() => {
                   if (item.afterMenuClose) afterClose.current = item.onClick

@@ -4,6 +4,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -41,32 +42,35 @@ export default function KitsPage() {
     navigate(`/kits${values.size ? `?${values}` : ''}`)
   }
   const columns = useMemo<TableColumn<KitDefinition>[]>(() => [
-    { key: 'code', title: '编码', width: 130 }, { key: 'name', title: '配件名称', width: 220 },
-    { key: 'categoryName', title: '分类', width: 140 }, { key: 'supplierName', title: '供应商', width: 180 },
-    { key: 'unit', title: '单位', width: 80, render: (_, row) => row.unit || '套' },
-    { key: 'spec', title: '型号', width: 140 }, { key: 'color', title: '颜色', width: 100 },
-    { key: 'articleNumber', title: '供应商型号', width: 150 },
-    { key: 'costPrice', title: '进价', width: 120, align: 'right', render: (_, row) => row.costPrice != null ? <span title={`¥${row.costPrice.toFixed(4)}`}>{money(row.costPrice)}</span> : '—' },
-    ...(['A', 'B', 'C', 'D'] as const).map(level => ({ key: `salePrice${level}`, title: `价格${level}`, width: 120, align: 'right' as const, render: (_: unknown, row: KitDefinition) => {
-      const price = row[`salePrice${level}`] ?? row.version?.[`salePrice${level}`] ?? row.salePriceA ?? row.version?.salePriceA ?? row.version?.referenceUnitPrice
-      return price != null ? <span title={`¥${price.toFixed(4)}`}>{money(price)}</span> : '—'
-    } })),
-    { key: 'currentVersionId', title: '当前版本', width: 110, render: (_, row) => row.version?.versionNo ?? '—' },
-    { key: 'revision', title: '资料修订', width: 100 },
-    { key: 'components', title: '组件数', width: 90, render: (_, row) => row.version?.components.length ?? '—' },
-    { key: 'isActive', title: '状态', width: 90, render: (_, row) => <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} /> },
-    { key: 'actions', title: '操作', width: 160, render: (_, row) => <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setEditor(row.id)}>{canUpdate ? '维护' : '查看'}</Button>{canDelete && <Button size="sm" variant="ghost" onClick={() => setDeleting(row)}>删除</Button>}</div> },
+    { key: 'name', title: '成套配件', width: 258, render: (_, row) => <ProductIdentitySummary product={row} /> },
+    { key: 'categoryName', title: '分类 / 供应商', width: 154, render: (_, row) => (
+      <div className="space-y-1">
+        <div>{row.categoryName || '—'}</div>
+        <div className="text-xs text-muted-foreground">{row.supplierName || '—'}</div>
+      </div>
+    ) },
+    { key: 'unit', title: '单位', width: 62, render: (_, row) => row.unit || '套' },
+    { key: 'costPrice', title: '进价', width: 106, align: 'right', render: (_, row) => row.costPrice != null ? <span className="tabular-nums" title={`¥${row.costPrice.toFixed(4)}`}>{money(row.costPrice)}</span> : '—' },
+    { key: 'salePriceA', title: '价格A', width: 106, align: 'right', render: (_, row) => {
+      const price = row.salePriceA ?? row.version?.salePriceA ?? row.version?.referenceUnitPrice
+      return price != null ? <span className="tabular-nums" title={`¥${price.toFixed(4)}`}>{money(price)}</span> : '—'
+    } },
+    { key: 'components', title: '组件数', width: 76, align: 'right', render: (_, row) => <span className="tabular-nums">{row.version?.components.length ?? '—'}</span> },
+    { key: 'isActive', title: '状态', width: 76, render: (_, row) => <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} /> },
+    { key: 'actions', title: '操作', width: 144, render: (_, row) => <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setEditor(row.id)}>{canUpdate ? '维护' : '查看'}</Button>{canDelete && <Button size="sm" variant="ghost" className="text-destructive-ink" onClick={() => setDeleting(row)}>删除</Button>}</div> },
   ], [canUpdate, canDelete])
   return <div>
     <PageHeader title="成套配件"
         description={!query.isError && !query.isLoading && query.data?.truncated ? <><span role="status">已读取 {query.data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 条，请缩小查询范围。</span> 已保存的销售单保留原成交资料，库存按真实组件管理。</> : '已保存的销售单保留原成交资料，库存按真实组件管理。'}  actions={canCreate ? <Button onClick={() => setEditor('new')}>新增配件</Button> : undefined} />
 
     <FilterCard className="mb-4">
-    <form key={keyword} className="flex w-full max-w-xl gap-2" onSubmit={event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('keyword'); updateKeyword(String(value ?? '').trim()) }}>
-      <Input name="keyword" aria-label="搜索成套配件" defaultValue={keyword} maxLength={100} autoComplete="off" placeholder="按编码、名称、型号、颜色或供应商型号搜索" /><Button variant="outline" type="submit">查询</Button>{keyword && <Button variant="ghost" type="button" onClick={() => updateKeyword('')}>清空</Button>}
-    </form>
+      <form key={keyword} className="flex w-full max-w-xl gap-2" onSubmit={event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('keyword'); updateKeyword(String(value ?? '').trim()) }}>
+        <Input className="h-9 min-w-0" name="keyword" aria-label="搜索成套配件" defaultValue={keyword} maxLength={100} autoComplete="off" placeholder="按编码、名称、型号、颜色或供应商型号搜索" />
+        <Button variant="outline" type="submit">查询</Button>
+        {keyword && <Button variant="ghost" type="button" onClick={() => updateKeyword('')}>清空</Button>}
+      </form>
     </FilterCard>
-    {query.isError ? <QueryErrorState error={query.error} title="成套配件加载失败" onRetry={() => void query.refetch()} /> : <KitsTable columns={columns} data={query.data?.list ?? EMPTY_KITS} loading={query.isLoading} emptyText="暂无成套配件；有维护权限的员工可添加固定商品组成。" columnStorageKey="kits-v2" virtualized preserveFocus retainFocusedRow={editor != null || !!deleting} />}
+    {query.isError ? <QueryErrorState error={query.error} title="成套配件加载失败" onRetry={() => void query.refetch()} /> : <KitsTable columns={columns} data={query.data?.list ?? EMPTY_KITS} loading={query.isLoading} emptyText="暂无成套配件；有维护权限的员工可添加固定商品组成。" columnStorageKey="kits-v3" scrollLabel="成套配件表格" virtualized preserveFocus retainFocusedRow={editor != null || !!deleting} />}
     {!query.isError && !query.isLoading && query.data && !query.data.truncated && <ListSummary total={total} />}
     {editor != null && <KitEditor key={editor} id={editor} source={query.readOwner} onClose={() => setEditor(null)} />}
     {deleting && <DeleteKitDialog initial={deleting} readOwner={query.readOwner} onClose={() => setDeleting(null)} />}

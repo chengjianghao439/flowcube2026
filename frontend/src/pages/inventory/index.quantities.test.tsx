@@ -36,7 +36,7 @@ beforeEach(() => { fixture.flags = {}; fixture.active = true; fixture.params = [
 afterEach(async () => { await act(async () => root.unmount()); qc.clear(); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); expect(fixture.write).not.toHaveBeenCalled() })
 function FilterSwitch() { const navigate = useNavigate(); return <button onClick={() => navigate('/inventory?keyword=长度&warehouseId=9')}>切换合成筛选</button> }
 async function draw() { await act(async () => root.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={['/inventory?keyword=筛选商品&warehouseId=8']}><FilterSwitch /><Page /></MemoryRouter></QueryClientProvider>)) }
-const card = (label: string) => [...host.querySelectorAll('p')].find(p => p.textContent === label)!.parentElement!
+const card = (label: string) => [...host.querySelectorAll('dt')].find(term => term.textContent === label)!.parentElement!
 
 test('完整筛选明细的个米数量分开显示，三卡不混加且不发业务写入', async () => {
   fixture.data = result([row(1, '个', 100, 30), row(2, '米', 5, 1)])

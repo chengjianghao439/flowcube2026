@@ -305,10 +305,15 @@ test('leaving detail during acknowledgement never clears durable original verifi
 test('kit binding requires explicit original component, same SKU different source is split, selection quantity editable but source price fixed', async () => {
   await renderPage('/returns/sale/new', async (host) => {
     await bind(host)
+    expect(host.querySelector<HTMLButtonElement>('[data-entry-field="customer"] button')?.disabled).toBe(true)
     expect(host.querySelectorAll('input[aria-label="退货数量"]')).toHaveLength(
       0
     )
     expect(host.textContent).toContain('来源全量参考')
+    await click(host, '创建退货单')
+    const firstChoice = [...host.querySelectorAll('button')].find(b => b.textContent === '选择 WT70 · 套A · 铰链')!
+    expect(document.activeElement).toBe(firstChoice)
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe('请选择本次退回的原出库配件')
     await click(host, '选择 WT70 · 套A · 铰链')
     expect(host.querySelectorAll('input[aria-label="退货数量"]')).toHaveLength(
       1
@@ -322,7 +327,8 @@ test('kit binding requires explicit original component, same SKU different sourc
         .disabled
     ).toBe(true)
     await click(host, '选择 WT71 · 套A · 铰链')
-    expect(host.textContent).toContain('分单')
+    const conflictingChoice = [...host.querySelectorAll('button')].find(b => b.textContent === '选择 WT71 · 套A · 铰链')!
+    expect(conflictingChoice.closest('td')?.querySelector('[role="alert"]')?.textContent).toContain('需要分单退货')
     expect(host.querySelectorAll('input[aria-label="退货数量"]')).toHaveLength(
       1
     )

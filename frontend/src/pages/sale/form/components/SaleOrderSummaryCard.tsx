@@ -1,6 +1,8 @@
 import { money } from '@/lib/format'
+import { useId } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { cn } from '@/lib/utils'
 import { baseQtyOf, type DraftItem } from '../validate'
@@ -21,6 +23,8 @@ export function SaleOrderSummaryCard({
   editableDiscount?: boolean
   warningText?: string
 }) {
+  const discountId = useId()
+  const errorId = `${discountId}-error`
   const filled = items.filter(item => item.productId > 0)
   const quantities = summarizeSaleQuantities(filled.map(item => ({ ...item, quantity: baseQtyOf(item) })))
   const belowCost = filled.some(item => item.costPrice != null && item.unitPrice < Number(item.costPrice))
@@ -35,12 +39,12 @@ export function SaleOrderSummaryCard({
         <div className="ml-auto flex flex-wrap items-start justify-end gap-x-6 gap-y-2">
           <div data-entry-field="discount">
             <div className="flex items-center gap-2">
-              <label className="text-muted-foreground" htmlFor="sale-discount-amount">折扣金额</label>
-              {editableDiscount ? <Input data-entry-field="discount" id="sale-discount-amount" aria-invalid={!!discountError} type="number" min={0} step={0.01} value={discountAmount}
+              <label className="text-muted-foreground" htmlFor={discountId}>折扣金额</label>
+              {editableDiscount ? <Input data-entry-field="discount" id={discountId} aria-invalid={!!discountError} aria-describedby={discountError ? errorId : undefined} type="number" min={0} step={0.01} value={discountAmount}
                 onChange={event => onDiscountChange?.(event.target.value)} placeholder="0.00" className="h-9 w-28 text-right text-sm tabular-nums" />
                 : <span data-entry-field="discount" tabIndex={-1} className="py-2 tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring" title="改单保留原折扣；明细金额不能低于该折扣">{discount > 0 ? money(-discount) : money(0)}</span>}
             </div>
-            {discountError && <p role="alert" className="mt-1 text-xs leading-5 text-destructive-ink">{discountError}</p>}
+            <OrderFieldError id={errorId} className="mt-1 leading-5">{discountError}</OrderFieldError>
           </div>
           <p className="flex items-baseline gap-3 pt-1.5"><span className="font-medium">订单金额</span><strong className="text-lg tabular-nums">{money(discountedTotal)}</strong></p>
         </div>
@@ -66,12 +70,13 @@ export function SaleOrderSummaryCard({
             <span>商品金额</span><span className="tabular-nums text-foreground">{money(total)}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <label className="text-muted-foreground" htmlFor="sale-discount-amount">折扣金额</label>
+            <label className="text-muted-foreground" htmlFor={discountId}>折扣金额</label>
             {editableDiscount ? (
-              <Input data-entry-field="discount" id="sale-discount-amount" type="number" min={0} step={0.01} value={discountAmount}
+              <Input data-entry-field="discount" id={discountId} aria-invalid={!!discountError} aria-describedby={discountError ? errorId : undefined} type="number" min={0} step={0.01} value={discountAmount}
                 onChange={event => onDiscountChange?.(event.target.value)} placeholder="0.00" className="h-8 w-28 text-right text-sm tabular-nums" />
             ) : <span data-entry-field="discount" tabIndex={-1} className="tabular-nums text-foreground focus:outline-none focus:ring-2 focus:ring-ring" title="改单保留原折扣；明细金额不能低于该折扣">{discount > 0 ? money(-discount) : money(0)}</span>}
           </div>
+          <OrderFieldError id={errorId} className="mt-1 leading-5">{discountError}</OrderFieldError>
         </div>
 
         <div className="border-t border-border pt-4 md:border-l md:border-t-0 md:pl-5 md:pt-0">

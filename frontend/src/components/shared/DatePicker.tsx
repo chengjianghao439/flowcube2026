@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 
 const DATE_FMT = 'yyyy-MM-dd'
+const INVALID_DATE_MESSAGE = '请输入有效日期，格式为 YYYY-MM-DD。'
 
 function parseStrict(value?: string): Date | undefined {
   if (!value) return undefined
@@ -45,25 +46,40 @@ interface DatePickerProps {
 export function DatePicker({ id, 'aria-label': ariaLabel, 'aria-invalid': invalid, 'aria-describedby': describedBy, value, onChange, min, max, placeholder = 'yyyy-mm-dd', className, disabled }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
+  const errorId = React.useId()
   const skipFocusOpen = React.useRef(false)
   const interactedOutside = React.useRef(false)
   const active = useSectionActive()
   const current = React.useRef({ active, disabled })
   current.current = { active, disabled }
   const [text, setText] = React.useState(value)
+  const [showError, setShowError] = React.useState(false)
   const selected = parseStrict(value)
   const minDate = parseStrict(min)
   const maxDate = parseStrict(max)
 
   // 外部 value 变化（如日历选中、重置）时同步输入框展示文本
-  React.useEffect(() => { setText(value) }, [value])
+  React.useEffect(() => {
+    setText(value)
+    setShowError(false)
+    inputRef.current?.setCustomValidity('')
+  }, [value])
+
+  function acceptValue(next: string) {
+    setText(next)
+    setShowError(false)
+    inputRef.current?.setCustomValidity('')
+    onChange(next)
+  }
 
   function commitText() {
     const trimmed = text.trim()
-    if (!trimmed) { onChange(''); return }
     const parsed = parseTyped(trimmed)
-    if (parsed) { onChange(format(parsed, DATE_FMT)) }
-    else { setText(value) } // 输入非法，恢复上一个合法值
+    if (trimmed && !parsed) {
+      setShowError(true)
+      return
+    }
+    acceptValue(parsed ? format(parsed, DATE_FMT) : '')
   }
 
   return (
@@ -74,19 +90,39 @@ export function DatePicker({ id, 'aria-label': ariaLabel, 'aria-invalid': invali
             ref={inputRef}
             id={id}
             aria-label={ariaLabel}
-            aria-invalid={invalid || undefined}
-            aria-describedby={describedBy}
+            aria-invalid={invalid || showError || undefined}
+            aria-describedby={[describedBy, showError ? errorId : undefined].filter(Boolean).join(' ') || undefined}
             type="text"
             value={text}
             placeholder={placeholder}
             disabled={disabled}
-            onChange={e => setText(e.target.value)}
+            onChange={e => {
+              const next = e.currentTarget.value
+              const malformed = next.trim() !== '' && !parseTyped(next)
+              e.currentTarget.setCustomValidity(malformed ? INVALID_DATE_MESSAGE : '')
+              setText(next)
+              if (!malformed) setShowError(false)
+            }}
             onBlur={commitText}
-            onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
-            onFocus={() => { if (skipFocusOpen.current) { skipFocusOpen.current = false; return }; setOpen(true) }}
+            onInvalid={() => setShowError(true)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                if (e.currentTarget.validity.customError) {
+                  setShowError(true)
+                  setOpen(false)
+                  return
+                }
+                e.currentTarget.blur()
+              }
+            }}
+            onFocus={e => {
+              if (skipFocusOpen.current) { skipFocusOpen.current = false; return }
+              if (!e.currentTarget.validity.customError) setOpen(true)
+            }}
             className={cn(
               'h-10 w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-              invalid && 'border-destructive/60',
+              (invalid || showError) && 'border-destructive/60',
               className,
             )}
           />
@@ -124,7 +160,7 @@ export function DatePicker({ id, 'aria-label': ariaLabel, 'aria-invalid': invali
               selected={selected}
               defaultMonth={selected}
               onSelect={(d) => {
-                onChange(d ? format(d, DATE_FMT) : '')
+                acceptValue(d ? format(d, DATE_FMT) : '')
                 setOpen(false)
               }}
               disabled={(d) => (minDate ? d < minDate : false) || (maxDate ? d > maxDate : false)}
@@ -134,20 +170,21 @@ export function DatePicker({ id, 'aria-label': ariaLabel, 'aria-invalid': invali
             <button
               type="button"
               className="text-sm text-primary hover:underline"
-              onClick={() => { onChange(''); setOpen(false) }}
+              onClick={() => { acceptValue(''); setOpen(false) }}
             >
               清除
             </button>
             <button
               type="button"
               className="text-sm text-primary hover:underline"
-              onClick={() => { onChange(format(new Date(), DATE_FMT)); setOpen(false) }}
+              onClick={() => { acceptValue(format(new Date(), DATE_FMT)); setOpen(false) }}
             >
               今天
             </button>
           </div>
         </div>
       </PopoverContent>
+      {showError && <p id={errorId} role="alert" className="mt-1 text-xs text-destructive-ink">{INVALID_DATE_MESSAGE}</p>}
     </Popover>
   )
 }

@@ -2,11 +2,15 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
+import { getByRole } from '@testing-library/dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { DashboardLayout } from '@/types/dashboard'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { BoardSalesActions } from '@/components/dashboard/widgets/OperationalWidgets'
 import DashboardPage from './index'
+import userEvent from '@testing-library/user-event'
+import { TabPathContext } from '@/components/layout/TabPathContext'
+import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 
 const state = vi.hoisted(() => ({ saved: { widgets: [] } as DashboardLayout, save: vi.fn(), permissions: null as Set<string> | null }))
 vi.mock('@/hooks/useDashboard', () => ({
@@ -16,7 +20,6 @@ vi.mock('@/hooks/useDashboard', () => ({
   useDashboardSummary: () => ({ data: { pendingPurchaseOrders: 3 }, isLoading: false }),
 }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => state.permissions === null || state.permissions.has(permission) }) }))
-vi.mock('@/hooks/useDirtyGuard', () => ({ useDirtyGuard: () => {} }))
 vi.mock('@/components/dashboard/registry', async importOriginal => {
   const original = await importOriginal<typeof import('@/components/dashboard/registry')>()
   return { ...original, WIDGET_MAP: Object.fromEntries(Object.entries(original.WIDGET_MAP).map(([id, def]) => [id, { ...def, Component: () => <span>{def.title}</span> }])) }
@@ -50,6 +53,7 @@ test('采购权限能查看待处理采购，销售卡片仅对有销售查看�
 test('仅可查看采购的账号打开业务待办即可看到采购内容', async () => {
   state.permissions = new Set([PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.PURCHASE_ORDER_VIEW])
   await act(async () => root.render(<MemoryRouter><BoardSalesActions /></MemoryRouter>))
+  expect(getByRole(host, 'heading', { name: '今天要推进的业务', level: 2 })).toBeTruthy()
   expect(host.textContent).toContain('待处理采购')
   expect(host.textContent).not.toContain('销售查看权限')
   expect(host.textContent).not.toContain('状态总览')
@@ -87,16 +91,62 @@ test('用户空布局保持空；主动载入推荐只是预览，原保存才�
   expect(ids()[0]).toBe('board-workbench'); expect(state.save).not.toHaveBeenCalled()
   await click('保存'); expect(state.save).toHaveBeenCalledOnce()
 })
-test('预览全部卡片明确标出布局预览，取消恢复原布局', async () => {
+function drawDashboard() {
+  return act(async () => root.render(<MemoryRouter><TabPathContext.Provider value="/dashboard"><DashboardPage /></TabPathContext.Provider></MemoryRouter>))
+}
+const isDirty = () => useDirtyGuardStore.getState().isTabDirty('/dashboard')
+
+test('预览仅展示有权限的卡片，可以返回原布局，查看本身没有草稿', async () => {
   state.saved = { widgets: [{ id: 'system-version', visible: true, w: 2 }] }
   state.permissions = new Set([PERMISSIONS.DASHBOARD_VIEW])
-  await act(async () => root.render(<MemoryRouter><DashboardPage /></MemoryRouter>))
+  await drawDashboard()
   expect(ids()).toEqual(['system-version'])
   await click('预览全部卡片')
   expect(host.textContent).toContain('布局预览')
-  expect(host.textContent).toContain('保存后应用，取消返回原布局')
+  expect(host.querySelector('[draggable="true"]')).toBeNull()
+  expect(isDirty()).toBe(false)
   expect(ids()).not.toContain('kpi-pending-sale')
-  await click('取消')
+  expect(ids().length).toBeGreaterThan(1)
+  await click('返回原布局')
   expect(ids()).toEqual(['system-version'])
   expect(state.save).not.toHaveBeenCalled()
+  expect(isDirty()).toBe(false)
+})
+
+test('可以从卡片预览明确进入编辑，取消恢复原布局', async () => {
+  state.saved = { widgets: [{ id: 'system-version', visible: true, w: 2 }] }
+  await drawDashboard()
+  await click('预览全部卡片')
+  const previewIds = ids()
+  await click('编辑此布局')
+  expect(ids()).toEqual(previewIds)
+  expect(isDirty()).toBe(true)
+  expect(host.querySelector('[draggable="true"]')).not.toBeNull()
+  await click('取消')
+  expect(ids()).toEqual(['system-version'])
+  expect(isDirty()).toBe(false)
+  expect(state.save).not.toHaveBeenCalled()
+})
+
+test('键盘可将卡片上移，焦点与排序播报仍对应该卡片并可保存顺序', async () => {
+  state.saved = { widgets: ['kpi-pending-sale', 'board-workbench', 'system-version'].map(id => ({ id, visible: true, w: 2 })) }
+  await drawDashboard()
+  await click('编辑仪表盘')
+  expect(isDirty()).toBe(false)
+  const user = userEvent.setup()
+  const move = () => host.querySelector<HTMLButtonElement>('[aria-label="上移系统版本"]')!
+  expect(move()).toBeTruthy()
+  move().focus()
+  await act(async () => { await user.keyboard('{Enter}') })
+  expect(ids()).toEqual(['kpi-pending-sale', 'system-version', 'board-workbench'])
+  expect(document.activeElement).toBe(move())
+  expect(host.querySelector('[role="status"].sr-only')?.textContent).toContain('系统版本已移到第 2 位')
+  expect(isDirty()).toBe(true)
+  await act(async () => { await user.keyboard('{Enter}') })
+  expect(ids()[0]).toBe('system-version')
+  expect(move().disabled).toBe(true)
+  expect(document.activeElement).toBe(host.querySelector('[aria-label="下移系统版本"]'))
+  await click('保存')
+  expect(state.saved.widgets.filter(widget => widget.visible).map(widget => widget.id)).toEqual(ids())
+  expect(isDirty()).toBe(false)
 })

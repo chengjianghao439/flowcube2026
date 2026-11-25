@@ -62,34 +62,45 @@ export default function ReplenishmentPage() {
   const total = data?.pagination?.total ?? 0
 
   const columns: TableColumn<ReplenishmentItem>[] = [
-    ...productIdentityColumns(),
-    { key: 'warehouseName', title: '仓库', width: 110 },
-    { key: 'confirmedDemand', title: '未发销售', width: 100, align: 'right', render: v => fmtQty(v) },
-    { key: 'netRequirement', title: '净需求', width: 90, align: 'right', render: v => fmtQty(v) },
-    { key: 'provisionalCoverage', title: '计划/草稿覆盖', width: 150, align: 'right', render: v => fmtQty(v) },
-    { key: 'available', title: '可用', width: 90, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
-    { key: 'inTransit', title: '在途采购', width: 100, align: 'right', render: v => Number(v) > 0
-        ? <span className="tabular-nums text-blue-600">{fmtQty(v)}</span>
-        : <span className="tabular-nums text-muted-foreground">—</span> },
-    { key: 'safetyStock', title: '安全库存', width: 100, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{fmtQty(v)}</span> },
-    { key: 'reorderPoint', title: '补货点', width: 90, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
-    {
-      key: 'suggestReorderPoint',
-      title: '建议补货点',
-      width: 130,
-      align: 'right',
-      render: (_, r) => (
-        <span className={`tabular-nums ${r.suggestReorderPoint > r.reorderPoint ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-          {fmtQty(r.suggestReorderPoint)}
-          <span className="ml-1 text-xs font-normal text-muted-foreground">(ADU {fmtQty(r.adu)}×{r.leadTimeDays}天)</span>
-        </span>
-      ),
-    },
-    { key: 'suggestQty', title: '建议采购量', width: 120, align: 'right', render: (v, r) => (
-        <span className="tabular-nums font-semibold text-primary">{fmtQty(v)}<span className="ml-1 text-xs font-normal text-muted-foreground">{r.unit}</span></span>
-      ) },
-    { key: 'earliestDemandDate', title: '交期核对', width: 180, render: (_, r) => <ProcurementArrivalStatus supply={r} /> },
-    { key: 'id', title: '操作', width: 240, render: (_, r) => <div className="flex gap-2"><ProcurementSupplyDetails supply={r} mode="replenishment" />{canAdjustInventory && Math.round(r.suggestReorderPoint) !== Math.round(r.reorderPoint) && <Button size="sm" variant="outline" onClick={() => adoptReorder({ row: r })}>采纳补货点</Button>}</div> },
+    { ...productIdentityColumns({ compact: true })[0], width: 250 },
+    { key: 'warehouseName', title: '仓库', width: 112 },
+    { key: 'confirmedDemand', title: '未发销售', width: 84, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
+    { key: 'available', title: '可用', width: 72, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
+    { key: 'provisionalCoverage', title: '已有覆盖', width: 112, align: 'right', render: (_, r) => (
+      <div className="space-y-1 text-xs tabular-nums">
+        <div>在途 <span className={r.inTransit > 0 ? 'text-info-ink' : 'text-muted-foreground'}>{r.inTransit > 0 ? fmtQty(r.inTransit) : '—'}</span></div>
+        <div>计划/草稿 {fmtQty(r.provisionalCoverage)}</div>
+      </div>
+    ) },
+    { key: 'netRequirement', title: '净需求', width: 83, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },
+    { key: 'suggestQty', title: '建议采购量', width: 104, align: 'right', render: (v, r) => (
+      <span className="tabular-nums font-semibold text-primary">{fmtQty(v)}<span className="ml-1 text-xs font-normal text-muted-foreground">{r.unit}</span></span>
+    ) },
+    { key: 'earliestDemandDate', title: '交期核对', width: 164, render: (_, r) => <ProcurementArrivalStatus supply={r} /> },
+    { key: 'suggestReorderPoint', title: '补货点', width: 106, align: 'right', render: (_, r) => (
+      <div className="space-y-1 text-xs tabular-nums">
+        <div>当前 {fmtQty(r.reorderPoint)}</div>
+        <div>建议 <span className={r.suggestReorderPoint > r.reorderPoint ? 'font-semibold text-primary' : 'text-muted-foreground'}>{fmtQty(r.suggestReorderPoint)}</span></div>
+      </div>
+    ) },
+    { key: 'id', title: '操作', width: 128, render: (_, r) => (
+      <div className="flex flex-wrap gap-1">
+        <ProcurementSupplyDetails supply={r} mode="replenishment">
+          <section aria-label="补货点参考" className="space-y-2 border-t pt-4">
+            <h3 className="font-medium">补货点参考</h3>
+            <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-2">
+              <dt>安全库存</dt><dd className="text-right tabular-nums">{fmtQty(r.safetyStock)} {r.unit}</dd>
+              <dt>日均销量</dt><dd className="text-right tabular-nums">{fmtQty(r.adu)} {r.unit}</dd>
+              <dt>采购提前期</dt><dd className="text-right tabular-nums">{r.leadTimeDays} 天</dd>
+            </dl>
+            <p className="text-xs text-muted-foreground">建议补货点 = 日均销量 × 采购提前期 + 安全库存。</p>
+          </section>
+        </ProcurementSupplyDetails>
+        {canAdjustInventory && Math.round(r.suggestReorderPoint) !== Math.round(r.reorderPoint) && (
+          <Button size="sm" variant="outline" onClick={() => adoptReorder({ row: r })}>采纳补货点</Button>
+        )}
+      </div>
+    ) },
   ]
 
   // 查询弹窗初始值
@@ -171,6 +182,7 @@ export default function ReplenishmentPage() {
           data={list}
           loading={isLoading}
           rowKey="id"
+          scrollLabel="补货建议表格"
           emptyState={chips.length ? (
             <EmptyState variant="no-result" title="没有符合条件的补货建议"
               description="可调整关键字、仓库或分类后重新查询。"

@@ -10,6 +10,11 @@ import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { todayYmd } from '@/lib/dateTime'
 import { isReversedDateRange } from '@/lib/dateRange'
 import { SALE_STATUS, SALE_STATUS_NAME } from '@/generated/status'
+import { usePermission } from '@/hooks/usePermission'
+import { captureKitReadOwner } from '@/hooks/useKits'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { hasPermission } from '@/lib/permissions'
+import { useAuthStore } from '@/store/authStore'
 
 /** 查询弹窗的状态顺序（与列表快捷筛选一致，名字取自生成物） */
 const SALE_STATUS_QUERY_ORDER = [SALE_STATUS.DRAFT, SALE_STATUS.PARTIAL_RESERVED, SALE_STATUS.RESERVED, SALE_STATUS.PICKING, SALE_STATUS.SHIPPED, SALE_STATUS.CANCELLED]
@@ -50,15 +55,18 @@ interface Props {
 }
 
 export default function SaleQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
+  const { can } = usePermission()
+  const canFindCustomer = can(PERMISSIONS.CUSTOMER_VIEW)
   const [draft, setDraft] = useState<SaleQueryValues>(EMPTY)
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
-  const [customerOpen, setCustomerOpen] = useState(false)
+  const [customerReadOwner, setCustomerReadOwner] = useState<ReturnType<typeof captureKitReadOwner> | null>(null)
   const [productOpen, setProductOpen] = useState(false)
   const dateErrorId = useId()
   const dateInvalid = isReversedDateRange(draft.startDate, draft.endDate)
   const apply = () => { if (!dateInvalid) onApply(draft) }
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
+  useEffect(() => { if (!open || !canFindCustomer) setCustomerReadOwner(null) }, [open, canFindCustomer])
 
   function set<K extends keyof SaleQueryValues>(key: K, value: SaleQueryValues[K]) {
     setDraft(d => ({ ...d, [key]: value }))
@@ -107,7 +115,7 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
             label="客户"
             placeholder="选择客户"
             value={draft.customerName ? `${draft.customerName}` : ''}
-            onOpen={() => setCustomerOpen(true)}
+            onOpen={canFindCustomer ? () => setCustomerReadOwner(captureKitReadOwner()) : undefined}
             onClear={() => setDraft(d => ({ ...d, customerId: null, customerName: '' }))}
           />
 
@@ -171,11 +179,15 @@ export default function SaleQueryDialog({ open, initial, resetValues, onClose, o
         </div>
       </QueryDialog>
 
-      <CustomerFinder compact
-        open={customerOpen}
-        onClose={() => setCustomerOpen(false)}
+      {open && canFindCustomer && customerReadOwner && <CustomerFinder compact open
+        readOwner={customerReadOwner}
+        readGuard={{ epoch: customerReadOwner.sessionGeneration, isCurrent: () => {
+          const { user } = useAuthStore.getState()
+          return hasPermission(user?.permissions, PERMISSIONS.CUSTOMER_VIEW, user?.roleId)
+        } }}
+        onClose={() => setCustomerReadOwner(null)}
         onConfirm={r => setDraft(d => ({ ...d, customerId: r.id, customerName: r.name }))}
-      />
+      />}
       <ProductFinder compact
         open={productOpen}
         onClose={() => setProductOpen(false)}

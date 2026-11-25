@@ -6,7 +6,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
  */
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { X } from 'lucide-react'
+
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
@@ -18,6 +18,7 @@ import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } fro
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { downloadExport } from '@/lib/exportDownload'
+import { AppliedFilters } from '@/pages/warehouse-structure/AppliedFilters'
 import { toast } from '@/lib/toast'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import LocationQueryDialog, { type LocationQueryValues } from './LocationQueryDialog'
@@ -112,6 +113,14 @@ export default function LocationsPage() {
   }
   function clearAll() { setKeyword(''); setWarehouseFilter(null); setStatusFilter(''); setZoneFilter('') }
 
+  const listFilters = {
+    keyword,
+    ...(warehouseFilter != null ? { warehouseId: warehouseFilter } : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(zoneFilter ? { zone: zoneFilter } : {}),
+  }
+  const exportFilters = Object.fromEntries(Object.entries(listFilters).map(([key, value]) => [key, String(value)]))
+
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
@@ -146,10 +155,7 @@ export default function LocationsPage() {
       columns={columns}
         queryKey={['locations', keyword, warehouseFilter, statusFilter, zoneFilter]}
         listQuery={() => getLocationsApi({
-          keyword,
-          warehouseId: warehouseFilter ?? undefined,
-          status: statusFilter || undefined,
-          zone: zoneFilter || undefined,
+          ...listFilters,
           pageSize: 20,
           page,
         })}
@@ -163,7 +169,7 @@ export default function LocationsPage() {
         canSubmit={() => !!form.warehouseId && !!form.code}
         headerActions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/locations').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/locations', exportFilters).catch(e => toast.error((e as Error).message))}>导出</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
@@ -184,21 +190,7 @@ export default function LocationsPage() {
             ]}
           />
         )}
-        renderToolbar={
-          chips.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {chips.map(c => (
-                <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                  {c.label}
-                  <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-              <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-            </div>
-          ) : null
-        }
+        renderToolbar={chips.length > 0 ? <AppliedFilters chips={chips} onClear={clearAll} /> : null}
         renderForm={(editing, _open, locked) => (
           <div className="space-y-3 py-2">
             <div>

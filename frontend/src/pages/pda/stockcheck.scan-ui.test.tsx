@@ -47,7 +47,7 @@ afterEach(async () => {
   host.remove()
 })
 
-test('盘点条码入口与拣货一致，选商品后点手动输入才出现条码框', async () => {
+async function openManualInput() {
   await act(async () => {
     root.render(<MemoryRouter initialEntries={['/pda/stockcheck/1']}>
       <Routes><Route path="/pda/stockcheck/:id" element={<PdaStockcheckPage />} /></Routes>
@@ -60,11 +60,36 @@ test('盘点条码入口与拣货一致，选商品后点手动输入才出现�
   await act(async () => { manualButton!.click() })
   const input = host.querySelector<HTMLInputElement>('[data-scanner-manual="true"]')!
   expect(input).not.toBeNull()
+  return input
+}
+
+async function submitManualBarcode(input: HTMLInputElement, barcode: string) {
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'I000007')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, barcode)
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) })
+}
+
+test('盘点条码入口与拣货一致，选商品后点手动输入才出现条码框', async () => {
+  const input = await openManualInput()
+  await submitManualBarcode(input, 'I000007')
   expect(inventory.container).toHaveBeenCalledWith('I000007', { skipGlobalError: true })
   expect(host.textContent).toContain('已扫条码（1）')
+  expect(input.isConnected).toBe(false)
+})
+
+test('手输盘点条码查找失败时保留输入及纠错焦点，修正后可以继续扫码', async () => {
+  inventory.container.mockRejectedValueOnce(new Error('库存条码不存在'))
+  const input = await openManualInput()
+  await submitManualBarcode(input, 'I000099')
+  expect(input.isConnected).toBe(true)
+  expect(input.value).toBe('I000099')
+  await vi.waitFor(() => expect(document.activeElement).toBe(input))
+  expect(host.textContent).toContain('已扫条码（0）')
+
+  await submitManualBarcode(input, 'I000007')
+  expect(inventory.container).toHaveBeenCalledTimes(2)
+  expect(host.textContent).toContain('已扫条码（1）')
+  expect(input.isConnected).toBe(false)
 })

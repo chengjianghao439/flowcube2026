@@ -27,14 +27,22 @@ export default function AgentWorkspace() {
 function Conversation() {
   const state = useAssistantConversation()
   const openGuide = useOpenWorkspacePath()
-  const { selected, busy, loading } = state
+  const { selected, busy, loading, messages } = state
   const [draftToCancel, setDraftToCancel] = useState<AssistantTask | null>(null)
   const log = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLTextAreaElement>(null)
   const followEnd = useRef(true)
+  const hasConversation = messages.length > 0 || !!selected || busy
   useLayoutEffect(() => {
-    if (followEnd.current && log.current) log.current.scrollTop = log.current.scrollHeight
-  }, [state.messages, selected?.preview, selected?.candidates, selected?.id, busy])
+    const thread = log.current
+    if (!thread) return
+    if (!hasConversation) {
+      thread.scrollTop = 0
+      followEnd.current = true
+    } else if (followEnd.current) {
+      thread.scrollTop = thread.scrollHeight
+    }
+  }, [hasConversation, messages, selected?.preview, selected?.candidates, selected?.id, busy])
   const recovery = Boolean(selected && (state.recoveryId === selected.id || ['CONFIRMED', 'EXECUTING', 'VERIFYING', 'RESULT_UNKNOWN', 'ESCALATED'].includes(selected.state)))
   function fill(text: string) { state.setInput(text); input.current?.focus() }
   return <div className="xiaoman-page">
@@ -59,18 +67,19 @@ function Conversation() {
       <section className="xiaoman-conversation" aria-label="与小满对话">
         <div className="xiaoman-thread" ref={log} onScroll={() => { if (log.current) followEnd.current = log.current.scrollHeight - log.current.scrollTop - log.current.clientHeight < 80 }}>
           <div className="xiaoman-thread-content">
-            {state.messages.length === 0 ? <div className="xiaoman-welcome">
+            {messages.length === 0 ? <div className="xiaoman-welcome">
               <span className="xiaoman-mark" aria-hidden="true">满</span><h2>今天想先办哪件事？</h2>
               {state.multipleUnfinished && <p>有多条待续办记录。请从最近记录打开对应任务，或告诉我客户全称、完整单号。</p>}
-              <div className="xiaoman-scope">
+              <div className="xiaoman-prompts">{PROMPTS.map(({ label, hint, text, Icon }) => <button type="button" key={label} disabled={busy || loading} onClick={() => fill(text)}><Icon size={19} aria-hidden="true" /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</div>
+              <div className="xiaoman-guides">{ASSISTANT_GUIDE_LINKS.map(link => <button type="button" key={link.path} className="xiaoman-guide" disabled={busy || loading} onClick={() => openGuide(link.path)}>{link.label}</button>)}</div>
+              <details className="xiaoman-scope">
+                <summary>使用说明</summary>
                 <h3>能做</h3>
                 <p>查库存、准备销售或采购草稿、看岗位待办、仓库和退货卡点。查客户账款请给客户全称，查核销进度请给完整收款单号。</p>
                 <h3>请到业务页面办理</h3>
                 <p>取消订单、改价、审批、付款和发货，请到相应页面办理。请在业务页面核对大额单据和商务处理进度。</p>
-              </div>
-              <div className="xiaoman-guides">{ASSISTANT_GUIDE_LINKS.map(link => <button type="button" key={link.path} className="xiaoman-guide" disabled={busy || loading} onClick={() => openGuide(link.path)}>{link.label}</button>)}</div>
-              <div className="xiaoman-prompts">{PROMPTS.map(({ label, hint, text, Icon }) => <button type="button" key={label} disabled={busy || loading} onClick={() => fill(text)}><Icon size={19} aria-hidden="true" /><span><strong>{label}</strong><small>{hint}</small></span></button>)}</div>
-            </div> : <div role="log" aria-live="polite" aria-label="小满对话" className="xiaoman-messages">{state.messages.map(message => <div key={message.id} className={`xiaoman-message is-${message.role}`}>
+              </details>
+            </div> : <div role="log" aria-live="polite" aria-label="小满对话" className="xiaoman-messages">{messages.map(message => <div key={message.id} className={`xiaoman-message is-${message.role}`}>
               {message.role === 'assistant' && <span className="xiaoman-avatar" aria-hidden="true">满</span>}<div className="xiaoman-message-text">{message.role === 'assistant' ? <MessageText text={message.text} /> : message.text}</div>
             </div>)}</div>}
             {selected && <div className="xiaoman-current">

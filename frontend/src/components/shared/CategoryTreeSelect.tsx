@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useCategoryTree } from '@/hooks/useCategories'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import type { Category } from '@/types/categories'
 
 interface CategoryTreeSelectProps {
@@ -124,7 +125,8 @@ export default function CategoryTreeSelect({
   disabled = false,
 }: CategoryTreeSelectProps) {
   const [open, setOpen] = useState(false)
-  const { data: categoryTree = [] } = useCategoryTree()
+  const active = useSectionActive()
+  const { data: categoryTree = [] } = useCategoryTree(undefined, active)
 
   const categoryMap = useMemo(() => flattenTree(categoryTree), [categoryTree])
   const selected = value == null ? null : categoryMap.get(value) ?? null

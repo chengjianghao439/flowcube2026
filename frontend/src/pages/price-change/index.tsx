@@ -221,16 +221,16 @@ export default function PriceChangePage() {
   })
 
   const columns: TableColumn<PriceChangeRequest>[] = [
-    { key: 'requestNo', title: '申请单号', width: 150 },
-    ...productIdentityColumns(),
-    { key: 'priceType', title: '价格类型', width: 112, render: v => priceTypeLabel(String(v)) },
-    { key: 'oldPrice', title: '申请时原价', width: 112, align: 'right', render: v => v != null ? unitPrice(Number(v)) : '—' },
-    { key: 'newPrice', title: '申请新价', width: 104, align: 'right', render: v => unitPrice(Number(v)) },
+    { key: 'requestNo', title: '申请单号', width: 136 },
+    { ...productIdentityColumns({ compact: true })[0], width: 252 },
+    { key: 'priceType', title: '价格类型', width: 94, render: v => priceTypeLabel(String(v)) },
+    { key: 'oldPrice', title: '申请时原价', width: 106, align: 'right', render: v => <span className="tabular-nums">{v != null ? unitPrice(Number(v)) : '—'}</span> },
+    { key: 'newPrice', title: '申请新价', width: 104, align: 'right', render: v => <span className="tabular-nums">{unitPrice(Number(v))}</span> },
     { key: 'status', title: '状态', width: 96, minWidth: 96, render: (v, row) => <SoftStatusLabel label={row.statusName ?? String(v)} tone={row.status === 1 && row.approvalId === null ? 'draft' : STATUS_TONE[Number(v)] ?? 'info'} /> },
     { key: 'applicantName', title: '申请人', width: 100 },
-    { key: 'createdAt', title: '申请时间', width: 160, render: v => formatDisplayDateTime(v) },
-    { key: 'id', title: '操作', width: 200, render: (_, row) => (
-      <div className="flex gap-1">
+    { key: 'createdAt', title: '申请时间', width: 148, noWrap: true, render: v => formatDisplayDateTime(v) },
+    { key: 'id', title: '操作', width: 192, render: (_, row) => (
+      <div className="flex flex-wrap gap-1">
         <OrderActivityDialog onOpenChange={setManualDetailOpen} type="price" id={row.id} title={row.requestNo} fields={[
           ['商品', row.productName], ['价格类型', priceTypeLabel(row.priceType)], ['原价格', row.oldPrice], ['申请价格', row.newPrice], ['状态', row.statusName], ['申请人', row.applicantName], ['申请原因', row.reason],
         ]} />
@@ -258,7 +258,7 @@ export default function PriceChangePage() {
         <Button size="sm" variant="outline" onClick={() => { setKeyword(search); }}>搜索</Button>
         {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); }}>重置</Button>}
       </FilterCard>
-      <DataTable columns={columns} data={list} loading={isLoading} />
+      <DataTable columns={columns} data={list} loading={isLoading} scrollLabel="商品改价申请表格" />
       <ListSummary total={total} unit="单" />
 
       <ApprovalHandoffNotice {...handoff} />

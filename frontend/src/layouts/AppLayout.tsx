@@ -20,7 +20,7 @@ export default function AppLayout() {
   return (
     <div className="desktop-shell-sample flex h-screen flex-col overflow-hidden bg-background">
       {/*
-        宽屏首行 Logo + 系统菜单 + 工具区；窄屏菜单独占下一行。工作区标签始终独占末行。
+        电脑常用窗口首行排列 Logo、菜单和工具。较窄窗口允许菜单换行。工作区标签独占末行。
       */}
       <header className="flex shrink-0 flex-col border-b border-border bg-background">
         <div className="desktop-topbar flex min-h-12 shrink-0 flex-wrap items-center gap-2 px-3 py-1">
@@ -50,6 +50,10 @@ export default function AppLayout() {
         </div>
       </header>
 
+      <div className="relative h-0 w-full shrink-0">
+        <AppToast />
+      </div>
+
       <main className="desktop-workspace min-h-0 min-w-0 flex-1 overflow-hidden">
         <TabErrorBoundary scope="workspace">
           <KeepAliveOutlet />
@@ -58,7 +62,6 @@ export default function AppLayout() {
 
       <DirtyGuardDialog />
       <GlobalConfirmDialog />
-      <AppToast />
     </div>
   )
 }

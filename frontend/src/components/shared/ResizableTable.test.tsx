@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, expect, test } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { ResizableTable } from './ResizableTable'
 
 let host: HTMLDivElement, root: Root
@@ -33,4 +33,23 @@ test('普通明细固定业务字段顺序，旧列宽记忆不能令表头与�
   expect([...host.querySelectorAll('thead th')].map(cell => cell.textContent)).toEqual(['编码', '数量', '操作'])
   expect([...host.querySelectorAll('col')].map(col => col.style.width)).toEqual(['210px', '100px', '120px'])
   expect(host.querySelector('tbody td')?.textContent).toBe('SKU-01')
+})
+
+test('按 Enter 适配没有子元素的纯文本，保持其他列与原单元格', () => {
+  render()
+  const cell = host.querySelector<HTMLTableCellElement>('tbody td')!
+  const longCode = 'SKU-01 合成加长规格标识'
+  cell.textContent = longCode
+  const measure = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return { width: this.parentElement === cell && this.textContent === longCode ? 280.4 : 0 } as DOMRect
+  })
+  try {
+    const handle = host.querySelector<HTMLButtonElement>('[aria-label="调整编码列宽"]')!
+    act(() => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+    expect([...host.querySelectorAll('col')].map(col => col.style.width)).toEqual(['317px', '100px', '120px'])
+    expect(cell.textContent).toBe(longCode)
+    expect(cell.children).toHaveLength(0)
+  } finally {
+    measure.mockRestore()
+  }
 })

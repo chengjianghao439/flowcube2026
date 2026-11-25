@@ -40,7 +40,7 @@ const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => 
   return response({ success: true, data: categories })
 })
 function response(body: unknown, status = 200) { return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }) }
-function row(revision = 1) { return { id: 'SYN'+revision, productId: 42, productCode: `R-SYN${revision}`, productName: `合成报表商品${revision}`, unit: '个', warehouseId: 9, warehouseName: '合成仓B', supplierId: null, onHand: 0, reserved: 0, available: 0, inTransit: 0, safetyStock: 0, reorderPoint: 1, targetStock: 1, suggestQty: 1, adu: 0, leadTimeDays: 1, suggestReorderPoint: 1, netRequirement: 1, confirmedDemand: 1, provisionalCoverage: 0, transferCandidates: [] } }
+function row(revision = 1) { return { id: 'SYN'+revision, productId: 42, productCode: `R-SYN${revision}`, productName: `合成报表商品${revision}`, unit: '个', warehouseId: 9, warehouseName: '合成仓B', supplierId: null, onHand: 0, reserved: 0, available: 0, inTransit: 0, safetyStock: 6, reorderPoint: 1, targetStock: 6, suggestQty: 1, adu: 2.5, leadTimeDays: 4, suggestReorderPoint: 10, netRequirement: 1, confirmedDemand: 1, provisionalCoverage: 0, transferCandidates: [] } }
 function listResponse(revision = 0) {
   const list = revision ? [row(revision)] : []
   return response({ success: true, data: { list, pagination: { page: 1, pageSize: 200, total: list.length } } })
@@ -148,5 +148,9 @@ test('REPLENISHMENT-Q08 只读需求覆盖详情关闭后查询保留，无写�
   respondList = () => listResponse(1); await ready(); await openQuery(); await edit(); await click('查询', dialog())
   await wait(() => expect(listRequests().at(-1)?.searchParams.get('keyword')).toBe(draft.keyword))
   const before = listRequests().length; await click('需求与覆盖'); expect(dialog().textContent).toContain('合成报表商品1')
+  const policy = dialog().querySelector('[aria-label="补货点参考"]')
+  expect(policy?.textContent).toContain('安全库存6 个')
+  expect(policy?.textContent).toContain('日均销量2.5 个')
+  expect(policy?.textContent).toContain('采购提前期4 天')
   await click('关闭', dialog()); expect(listRequests()).toHaveLength(before); await click('查询'); await wait(() => expect(fields()).toEqual(draft))
 })

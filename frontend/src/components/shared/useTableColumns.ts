@@ -228,6 +228,9 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
     const index = orderedColumns.findIndex(item => item.key === col.key) + (isSelectEnabled ? 1 : 0)
     const snapshot = measureWidths()
     let width = 80
+    const textProbe = document.createElement('span')
+    textProbe.style.position = 'absolute'
+    textProbe.style.visibility = 'hidden'
     // 双击时才测量已加载内容；临时使用自然宽度，支持换行文字和表单控件。
     for (const row of Array.from(tableRef.current?.rows ?? [])) {
       // 分组表头的 DOM 下标不是叶列下标；合计行的 colspan 也会占据多个逻辑列。
@@ -236,8 +239,15 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
         ? Array.from(row.cells).find(cell => cell.dataset.columnKey === String(col.key))
         : Array.from(row.cells).find(cell => { const start = offset; offset += cell.colSpan; return start === index && cell.colSpan === 1 })
       if (!cell) continue
-      const content = cell.firstElementChild as HTMLElement | null
-      if (!content) continue
+      const child = cell.firstElementChild as HTMLElement | null
+      if (!child) {
+        const text = cell.textContent
+        if (!text?.trim()) continue
+        // 纯文本继承原格的字体，临时探针不改变表格布局。
+        textProbe.textContent = text
+        cell.append(textProbe)
+      }
+      const content = child ?? textProbe
       const previous = content.style.cssText
       try {
         content.style.width = 'max-content'
@@ -247,6 +257,7 @@ export function useTableColumns<T extends object>({columns, fluid, columnStorage
         width = Math.max(width, Math.max(content.scrollWidth, content.getBoundingClientRect().width) + 36)
       } finally {
         content.style.cssText = previous
+        if (!child) textProbe.remove()
       }
     }
     // 虚拟行不在 DOM 中，基础文本仍从完整数据测量；复合控件沿用上面的实际 DOM 测量。

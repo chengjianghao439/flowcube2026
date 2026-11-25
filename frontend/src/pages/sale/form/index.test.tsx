@@ -5,18 +5,18 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import type { SaleOrder } from '@/types/sale'
 import SaleFormPage from './index'
 import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { useWorkspaceStore, HOME_TAB, MAX_WORKSPACE_TABS } from '@/store/workspaceStore'
 import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
+import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
+import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
+import apiClient from '@/api/client'
 
-vi.mock('@/components/shared/OrderFulfillmentPanel', () => ({ OrderFulfillmentPanel: () => {
-  const active = useSectionActive()
-  return <div data-testid="arrangements" data-active={String(active)}>备货情况<input aria-label="待保存的安排" defaultValue="" />待处理问题</div>
-} }))
+const retiredPanel = vi.hoisted(() => vi.fn(() => <div data-testid="arrangements">备货情况</div>))
+vi.mock('@/components/shared/OrderFulfillmentPanel', () => ({ OrderFulfillmentPanel: retiredPanel }))
 
 let host: HTMLDivElement, root: Root, client: QueryClient
 const order: SaleOrder = { id: 12, orderNo: 'XS-12', customerId: 1, customerName: '示例客户', warehouseId: 1, warehouseName: '示例仓库', status: 1, statusName: '草稿', totalAmount: 0, operatorId: 1, operatorName: '经办人', createdAt: '2026-09-08', items: [] }
@@ -55,41 +55,57 @@ test('普通详情合并商品身份列，保留换算、分仓、已发进度�
   expect(host.textContent).not.toContain('订单汇总')
 })
 
-test('发货安排独立于作业进度，切换后保留输入并暂停隐藏区块', () => {
+test('普通详情移除发货安排入口，作业进度仍可浏览', () => {
   render()
-  expect(tab('发货安排')).toBeTruthy()
+  expect(tab('发货安排')).toBeUndefined()
   act(() => tab('作业进度').click())
   expect(host.textContent).toContain('尚未创建仓库任务')
-  expect(host.querySelector('[data-testid="arrangements"]')).toBeNull()
-  act(() => tab('发货安排').click())
-  const input = host.querySelector<HTMLInputElement>('input[aria-label="待保存的安排"]')!
-  input.value = '等待客户确认'
-  expect(input.closest('[hidden]')).toBeNull()
-  act(() => tab('作业进度').click())
-  expect(input.closest('[hidden]')).not.toBeNull()
-  expect(host.querySelector('[data-testid="arrangements"]')!.getAttribute('data-active')).toBe('false')
-  act(() => tab('发货安排').click())
-  expect(input.value).toBe('等待客户确认')
-  expect(input.closest('[hidden]')).toBeNull()
+  expect(retiredPanel).not.toHaveBeenCalled()
 })
 
-test('首次从待办进入打开本单发货安排', () => {
-  window.history.replaceState({}, '', '/#/sale/12?focus=fulfillment')
+test('未操作的销售详情隐藏后不登记未保存更改', async () => {
+  const { token, user } = useAuthStore.getState()
+  useAuthStore.setState({ token: 'fixture', user: { id: 5, roleId: 5, permissions: [PERMISSIONS.SALE_ORDER_VIEW] } as never })
+  const adapter = apiClient.defaults.adapter
+  const read = vi.fn()
+  apiClient.defaults.adapter = async config => {
+    read(config.method, config.url)
+    return { config, status: 200, statusText: 'OK', headers: {}, data: { success: true, data: order } }
+  }
+  const draw = (active: boolean) => act(async () => root.render(
+    <MemoryRouter initialEntries={['/sale/12']}><QueryClientProvider client={client}>
+      <TabPathContext.Provider value="/sale/12"><SectionVisibilityContext.Provider value={active}>
+        <SaleFormPage />
+      </SectionVisibilityContext.Provider></TabPathContext.Provider>
+    </QueryClientProvider></MemoryRouter>,
+  ))
+  try {
+    await draw(true)
+    expect(read.mock.calls).toEqual([['get', '/sale/12']])
+    expect(useDirtyGuardStore.getState().isTabDirty('/sale/12')).toBe(false)
+    await draw(false)
+    expect(useDirtyGuardStore.getState().isTabDirty('/sale/12')).toBe(false)
+    expect(read).toHaveBeenCalledOnce()
+  } finally {
+    apiClient.defaults.adapter = adapter
+    await act(async () => useAuthStore.setState({ token, user }))
+  }
+})
+
+test('首次打开旧发货安排链接进入订单信息，不挂载退役面板', () => {
   render(buildWorkspaceTabRegistration('/sale/12', '?focus=fulfillment').path)
-  expect(tab('发货安排')?.getAttribute('aria-pressed')).toBe('true')
-  expect(host.querySelector('[data-testid="arrangements"]')).not.toBeNull()
+  expect(tab('订单信息')?.getAttribute('aria-pressed')).toBe('true')
+  expect(retiredPanel).not.toHaveBeenCalled()
 })
 
-test('已打开订单从待办返回定位发货安排，其他订单的链接不影响本单', () => {
+test('已打开订单收到旧安排链接返回其订单信息，其他订单的链接不影响本单', () => {
   window.history.replaceState({}, '', '/#/sale/13?focus=fulfillment')
   render()
-  expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
+  act(() => tab('作业进度').click())
   navigate(13)
-  expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
-  navigate(12)
-  expect(tab('订单信息').getAttribute('aria-pressed')).toBe('true')
+  expect(tab('作业进度').getAttribute('aria-pressed')).toBe('true')
   render(buildWorkspaceTabRegistration('/sale/12', '?focus=fulfillment').path)
-  expect(tab('发货安排')?.getAttribute('aria-pressed')).toBe('true')
+  expect(tab('订单信息')?.getAttribute('aria-pressed')).toBe('true')
 })
 
 test('隐藏另一单的全局hash不改变本标签已经选择的区域', () => {

@@ -242,7 +242,7 @@ export default function SalePage() {
     { key: 'status', title: '状态', width: 104, minWidth: 104, render: (_, r) => { const ws = getSaleWorkflowStatus(r); return <SoftStatusLabel label={ws.label} tone={ws.tone} title={ws.detail} onClick={r.taskNo && r.taskId ? () => goToDetail(r) : undefined} /> } },
     { key: 'totalAmount', title: '折后金额', width: 108, minWidth: 108, noWrap: true, align: 'right', render: (_, r) => <span className="font-medium">{money(Math.max(0, r.totalAmount - (r.discountAmount ?? 0)))}</span> },
     { key: 'receivableStatus', title: '回款状态', width: 100, minWidth: 100, render: (_, r) => { const rs = getReceivableStatus(r); return <SoftStatusLabel label={rs.label} tone={rs.tone} className="whitespace-nowrap" title={rs.dueDate ? `账期至 ${formatDisplayDate(rs.dueDate)}` : undefined} /> } },
-    { key: 'warehouseName', title: '仓库', width: 80, minWidth: 80 },
+    { key: 'warehouseName', title: '仓库', width: 112, minWidth: 112 },
     { key: 'operatorName', title: '经办人', width: 90, minWidth: 90, noWrap: true },
     { key: 'createdAt', title: '创建时间', width: 150, minWidth: 150, noWrap: true, render: v => formatDisplayDateTime(v) },
     { key: 'remark', title: '备注', expandableText: true, width: 92, minWidth: 80, render: v => (v as string) || '—' },

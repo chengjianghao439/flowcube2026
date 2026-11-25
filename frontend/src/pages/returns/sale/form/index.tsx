@@ -16,7 +16,7 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
  * 因此本文件只有 FormView（新建）与 DetailView（详情），没有 EditView。
  */
 
-import { useState, useRef, useEffect, Fragment } from 'react'
+import { useState, useRef, useEffect, useId, Fragment } from 'react'
 import { useContext } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
@@ -34,6 +34,8 @@ import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
 import { PickerField } from '@/components/shared/PickerField'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MAX_WORKSPACE_TABS, useWorkspaceStore } from '@/store/workspaceStore'
@@ -159,9 +161,21 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
   const [finderOpen, setFinderOpen] = useState(false)
   const [finderItemKey, setFinderItemKey] = useState<number | null>(null)
 
-  const [customerError, setCustomerError] = useState(false)
-  const [warehouseError, setWarehouseError] = useState(false)
-  const [invalidItemKeys, setInvalidItemKeys] = useState<Set<number>>(new Set())
+  const formRef = useRef<HTMLDivElement>(null)
+  const errorPrefix = useId()
+  const [entryErrors, setEntryErrors] = useState<Record<string, string>>({})
+  const [choiceError, setChoiceError] = useState<{ sourceId?: number; message: string } | null>(null)
+  const errorId = (field: string) => entryErrors[field] ? `${errorPrefix}-${field}` : undefined
+
+  function setEntryError(field: string, message?: string) {
+    setEntryErrors(previous => {
+      if (previous[field] === message) return previous
+      const next = { ...previous }
+      if (message) next[field] = message
+      else delete next[field]
+      return next
+    })
+  }
 
   const isDirty = !createdReturn && (!!write.pending || !!(customer || warehouseId || remark || orderNo || items.length))
   useDirtyGuard(tabKey, isDirty)
@@ -183,14 +197,19 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
     setFinderItemKey(null)
     setFinderOpen(true)
   }
-  const removeItem = (k: number) => setItems(p => p.filter(i => i._key !== k))
+  function removeItem(key: number) {
+    setItems(previous => previous.filter(item => item._key !== key))
+    setEntryError(`item-${key}-quantity`)
+    setEntryError(`item-${key}-product`)
+    setChoiceError(null)
+  }
   const updateItem = (k: number, field: string, val: string | number) =>
     setItems(p => p.map(i => (i._key === k ? { ...i, [field]: val } : i)))
 
   function handleCustomerConfirm(result: FinderResult) {
-    if (locked) return
+    if (locked || submitting || boundSource) return
     setCustomer(result)
-    setCustomerError(false)
+    setEntryError('customer')
   }
 
   function handleFinderConfirm(product: ProductFinderResult) {
@@ -211,12 +230,9 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
     getProductApi(product.id)
       .then(full => { const units = full?.units ?? []; setItems(prev => prev.map(i => (i._key === k && i.productId === product.id ? { ...i, units } : i))) })
       .catch(() => { /* 拉取失败：按基本单位录入 */ })
-    setInvalidItemKeys(prev => {
-      if (!prev.has(k)) return prev
-      const next = new Set(prev)
-      next.delete(k)
-      return next
-    })
+    setEntryError('add')
+    setEntryError(`item-${k}-product`)
+    setEntryError(`item-${k}-quantity`)
   }
 
   const clearSourceBinding = () => {
@@ -225,6 +241,8 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
     handoffActive.current = false
     sourceSerial.current++; currentOrderNo.current = ''; setLoadingSource(false); setSourceError('')
     setBoundSource(null)
+    setEntryErrors({})
+    setChoiceError(null)
     setOrderNo('')
     setCustomer(null)
     setWarehouseId(''); setWarehouseName('')
@@ -236,10 +254,14 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
     const trimmed = number.trim()
     const expected = carried ?? (handoffActive.current && handoff && handoff !== 'invalid' ? handoff : undefined)
     const draftAtRead = sourceDraftRef.current
-    if (!trimmed) { toast.warning('请先填写关联原单号'); return }
+    if (!trimmed) {
+      setEntryError('source', '请先填写关联原单号')
+      focusOrderEntryField(formRef.current, 'source')
+      return
+    }
     const serial = ++sourceSerial.current
     currentOrderNo.current = trimmed
-    setLoadingSource(true); setSourceError('')
+    setLoadingSource(true); setSourceError(''); setEntryError('source')
     try {
       assertKitReadOwner(owner)
       const source = await getSaleReturnSourceOrderApi(trimmed, commercialReadConfig(owner))
@@ -250,9 +272,9 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
       if (!source || !Number.isSafeInteger(source.id) || source.id <= 0 || source.orderNo !== trimmed || (expected && (source.id !== expected.id || source.orderNo !== expected.orderNo))) throw new Error('来源身份不符，原单号和草稿已保留，请重新核对')
       setBoundSource(source)
       setCustomer({ id: source.customerId, code: '', name: source.customerName })
-      setCustomerError(false)
       setWarehouseId(String(source.warehouseId)); setWarehouseName(source.warehouseName)
-      setWarehouseError(false)
+      setEntryErrors({})
+      setChoiceError(null)
       const nextItems: DraftItem[] = (source.commercialModel === 'kit-v1' ? [] : source.items)
         .filter(item => item.remainingQty > 0)
         .map((item, index) => ({
@@ -282,12 +304,21 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
 
   function selectSource(item: ReturnSourceOrderItem) {
     if (locked) return
-    if (items.some(row => row.dispatchComponentId === item.dispatchComponentId)) { setSourceError('该原来源已选择，请直接修改本次申请量'); return }
-    if (items.some(row => row.productId === item.productId || row.source?.warehouseId !== item.warehouseId)) { setSourceError('相同商品的不同原来源，或不同发货仓库，需要分单退货；已填数量保持'); return }
+    if (items.some(row => row.dispatchComponentId === item.dispatchComponentId)) {
+      setChoiceError({ sourceId: item.dispatchComponentId, message: '该原来源已选择，请直接修改本次申请量' })
+      return
+    }
+    if (items.some(row => row.productId === item.productId || row.source?.warehouseId !== item.warehouseId)) {
+      setChoiceError({ sourceId: item.dispatchComponentId, message: '相同商品的不同原来源，或不同发货仓库，需要分单退货；已填数量保持' })
+      return
+    }
     if (!item.dispatchComponentId || !item.commercialComponentId || !item.sourceItemId || !item.warehouseId) { setSourceError('来源身份不完整，请核对原批次'); return }
     setWarehouseId(String(item.warehouseId)); setWarehouseName(item.warehouseName || '')
     setItems(rows => [...rows, { ...item, _key: counter, quantity: Math.min(1, item.remainingQty), source: item, originalQty: item.sourceQuantity }])
-    setCounter(c => c + 1); setSourceError('')
+    setCounter(c => c + 1)
+    setSourceError('')
+    setChoiceError(null)
+    setEntryError('source-selection')
   }
   function openCreatedReturn(res: { id: number; returnNo: string }) {
     const workspace = useWorkspaceStore.getState()
@@ -316,18 +347,35 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
   }
   async function handleSubmit() {
     if (createdReturnRef.current || locked || submitting || loadingSource) return
-    if (handoffActive.current && !boundSource) { toast.warning('请先载入并核对原单，或清除来源后按手工退货填写'); return }
-    const missingCustomer = !customer
-    const missingWarehouse = !warehouseId
-    setCustomerError(missingCustomer)
-    setWarehouseError(missingWarehouse)
-    if (missingCustomer) { toast.warning('请选择客户'); return }
-    if (missingWarehouse) { toast.warning('请选择仓库'); return }
-    if (!items.length) { toast.warning('请添加至少一条退货明细'); return }
-    const badItemKeys = new Set(items.filter(i => !i.productId || i.quantity <= 0).map(i => i._key))
-    setInvalidItemKeys(badItemKeys)
-    if (badItemKeys.size) { toast.warning('请完整填写所有明细'); return }
-    if ((isKit || isOrdinaryNet) && items.some(i => !hasQuantityPrecision(i.quantity) || ((isKit ? i.source?.allowDecimalQty === false : allowDecimalOf(i.productId) === false) && !Number.isInteger(i.quantity)) || i.quantity > (i.remainingQty ?? 0))) { setSourceError('本次申请量不能超过来源剩余额度；数量最多两位小数，整数商品只能填整数'); return }
+    const errors: Record<string, string> = {}
+    if (handoffActive.current && !boundSource) {
+      errors.source = '请先载入并核对原单，或清除来源后按手工退货填写'
+    } else {
+      if (!customer) errors.customer = '请选择客户'
+      if (!warehouseId) errors.warehouse = '请选择仓库'
+      if (!items.length) {
+        if (isKit) errors['source-selection'] = '请选择本次退回的原出库配件'
+        else if (boundSource) errors.details = '请保留至少一条退货明细'
+        else errors.add = '请添加至少一条退货明细'
+      }
+      for (const item of items) {
+        const quantityField = `item-${item._key}-quantity`
+        if (!item.productId) errors[`item-${item._key}-product`] = '请选择退货商品'
+        if (item.quantity <= 0) errors[quantityField] = '退货数量须大于零'
+        else if (isKit || isOrdinaryNet) {
+          const integerOnly = (isKit ? item.source?.allowDecimalQty : allowDecimalOf(item.productId)) === false
+          if (!hasQuantityPrecision(item.quantity)) errors[quantityField] = '数量最多保留两位小数'
+          else if (integerOnly && !Number.isInteger(item.quantity)) errors[quantityField] = '该商品数量只能是整数'
+          else if (item.quantity > (item.remainingQty ?? 0)) errors[quantityField] = '本次申请量不能超过来源剩余额度'
+        }
+      }
+    }
+    setEntryErrors(errors)
+    const invalidFields = Object.keys(errors)
+    if (invalidFields.length) {
+      if (!invalidFields.some(field => focusOrderEntryField(formRef.current, field))) focusOrderEntryField(formRef.current, 'source')
+      return
+    }
 
     try {
       setSubmitting(true)
@@ -358,7 +406,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
 
   return (
-    <div className="desktop-document-form flex flex-col gap-3">
+    <div ref={formRef} className="desktop-document-form desktop-entry-controls flex flex-col gap-3">
       <ActionBar
         title="新建销售退货单"
         description={boundSource ? `已关联原单 ${boundSource.orderNo}。${isKit ? '请按原成交行、实际出库批次和组件选择；原成交资料不随套定义改版变化。' : isOrdinaryNet ? '可调整本次退货数量或移除不退商品；原单价仅供参考，净冲减金额提交后核定。' : '退货单价默认取原单真实成交价，数量默认取剩余可退数量。'}` : '本系统原单请填写单号并载入；无本系统原单的旧系统退货，可手工选择客户、仓库与商品填写。'}
@@ -377,38 +425,47 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
       <fieldset disabled={locked || submitting} className="contents">
       <SectionCard title="退货信息" compact>
         <div className="desktop-form-fields grid grid-cols-3 gap-x-5 gap-y-4">
-          <div className="space-y-1.5">
+          <div data-entry-field="customer" className="space-y-1.5">
             <Label>客户 *</Label>
             <PickerField
               value={customer?.name ?? ''}
               placeholder="点击选择客户…"
+              disabled={!!boundSource}
               onOpen={() => setCustomerFinderOpen(true)}
               onDoubleClick={() => { setCustomerFinderOpen(false); navigate('/customers') }}
-              className={cn(customerError && 'border-destructive/60 bg-destructive/5', !!boundSource && 'pointer-events-none opacity-60')}
+              aria-invalid={!!entryErrors.customer}
+              aria-describedby={errorId('customer')}
+              className={cn(entryErrors.customer && 'border-destructive/60 bg-destructive/5')}
             />
-            {customerError && <p className="text-xs text-destructive-ink">请选择客户</p>}
+            <OrderFieldError id={errorId('customer')}>{entryErrors.customer}</OrderFieldError>
           </div>
-          <div className="space-y-1.5">
+          <div data-entry-field="warehouse" className="space-y-1.5">
             <Label>退货仓库 *</Label>
             <WarehouseSelect
               value={warehouseId ? +warehouseId : null}
-              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setWarehouseError(false) }}
+              onChange={(id, name) => { setWarehouseId(id ? String(id) : ''); setWarehouseName(name); setEntryError('warehouse') }}
               placeholder="选择仓库"
               disabled={!!boundSource}
-              className={cn(warehouseError && 'border-destructive/60 bg-destructive/5')}
+              aria-invalid={!!entryErrors.warehouse}
+              aria-describedby={errorId('warehouse')}
+              className={cn(entryErrors.warehouse && 'border-destructive/60 bg-destructive/5')}
             />
-            {warehouseError && <p className="text-xs text-destructive-ink">请选择仓库</p>}
+            <OrderFieldError id={errorId('warehouse')}>{entryErrors.warehouse}</OrderFieldError>
           </div>
-          <div className="space-y-1.5">
+          <div data-entry-field="source" className="space-y-1.5">
             <Label>关联原销售单号</Label>
             <div className="flex items-center gap-1">
               <Input
                 value={orderNo}
+                aria-invalid={!!entryErrors.source}
+                aria-describedby={errorId('source')}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   const next = e.target.value
                   sourceSerial.current++; currentOrderNo.current = next; setLoadingSource(false)
                   setOrderNo(next)
-                  if (boundSource && next.trim() !== boundSource.orderNo) { setBoundSource(null); setItems([]) }
+                  if (boundSource && next.trim() !== boundSource.orderNo) {
+                    setBoundSource(null); setItems([]); setEntryErrors({}); setChoiceError(null)
+                  } else setEntryError('source')
                 }}
                 placeholder="输入原单号"
                 disabled={locked || (write.conflict && !!boundSource)}
@@ -422,6 +479,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
                 </Button>
               )}
             </div>
+            <OrderFieldError id={errorId('source')}>{entryErrors.source}</OrderFieldError>
           </div>
           <div className="desktop-field-wide col-span-3 space-y-1.5">
             <Label>备注</Label>
@@ -431,22 +489,27 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
 
       </SectionCard>
 
-      {isKit && <SourceComponents cashProof={boundSource!} items={boundSource!.items} disabled={locked} onSelect={selectSource} />}
+      {isKit && <SourceComponents cashProof={boundSource!} items={boundSource!.items} disabled={locked} onSelect={selectSource}
+        selectionError={entryErrors['source-selection']} choiceError={choiceError} />}
 
       <SectionCard
         title="退货明细"
         compact
         actions={!boundSource ? (
-          <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">+ 添加商品</Button>
+          <div data-entry-field="add" className="space-y-1">
+            <Button type="button" size="sm" variant="outline" aria-describedby={errorId('add')} onClick={addItem} className="gap-1.5">+ 添加商品</Button>
+            <OrderFieldError id={errorId('add')}>{entryErrors.add}</OrderFieldError>
+          </div>
         ) : undefined}
       >
         {items.length === 0 ? (
-          <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+          <div data-entry-field="details" className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
             {boundSource ? (
               <>
                 <p className="text-sm text-muted-foreground">{noReturnableSourceItems
                   ? '原销售单暂无剩余可退数量。'
                   : isKit ? '请从原成交行选择本次退回的商品。' : '当前没有选中的退货商品。'}</p>
+                <OrderFieldError>{entryErrors.details}</OrderFieldError>
                 <ReturnToSourceOrder kind="sale" sourceId={boundSource.id} sourceNo={boundSource.orderNo} />
               </>
             ) : <p className="text-sm text-muted-foreground">载入原销售单，或添加本次需要退回的商品。</p>}
@@ -456,72 +519,87 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
           <div className="overflow-x-auto">
             <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 80, align: 'right' }, { key: 'unitPrice', title: isOrdinaryNet ? '原单价参考 (¥)' : '单价 (¥)', width: 96, align: 'right' }, { key: 'amount', title: isOrdinaryNet ? '净冲减金额' : '金额', width: 112, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="sale-return-entry-items" minWidth={900}>
               <tbody>
-                {items.map(item => (
-                  <Fragment key={item._key}>
-                    <tr className={cn('border-border/40', (item.originalQty == null && item.returnedQty == null) && 'border-b')}>
-                      <ProductIdentityCells compact product={item} nameContent={<button
-                          type="button"
-                          disabled={!!boundSource}
-                          onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
-                          onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
-                          className={cn(
-                            'block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                            invalidItemKeys.has(item._key) && 'border-destructive/60 bg-destructive/5',
-                          )}
-                        >
-                          {item.productName
-                            ? <span className="break-words font-medium">{item.productName}</span>
-                            : <span className="text-muted-foreground">点击选择商品…</span>}
-                        </button>} />
-                      <td className="py-2.5 text-center text-muted-body">
-                        {(!boundSource && item.units && item.units.filter(u => !u.isBase).length > 0) ? (
-                          <select
-                            aria-label="退货商品单位"
-                            value={item.entryUnit || item.unit}
-                            onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
-                            className="h-8 rounded-md border border-border bg-background px-1 text-sm"
-                          >
-                            {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
-                          </select>
-                        ) : ((item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : (item.unit || '—'))}
-                      </td>
-                      <td className="py-2.5 pr-2">
-                        <Input quantity
-                          aria-label="退货数量" type="number" min="0.01" step={qtyStep(isKit ? item.source?.allowDecimalQty !== false : allowDecimalOf(item.productId))} placeholder="数量"
-                          value={item.quantity}
-                          max={isKit || isOrdinaryNet ? item.remainingQty : undefined}
-                          disabled={!!boundSource && !isKit && !isOrdinaryNet}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
-                          className="text-right text-sm"
-                        />
-                        {item.entryUnit && item.entryUnit !== item.unit && (() => {
-                          const rate = Number((item.units || []).find(u => u.unitName === item.entryUnit)?.conversionRate ?? 1)
-                          return <p className="mt-1 text-right text-xs text-muted-foreground">= {(item.quantity * rate).toLocaleString()} {item.unit}</p>
-                        })()}
-                      </td>
-                      <td className="py-2.5">
-                        <Input
-                          aria-label="退货单价" type="number" min="0" step="0.01" placeholder="单价"
-                          value={item.unitPrice}
-                          disabled={!!boundSource}
-                          onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
-                          className="text-right text-sm"
-                        />
-                      </td>
-                      <td className="py-2.5 text-right font-medium tabular-nums">{isKit ? '保存后估算' : isOrdinaryNet ? '提交后核定' : money(item.quantity * item.unitPrice)}</td>
-                      <td className="py-2.5 text-center">
-                        <Button type="button" size="sm" variant="ghost" aria-label="删除退货商品行" disabled={!!boundSource && !isKit && !isOrdinaryNet} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button>
-                      </td>
-                    </tr>
-                    {(item.originalQty != null || item.returnedQty != null) && (
-                      <tr className="border-b border-border/40">
-                        <td colSpan={6} className="pb-2.5 pt-0 text-xs text-muted-foreground">
-                          {isKit && <><SourceLabel source={item.source as ReturnSourceLabels} /><br /></>}原单数量 {Number(item.originalQty || 0).toFixed(2)}，{isKit ? '已申请' : '已退'} {Number(item.returnedQty || 0).toFixed(2)}，剩余可退 {Number(item.remainingQty || 0).toFixed(2)}
+                {items.map(item => {
+                  const productField = `item-${item._key}-product`
+                  const quantityField = `item-${item._key}-quantity`
+                  return (
+                    <Fragment key={item._key}>
+                      <tr className={cn('border-border/40', (item.originalQty == null && item.returnedQty == null) && 'border-b')}>
+                        <ProductIdentityCells compact product={item} nameContent={
+                          <div data-entry-field={productField} className="space-y-1">
+                            <button
+                              aria-invalid={!!entryErrors[productField]}
+                              aria-describedby={errorId(productField)}
+                              type="button"
+                              disabled={!!boundSource}
+                              onClick={() => { setFinderItemKey(item._key); setFinderOpen(true) }}
+                              onDoubleClick={() => { setFinderOpen(false); setFinderItemKey(null); navigate('/products') }}
+                              className={cn(
+                                'block w-full overflow-hidden rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/30 disabled:cursor-not-allowed disabled:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                entryErrors[productField] && 'border-destructive/60 bg-destructive/5',
+                              )}
+                            >
+                              {item.productName
+                                ? <span className="break-words font-medium">{item.productName}</span>
+                                : <span className="text-muted-foreground">点击选择商品…</span>}
+                            </button>
+                            <OrderFieldError id={errorId(productField)}>{entryErrors[productField]}</OrderFieldError>
+                          </div>
+                        } />
+                        <td className="py-2.5 text-center text-muted-body">
+                          {(!boundSource && item.units && item.units.filter(u => !u.isBase).length > 0) ? (
+                            <select
+                              aria-label="退货商品单位"
+                              value={item.entryUnit || item.unit}
+                              onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
+                              className="h-8 rounded-md border border-border bg-background px-1 text-sm"
+                            >
+                              {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
+                            </select>
+                          ) : ((item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : (item.unit || '—'))}
+                        </td>
+                        <td data-entry-field={quantityField} className="py-2.5 pr-2">
+                          <Input quantity
+                            aria-invalid={!!entryErrors[quantityField]}
+                            aria-describedby={errorId(quantityField)}
+                            onQuantityError={message => setEntryError(quantityField, message ?? undefined)}
+                            aria-label="退货数量" type="number" min="0.01" step={qtyStep(isKit ? item.source?.allowDecimalQty !== false : allowDecimalOf(item.productId))} placeholder="数量"
+                            value={item.quantity}
+                            max={isKit || isOrdinaryNet ? item.remainingQty : undefined}
+                            disabled={!!boundSource && !isKit && !isOrdinaryNet}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', +e.target.value)}
+                            className="text-right text-sm"
+                          />
+                          <OrderFieldError id={errorId(quantityField)} className="mt-1">{entryErrors[quantityField]}</OrderFieldError>
+                          {item.entryUnit && item.entryUnit !== item.unit && (() => {
+                            const rate = Number((item.units || []).find(u => u.unitName === item.entryUnit)?.conversionRate ?? 1)
+                            return <p className="mt-1 text-right text-xs text-muted-foreground">= {(item.quantity * rate).toLocaleString()} {item.unit}</p>
+                          })()}
+                        </td>
+                        <td className="py-2.5">
+                          <Input
+                            aria-label="退货单价" type="number" min="0" step="0.01" placeholder="单价"
+                            value={item.unitPrice}
+                            disabled={!!boundSource}
+                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'unitPrice', +e.target.value)}
+                            className="text-right text-sm"
+                          />
+                        </td>
+                        <td className="py-2.5 text-right font-medium tabular-nums">{isKit ? '保存后估算' : isOrdinaryNet ? '提交后核定' : money(item.quantity * item.unitPrice)}</td>
+                        <td className="py-2.5 text-center">
+                          <Button type="button" size="sm" variant="ghost" aria-label="删除退货商品行" disabled={!!boundSource && !isKit && !isOrdinaryNet} className="h-8 w-9 p-0 text-muted-foreground hover:text-destructive-ink" onClick={() => removeItem(item._key)}>✕</Button>
                         </td>
                       </tr>
-                    )}
-                  </Fragment>
-                ))}
+                      {(item.originalQty != null || item.returnedQty != null) && (
+                        <tr className="border-b border-border/40">
+                          <td colSpan={6} className="pb-2.5 pt-0 text-xs text-muted-foreground">
+                            {isKit && <><SourceLabel source={item.source as ReturnSourceLabels} /><br /></>}原单数量 {Number(item.originalQty || 0).toFixed(2)}，{isKit ? '已申请' : '已退'} {Number(item.returnedQty || 0).toFixed(2)}，剩余可退 {Number(item.remainingQty || 0).toFixed(2)}
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </tbody>
             </ResizableTable>
           </div>
@@ -545,7 +623,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
         onClose={() => { setFinderOpen(false); setFinderItemKey(null) }}
       />
       <CustomerFinder
-        open={customerFinderOpen}
+        open={customerFinderOpen && !boundSource && !locked && !submitting}
         onClose={() => setCustomerFinderOpen(false)}
         onConfirm={handleCustomerConfirm}
       />

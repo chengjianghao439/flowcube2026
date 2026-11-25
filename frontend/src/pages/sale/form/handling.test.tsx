@@ -87,6 +87,93 @@ test('真实普通新建仅初始化来源SKU/基本单位/原仓；客户主动
     expect(requests[0].data).toMatchObject({ customerId:4, warehouseId:8, items:[{productId:3,unit:'个',entryUnit:'个',quantity:2.5,unitPrice:7.1234}], disposalSource:{sourceId:11,expectedRevision:1} })
   })
 })
+test('来源销售缺少客户和数量时在字段与明细旁提示，逐次聚焦可修正项', async () => {
+  requests.length = 0
+  actualAdapter()
+  await page('/sale/new?handlingSourceId=11', async host => {
+    await click('载入来源商品')
+    await click('保存草稿')
+    const customer = host.querySelector('[data-entry-field="party"]')!
+    expect(customer.querySelector('[role="alert"]')?.textContent).toBe('请选择客户')
+    expect(document.activeElement).toBe(customer.querySelector('button'))
+    const quantity = host.querySelector<HTMLInputElement>('input[aria-label="当前商品数量"]')!
+    const description = () => document.getElementById(quantity.getAttribute('aria-describedby') ?? '')
+    expect(description()?.textContent).toContain('数量必须大于 0')
+    expect(description()?.closest('td')).toBe(quantity.closest('td'))
+    expect(host.textContent).not.toContain('点击可定位')
+
+    await act(async () => customer.querySelector('button')!.click())
+    await click('选择夹具客户')
+    await click('保存草稿')
+    expect(document.activeElement).toBe(quantity)
+    expect(customer.querySelector('[role="alert"]')).toBeNull()
+    expect(quantity.value).toBe('0')
+    expect(requests).toHaveLength(0)
+  })
+})
+
+test('来源销售可关联额度、联系电话及折扣按字段提示，修正后原草稿可提交', async () => {
+  requests.length = 0
+  actualAdapter()
+  await page('/sale/new?handlingSourceId=11', async host => {
+    await click('载入来源商品')
+    await act(async () => host.querySelector<HTMLElement>('[data-entry-field="party"] button')!.click())
+    await click('选择夹具客户')
+    const quantity = host.querySelector<HTMLInputElement>('input[aria-label="当前商品数量"]')!
+    const phone = host.querySelector<HTMLInputElement>('input[aria-label="联系电话"]')!
+    const discount = host.querySelector<HTMLInputElement>('input[data-entry-field="discount"]')!
+    const describedBy = (field: HTMLInputElement) => document.getElementById(field.getAttribute('aria-describedby') ?? '')?.textContent
+
+    await input(quantity, '11')
+    await click('保存草稿')
+    expect(describedBy(quantity)).toContain('可关联')
+    expect(document.activeElement).toBe(quantity)
+    expect(quantity.value).toBe('11')
+    expect(requests).toHaveLength(0)
+
+    await input(quantity, '2.5')
+    await input(phone, 'invalid')
+    await click('保存草稿')
+    expect(describedBy(phone)).toContain('联系电话')
+    expect(document.activeElement).toBe(phone)
+    expect(phone.value).toBe('invalid')
+
+    await input(phone, '0755-12345678')
+    await input(discount, '100')
+    await click('保存草稿')
+    expect(describedBy(discount)).toContain('折扣金额')
+    expect(document.activeElement).toBe(discount)
+    expect(discount.value).toBe('100')
+    expect(requests).toHaveLength(0)
+
+    await input(discount, '1')
+    await click('保存草稿')
+    expect(requests).toHaveLength(1)
+    expect(requests[0].data).toMatchObject({ receiverPhone: '0755-12345678', discountAmount: 1, items: [{ quantity: 2.5 }] })
+  })
+})
+
+test('来源销售数量超过允许精度时在输入旁提示，并等待更正后再保存', async () => {
+  requests.length = 0
+  actualAdapter()
+  await page('/sale/new?handlingSourceId=11', async host => {
+    await click('载入来源商品')
+    await act(async () => host.querySelector<HTMLElement>('[data-entry-field="party"] button')!.click())
+    await click('选择夹具客户')
+    const quantity = host.querySelector<HTMLInputElement>('input[aria-label="当前商品数量"]')!
+    await input(quantity, '2.5')
+    await input(quantity, '2.555')
+    expect(quantity.closest('td')?.querySelector('[role="alert"]')?.textContent).toContain('数量最多保留两位小数')
+    expect(quantity.value).toBe('2.5')
+    await click('保存草稿')
+    expect(requests).toHaveLength(0)
+    await input(quantity, '2.55')
+    await click('保存草稿')
+    expect(requests).toHaveLength(1)
+    expect(requests[0].data).toMatchObject({ items: [{ quantity: 2.55 }] })
+  })
+})
+
 test('已有备注不能被商品来源初始化覆盖；原输入保留', async () => {
   actualAdapter()
   await page('/sale/new?handlingSourceId=11', async host => {

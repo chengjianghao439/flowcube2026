@@ -8,8 +8,8 @@ import RefundsPage from './index'
 import FinanceAccountsPage from '../finance/accounts'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
-const access = vi.hoisted(() => ({ createAccount: true }))
-vi.mock('@/api/refund', async original => ({ ...await original<typeof import('@/api/refund')>(), getRefundListApi: async () => ({ list: [], pagination: { total: 0 } }) }))
+const access = vi.hoisted(() => ({ createAccount: true, createRefund: vi.fn(async () => { throw new Error('合成传输') }) }))
+vi.mock('@/api/refund', async original => ({ ...await original<typeof import('@/api/refund')>(), getRefundListApi: async () => ({ list: [], pagination: { total: 0 } }), createRefundApi: access.createRefund }))
 vi.mock('@/api/finance', async original => ({ ...await original<typeof import('@/api/finance')>(), getActiveAccountsApi: async () => [], getAccountsApi: async () => ({ list: [], pagination: { total: 0 } }) }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => permission !== PERMISSIONS.FINANCE_ACCOUNT_CREATE || access.createAccount }) }))
 
@@ -50,5 +50,43 @@ test('无创建权限的财务账号仍可查询账户，但没有新建入口',
     cache.clear()
     host.remove()
     access.createAccount = true
+  }
+})
+
+test('退款单提交时在单号和金额字段下显示错误，聚焦首处并保留输入', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  const host = document.body.appendChild(document.createElement('div'))
+  const root = createRoot(host), cache = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  try {
+    await act(async () => root.render(<QueryClientProvider client={cache}><MemoryRouter><RefundsPage /></MemoryRouter></QueryClientProvider>))
+    const trigger = [...host.querySelectorAll('button')].find(button => button.textContent === '+ 新建退款单')!
+    await act(async () => trigger.click())
+    const dialog = document.querySelector('[role="dialog"]')!
+    const submit = [...dialog.querySelectorAll('button')].find(button => button.textContent === '创建退款单')!
+    await act(async () => submit.click())
+    const fields = [...dialog.querySelectorAll<HTMLInputElement>('input[aria-invalid="true"]')]
+    expect(fields).toHaveLength(2)
+    expect(document.activeElement).toBe(fields[0])
+    expect(document.getElementById(fields[0].getAttribute('aria-describedby')!)?.textContent).toBe('请输入销售单号')
+    expect(document.getElementById(fields[1].getAttribute('aria-describedby')!)?.textContent).toBe('退款金额必须大于 0')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(fields[0], 'SYN-1')
+      fields[0].dispatchEvent(new Event('input', { bubbles: true }))
+      submit.click()
+    })
+    expect(fields[0].value).toBe('SYN-1')
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(fields[1], '1.001')
+      fields[1].dispatchEvent(new Event('input', { bubbles: true }))
+      submit.click()
+    })
+    expect(fields[1].value).toBe('1.001')
+    expect(document.activeElement).toBe(fields[1])
+    expect(document.getElementById(fields[1].getAttribute('aria-describedby')!)?.textContent).toContain('最多保留两位小数')
+    expect(access.createRefund).not.toHaveBeenCalled()
+  } finally {
+    await act(async () => root.unmount())
+    cache.clear()
+    host.remove()
   }
 })

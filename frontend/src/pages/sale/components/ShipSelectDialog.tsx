@@ -46,7 +46,15 @@ export default function ShipSelectDialog({ open, onClose, order, loading, recove
   }
   const selected = undispatched.filter(item => rows[item.id]?.checked)
   const invalid = selected.filter(item => !isAllocationQtyValid(rows[item.id]?.qty ?? 0, limitFor(item.id), item.allowDecimalQty !== false))
-  const allSelected = undispatched.length > 0 && undispatched.every(item => rows[item.id]?.checked)
+  const allSelected = selected.length > 0 && selected.length === undispatched.length
+  const someSelected = !allSelected && selected.length > 0
+
+  function toggleAll(checked: boolean) {
+    if (submitting.current || frozen) return
+    setRows(previous => Object.fromEntries(undispatched.map(item => [
+      item.id, { checked, qty: previous[item.id]?.qty ?? limitFor(item.id) },
+    ])))
+  }
 
   const setRow = (id: number, patch: Partial<RowState>) => {
     if (submitting.current || frozen) return
@@ -74,7 +82,11 @@ export default function ShipSelectDialog({ open, onClose, order, loading, recove
           <ReportTable className="w-full min-w-[1560px] text-sm">
             <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
               <tr>
-                <th className="w-10 px-3 py-2"><input type="checkbox" aria-label="选择全部可出库明细" disabled={frozen} checked={allSelected} onChange={e => { if (!submitting.current && !frozen) setRows(Object.fromEntries(undispatched.map(item => [item.id, { checked: e.target.checked, qty: limitFor(item.id) }]))) }} /></th>
+                <th className="w-10 px-3 py-2">
+                  <input type="checkbox" aria-label="选择全部可出库明细" disabled={frozen} checked={allSelected}
+                    ref={el => { if (el) el.indeterminate = someSelected }}
+                    onChange={e => toggleAll(e.target.checked)} />
+                </th>
                 <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
                 <th className="w-40 px-3 py-2 text-left">发货仓库</th>
                 <th className="w-28 px-3 py-2 text-right">已占未发</th>

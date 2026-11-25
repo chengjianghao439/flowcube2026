@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react'
+import { useId, type ReactNode } from 'react'
 import { PackageOpen, Plus } from 'lucide-react'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { Button } from '@/components/ui/button'
 
@@ -12,10 +13,11 @@ export function SaleOrderItemsSection({ hasItems, onAdd, children, allowAdd = tr
   onAdd: () => void
   children: ReactNode
 }) {
+  const errorId = useId()
   return (
     <SectionCard title="商品明细" compact noPadding={compact} actions={allowAdd ? <>
-      {compact && addError && <p role="alert" className="text-xs text-destructive-ink">{addError}</p>}
-      <Button data-entry-add data-entry-field="add" type="button" size="sm" variant="outline" onClick={onAdd} className="gap-1.5">
+      <OrderFieldError id={errorId}>{addError}</OrderFieldError>
+      <Button data-entry-add data-entry-field="add" type="button" size="sm" variant="outline" onClick={onAdd} aria-describedby={addError ? errorId : undefined} className="gap-1.5">
         <Plus className="h-4 w-4" />添加商品
       </Button></> : undefined
     }>

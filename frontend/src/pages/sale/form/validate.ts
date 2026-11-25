@@ -1,4 +1,3 @@
-import { collectOrderIssues } from '@/lib/orderEntry'
 import { roundQuantity } from '@/lib/qtyStep'
 import type { SaleOrderItem } from '@/types/sale'
 import type { ProductUnit } from '@/types/products'
@@ -55,26 +54,4 @@ export interface ScanRow {
   qtyLabel: string
   operatorName: string | null
   scannedAt: string | null
-}
-
-/** CreateView 和 EditView 共用的表单校验：通过则返回过滤后的有效明细，否则设置字段错误并返回 null（页面统一显示完整问题列表） */
-export function validateSaleForm(input: {
-  items: DraftItem[]
-  customerId: string
-  customerName: string
-  warehouseId: string
-  warehouseName: string
-  receiverPhone: string
-  discountAmount?: string | number
-  priceLoading?: Record<number, boolean>
-  priceErrors?: Record<number, string>
-  setCustomerError: (v: boolean) => void
-  setWarehouseError: (v: boolean) => void
-  setInvalidItemKeys: (v: Set<number>) => void
-}): DraftItem[] | null {
-  const issues = collectOrderIssues({ ...input, kind: 'sale', partyId: input.customerId, partyName: input.customerName })
-  input.setCustomerError(issues.some(i => i.target === 'party'))
-  input.setWarehouseError(issues.some(i => i.target === 'warehouse'))
-  input.setInvalidItemKeys(new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey])))
-  return issues.length ? null : input.items.filter(i => i.productId > 0)
 }

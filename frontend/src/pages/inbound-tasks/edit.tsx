@@ -1,9 +1,10 @@
-import { useContext, useEffect, useId, useMemo, useState } from 'react'
+import { useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Loader2, Save, ShoppingCart } from 'lucide-react'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,13 +20,14 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
 import { getInboundListWorkspacePath } from '@/lib/inboundListNavigation'
 import { toast } from '@/lib/toast'
-import { quantityInputError } from '@/lib/qtyStep'
+import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import { unitPrice } from '@/lib/format'
 import type { InboundTask, InboundTaskEditContext, PickedPurchaseItem, UpdateInboundTaskResult } from '@/types/inbound-tasks'
-import { InboundEntryTable } from './InboundEntryTable'
+import { InboundEntryTable, type InboundEntryFocus } from './InboundEntryTable'
+import { inboundDraftQuantityError } from './inboundQuantity'
 import { InboundProductIdentity } from './InboundProductIdentity'
 import { InboundFreightFields } from './InboundFreightFields'
-import { parseInboundFreightAmount, type InboundFreightType } from './inboundFreight'
+import { validateInboundFreightAmount, type InboundFreightType } from './inboundFreight'
 import { PurchaseItemPickerDialog } from './PurchaseItemPickerDialog'
 
 interface Draft {
@@ -53,6 +55,10 @@ export default function InboundTaskEditPage() {
   const prefix = useId(), tabPath = useContext(TabPathContext), location = useLocation(), navigate = useNavigate()
   const path = tabPath || location.pathname + location.search, ownPath = path.split(/[?#]/)[0]
   const match = ownPath.match(/^\/inbound-tasks\/([1-9]\d*)\/edit$/), parsedId = Number(match?.[1]), id = Number.isSafeInteger(parsedId) && parsedId > 0 ? parsedId : null
+  const entryRef = useRef<HTMLDivElement>(null)
+  const focusRowRef = useRef<InboundEntryFocus>(null)
+  const [validationAttempted, setValidationAttempted] = useState(false)
+  const [rejectedQuantities, setRejectedQuantities] = useState<Record<number, string | undefined>>({})
   const active = useActiveWorkspaceTab(), { can } = usePermission(), [owner] = useState(captureInboundEditOwner)
   const [draft, setDraft] = useState<Draft | null>(null), [baseline, setBaseline] = useState<Baseline | null>(null), [initError, setInitError] = useState(''), [pickerOpen, setPickerOpen] = useState(false)
   const recovery = useInboundTaskEditRecovery(id ?? 0, active, owner, () => writable)
@@ -94,24 +100,41 @@ export default function InboundTaskEditPage() {
   const dirty = !!recovery.pendingRecord || !!(draft && baseline && signature(draft) !== baseline.signature)
   useDirtyGuard(path, dirty)
   const blocked = !writable || recovery.blocked
+  const freight = validateInboundFreightAmount(draft?.freightAmount ?? '')
+  const remarkError = (draft?.remark.trim().length ?? 0) > 200 ? '备注最多200字，原输入已保留，请核对后修改' : null
+  const addError = !rows.length ? '请至少保留一条有效明细' : null
+  const rowIssues = rows.map(row => rejectedQuantities[row.item.purchaseItemId] ?? inboundDraftQuantityError(row.qtyInput ?? String(row.qty), row.item.remainingQty))
+  const showErrors = validationAttempted && !blocked
+  const errorId = (field: string) => `${prefix}-${field}-error`
+  const describedBy = (field: string, error: string | null) => showErrors && error ? errorId(field) : undefined
   function closeTab() { useWorkspaceStore.getState().removeTab(path); navigate(getInboundListWorkspacePath()) }
   function patch(change: Partial<Draft>) { if (!blocked) setDraft(previous => previous ? { ...previous, ...change } : null) }
+  function reportQuantityError(purchaseItemId: number, error: string | null) {
+    if (blocked) return
+    setRejectedQuantities(previous => previous[purchaseItemId] === (error ?? undefined)
+      ? previous
+      : { ...previous, [purchaseItemId]: error ?? undefined })
+  }
   function lineQty(purchaseItemId: number, raw: string) {
     if (blocked || !draft) return
     const entry = draft.selected[purchaseItemId], qty = Number(raw.replace(/,/g, '').trim())
-    if (!entry || !Number.isFinite(qty) || qty < 0 || qty > entry.item.remainingQty) return
+    if (!entry) return
+    if (!Number.isFinite(qty) || qty < 0 || qty > entry.item.remainingQty) {
+      reportQuantityError(purchaseItemId, inboundDraftQuantityError(raw, entry.item.remainingQty))
+      return
+    }
     patch({ selected: { ...draft.selected, [purchaseItemId]: { ...entry, qty, qtyInput: raw } } })
   }
   function blurQty(purchaseItemId: number) {
     if (blocked || !draft) return
     const entry = draft.selected[purchaseItemId], raw = entry?.qtyInput ?? String(entry?.qty ?? ''), qty = Number(raw.trim())
-    if (entry && raw.trim() && !quantityInputError(raw) && qty > 0 && qty <= entry.item.remainingQty) patch({ selected: { ...draft.selected, [purchaseItemId]: { ...entry, qty, qtyInput: String(qty) } } })
+    if (entry && !inboundDraftQuantityError(raw, entry.item.remainingQty)) patch({ selected: { ...draft.selected, [purchaseItemId]: { ...entry, qty, qtyInput: String(qty) } } })
   }
   function picked(pickedRows: PickedPurchaseItem[]) {
     if (blocked || !draft || !baseline) return
     const selected: Record<number, PickedPurchaseItem> = {}, originals = new Map(baseline.context.task.items?.map(item => [item.purchaseItemId, item.id]))
     for (const row of pickedRows) selected[row.item.purchaseItemId] = { ...row, qtyInput: String(row.qty), inboundItemId: draft.selected[row.item.purchaseItemId]?.inboundItemId ?? originals.get(row.item.purchaseItemId) }
-    patch({ selected }); setPickerOpen(false)
+    patch({ selected }); setRejectedQuantities({}); setPickerOpen(false)
   }
   function confirmed(result: UpdateInboundTaskResult | null) {
     if (!result || !recovery.canApply(result)) return
@@ -121,12 +144,19 @@ export default function InboundTaskEditPage() {
     else closeTab()
   }
   async function save() {
-    if (blocked || !draft || !baseline) return
-    if (draft.remark.trim().length > 200) { toast.error('备注最多200字，原输入已保留，请核对后修改'); return }
-    let freightAmount: number | null
-    try { freightAmount = parseInboundFreightAmount(draft.freightAmount) } catch (error) { toast.error(error instanceof Error ? error.message : '请核对运费金额'); return }
-    if (!rows.length || rows.some(row => { const raw = row.qtyInput ?? String(row.qty), qty = Number(raw.trim()); return !raw.trim() || !!quantityInputError(raw) || !Number.isFinite(qty) || qty <= 0 || qty > row.item.remainingQty })) { toast.warning('请至少保留一条有效明细，并核对本次到货数量'); return }
-    const result = await recovery.submit({ remark: draft.remark.trim(), freightType: draft.freightType, freightAmount, expectedEditFingerprint: baseline.fingerprint, items: rows.map(row => ({ purchaseItemId: row.item.purchaseItemId, qty: Number((row.qtyInput ?? String(row.qty)).trim()) })) })
+    if (!active || blocked || !draft || !baseline) return
+    setValidationAttempted(true)
+    const headerField = remarkError ? 'remark' : freight.error ? 'freight' : addError ? 'add' : null
+    if (headerField) {
+      focusOrderEntryField(entryRef.current, headerField)
+      return
+    }
+    const invalidIndex = rowIssues.findIndex(Boolean)
+    if (invalidIndex >= 0) {
+      focusRowRef.current?.(invalidIndex, `item-${rows[invalidIndex].item.purchaseItemId}-quantity`)
+      return
+    }
+    const result = await recovery.submit({ remark: draft.remark.trim(), freightType: draft.freightType, freightAmount: freight.amount, expectedEditFingerprint: baseline.fingerprint, items: rows.map(row => ({ purchaseItemId: row.item.purchaseItemId, qty: Number((row.qtyInput ?? String(row.qty)).trim()) })) })
     confirmed(result)
   }
   const recoveryPanel = recovery.pendingRecord ? <div role="status" className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-sm">
@@ -135,7 +165,7 @@ export default function InboundTaskEditPage() {
     <div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" disabled={recovery.busy || !can(PERMISSIONS.INBOUND_ORDER_VIEW)} onClick={async () => confirmed(await recovery.queryOriginal())}>查询原保存结果</Button>
       {recovery.canRetry && <Button variant="outline" size="sm" disabled={recovery.busy || !can(PERMISSIONS.INBOUND_ORDER_UPDATE)} onClick={async () => confirmed(await recovery.retry())}>按原请求重试</Button>}</div>
   </div> : null
-  return <div className="desktop-inbound-form flex flex-col gap-4">
+  return <div ref={entryRef} className="desktop-inbound-form desktop-entry-controls flex flex-col gap-4">
     <ActionBar title={baseline ? `编辑 ${baseline.context.task.taskNo}` : '编辑收货订单'}
         description="核对收货草稿的来源与商品明细。" rightActions={<>
       <Button variant="outline" onClick={() => confirmDirtyLeave({ dirtyKeys: [path], willNavigate: true, proceed: closeTab })}>取消编辑</Button>
@@ -154,16 +184,49 @@ export default function InboundTaskEditPage() {
       <SectionCard title="订单信息" compact><div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor={`${prefix}-supplier`}>供应商</label><Input id={`${prefix}-supplier`} readOnly className="h-9" value={baseline.context.task.supplierName ?? '—'} /></div>
         <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor={`${prefix}-warehouse`}>仓库</label><Input id={`${prefix}-warehouse`} readOnly className="h-9" value={baseline.context.task.warehouseName ?? '—'} /></div>
-        <div className="space-y-1.5"><label className="text-sm font-medium" htmlFor={`${prefix}-remark`}>备注</label><Input id={`${prefix}-remark`} className="h-9" value={draft.remark} maxLength={200} onChange={event => patch({ remark: event.target.value })} disabled={blocked} placeholder="选填" /></div>
-        <InboundFreightFields prefix={prefix} freightType={draft.freightType} freightAmount={draft.freightAmount} onTypeChange={freightType => patch({ freightType })} onAmountChange={freightAmount => patch({ freightAmount })} disabled={blocked} />
+        <div data-entry-field="remark" className="space-y-1.5">
+          <label className="text-sm font-medium" htmlFor={`${prefix}-remark`}>备注</label>
+          <Input id={`${prefix}-remark`} className="h-9" aria-invalid={!!describedBy('remark', remarkError)} aria-describedby={describedBy('remark', remarkError)}
+            value={draft.remark} maxLength={200} onChange={event => patch({ remark: event.target.value })} disabled={blocked} placeholder="选填" />
+          <OrderFieldError id={errorId('remark')}>{showErrors && remarkError}</OrderFieldError>
+        </div>
+        <InboundFreightFields prefix={prefix} freightType={draft.freightType} freightAmount={draft.freightAmount} onTypeChange={freightType => patch({ freightType })}
+          onAmountChange={freightAmount => patch({ freightAmount })} amountError={showErrors ? freight.error : null} disabled={blocked} />
       </div></SectionCard>
-      <SectionCard title="商品明细" compact actions={<Button type="button" size="sm" variant="outline" disabled={blocked} onClick={() => setPickerOpen(true)} className="gap-1.5"><ShoppingCart className="h-4 w-4" />选择商品</Button>}>
+      <SectionCard title="商品明细" compact actions={<div data-entry-field="add" className="flex flex-wrap items-center gap-2">
+        <OrderFieldError id={errorId('add')}>{showErrors && addError}</OrderFieldError>
+        <Button type="button" size="sm" variant="outline" aria-describedby={describedBy('add', addError)}
+          disabled={blocked} onClick={() => setPickerOpen(true)} className="gap-1.5"><ShoppingCart className="h-4 w-4" />选择商品</Button>
+      </div>}>
         {!rows.length ? <div className="py-6 text-center text-sm text-muted-foreground">尚未选择商品，点击右上角「选择商品」挑选本次到货明细</div> : <>
-          <div className="max-h-[60vh] overflow-auto" data-workspace-scroll><InboundEntryTable data={rows} getRowKey={entry => entry.item.purchaseItemId} renderRow={({ item, qty, qtyInput, inboundItemId }) => <tr key={item.purchaseItemId} data-inbound-item-id={inboundItemId} className="border-b border-border/40">
-            <td><InboundProductIdentity item={item} /></td><td><div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1"><Input quantity inputMode="decimal" className="h-9 min-w-12 max-w-24 flex-1 text-right tabular-nums" value={qtyInput ?? String(qty)} onBlur={() => blurQty(item.purchaseItemId)} data-purchase-item-id={item.purchaseItemId} aria-label={`${item.purchaseOrderNo} ${item.productName}本次到货数量`} disabled={blocked} onChange={event => lineQty(item.purchaseItemId, event.target.value)} /><span className="min-w-0 text-muted-body [overflow-wrap:anywhere]">{item.unit || '单位未提供'}</span></div></td>
-            <td className="font-mono text-xs">{item.purchaseOrderNo}</td><td className="text-muted-foreground">{item.warehouseName}</td><td className="text-right tabular-nums">{unitPrice(item.unitPrice)}</td>
-            <td className="text-center"><Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive-ink" disabled={blocked} aria-label={`删除 ${item.purchaseOrderNo} ${item.productName}`} onClick={() => { const selected = { ...draft.selected }; delete selected[item.purchaseItemId]; patch({ selected }) }}>✕</Button></td>
-          </tr>} /></div><div className="desktop-order-total border-t border-border px-3 py-2 text-sm text-muted-body">商品明细：{rows.length} 行</div>
+          <div className="max-h-[60vh] overflow-auto" data-workspace-scroll>
+            <InboundEntryTable data={rows} getRowKey={entry => entry.item.purchaseItemId} focusRowRef={focusRowRef} renderRow={({ item, qty, qtyInput, inboundItemId }, index) => {
+              const field = `item-${item.purchaseItemId}-quantity`
+              const quantityError = !blocked ? rejectedQuantities[item.purchaseItemId] ?? (showErrors ? rowIssues[index] : null) : null
+              return <tr key={item.purchaseItemId} data-inbound-item-id={inboundItemId} className="border-b border-border/40">
+                <td><InboundProductIdentity item={item} /></td>
+                <td data-entry-field={field}>
+                  <div className="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+                    <Input quantity inputMode="decimal" className="h-9 min-w-12 max-w-24 flex-1 text-right tabular-nums" value={qtyInput ?? String(qty)}
+                      onBlur={() => blurQty(item.purchaseItemId)} data-purchase-item-id={item.purchaseItemId} aria-label={`${item.purchaseOrderNo} ${item.productName}本次到货数量`}
+                      aria-invalid={!!quantityError} aria-describedby={quantityError ? errorId(field) : undefined} disabled={blocked}
+                      onQuantityError={error => reportQuantityError(item.purchaseItemId, error)} onChange={event => lineQty(item.purchaseItemId, event.target.value)} />
+                    <span className="min-w-0 text-muted-body [overflow-wrap:anywhere]">{item.unit || '单位未提供'}</span>
+                  </div>
+                  <OrderFieldError id={errorId(field)} className="mt-1">{quantityError}</OrderFieldError>
+                </td>
+                <td className="font-mono text-xs">{item.purchaseOrderNo}</td><td className="text-muted-foreground">{item.warehouseName}</td><td className="text-right tabular-nums">{unitPrice(item.unitPrice)}</td>
+                <td className="text-center"><Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive-ink"
+                  disabled={blocked} aria-label={`删除 ${item.purchaseOrderNo} ${item.productName}`} onClick={() => {
+                    const selected = { ...draft.selected }
+                    delete selected[item.purchaseItemId]
+                    reportQuantityError(item.purchaseItemId, null)
+                    patch({ selected })
+                  }}>✕</Button></td>
+              </tr>
+            }} />
+          </div>
+          <div className="desktop-order-total border-t border-border px-3 py-2 text-sm text-muted-body">商品明细：{rows.length} 行</div>
         </>}
       </SectionCard>
       <PurchaseItemPickerDialog open={pickerOpen && !blocked} supplierId={baseline.context.supplierId} editTaskId={id!} readOwner={owner} canInteract={() => !blocked} initialSelection={draft.selected} onClose={() => setPickerOpen(false)} onConfirm={picked} />

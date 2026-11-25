@@ -6,6 +6,7 @@ const { ORDINARY_FUND_SOURCE_BY_BIZ_TYPE, OPERATING_FUND_COMPANY_ID, fundAccount
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const { generateMasterCode } = require('../../utils/codeGenerator')
 const { normalizePagination } = require('../../utils/pagination')
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 
 /**
  * 资金账户与账户流水。
@@ -247,7 +248,7 @@ async function update(id, { name, type, accountNo, bankName, holder, openingBala
  * 余额调整：账实不符时补一笔差额流水。
  * 不直接改余额——那样查不出「谁在什么时候把账改成了这样」。
  */
-async function adjust(id, { targetBalance, happenedAt, remark }, operator) {
+async function adjust(id, { targetBalance, expectedBalance, happenedAt, remark }, operator, requestKey) {
   cashCents(targetBalance, { label: '账户调整后余额' })
   const conn = await pool.getConnection()
   try {
@@ -255,9 +256,28 @@ async function adjust(id, { targetBalance, happenedAt, remark }, operator) {
     const [[acc]] = await conn.query('SELECT * FROM finance_accounts WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
     if (!acc) throw new AppError('资金账户不存在', 404)
 
-    storedCashCents(acc.current_balance, '账户原余额')
+    const currentCents = storedCashCents(acc.current_balance, '账户原余额')
+    const expectedCents = cashCents(expectedBalance, { label: '确认时的账户余额' })
     const targetUnits = moneyUnits(targetBalance)
-    const diffUnits = targetUnits - moneyUnits(acc.current_balance)
+    const request = await beginResourceOperationRequest(conn, {
+      requestKey, action: 'finance.account.adjust', userId: operator.operatorId,
+      resourceType: 'finance_account', resourceId: id,
+    })
+    if (request.replay) {
+      const previous = request.responseData
+      const priorUnits = moneyUnits(previous.balance)
+      if (priorUnits !== targetUnits || priorUnits - moneyUnits(previous.diff) !== expectedCents * 100n) {
+        throw new AppError('该请求键已有不同的余额调整，请核对原流水', 409, 'FINANCE_ACCOUNT_ADJUST_REQUEST_MISMATCH')
+      }
+      await conn.commit()
+      return previous
+    }
+    if (currentCents !== expectedCents) {
+      throw new AppError('账户余额已变化，请核对新余额后再次确认', 409, 'FINANCE_ACCOUNT_BALANCE_CHANGED', {
+        currentBalance: cashNumber(currentCents),
+      })
+    }
+    const diffUnits = targetUnits - currentCents * 100n
     if (diffUnits === 0n) throw new AppError('调整后余额与当前余额相同，无需调整', 400)
 
     const res = await recordTransaction(conn, {
@@ -268,8 +288,10 @@ async function adjust(id, { targetBalance, happenedAt, remark }, operator) {
       happenedAt: happenedAt || beijingTodayYmd(),
       remark: remark || `余额调整：${acc.current_balance} → ${moneyText(targetUnits)}`,
     }, operator)
+    const data = { id: Number(id), balance: res.balanceAfter, diff: Number(moneyText(diffUnits)) }
+    await completeOperationRequest(conn, request, { data, resourceType: 'finance_account', resourceId: id })
     await conn.commit()
-    return { id: Number(id), balance: res.balanceAfter, diff: Number(moneyText(diffUnits)) }
+    return data
   } catch (error) {
     await conn.rollback()
     throw error

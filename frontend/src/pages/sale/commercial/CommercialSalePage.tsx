@@ -29,7 +29,6 @@ import { Button } from '@/components/ui/button'
 import DataTable from '@/components/shared/DataTable'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
-import CommercialFulfillmentSummary from './CommercialFulfillmentSummary'
 import { PrintPreviewOverlay } from '@/components/print/SaleOrderPrintTemplate'
 import { FulfillmentProgressCard } from '../form/components/FulfillmentProgressCard'
 import { SaleOrderOverview } from '../form/components/SaleOrderOverview'
@@ -210,7 +209,7 @@ export default function CommercialSalePage({
     <div className="flex flex-col gap-2.5">
       <ActionBar
         title={order.orderNo}
-        description="查看销售明细、回款与履约进度。"
+        description="查看销售明细、回款与仓库作业进度。"
         subtitle={<SoftStatusLabel label={workflow.label} tone={workflow.tone} />}
         rightActions={
           <>
@@ -319,9 +318,6 @@ export default function CommercialSalePage({
         <SaleOrderInfoCard order={order} />
         <CommercialOrderItems order={order} />
       </KeepAliveSection>
-      <KeepAliveSection active={detailTab === 'fulfillment'} className="space-y-3">
-        <CommercialFulfillmentSummary key={order.id} id={order.id} owner={owner} groups={order.commercialGroups ?? []} />
-      </KeepAliveSection>
       <KeepAliveSection active={detailTab === 'progress'} className="space-y-3"><div className="card-base space-y-4 p-4">
         {!ownerCurrent ? (
           <p role="alert">读取来源已变化，原任务资料保留；请回原服务器核对后办理交接。</p>
@@ -332,7 +328,7 @@ export default function CommercialSalePage({
         )}
         <SaleOrderPickingProgress order={order} />
         {!!order.commercialDispatches?.length && <div data-sale-batches className="space-y-2">
-          <h3 className="text-sm font-semibold">发货批次</h3>
+          <h2 className="text-sm font-semibold">发货批次</h2>
           <DataTable virtualized rowKey="id" columns={[
             { key: 'taskNo', title: '任务', width: 150 },
             { key: 'productName', title: '商品', width: 260, render: value => <span className="whitespace-normal break-words">{String(value)}</span> },

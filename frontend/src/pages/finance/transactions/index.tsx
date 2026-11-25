@@ -185,17 +185,25 @@ export default function FinanceTransactionsPage() {
 
   const columns: TableColumn<AccountTransaction>[] = [
     { key: 'happenedAt', title: '日期', width: 110, render: v => formatDisplayDate(String(v)) },
-    { key: 'accountName', title: '账户', width: 150, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
+    { key: 'accountName', title: '账户', width: 132, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
     { key: 'bizType', title: '类型', width: 100, render: (_, row) => {
       const t = row as AccountTransaction
       // 余额调整是人工对平账目的动作，与常规收付款区分开
       return <SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} />
     }},
-    { key: 'bizNo', title: '关联单号', width: 160, render: (v,row) => (row as AccountTransaction).bizType===6 && mayTrace && Number.isSafeInteger((row as AccountTransaction).bizId) && Number((row as AccountTransaction).bizId)>0
-      ? <Button size="sm" variant="link" onClick={()=>{if(activity.current.active&&readActivity===activity.current.generation&&disposalOwnerCurrent(readOwner)&&mayTrace)setTrace({id:Number((row as AccountTransaction).bizId),owner:readOwner,activity:readActivity,refundNo:String(v),fundId:Number((row as AccountTransaction).id),amount4:Number((row as AccountTransaction).amount).toFixed(4)})}}>{String(v)}</Button>
-      : v ? <span className="text-doc-code-muted">{String(v)}</span>
-      : <span className="text-muted-foreground">—</span> },
-    { key: 'partyName', title: '往来单位', width: 150, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
+    { key: 'bizNo', title: '关联单号', width: 140, render: (value, row) => {
+      const refundId = Number(row.bizId)
+      if (row.bizType === 6 && mayTrace && Number.isSafeInteger(row.bizId) && refundId > 0) {
+        const refundNo = String(value)
+        return <Button size="sm" variant="link" title={refundNo}
+          className="h-auto max-w-full justify-start whitespace-normal break-all px-0 py-1 text-left" onClick={() => {
+            if (!activity.current.active || readActivity !== activity.current.generation || !disposalOwnerCurrent(readOwner) || !mayTrace) return
+            setTrace({ id: refundId, owner: readOwner, activity: readActivity, refundNo, fundId: Number(row.id), amount4: Number(row.amount).toFixed(4) })
+          }}>{refundNo}</Button>
+      }
+      return value ? <span className="text-doc-code-muted break-all">{String(value)}</span> : <span className="text-muted-foreground">—</span>
+    } },
+    { key: 'partyName', title: '往来单位', width: 132, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
     { key: 'amount', title: '收入', width: 120, align: 'right', render: (_, row) => {
       const t = row as AccountTransaction
       return t.direction === 1 ? <span className="tabular-nums font-medium text-success-ink">{cashLabel(t.amount)}</span> : <span className="text-muted-foreground">—</span>
@@ -208,7 +216,7 @@ export default function FinanceTransactionsPage() {
       <span className={`tabular-nums ${Number(v) < 0 ? 'text-destructive-ink' : 'text-foreground'}`}>{cashLabel(v as number)}</span>
     )},
     { key: 'operatorName', title: '操作人', width: 100, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
-    { key: 'remark', title: '备注', expandableText: true, width: 200, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
+    { key: 'remark', title: '备注', expandableText: true, width: 142, render: v => (v as string) || <span className="text-muted-foreground">—</span> },
   ]
 
   const summary = data?.summary
@@ -239,7 +247,7 @@ export default function FinanceTransactionsPage() {
 
       <QueryChips chips={queryChips} onClearAll={() => { setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' }); }} />
 
-      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />}
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" scrollLabel="资金流水表格" />}
 
       {!isError && !isLoading && data && <ListSummary total={total} unit="笔" />}
 

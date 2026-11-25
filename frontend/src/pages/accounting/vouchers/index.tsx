@@ -11,7 +11,7 @@ import { ReportTable } from '@/components/shared/ReportTable'
  * 前端不复制任何会计规则（借贷方向/金额/勾稽一律以接口为准）。
  */
 
-import { useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { Plus, RefreshCw, Download, FileText, Undo2, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -245,6 +245,8 @@ type Row = { accountId: number | null; direction: number; amount: string; summar
 const emptyRow = (direction = 1): Row => ({ accountId: null, direction, amount: '', summary: '' })
 
 function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  const fieldId = useId()
   const { data: accounts = [] } = useAccountFlat({ onlyLeaf: true, onlyActive: true })
   const { mutate: create, isPending } = useCreateManualVoucher()
   const [voucherDate, setVoucherDate] = useState(() => todayYmd())
@@ -272,17 +274,22 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-6xl">
-        <DialogHeader description={"填写记账日期、摘要与借贷分录。"}><DialogTitle>手工凭证录入</DialogTitle></DialogHeader>
+      <DialogContent className="sm:max-w-6xl" onOpenAutoFocus={event => {
+        event.preventDefault()
+        titleRef.current?.focus()
+      }}>
+        <DialogHeader description="填写记账日期、摘要与借贷分录。">
+          <DialogTitle ref={titleRef} tabIndex={-1}>手工凭证录入</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3 py-1">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>记账日期 *</Label>
-              <DatePicker value={voucherDate} onChange={setVoucherDate} disabled={isPending} />
+              <Label htmlFor={`${fieldId}-date`}>记账日期 *</Label>
+              <DatePicker id={`${fieldId}-date`} value={voucherDate} onChange={setVoucherDate} disabled={isPending} />
             </div>
             <div className="space-y-1.5">
-              <Label>摘要</Label>
-              <Input value={summary} onChange={e => setSummary(e.target.value)} placeholder="整张凭证摘要（选填）" disabled={isPending} />
+              <Label htmlFor={`${fieldId}-summary`}>摘要</Label>
+              <Input id={`${fieldId}-summary`} value={summary} onChange={e => setSummary(e.target.value)} placeholder="整张凭证摘要（选填）" disabled={isPending} />
             </div>
           </div>
 
@@ -290,19 +297,19 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
             {rows.map((r, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Select value={r.accountId ? String(r.accountId) : ''} onValueChange={val => setRow(i, { accountId: Number(val) })} disabled={isPending}>
-                  <SelectTrigger className="h-9 flex-1"><SelectValue placeholder="选择科目" /></SelectTrigger>
+                  <SelectTrigger className="h-9 flex-1" aria-label={`第 ${i + 1} 行科目`}><SelectValue placeholder="选择科目" /></SelectTrigger>
                   <SelectContent>
                     {accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.code} {a.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 <Select value={String(r.direction)} onValueChange={val => setRow(i, { direction: Number(val) })} disabled={isPending}>
-                  <SelectTrigger className="h-9 w-20"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-20" aria-label={`第 ${i + 1} 行借贷方向`}><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="1">借</SelectItem><SelectItem value="2">贷</SelectItem></SelectContent>
                 </Select>
                 <Input type="number" value={r.amount} onChange={e => setRow(i, { amount: e.target.value })}
-                  placeholder="金额" className="w-32 text-right tabular-nums" disabled={isPending} />
+                  placeholder="金额" aria-label={`第 ${i + 1} 行金额`} className="w-32 text-right tabular-nums" disabled={isPending} />
                 <Input value={r.summary} onChange={e => setRow(i, { summary: e.target.value })}
-                  placeholder="行摘要" className="w-40" disabled={isPending} />
+                  placeholder="行摘要" aria-label={`第 ${i + 1} 行摘要`} className="w-40" disabled={isPending} />
                 <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive-ink" aria-label="删除本行分录"
                   onClick={() => setRows(rs => rs.length > 2 ? rs.filter((_, idx) => idx !== i) : rs)} disabled={isPending || rows.length <= 2}>
                   <Trash2 className="h-4 w-4" />

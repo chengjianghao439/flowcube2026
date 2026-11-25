@@ -32,9 +32,39 @@ test('stored received fractional supplier fact keeps raw detail and permanent ol
  const own=await svc.getOwnOperation(uuid(3),{action:'supplier.refund.receive.61',requestKey:'fixed-key'},9);assert.equal(own.data.amount,'0.0067')
  assert.deepEqual(f.data,before)
 })
-function accountFixture({hasTransactions=false,type=1,companyId=1,balance='0.0001'}={}){const sql=[],row={id:1,type,company_id:companyId,is_active:1,opening_balance:balance,current_balance:balance};const conn={beginTransaction:async()=>{},commit:async()=>{},rollback:async()=>{},release(){},query:async(q,args)=>{sql.push({q,args});if(q.startsWith('SELECT * FROM finance_accounts'))return [[copy(row)]];if(q.startsWith('SELECT id FROM finance_account_transactions'))return [hasTransactions?[{id:31}]:[]];if(q.startsWith('UPDATE finance_accounts'))return [{affectedRows:1}];throw Error('Unexpected money projection '+q)}}
- const svc=load('modules/finance/finance-accounts.service.js',{'../../utils/decimalMoney':money,'../../utils/cashMoney':cash,'../../config/db':{pool:{getConnection:async()=>conn}},'../../utils/AppError':AppError,'../../constants/voucherSource':require('../backend/src/constants/voucherSource'),'../../utils/backendTime':{},'../../utils/codeGenerator':{},'../../utils/pagination':{}})
- return {svc,conn,sql,row}}
+function accountFixture({hasTransactions=false,type=1,companyId=1,balance='0.0001'}={}) {
+ const sql = [], transactions = [], receipts = new Map()
+ const row = { id:1, type, company_id:companyId, is_active:1, opening_balance:balance, current_balance:balance }
+ const conn = {
+  beginTransaction:async()=>{}, commit:async()=>{}, rollback:async()=>{}, release(){},
+  async query(q,args) {
+   sql.push({q,args})
+   if(q.startsWith('SELECT * FROM finance_accounts'))return [[copy(row)]]
+   if(q.startsWith('SELECT opening_balance FROM finance_accounts'))return [[{opening_balance:row.opening_balance}]]
+   if(q.startsWith('SELECT id FROM finance_account_transactions'))return [hasTransactions?[{id:31}]:[]]
+   if(q.startsWith('INSERT INTO finance_account_transactions')) {
+    transactions.push({direction:args[1],amount:args[2]})
+    return [{insertId:transactions.length}]
+   }
+   if(q.includes('AS fractional_count')) {
+    const delta=transactions.reduce((sum,t)=>sum+(t.direction===1?1n:-1n)*money.moneyUnits(t.amount),0n)
+    return [[{delta:money.moneyText(delta),fractional_count:0}]]
+   }
+   if(q.startsWith('UPDATE finance_accounts SET current_balance'))row.current_balance=args[0]
+   if(q.startsWith('UPDATE finance_accounts')||q.startsWith('UPDATE finance_account_transactions'))return [{affectedRows:1}]
+   throw Error('Unexpected money projection '+q)
+  },
+ }
+ const operationRequest = {
+  async beginResourceOperationRequest(_conn,{requestKey,action,userId,resourceId}) {
+   const key=JSON.stringify([requestKey,action,userId,resourceId])
+   return {key,replay:receipts.has(key),responseData:receipts.get(key)}
+  },
+  async completeOperationRequest(_conn,{key},{data}) { receipts.set(key,data) },
+ }
+ const svc=load('modules/finance/finance-accounts.service.js',{'../../utils/decimalMoney':money,'../../utils/cashMoney':cash,'../../config/db':{pool:{getConnection:async()=>conn}},'../../utils/AppError':AppError,'../../constants/voucherSource':require('../backend/src/constants/voucherSource'),'../../utils/backendTime':{beijingTodayYmd:()=> '2026-11-24'},'../../utils/codeGenerator':{},'../../utils/pagination':{},'../../utils/operationRequest':operationRequest})
+ return {svc,conn,sql,row,transactions}
+}
 test('legacy fractional account metadata edit and explicit identical amount preserve old money',async()=>{
  for(const openingBalance of [undefined,'0.0001']){const f=accountFixture();await f.svc.update(1,{name:'保留原账',type:1,isActive:false,openingBalance});assert.equal(f.sql.length,2);assert.equal(f.sql[1].args[5],'0.0001');assert.ok(!f.sql.some(s=>/SUM|current_balance=/.test(s.q))) }
 })
@@ -53,8 +83,25 @@ test('new ordinary funds cannot use a legacy account belonging to a book whose p
 })
 test('account real monetary edit and adjustment still reject old fractional source',async()=>{
  const f=accountFixture();await assert.rejects(f.svc.update(1,{name:'x',type:1,openingBalance:'0.01'}),e=>e.statusCode===409)
- await assert.rejects(f.svc.adjust(1,{targetBalance:'0.01'},{}),e=>e.statusCode===409)
+ await assert.rejects(f.svc.adjust(1,{targetBalance:'0.01',expectedBalance:0},{}),e=>e.statusCode===409&&e.code==='CASH_LEGACY_PRECISION_REVIEW_REQUIRED')
  assert.equal(f.sql.some(s=>s.q.startsWith('UPDATE')),false)
+})
+test('余额调整锁内拒绝过期预览，并保留当时的最新余额和全部流水', async () => {
+ const f=accountFixture({balance:'130.0000'})
+ await assert.rejects(f.svc.adjust(1,{targetBalance:120,expectedBalance:100},{operatorId:2},'stale'),
+  e=>e.statusCode===409&&e.code==='FINANCE_ACCOUNT_BALANCE_CHANGED'&&e.data.currentBalance===130)
+ assert.equal(f.row.current_balance,'130.0000')
+ assert.equal(f.transactions.length,0)
+ assert.match(f.sql[0].q,/FOR UPDATE/)
+})
+test('重核后余额调整写入正确方向，同键提交只返回原回执', async () => {
+ const f=accountFixture({balance:'130.0000'})
+ const body={targetBalance:120,expectedBalance:130}
+ const result=await f.svc.adjust(1,body,{operatorId:2},'reconfirmed')
+ assert.equal(result.diff,-10)
+ assert.equal(result.balance,120)
+ assert.deepEqual(await f.svc.adjust(1,body,{operatorId:2},'reconfirmed'),result)
+ assert.deepEqual(f.transactions,[{direction:2,amount:'10.0000'}])
 })
 test('customer refund backfill denies wrong warehouse before raw stored amount and application writes',async()=>{
  let applications=0

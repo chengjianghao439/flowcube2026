@@ -9,6 +9,8 @@ import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 
 import apiClient from '@/api/client'
 import { toast } from '@/lib/toast'
 import { useCompanyStore } from '@/store/companyStore'
+import { useAuthStore } from '@/store/authStore'
+import { PERMISSIONS as P } from '@/lib/permission-codes'
 import FixedAssetsPage from './index'
 
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
@@ -38,6 +40,7 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date('2026-11-18T16:05:00Z'))
   vi.clearAllMocks()
+  useAuthStore.setState({ user: { id: 9, username: 'fixture', realName: '合成用户', roleId: 5, roleName: '合成角色', permissions: [P.ACCOUNTING_LEDGER_VIEW, P.ACCOUNTING_VOUCHER_MANAGE] } })
   useCompanyStore.getState().setCompany(1)
   host = document.createElement('div')
   document.body.append(host)
@@ -72,6 +75,7 @@ afterEach(async () => {
   host.remove()
   useCompanyStore.getState().setCompany(1)
   apiClient.defaults.adapter = originalAdapter
+  useAuthStore.setState({ user: null })
   localStorage.clear()
   vi.useRealTimers()
   expect(unexpected).toEqual([])

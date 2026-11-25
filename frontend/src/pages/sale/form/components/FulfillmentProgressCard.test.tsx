@@ -2,6 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
+import { getByRole } from '@testing-library/dom'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import { FulfillmentProgressCard } from './FulfillmentProgressCard'
 import type { SaleOrder, SaleOrderTask } from '@/types/sale'
@@ -19,6 +20,7 @@ function Path() { const location = useLocation(); return <output>{location.pathn
 function render(tasks: SaleOrderTask[]) { act(() => root.render(<MemoryRouter initialEntries={['/sale/5']}><FulfillmentProgressCard order={{ taskNo: 'WT-11', warehouseTaskStatus: 2, tasks } as SaleOrder} /><Path /></MemoryRouter>)) }
 test('主管单仓交接只导航注册入口并带准确任务与仓库', () => {
   render([task(11, 3)])
+  expect(getByRole(host, 'heading', { name: '作业进度', level: 2 })).toBeTruthy()
   const button = [...host.querySelectorAll('button')].find(node => node.textContent === '去分配分拣格')
   expect(button).toBeTruthy()
   act(() => button!.click())
@@ -26,6 +28,7 @@ test('主管单仓交接只导航注册入口并带准确任务与仓库', () =>
 })
 test('多仓交接逐任务独立，挂起、已分配与后续阶段不显示入口', () => {
   render([task(11, 3), task(22, 8), task(33, 3, { cancelRequestedAt: 'now' }), task(44, 3, { adjustmentRequestedAt: 'now' }), task(55, 3, { sortingBinId: 4 }), task(66, 3, { status: 4 })])
+  expect(getByRole(host, 'heading', { name: '仓库任务进度', level: 2 })).toBeTruthy()
   const buttons = [...host.querySelectorAll('button')].filter(node => node.textContent === '去分配分拣格')
   expect(buttons).toHaveLength(2)
   act(() => buttons[1].click())

@@ -9,3 +9,12 @@ export function parseInboundFreightAmount(raw: string): number | null {
   if (!Number.isFinite(amount) || amount > 999999999999.99 || !Number.isSafeInteger(Math.round(amount * 100))) throw Error('运费金额超出可记录范围')
   return amount
 }
+
+/** 同时供草稿字段反馈和提交使用，避免两处解析规则分叉。 */
+export function validateInboundFreightAmount(raw: string): { amount: number | null; error: string | null } {
+  try {
+    return { amount: parseInboundFreightAmount(raw), error: null }
+  } catch (error) {
+    return { amount: null, error: error instanceof Error ? error.message : '请核对运费金额' }
+  }
+}

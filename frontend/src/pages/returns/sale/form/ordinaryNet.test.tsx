@@ -76,17 +76,39 @@ test('ordinary source permits partial quantity and omission without guessing dis
     expect((host.querySelector('input[placeholder="输入原单号"]') as HTMLInputElement).value).toBe('SO80')
   })
 })
+test('manual sale return focuses the first required field and reports it beside the picker', async () => {
+  await mounted('/returns/sale/new', async host => {
+    await click(host, '创建退货单')
+    const picker = [...host.querySelectorAll('button')].find(button => button.textContent?.includes('点击选择客户'))!
+    expect(document.activeElement).toBe(picker)
+    const error = document.getElementById(picker.getAttribute('aria-describedby') ?? '')
+    expect(error?.getAttribute('role')).toBe('alert')
+    expect(error?.textContent).toBe('请选择客户')
+    expect(host.querySelector('.desktop-section-heading [role="alert"]')?.textContent).toBe('请添加至少一条退货明细')
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(api.create).not.toHaveBeenCalled()
+  })
+})
 test('ordinary partial quantity cannot exceed source remaining', async () => {
   await mounted(path, async host => {
-    await set(host.querySelector('[aria-label="退货数量"]')!, '8.01'); await click(host, '创建退货单')
-    expect(api.create).not.toHaveBeenCalled(); expect(host.textContent).toContain('数量最多两位小数')
+    const input = host.querySelector<HTMLInputElement>('[aria-label="退货数量"]')!
+    await set(input, '8.01'); await click(host, '创建退货单')
+    expect(api.create).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(input)
+    expect(input.getAttribute('aria-invalid')).toBe('true')
+    expect(input.closest('td')?.querySelector('[role="alert"]')?.textContent).toBe('本次申请量不能超过来源剩余额度')
+    expect(toast.warning).not.toHaveBeenCalled()
+    await set(input, '7.25')
+    expect(input.closest('td')?.querySelector('[role="alert"]')).toBeNull()
   })
 })
 test('actual quantity input rejects a third decimal without replacing the accepted draft', async () => {
   await mounted(path, async host => {
     const input = host.querySelector<HTMLInputElement>('[aria-label="退货数量"]')!
     await set(input, '1.001')
-    expect(input.value).toBe('8'); expect(toast.error).toHaveBeenCalledWith('数量最多保留两位小数')
+    expect(input.value).toBe('8')
+    expect(input.closest('td')?.querySelector('[role="alert"]')?.textContent).toBe('数量最多保留两位小数')
+    expect(toast.error).not.toHaveBeenCalled()
     expect(api.create).not.toHaveBeenCalled()
   })
 })
@@ -94,7 +116,9 @@ test('integer product remains integer when source quantity becomes editable', as
   await mounted(path, async host => {
     const input = host.querySelectorAll<HTMLInputElement>('[aria-label="退货数量"]')[1]
     await set(input, '1.5')
-    expect(input.value).toBe('4'); expect(toast.error).toHaveBeenCalledWith('该商品数量只能是整数')
+    expect(input.value).toBe('4')
+    expect(input.closest('td')?.querySelector('[role="alert"]')?.textContent).toBe('该商品数量只能是整数')
+    expect(toast.error).not.toHaveBeenCalled()
     expect(api.create).not.toHaveBeenCalled()
   })
 })

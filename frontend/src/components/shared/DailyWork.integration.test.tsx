@@ -19,6 +19,8 @@ import { isRegisteredErpRoute, resolveRoutePermission, resolveRouteTitle } from 
 import { getDashboardLayoutApi, saveDashboardLayoutApi } from '@/api/dashboard'
 import { WIDGETS, mergeLayout } from '@/components/dashboard/registry'
 import type { DashboardLayout } from '@/types/dashboard'
+import { getRoleWorkbenchApi, type RoleWorkbenchData } from '@/api/reports'
+import { getNotificationsApi, type NotificationItem } from '@/api/notifications'
 
 vi.mock('@/api/dashboard', async importOriginal => ({
   ...await importOriginal<typeof import('@/api/dashboard')>(),
@@ -31,9 +33,10 @@ vi.mock('@/api/reports', async importOriginal => ({
   getRoleWorkbenchApi: vi.fn(async () => ({ sections: [], summary: {}, topAlert: null })),
 }))
 vi.mock('@/api/notifications', () => ({ getNotificationsApi: vi.fn(async () => ({ items: [] })) }))
+const retiredIssues = vi.hoisted(() => vi.fn(async () => ({ list: [], pagination: { total: 0 }, summary: {} })))
 vi.mock('@/api/fulfillment', async importOriginal => ({
   ...await importOriginal<typeof import('@/api/fulfillment')>(),
-  getFulfillmentIssues: vi.fn(async () => ({ list: [], pagination: { total: 0 }, summary: {} })),
+  getFulfillmentIssues: retiredIssues,
 }))
 // KeepAlive 自身与 store 使用真实实现；只替换目的页业务体，观察内存筛选/草稿是否保留。
 vi.mock('@/router/routeRegistry', async importOriginal => ({
@@ -72,6 +75,8 @@ async function render(page: 'dashboard' | 'workbench' | 'daily' = 'daily', keepA
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   vi.clearAllMocks()
+  vi.mocked(getRoleWorkbenchApi).mockResolvedValue({ sections: [], summary: { totalAlerts: 0, warehouseCount: 0, saleCount: 0, managementCount: 0 }, topAlert: null })
+  vi.mocked(getNotificationsApi).mockResolvedValue({ items: [], total: 0, counts: {} })
   saved = { widgets: WIDGETS.map(w => ({ id: w.id, visible: false, w: w.defaultW })) }
   vi.mocked(getDashboardLayoutApi).mockImplementation(async () => saved)
   useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key })
@@ -127,7 +132,8 @@ test('退出及切换账号不留下旧权限入口，超级管理员退出后�
 test('待办中心保留常用工作且仍保留自身REPORT_VIEW门槛', async () => {
   login([...warehouse, P.REPORT_VIEW]); await render('workbench')
   expect(labels()).toEqual(['库存管理', '客户往来', '供应商往来', '条码打印查询'])
-  expect(host.textContent).toContain('订单履约待办'); expect(host.textContent).toContain('财务与系统提醒')
+  expect(host.textContent).not.toContain('订单履约待办'); expect(host.textContent).toContain('财务与系统提醒')
+  expect(retiredIssues).not.toHaveBeenCalled()
   expect(resolveRoutePermission('/reports/role-workbench')).toBe(P.REPORT_VIEW)
 })
 test('仪表盘移除常用工作后保留卡片顺序、隐藏偏好与保存载荷', async () => {
@@ -135,8 +141,14 @@ test('仪表盘移除常用工作后保留卡片顺序、隐藏偏好与保存�
   await render('dashboard'); expect(work()).toBeNull()
   expect([...host.querySelectorAll('[data-widget-id]')].map(el => el.getAttribute('data-widget-id'))).toEqual(['kpi-pending-sale'])
   await act(async () => button('编辑仪表盘')!.click()); expect(work()).toBeNull()
+  expect(button('保存')!.disabled).toBe(true)
+  const narrower = host.querySelector<HTMLButtonElement>('[aria-label="减小待处理销售宽度"]')!
+  await act(async () => narrower.click())
   await act(async () => button('保存')!.click()); await settle()
-  expect(saveDashboardLayoutApi).toHaveBeenCalledWith(mergeLayout(saved))
+  const expected = mergeLayout(saved)
+  expect(saveDashboardLayoutApi).toHaveBeenCalledWith({
+    widgets: expected.widgets.map(widget => widget.id === 'kpi-pending-sale' ? { ...widget, w: 2 } : widget),
+  })
   expect(work()).toBeNull()
 })
 test('待办常用入口通过真实工作区保留原标签query、筛选草稿及其他单据', async () => {
@@ -157,4 +169,95 @@ test('待办常用入口通过真实工作区保留原标签query、筛选草稿
   expect(host.querySelector('output')?.textContent).toBe('/sale?keyword=old')
   expect(useWorkspaceStore.getState().tabs).toEqual([HOME_TAB, workbench, existing, detail])
   expect(input.value).toBe('未保存的数量'); expect(input.isConnected).toBe(true)
+})
+
+const payable: NotificationItem = { type: 'danger', icon: '!', text: '2 笔应付账款未结清', path: '/payments/payable', category: 'finance', priority: 12 }
+const queue: RoleWorkbenchData = {
+  sections: [{ key: 'warehouse', title: '仓库角色', description: '收货、上架和补打', priorityRank: 10, cards: [
+    { key: 'warehouse-pending-receive', title: '待收货', description: '待收货订单', count: 0, path: '/inbound-tasks', actionLabel: '查看收货订单', accent: 'blue', priorityRank: 10, priorityLabel: 'P1', items: [] },
+    { key: 'warehouse-print', title: '打印失败待补打', description: '收货打印异常', count: 2, path: '/inbound-tasks/12', actionLabel: '打开首单', accent: 'rose', priorityRank: 40, priorityLabel: 'P4', items: [
+      { id: 1, title: 'IN-12', subtitle: '箱码 A', path: '/inbound-tasks/12', badge: '失败' },
+      { id: 2, title: 'IN-12', subtitle: '箱码 B', path: '/inbound-tasks/12', badge: '超时待确认' },
+    ] },
+  ] }], summary: { totalAlerts: 2, warehouseCount: 2, saleCount: 0, managementCount: 0 }, topAlert: null,
+}
+function workbenchWithData() {
+  login([P.DASHBOARD_VIEW, P.REPORT_VIEW, P.INBOUND_ORDER_VIEW, P.PAYMENT_VIEW])
+  vi.mocked(getRoleWorkbenchApi).mockResolvedValue(queue)
+  vi.mocked(getNotificationsApi).mockResolvedValue({ items: [payable], total: 1, counts: {} })
+}
+async function refreshWorkbench() {
+  const refresh = button('立即刷新')!
+  await act(async () => refresh.click())
+  await settle()
+}
+
+test('非零业务先显示，零类别可展开，重复首单动作隐藏且打印任务以条计数', async () => {
+  workbenchWithData()
+  await render('workbench')
+  const page = host.textContent ?? ''
+  expect(page.indexOf('打印失败待补打')).toBeLessThan(page.indexOf('常用工作'))
+  expect(page).toContain('2 条打印任务')
+  expect(page).not.toContain('当前显示 2 条')
+  expect(button('打开首单')).toBeUndefined()
+  expect([...host.querySelectorAll('button')].filter(button => button.textContent?.includes('IN-12'))).toHaveLength(2)
+  const quiet = [...host.querySelectorAll('details')].find(element => element.textContent?.includes('待收货'))
+  expect(quiet?.open).toBe(false)
+  expect(quiet?.querySelector('summary')?.textContent).toContain('零待办类别')
+})
+
+test('岗位数量大于可见明细时说明当前显示数', async () => {
+  workbenchWithData()
+  const section = queue.sections[0]
+  const [receive, print] = section.cards
+  vi.mocked(getRoleWorkbenchApi).mockResolvedValue({
+    ...queue,
+    sections: [{ ...section, cards: [receive, { ...print, count: 4 }] }],
+  })
+  await render('workbench')
+  expect(host.textContent).toContain('4 条打印任务')
+  expect(host.textContent).toContain('当前显示 2 条')
+})
+
+test('财务提醒以类别计数并用可读的紧急程度，首读失败保留旁区', async () => {
+  workbenchWithData()
+  vi.mocked(getNotificationsApi).mockRejectedValueOnce(new Error('合成通知读取失败'))
+  await render('workbench')
+  expect(host.textContent).toContain('打印失败待补打')
+  expect(host.textContent).toContain('财务与系统提醒加载失败')
+  expect(host.textContent).not.toContain('暂无待提醒事项')
+  await refreshWorkbench()
+  expect(host.textContent).toContain('1 类提醒')
+  expect(host.textContent).toContain('2 笔应付账款未结清')
+  expect(host.textContent).toContain('优先处理')
+  expect(host.textContent).not.toContain('P12')
+})
+
+test('岗位和提醒的刷新失败都保留上次已读内容、最后更新时间和各自重试', async () => {
+  workbenchWithData()
+  await render('workbench')
+  vi.mocked(getRoleWorkbenchApi).mockRejectedValueOnce(new Error('合成岗位刷新失败'))
+  vi.mocked(getNotificationsApi).mockRejectedValueOnce(new Error('合成提醒刷新失败'))
+  await refreshWorkbench()
+  expect(vi.mocked(getRoleWorkbenchApi)).toHaveBeenCalledTimes(2)
+  expect(vi.mocked(getNotificationsApi)).toHaveBeenCalledTimes(2)
+  expect(retiredIssues).not.toHaveBeenCalled()
+  expect(host.textContent).toContain('打印失败待补打')
+  expect(host.textContent).toContain('2 笔应付账款未结清')
+  expect(host.querySelectorAll('time[datetime]')).toHaveLength(2)
+  expect(host.textContent).toContain('显示上次读取的内容')
+  const retry = [...host.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === '重试岗位待办')!
+  await act(async () => retry.click()); await settle()
+  expect(vi.mocked(getRoleWorkbenchApi)).toHaveBeenCalledTimes(3)
+  expect(vi.mocked(getNotificationsApi)).toHaveBeenCalledTimes(2)
+})
+
+test('仪表盘待处理与关注沿用岗位动作，无已退役的履约摘要或读取', async () => {
+  workbenchWithData()
+  saved.widgets = saved.widgets.map(widget => widget.id === 'board-workbench' ? { ...widget, visible: true } : widget)
+  await render('dashboard')
+  await vi.waitFor(() => expect(host.textContent).toContain('打印失败待补打'))
+  expect(button('进入待办中心')).toBeTruthy()
+  expect(host.textContent).not.toContain('履约事项')
+  expect(retiredIssues).not.toHaveBeenCalled()
 })

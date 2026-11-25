@@ -8,14 +8,18 @@ import {
 
 const QK = 'acct-ledger'
 
+export function isLedgerPeriod(period: string): boolean {
+  return /^\d{4}(0[1-9]|1[0-2])$/.test(period)
+}
+
 export const useTrialBalance = (period: string) =>
-  useQuery({ queryKey: useCompanyQueryKey([QK, 'trial', period]), queryFn: () => getTrialBalanceApi(period), enabled: /^\d{6}$/.test(period) })
+  useQuery({ queryKey: useCompanyQueryKey([QK, 'trial', period]), queryFn: () => getTrialBalanceApi(period), enabled: isLedgerPeriod(period) })
 
 export const useAccountLedger = (accountId: number | null, period: string) =>
   useQuery({
     queryKey: useCompanyQueryKey([QK, 'account', accountId, period]),
     queryFn: () => getAccountLedgerApi(accountId as number, period),
-    enabled: !!accountId && /^\d{6}$/.test(period),
+    enabled: !!accountId && isLedgerPeriod(period),
   })
 
 export const useIncomeStatement = (period: string) =>

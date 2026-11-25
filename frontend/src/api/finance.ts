@@ -51,9 +51,12 @@ export const createAccountApi = (d: object) => client.post<{ id:number; code:str
 export const updateAccountApi = (id: number, d: object) => client.put<unknown>(`/finance/accounts/${id}`, d)
 export const deleteAccountApi = (id: number) => client.delete<unknown>(`/finance/accounts/${id}`)
 
-/** 余额调整：填目标余额，服务端补一笔差额流水（不直接改余额，留痕） */
-export const adjustAccountApi = (id: number, d: { targetBalance: number; happenedAt?: string; remark?: string }) =>
-  client.post<{ id:number; balance:number; diff:number }>(`/finance/accounts/${id}/adjust`, d)
+/** 按用户核对的当前余额和目标余额补一笔差额流水。 */
+export const adjustAccountApi = (id: number, d: { expectedBalance: number; targetBalance: number; happenedAt?: string; remark?: string }, requestKey: string) =>
+  client.post<{ id:number; balance:number; diff:number }>(`/finance/accounts/${id}/adjust`, d, {
+    headers: withRequestKeyHeaders(requestKey),
+    automaticReplay: false,
+  })
 
 /** 账户流水。不传 accountId = 查全部账户（资金流水页的默认形态） */
 export const getAccountTransactionsApi = (p: { accountId?: number; bizType?: string; direction?: string; startDate?: string; endDate?: string; keyword?: string; page?: number; pageSize?: number }, config: import('axios').AxiosRequestConfig = {}) =>

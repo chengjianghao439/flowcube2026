@@ -10,6 +10,9 @@ import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { INBOUND_STATUS_LABEL, type InboundTaskStatus } from '@/types/inbound-tasks'
 import { todayYmd } from '@/lib/dateTime'
+import { useFinderReadContext } from '@/hooks/useFinderReadContext'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 
 /** 收货订单查询弹窗对外的筛选值（与 URL 参数一一对应） */
 export interface InboundTaskQueryValues {
@@ -47,18 +50,21 @@ interface Props {
 }
 
 export default function InboundTaskQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
+  const { can } = usePermission()
+  const canFindSupplier = can(PERMISSIONS.SUPPLIER_VIEW)
   const [draft, setDraft] = useState<InboundTaskQueryValues>(EMPTY)
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
   const [productOpen, setProductOpen] = useState(false)
   const [supplierOpen, setSupplierOpen] = useState(false)
-
-
+  const supplierPickerOpen = open && canFindSupplier && supplierOpen
+  const supplierRead = useFinderReadContext(supplierPickerOpen, supplierPickerOpen, PERMISSIONS.SUPPLIER_VIEW, 'inbound-query-supplier')
 
   const wasOpen = useRef(false)
   useEffect(() => {
     if (open && !wasOpen.current) setDraft({ ...initial })
     wasOpen.current = open
   }, [open, initial])
+  useEffect(() => { if (!open || !canFindSupplier) setSupplierOpen(false) }, [open, canFindSupplier])
 
   function set<K extends keyof InboundTaskQueryValues>(key: K, value: InboundTaskQueryValues[K]) {
     setDraft(d => ({ ...d, [key]: value }))
@@ -91,7 +97,7 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC
             label="供应商"
             placeholder="选择供应商"
             value={draft.supplierName ? `${draft.supplierName}` : ''}
-            onOpen={() => setSupplierOpen(true)}
+            onOpen={canFindSupplier ? () => setSupplierOpen(true) : undefined}
             onClear={() => setDraft(d => ({ ...d, supplierId: null, supplierName: '' }))}
           />
 
@@ -164,11 +170,11 @@ export default function InboundTaskQueryDialog({ open, initial, resetValues, onC
         </QueryFormLayout>
       </QueryDialog>
 
-      <SupplierFinder
-        open={supplierOpen}
+      {supplierPickerOpen && <SupplierFinder open
+        context={supplierRead}
         onClose={() => setSupplierOpen(false)}
         onConfirm={r => setDraft(d => ({ ...d, supplierId: r.id, supplierName: r.name }))}
-      />
+      />}
       <ProductFinder
         open={productOpen}
         onClose={() => setProductOpen(false)}

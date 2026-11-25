@@ -9,31 +9,34 @@
  * 默认最小高度 40px，长文本完整换行并自动增高；调用方可调整最小高度。
  * 即使查询表单沿用 h-9，也不能把长选择结果压回固定高度。
  */
+import type { AriaAttributes } from 'react'
 import { Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-export function PickerField({ id, label, value, placeholder, onOpen, onClear, onDoubleClick, disabled, className }: {
+export function PickerField({ id, label, value, placeholder, onOpen, onClear, onDoubleClick, disabled, className, 'aria-invalid': invalid, 'aria-describedby': describedBy }: {
   id?: string
   /** 给了就渲染内置 label（查询弹窗用）；表单场景通常外部已有 Label，不传 */
   label?: string
   value: string
   placeholder: string
-  onOpen: () => void
+  onOpen?: () => void
   /** 给了才显示清除按钮 */
   onClear?: () => void
   onDoubleClick?: () => void
   disabled?: boolean
   className?: string
-}) {
+} & Pick<AriaAttributes, 'aria-invalid' | 'aria-describedby'>) {
   const field = (
     <div className="fc-picker-field flex min-w-0 items-center gap-1">
       <button
         id={id}
+        aria-invalid={invalid}
+        aria-describedby={describedBy}
         type="button"
         onClick={onOpen}
         onDoubleClick={onDoubleClick}
-        disabled={disabled}
+        disabled={disabled || !onOpen}
         className={cn(
           'fc-picker-trigger min-h-10 !h-auto w-full min-w-0 whitespace-normal [overflow-wrap:anywhere] rounded-md border border-input bg-background px-3 py-2',
           'text-left text-sm transition-colors',

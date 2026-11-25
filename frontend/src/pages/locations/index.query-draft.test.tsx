@@ -33,11 +33,14 @@ const oldAdapter = apiClient.defaults.adapter, oldEnv = apiClient.defaults.env
 const transport = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
   const method = (typeof input === 'object' && 'method' in input ? input.method : init?.method) || 'GET'
-  if (url.origin !== 'http://query-draft.fixture.invalid' || method !== 'GET' || !['/api/locations', '/api/warehouses/active'].includes(url.pathname)) {
+  if (url.origin !== 'http://query-draft.fixture.invalid' || method !== 'GET' || !['/api/locations', '/api/warehouses/active', '/api/export/locations'].includes(url.pathname)) {
     unexpected.push(`${method} ${url.origin}${url.pathname}`)
     return response({ success: false, message: '禁止未声明请求' }, 403)
   }
   requests.push(url)
+  if (url.pathname === '/api/export/locations') {
+    return new Response(new Uint8Array([0x50, 0x4b]), { headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } })
+  }
   return url.pathname === '/api/warehouses/active' ? respondWarehouses() : respondList(url)
 })
 function response(body: unknown, status = 200) {
@@ -207,4 +210,23 @@ test('LOC-Q08 关键字回车提交当前草稿并沿原筛选合同关闭弹窗
   await wait(() => expect(listRequests().at(-1)?.searchParams.get('keyword')).toBe(draft.keyword))
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: draft.keyword, zone: draft.zone, warehouseId: '8', page: '1', pageSize: '200', status: '2' })
+})
+
+test('库位导出使用应用后的完整筛选，忽略后来取消的查询草稿', async () => {
+  vi.stubGlobal('URL', class extends URL {
+    static createObjectURL() { return 'blob:location-export-fixture' }
+    static revokeObjectURL() {}
+  })
+  const download = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+  await ready()
+  await apply()
+  await openQuery()
+  await edit(draft)
+  await click('取消', dialog())
+  await click('导出')
+  await wait(() => expect(download).toHaveBeenCalledOnce())
+  const exported = requests.filter(url => url.pathname === '/api/export/locations').at(-1)
+  expect(Object.fromEntries(exported!.searchParams)).toEqual({
+    keyword: applied.keyword, zone: applied.zone, warehouseId: '8', status: '1',
+  })
 })

@@ -43,6 +43,7 @@ router.delete('/accounts/:id', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_DEL
 // 余额调整单独授权：它能直接改变账面资金，属于高敏动作
 router.post('/accounts/:id/adjust', requirePermission(PERMISSIONS.FINANCE_ACCOUNT_ADJUST), vParams(idParam), validateBody(z.object({
   targetBalance: z.number('请填写调整后的账户余额'),
+  expectedBalance: z.number('请更新客户端界面并重新确认当前账户余额'),
   happenedAt: z.string().optional(),
   remark: z.string().max(300).optional().or(z.literal('')),
 })), ctrl.adjust)

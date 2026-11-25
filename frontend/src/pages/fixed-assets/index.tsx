@@ -1,4 +1,6 @@
 import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
@@ -12,6 +14,7 @@ import { FilterCard } from '@/components/shared/FilterCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -33,14 +36,33 @@ const ASSET_STATUS: Record<number, { label: string; tone: StatusTone }> = {
 
 function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () => void; onSaved: () => void }) {
   const qc = useQueryClient()
-  const residualRateId = useId()
+  const fieldId = useId()
   const [form, setForm] = useState({ assetName: '', category: '', departmentName: '', acquireDate: todayYmd(), originalCost: '', residualRate: '0.05', usefulMonths: '36' })
+  const [rateBadInput, setRateBadInput] = useState(false)
   const { mutate: create, isPending } = useMutation({
     mutationFn: createFixedAssetApi,
     onSuccess: (r) => { toast.success(`已创建固定资产 ${r.assetNo}`); onClose(); onSaved(); qc.invalidateQueries({ queryKey: ['fixed-assets'] }) },
     onError: (e: Error) => toast.error(e.message),
   })
   const set = (k: keyof typeof form) => (v: string) => setForm(prev => ({ ...prev, [k]: v }))
+  const originalCost = Number(form.originalCost)
+  const residualRate = Number(form.residualRate)
+  const usefulMonths = Number(form.usefulMonths)
+  const costError = !Number.isFinite(originalCost) || originalCost <= 0
+  const showCostError = form.originalCost !== '' && costError
+  const rateError = rateBadInput || !Number.isFinite(residualRate) || residualRate < 0 || residualRate > 0.9999
+  const monthsError = !Number.isInteger(usefulMonths) || usefulMonths < 1 || usefulMonths > 600
+  const canCreate = !!form.assetName.trim() && !costError && !rateError && !monthsError && !isPending
+
+  function submit() {
+    if (!canCreate) return
+    create({
+      assetName: form.assetName.trim(), category: form.category.trim() || null,
+      departmentName: form.departmentName.trim() || null,
+      acquireDate: form.acquireDate, originalCost, residualRate, usefulMonths,
+    })
+  }
+
   return (
     <Dialog open={open} onOpenChange={v => !v && onClose()}>
       <DialogContent className="fc-form-dialog sm:max-w-3xl">
@@ -66,30 +88,38 @@ function CreateDialog({ open, onClose, onSaved }: { open: boolean; onClose: () =
               <DatePicker aria-label="购置日期" value={form.acquireDate} onChange={v => set('acquireDate')(v)} />
             </div>
             <div className="space-y-1">
-              <Label>原值（元）*</Label>
-              <Input aria-label="原值（元）" type="number" value={form.originalCost} onChange={e => set('originalCost')(e.target.value)} placeholder="12000" className="text-right" />
+              <Label htmlFor={`${fieldId}-cost`}>原值（元）<span aria-hidden="true">*</span></Label>
+              <Input id={`${fieldId}-cost`} type="number" step="any" aria-required="true"
+                aria-invalid={showCostError || undefined}
+                aria-describedby={showCostError ? `${fieldId}-cost-error` : undefined}
+                value={form.originalCost} onChange={e => set('originalCost')(e.target.value)} placeholder="12000" className="text-right" />
+              {showCostError && <p id={`${fieldId}-cost-error`} className="text-xs text-destructive-ink" role="alert">原值必须大于 0</p>}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
-              <Label htmlFor={residualRateId}>残值率</Label>
-              <Input id={residualRateId} aria-describedby={`${residualRateId}-hint`} type="number" value={form.residualRate} onChange={e => set('residualRate')(e.target.value)} step="0.01" className="text-right" />
-              <p id={`${residualRateId}-hint`} className="text-xs text-muted-foreground">输入 0 至 0.9999 的数值。默认 0.05 表示 5%。</p>
+              <Label htmlFor={`${fieldId}-rate`}>残值率</Label>
+              <Input id={`${fieldId}-rate`} type="number" min="0" max="0.9999" step="0.0001"
+                aria-invalid={rateError || undefined} aria-describedby={`${fieldId}-rate-hint`}
+                onInput={event => setRateBadInput(event.currentTarget.validity.badInput)}
+                value={form.residualRate} onChange={e => set('residualRate')(e.target.value)} className="text-right" />
+              <p id={`${fieldId}-rate-hint`} role={rateError ? 'alert' : undefined}
+                className={rateError ? 'text-xs text-destructive-ink' : 'text-xs text-muted-foreground'}>
+                {rateError ? '残值率必须在 0 至 0.9999 之间' : '输入 0 至 0.9999 的数值。默认 0.05 表示 5%。'}
+              </p>
             </div>
             <div className="space-y-1">
-              <Label>使用年限（月）*</Label>
-              <Input aria-label="使用年限（月）" type="number" value={form.usefulMonths} onChange={e => set('usefulMonths')(e.target.value)} className="text-right" />
+              <Label htmlFor={`${fieldId}-months`}>使用年限（月）<span aria-hidden="true">*</span></Label>
+              <Input id={`${fieldId}-months`} type="number" min="1" max="600" step="1" aria-required="true"
+                aria-invalid={monthsError || undefined} aria-describedby={monthsError ? `${fieldId}-months-error` : undefined}
+                value={form.usefulMonths} onChange={e => set('usefulMonths')(e.target.value)} className="text-right" />
+              {monthsError && <p id={`${fieldId}-months-error`} className="text-xs text-destructive-ink" role="alert">使用年限必须为 1 至 600 的整数月</p>}
             </div>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
-          <Button disabled={!form.assetName.trim() || !form.originalCost || !form.usefulMonths || isPending} onClick={() => create({
-            assetName: form.assetName.trim(), category: form.category.trim() || null,
-            departmentName: form.departmentName.trim() || null,
-            acquireDate: form.acquireDate, originalCost: Number(form.originalCost),
-            residualRate: Number(form.residualRate), usefulMonths: Number(form.usefulMonths),
-          })}>{isPending ? '创建中…' : '创建'}</Button>
+          <Button disabled={!canCreate} onClick={submit}>{isPending ? '创建中…' : '创建'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -146,23 +176,26 @@ function DisposeDialog({ target, isCurrent, onClose }: {
           </div>
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-type`}>处置方式</Label>
-            <select id={`${fieldId}-type`} disabled={isPending} value={form.disposeType} onChange={e => setForm(p => ({ ...p, disposeType: e.target.value }))} className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm">
-              <option value="1">出售</option>
-              <option value="2">报废</option>
-            </select>
+            <Select disabled={isPending} value={form.disposeType} onValueChange={disposeType => setForm(p => ({ ...p, disposeType }))}>
+              <SelectTrigger id={`${fieldId}-type`} className="h-9 min-h-9 py-1.5"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">出售</SelectItem>
+                <SelectItem value="2">报废</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-date`}>处置日期</Label>
-            <DatePicker id={`${fieldId}-date`} disabled={isPending} value={form.disposeDate} onChange={v => setForm(p => ({ ...p, disposeDate: v }))} />
+            <DatePicker id={`${fieldId}-date`} disabled={isPending} value={form.disposeDate} onChange={v => setForm(p => ({ ...p, disposeDate: v }))} className="h-9" />
           </div>
           <div className="grid grid-cols-2 gap-x-5 gap-y-4">
             <div className="space-y-1">
               <Label htmlFor={`${fieldId}-income`}>处置收入</Label>
-              <Input id={`${fieldId}-income`} disabled={isPending} type="number" value={form.income} onChange={e => setForm(p => ({ ...p, income: e.target.value }))} className="text-right" />
+              <Input id={`${fieldId}-income`} disabled={isPending} type="number" value={form.income} onChange={e => setForm(p => ({ ...p, income: e.target.value }))} className="h-9 text-right" />
             </div>
             <div className="space-y-1">
               <Label htmlFor={`${fieldId}-expense`}>清理费用</Label>
-              <Input id={`${fieldId}-expense`} disabled={isPending} type="number" value={form.expense} onChange={e => setForm(p => ({ ...p, expense: e.target.value }))} className="text-right" />
+              <Input id={`${fieldId}-expense`} disabled={isPending} type="number" value={form.expense} onChange={e => setForm(p => ({ ...p, expense: e.target.value }))} className="h-9 text-right" />
             </div>
           </div>
         </div>
@@ -179,6 +212,10 @@ function DisposeDialog({ target, isCurrent, onClose }: {
 
 export default function FixedAssetsPage() {
   const qc = useQueryClient()
+  const { can } = usePermission()
+  const canManage = can(PERMISSIONS.ACCOUNTING_VOUCHER_MANAGE)
+  const managePermission = useRef(canManage)
+  managePermission.current = canManage
   const [keyword, setKeyword] = useState('')
   const [applied, setApplied] = useState<{ keyword: string }>({ keyword: '' })
   const [createOpen, setCreateOpen] = useState(false)
@@ -193,14 +230,21 @@ export default function FixedAssetsPage() {
     setDisposeTarget(null)
   }), [])
 
+  useEffect(() => {
+    if (canManage) return
+    setCreateOpen(false)
+    currentTarget.current = null
+    setDisposeTarget(null)
+  }, [canManage])
+
   const openDisposal = (asset: FixedAsset) => {
-    if (currentTarget.current || useCompanyStore.getState().companyId !== companyId) return
+    if (!managePermission.current || currentTarget.current || useCompanyStore.getState().companyId !== companyId) return
     const target = { asset, companyId, opening: ++nextOpening.current }
     currentTarget.current = target
     setDisposeTarget(target)
   }
   const isCurrent = (target: DisposalTarget) =>
-    currentTarget.current === target && useCompanyStore.getState().companyId === target.companyId
+    managePermission.current && currentTarget.current === target && useCompanyStore.getState().companyId === target.companyId
   const closeDisposal = (target: DisposalTarget) => {
     if (!isCurrent(target)) return
     currentTarget.current = null
@@ -237,33 +281,37 @@ export default function FixedAssetsPage() {
     { key: 'accumDepr', title: '累计折旧', width: 110, align: 'right', render: v => <span className="tabular-nums text-muted-foreground">{money(v as number)}</span> },
     { key: 'netBookValue', title: '账面净值', width: 110, align: 'right', render: v => <span className="tabular-nums font-medium">{money(v as number)}</span> },
     { key: 'status', title: '状态', width: 90, render: (_, r) => <SoftStatusLabel label={ASSET_STATUS[r.status]?.label ?? '未知'} tone={ASSET_STATUS[r.status]?.tone ?? 'draft'} /> },
-    {
+  ]
+  if (canManage) {
+    columns.push({
       key: 'id',
       title: '操作',
       width: 110,
       render: (_, r) => (r.status === 1 || r.status === 2) ? (
         <Button size="sm" variant="outline" onClick={() => openDisposal(r)}>处置</Button>
       ) : <span className="text-xs text-muted-foreground">—</span>,
-    },
-  ]
+    })
+  }
 
   return (
     <div className="space-y-4">
       <PageHeader
         title="固定资产"
-        description="固定资产卡片、按月计提折旧（直线法）、处置/报废。折旧凭证自动生成并进入总账。"
+        description={canManage ? '固定资产卡片、按月计提折旧（直线法）、处置/报废。折旧凭证自动生成并进入总账。' : '查看固定资产、折旧及账面净值。'}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => downloadExport('/export/fixed-assets').catch(e => toast.error((e as Error).message))}>导出</Button>
-            <Button variant="outline" disabled={deprPending} onClick={() => runDepr(beijingPeriod())}>{deprPending ? '计提中…' : '计提本月折旧'}</Button>
-            <Button onClick={() => setCreateOpen(true)}>新增资产</Button>
+            {canManage && <>
+              <Button variant="outline" disabled={deprPending} onClick={() => runDepr(beijingPeriod())}>{deprPending ? '计提中…' : '计提本月折旧'}</Button>
+              <Button onClick={() => setCreateOpen(true)}>新增资产</Button>
+            </>}
           </div>
         }
       />
 
 
       <FilterCard>
-        <Input placeholder="编号 / 名称 / 类别" value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && setApplied({ keyword })} className="w-56" />
+        <Input aria-label="搜索固定资产" placeholder="编号 / 名称 / 类别" value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && setApplied({ keyword })} className="h-9 w-56" />
         <Button size="sm" variant="outline" onClick={() => setApplied({ keyword })}>搜索</Button>
         <div className="ml-auto text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项</div>
       </FilterCard>
@@ -275,8 +323,8 @@ export default function FixedAssetsPage() {
       )}
       {total > 0 && <ListSummary total={total} />}
 
-      <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => refetch()} />
-      {disposeTarget?.companyId === companyId && (
+      {canManage && <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => refetch()} />}
+      {canManage && disposeTarget?.companyId === companyId && (
         <DisposeDialog
           key={disposeTarget.opening}
           target={disposeTarget}

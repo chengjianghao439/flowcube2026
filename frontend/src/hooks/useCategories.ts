@@ -8,14 +8,19 @@ import type { ProductFinderReadContext } from './useProducts'
 
 const QK = 'categories'
 
-export const useCategoryTree = (context?: ProductFinderReadContext) => useQuery({
+export const useCategoryTree = (context?: ProductFinderReadContext, enabled?: boolean) => useQuery({
   queryKey: context ? [QK, 'tree', ...context.key] : [QK, 'tree'],
   queryFn: async query => {
     context?.assertCurrent()
-    const data = context ? await getCategoryTreeApi({ ...context.config, signal: query.signal }) : await getCategoryTreeApi()
+    const data = context || enabled !== undefined
+      ? await getCategoryTreeApi({ ...context?.config, signal: query.signal })
+      : await getCategoryTreeApi()
     context?.assertCurrent()
     return data
-  }, enabled: !context || context.enabled, staleTime: 60000,
+  },
+  enabled: enabled !== false && (!context || context.enabled),
+  subscribed: enabled !== false,
+  staleTime: 60000,
 })
 
 function invalidate(qc: ReturnType<typeof useQueryClient>) {

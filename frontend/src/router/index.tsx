@@ -10,6 +10,7 @@ import DesktopPrintClientBridge from '@/components/desktop/DesktopPrintClientBri
 
 import { pdaRoutes } from './pdaRoutes'
 import { ERP_NO_ACCESS_PATH, resolveErpLoginDestination } from './erpLoginDestination'
+import { ROUTE_ALIASES } from './routeDefinitions'
 
 // ── 后台系统页面 ──────────────────────────────────────────────────────────────
 const LoginPage       = lazy(() => import('@/pages/login'))
@@ -59,6 +60,11 @@ function ErpProtectedRoute() {
   const location = useLocation()
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />
   return <Outlet />
+}
+
+function ErpAliasRedirect({ pathname }: { pathname: string }) {
+  const { search, hash } = useLocation()
+  return <Navigate to={{ pathname, search, hash }} replace />
 }
 
 /** ERP 游客守卫与登录回调共用当前账号的落地权限判断。 */
@@ -124,10 +130,9 @@ export default function AppRouter() {
           {/* ── ERP 已登录路由 ── */}
           <Route element={<ErpProtectedRoute />}>
             <Route path={ERP_NO_ACCESS_PATH} element={<NoAccessPage />} />
-            <Route path="/sales" element={<Navigate to="/sale" replace />} />
-            {/* 应付/应收、供应商/客户对账原本各是一个页面的两个 tab，拆开后旧链接与旧工作区标签仍要能打开 */}
-            <Route path="/payments" element={<Navigate to="/payments/payable" replace />} />
-            <Route path="/reports/reconciliation" element={<Navigate to="/reports/reconciliation/payable" replace />} />
+            {Object.entries(ROUTE_ALIASES).map(([alias, pathname]) => (
+              <Route key={alias} path={alias} element={<ErpAliasRedirect pathname={pathname} />} />
+            ))}
             <Route path="/*" element={<AppLayout />} />
           </Route>
 

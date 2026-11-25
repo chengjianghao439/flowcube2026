@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { within } from '@testing-library/dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import StockCheckPage from './index'
 import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
@@ -8,13 +9,15 @@ import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityC
 const fixture = vi.hoisted(() => ({
   query: { data: undefined as unknown, isLoading: false, error: null as unknown, refetch: vi.fn() },
   params: [] as { keyword: string }[],
+  canCreate: false,
+  create: vi.fn(),
 }))
 vi.mock('@/hooks/useStockCheck', () => ({
   useCheckList: (params: { keyword: string }) => { fixture.params.push(params); return fixture.query },
-  useCreateCheck: () => ({ isPending: false, mutateAsync: vi.fn() }),
+  useCreateCheck: () => ({ isPending: false, mutateAsync: fixture.create }),
 }))
 vi.mock('@/hooks/useWarehouses', () => ({ useWarehousesActive: () => ({ data: [] }) }))
-vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => false }) }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => fixture.canCreate }) }))
 // Detail business data is synthetic; use the actual portal/focus-return boundary.
 vi.mock('./components/CheckDetailDialog', async () => {
   const { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } = await import('@/components/ui/dialog')
@@ -27,6 +30,8 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   fixture.query = { data: { list: rows(1000), pagination: { total: 1000 }, truncated: false }, isLoading: false, error: null, refetch: vi.fn() }
   fixture.params = []
+  fixture.create.mockReset()
+  fixture.canCreate = false
   host = document.createElement('div'); host.dataset.workspaceScroll = ''; document.body.append(host)
   Object.defineProperties(host, { clientHeight: { value: 480 }, offsetHeight: { value: 480 }, offsetWidth: { value: 800 } })
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
@@ -73,6 +78,14 @@ test('加载时不显示旧成功计数，小列表仍完整呈现', () => {
   fixture.query.isLoading = false; fixture.query.data = { list: rows(3), pagination: { total: 3 } }; render()
   expect(host.querySelectorAll('tbody tr')).toHaveLength(3); expect(host.textContent).toContain('共 3 单')
 })
+test('盘点操作列默认给查看/填写按钮留出足够宽度', () => {
+  fixture.query.data = { list: rows(1), pagination: { total: 1 } }
+  render()
+  const action = within(host).getByRole('button', { name: '查看/填写' })
+  const cell = action.closest('td')!
+  const column = [...host.querySelectorAll('col')][cell.cellIndex]
+  expect(Number.parseFloat(column.style.width)).toBeGreaterThanOrEqual(128)
+})
 test('搜索条件、未应用草稿和末行详情关闭均不清空或重挂列表', async () => {
   render(); const search = input('仓A')
   act(() => search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
@@ -102,4 +115,25 @@ test('聚焦的操作按钮滚出视口仍保留焦点，失焦后不继续挂�
   expect(host.textContent).toContain('SC-1000')
   act(() => host.querySelector('input')!.focus())
   expect(action.isConnected).toBe(false)
+})
+
+test('新建盘点的可读标签和必填仓库入口与原生提交一致', () => {
+  fixture.canCreate = true
+  render()
+  act(() => within(host).getByRole('button', { name: /新建盘点/ }).click())
+  const dialog = within(document.body).getByRole('dialog', { name: '新建盘点单' })
+  const scope = within(dialog)
+  expect(scope.getByRole('combobox', { name: /选择仓库/ }).getAttribute('aria-required')).toBe('true')
+  expect(scope.getByRole('combobox', { name: '盘点方式' })).toBeTruthy()
+  expect(scope.getByRole('textbox', { name: '备注' })).toBeTruthy()
+  const submit = scope.getByRole<HTMLButtonElement>('button', { name: '创建盘点' })
+  expect(submit.disabled).toBe(false)
+  expect(submit.form?.classList.contains('fc-form-dialog-body')).toBe(true)
+  expect(submit.closest('.fc-dialog-footer')?.parentElement).toBe(dialog)
+  act(() => submit.click())
+  const warehouse = scope.getByRole('combobox', { name: /选择仓库/ })
+  expect(warehouse.getAttribute('aria-invalid')).toBe('true')
+  expect(document.activeElement).toBe(warehouse)
+  expect(scope.getByRole('alert').textContent).toBe('请选择仓库')
+  expect(fixture.create).not.toHaveBeenCalled()
 })

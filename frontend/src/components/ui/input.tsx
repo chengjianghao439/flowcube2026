@@ -7,17 +7,20 @@ import { toast } from "@/lib/toast"
 type InputProps = React.ComponentProps<"input"> & {
   /** 仅数量字段启用；金额、单价、换算率不要设置。step=1 时同时限制整数。 */
   quantity?: boolean
+  /** 订单表单可在字段旁显示数量错误。 */
+  onQuantityError?: (message: string | null) => void
 }
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
-  ({ className, type, quantity = false, onChange, onPaste, onBlur, ...props }, ref) => {
+  ({ className, type, quantity = false, onQuantityError, onChange, onPaste, onBlur, ...props }, ref) => {
     const accepted = React.useRef(String(props.defaultValue ?? ''))
     const rejected = React.useRef(false)
     const integerOnly = String(props.step) === '1'
+    const reportQuantityError = onQuantityError ?? toast.error
     const reject = (input: HTMLInputElement, message: string) => {
       input.value = props.value === undefined ? accepted.current : String(props.value ?? '')
       rejected.current = true
-      toast.error(message)
+      reportQuantityError(message)
     }
     return (
       <input
@@ -34,11 +37,12 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           if (error) { reject(event.currentTarget, error); return }
           accepted.current = event.currentTarget.value
           rejected.current = false
+          if (quantity) onQuantityError?.(null)
           onChange?.(event)
         }}
         onPaste={event => {
           const error = quantity ? quantityInputError(event.clipboardData.getData('text'), integerOnly) : null
-          if (error) { event.preventDefault(); rejected.current = true; toast.error(error); return }
+          if (error) { event.preventDefault(); rejected.current = true; reportQuantityError(error); return }
           onPaste?.(event)
         }}
         onBlur={event => {

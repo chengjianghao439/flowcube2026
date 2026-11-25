@@ -27,7 +27,7 @@ import {
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
   AlignHorizontalSpaceAround, AlignVerticalSpaceAround,
-  ChevronUp, ChevronDown, ArrowLeft,
+  ChevronUp, ChevronDown, ArrowLeft, PanelLeft, PanelRight,
 } from 'lucide-react'
 import { getLogoApi } from '@/api/settings'
 
@@ -1067,6 +1067,8 @@ export default function PrintTemplateEditor() {
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.PRINT_TEMPLATE_MANAGE)
   const gridPatternUid = useId().replace(/:/g, '')
+  const fieldsPanelId = useId()
+  const propertiesPanelId = useId()
   const tabPath = useContext(TabPathContext)
   const isNew   = tabPath.endsWith('/new') || tabPath === ''
   const id      = isNew ? undefined : tabPath.split('/').pop()
@@ -1102,6 +1104,8 @@ export default function PrintTemplateEditor() {
   /** 多选：Shift+点击 toggle；空数组 = 未选中 */
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [preview,    setPreview]    = useState(false)
+  const [fieldsOpen, setFieldsOpen] = useState(true)
+  const [propertiesOpen, setPropertiesOpen] = useState(true)
   /** 画布仅影响显示与拖拽换算，不改变存库的 mm 坐标 */
   const [editorZoom, setEditorZoom] = useState(1)
   /** 用户手动缩放后暂停自适应（fit 由「适应画布」按钮/初始化触发；手动调回可再触发） */
@@ -1898,28 +1902,71 @@ export default function PrintTemplateEditor() {
     <div className="desktop-print-editor flex h-full min-h-0 flex-col gap-5 overflow-hidden">
       <PageHeader
         title={isNew ? '新建打印模板' : `编辑打印模板 #${id}`}
-        description={`${preview ? '画布下方显示真实纸张尺寸，保存后打印以预览为准。' : '从左侧拖入字段，点选后拖动、缩放或在右侧修改属性；工具栏可放大画布，Delete 删除。画布下方显示真实纸张尺寸（毫米），保存后打印以预览为准。'}${isZplLabelType(type) ? '打印时按毫米坐标生成 ZPL。' : ''}`}
-        actions={
-          // 评审次要项：保存后（尤其新建跳转）给返回列表出口
-          <Button type="button" size="sm" variant="outline" onClick={() => navigate(getWorkspaceListPath('/settings/print-templates'))}>
+        description={`${preview ? '画布下方显示真实纸张尺寸，保存后打印以预览为准。' : '从字段列表拖入元素，点选后拖动、缩放或修改属性，按 Delete 删除。画布下方显示真实纸张尺寸，打印以预览为准。'}${isZplLabelType(type) ? '打印时按毫米坐标生成 ZPL。' : ''}`}
+        actions={<>
+          {!preview && (
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-0.5" role="group" aria-label="编辑器面板">
+                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                  aria-expanded={fieldsOpen} aria-controls={fieldsPanelId} aria-label="字段列表" title={fieldsOpen ? '收起字段列表' : '展开字段列表'}
+                  onClick={() => setFieldsOpen(open => !open)}>
+                  <PanelLeft className="size-4" />
+                </Button>
+                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                  aria-expanded={propertiesOpen} aria-controls={propertiesPanelId} aria-label="属性面板" title={propertiesOpen ? '收起属性面板' : '展开属性面板'}
+                  onClick={() => setPropertiesOpen(open => !open)}>
+                  <PanelRight className="size-4" />
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-0.5" role="group" aria-label="编辑历史">
+                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                  disabled={historyPast.current.length === 0} onClick={undo} title="撤销 (Ctrl+Z)" aria-label="撤销">
+                  <Undo2 className="size-3.5" />
+                </Button>
+                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                  disabled={historyFuture.current.length === 0} onClick={redo} title="重做 (Ctrl+Shift+Z / Ctrl+Y)" aria-label="重做">
+                  <Redo2 className="size-3.5" />
+                </Button>
+                <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                  disabled={selectedIds.length === 0} onClick={() => duplicateGroup(selectedIds)} title="复制选中元素 (Ctrl+D)" aria-label="复制选中元素">
+                  <Copy className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
+          <Button type="button" variant="outline" onClick={() => navigate(getWorkspaceListPath('/settings/print-templates'))}>
             <ArrowLeft className="mr-1 size-4" />
             返回列表
           </Button>
-        }
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => { setPreview(p => !p); setSelectedIds([]) }}
+          >
+            {preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            {preview ? '退出预览' : '预览'}
+          </Button>
+
+          {canManage && <Button type="button" onClick={handleSave} disabled={isPending} className="gap-1.5">
+            {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+            {isPending ? '保存中…' : '保存'}
+          </Button>}
+        </>}
       />
 
-
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
-        <div className="flex shrink-0 flex-wrap items-center gap-3 border-b px-4 py-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
           <Input
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="模板名称"
-            className="h-9 w-60 text-sm" aria-label="模板名称"
+            className="h-9 w-36 text-sm" aria-label="模板名称"
           />
 
           <Select value={String(type)} onValueChange={handleTypeChange}>
-            <SelectTrigger className="h-9 w-[11rem] px-2 text-sm">
+            <SelectTrigger className="h-9 min-h-9 w-32 px-2 py-1.5 text-sm" aria-label="模板类型">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1991,8 +2038,8 @@ export default function PrintTemplateEditor() {
             </div>
           ) : (
             <Select value={paperSize} onValueChange={v => setPaperSize(v as PaperSize)}>
-              <SelectTrigger className="h-9 w-56 shrink-0 px-2 text-sm">
-                <SelectValue />
+              <SelectTrigger className="h-9 min-h-9 w-24 shrink-0 px-2 py-1.5 text-sm" aria-label="纸张规格">
+                <SelectValue>{paperSize.startsWith('thermal') ? paper.label : paperSize}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {paperSelectEntries.map(([k, v]) => (
@@ -2023,7 +2070,7 @@ export default function PrintTemplateEditor() {
                     roundOnBlur
                     onValueChange={value => { snapshot(`page-margin-${k}`); setMargins(m => ({ ...m, [k]: value })) }}
                     onComplete={endInputEdit}
-                    className="h-9 w-[3rem] text-sm"
+                    className="h-9 w-10 px-2 text-sm"
                     title={`页面${zh}边距 mm`}
                   />
                 </div>
@@ -2031,24 +2078,7 @@ export default function PrintTemplateEditor() {
             </div>
           )}
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted-foreground">{elements.length} 个元素</span>
-
-            <div className="flex items-center gap-0.5 rounded-md border border-border bg-background px-0.5 py-0.5">
-              <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
-                disabled={historyPast.current.length === 0} onClick={undo} title="撤销 (Ctrl+Z)" aria-label="撤销">
-                <Undo2 className="size-3.5" />
-              </Button>
-              <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
-                disabled={historyFuture.current.length === 0} onClick={redo} title="重做 (Ctrl+Shift+Z / Ctrl+Y)" aria-label="重做">
-                <Redo2 className="size-3.5" />
-              </Button>
-              <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
-                disabled={selectedIds.length === 0} onClick={() => duplicateGroup(selectedIds)} title="复制选中元素 (Ctrl+D)" aria-label="复制选中元素">
-                <Copy className="size-3.5" />
-              </Button>
-            </div>
-
+          <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
             <div className="flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5">
               <span className="text-xs text-muted-foreground px-0.5">画布</span>
               <Button
@@ -2110,54 +2140,41 @@ export default function PrintTemplateEditor() {
                 适应
               </Button>
             </div>
-
-            <Button
-              size="sm"
-              variant={preview ? 'default' : 'outline'}
-              className="gap-1.5"
-              onClick={() => { setPreview(p => !p); setSelectedIds([]) }}
-            >
-              {preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-              {preview ? '退出预览' : '预览'}
-            </Button>
-
-            {canManage && <Button size="sm" onClick={handleSave} disabled={isPending} className="gap-1.5">
-              {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
-              {isPending ? '保存中…' : '保存'}
-            </Button>}
           </div>
         </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {!preview && (
-            <PalettePanel
-              fields={paletteFields}
-              hint={isZplLabelType(type) ? '拖拽条码或文字到画布' : undefined}
-              onDragStart={handlePaletteDragStart}
-              layers={elements}
-              selectedIds={selectedIds}
-              onSelectLayer={(id, additive) =>
-                setSelectedIds(prev => additive
-                  ? (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-                  : [id])
-              }
-              onMoveLayer={(id, dir) => {
-                // 渲染顺序 = 数组顺序（后者覆盖前者）：-1 = 更早绘制（垫底），+1 = 更晚绘制（置顶）
-                const idx = elements.findIndex(e => e.id === id)
-                if (idx < 0) return
-                const to = idx + dir
-                if (to < 0 || to >= elements.length) return
-                snapshot()
-                setElements(prev => {
-                  const next = [...prev]
-                  const [moved] = next.splice(idx, 1)
-                  next.splice(to, 0, moved)
-                  return next
-                })
-              }}
-              onDeleteLayer={id => deleteElement(id)}
-              showLayers={!isZplLabelType(type)}
-            />
+            <div id={fieldsPanelId} className={fieldsOpen ? 'flex min-h-0 shrink-0' : 'hidden'}>
+              <PalettePanel
+                fields={paletteFields}
+                hint={isZplLabelType(type) ? '拖拽条码或文字到画布' : undefined}
+                onDragStart={handlePaletteDragStart}
+                layers={elements}
+                selectedIds={selectedIds}
+                onSelectLayer={(id, additive) =>
+                  setSelectedIds(prev => additive
+                    ? (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+                    : [id])
+                }
+                onMoveLayer={(id, dir) => {
+                  // 渲染顺序 = 数组顺序（后者覆盖前者）：-1 = 更早绘制（垫底），+1 = 更晚绘制（置顶）
+                  const idx = elements.findIndex(e => e.id === id)
+                  if (idx < 0) return
+                  const to = idx + dir
+                  if (to < 0 || to >= elements.length) return
+                  snapshot()
+                  setElements(prev => {
+                    const next = [...prev]
+                    const [moved] = next.splice(idx, 1)
+                    next.splice(to, 0, moved)
+                    return next
+                  })
+                }}
+                onDeleteLayer={id => deleteElement(id)}
+                showLayers={!isZplLabelType(type)}
+              />
+            </div>
           )}
 
           <div
@@ -2320,32 +2337,34 @@ export default function PrintTemplateEditor() {
               {elements.length === 0 && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground pointer-events-none">
                   <Table2 className="size-10" />
-                  <p className="text-sm">从左侧拖拽字段到这里</p>
+                  <p className="text-sm">{preview || fieldsOpen ? '从左侧拖拽字段到这里' : '展开字段列表后拖入字段'}</p>
                 </div>
               )}
             </div>
 
             <p className="mx-auto text-xs text-muted-foreground">
-              {paper.label} · {paper.w} × {paper.h} mm
+              {paper.label} · {paper.w} × {paper.h} mm · {elements.length} 个元素
             </p>
           </div>
 
           {!preview && (
-            <PropertiesPanel
-              key={selected?.id}
-              el={selected}
-              multiCount={selectedIds.length}
-              isLabel={isZplLabelType(type)}
-              canvasW={paper.w}
-              canvasH={paper.h}
-              onChange={patchElement}
-              onToggle={toggleElementField}
-              onEndInputEdit={endInputEdit}
-              onDelete={deleteElement}
-              onDeleteMulti={deleteSelectedGroup}
-              onAlign={alignSelectedToCanvas}
-              onDistribute={distributeSelected}
-            />
+            <div id={propertiesPanelId} className={propertiesOpen ? 'flex min-h-0 shrink-0' : 'hidden'}>
+              <PropertiesPanel
+                key={selected?.id}
+                el={selected}
+                multiCount={selectedIds.length}
+                isLabel={isZplLabelType(type)}
+                canvasW={paper.w}
+                canvasH={paper.h}
+                onChange={patchElement}
+                onToggle={toggleElementField}
+                onEndInputEdit={endInputEdit}
+                onDelete={deleteElement}
+                onDeleteMulti={deleteSelectedGroup}
+                onAlign={alignSelectedToCanvas}
+                onDistribute={distributeSelected}
+              />
+            </div>
           )}
         </div>
       </div>

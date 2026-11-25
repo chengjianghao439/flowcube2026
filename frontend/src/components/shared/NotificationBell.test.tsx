@@ -50,3 +50,14 @@ it.each([false, true])('应收及应付通知随目标权限显示，计数只�
   expect(content?.includes('应付账款已逾期')).toBe(allowPayment)
   expect(content?.includes('应收账款未结清')).toBe(allowPayment)
 })
+
+it('长通知列表可取得键盘焦点并与刷新页脚独立', () => {
+  state.items = Array.from({ length: 6 }, (_, index) => ({ path: `/inbound-tasks/${index + 1}`, category: 'operations', type: 'warning', icon: '', text: `收货异常 ${index + 1}` }))
+  act(() => root.render(<MemoryRouter><NotificationBell /></MemoryRouter>))
+  act(() => container.querySelector('button')!.click())
+  const list = document.querySelector<HTMLElement>('[role="region"][aria-label="待处理通知"]')
+  expect(list?.querySelectorAll('button')).toHaveLength(6)
+  expect(list?.textContent).not.toContain('每分钟自动刷新')
+  list?.focus()
+  expect(document.activeElement).toBe(list)
+})

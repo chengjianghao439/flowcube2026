@@ -201,3 +201,15 @@ test('PRODUCT-Q08 关键字回车沿原合同应用当前全部草稿', async ()
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: draft.keyword, categoryId: '5', status: '0', minPrice: draft.minPrice, maxPrice: draft.maxPrice, page: '1', pageSize: '200' }); expect(params()).toEqual({ keyword: draft.keyword, categoryId: '5', status: '0', minPrice: draft.minPrice, maxPrice: draft.maxPrice, page: '1' })
 })
+
+test('商品表在 1390px 可视宽度内保留编码、名称和动作的默认宽度', async () => {
+  await ready()
+  const table = host.querySelector('table')!
+  const widths = [...table.querySelectorAll('col')].map(col => parseFloat(col.style.width))
+  const keys = [...table.querySelectorAll<HTMLElement>('thead th')].map(th => th.dataset.columnKey)
+  expect(widths[keys.indexOf('code')]).toBeGreaterThanOrEqual(160)
+  expect(widths[keys.indexOf('name')]).toBeGreaterThanOrEqual(220)
+  expect(widths[keys.indexOf('id')]).toBeGreaterThanOrEqual(140)
+  expect(widths.reduce((total, width) => total + width, 0)).toBeLessThanOrEqual(1390)
+  expect(host.querySelector('[data-table-scroll]')?.getAttribute('aria-label')).toBe('商品管理表格')
+})

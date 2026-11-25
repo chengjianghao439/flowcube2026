@@ -144,7 +144,8 @@ async function scenarioAccountProjection(ctx, log, token) {
 
   // 余额调整：补差额流水，不直接改余额
   const adjusted = await http.post(`/api/finance/accounts/${accountId}/adjust`, {
-    token, json: { targetBalance: 1600, remark: 'smoke 调整' },
+    token, headers: { 'X-Request-Key': randomRef('KEY') },
+    json: { expectedBalance: 1500, targetBalance: 1600, remark: 'smoke 调整' },
   })
   log.assert('余额调整成功', adjusted.ok, `status=${adjusted.status}`)
   const adjTxn = await dbQuery(pool,

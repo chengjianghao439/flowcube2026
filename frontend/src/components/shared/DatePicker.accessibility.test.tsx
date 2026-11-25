@@ -2,7 +2,7 @@
 import { act, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { getByRole } from '@testing-library/dom'
+import { fireEvent, getByRole } from '@testing-library/dom'
 import { DatePicker } from './DatePicker'
 import { AppDialog } from './AppDialog'
 // Keep the real Popover/FocusScope; the calendar date rules are outside this
@@ -76,4 +76,37 @@ test('嵌套查询窗中 Escape 只退出日历，第二次才关闭查询窗', 
   expect(change).not.toHaveBeenCalled()
   act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
   await until(() => !document.querySelector('[role="dialog"]'))
+})
+
+test('非法日期在失焦后保留并关联原因，修正后才提交新值', async () => {
+  const change = vi.fn()
+  act(() => root.render(<DatePicker aria-label="业务日期" value="2026-10-08" onChange={change} />))
+  const input = getByRole(host, 'textbox', { name: '业务日期' }) as HTMLInputElement
+  act(() => { fireEvent.change(input, { target: { value: '2026-02-31' } }); fireEvent.focusOut(input) })
+  expect(input.value).toBe('2026-02-31')
+  expect(input.getAttribute('aria-invalid')).toBe('true')
+  const feedback = document.getElementById(input.getAttribute('aria-describedby')!)!
+  expect(feedback.textContent).toContain('有效日期')
+  expect(change).not.toHaveBeenCalled()
+  act(() => { fireEvent.change(input, { target: { value: '2026-2-28' } }); fireEvent.focusOut(input) })
+  expect(input.value).toBe('2026-02-28')
+  expect(input.getAttribute('aria-invalid')).not.toBe('true')
+  expect(change).toHaveBeenCalledExactlyOnceWith('2026-02-28')
+})
+
+test('非法日期按 Enter 保留输入焦点且不触发表单默认提交', () => {
+  const change = vi.fn()
+  act(() => root.render(<form><DatePicker aria-label="报表日期" value="2026-10-08" onChange={change} /><button>查询</button></form>))
+  const input = getByRole(host, 'textbox', { name: '报表日期' }) as HTMLInputElement
+  const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+  act(() => {
+    input.focus()
+    fireEvent.change(input, { target: { value: '2026-13-01' } })
+    input.dispatchEvent(enter)
+  })
+  expect(enter.defaultPrevented).toBe(true)
+  expect(document.activeElement).toBe(input)
+  expect(input.value).toBe('2026-13-01')
+  expect(input.getAttribute('aria-invalid')).toBe('true')
+  expect(change).not.toHaveBeenCalled()
 })

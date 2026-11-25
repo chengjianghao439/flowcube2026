@@ -2,9 +2,10 @@ import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { money } from '@/lib/format'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
-import { useId, useState, useEffect } from 'react'
+import { useId, useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
+import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
@@ -21,8 +22,12 @@ import { toast } from '@/lib/toast'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { usePermission } from '@/hooks/usePermission'
+import { hasPermission } from '@/lib/permissions'
+import { useAuthStore } from '@/store/authStore'
 import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { PERMISSIONS } from '@/lib/permission-codes'
+import { createRequestKey } from '@/lib/requestKey'
+import { ApiClientError } from '@/api/client'
 import {
   getAccountsApi, createAccountApi, updateAccountApi, deleteAccountApi,
   adjustAccountApi, getAccountTransactionsApi, type FinanceAccount,
@@ -39,6 +44,13 @@ const EMPTY_FORM = {
 }
 
 interface AcctQuery { keyword: string; type: string; isActive: string }
+interface AdjustmentIntent {
+  id: number
+  expectedBalance: number
+  targetBalance: number
+  remark: string
+  requestKey: string
+}
 const EMPTY_ACCT_QUERY: AcctQuery = { keyword: '', type: '', isActive: '' }
 const TYPE_NAME: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map(([v, l]) => [v, l]))
 
@@ -51,9 +63,9 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   return (
     <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="fc-form-dialog max-w-lg">
         <DialogHeader description={"设置资金账户的筛选条件。"}><DialogTitle>查询资金账户</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+        <div className="fc-form-dialog-body space-y-3">
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-keyword`}>关键字</Label>
             <Input id={`${fieldId}-keyword`} className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
@@ -93,6 +105,11 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
   )
 }
 
+function mayDeleteFinanceAccount() {
+  const user = useAuthStore.getState().user
+  return hasPermission(user?.permissions, PERMISSIONS.FINANCE_ACCOUNT_DELETE, user?.roleId)
+}
+
 export default function FinanceAccountsPage() {
   const fieldId = useId()
   const qc = useQueryClient()
@@ -100,6 +117,7 @@ export default function FinanceAccountsPage() {
   const canCreate = can(PERMISSIONS.FINANCE_ACCOUNT_CREATE)
   const canUpdate = can(PERMISSIONS.FINANCE_ACCOUNT_UPDATE)
   const canAdjust = can(PERMISSIONS.FINANCE_ACCOUNT_ADJUST)
+  const canDelete = can(PERMISSIONS.FINANCE_ACCOUNT_DELETE)
 
   const [query, setQuery] = useState<AcctQuery>(EMPTY_ACCT_QUERY)
   const [queryOpen, setQueryOpen] = useState(false)
@@ -110,7 +128,12 @@ export default function FinanceAccountsPage() {
   const [adjustTarget, setAdjustTarget] = useState<FinanceAccount | null>(null)
   const [adjustBalance, setAdjustBalance] = useState('')
   const [adjustRemark, setAdjustRemark] = useState('')
+  const [adjustConflict, setAdjustConflict] = useState('')
+  const lastAdjustment = useRef<AdjustmentIntent | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<FinanceAccount | null>(null)
+  useEffect(() => {
+    if (!canDelete) setDeleteTarget(null)
+  }, [canDelete])
 
   const { data, isLoading } = useVisibleQuery({
     queryKey: ['finance-accounts', query],
@@ -160,21 +183,51 @@ export default function FinanceAccountsPage() {
     onSuccess: () => { invalidate(); setFormOpen(false); toast.success(editing ? '账户已保存' : '账户已创建') },
   })
   const adjustMut = useMutation({
-    mutationFn: () => adjustAccountApi(adjustTarget!.id, {
-      targetBalance: Number(adjustBalance),
-      remark: adjustRemark || undefined,
-    }),
+    mutationFn: ({ id, expectedBalance, targetBalance, remark, requestKey }: AdjustmentIntent) =>
+      adjustAccountApi(id, { expectedBalance, targetBalance, remark: remark || undefined }, requestKey),
     onSuccess: (res) => {
       invalidate(); setAdjustTarget(null)
-      toast.success(`余额已调整为 ${money(res.balance)}（差额 ${money(Math.abs(res.diff))}）`)
+      toast.success(`余额已调整为 ${money(res.balance)}（${res.diff < 0 ? '减少' : '增加'} ${money(Math.abs(res.diff))}）`)
+    },
+    onError: (error, intent) => {
+      if (!(error instanceof ApiClientError) || error.code !== 'FINANCE_ACCOUNT_BALANCE_CHANGED') return
+      const currentBalance = (error.data as { currentBalance?: unknown } | null)?.currentBalance
+      if (typeof currentBalance !== 'number' || !Number.isFinite(currentBalance)) return
+      invalidate()
+      setAdjustConflict(error.message)
+      setAdjustTarget(current => current?.id === intent.id ? { ...current, currentBalance } : current)
     },
   })
   const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteAccountApi(id),
+    mutationFn: (id: number) => {
+      if (!mayDeleteFinanceAccount()) throw new Error('没有删除资金账户的权限')
+      return deleteAccountApi(id)
+    },
     onSuccess: () => { invalidate(); setDeleteTarget(null); toast.success('账户已删除') },
   })
 
   function openCreate() { if (canCreate) { setEditing(null); setForm(EMPTY_FORM); setFormOpen(true) } }
+  function openAdjustment(account: FinanceAccount) {
+    lastAdjustment.current = null
+    setAdjustConflict('')
+    setAdjustTarget(account)
+    setAdjustBalance(String(account.currentBalance))
+    setAdjustRemark('')
+  }
+  function confirmAdjustment() {
+    if (!adjustTarget || adjustBalance === '' || adjustMut.isPending) return
+    const { id, currentBalance: expectedBalance } = adjustTarget
+    const targetBalance = Number(adjustBalance)
+    if (targetBalance === expectedBalance) return
+    const previous = lastAdjustment.current
+    const requestKey = previous?.id === id && previous.expectedBalance === expectedBalance
+      && previous.targetBalance === targetBalance && previous.remark === adjustRemark
+      ? previous.requestKey
+      : createRequestKey('finance-account-adjust')
+    const intent = { id, expectedBalance, targetBalance, remark: adjustRemark, requestKey }
+    lastAdjustment.current = intent
+    adjustMut.mutate(intent)
+  }
   function openEdit(a: FinanceAccount) {
     setEditing(a)
     setForm({
@@ -209,8 +262,10 @@ export default function FinanceAccountsPage() {
           onPrimaryClick={() => setTxAccount(a)}
           items={[
             ...(canUpdate ? [{ label: '编辑', onClick: () => openEdit(a) }] : []),
-            ...(canAdjust ? [{ label: '余额调整', onClick: () => { setAdjustTarget(a); setAdjustBalance(String(a.currentBalance)); setAdjustRemark('') } }] : []),
-            { label: '删除', onClick: () => setDeleteTarget(a) },
+            ...(canAdjust ? [{ label: '余额调整', onClick: () => openAdjustment(a) }] : []),
+            ...(canDelete ? [{ label: '删除', destructive: true, afterMenuClose: true, onClick: () => {
+              if (mayDeleteFinanceAccount()) setDeleteTarget(a)
+            } }] : []),
           ]}
         />
       )
@@ -218,6 +273,7 @@ export default function FinanceAccountsPage() {
   ]
 
   const summary = data?.summary
+  const adjustmentDiff = adjustTarget && adjustBalance !== '' ? Number(adjustBalance) - adjustTarget.currentBalance : null
 
   return (
     <div className="space-y-4">
@@ -234,12 +290,9 @@ export default function FinanceAccountsPage() {
       />
 
 
-      {summary && (
-        <div className="rounded-lg border border-border bg-card px-4 py-3">
-          <span className="text-sm text-muted-foreground">资金合计（{summary.accountCount} 个账户）</span>
-          <span className="ml-3 tabular-nums text-2xl font-bold text-foreground">{money(summary.totalBalance)}</span>
-        </div>
-      )}
+      {summary && <SummaryStrip items={[
+        { label: `资金合计（${summary.accountCount} 个账户）`, value: money(summary.totalBalance) },
+      ]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => setQuery(EMPTY_ACCT_QUERY)} />
 
@@ -249,7 +302,7 @@ export default function FinanceAccountsPage() {
 
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen && (editing ? canUpdate : canCreate)} onOpenChange={v => !v && setFormOpen(false)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="fc-form-dialog max-w-2xl">
           {/* 编辑态与默认（新建）态一眼可分 */}
           <DialogHeader description={editing ? <>
                 正在编辑：<span className="font-medium text-foreground">{editing.code ? `${editing.code} · ` : ''}{editing.name}</span>
@@ -260,7 +313,7 @@ export default function FinanceAccountsPage() {
             </DialogTitle>
 
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="fc-form-dialog-body grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label htmlFor={`${fieldId}-name`}>账户名称 *</Label>
               <Input id={`${fieldId}-name`} value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="如：工商银行基本户" />
@@ -315,95 +368,101 @@ export default function FinanceAccountsPage() {
 
       {/* 账户流水 */}
       <Dialog open={!!txAccount} onOpenChange={v => !v && setTxAccount(null)}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="fc-form-dialog max-w-4xl">
           <DialogHeader description="核对该账户全部日期的收支与余额。"><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
-          {txAccount && (
-            <div className="text-sm text-muted-foreground">
-              当前余额 <span className="font-semibold text-foreground">{money(txAccount.currentBalance)}</span>
-              {transactions && <>
-                {' '}· 累计收入 <span className="text-success-ink">{money(transactions.summary.inAmount)}</span>
-                {' '}· 累计支出 <span className="text-destructive-ink">{money(transactions.summary.outAmount)}</span>
-              </>}
-            </div>
-          )}
-          {transactionsQuery.isError ? (
-            <QueryErrorState error={transactionsQuery.error} onRetry={() => void transactionsQuery.refetch()} title="账户流水加载失败" compact />
-          ) : transactionsQuery.isLoading ? (
-            <p role="status" className="text-sm text-muted-foreground">正在加载账户流水…</p>
-          ) : transactions && <div className="max-h-96 overflow-y-auto rounded-md border">
-            <ReportTable className="w-full text-sm">
-              <thead className="sticky top-0 text-xs text-muted-foreground">
-                <tr>
-                  <th className="w-28 whitespace-nowrap px-2 py-1.5 text-left">日期</th>
-                  <th className="px-2 py-1.5 text-left">类型</th>
-                  <th className="px-2 py-1.5 text-left">关联单号</th>
-                  <th className="px-2 py-1.5 text-left">往来方</th>
-                  <th className="px-2 py-1.5 text-right">收入</th>
-                  <th className="px-2 py-1.5 text-right">支出</th>
-                  <th className="px-2 py-1.5 text-right">余额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions?.list.map(t => (
-                  <tr key={t.id} className="border-t">
-                    <td className="whitespace-nowrap px-2 py-1.5 tabular-nums">{formatDisplayDate(t.happenedAt)}</td>
-                    <td className="px-2 py-1.5"><SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} /></td>
-                    <td className="px-2 py-1.5 text-doc-code-muted">{t.bizNo || '—'}</td>
-                    <td className="px-2 py-1.5">{t.partyName || '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-success-ink">{t.direction === 1 ? money(t.amount) : ''}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-destructive-ink">{t.direction === 2 ? money(t.amount) : ''}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums font-medium">{money(t.balanceAfter)}</td>
+          <div className="fc-form-dialog-body space-y-4">
+            {txAccount && (
+              <div className="text-sm text-muted-foreground">
+                当前余额 <span className="font-semibold text-foreground">{money(txAccount.currentBalance)}</span>
+                {transactions && <>
+                  {' '}· 累计收入 <span className="text-success-ink">{money(transactions.summary.inAmount)}</span>
+                  {' '}· 累计支出 <span className="text-destructive-ink">{money(transactions.summary.outAmount)}</span>
+                </>}
+              </div>
+            )}
+            {transactionsQuery.isError ? (
+              <QueryErrorState error={transactionsQuery.error} onRetry={() => void transactionsQuery.refetch()} title="账户流水加载失败" compact />
+            ) : transactionsQuery.isLoading ? (
+              <p role="status" className="text-sm text-muted-foreground">正在加载账户流水…</p>
+            ) : transactions && <div className="max-h-96 overflow-y-auto rounded-md border">
+              <ReportTable className="w-full text-sm">
+                <thead className="sticky top-0 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="w-28 whitespace-nowrap px-2 py-1.5 text-left">日期</th>
+                    <th className="px-2 py-1.5 text-left">类型</th>
+                    <th className="px-2 py-1.5 text-left">关联单号</th>
+                    <th className="px-2 py-1.5 text-left">往来方</th>
+                    <th className="px-2 py-1.5 text-right">收入</th>
+                    <th className="px-2 py-1.5 text-right">支出</th>
+                    <th className="px-2 py-1.5 text-right">余额</th>
                   </tr>
-                ))}
-                {transactions && !transactions.list.length && (
-                  <tr><td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">该账户还没有流水</td></tr>
-                )}
-              </tbody>
-            </ReportTable>
-          </div>}
-          {transactions && transactions.pagination.total > transactions.list.length && (
-            <p className="text-xs text-muted-foreground">
-              明细显示最近 {transactions.list.length} 条，共 {transactions.pagination.total} 条。累计金额覆盖全部日期。
-            </p>
-          )}
+                </thead>
+                <tbody>
+                  {transactions?.list.map(t => (
+                    <tr key={t.id} className="border-t">
+                      <td className="whitespace-nowrap px-2 py-1.5 tabular-nums">{formatDisplayDate(t.happenedAt)}</td>
+                      <td className="px-2 py-1.5"><SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} /></td>
+                      <td className="px-2 py-1.5 text-doc-code-muted">{t.bizNo || '—'}</td>
+                      <td className="px-2 py-1.5">{t.partyName || '—'}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-success-ink">{t.direction === 1 ? money(t.amount) : ''}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-destructive-ink">{t.direction === 2 ? money(t.amount) : ''}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-medium">{money(t.balanceAfter)}</td>
+                    </tr>
+                  ))}
+                  {transactions && !transactions.list.length && (
+                    <tr><td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">该账户还没有流水</td></tr>
+                  )}
+                </tbody>
+              </ReportTable>
+            </div>}
+            {transactions && transactions.pagination.total > transactions.list.length && (
+              <p className="text-xs text-muted-foreground">
+                明细显示最近 {transactions.list.length} 条，共 {transactions.pagination.total} 条。累计金额覆盖全部日期。
+              </p>
+            )}
+          </div>
           <DialogFooter><Button variant="outline" onClick={() => setTxAccount(null)}>关闭</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* 余额调整：不直接改余额，补一笔差额流水留痕 */}
-      <Dialog open={!!adjustTarget} onOpenChange={v => !v && setAdjustTarget(null)}>
-        <DialogContent>
+      <Dialog open={!!adjustTarget} onOpenChange={v => !v && !adjustMut.isPending && setAdjustTarget(null)}>
+        <DialogContent className="fc-form-dialog">
           <DialogHeader description={<>{<>
             账实不符时用它对平。系统会按差额补一笔「余额调整」流水，不会直接改写余额，调整过程可追溯。
           </>}</>}><DialogTitle>余额调整 — {adjustTarget?.name}</DialogTitle></DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-current`}>当前余额</Label>
-              <Input id={`${fieldId}-current`} value={adjustTarget ? money(adjustTarget.currentBalance) : ''} disabled className="bg-muted/50" />
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor={`${fieldId}-current`}>当前余额</Label>
+                <Input id={`${fieldId}-current`} value={adjustTarget ? money(adjustTarget.currentBalance) : ''} disabled className="bg-muted/50" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor={`${fieldId}-adjusted`}>调整后余额 *</Label>
+                <Input id={`${fieldId}-adjusted`} type="number" step="0.01" value={adjustBalance} disabled={adjustMut.isPending}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustBalance(e.target.value)} />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label htmlFor={`${fieldId}-reason`}>调整原因</Label>
+                <Input id={`${fieldId}-reason`} value={adjustRemark} disabled={adjustMut.isPending} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustRemark(e.target.value)} placeholder="如：与银行流水核对差异" />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-adjusted`}>调整后余额 *</Label>
-              <Input id={`${fieldId}-adjusted`} type="number" step="0.01" value={adjustBalance}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustBalance(e.target.value)} />
-            </div>
-            <div className="space-y-1 col-span-2">
-              <Label htmlFor={`${fieldId}-reason`}>调整原因</Label>
-              <Input id={`${fieldId}-reason`} value={adjustRemark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustRemark(e.target.value)} placeholder="如：与银行流水核对差异" />
-            </div>
+            {adjustConflict && <p role="alert" className="text-sm text-destructive-ink">{adjustConflict}</p>}
+            {adjustmentDiff === 0 && <p className="text-sm text-muted-foreground">目标余额与当前余额一致，无需调整。</p>}
+            {adjustmentDiff != null && adjustmentDiff !== 0 && (
+              <p className="text-sm">
+                将产生差额流水：
+                <span className={`ml-1 font-semibold tabular-nums ${adjustmentDiff > 0 ? 'text-success-ink' : 'text-destructive-ink'}`}>
+                  {adjustmentDiff > 0 ? '+' : '-'}
+                  {money(Math.abs(adjustmentDiff))}
+                </span>
+              </p>
+            )}
           </div>
-          {adjustTarget && adjustBalance !== '' && (
-            <p className="text-sm">
-              将产生差额流水：
-              <span className={`ml-1 font-semibold tabular-nums ${Number(adjustBalance) >= adjustTarget.currentBalance ? 'text-success-ink' : 'text-destructive-ink'}`}>
-                {Number(adjustBalance) >= adjustTarget.currentBalance ? '+' : '-'}
-                {money(Math.abs(Number(adjustBalance) - adjustTarget.currentBalance))}
-              </span>
-            </p>
-          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAdjustTarget(null)}>取消</Button>
-            <Button disabled={adjustBalance === '' || adjustMut.isPending} onClick={() => adjustMut.mutate()}>
+            <Button variant="outline" disabled={adjustMut.isPending} onClick={() => setAdjustTarget(null)}>取消</Button>
+            <Button disabled={adjustmentDiff == null || adjustmentDiff === 0 || adjustMut.isPending} onClick={confirmAdjustment}>
               {adjustMut.isPending ? '调整中…' : '确认调整'}
             </Button>
           </DialogFooter>
@@ -411,11 +470,15 @@ export default function FinanceAccountsPage() {
       </Dialog>
 
       <ConfirmDialog
-        open={!!deleteTarget}
+        open={canDelete && !!deleteTarget}
+        loading={deleteMut.isPending}
+        variant="destructive"
         title="删除账户"
         description={`确定删除账户「${deleteTarget?.name}」？有流水的账户不能删除，请改为停用。`}
         onCancel={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMut.mutate(deleteTarget.id)}
+        onConfirm={() => {
+          if (canDelete && deleteTarget && !deleteMut.isPending) deleteMut.mutate(deleteTarget.id)
+        }}
       />
     </div>
   )

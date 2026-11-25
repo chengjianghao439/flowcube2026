@@ -13,7 +13,12 @@ const detail = async(req,res,next)=>{ try{return successResponse(res,await svc.f
 const create = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await svc.create(req.body,op),'账户已创建',201)}catch(e){next(e)} }
 const update = async(req,res,next)=>{ try{return successResponse(res,await svc.update(+req.params.id,req.body),'保存成功')}catch(e){next(e)} }
 const remove = async(req,res,next)=>{ try{return successResponse(res,await svc.softDelete(+req.params.id),'删除成功')}catch(e){next(e)} }
-const adjust = async(req,res,next)=>{ try{const op=getOperatorFromRequest(req);return successResponse(res,await svc.adjust(+req.params.id,req.body,op),'余额已调整')}catch(e){next(e)} }
+const adjust = async (req, res, next) => {
+  try {
+    const data = await svc.adjust(req.params.id, req.body, getOperatorFromRequest(req), extractRequestKey(req))
+    return successResponse(res, data, '余额已调整')
+  } catch (error) { next(error) }
+}
 const transactions = async(req,res,next)=>{ try{return successResponse(res,await svc.findTransactions({...req.query,accountId:req.params.id?+req.params.id:req.query.accountId}),'查询成功')}catch(e){next(e)} }
 const consistency = async(req,res,next)=>{ try{return successResponse(res,await svc.checkConsistency(),'检查完成')}catch(e){next(e)} }
 

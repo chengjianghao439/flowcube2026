@@ -9,6 +9,7 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-ra
   --desktop-radius-lg:var(--radius-dialog);
   --desktop-shadow:var(--shadow-card);
   --desktop-shadow-lg:var(--shadow-popover);
+  --desktop-shadow-menu:0 12px 36px rgb(var(--shadow-ink) / 12%),0 2px 6px rgb(var(--shadow-ink) / 4%);
   font-family:"Inter","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
   font-variant-numeric:tabular-nums;
 }
@@ -39,7 +40,7 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-sheet,[data-ra
 .desktop-workspace .desktop-print-editor { row-gap:20px; }
 .desktop-workspace .desktop-print-editor > .desktop-page-heading { margin-bottom:0; }
 .desktop-workspace .desktop-page-header .fc-button { height:36px; font-size:13px; }
-.desktop-workspace .desktop-section-heading h3 { font-size:14px; line-height:1.5; font-weight:600; }
+.desktop-workspace .desktop-section-heading > h2 { font-size:14px; line-height:1.5; font-weight:600; }
 .desktop-workspace :is(.desktop-section-card,.bg-card.border).rounded-lg { border-radius:var(--desktop-radius); }
 .desktop-workspace :is(input.bg-background,textarea.bg-background,button.bg-background) { background-color:hsl(var(--card)); }
 
@@ -129,6 +130,12 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 :is(.desktop-workspace,body:has(.desktop-shell-sample) .fc-dialog) .desktop-detail-tabs > button > svg { width:15px; height:15px; }
 .desktop-workspace .desktop-purchase-form { gap:18px; }
 .desktop-workspace .desktop-purchase-form > .desktop-section-card { overflow:hidden; }
+.desktop-workspace .desktop-entry-controls :is(.fc-input,.fc-date-picker > input),
+body:has(.desktop-shell-sample) .fc-form-dialog .desktop-entry-controls .fc-input { height:36px; }
+.desktop-workspace .desktop-entry-controls :is(.fc-select-trigger,.fc-picker-trigger),
+body:has(.desktop-shell-sample) .fc-form-dialog .desktop-entry-controls .fc-select-trigger {
+  min-height:36px; padding-block:6px;
+}
 .desktop-workspace [data-purchase-entry-table] { font-size:13px; }
 .desktop-workspace [data-purchase-entry-table] td { padding-block:10px; }
 .desktop-workspace .desktop-order-facts { gap:14px 28px; font-size:13px; }
@@ -149,16 +156,6 @@ body:has(.desktop-shell-sample) .fc-global-search-input .fc-icon-button svg { wi
 
 
 /* Inventory, receiving and warehouse execution keep their existing data and controls. */
-.desktop-workspace .desktop-stock-summary {
-  gap:0; overflow:hidden; border:1px solid hsl(var(--border)); border-radius:var(--desktop-radius); background:hsl(var(--card));
-}
-.desktop-workspace .desktop-stock-stat {
-  padding:18px 20px; gap:10px; border:0; border-radius:0; background:transparent; box-shadow:none;
-}
-.desktop-workspace .desktop-stock-stat + .desktop-stock-stat { border-left:1px solid hsl(var(--border)); }
-.desktop-workspace .desktop-stock-stat-icon { width:24px; height:24px; background:transparent; }
-.desktop-workspace .desktop-stock-stat-icon > svg { width:17px; height:17px; }
-.desktop-workspace .desktop-stock-stat-value { margin-top:6px; font-size:20px; font-weight:600; line-height:1.4; letter-spacing:-.02em; }
 .desktop-workspace .desktop-inventory-table thead > tr { background:hsl(var(--surface-subtle)); }
 .desktop-workspace :is(.desktop-inbound-form,.desktop-inbound-detail) { gap:18px; }
 .desktop-workspace .desktop-inbound-form > .desktop-section-card { overflow:hidden; }
@@ -225,6 +222,8 @@ body:has(.desktop-shell-sample) .desktop-wave-items td { padding-block:10px; }
 
 /* Radix portals sit beside AppLayout. Conditional ownership keeps these styles out of PDA. */
 body:has(.desktop-shell-sample) .fc-dialog-overlay { background:rgb(var(--shadow-ink) / 28%); }
+/* Radix 对话框的门户并列挂在 body 下。保留每层遮罩的交互，只让最上层着色。 */
+body:has(.desktop-shell-sample) > .fc-dialog-overlay:has(~ .fc-dialog-overlay) { background:transparent; }
 body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) {
   --background:0 0% 100%;
   border-radius:16px;
@@ -252,7 +251,7 @@ body:has(.desktop-shell-sample) .fc-category-menu .fc-category-children { margin
 body:has(.desktop-shell-sample) .fc-category-menu .fc-category-caption { margin-bottom:4px; border:0; border-radius:0; background:transparent; padding:7px 10px; font-size:12px; line-height:18px; }
 body:has(.desktop-shell-sample) .fc-app-dialog-footer { background:hsl(var(--surface-subtle)); border-color:hsl(var(--border)); border-radius:0 0 15px 15px; }
 body:has(.desktop-shell-sample) .fc-app-dialog-footer .fc-button { height:36px; font-size:13px; }
-body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] > :is([role="menu"],[role="listbox"],[role="dialog"]) { border-radius:10px; box-shadow:0 16px 40px rgb(var(--shadow-ink) / 12%); }
+body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] > :is([role="menu"],[role="listbox"],[role="dialog"]) { border-radius:10px; box-shadow:var(--desktop-shadow-menu); }
 
 /* Familiar desktop tools: quiet at rest, explicit on focus and while choosing. */
 @layer components {
@@ -298,7 +297,7 @@ body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] > :is([role=
 :is(.desktop-workspace,body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog)) .fc-date-picker > button:hover:not(:disabled) { background:hsl(var(--muted)); }
 body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu) {
   border-radius:12px; border-color:hsl(var(--border)); background:hsl(var(--popover));
-  box-shadow:0 12px 36px rgb(var(--shadow-ink) / 12%),0 2px 6px rgb(var(--shadow-ink) / 4%);
+  box-shadow:var(--desktop-shadow-menu);
   transform-origin:var(--radix-popper-transform-origin);
 }
 body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu)[data-state="open"] { animation:desktop-tool-open var(--desktop-motion-in) var(--desktop-motion-ease); }
@@ -394,12 +393,28 @@ body:has(.desktop-shell-sample) .fc-icon-tooltip[data-state="delayed-open"] { an
   .desktop-shell-sample .desktop-nav nav { padding-bottom:2px; }
   .desktop-shell-sample .desktop-topbar { gap:8px 12px; }
 }
+@media (max-width:1180px) and (max-height:640px) {
+  .desktop-shell-sample .desktop-topbar { min-height:44px; padding-block:3px; row-gap:3px; }
+  .desktop-shell-sample .desktop-nav nav > a,
+  .desktop-shell-sample .desktop-nav nav > div > button { padding-block:5px; }
+  .desktop-shell-sample .desktop-tabs { padding-top:1px; }
+  .desktop-shell-sample .desktop-toast-viewport { right:auto; left:50%; translate:-50% 0; }
+}
+@media (min-width:1024px) and (max-width:1180px) {
+  .desktop-shell-sample .desktop-topbar { column-gap:8px; padding-inline:12px; }
+  .desktop-shell-sample .desktop-nav { order:0; width:auto; flex:1 1 560px; }
+  .desktop-shell-sample .desktop-nav nav { gap:1px; padding-bottom:0; }
+  .desktop-shell-sample .desktop-nav nav > a,
+  .desktop-shell-sample .desktop-nav nav > div > button { padding-inline:4px; font-size:12px; white-space:nowrap; }
+  .desktop-shell-sample .desktop-nav nav > div > button > svg { width:12px; height:12px; }
+  .desktop-shell-sample .desktop-tools { gap:6px; padding-left:8px; }
+  .desktop-shell-sample .desktop-search .fc-global-search-input { width:128px; padding-inline:8px; }
+  .desktop-shell-sample .desktop-tools .desktop-user-name { max-width:84px; overflow-wrap:anywhere; }
+  .desktop-shell-sample .desktop-tools .desktop-user-role { display:none; }
+}
 @media (max-width:1100px) {
   .desktop-workspace :is(.desktop-form-fields,.desktop-document-facts) { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .desktop-workspace .desktop-transfer-fields > .desktop-field-wide { grid-column:1 / -1; }
-  .desktop-workspace .desktop-stock-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .desktop-workspace .desktop-stock-stat:nth-child(3) { border-left:0; }
-  .desktop-workspace .desktop-stock-stat:nth-child(n+3) { border-top:1px solid hsl(var(--border)); }
   .desktop-workspace [data-workspace-scroll] > .p-6 { padding:20px; }
 }
 @media (max-width:640px) {
@@ -461,9 +476,6 @@ body:has(.desktop-shell-sample) .fc-audit-detail .fc-detail-row dd { margin:0; }
 .desktop-workspace .fc-tax-adjustment-form > input:first-child { flex:1 1 180px; min-width:0; }
 .desktop-workspace .fc-tax-adjustment-form > input:nth-child(2) { flex:0 1 128px; min-width:90px; }
 .desktop-workspace .fc-tax-adjustment-form > button { height:36px; }
-.desktop-workspace .fc-account-tree-row { border-width:0 0 1px; border-color:hsl(var(--border) / .6); border-radius:7px; box-shadow:none; }
-.desktop-workspace .fc-account-children { margin-left:20px; padding-left:12px; border-left:1px solid hsl(var(--border) / .65); }
-.desktop-workspace .fc-account-tree-row > button:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
 .desktop-workspace .fc-segmented-option:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
 body:has(.desktop-shell-sample) .fc-approval-step { border-block-start:1px solid hsl(var(--border)); padding:16px 0 4px; }
 @media (max-width:640px) {
@@ -523,7 +535,7 @@ body:has(.desktop-shell-sample) .fc-order-activity .fc-order-facts > [data-long]
   body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-dialog-overlay,.fc-sheet,.fc-sheet-overlay,[data-radix-popper-content-wrapper]) { animation:none !important; transition:none !important; }
   body:has(.desktop-shell-sample) :is(.fc-popover,.fc-select-menu,.fc-dropdown-menu,.fc-select-trigger,.fc-select-trigger > svg,.fc-picker-trigger,.fc-date-picker > input,.fc-input,textarea) { animation:none !important; transition:none !important; }
   body:has(.desktop-shell-sample) :is(.fc-icon-tooltip,.fc-character-count),
-  .desktop-workspace :is(.fc-account-row-actions,.fc-segmented-option) { animation:none !important; transition:none !important; }
+  .desktop-workspace .fc-segmented-option { animation:none !important; transition:none !important; }
 }
 
 /* 电脑端弹窗：提示或用途只占标题下同一位置，PDA 保持原样。 */
@@ -533,7 +545,7 @@ body:has(.desktop-shell-sample) .fc-app-dialog-description { font-size:12px; lin
 
 /* ── 附件基线：弹窗与浮层用规范的大圆角与深柔影；选区与焦点与官网一致 ── */
 body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog) { border-radius:var(--desktop-radius-lg); box-shadow:var(--desktop-shadow-lg); }
-body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] :is([role="menu"],[role="listbox"]) { border-radius:14px; box-shadow:var(--desktop-shadow-lg); }
+body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] :is([role="menu"],[role="listbox"]) { border-radius:14px; box-shadow:var(--desktop-shadow-menu); }
 :is(.desktop-page-sample,.desktop-workspace) ::selection { background:hsl(var(--selection)); }
 :is(.desktop-page-sample,.desktop-workspace) .fc-button:focus-visible { outline:2px solid hsl(var(--ring)); outline-offset:2px; }
 
@@ -579,7 +591,7 @@ body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] :is([role="m
 .desktop-workspace .desktop-table button.fc-table-actions:is(.bg-primary,.bg-transparent) { background:hsl(var(--blue-10)); color:hsl(var(--primary-action)); }
 .desktop-workspace .desktop-table button.fc-table-actions:is(.bg-primary,.bg-transparent):hover { background:hsl(var(--primary-action)); color:hsl(var(--card)); }
 /* TopNav.tsx: nav > div.relative > div[role="menu"] > ul; current source includes the role. */
-.desktop-shell-sample .desktop-nav nav [role="menu"] > ul { border-radius:14px; box-shadow:var(--desktop-shadow-lg); padding:6px; }
+.desktop-shell-sample .desktop-nav nav [role="menu"] > ul { border-radius:14px; box-shadow:var(--desktop-shadow-menu); padding:6px; }
 
 /* Compatibility aliases: keep existing TSX utility names and their semantic roles.
  * These selectors are collected from real non-PDA class literals; blue utilities
@@ -612,12 +624,15 @@ body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] :is([role="m
 body:has(.desktop-shell-sample) [data-radix-popper-content-wrapper] {
   --desktop-radius-popover:14px;
   --desktop-radius-option:8px;
-  --desktop-layer-header:20;
+  --desktop-layer-header:40;
 }
 
 /* Header 的 backdrop-filter 建立层叠上下文，内联 Popover 仍属于它。
-   flex 子项只调层级，避免搜索结果被后面的工作面遮住；Dialog/Sheet 保留 50。 */
+   Header 高于工作区列宽手柄（30），页面级 Dialog/Sheet 仍高于它（50）。 */
 .desktop-shell-sample > header { z-index:var(--desktop-layer-header); }
+.desktop-shell-sample { --desktop-layer-toast:35; }
+/* 模态层已隔离顶栏操作，提交反馈需在遮罩之上可见。 */
+body:has(> :is(.fc-dialog-overlay,.fc-sheet-overlay)[data-state="open"]) .desktop-shell-sample .desktop-toast-viewport { --desktop-layer-toast:60; }
 
 /* GlobalSearch: PopoverContent 同元素 role=presentation；cmdk 输出选项状态。
    内层 listbox 是滚动列表，不再继承通用浮层规则的第二层阴影。 */
@@ -716,6 +731,11 @@ body:has(.desktop-shell-sample) :is(.fc-dialog,.fc-app-dialog,.fc-dialog-overlay
   opacity:1;
   translate:0 0;
   transition:opacity var(--desktop-motion-in) var(--desktop-motion-ease),translate var(--desktop-motion-in) var(--desktop-motion-ease),display var(--desktop-motion-out) allow-discrete;
+}
+.desktop-shell-sample .fc-topnav-menu > ul {
+  max-height:var(--topnav-menu-height, calc(100dvh - 12px));
+  overflow-y:auto;
+  overscroll-behavior-y:contain;
 }
 .desktop-shell-sample .fc-topnav-menu[hidden] {
   display:none;

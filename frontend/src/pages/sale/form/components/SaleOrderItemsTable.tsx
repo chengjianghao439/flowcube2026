@@ -5,6 +5,7 @@ import { SaleEntryTable } from './SaleEntryTable'
 import type { EntryIssue } from '@/lib/orderEntry'
 import { money } from '@/lib/format'
 import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
+import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +24,7 @@ function canExplainBaseQty(item: DraftItem): boolean {
 
 export function SaleOrderItemsTable({
   compact = false, issues = [], lockedIdentity = false, readEnabled = true, quantityRead, items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
-  setFinderItemKey, setFinderOpen, updateItem, removeItem,
+  setFinderItemKey, setFinderOpen, updateItem, removeItem, onQuantityError,
 }: {
   /** 仅销售样板启用；默认保留其他录入入口的现有布局。 */
   compact?: boolean
@@ -40,6 +41,7 @@ export function SaleOrderItemsTable({
   setFinderOpen: (v: boolean) => void
   updateItem: (k: number, field: string, val: string | number) => void
   removeItem: (k: number) => void
+  onQuantityError?: (error: string | null) => void
 }) {
   const navigate = useNavigate()
   const fieldId = useId()
@@ -50,8 +52,8 @@ export function SaleOrderItemsTable({
       <TableShell compact={compact}>
         <tbody>
           {items.map(item => {
-            const quantityIssue = compact ? issues.find(issue => issue.itemKey === item._key && issue.target === `item-${item._key}-quantity`) : undefined
-            const priceIssue = compact ? issues.find(issue => issue.itemKey === item._key && issue.target === `item-${item._key}-price`) : undefined
+            const quantityIssue = issues.find(issue => issue.itemKey === item._key && issue.target === `item-${item._key}-quantity`)
+            const priceIssue = issues.find(issue => issue.itemKey === item._key && issue.target === `item-${item._key}-price`)
             const priceError = priceErrors[item._key]
             const showPriceIssue = priceIssue && (!priceError || !(priceIssue.message === priceError || priceIssue.message.endsWith(`：${priceError}`)))
             const quantityErrorId = `${fieldId}-${item._key}-quantity-error`
@@ -78,7 +80,7 @@ export function SaleOrderItemsTable({
               {item.productId > 0 && !canExplainBaseQty(item) && <p role="status" className="mt-1 text-xs text-destructive-ink">换算待确认</p>}
             </td>
             const quantityCell = <td className="px-3 py-3 align-top">
-              <Input quantity
+              <Input quantity onQuantityError={onQuantityError}
                 data-entry-input data-entry-field={`item-${item._key}-quantity`} aria-invalid={!!quantityIssue || (invalidItemKeys.has(item._key) && (!Number.isFinite(item.quantity) || item.quantity <= 0))}
                 aria-describedby={quantityIssue ? quantityErrorId : undefined}
                 aria-label={`${item.productName || '商品'}数量`}
@@ -88,7 +90,7 @@ export function SaleOrderItemsTable({
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateItem(item._key, 'quantity', parsePositiveQuantity(e.target.value))}
                 className="h-9 text-right text-sm tabular-nums"
               />
-              {quantityIssue && <p id={quantityErrorId} role="alert" className="mt-1 text-xs leading-5 text-destructive-ink">{quantityIssue.message}</p>}
+              <OrderFieldError id={quantityErrorId} className="mt-1 leading-5">{quantityIssue?.message}</OrderFieldError>
             </td>
             return <tr key={item._key} className="border-b border-border/40 transition-colors hover:bg-muted/20">
               {compact ? <td className="align-top">{productButton}</td> : <ProductIdentityCells compact product={item} nameContent={productButton} />}
@@ -97,7 +99,7 @@ export function SaleOrderItemsTable({
                 <Input
                   data-entry-input data-entry-field={`item-${item._key}-price`} aria-invalid={!!priceIssue || !!priceErrors[item._key] || (invalidItemKeys.has(item._key) && (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0))}
                   aria-label={`${item.productName || '商品'}单价`}
-                  aria-describedby={compact && (priceError || priceIssue) ? priceErrorId : undefined}
+                  aria-describedby={priceError || priceIssue ? priceErrorId : undefined}
                   type="number" min="0" step="0.01" placeholder="单价"
                   value={item.unitPrice}
                   aria-busy={!!priceLoading[item._key]}
@@ -105,10 +107,11 @@ export function SaleOrderItemsTable({
                   className="h-9 text-right text-sm tabular-nums"
                 />
                 {priceLoading[item._key] && <p role="status" className="mt-1 text-right text-[11px] text-muted-foreground">正在获取价格…</p>}
-                {compact ? (priceError || showPriceIssue) && <div id={priceErrorId} role="alert" className="mt-1 text-xs leading-5 text-destructive-ink">
-                  {showPriceIssue && <p>{priceIssue.message}</p>}
-                  {priceError && <><p>{priceError}</p><button type="button" className="mt-1 underline" onClick={() => updateItem(item._key, 'unitPrice', item.unitPrice)}>确认当前单价</button></>}
-                </div> : priceError && <div className="mt-1 text-xs text-destructive-ink"><p>{priceError}</p><button type="button" className="mt-1 underline" onClick={() => updateItem(item._key, 'unitPrice', item.unitPrice)}>确认当前单价</button></div>}
+                {(priceError || showPriceIssue) && <div id={priceErrorId} className="mt-1 text-xs leading-5 text-destructive-ink">
+                  <OrderFieldError>{showPriceIssue && priceIssue.message}</OrderFieldError>
+                  <OrderFieldError>{priceError}</OrderFieldError>
+                  {priceError && <button type="button" className="mt-1 underline" onClick={() => updateItem(item._key, 'unitPrice', item.unitPrice)}>确认当前单价</button>}
+                </div>}
               </td>
               <td className={cn('py-2.5 text-right font-medium tabular-nums', compact && 'align-top')}>
                 <span className={cn(compact && 'block py-1.5')}>{money(item.quantity * item.unitPrice)}</span>

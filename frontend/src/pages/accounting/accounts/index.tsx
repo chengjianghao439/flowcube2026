@@ -7,9 +7,15 @@
  *  - 有下级的科目为汇总科目（不可直接记账）；最多 4 级。
  */
 
-import { useEffect, useMemo, useState } from 'react'
-import { EmptyState } from '@/components/shared/EmptyState'
-import { ChevronDown, ChevronRight, Plus, Pencil, Trash2, Power, BookOpen } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
+import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { TreeTableFilters, TreeTableName } from '@/components/shared/TreeTable'
+import { useTreeTable, type TreeTableRow } from '@/hooks/useTreeTable'
+import type { TableColumn } from '@/types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -236,118 +242,9 @@ function AccountFormDialog({ open, mode, parentAcct, editAcct, onClose }: FormDi
   )
 }
 
-// ─── 单个科目节点 ─────────────────────────────────────────────────────────────
-
-interface NodeProps {
-  acct: Account
-  canManage: boolean
-  onAddChild: (a: Account) => void
-  onEdit: (a: Account) => void
-  onDelete: (a: Account) => void
-  onToggle: (a: Account) => void
-  expandedIds: Set<number>
-  onExpand: (a: Account) => void
-}
-
-function AccountNode({ acct, canManage, onAddChild, onEdit, onDelete, onToggle, expandedIds, onExpand }: NodeProps) {
-  const hasChildren = !!(acct.children && acct.children.length > 0)
-  const expanded = expandedIds.has(acct.id)
-
-  return (
-    <div className="space-y-2">
-      <div
-        className={cn(
-          'fc-account-tree-row group flex items-center gap-2 rounded-lg border border-border/70 bg-card px-3 py-2.5 transition-colors hover:border-primary/30 hover:bg-primary/5',
-          acct.isActive === 0 && 'opacity-50',
-          expanded && 'border-primary/30 bg-primary/5',
-        )}
-      >
-        {hasChildren ? <button
-          type="button"
-          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-muted-foreground"
-          onClick={() => onExpand(acct)}
-          aria-expanded={expanded}
-          aria-label={`${expanded ? '收起' : '展开'} ${acct.code} ${acct.name}`}
-        >
-          {expanded ? <ChevronDown className="h-3.5 w-3.5" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5" aria-hidden />}
-        </button> : <span className="h-5 w-5 shrink-0" aria-hidden />}
-
-        <span className="w-20 shrink-0 font-mono text-sm text-doc-code-muted">{acct.code}</span>
-        <span className="flex-1 min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium">{acct.name}</span>
-
-        <SoftStatusLabel label={ACCOUNT_CATEGORY_LABELS[acct.category]} tone="info" className="shrink-0" />
-        <span className="shrink-0 text-xs text-muted-foreground">{BALANCE_DIR_LABELS[acct.balanceDir]}方</span>
-        {acct.auxType === 1 && <SoftStatusLabel label="往来" tone="info" className="shrink-0" />}
-        {acct.isLeaf === 0 && <SoftStatusLabel label="汇总" tone="draft" className="shrink-0" />}
-        {acct.isPreset === 1 && <SoftStatusLabel label="预置" tone="draft" className="shrink-0" />}
-        <SoftStatusLabel label={acct.isActive ? '启用' : '停用'} tone={activeTone(acct.isActive)} className="shrink-0" />
-
-        {canManage && (
-          <div className="fc-account-row-actions flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-            {acct.level < MAX_LEVEL && (
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-                title="新增下级科目" onClick={() => onAddChild(acct)}>
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
-              title="编辑" onClick={() => onEdit(acct)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            {acct.isPreset === 0 && (
-              <>
-                <Button size="sm" variant="ghost"
-                  className={cn('h-7 w-7 p-0', acct.isActive ? 'text-muted-foreground hover:text-orange-500' : 'text-muted-foreground hover:text-green-600')}
-                  title={acct.isActive ? '停用' : '启用'} onClick={() => onToggle(acct)}>
-                  <Power className="h-3.5 w-3.5" />
-                </Button>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink"
-                  title="删除" onClick={() => onDelete(acct)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {hasChildren && expanded && (
-        <div className="fc-account-children space-y-1">
-          {acct.children!.map(child => (
-            <AccountNode
-              key={child.id}
-              acct={child}
-              canManage={canManage}
-              onAddChild={onAddChild}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onToggle={onToggle}
-              expandedIds={expandedIds}
-              onExpand={onExpand}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function findPath(nodes: Account[], targetId: number, trail: number[] = []): number[] | null {
-  for (const node of nodes) {
-    const next = [...trail, node.id]
-    if (node.id === targetId) return next
-    if (node.children?.length) {
-      const found = findPath(node.children, targetId, next)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-// ─── 主页面 ───────────────────────────────────────────────────────────────────
-
 export default function AccountsPage() {
-  const { data: tree = [], isLoading } = useAccountTree()
+  const { data: tree = [], isLoading, isError, error, refetch } = useAccountTree()
+  const hierarchy = useTreeTable(tree)
   const { mutate: del, isPending: deleting } = useDeleteAccount()
   const { mutate: toggle, isPending: toggling } = useToggleAccountStatus()
   const { can } = usePermission()
@@ -359,30 +256,56 @@ export default function AccountsPage() {
   const [editAcct, setEditAcct] = useState<Account | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Account | null>(null)
   const [toggleTarget, setToggleTarget] = useState<Account | null>(null)
-  const [expandedPath, setExpandedPath] = useState<number[]>([])
-  const expandedIds = useMemo(() => new Set(expandedPath), [expandedPath])
 
   function handleAddRoot() { setFormMode('create'); setParentAcct(null); setEditAcct(null); setFormOpen(true) }
   function handleAddChild(a: Account) { setFormMode('create'); setParentAcct(a); setEditAcct(null); setFormOpen(true) }
   function handleEdit(a: Account) { setFormMode('edit'); setEditAcct(a); setParentAcct(null); setFormOpen(true) }
 
   function confirmDelete() {
-    if (!deleteTarget) return
+    if (!canManage || !deleteTarget) return
     del(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) })
   }
   function confirmToggle() {
-    if (!toggleTarget) return
+    if (!canManage || !toggleTarget) return
     toggle({ id: toggleTarget.id, isActive: toggleTarget.isActive === 0 }, { onSuccess: () => setToggleTarget(null) })
   }
 
-  const flatCount = (nodes: Account[]): number => nodes.reduce((s, n) => s + 1 + flatCount(n.children ?? []), 0)
-  const totalCount = flatCount(tree)
+  const columns: TableColumn<TreeTableRow<Account>>[] = [
+    { key: 'code', title: '科目编码', width: 112, render: (_, { node }) => <span className="text-doc-code">{node.code}</span> },
+    { key: 'name', title: '科目名称', width: 242, render: (_, row) => <TreeTableName {...row} searching={hierarchy.searching}
+      label={`${row.node.code} ${row.node.name}`} onToggle={() => hierarchy.toggle(row.id)}>{row.node.name}</TreeTableName> },
+    { key: 'category', title: '科目类别', width: 82, render: (_, { node }) => ACCOUNT_CATEGORY_LABELS[node.category] },
+    { key: 'balanceDir', title: '余额方向', width: 84, render: (_, { node }) => BALANCE_DIR_LABELS[node.balanceDir] },
+    { key: 'auxType', title: '辅助核算', width: 84, render: (_, { node }) => node.auxType === 1 ? '往来' : '—' },
+    { key: 'isLeaf', title: '记账属性', width: 84, render: (_, { node }) => node.isLeaf === 0
+      ? <span title="有下级科目，不可直接记账">汇总</span> : '明细' },
+    { key: 'isPreset', title: '来源', width: 92, render: (_, { node }) => node.isPreset === 1 ? '系统预置' : '自定义' },
+    { key: 'isActive', title: '状态', width: 76, render: (_, { node }) => <SoftStatusLabel
+      label={node.isActive ? '启用' : '停用'} tone={activeTone(node.isActive)} /> },
+  ]
+  if (canManage) {
+    columns.push({
+      key: 'actions', title: '操作', width: 112, render: (_, { node }) => <TableActionsMenu
+        primaryLabel="编辑"
+        rowLabel={`${node.code} ${node.name}`}
+        primaryVariant="outline"
+        onPrimaryClick={() => handleEdit(node)}
+        items={[
+          ...(node.level < MAX_LEVEL ? [{ label: '新增下级科目', afterMenuClose: true, onClick: () => handleAddChild(node) }] : []),
+          ...(node.isPreset === 0 ? [
+            { label: node.isActive ? '停用' : '启用', afterMenuClose: true, onClick: () => setToggleTarget(node) },
+            { label: '删除', destructive: true, separatorBefore: true, afterMenuClose: true, onClick: () => setDeleteTarget(node) },
+          ] : []),
+        ]}
+      />,
+    })
+  }
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="会计科目表"
-        description="查看会计科目层级与记账属性。"
+        description="查看企业会计准则下的科目层级与记账属性。"
         actions={canManage && (
           <Button onClick={handleAddRoot}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -391,56 +314,18 @@ export default function AccountsPage() {
         )}
       />
 
-      {/* 图例 */}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-        <span>企业会计准则口径 · 共 {totalCount} 个科目</span>
-        {CATEGORY_OPTIONS.map(c => (
-          <span key={c} className="flex items-center gap-1">
-            <SoftStatusLabel label={ACCOUNT_CATEGORY_LABELS[c]} tone="info" />
-          </span>
-        ))}
-        <span className="ml-auto flex items-center gap-2">
-          <SoftStatusLabel label="汇总" tone="draft" />有下级不可记账
-          <SoftStatusLabel label="预置" tone="draft" />系统预置不可删
-        </span>
-      </div>
+      <TreeTableFilters label="搜索科目编码或名称" value={hierarchy.search} onChange={hierarchy.setSearch}
+        searching={hierarchy.searching} expandAll={hierarchy.expandAll} collapseAll={hierarchy.collapseAll} />
 
-      <div className="card-base p-2">
-        {isLoading ? (
-          <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">加载中…</div>
-        ) : tree.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <BookOpen className="mb-3 h-10 w-10 opacity-30" />
-            <EmptyState variant="no-data" title="暂无科目" compact />
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {tree.map(acct => (
-              <AccountNode
-                key={acct.id}
-                acct={acct}
-                canManage={canManage}
-                onAddChild={handleAddChild}
-                onEdit={handleEdit}
-                onDelete={setDeleteTarget}
-                onToggle={setToggleTarget}
-                expandedIds={expandedIds}
-                onExpand={(target) => {
-                  const path = findPath(tree, target.id) ?? [target.id]
-                  setExpandedPath(prev =>
-                    prev.length === path.length && prev.every((v, i) => v === path[i])
-                      ? prev.slice(0, -1)
-                      : path,
-                  )
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {isError ? <QueryErrorState title="会计科目加载失败" error={error} onRetry={() => void refetch()} /> : (
+        <DataTable columns={columns} data={hierarchy.rows} loading={isLoading} virtualized preserveFocus retainFocusedRow
+          scrollLabel="会计科目表格" emptyText={hierarchy.searching ? '没有匹配的科目' : '暂无科目'} />
+      )}
+      {!isError && !isLoading && <ListSummary total={hierarchy.searching ? hierarchy.rows.length : hierarchy.total}
+        unit={hierarchy.searching ? '个可见科目' : '个科目'} />}
 
       <AccountFormDialog
-        open={formOpen}
+        open={formOpen && canManage}
         mode={formMode}
         parentAcct={parentAcct}
         editAcct={editAcct}
@@ -448,7 +333,7 @@ export default function AccountsPage() {
       />
 
       <ConfirmDialog
-        open={!!deleteTarget}
+        open={!!deleteTarget && canManage}
         variant="destructive"
         title={`删除科目「${deleteTarget?.code} ${deleteTarget?.name}」`}
         description="仅用于删除建错、从未使用的科目。若存在下级科目将无法删除。用过的科目请改为停用。"
@@ -459,7 +344,7 @@ export default function AccountsPage() {
       />
 
       <ConfirmDialog
-        open={!!toggleTarget}
+        open={!!toggleTarget && canManage}
         title={`${toggleTarget?.isActive ? '停用' : '启用'}科目「${toggleTarget?.code} ${toggleTarget?.name}」`}
         description={toggleTarget?.isActive
           ? '停用后该科目不可再用于新凭证，但不影响历史数据。'
