@@ -1,3 +1,4 @@
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import { useVisibleQuery } from '@/hooks/useVisibleQuery'
 import { money } from '@/lib/format'
 import { useState, useRef } from 'react'
@@ -19,7 +20,7 @@ import type { TableColumn } from '@/types'
 import { formatDisplayDate } from '@/lib/dateTime'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
-import KeepAliveSection from '@/components/shared/KeepAliveSection'
+import { ContentTabs } from '@/components/shared/ContentTabs'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { CreateManualPayableDialog } from '@/components/shared/payments/CreateManualPayableDialog'
 import { usePermission } from '@/hooks/usePermission'
@@ -55,7 +56,7 @@ const COPY = {
   },
   2: {
     title: '现结客户账款',
-    description: '现结客户：出库即结，出库后逐笔登记收款；月结客户见「月结客户对账」',
+    description: '现结客户：出库即结，出库后逐笔登记收款；月结客户见「月结客户对账」。',
     party: '客户',
     amountCol: '已收金额',
     payAction: '登记收款',
@@ -78,6 +79,7 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
   const { can } = usePermission()
   // 核销 tab 的动作按钮挪到本页 PageHeader（与「按单登记」tab 对齐），通过 ref 触发面板内部动作
   const receiptRef = useRef<ReceiptPanelHandle>(null)
+  const [filterSlot, setFilterSlot] = useState<HTMLDivElement | null>(null)
   const { renderActions, dialogs } = usePaymentActions(type)
   const PAGE_SIZE = 20
   const queryLabels = {
@@ -146,12 +148,8 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
           ? `${isPayable ? '付款' : '收款'}单涵盖现结与月结。${can(PERMISSIONS.PAYMENT_EXECUTE) ? `此处可核销现结应${isPayable ? '付' : '收'}，月结请通过对账单核销。` : ''}`
           : copy.description}
         actions={tab === 'records' ? (
-          // 按单登记：新建手工应付 + 查询 + 导出（导出参数键为 orderNo，与本 tab 列表一致）
-          <div className="flex gap-2">
-            {isPayable && can(PERMISSIONS.PAYMENT_CREATE) && (
-              <Button onClick={() => setCreateOpen(true)}>新建应付账款</Button>
-            )}
-            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          // 按单登记：导出、查询、新建手工应付（导出参数键为 orderNo，与本 tab 列表一致）
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => downloadExport(
@@ -161,64 +159,64 @@ export default function PaymentsView({ type }: { type: PaymentType }) {
             >
               导出 Excel
             </Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {isPayable && can(PERMISSIONS.PAYMENT_CREATE) && (
+              <Button onClick={() => setCreateOpen(true)}>新建应付账款</Button>
+            )}
           </div>
         ) : (
           // 核销 tab：按钮同样落在右上角 PageHeader（与按单登记对齐），通过 ref 驱动 ReceiptPanel
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => receiptRef.current?.exportExcel()}>导出 Excel</Button>
+            <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
             {can(PERMISSIONS.PAYMENT_EXECUTE) && <Button onClick={() => receiptRef.current?.openRegister()}>登记{isPayable ? '付款' : '收款'}</Button>}
           </div>
         )}
       />
 
 
-      <nav aria-label={`${copy.title}登记方式`} className="flex gap-1 border-b border-border">
-        {([
-          { key: 'records' as const, label: can(PERMISSIONS.PAYMENT_EXECUTE) ? '按单登记' : '账款明细' },
-          { key: 'receipts' as const, label: `${isPayable ? '付款' : '收款'}${can(PERMISSIONS.PAYMENT_EXECUTE) ? '核销' : '流水'}` },
-        ]).map(item => (
-          <button
-            key={item.key}
-            type="button"
-            aria-current={tab === item.key ? 'true' : undefined}
-            onClick={() => setTab(item.key)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      <ContentTabs value={tab} onValueChange={setTab} label={`${copy.title}登记方式`}
+        rightSlot={
+          <div ref={setFilterSlot} className="flex flex-wrap items-center justify-end gap-2" aria-label="已应用筛选">
+            {tab === 'records' && (
+              <>
+                <AppliedDateRange label={queryLabels.dateLabel} startDate={query.startDate} endDate={query.endDate}
+                  onClear={() => setQuery(q => ({ ...q, startDate: '', endDate: '' }))} />
+                <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} clearValue={ALL_DATES_QUERY} showDateChip={false} />
+              </>
+            )}
+          </div>
+        }
+        tabs={[
+        { value: 'records', label: can(PERMISSIONS.PAYMENT_EXECUTE) ? '按单登记' : '账款明细', content: <div className="space-y-4">
+          {isPayable && <SupplierMonthlyPayables />}
 
-      <KeepAliveSection active={tab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={IMMEDIATE_SCOPE} hideToolbar /></KeepAliveSection>
+          <section aria-label="现结账款" className="space-y-4">
+          {isPayable && <h2 className="text-base font-semibold">现结账款</h2>}
 
-      <KeepAliveSection active={tab === 'records'} className="space-y-4">
-      {isPayable && <SupplierMonthlyPayables />}
+          {isPayable && !isError && !isLoading && data && <SummaryStrip items={[{ label: '现结余额', value: money(data.summary.balance) }]} />}
+          {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable fluid virtualized columnStorageKey={`payments-${type}`} scrollLabel="账款表格" columns={columns} data={data?.list || []} loading={isLoading} />}
 
-      <section aria-label="现结账款" className="space-y-4">
-      {isPayable && <h2 className="text-base font-semibold">现结账款</h2>}
-      <PaymentQueryBar query={query} onChange={(q) => { setQuery(q); }} labels={queryLabels} clearValue={ALL_DATES_QUERY} />
+          {!isError && !isLoading && data && <ListSummary total={total} unit="笔" />}
+          </section>
 
-      {isPayable && !isError && !isLoading && data && <SummaryStrip items={[{ label: '现结余额', value: money(data.summary.balance) }]} />}
-      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} />}
-
-      {!isError && !isLoading && data && <ListSummary total={total} unit="笔" />}
-      </section>
-
-      <PaymentQueryDialog
-        title={`查询${copy.title}`}
-        open={queryOpen}
-        initial={query}
-        clearValue={ALL_DATES_QUERY}
-        onClose={() => setQueryOpen(false)}
-        onApply={applyQuery}
-        labels={queryLabels}
-        partyType={type}
-        statusOptions={copy.statusOptions}
-        showConfirmStatus={isPayable}
-        singleDate
-      />
-      </KeepAliveSection>
+          <PaymentQueryDialog
+            title={`查询${copy.title}`}
+            open={queryOpen}
+            initial={query}
+            clearValue={ALL_DATES_QUERY}
+            onClose={() => setQueryOpen(false)}
+            onApply={applyQuery}
+            labels={queryLabels}
+            partyType={type}
+            statusOptions={copy.statusOptions}
+            showConfirmStatus={isPayable}
+            singleDate
+          />
+        </div> },
+        { value: 'receipts', label: `${isPayable ? '付款' : '收款'}${can(PERMISSIONS.PAYMENT_EXECUTE) ? '核销' : '流水'}`,
+          content: <ReceiptPanel ref={receiptRef} type={type} settlementTypes={IMMEDIATE_SCOPE} hideToolbar filterSlot={tab === 'receipts' ? filterSlot : null} /> },
+      ]} />
 
       {dialogs}
 

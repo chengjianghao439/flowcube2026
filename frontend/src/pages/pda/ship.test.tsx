@@ -17,7 +17,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import Page from './ship'
 
 const api = vi.hoisted(() => ({
-  pending: vi.fn(), ship: vi.fn(), task: vi.fn(), pkg: vi.fn(),
+  confirm: vi.fn(), pending: vi.fn(), ship: vi.fn(), task: vi.fn(), pkg: vi.fn(),
   ok: vi.fn(), err: vi.fn(), warn: vi.fn(),
 }))
 
@@ -31,16 +31,16 @@ vi.mock('@/hooks/usePdaFeedback', () => ({
   usePdaFeedback: () => ({ flash: null, ok: api.ok, err: api.err, warn: api.warn }),
 }))
 vi.mock('@/hooks/useCriticalPdaAction', () => ({
-  useCriticalPdaAction: ({ onConfirmed }: { onConfirmed: () => void }) => ({
+  useCriticalPdaAction: ({ onConfirmed }: { onConfirmed: (result: unknown) => unknown }) => { api.confirm.mockImplementation(onConfirmed); return ({
     run: async (execute: (key: string) => Promise<unknown>) => {
       const data = await execute('stable-key')
-      onConfirmed()
+      await onConfirmed(data)
       return { kind: 'success', data }
     },
     blockedReason: null, pendingRecord: null, confirming: false, phase: 'idle', phaseMessage: null,
     lastErrorMessage: null, submitBlocked: false,
     confirmPending: async () => null, clearPending: () => {}, clearError: () => {},
-  }),
+  }) },
 }))
 
 const task = (id: number, taskNo: string) => ({
@@ -60,7 +60,7 @@ beforeEach(async () => {
   api.pending
     .mockResolvedValueOnce({ list: [task(1, 'WT-RET-A'), task(2, 'WT-RET-B')], total: 2, page: 1, pageSize: 100 })
     .mockResolvedValue({ list: [task(2, 'WT-RET-B')], total: 1, page: 1, pageSize: 100 })
-  api.ship.mockResolvedValue({ taskId: 1 })
+  api.ship.mockImplementation(async (taskId: number) => ({ taskId }))
   api.task.mockResolvedValue({ id: 1, status: 7, statusName: '已出库' })
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
   host = document.createElement('div')
@@ -127,4 +127,20 @@ test('FE07 已出库包裹提示任务已完成，不重复发起出库',async()
   await scanBox()
   expect(api.err).toHaveBeenCalledWith('该任务已完成出库')
   expect(api.ship).not.toHaveBeenCalled()
+})
+
+test('核对旧任务出库后再扫待打包的新任务仍显示待打包', async () => {
+  await act(async () => { await api.confirm({taskId: 99}) })
+  api.pkg.mockResolvedValue({warehouseTaskId:21, taskNo:'WT21', customerName:'测试', warehouseTaskStatus:5, packages:[], barcode:'L000021'})
+  await scanBox()
+  expect(host.textContent).not.toContain('本任务出库完成')
+  expect(api.ship).not.toHaveBeenCalled()
+  expect(api.pending.mock.calls.length).toBeGreaterThan(1)
+})
+
+test('当前包裹不得用其它任务的成功回执显示完成页', async () => {
+  api.ship.mockResolvedValue({taskId:199})
+  api.pkg.mockResolvedValue({warehouseTaskId:21,taskNo:'WT21',customerName:'测试',warehouseTaskStatus:6,packages:[]})
+  await scanBox()
+  expect(host.textContent).not.toContain('本任务出库完成')
 })

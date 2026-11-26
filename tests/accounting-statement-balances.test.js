@@ -34,9 +34,9 @@ function reports(byCompany = { 1: [] }, failure = null) {
     const real = createRequire(filename), module = { exports: {} }
     let source = fs.readFileSync(filename, 'utf8')
     if (process.env.ACCOUNTING_REPORT_MUTANT === 'natural_asset') {
-      const marker = 'const assetAmount = round2(Number(r.d) - Number(r.c))'
+      const marker = 'const b = categoryBalance(r)'
       assert.equal(source.split(marker).length - 1, 1, 'mutation must replace exactly one asset calculation')
-      source = source.replace(marker, 'const assetAmount = b')
+      source = source.replace(marker, 'const b = r.category === 1 && (r.balanceDir ?? r.balance_dir) === 2 ? Number(r.c) - Number(r.d) : categoryBalance(r)')
     }
     vm.runInNewContext(source, {
       module, console,
@@ -54,6 +54,7 @@ function reports(byCompany = { 1: [] }, failure = null) {
 }
 
 const cases = [
+  { name: 'debit input VAT reduces liabilities', rows: [row('1405',1,1,100,0), row('222101',2,1,13,0), row('2202',2,2,0,113)], asset:100, liability:100, equity:0 },
   { name: 'empty', rows: [], asset: 0, liability: 0, equity: 0 },
   { name: 'ordinary asset', rows: normal(100), asset: 100, liability: 100, equity: 0 },
   { name: 'depreciation reduces asset', rows: depreciated(100, 10), asset: 90, liability: 100, equity: -10, contra: -10 },

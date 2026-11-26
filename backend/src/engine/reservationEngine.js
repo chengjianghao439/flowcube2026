@@ -13,7 +13,7 @@ const { assertQtyPrecision } = require('../utils/qtyPrecision')
 
 const AppError = require('../utils/AppError')
 const logger = require('../utils/logger')
-const { getAvailableStockForDecision, lockStockDimension } = require('./containerEngine')
+const { getAvailableStockForDecision, lockStockDimension, lockStockDimensions } = require('./containerEngine')
 const { getExpectedStock, reduceExpectedBindings } = require('../utils/expectedStock')
 const { roundQty } = require('../utils/unitConversion')
 
@@ -45,6 +45,7 @@ function logReservedClamp(context, detail) {
 async function reserve(conn, { productId, productName = '该商品', warehouseId, qty,
   refType, refId, refItemId = null, refNo, includeExpected = false }) {
   await assertQtyPrecision(conn, [{ productId, qty, label: '预占数量' }])
+  if (!(Number(qty) > 0)) throw new AppError('预占数量必须大于零', 400, 'INVALID_RESERVATION_QTY')
   const { quantity: onHand, reserved, available } = await getAvailableStockForDecision(conn, {
     productId,
     warehouseId,
@@ -117,23 +118,28 @@ async function reserve(conn, { productId, productName = '该商品', warehouseId
 async function releaseByRef(conn, refType, refId) {
   // 先锁所有库存维度，才能锁预占/预计绑定。否则首行释放提前锁住其它商品绑定，
   // 与后者的上架（库存→绑定）或出库（库存→预占）形成 ABBA。
+  const isSale = refType === 'sale_order'
   const [dimensions] = await conn.query(
     `SELECT DISTINCT product_id,warehouse_id FROM stock_reservations
-     WHERE ref_type=? AND ref_id=? AND status=1 ORDER BY product_id,warehouse_id`,
+     WHERE ref_type=? AND ref_id=? AND status=1
+     ${isSale ? 'UNION SELECT product_id,warehouse_id FROM sale_order_expected_bindings WHERE sale_order_id=? AND released_at IS NULL' : ''}`,
+    isSale ? [refType, refId, refId] : [refType, refId],
+  )
+  await lockStockDimensions(conn, dimensions)
+  const [rows] = await conn.query(
+    'SELECT * FROM stock_reservations WHERE ref_type=? AND ref_id=? AND status=1 ORDER BY id FOR UPDATE',
     [refType, refId],
   )
-  for (const dimension of dimensions) await lockStockDimension(conn, dimension.product_id, dimension.warehouse_id)
-  const [rows] = await conn.query(
-    'SELECT * FROM stock_reservations WHERE ref_type=? AND ref_id=? AND status=1 FOR UPDATE',
-    [refType, refId]
-  )
+  const [bindings] = isSale ? await conn.query(
+    'SELECT id,product_id,warehouse_id FROM sale_order_expected_bindings WHERE sale_order_id=? AND released_at IS NULL ORDER BY id FOR UPDATE',
+    [refId],
+  ) : [[]]
 
-  await assertQtyPrecision(conn, rows.map(row => ({ productId: row.product_id, qty: row.qty, label: '释放预占数量' })))
   const lockedDimensions = new Set(dimensions.map(d => `${Number(d.product_id)}:${Number(d.warehouse_id)}`))
-  if (rows.some(r => !lockedDimensions.has(`${Number(r.product_id)}:${Number(r.warehouse_id)}`))) {
-    // 调用者旧 RR 快照可能漏掉刚新增的维度；不能持着预占行锁再补取该库存锁。
+  if ([...rows, ...bindings].some(r => !lockedDimensions.has(`${Number(r.product_id)}:${Number(r.warehouse_id)}`))) {
     throw new AppError('预占维度已变化，请刷新后重试释放库存', 409)
   }
+  await assertQtyPrecision(conn, rows.map(row => ({ productId: row.product_id, qty: row.qty, label: '释放预占数量' })))
 
   for (const r of rows) {
     // 减少 reserved（使用 GREATEST 保证不低于 0；截断即告警，见 logReservedClamp）
@@ -156,10 +162,10 @@ async function releaseByRef(conn, refType, refId) {
     await conn.query('UPDATE stock_reservations SET status=3 WHERE id=?', [r.id])
   }
   // 全部维度预占核销后统一关闭依赖；也能清理旧版本履约后残留的本单绑定。
-  if (refType === 'sale_order') {
+  if (bindings.length) {
     await conn.query(
-      'UPDATE sale_order_expected_bindings SET released_at=NOW() WHERE sale_order_id=? AND released_at IS NULL',
-      [refId],
+      'UPDATE sale_order_expected_bindings SET released_at=NOW() WHERE id IN (?) AND released_at IS NULL',
+      [bindings.map(row => row.id)],
     )
   }
 }
@@ -181,22 +187,12 @@ async function releaseByRef(conn, refType, refId) {
  * @param {number} refId      - 销售单 ID
  * @param {number} productId
  * @param {number} warehouseId
- * @param {number} [qty]      - 本次实际出库量；不传则退化为整组核销（兼容旧调用，现已无此类调用）
+ * @param {number} [qty]      - 本次实际出库量；不传则整组核销
+ * @returns {Promise<number>} 本单本维度实际核销量
  */
 async function markFulfilled(conn, refType, refId, productId, warehouseId, qty = null) {
   if (qty != null) await assertQtyPrecision(conn, [{ productId, qty, label: '履约核销数量' }])
-  if (qty == null) {
-    await conn.query(
-      `UPDATE stock_reservations SET status=2
-       WHERE ref_type=? AND ref_id=? AND product_id=? AND warehouse_id=? AND status=1`,
-      [refType, refId, productId, warehouseId],
-    )
-    if (refType === 'sale_order') await reduceExpectedBindings(conn, { saleOrderId: refId, productId, warehouseId }, Number.MAX_SAFE_INTEGER / 100)
-    return
-  }
-
-  let remaining = Number(qty)
-  if (!(remaining > 0)) return
+  if (qty != null && !(Number(qty) > 0)) return 0
 
   const [rows] = await conn.query(
     `SELECT id, qty FROM stock_reservations
@@ -205,6 +201,13 @@ async function markFulfilled(conn, refType, refId, productId, warehouseId, qty =
     [refType, refId, productId, warehouseId],
   )
 
+  if (qty == null) {
+    if (rows.length) await conn.query('UPDATE stock_reservations SET status=2 WHERE id IN (?)', [rows.map(r => r.id)])
+    if (refType === 'sale_order') await reduceExpectedBindings(conn, { saleOrderId: refId, productId, warehouseId }, Number.MAX_SAFE_INTEGER / 100)
+    return roundQty(rows.reduce((sum, row) => sum + Number(row.qty), 0))
+  }
+
+  let remaining = Number(qty)
   for (const r of rows) {
     if (remaining <= 0) break
     const rowQty = Number(r.qty)
@@ -246,6 +249,7 @@ async function markFulfilled(conn, refType, refId, productId, warehouseId, qty =
       refType, refId, productId, warehouseId, fulfillQty: Number(qty), unmatched: remaining,
     })
   }
+  return roundQty(Number(qty) - remaining)
 }
 
 /**

@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
+import { openTableActions } from '@/test/chooseTableAction'
 // Real page/hooks/API, closed synthetic HTTP allowlist. No external network.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { chooseCreditAction, openCreditActions } from './rowMenu.test-utils'
 import Page from './index'
 import api, { getApiClientBaseURL, setApiClientBaseURL } from '@/api/client'
 
@@ -63,9 +65,9 @@ afterEach(async()=>{
 
 test.each(['销售单内容已变更','已超过有效截止时间','缺少原始内容证明'])('显示失效原因%s；部分占库原单直接重申，历史不取消，新单仍由用户提交',async message=>{
   why=message;await mount();expect(host.textContent).toContain(`原批准已失效：${message}。`)
-  expect(host.querySelector('.desktop-page-description')?.textContent).toBe('金额为申请时的授信额度')
+  expect(host.querySelector('.desktop-page-description')?.textContent).toBe('金额为申请时的授信额度。')
   expect(host.textContent?.match(/金额为申请时的授信额度/g)).toHaveLength(1)
-  await click('重新申请')
+  await chooseCreditAction('重新申请')
   const dialog = document.querySelector('[role="dialog"]')!
   expect(dialog.querySelector('.fc-dialog-caption')?.textContent).toContain('提交后系统会校验该客户授信是否超限')
   expect(dialog.querySelector('.fc-dialog-caption')?.textContent).toContain('旧申请与审批记录保留')
@@ -79,25 +81,26 @@ test.each(['销售单内容已变更','已超过有效截止时间','缺少原�
   expect(new URLSearchParams(currentSearch).get('status')).toBe('1')
   expect(new URLSearchParams(currentSearch).get('keyword')).toBe('CO-NEW')
   expect(new URLSearchParams(currentSearch).has('startDate')).toBe(false)
-  await click('提交')
+  await chooseCreditAction('提交')
   await vi.waitFor(()=>expect(writes.map(r=>r.path)).toEqual(['/api/credit-overrides','/api/credit-overrides/2/submit']))
 })
 
 test('仅有审批或查看资格不能获得重新申请按钮',async()=>{
   rights.apply=false;rights.approve=true;await mount();expect(host.textContent).toContain('已失效')
-  expect([...host.querySelectorAll('button')].some(n=>n.textContent==='重新申请')).toBe(false)
+  expect((await openCreditActions()).some(n => n.textContent === '重新申请')).toBe(false)
 })
 
 test.each([[true,false],[false,true]])('同步后的待审按钮分权：申请权%s，独立审批权%s',async(apply,approve)=>{
   rights.apply=apply;rights.approve=approve;pending=true;await mount()
-  const labels=[...host.querySelectorAll('button')].map(n=>n.textContent?.trim())
+  const menu = await openTableActions(original.overrideNo)
+  const labels = [...host.querySelectorAll('button'), ...menu.querySelectorAll('[role="menuitem"]')].map(n => n.textContent?.trim())
   expect(labels.includes('批准')).toBe(approve);expect(labels.includes('驳回')).toBe(approve)
   expect(labels.includes('发起申请')).toBe(apply);expect(labels.includes('重新申请')).toBe(false)
   expect(writes).toHaveLength(0)
 })
 
 test('并发产生待审批申请时显示服务端原因，保留本次填写且不取消历史单',async()=>{
-  failCreate=true;await mount();await click('重新申请');const node=await reason();await click('创建申请')
+  failCreate=true;await mount();await chooseCreditAction('重新申请');const node=await reason();await click('创建申请')
   await vi.waitFor(()=>expect(toasts.error).toHaveBeenCalledWith('已有待审批申请，请查看进度'))
   expect(document.querySelector('[role="dialog"]')).toBeTruthy();expect(node.value).toBe('新的审批原因')
   expect(writes).toHaveLength(1);expect(writes[0].path).toBe('/api/credit-overrides')
@@ -105,10 +108,10 @@ test('并发产生待审批申请时显示服务端原因，保留本次填写�
 
 test('重申的预填原单不标脏，填写原因后可继续编辑或放弃', async () => {
   await mount()
-  await click('重新申请')
+  await chooseCreditAction('重新申请')
   await click('取消', document.querySelector('#credit-reason')!.closest('[role="dialog"]')!)
   expect(document.querySelector('#credit-reason')).toBeNull()
-  await click('重新申请')
+  await chooseCreditAction('重新申请')
   const field = await reason()
   await click('取消', field.closest('[role="dialog"]')!)
   await click('继续编辑')

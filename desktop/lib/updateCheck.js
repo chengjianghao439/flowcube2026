@@ -89,15 +89,12 @@ function resolveDownloadUrl(payload, origin) {
     const sameOrigin = `${base}/current/${encodeURIComponent(fn)}`
     if (isValidDownloadUrl(sameOrigin)) return sameOrigin
   }
-  if (isValidDownloadUrl(url)) return url
-  if (url.startsWith('/')) {
-    const built = `${base}${url}`
-    if (isValidDownloadUrl(built)) return built
-  }
-  if (fn && base) {
-    const built = `${base}/current/${encodeURIComponent(fn)}`
-    if (isValidDownloadUrl(built)) return built
-  }
+  const candidate = url || (fn ? `/current/${encodeURIComponent(fn)}` : '')
+  if (!candidate) return ''
+  try {
+    const resolved = new URL(candidate, base)
+    if (isValidDownloadUrl(resolved.href) && resolved.origin === base) return resolved.href
+  } catch { /* 清单字段不完整 */ }
   return ''
 }
 
@@ -117,6 +114,12 @@ function verifyFileIntegrity(filePath, expectedSha256) {
     })
     stream.on('error', reject)
   })
+}
+
+async function trustedUpdateOrigin() {
+  const value = (await fs.readFile(path.join(process.resourcesPath, 'renderer', 'native-update-origin.txt'), 'utf8')).trim()
+  if (!isValidDownloadUrl(value) || new URL(value).origin !== value) throw new Error('安装包未配置可信 HTTPS 更新服务器')
+  return value
 }
 
 /** 主进程从已配置的 HTTPS API 读取清单；不接收渲染层提供的摘要。 */
@@ -160,8 +163,8 @@ function fetchInstaller(url, signal) {
     request.on('error', reject)
     let redirects = 0
     request.on('redirect', (_status, _method, destination) => {
-      if (++redirects > MAX_REDIRECTS || !isValidDownloadUrl(destination)) {
-        reject(new Error(redirects > MAX_REDIRECTS ? '安装包重定向次数过多' : '安装包重定向不是有效的 HTTPS 地址'))
+      if (++redirects > MAX_REDIRECTS || !isValidDownloadUrl(destination) || new URL(destination).origin !== new URL(url).origin) {
+        reject(new Error(redirects > MAX_REDIRECTS ? '安装包重定向次数过多' : '安装包重定向须使用相同的可信 HTTPS 服务器'))
         request.abort()
         return
       }
@@ -218,7 +221,7 @@ function versionInfo(app, manifest) {
   return { current: app.getVersion(), version: manifest.version, notes: manifest.notes }
 }
 
-async function checkAppUpdate(app, win, apiOriginFn, { manual = false } = {}) {
+async function checkAppUpdate(app, win, { manual = false } = {}) {
   if (!supportsWindowsUpdate(app)) {
     if (manual) publish(win, { stage: 'unsupported', current: app.getVersion(), message: '自动更新适用于 Windows 安装版。' })
     return
@@ -232,7 +235,7 @@ async function checkAppUpdate(app, win, apiOriginFn, { manual = false } = {}) {
   prepared = null
   publish(win, { stage: 'checking', ...info })
   try {
-    const origin = await apiOriginFn()
+    const origin = await trustedUpdateOrigin()
     const manifest = await fetchUpdateManifest(origin)
     info = versionInfo(app, manifest)
     if (process.env.FLOWCUBE_UPDATE_DIAG === '1') console.info('[FlowCube] 更新检查', info.current, '→', info.version)
@@ -293,26 +296,34 @@ function cancelUpdateDownload(win) {
   active.abort()
 }
 
-function launchInstaller(file) {
+function launchInstaller(file, sha256) {
   const systemRoot = process.env.SystemRoot || 'C:\\Windows'
   const powershell = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-  // RunAs 返回时系统已接受安装器启动。路径经环境变量传递，与固定脚本分开。
-  const script = "$ErrorActionPreference='Stop'; Start-Process -FilePath $env:FLOWCUBE_INSTALLER_PATH -ArgumentList @('--updated','/S','--force-run') -Verb RunAs"
+  // 保持同一只读文件句柄直至系统接受启动。拒绝重解析点并对句柄再次计算摘要。
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    "function Assert-NoReparse($target) { $entry = Get-Item -LiteralPath $target -Force; while ($null -ne $entry) { if ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) { exit 31 }; if ($entry -is [IO.FileInfo]) { $entry = $entry.Directory } else { $entry = $entry.Parent } } }",
+    "$file = Get-Item -LiteralPath $env:FLOWCUBE_INSTALLER_PATH -Force",
+    "Assert-NoReparse $file.FullName",
+    "$stream=[IO.File]::Open($file.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)",
+    "try { Assert-NoReparse $file.FullName; if ((Get-FileHash -InputStream $stream -Algorithm SHA256).Hash -ne $env:FLOWCUBE_INSTALLER_SHA256) { exit 31 }; Start-Process -FilePath $file.FullName -ArgumentList @('--updated','/S','--force-run') -Verb RunAs } finally { $stream.Dispose() }",
+  ].join('; ')
   return new Promise((resolve, reject) => {
     execFile(powershell, ['-NoProfile', '-NonInteractive', '-Command', script],
-      { windowsHide: true, env: { ...process.env, FLOWCUBE_INSTALLER_PATH: file } },
+      { windowsHide: true, env: { ...process.env, FLOWCUBE_INSTALLER_PATH: file, FLOWCUBE_INSTALLER_SHA256: sha256 } },
       error => error ? reject(error) : resolve())
   })
 }
 
-async function restartToUpdate(app, win, origin, quitForInstall) {
+async function restartToUpdate(app, win, quitForInstall) {
   if (active || state.stage === 'installing') return
   if (!supportsWindowsUpdate(app) || !prepared || state.stage !== 'ready') throw new Error('更新包尚未下载并通过校验')
   const { manifest, file } = prepared
   const info = versionInfo(app, manifest)
   publish(win, { stage: 'installing', ...info })
   try {
-    if (!isValidDownloadUrl(origin) || new URL(origin).origin !== prepared.origin) throw new Error('更新服务器已变化，请重新检查。')
+    const origin = await trustedUpdateOrigin()
+    if (origin !== prepared.origin) throw new Error('更新服务器已变化，请重新检查。')
     const fresh = await fetchUpdateManifest(origin)
     if (!isNewer(info.current, fresh.version) || fresh.version !== manifest.version
         || fresh.sha256 !== manifest.sha256 || fresh.downloadUrl !== manifest.downloadUrl) {
@@ -326,8 +337,13 @@ async function restartToUpdate(app, win, origin, quitForInstall) {
     return
   }
   try {
-    await launchInstaller(file)
-  } catch {
+    await launchInstaller(file, manifest.sha256)
+  } catch (error) {
+    if (error.code === 31) {
+      prepared = null
+      publish(win, { stage: 'error', ...info, message: '安装包位置或校验值已变化，请重新检查更新。', showNotice: true })
+      return
+    }
     publish(win, { stage: 'ready', ...info, message: '安装程序未启动。若取消了系统授权，可以再次点击重启升级。' })
     return
   }

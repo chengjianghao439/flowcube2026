@@ -10,13 +10,13 @@ export async function getRacksApi(
   return res
 }
 
-export async function createRackApi(data: CreateRackParams): Promise<Rack> {
-  const res = await apiClient.post<Rack>('/racks', data)
+export async function createRackApi(data: CreateRackParams, config?: Parameters<typeof apiClient.post>[2]): Promise<Rack> {
+  const res = await apiClient.post<Rack>('/racks', data, config)
   return res
 }
 
-export async function updateRackApi(id: number, data: UpdateRackParams): Promise<Rack> {
-  const res = await apiClient.put<Rack>(`/racks/${id}`, data)
+export async function updateRackApi(id: number, data: UpdateRackParams, config?: Parameters<typeof apiClient.put>[2]): Promise<Rack> {
+  const res = await apiClient.put<Rack>(`/racks/${id}`, data, config)
   return res
 }
 

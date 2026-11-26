@@ -4,6 +4,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { WorkspaceTabs } from './WorkspaceTabs'
+import { useAuthStore } from '@/store/authStore'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { HOME_TAB, useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { DirtyGuardDialog } from '@/components/shared/DirtyGuardDialog'
@@ -41,6 +43,7 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   // JSDOM lacks the browser scrolling API; navigation, stores and dirty dialog stay real.
   Element.prototype.scrollIntoView = vi.fn()
+  useAuthStore.setState({user:{id:1,username:'合成管理员',realName:'管理员',roleId:1,roleName:'管理员'}})
   useWorkspaceStore.setState({ tabs: [HOME_TAB,
     { key: '/sale', path: '/sale?keyword=原筛选', title: '销售订单', closable: true },
     { key: '/products', path: '/products?keyword=商品筛选', title: '商品管理', closable: true },
@@ -173,4 +176,12 @@ test('关闭其他/全部沿原脏守卫，取消不删除；确认全部回仪�
   await click(namedButton('放弃本次修改')); await settle()
   expect(useWorkspaceStore.getState().tabs).toEqual([HOME_TAB])
   expect(location()).toBe('/dashboard')
+})
+
+test('无仪表盘权限时，关闭全部标签回到首个可用业务页', async () => {
+  useAuthStore.setState({user:{id:2,username:'业务员',realName:'业务员',roleId:2,roleName:'业务员',permissions:[PERMISSIONS.SALE_ORDER_VIEW]}})
+  await render()
+  await key(namedButton('标签操作'), 'ArrowDown')
+  await click(namedButton('关闭全部标签'))
+  expect(location()).toBe('/sale')
 })

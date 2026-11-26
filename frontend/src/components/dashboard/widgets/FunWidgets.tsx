@@ -5,6 +5,8 @@ import {
   Droplet, StickyNote, CheckCircle2, Circle, Gauge,
 } from 'lucide-react'
 import { WidgetShell } from '../WidgetShell'
+import { Input } from '@/components/ui/input'
+import { DatePicker } from '@/components/shared/DatePicker'
 import { cn } from '@/lib/utils'
 
 // 趣味小组件：与业务数据无关，纯本地状态，给仪表盘一点人味儿。
@@ -192,9 +194,9 @@ export function OffWorkCountdown() {
         <button type="button" onClick={() => done && setCelebrate(true)} className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={!done}>{big}</button>
         <p className="text-xs text-muted-foreground">{hint}</p>
         {editing && (
-          <input aria-label="下班时间" type="time" value={off}
+          <Input aria-label="下班时间" type="time" value={off}
             onChange={e => { setOff(e.target.value); localStorage.setItem('dash-offwork', e.target.value) }}
-            className="mt-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
+            className="mt-1 h-8 w-auto px-2" />
         )}
       </div>
     </WidgetShell>
@@ -284,12 +286,11 @@ export function HolidayCountdown() {
               下一个：{next.emoji} {next.name} · {days === 0 ? '就是今天' : `${days} 天后`}
             </p>
           )}
-          <div className="space-y-2 border-b border-border pb-3">
+          <form className="space-y-2 border-b border-border pb-3" onSubmit={event => { event.preventDefault(); add() }}>
             <div className="flex flex-wrap gap-2">
-              <input aria-label="假期日期" type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
-              <input aria-label="假期名称" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="假期名称" maxLength={12}
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
+              <div className="min-w-32 flex-1"><DatePicker aria-label="假期日期" value={date} onChange={setDate} className="h-8" /></div>
+              <Input aria-label="假期名称" value={name} onChange={e => setName(e.target.value)} placeholder="假期名称" maxLength={12}
+                className="h-8 min-w-20 flex-1" />
             </div>
             <div className="flex flex-wrap gap-1">
               {EMOJI_CHOICES.map(e => (
@@ -299,11 +300,11 @@ export function HolidayCountdown() {
                 </button>
               ))}
             </div>
-            <button type="button" onClick={add} disabled={!name.trim() || !date}
+            <button type="submit" disabled={!name.trim() || !date}
               className="flex w-full items-center justify-center gap-1 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40">
               <Plus className="h-4 w-4" /> 添加假期
             </button>
-          </div>
+          </form>
           <div className="space-y-1">
             {items.map(i => (
               <div key={i.id} className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted/50">
@@ -452,9 +453,9 @@ export function SlackingCountdown() {
         {editing && (
           <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
             <span>每月发薪日</span>
-            <input aria-label="每月发薪日" type="number" min={1} max={28} value={payday}
+            <Input aria-label="每月发薪日" type="number" min={1} max={28} value={payday}
               onChange={e => { const v = Math.min(28, Math.max(1, Number(e.target.value) || 1)); setPayday(v); localStorage.setItem('dash-payday', String(v)) }}
-              className="w-16 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground" />
+              className="h-8 w-16 px-2" />
             <span>号</span>
           </div>
         )}

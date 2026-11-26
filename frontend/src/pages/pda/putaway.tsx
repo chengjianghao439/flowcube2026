@@ -18,6 +18,7 @@ import { makePutawayFlow, type PutawayFlowContext } from '@/flows/putawayFlow'
 
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
+import PdaInboundReceiptNotice from '@/components/pda/PdaInboundReceiptNotice'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 
 function PutawayRunner({ taskId }: { taskId: number }) {
@@ -174,9 +175,10 @@ export default function PdaPutawayPage() {
     )
   }
 
+  const recoveryNotice = <PdaInboundReceiptNotice taskId={taskId} operation="putaway" />
   if (isError || (!isLoading && !task)) {
     return <div className="min-h-screen bg-background">
-      <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
+      <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />{recoveryNotice}
       <PdaEmptyState title="加载失败" description="上架任务暂时无法读取，请检查网络后重试" actionText="重试" onAction={() => { void refetch() }} />
     </div>
   }
@@ -184,7 +186,7 @@ export default function PdaPutawayPage() {
   if (isLoading || !task) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />{recoveryNotice}
         <PdaLoading className="h-40 mt-8" />
       </div>
     )
@@ -193,7 +195,7 @@ export default function PdaPutawayPage() {
   if (task.status === 1) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />{recoveryNotice}
         <PdaEmptyState
           icon={<Hourglass className="h-12 w-12 text-muted-foreground" />}
           title="尚未收货"
@@ -208,7 +210,7 @@ export default function PdaPutawayPage() {
   if (!task.submittedAt) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />{recoveryNotice}
         <PdaEmptyState
           icon={<ArrowUpFromLine className="h-12 w-12 text-muted-foreground" />}
           title="未提交"
@@ -223,7 +225,7 @@ export default function PdaPutawayPage() {
   if (task.status === 4 || task.status === 5) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />{recoveryNotice}
         <PdaEmptyState
           icon={<CircleCheck className="h-12 w-12 text-muted-foreground" />}
           title={task.status === 5 ? '已取消' : '已完成'}
@@ -237,7 +239,7 @@ export default function PdaPutawayPage() {
 
   if (task.status === 2 && (task.putawaySummary?.waitingContainers ?? 0) === 0) {
     return <div className="min-h-screen bg-background">
-      <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />
+      <PdaHeader title="扫码上架" onBack={() => navigate('/pda/inbound')} />{recoveryNotice}
       <PdaEmptyState title="暂无待上架货物" description="已收到的货已全部上架，仍可继续收货" actionText="继续收货" onAction={() => navigate(`/pda/receive/${taskId}`)} />
     </div>
   }

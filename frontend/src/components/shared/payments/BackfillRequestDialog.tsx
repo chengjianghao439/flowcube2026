@@ -38,27 +38,29 @@ export function BackfillRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v && !pending) onClose() }}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="fc-form-dialog sm:max-w-xl">
         <DialogHeader description={<>
             {message && <span role="alert">{message} </span>}
             这个会计期间已经结账，凭证已经封存，所以这笔业务<strong>不能当场记账</strong>。
             可以把它提交为一张跨期补录申请：<strong>申请不记账</strong>，由<strong>另一个人</strong>批准后
             才会真正记账，凭证落在补录当期（批准那天所在的期间）。
           </>}><DialogTitle>这笔业务落在已结账的期间</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-1 text-sm">
+        <div className="fc-form-dialog-body space-y-4">
+          <div className="space-y-3 py-1 text-sm">
 
-          {summary && <div className="text-xs text-muted-foreground">{summary}</div>}
-          <div className="space-y-1.5">
-            <Label>申请原因 *</Label>
-            <Input
-              value={reason}
-              onChange={e => setReason(e.target.value)}
-              placeholder="如：上月已结账后才发现这笔付款漏登，凭证与银行流水都已确认"
-              maxLength={300}
-              disabled={pending}
-              autoFocus
-            />
-            <p className="text-xs text-muted-foreground">审批人要靠这句话判断该不该补，请写清为什么现在才记（至少 {REASON_MIN} 个字）。</p>
+            {summary && <div className="text-xs text-muted-foreground">{summary}</div>}
+            <div className="space-y-1.5">
+              <Label>申请原因 *</Label>
+              <Input
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                placeholder="如：上月已结账后才发现这笔付款漏登，凭证与银行流水都已确认"
+                maxLength={300}
+                disabled={pending}
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">审批人要靠这句话判断该不该补，请写清为什么现在才记（至少 {REASON_MIN} 个字）。</p>
+            </div>
           </div>
         </div>
         <DialogFooter>

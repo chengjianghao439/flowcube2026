@@ -273,6 +273,32 @@ for (const mismatch of [null, 'manifest', 'asset', 'public-exe']) {
   })
 }
 
+test('桌面预检无需创建目录，已有不可用的暂存路径会拒绝发布', t => {
+  const { file } = makeFile()
+  t.after(() => fs.rmSync(path.dirname(file), { recursive: true, force: true }))
+  const downloads = path.join(path.dirname(file), 'downloads')
+  fs.mkdirSync(downloads)
+  const check = () => require('node:child_process').spawnSync(process.execPath, [
+    path.resolve(__dirname, '../scripts/release-desktop.js'), VERSION, '--artifact=' + file,
+    '--source-sha=' + SOURCE_SHA, '--sha256=' + sha256(file), '--dry-run', '--check-write-access',
+  ], { encoding: 'utf8', env: { ...process.env, FLOWCUBE_DOWNLOADS_ROOT: downloads } })
+  const ok = check()
+  assert.equal(ok.status, 0, ok.stderr)
+  assert.deepEqual(fs.readdirSync(downloads), [])
+  const staging = path.join(downloads, '.desktop-staging')
+  fs.writeFileSync(staging, 'marker')
+  const rejected = check()
+  assert.notEqual(rejected.status, 0)
+  assert.match(rejected.stderr, /\.desktop-staging/)
+  assert.equal(fs.readFileSync(staging, 'utf8'), 'marker')
+  if (process.getuid?.() > 0) {
+    fs.unlinkSync(staging)
+    fs.mkdirSync(staging, { mode: 0o500 })
+    assert.notEqual(check().status, 0)
+    fs.chmodSync(staging, 0o700)
+  }
+})
+
 test('服务器发布前 GitHub 保持草稿，写入服务器后可恢复丢失的转正响应', async t => {
   const { file, fileSize } = makeFile()
   t.after(() => fs.rmSync(path.dirname(file), { recursive: true, force: true }))

@@ -36,7 +36,7 @@ function makeMock() {
       const type = url.searchParams.get('type');
       return ok(res, type ? hits.filter(h => h.type === type) : hits);
     }
-    if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, allowDecimalQty: false }); }
+    if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, unit: state.stock.find(row => row.productId === id)?.unit, allowDecimalQty: false }); }
     if (p === '/api/customers/1') return ok(res, { id: 1, name: '演示客户甲公司', priceLevel: 'A', creditLimit: null });
     if (p === '/api/warehouses') return ok(res, { list: [{ id: 1, name: '华东一仓' }] });
     if (p === '/api/inventory/stock') return ok(res, { list: state.stock });
@@ -125,7 +125,7 @@ test('A7 消歧：同名多命中停在消歧不默认选', async () => {
 
 test('G2 建销售单：试算→预览→确认→核验，合计按分对平', async () => {
   const { server, state, client, store } = await setup();
-  const out = await handleMessage(store, client, FULL_ACTOR, '给演示客户甲公司开单：缓冲铰链 10个');
+  const out = await handleMessage(store, client, FULL_ACTOR, '给演示客户甲公司开单：缓冲铰链 10件');
   assert.equal(out.task.state, 'AWAITING_CONFIRM');
   assert.equal(out.task.preview.totalCents, 8900);
   const done = await confirmTask(store, client, out.task.id, FULL_ACTOR);
@@ -137,7 +137,7 @@ test('G2 建销售单：试算→预览→确认→核验，合计按分对平',
 
 test('A3 新鲜度：预览后价格变化，确认被拦截且零建单', async () => {
   const { server, state, client, store } = await setup();
-  const out = await handleMessage(store, client, FULL_ACTOR, '给演示客户甲公司开单：缓冲铰链 10个');
+  const out = await handleMessage(store, client, FULL_ACTOR, '给演示客户甲公司开单：缓冲铰链 10件');
   assert.equal(out.task.state, 'AWAITING_CONFIRM');
   state.prices[1] = 9.9; // 预览后价格被他人改动
   const blocked = await confirmTask(store, client, out.task.id, FULL_ACTOR);
@@ -150,7 +150,7 @@ test('A3 新鲜度：预览后价格变化，确认被拦截且零建单', async
 test('A4 结果未知：响应丢失后查回执恢复，不重复建单', async t => {
   const { server, state, client, store } = await setup();
   t.after(() => new Promise(resolve => server.close(resolve)));
-  const out = await handleMessage(store, client, FULL_ACTOR, '给演示客户甲公司开单：缓冲铰链 10个');
+  const out = await handleMessage(store, client, FULL_ACTOR, '给演示客户甲公司开单：缓冲铰链 10件');
   state.dropNextSalePost = true; // 服务端已执行，但响应在路上丢失
   const done = await confirmTask(store, client, out.task.id, FULL_ACTOR);
   assert.equal(done.task.state, 'DONE');

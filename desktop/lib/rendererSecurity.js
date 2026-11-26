@@ -1,5 +1,7 @@
 'use strict'
 
+const ALLOWED_PERMISSIONS = new Set(['clipboard-sanitized-write', 'notifications'])
+
 /** 本地入口按完整 file URL 匹配，只允许 HashRouter 的 hash 变化。 */
 function createRendererGuard() {
   const entries = new WeakMap()
@@ -16,6 +18,15 @@ function createRendererGuard() {
       && event.senderFrame && event.senderFrame === event.sender.mainFrame
       && allowsNavigation(event.sender, event.senderFrame.url))
   }
-  return { register, allowsNavigation, isTrusted }
+  function allowsPermission(contents, permission, details = {}) {
+    if (!ALLOWED_PERMISSIONS.has(permission)) return false
+    if (!contents || contents.isDestroyed()) return false
+    if (details.isMainFrame === false) return false
+    const url = details.requestingUrl || contents.mainFrame?.url || (typeof contents.getURL === 'function' ? contents.getURL() : '')
+    if (!allowsNavigation(contents, url)) return false
+    const origin = details.requestingOrigin ?? details.securityOrigin
+    return !origin || origin === 'file://' || origin === 'null'
+  }
+  return { register, allowsNavigation, isTrusted, allowsPermission }
 }
 module.exports = { createRendererGuard }

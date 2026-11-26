@@ -191,11 +191,16 @@ export default function PdaTaskPage() {
       // 列表仍显示待拣 0/2」的矛盾数据（2026-09-17 验收 ISSUE-001）。
       await qc.invalidateQueries({ queryKey: ['pda-my-tasks'] })
       await qc.invalidateQueries({ queryKey: ['pda-my-task-sku-summary'] })
-      const latest = await qc.fetchQuery({
-        queryKey: ['pda-task', taskId],
-        queryFn: () => getTaskByIdApi(taskId, { skipGlobalError: true }),
-      })
-      if (currentTaskId.current === taskId && latest.id === taskId && reachedPostPickStatus(latest)) {
+      let latest: WarehouseTask | undefined
+      try {
+        latest = await qc.fetchQuery({
+          queryKey: ['pda-task', taskId],
+          queryFn: () => getTaskByIdApi(taskId, { skipGlobalError: true }),
+        })
+      } catch {
+        if (currentTaskId.current === taskId) warn('拣货已确认，请重试读取任务进度')
+      }
+      if (currentTaskId.current === taskId && latest?.id === taskId && reachedPostPickStatus(latest)) {
         setFinished({ id: taskId, status: latest.status })
         setHandoffTask(latest)
         ok(stateConfirmedMessage('拣货', latest.statusName))
@@ -374,6 +379,40 @@ export default function PdaTaskPage() {
   const currentHandoff = handoffTask?.id === taskId ? handoffTask : null
   const nextStatus = currentHandoff?.status ?? (finished?.id === taskId ? finished.status : undefined)
   const canHandoff = !!currentHandoff && task?.id === taskId && !isLoading && !taskError && !pickAction.submitBlocked && !readyAction.submitBlocked && readyAction.networkStatus === 'online'
+  const recoveryNotice = (
+    <PdaCriticalActionNotice
+      blockedReason={taskNoticeAction?.blockedReason ?? null}
+      pendingRecord={taskNoticeAction?.pendingRecord}
+      confirming={taskNoticeAction?.confirming}
+      phase={taskNoticeAction?.phase}
+      phaseMessage={taskNoticeAction?.phaseMessage}
+      lastErrorMessage={taskNoticeAction?.lastErrorMessage}
+      onConfirm={() => {
+        const handler = pickAction.pendingRecord ? pickAction : readyAction.pendingRecord ? readyAction : taskNoticeAction
+        if (!handler) return
+        const requestKey = handler.pendingRecord?.requestKey
+        void handler.confirmPending().then((status) => {
+          if (!status) return
+          if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
+          if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
+          if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次提交记录；请先刷新任务后再重试'))
+          if (status.status === 'failed') {
+            if (requestKey) setScanResolution({ requestKey, outcome: 'rejected' })
+            err(formatPdaErrorMessage(status.message, '扫码失败，请检查条码或任务状态'))
+          }
+        })
+      }}
+      onClear={() => {
+        if (pickAction.pendingRecord) pickAction.clearPending()
+        if (readyAction.pendingRecord) readyAction.clearPending()
+      }}
+      onDismissError={() => {
+        pickAction.clearError()
+        readyAction.clearError()
+      }}
+    />
+  )
+
   if (finished?.id === taskId) return (
     <PdaDoneView
       icon={<CircleCheck className="h-20 w-20 text-success-ink" />}
@@ -382,6 +421,7 @@ export default function PdaTaskPage() {
       actionText="返回任务列表"
       onAction={() => navigate('/pda/picking')}
     >
+      {recoveryNotice}
       <PdaNextStep
         enabled={canHandoff && nextStatus === WT_STATUS.SORTING}
         required={[PERMISSIONS.SORTING_BIN_VIEW, PERMISSIONS.WAREHOUSE_TASK_SORT]}
@@ -411,37 +451,7 @@ export default function PdaTaskPage() {
       {/* Product list */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
-          <PdaCriticalActionNotice
-            blockedReason={taskNoticeAction?.blockedReason ?? null}
-            pendingRecord={taskNoticeAction?.pendingRecord}
-            confirming={taskNoticeAction?.confirming}
-            phase={taskNoticeAction?.phase}
-            phaseMessage={taskNoticeAction?.phaseMessage}
-            lastErrorMessage={taskNoticeAction?.lastErrorMessage}
-            onConfirm={() => {
-              const handler = pickAction.pendingRecord ? pickAction : readyAction.pendingRecord ? readyAction : taskNoticeAction
-              if (!handler) return
-              const requestKey = handler.pendingRecord?.requestKey
-              void handler.confirmPending().then((status) => {
-                if (!status) return
-                if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
-                if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
-                if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次提交记录；请先刷新任务后再重试'))
-                if (status.status === 'failed') {
-                  if (requestKey) setScanResolution({ requestKey, outcome: 'rejected' })
-                  err(formatPdaErrorMessage(status.message, '扫码失败，请检查条码或任务状态'))
-                }
-              })
-            }}
-            onClear={() => {
-              if (pickAction.pendingRecord) pickAction.clearPending()
-              if (readyAction.pendingRecord) readyAction.clearPending()
-            }}
-            onDismissError={() => {
-              pickAction.clearError()
-              readyAction.clearError()
-            }}
-          />
+          {recoveryNotice}
           {isLoading && <PdaLoading className="h-32" />}
           {(taskError || suggestionError) && <PdaQueryError onRetry={() => { void refetchTask(); void refetchSug() }} />}
           {!taskError && !suggestionError && items.map(item => (

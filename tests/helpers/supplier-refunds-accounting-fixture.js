@@ -120,8 +120,14 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
     if(sql.startsWith('SELECT pr.id, pr.order_no, pr.party_name,')){assert.match(sql,/pr.order_id IS NULL AND pr.debit_account_code IS NOT NULL$/);return [[]]}
     if(sql==='SELECT source_id,source_no,voucher_date FROM acct_vouchers WHERE company_id=? AND source_type=? AND source_id IS NOT NULL'){assert.equal(args[1],'purchase_settle');return [[]]}
     if(sql==='SELECT period FROM acct_periods WHERE company_id=? AND status=2 FOR UPDATE')return [state.acct_periods.filter(p=>p.company_id===args[0]&&p.status===2).map(p=>({period:p.period}))]
-    if(sql.startsWith('SELECT a.code, a.name, a.category, a.balance_dir,')){assert.match(sql,/a.category IN \(5, 6\)/);return [[]]}
-    if(sql==='SELECT id, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ? AND company_id = ?'){assert.equal(args[0],'period_close');return [[]]}
+    if(sql.startsWith('SELECT a.code, a.name, a.category, a.balance_dir,')){assert.match(sql,/a.category IN \(4, 5, 6\)/);return [[]]}
+    if (sql.startsWith('SELECT v.id, v.source_hash, v.status FROM acct_vouchers root JOIN acct_vouchers v')) {
+      assert.match(sql, /v.company_id=root.company_id AND v.is_reversal=0/)
+      assert.match(sql, /root.company_id=\? AND root.source_type=\? AND root.source_id=\? ORDER BY v.id DESC LIMIT 1$/)
+      assert.deepEqual(copy(args), [1, 'period_close', 202610])
+      assert.equal(state.acct_vouchers.length, 0)
+      return [[]]
+    }
     if(sql.startsWith('INSERT INTO acct_periods (company_id, period, status,')){assert.equal(args[0],1);assert.equal(args[1],'202610');state.acct_periods.push({company_id:args[0],period:args[1],status:2});return [{affectedRows:1}]}
     // Preserve the historical gross metrics with the ordinary-fund owner filter.
     if(sql.includes('COALESCE(SUM(IF(v.is_reversal=1,-e.amount,e.amount)),0) s')){assert.match(sql,/source_type IN \('receipt_in','payment_out','expense_pay'\)/);return [[{s:'100.00'}]]}
@@ -200,6 +206,7 @@ async function fixture(amount='4.0000',gross='100.0000',options={}) {
   const pure={'../purchase/purchase.cash-money':require('../../backend/src/modules/purchase/purchase.cash-money'),'../accounting/voucher-sale-money':require('../../backend/src/modules/accounting/voucher-sale-money'),'../../utils/cashMoney':require('../../backend/src/utils/cashMoney'),crypto,'node:crypto':crypto,'../../utils/sqlIdentifier':sqlIdentifier,'../../utils/AppError':AppError,'../../utils/decimalMoney':money,'../../utils/backendTime':backendTime,
     '../refunds/supplier-refunds.backfill-rules':null,'../../constants/voucherSource':voucherSource,'../../constants/permissions':{PERMISSIONS},'../../utils/logger':{info(){},warn(){}},
     '../../config/db':{pool:{getConnection:async()=>f.conn,query:(sql,args)=>f.conn.query(sql,args)}},
+    './accounting.report-basis': require('../../backend/src/modules/accounting/accounting.report-basis'),
     './voucher-sale-money':saleMoney,'../accounting/voucher-sale-money':saleMoney,
     './voucher-sale-periods':{SALE_TYPES:['sale_revenue','sale_cogs'],loadSaleShipmentFacts:async()=>({orders:[]}),projectSaleShipments:()=>[],reconcileSalePeriods:async()=>[]},
     '../inbound-tasks/inbound-purchase-source':{assertPurchaseSettlementSources:async()=>{throw Error('unexpected old PO source in empty boundary')}},

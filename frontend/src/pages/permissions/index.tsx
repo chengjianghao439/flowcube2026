@@ -50,11 +50,11 @@ function DuplicateRoleDialog({ role, onClose }: { role: Role | null; onClose: ()
 
   return (
     <Dialog open={!!role} onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="fc-form-dialog sm:max-w-md">
         <DialogHeader description={<>{<>复制会连同该角色的全部权限一起带入新角色，之后可在本页单独调整。</>}</>}>
           <DialogTitle>复制角色</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
+        <div className="fc-form-dialog-body space-y-3 py-2">
           <div>
             <Label>源角色</Label>
             <Input value={role?.name ?? ''} disabled className="mt-1 bg-muted/50" />
@@ -102,11 +102,11 @@ function CreateRoleDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader description={"填写角色编码、名称与备注。"}>
+      <DialogContent className="fc-form-dialog sm:max-w-md">
+        <DialogHeader>
           <DialogTitle>新增角色</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
+        <div className="fc-form-dialog-body space-y-3 py-2">
           <div>
             <Label>角色编码 *</Label>
             <Input value={code} onChange={e => setCode(e.target.value)} placeholder="如 warehouse_manager" maxLength={50} />
@@ -145,19 +145,25 @@ export default function PermissionsPage() {
   const permsRef = useRef(perms)
   permsRef.current = perms
 
-  const { data: roles } = useRoles()
+  const { data: roles, isError: rolesFailed } = useRoles()
   const { data: rolePerms, isLoading, isError, error, refetch } = useRolePermissions(selectedRole)
   const { mutate: deleteRole } = useDeleteRole()
 
   /** 当前角色的权限基线：用于「是否改过」判断与「取消编辑」回滚 */
+  const [editBaseline, setEditBaseline] = useState<Set<string>>(() => new Set())
+  const changedElsewhere = editing && Array.isArray(rolePerms) && (rolePerms.length !== editBaseline.size || rolePerms.some(code => !editBaseline.has(code)))
+  const ready = !changedElsewhere && isSuperAdmin && !rolesFailed && !!roles?.some(r => r.id === selectedRole && r.code !== 'admin')
+    && !isLoading && !isError && Array.isArray(rolePerms)
+  const roleAtSave = useRef(selectedRole)
+  roleAtSave.current = selectedRole
   const baseline = useMemo(() => new Set(rolePerms ?? []), [rolePerms])
 
-  useEffect(() => { if (rolePerms) setPerms(new Set(rolePerms)) }, [rolePerms])
+  useEffect(() => { if (!editing && rolePerms) setPerms(new Set(rolePerms)) }, [editing, rolePerms])
 
   const save = useSaveRolePermissions()
 
   const toggle = (code: string) => {
-    if (!isSuperAdmin) return
+    if (!ready || !editing) return
     setPerms(p => { const n = new Set(p); if (n.has(code)) n.delete(code); else n.add(code); return n })
   }
 
@@ -166,7 +172,7 @@ export default function PermissionsPage() {
   )
 
   /** 进入编辑态：以基线为起点，避免残留上次未保存的勾选 */
-  const startEdit = () => { setPerms(new Set(baseline)); setEditing(true) }
+  const startEdit = () => { if (!ready) return; setEditBaseline(baseline); setPerms(new Set(baseline)); setEditing(true) }
   /** 取消编辑：丢弃改动回到默认（只读）态 */
   const cancelEdit = () => { setPerms(new Set(baseline)); setEditing(false) }
 
@@ -184,15 +190,19 @@ export default function PermissionsPage() {
     setSelectedRole(id)
   }
 
-  const handleSave = () => save.mutate({ roleId: selectedRole, permissions: Array.from(perms) }, {
-    // 保存成功后回到默认（只读）态——页面状态本身的变化就是「已保存」的反馈
-    onSuccess: (_result, submitted) => {
-      // 保存期间又勾选/取消时留在编辑态，不能把后续改动当成已保存
-      const latest = permsRef.current
-      if (!submitted.permissions.some(code => !latest.has(code)) && latest.size === submitted.permissions.length) setEditing(false)
-      toast.success('权限已更新，用户下次登录生效')
-    },
-  })
+  const handleSave = () => {
+    if (!editing || !ready || save.isPending) return
+    save.mutate({ roleId: selectedRole, permissions: Array.from(perms) }, {
+      onSuccess: (_result, submitted) => {
+        if (roleAtSave.current === submitted.roleId) {
+          setEditBaseline(new Set(submitted.permissions))
+          const latest = permsRef.current
+          if (latest.size === submitted.permissions.length && submitted.permissions.every(code => latest.has(code))) setEditing(false)
+        }
+        toast.success('权限已更新，用户下次登录生效')
+      },
+    })
+  }
 
   const roleList = visibleRoles(roles ?? [])
 
@@ -200,20 +210,21 @@ export default function PermissionsPage() {
     <div className="space-y-6">
       <PageHeader
         title="权限管理"
-        description="提示：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改；系统内置角色不可删除。"
+        description="配置角色权限；修改后需重新登录生效。"
         status={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /><span className="text-sm text-muted-foreground">{roleList.find(r => r.id === selectedRole)?.name ?? ''}</span></> : undefined}
         actions={isSuperAdmin ? (
           editing ? (
             <>
               <Button variant="outline" onClick={cancelEdit} disabled={save.isPending}>取消编辑</Button>
-              <Button onClick={handleSave} disabled={save.isPending}>{save.isPending ? '保存中…' : '保存修改'}</Button>
+              <Button onClick={handleSave} disabled={!ready || save.isPending}>{save.isPending ? '保存中…' : '保存修改'}</Button>
             </>
           ) : (
-            <Button variant="outline" onClick={startEdit}>编辑</Button>
+            <Button variant="outline" onClick={startEdit} disabled={!ready}>编辑</Button>
           )
         ) : null}
       />
 
+      {changedElsewhere && <p role="alert">角色权限已更新，请取消编辑后重新核对。</p>}
       <div className="grid items-start gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
         {/* 左栏：角色列表（选中高亮，hover 显示复制/删除） */}
         <aside className="w-full shrink-0 rounded-lg border bg-card p-3 lg:sticky lg:top-4">
@@ -290,7 +301,7 @@ export default function PermissionsPage() {
                         <button
                           key={p.code}
                           onClick={() => toggle(p.code)}
-                          disabled={!isSuperAdmin}
+                          disabled={!ready}
                           aria-pressed={active}
                           className={`inline-flex min-h-9 items-center rounded-md border px-3 py-1.5 text-left text-sm transition-colors ${active ? 'border-primary bg-primary/10 font-medium text-primary' : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'} ${!isSuperAdmin ? 'cursor-default' : 'cursor-pointer'}`}
                         >

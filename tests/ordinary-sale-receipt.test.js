@@ -68,6 +68,9 @@ test('宽查询命中普通原action仍核scope；控制器只调用本人tuple�
       '../../utils/AppError': AppError,
       '../../utils/response': { successResponse(_res, data) { sent.push(data) } },
       '../../utils/operationRequest': { async getScopedOperationRequestStatus(input) { assert.equal(input.userId, 7); assert.equal(input.requestKey, 'original'); input.receiptContext.matchedAction = 'sale.ship:21'; return receipt('ship') } },
+      '../warehouse-tasks/warehouse-tasks.adjust-receipt': {
+        assertAdjustmentReceipt() { assert.fail('其他领域的回执无需查询改单明细') },
+      },
       '../packages/packages.receipt-guard': { assertPrintLabelReceiptConsistent() {} }, '../../utils/logger': {},
       '../inbound-tasks/inbound-tasks.create-receipt': { async ensureInboundCreateReceiptView() {}, async assertInboundCreateReceipt() {} },
       '../inbound-tasks/inbound-tasks.edit-receipt': { async ensureInboundEditReceiptView() {}, async assertInboundEditReceipt() {} },

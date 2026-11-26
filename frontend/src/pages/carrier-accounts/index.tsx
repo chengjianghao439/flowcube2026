@@ -1,5 +1,6 @@
 import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { FilterCard } from '@/components/shared/FilterCard'
 import { Link2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -103,16 +104,24 @@ export default function CarrierAccountsPage() {
       toast.success('承运商账号已新增')
     } finally { busy.current = false; setSaving(false) }
   }
-  return <div className="desktop-management-page desktop-carrier-accounts">
+  return <div className="desktop-management-page desktop-carrier-accounts space-y-4">
     <PageHeader title="快递账号绑定"
-        description="维护快递月结账号与发货服务。"  actions={<>{canCreate && <Button disabled={saving} onClick={() => select('new')}>新增承运商账号</Button>}<Button variant="outline" disabled={saving || dirty || creating} onClick={() => navigate('/carriers')}>承运商管理</Button></>} />
+        description="维护快递月结账号与发货服务。"
+      actions={<>
+        <Button variant="outline" disabled={saving || dirty || creating} onClick={() => navigate('/carriers')}>承运商管理</Button>
+        {canCreate && <Button disabled={saving} onClick={() => select('new')}>新增承运商账号</Button>}
+      </>}
+    />
     <div className="desktop-split-workbench">
       <aside aria-label="快递账号列表" className="desktop-split-sidebar">
-        <div className="desktop-split-search">
-        <Input aria-label="搜索快递账号" placeholder="搜索名称或月结号" value={keyword} onChange={e => setKeyword(e.target.value)} />
-        <p className="text-xs text-muted-foreground">{available.length} 个承运商 · 选择后管理账号</p>
-        </div>
-        {carriers.isError ? <p className="desktop-split-message" role="alert">账号列表读取失败。<Button variant="link" onClick={() => void carriers.refetch()}>重新加载</Button></p> : carriers.isLoading ? <p className="desktop-split-message" role="status">正在加载账号…</p> : <div className="desktop-split-list">
+        <FilterCard className="desktop-split-search items-stretch border-x-0 border-t-0">
+          <Input aria-label="搜索快递账号" placeholder="搜索名称或月结号" value={keyword} onChange={e => setKeyword(e.target.value)} />
+          {carriers.isSuccess && <p className="text-xs text-muted-foreground">{available.length} 个承运商 · 选择后管理账号</p>}
+        </FilterCard>
+        {carriers.isError ? <p className="desktop-split-message" role="alert">
+          {carriers.data ? '账号列表刷新失败，承运商资料来自上次读取。' : '账号列表读取失败。'}
+          <Button variant="link" disabled={carriers.isFetching} onClick={() => void carriers.refetch()}>重新加载</Button>
+        </p> : carriers.isLoading ? <p className="desktop-split-message" role="status">正在加载账号…</p> : <div className="desktop-split-list">
           {visible.map(c => <button key={c.id} type="button" aria-pressed={!creating && String(c.id) === carrierId} disabled={saving} onClick={() => select(String(c.id))} className={`block w-full border-b px-4 py-3 text-left last:border-b-0 hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:opacity-50 ${!creating && String(c.id) === carrierId ? 'bg-accent text-accent-foreground' : 'bg-card'}`}>
             <span className="block break-words font-medium">{c.name}</span><span className="mt-1 block break-all text-sm text-muted-foreground">{c.monthlyAccount || '未绑定月结账号'}</span><span className="mt-2 block text-xs text-muted-foreground">{c.platformCode === 'sf' ? '顺丰 · ' : c.platformCode === 'deppon' ? '德邦 · ' : ''}{!c.isActive ? '承运商已停用' : c.waybillEnabled ? '自动下单已启用' : '自动下单已暂停'}</span>
           </button>)}
@@ -122,11 +131,18 @@ export default function CarrierAccountsPage() {
       <section aria-label="账号管理" className="desktop-split-content">
         {creating && canCreate ? <NewAccountForm onDirtyChange={setDirty} saving={saving} onCreate={create} onCancel={() => select('')} /> : !selected ? <EmptyState icon={<Link2 className="h-6 w-6" aria-hidden />} title="选择承运商" description="选择已有承运商查看账号资料，或新增承运商账号。" /> : <>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b pb-4"><div><h2 className="font-semibold">{selected.name}</h2><p className="mt-1 text-sm text-muted-foreground">{selected.code} · {selected.isActive ? '承运商正常使用' : '承运商已停用'}</p></div><div className="flex flex-wrap gap-2">
-            {platform && <Button variant="outline" disabled={saving || dirty || binding.isFetching} onClick={() => void binding.refetch()}>刷新开通状态</Button>}
+            {platform && <Button variant="outline" disabled={saving || (dirty && !binding.isError) || binding.isFetching} onClick={() => void binding.refetch()}>刷新开通状态</Button>}
           </div></div>
           {selected.platformCode && <p className="mb-5 text-sm"><span className="font-medium">快递公司：{platform === 'sf' ? '顺丰' : '德邦'}</span><span className="ml-3 text-muted-foreground">承运商资料已带入</span></p>}
           {!selected.platformCode && <div className="mb-6 max-w-xs space-y-2"><Label htmlFor="binding-company">补充快递公司</Label><Select value={platform || '__empty__'} disabled={saving || dirty || !canEdit} onValueChange={v => setPlatform(v === '__empty__' ? '' : v as 'sf' | 'deppon')}><SelectTrigger id="binding-company"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__empty__">请选择快递公司</SelectItem><SelectItem value="sf">顺丰</SelectItem><SelectItem value="deppon">德邦</SelectItem></SelectContent></Select></div>}
-          {!platform ? <p className="text-sm text-muted-foreground">请选择快递公司。</p> : binding.isError ? <p role="alert">{binding.error instanceof Error ? binding.error.message : '开通状态读取失败，请刷新重试'}</p> : formData ? <AccountBindingForm key={`${carrierId}:${platform}:${formData.revision}`} data={formData} canEdit={canEdit} saving={saving} onSave={save} onDirtyChange={onBindingDirty} /> : <p role="status">正在检查账号准备状态…</p>}
+          {!platform ? <p className="text-sm text-muted-foreground">请选择快递公司。</p> : <>
+            {binding.isError && <p role="alert" className="mb-3 text-sm text-destructive-ink">
+              {formData ? '开通状态刷新失败，当前显示上次读取的资料。' : '开通状态读取失败。'}
+              {binding.error instanceof Error && ` ${binding.error.message}`} 请点击「刷新开通状态」重试。
+            </p>}
+            {formData ? <AccountBindingForm key={`${carrierId}:${platform}:${formData.revision}`} data={formData} canEdit={canEdit} saving={saving} onSave={save} onDirtyChange={onBindingDirty} />
+              : !binding.isError && <p role="status">正在检查账号准备状态…</p>}
+          </>}
         </>}
       </section>
     </div>

@@ -24,6 +24,8 @@ const api = vi.hoisted(() => ({
   ok: vi.fn(),
   err: vi.fn(),
   warn: vi.fn(),
+  pickPending: false,
+  pickConfirmed: vi.fn(),
   readyConfirmed: null as null | (() => Promise<void>),
 }))
 
@@ -43,13 +45,16 @@ vi.mock('@/hooks/usePdaFeedback', () => ({
 vi.mock('@/hooks/useCriticalPdaAction', () => ({
   useCriticalPdaAction: ({ action, onConfirmed }: { action: string; onConfirmed: (data: unknown, ctx: { recovered: boolean }) => Promise<void> }) => {
     if (action.startsWith('warehouse.ready.')) api.readyConfirmed = () => onConfirmed({ taskId: 42 }, { recovered: false })
+    if (action.startsWith('warehouse.pick-scan.')) api.pickConfirmed.mockImplementation(onConfirmed)
+    const pending = action.startsWith('warehouse.pick-scan.') && api.pickPending
     return ({
     run: async (execute: (key: string) => Promise<unknown>) => ({ kind: 'success', data: await execute('stable-key') }),
     submitBlocked: false,
     phase: 'idle',
     phaseMessage: null,
     lastErrorMessage: null,
-    pendingRecord: null,
+    blockedReason: pending ? "请核对原取货结果" : null,
+    pendingRecord: pending ? {action,requestKey:"original-key",metadata:{}} : null,
     confirmPending: vi.fn(),
     clearPending: vi.fn(),
     clearError: vi.fn(),
@@ -94,6 +99,7 @@ let qc: QueryClient
 beforeEach(async () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   vi.resetAllMocks()
+  api.pickPending = false
   api.task.mockResolvedValue(TASK)
   api.sug.mockResolvedValue(SUGGESTIONS)
   api.ready.mockResolvedValue({ taskId: 42 })
@@ -238,4 +244,17 @@ test.each([false, true])('原任务小数规则%s在扫码前生效且合法余�
   await act(async () => { await qc.invalidateQueries({queryKey:['pda-task',42]});await qc.invalidateQueries({queryKey:['pda-suggestions',42]}) }); await settle(); await gunScan('I000123')
   if (allowDecimalQty) expect(api.submitScan).toHaveBeenCalledWith(expect.objectContaining({qty:0.1}),'stable-key')
   else {expect(api.submitScan).not.toHaveBeenCalled();expect(api.err).toHaveBeenCalledWith(expect.stringContaining('整数'))}
+})
+
+test('完成页仍可核对另一次待确认的拣货扫码', async () => {
+  api.pickPending = true
+  await act(async () => { await api.readyConfirmed!() })
+  expect(host.textContent).toContain('拣货完成')
+  expect(host.textContent).toContain('确认上次结果')
+})
+
+test('扫码回执已确认后读取任务失败仍能接收回执', async () => {
+  api.task.mockRejectedValue(new Error('合成读取失败'))
+  await act(async () => { await api.pickConfirmed({}, {recovered:true, requestKey:'original'}) })
+  expect(api.warn).toHaveBeenCalledWith(expect.stringContaining('已确认'))
 })

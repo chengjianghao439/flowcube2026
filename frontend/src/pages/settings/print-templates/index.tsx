@@ -3,7 +3,6 @@
  * 路由：/settings/print-templates
  */
 import { useState } from 'react'
-import { Plus } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
@@ -84,11 +83,11 @@ export default function PrintTemplatesPage() {
   ]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="打印模板"
         description="维护单据模板与默认打印版式。"
-        actions={canManage && <Button onClick={goToNew}><Plus className="mr-1.5 h-4 w-4" aria-hidden />新建模板</Button>}
+        actions={canManage && <Button onClick={goToNew}>新建模板</Button>}
       />
 
       {isError ? (

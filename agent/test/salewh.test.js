@@ -21,7 +21,7 @@ function makeFlow({ stockInWh1 = true } = {}) {
       if (kw.includes('演示客户')) return ok(res, [{ id: 1, type: 'customer', title: '演示客户甲公司' }]);
       return ok(res, []);
     }
-    if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, allowDecimalQty: false }); }
+    if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, unit: '个', allowDecimalQty: false }); }
     if (p === '/api/customers/1') return ok(res, { id: 1, name: '演示客户甲公司', priceLevel: 'A', creditLimit: null });
     if (p === '/api/warehouses') return ok(res, { list: [{ id: 2, name: '测试二仓' }, { id: 1, name: '华东一仓' }] }); // 空仓排第一（真沙箱现状）
     if (p === '/api/inventory/stock') return ok(res, { list: stockInWh1 ? [{ productId: 3, warehouseId: 1, quantity: 130, reserved: 3, available: 127, productCode: 'P000003', productName: '上翻支撑·标准型', unit: '个' }] : [] });

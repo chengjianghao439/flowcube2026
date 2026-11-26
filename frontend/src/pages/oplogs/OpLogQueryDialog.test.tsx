@@ -82,3 +82,18 @@ test('打开查询直接聚焦关键字，键盘输入不必先经过关闭按�
   expect(document.activeElement).toBe(keyword())
   expect(apply).not.toHaveBeenCalled()
 })
+
+test.each([
+  { startDate: '2026-10-12', endDate: '2026-10-08' },
+  { startDate: '', endDate: '2026-10-08' },
+  { startDate: '2026-10-16', endDate: '' },
+])('倒置的实际操作日期阻断按钮和回车，修正后仍可查询 %#', async range => {
+  await draw(true, { ...applied, ...range })
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('起始日期不能晚于结束日期')
+  expect(dates().every(field => field.getAttribute('aria-invalid') === 'true')).toBe(true)
+  await click('查询')
+  await act(async () => keyword().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(apply).not.toHaveBeenCalled()
+  await click('重置'); await click('查询')
+  expect(apply).toHaveBeenCalledExactlyOnceWith({ keyword: '', module: '', ...defaults })
+})

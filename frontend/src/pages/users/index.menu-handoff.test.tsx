@@ -53,6 +53,7 @@ test.each([
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   expect(document.body.style.pointerEvents).not.toBe('none')
   expect(document.activeElement).toBe(source)
-  await act(async () => user.click(getByRole(host, 'button', { name: '搜索' }))); await settle()
+  await act(async () => user.click(getByRole(host, 'button', { name: '查询' }))); await settle()
+  expect(getByRole(document.body, 'dialog', { name: '查询用户' }).contains(document.activeElement)).toBe(true)
   expect(io.mutate).not.toHaveBeenCalled()
 })

@@ -136,51 +136,53 @@ export default function RefundDetailDialog({ open, onClose, id }: Props) {
   return (
     <>
     <Dialog open={open && sectionActive} onOpenChange={(next) => { if (!next && !actionLocked) { onClose(); closePrompt() } }}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader description={"核对退款来源、金额与处理记录。"}>
+      <DialogContent className="fc-form-dialog max-w-4xl">
+        <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-3">
             退款单详情
             {refund && !isError && <SoftStatusLabel label={refund.statusName} tone={STATUS_TONE[refund.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>
-        <UncertainSubmitNotice
-          visible={guard.uncertain}
-          pending={guard.checkMut.isPending}
-          what={guard.lastLabelRef.current ?? undefined}
-          onCheck={() => {
-            // 点查询这一刻拍「在确认哪一张」的快照（同核销/付款范式），避免回调里现读被后来的提交覆盖
-            const queriedRefundId = submittedTargetIdRef.current
-            const queriedRefundNo = submittedRefundNoRef.current
-            return guard.checkLastResult(() => {
-              invalidateFinance(qc)
-              // 点出被确认的是哪一张，避免在另一张的详情里只报「已成功」被误读
-              toast.success(`上次提交的退款已执行成功，无需重复执行${queriedRefundNo ? `（${queriedRefundNo}）` : ''}`)
-              // 只有「查询指向的那一张」正是「现在打开的这张」时才关详情；已切到另一张则保留
-              if (queriedRefundId === currentTargetIdRef.current) onClose()
-            })
-          }}
-        />
-        <OrderDetailSections type="refund" id={id || 0}>
+        <div className="fc-form-dialog-body space-y-4">
+          <UncertainSubmitNotice
+            visible={guard.uncertain}
+            pending={guard.checkMut.isPending}
+            what={guard.lastLabelRef.current ?? undefined}
+            onCheck={() => {
+              // 点查询这一刻拍「在确认哪一张」的快照（同核销/付款范式），避免回调里现读被后来的提交覆盖
+              const queriedRefundId = submittedTargetIdRef.current
+              const queriedRefundNo = submittedRefundNoRef.current
+              return guard.checkLastResult(() => {
+                invalidateFinance(qc)
+                // 点出被确认的是哪一张，避免在另一张的详情里只报「已成功」被误读
+                toast.success(`上次提交的退款已执行成功，无需重复执行${queriedRefundNo ? `（${queriedRefundNo}）` : ''}`)
+                // 只有「查询指向的那一张」正是「现在打开的这张」时才关详情；已切到另一张则保留
+                if (queriedRefundId === currentTargetIdRef.current) onClose()
+              })
+            }}
+          />
+          <OrderDetailSections type="refund" id={id || 0}>
 
-        {isError ? <QueryErrorState compact error={error} onRetry={() => void refetch()} /> : <>
-        {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
-        {isFetching && !isLoading && <p className="text-sm text-muted-foreground">正在刷新退款单，请等待核验后操作。</p>}
-        {isPaused && <p className="text-sm text-muted-foreground">网络连接已暂停，请恢复连接后再操作。</p>}
-        {refund && (
-          <div className="grid grid-cols-1 gap-x-8 gap-y-5 rounded-lg border border-border bg-muted/20 p-5 text-sm sm:grid-cols-2 [&>div]:break-words [&>div]:leading-6">
-            <div><span className="text-muted-foreground">退款单号：</span><span className="text-doc-code-strong">{refund.refundNo}</span></div>
-            <div><span className="text-muted-foreground">销售单：</span><span className="text-doc-code">{refund.saleOrderNo}</span></div>
-            <div><span className="text-muted-foreground">客户：</span>{refund.customerName}</div>
-            <div><span className="text-muted-foreground">退款金额：</span><span className="tabular-nums text-xl font-semibold">{money(refund.amount)}</span></div>
-            <div><span className="text-muted-foreground">退款日期：</span>{formatDisplayDate(refund.refundDate)}</div>
-            <div><span className="text-muted-foreground">经办人：</span>{refund.operatorName || '—'}</div>
-            {refund.confirmedByName && <div><span className="text-muted-foreground">确认人：</span>{refund.confirmedByName}</div>}
-            {refund.refundedAt && <div><span className="text-muted-foreground">退款完成：</span>{formatDisplayDateTime(refund.refundedAt)}</div>}
-            {refund.remark && <div className="sm:col-span-2"><span className="text-muted-foreground">备注：</span>{refund.remark}</div>}
-          </div>
-        )}
-        </>}
-        </OrderDetailSections>
+          {isError ? <QueryErrorState compact error={error} onRetry={() => void refetch()} /> : <>
+          {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
+          {isFetching && !isLoading && <p className="text-sm text-muted-foreground">正在刷新退款单，请等待核验后操作。</p>}
+          {isPaused && <p className="text-sm text-muted-foreground">网络连接已暂停，请恢复连接后再操作。</p>}
+          {refund && (
+            <div className="grid grid-cols-1 gap-x-8 gap-y-5 rounded-lg border border-border bg-muted/20 p-5 text-sm sm:grid-cols-2 [&>div]:break-words [&>div]:leading-6">
+              <div><span className="text-muted-foreground">退款单号：</span><span className="text-doc-code-strong">{refund.refundNo}</span></div>
+              <div><span className="text-muted-foreground">销售单：</span><span className="text-doc-code">{refund.saleOrderNo}</span></div>
+              <div><span className="text-muted-foreground">客户：</span>{refund.customerName}</div>
+              <div><span className="text-muted-foreground">退款金额：</span><span className="tabular-nums text-xl font-semibold">{money(refund.amount)}</span></div>
+              <div><span className="text-muted-foreground">退款日期：</span>{formatDisplayDate(refund.refundDate)}</div>
+              <div><span className="text-muted-foreground">经办人：</span>{refund.operatorName || '—'}</div>
+              {refund.confirmedByName && <div><span className="text-muted-foreground">确认人：</span>{refund.confirmedByName}</div>}
+              {refund.refundedAt && <div><span className="text-muted-foreground">退款完成：</span>{formatDisplayDateTime(refund.refundedAt)}</div>}
+              {refund.remark && <div className="sm:col-span-2"><span className="text-muted-foreground">备注：</span>{refund.remark}</div>}
+            </div>
+          )}
+          </>}
+          </OrderDetailSections>
+        </div>
         <DialogFooter className="gap-2">
           {canSubmit && (
             <Button onClick={() => confirmAction({

@@ -66,7 +66,7 @@ export default function PdaShipPage() {
   const { flash, ok, err, warn } = usePdaFeedback()
   const [info, setInfo]       = useState<PackageShipInfo | null>(null)
   const [loading, setLoading] = useState(false)
-  const [done, setDone]       = useState(false)
+  const [doneTaskId, setDoneTaskId] = useState<number | null>(null)
   const [pendingScanKey, setPendingScanKey] = useState<string | null>(null)
   // 待出库的退货任务（采购退货 / 销售退货返货）：这两类跳过了打包，**没有包裹也没有物流箱码**，
   // 上面那条「扫箱码 → 反查包裹」的路径对它们无从下手。没有这个列表，货拣完了也出不了库，
@@ -90,9 +90,10 @@ export default function PdaShipPage() {
     action: `warehouse.ship.confirm`,
     requestAction: 'warehouse.ship',
     label: '出库确认',
-    onConfirmed: async () => {
+    onConfirmed: async data => {
+      setDoneTaskId(data?.taskId ?? null)
       ok('出库成功！')
-      setDone(true)
+      await qc.invalidateQueries({ queryKey: ['return-out-pending'] })
     },
     resolveServerState: async ({ record }) => {
       const taskId = Number(record.metadata?.taskId ?? info?.warehouseTaskId ?? 0)
@@ -117,8 +118,7 @@ export default function PdaShipPage() {
       // 列表出库也要刷新：任务出库后应从待出库列表消失，否则操作员会对着已完成的单重复点。
       // 列表路径不切"出库完成"整页（那是扫箱码流程的落地页），清掉 done 留在列表继续作业。
       if (vars.fromList) {
-        setDone(false)
-        void qc.invalidateQueries({ queryKey: ['return-out-pending'] })
+        setDoneTaskId(null)
       }
       if (result.kind === 'pending') {
         warn('网络中断，出库结果待确认。请先确认结果，避免重复扫码出库。')
@@ -130,6 +130,7 @@ export default function PdaShipPage() {
 
   // 扫码后自动查询；可出库即自动出库
   const handleScan = useCallback(async (raw: string): Promise<PdaScanOutcome> => {
+    setDoneTaskId(null)
     const parsed = parseBarcode(raw)
     if (parsed.type !== 'box') {
       err(parsed.type === 'unknown'
@@ -164,14 +165,37 @@ export default function PdaShipPage() {
     } finally { setLoading(false) }
   }, [err, shipMut])
 
-  if (done && info) return (
+  const recoveryNotice = (
+    <PdaCriticalActionNotice
+      blockedReason={shipAction.blockedReason}
+      pendingRecord={shipAction.pendingRecord}
+      confirming={shipAction.confirming}
+      phase={shipAction.phase}
+      phaseMessage={shipAction.phaseMessage}
+      lastErrorMessage={shipAction.lastErrorMessage}
+      onConfirm={() => {
+        void shipAction.confirmPending().then((status) => {
+          if (!status) return
+          if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
+          if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
+          if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次出库记录；请先刷新任务状态再决定是否重扫'))
+          if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '出库失败，请确认任务状态或联系管理员'))
+        })
+      }}
+      onClear={() => shipAction.clearPending()}
+      onDismissError={() => shipAction.clearError()}
+    />
+  )
+
+  if (info && doneTaskId === info.warehouseTaskId) return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
+      {recoveryNotice}
       <Truck className="h-16 w-16 text-primary mb-6" />
       <h2 className="text-2xl font-bold text-foreground">本任务出库完成！</h2>
       <p className="text-muted-foreground mt-2 mb-1">仓库任务 <span className="font-mono font-semibold text-foreground">{info.taskNo}</span></p>
       <p className="text-muted-foreground mb-8">本批已发往 {info.customerName}，整单进度请查看销售单。</p>
       <div className="flex gap-3 w-full max-w-xs">
-        <Button size="lg" variant="outline" className="px-3 flex-1" onClick={() => { setInfo(null); setDone(false) }}>继续出库</Button>
+        <Button size="lg" variant="outline" className="px-3 flex-1" onClick={() => { setInfo(null); setDoneTaskId(null) }}>继续出库</Button>
         <Button size="lg" className="px-3 flex-1" onClick={() => navigate('/pda')}>返回工作台</Button>
       </div>
     </div>
@@ -203,25 +227,7 @@ export default function PdaShipPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-5 space-y-4">
-          <PdaCriticalActionNotice
-            blockedReason={shipAction.blockedReason}
-            pendingRecord={shipAction.pendingRecord}
-            confirming={shipAction.confirming}
-            phase={shipAction.phase}
-            phaseMessage={shipAction.phaseMessage}
-            lastErrorMessage={shipAction.lastErrorMessage}
-            onConfirm={() => {
-              void shipAction.confirmPending().then((status) => {
-                if (!status) return
-                if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
-                if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '任务状态还未确认，请稍后再查'))
-                if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次出库记录；请先刷新任务状态再决定是否重扫'))
-                if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '出库失败，请确认任务状态或联系管理员'))
-              })
-            }}
-            onClear={() => shipAction.clearPending()}
-            onDismissError={() => shipAction.clearError()}
-          />
+          {recoveryNotice}
           {/* 扫码区移至底栏，此处保留加载状态 */}
           {loading && <div className="flex items-center justify-center gap-2 py-1"><PdaLoading size={16} /><span className="text-xs text-muted-foreground">查询中…</span></div>}
 

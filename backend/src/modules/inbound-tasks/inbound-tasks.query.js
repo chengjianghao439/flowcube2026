@@ -26,6 +26,9 @@ const {
 const { EXPIRE_MESSAGE, CLIENT_OFFLINE_MESSAGE } = require('../print-jobs/print-jobs.status')
 const { EFFECTIVE_ASSIGNED_QTY_SQL } = require('./inbound-tasks.short-receipt')
 
+// 收货任务关联贯穿条码历史，当前可操作的容器另按仓库和调拨归属筛选。
+const AT_RECEIVING_WAREHOUSE = 'c.transfer_order_id IS NULL AND c.warehouse_id = t.warehouse_id'
+
 function buildTaskWithClosure(task, items = [], summary = {}, timeline = [], recentPrintJobs = [], thresholds = DEFAULT_INBOUND_THRESHOLDS) {
   // 汇总数量以 summary（loadInboundTaskClosureSummary 的 SQL 聚合结果）为准，而非重新对
   // items 求和——findAll（列表页）为省流量不传 items，若在这里对空数组 reduce 会把
@@ -106,13 +109,13 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
   const [containerRows] = await conn.query(
     `SELECT
         c.inbound_task_id AS task_id,
-        COALESCE(SUM(CASE WHEN c.status = ? THEN 1 ELSE 0 END), 0) AS waiting_containers,
-        COALESCE(SUM(CASE WHEN c.status = ? THEN 1 ELSE 0 END), 0) AS stored_containers,
-        COALESCE(SUM(CASE WHEN c.status = ? THEN c.remaining_qty ELSE 0 END), 0) AS waiting_qty,
-        COALESCE(SUM(CASE WHEN c.status = ? THEN c.remaining_qty ELSE 0 END), 0) AS stored_qty,
+        COALESCE(SUM(CASE WHEN c.status = ? AND ${AT_RECEIVING_WAREHOUSE} THEN 1 ELSE 0 END), 0) AS waiting_containers,
+        COALESCE(SUM(CASE WHEN c.status = ? AND ${AT_RECEIVING_WAREHOUSE} THEN 1 ELSE 0 END), 0) AS stored_containers,
+        COALESCE(SUM(CASE WHEN c.status = ? AND ${AT_RECEIVING_WAREHOUSE} THEN c.remaining_qty ELSE 0 END), 0) AS waiting_qty,
+        COALESCE(SUM(CASE WHEN c.status = ? AND ${AT_RECEIVING_WAREHOUSE} THEN c.remaining_qty ELSE 0 END), 0) AS stored_qty,
         COALESCE(SUM(
           CASE
-            WHEN c.status = ?
+            WHEN c.status = ? AND ${AT_RECEIVING_WAREHOUSE}
              AND (
                (c.putaway_deadline_at IS NOT NULL AND c.putaway_deadline_at < NOW())
                OR (c.putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, c.created_at, NOW()) >= ?)
@@ -122,6 +125,7 @@ async function loadInboundTaskClosureSummary(taskIds, thresholds = DEFAULT_INBOU
         ), 0) AS overdue_containers,
         COALESCE(COUNT(DISTINCT c.id), 0) AS total_containers
      FROM inventory_containers c
+     JOIN inbound_tasks t ON t.id = c.inbound_task_id
      WHERE c.inbound_task_id IN (${placeholders})
        AND c.deleted_at IS NULL
        AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
@@ -502,9 +506,10 @@ async function queryWaitingContainers(taskId, scopeWarehouseIds) {
   const [rows] = await pool.query(
     `SELECT c.*, p.code AS product_code, p.name AS product_name, loc.code AS location_code
      FROM inventory_containers c
+     JOIN inbound_tasks t ON t.id = c.inbound_task_id
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
-     WHERE c.inbound_task_id = ? AND c.deleted_at IS NULL AND c.status = ?
+     WHERE c.inbound_task_id = ? AND c.deleted_at IS NULL AND c.status = ? AND ${AT_RECEIVING_WAREHOUSE}
        AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
      ORDER BY c.id ASC`,
     [taskId, CONTAINER_STATUS.PENDING_PUTAWAY],
@@ -517,9 +522,10 @@ async function queryStoredContainers(taskId, scopeWarehouseIds) {
   const [rows] = await pool.query(
     `SELECT c.*, p.code AS product_code, p.name AS product_name, loc.code AS location_code
      FROM inventory_containers c
+     JOIN inbound_tasks t ON t.id = c.inbound_task_id
      LEFT JOIN product_items p ON p.id = c.product_id
      LEFT JOIN warehouse_locations loc ON loc.id = c.location_id
-     WHERE c.inbound_task_id = ? AND c.deleted_at IS NULL AND c.status = ? AND c.location_id IS NOT NULL
+     WHERE c.inbound_task_id = ? AND c.deleted_at IS NULL AND c.status = ? AND ${AT_RECEIVING_WAREHOUSE} AND c.location_id IS NOT NULL
        AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
      ORDER BY c.id ASC`,
     [taskId, CONTAINER_STATUS.ACTIVE],
@@ -553,12 +559,14 @@ async function refreshPutawayOverdueMarks() {
   try {
     const thresholds = await getInboundClosureThresholds()
     const [u] = await pool.query(
-      `UPDATE inventory_containers
-       SET putaway_flagged_overdue = 1, is_overdue = 1
-       WHERE status = ? AND deleted_at IS NULL AND (is_legacy = 0 OR is_legacy IS NULL)
+      `UPDATE inventory_containers c
+       JOIN inbound_tasks t ON t.id = c.inbound_task_id
+       SET c.putaway_flagged_overdue = 1, c.is_overdue = 1
+       WHERE c.status = ? AND c.deleted_at IS NULL AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+         AND ${AT_RECEIVING_WAREHOUSE}
          AND (
            (putaway_deadline_at IS NOT NULL AND putaway_deadline_at < NOW())
-           OR (putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, created_at, NOW()) >= ?)
+           OR (putaway_deadline_at IS NULL AND TIMESTAMPDIFF(HOUR, c.created_at, NOW()) >= ?)
          )
          AND (is_overdue = 0 OR is_overdue IS NULL)`,
       [CONTAINER_STATUS.PENDING_PUTAWAY, Number(thresholds.putawayTimeoutHours || DEFAULT_INBOUND_THRESHOLDS.putawayTimeoutHours)],
@@ -585,7 +593,8 @@ async function listAllPendingPutawayContainers(scopeWarehouseIds = null) {
             t.task_no, t.purchase_order_no, t.warehouse_name
      FROM inventory_containers c
      INNER JOIN inbound_tasks t ON t.id = c.inbound_task_id
-     WHERE c.status = ? AND c.deleted_at IS NULL AND (c.is_legacy = 0 OR c.is_legacy IS NULL)${scope.sql}
+     WHERE c.status = ? AND c.deleted_at IS NULL AND (c.is_legacy = 0 OR c.is_legacy IS NULL)
+       AND ${AT_RECEIVING_WAREHOUSE}${scope.sql}
      ORDER BY c.created_at ASC`,
     [CONTAINER_STATUS.PENDING_PUTAWAY, ...scope.params],
   )

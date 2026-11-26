@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { IncomingMessage } from 'node:http'
 import type { ClientRequest } from 'node:http'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import type { ProxyOptions } from 'vite'
 import { radixSingletons } from './radixSingletons'
 
@@ -92,6 +92,31 @@ function devAuthSeedPlugin() {
   }
 }
 
+/** Both native clients read this build asset outside of their WebView. */
+function nativeUpdateAssets(desktop: boolean): Plugin {
+  return {
+    name: 'flowcube-native-update-assets',
+    apply: 'build',
+    generateBundle: {
+      order: 'post',
+      handler(_options, bundle) {
+        const raw = process.env.VITE_ERP_PRODUCTION_ORIGIN?.trim()
+        const url = raw ? new URL(raw) : null
+        const origin = url?.protocol === 'https:' && !url.username && !url.password ? url.origin : ''
+        this.emitFile({ type: 'asset', fileName: 'native-update-origin.txt', source: origin })
+        if (!desktop) return
+        const entry = bundle['index.html']
+        if (entry?.type !== 'asset' || typeof entry.source !== 'string' || !entry.source.includes('<head>')) {
+          throw new Error('桌面端缺少 HTML 入口')
+        }
+        const policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: http: data: blob:; font-src 'self' data:; connect-src 'self' https: http: wss: ws:; worker-src 'self' blob:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
+        const meta = `<meta http-equiv="Content-Security-Policy" content="${policy}">`
+        this.emitFile({ type: 'asset', fileName: 'desktop.html', source: entry.source.replace('<head>', '<head>' + meta) })
+      },
+    },
+  }
+}
+
 export default defineConfig(({ command }) => {
   const isCapacitorBundle = process.env.VITE_CAPACITOR === '1'
   const isElectronBundle = process.env.VITE_ELECTRON === '1'
@@ -113,6 +138,7 @@ export default defineConfig(({ command }) => {
     base: isCapacitorBundle || isElectronBundle ? './' : '/',
     plugins: [
       react(),
+      nativeUpdateAssets(isElectronBundle && !isPDA),
       isPDA &&
         legacy({
           targets: ['Android >= 5'],

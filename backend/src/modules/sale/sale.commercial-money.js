@@ -23,13 +23,20 @@ async function orderMoney(conn, orderId) {
 
 }
 async function prepareShipment(conn, task, sale) {
+  let policy = sale.cash_policy
+  if (!Object.hasOwn(sale,'cash_policy')) {
+    const [[current]] = await conn.query('SELECT cash_policy FROM sale_orders WHERE id=? FOR SHARE',[sale.id])
+    if (!current) invalid('缺少原销售单')
+    policy = current.cash_policy
+  }
+  if (policy != null && policy !== 'cash-cents-v1') invalid('销售单实际金额政策未知')
   const groups = await loadGroups(conn, sale.id, { lock:true })
   const byId = new Map(groups.map(g => [g.id,g]))
   const [dispatch] = await conn.query('SELECT * FROM sale_dispatch_groups WHERE task_id=? AND active=1 ORDER BY id FOR UPDATE', [task.id])
   if (!dispatch.length || dispatch.some(d => d.confirmed_at)) invalid('本批仓库任务缺少有效成交明细')
   // Confirmation is committed atomically with real WT7 and cannot be reversed.
   // Lock only evidence rows, not JOINed WT/group/source-budget identities.
-  const [prior] = await conn.query('SELECT group_id,quantity,confirmed_gross,order_gross_basis,discount_basis,basis_origin FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id FOR SHARE', [sale.id])
+  const [prior] = await conn.query('SELECT task_id,group_id,quantity,confirmed_gross,order_gross_basis,discount_basis,basis_origin FROM sale_dispatch_groups WHERE order_id=? AND confirmed_at IS NOT NULL ORDER BY id FOR SHARE', [sale.id])
   if(prior.some(d=>!['real_confirmation','legacy_verified'].includes(d.basis_origin)))invalid('原出库批次的折扣依据尚未核对')
   const shippedByGroup = new Map()
   for (const d of prior) shippedByGroup.set(Number(d.group_id),roundQty((shippedByGroup.get(Number(d.group_id))||0)+Number(d.quantity)))
@@ -49,9 +56,25 @@ async function prepareShipment(conn, task, sale) {
   const basis=prior.length ? {orderGross:Number(prior[0].order_gross_basis),discount:Number(prior[0].discount_basis)} : {orderGross:Number(sale.total_amount),discount:Number(sale.discount_amount)}
   financialTarget(basis,0)
   if(prior.some(d=>cash.storedCashCents(d.order_gross_basis,'原出库合计')!==cash.storedCashCents(basis.orderGross)||cash.storedCashCents(d.discount_basis,'原出库折扣')!==cash.storedCashCents(basis.discount)))invalid('原出库批次折扣依据不一致')
-  if(sale.cash_policy!=='cash-cents-v1'){
+  if (policy == null) {
     let cumulative=0n
-    for(const d of prior){cumulative+=cash.storedCashCents(d.confirmed_gross,'旧出库毛额');assertLegacyCut(basis,cash.cashText(cumulative))}
+    const grossByTask = new Map()
+    for (const row of prior) {
+      const taskId = Number(row.task_id)
+      grossByTask.set(taskId,(grossByTask.get(taskId) ?? 0n) + cash.storedCashCents(row.confirmed_gross,'旧出库毛额'))
+    }
+    if (grossByTask.size) {
+      // 凭证按北京业务日、任务 ID 对累计实发分段，同一任务内没有分位截点。
+      const [tasks] = await conn.query(
+        `SELECT id, shipped_at FROM warehouse_tasks WHERE id IN (?) AND sale_order_id=? AND status=7
+           AND shipped_at IS NOT NULL AND deleted_at IS NULL ORDER BY DATE(shipped_at), id FOR SHARE`,
+        [[...grossByTask.keys()],sale.id])
+      if (tasks.length !== grossByTask.size) invalid('旧出库金额缺少已发任务')
+      for (const row of tasks) {
+        cumulative += grossByTask.get(Number(row.id))
+        assertLegacyCut(basis,cash.cashText(cumulative))
+      }
+    }
     cumulative+=money.reduce((n,m)=>n+cash.storedCashCents(m.projection.grossAmount),0n)
     assertLegacyCut(basis,cash.cashText(cumulative))
   }

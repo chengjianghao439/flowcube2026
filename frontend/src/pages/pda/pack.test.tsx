@@ -11,7 +11,7 @@
  */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
@@ -211,7 +211,7 @@ let root: Root | undefined
 let container: HTMLDivElement
 let client: QueryClient
 
-function mount() {
+function mount(path = '/pda/pack?taskId=42') {
   container = document.createElement('div')
   document.body.appendChild(container)
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -219,8 +219,11 @@ function mount() {
   act(() => {
     root!.render(
       <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={['/pda/pack?taskId=42']}>
-          <PdaPackPage />
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/pda" element={<h1>我的工作台</h1>} />
+            <Route path="/pda/pack" element={<PdaPackPage />} />
+          </Routes>
         </MemoryRouter>
       </QueryClientProvider>,
     )
@@ -748,4 +751,17 @@ test('C4 任务已推进到待出库但存在原键记录时，仍按只读事�
   // 箱件事实按**只读查询**呈现，不因为任务已经不是待打包就退化成 0
   expect(text).toContain('1/1 箱')
   expect(text).not.toContain('点击下方「新建箱子」开始打包')
+})
+
+test('未选择任务时仍能核对旧箱回执', async () => {
+  st.blocked = true
+  st.pending = { action: 'package.add', requestKey:'original', label:'装箱确认', createdAt:'2026-09-29T00:00:00Z', metadata:{ taskId:41, packageId:7, packageBarcode:'L000007' } }
+  mount('/pda/pack')
+  await act(async () => { await new Promise(r => setTimeout(r, 20)) })
+  expect(container.textContent).toContain('确认上次结果')
+  expect(container.textContent).toContain('L000007')
+  const back = container.querySelector('header button') as HTMLButtonElement
+  expect(back?.textContent).toContain('返回工作台')
+  await act(async () => back.click())
+  expect(container.textContent).toBe('我的工作台')
 })

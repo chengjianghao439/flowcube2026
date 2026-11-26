@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { getApiClientBaseURL, subscribeApiClientBaseURL } from '@/api/client'
+import { subscribeApiClientBaseURL } from '@/api/client'
+import { currentApiEndpoint } from '@/lib/apiEndpoint'
 import { getOperationRequestStatusApi } from '@/api/operation-requests'
 import { updateInboundTaskApi } from '@/api/inbound-tasks'
 import { useAuthStore } from '@/store/authStore'
@@ -25,13 +26,9 @@ function ensureSubscriptions() {
 }
 export const subscribeInboundEdit = (listener: () => void) => { ensureSubscriptions(); listeners.add(listener); return () => { listeners.delete(listener) } }
 export const inboundEditRevision = () => revision
-function endpoint() {
-  const raw = getApiClientBaseURL() ?? '/api'
-  try { return new URL(raw, window.location.origin).href.replace(/\/$/, '') } catch { return raw.replace(/\/$/, '') }
-}
 export interface InboundEditOwner { userId: number | null; baseURL: string; sessionGeneration: number; epoch: number }
-export function captureInboundEditOwner(): InboundEditOwner { ensureSubscriptions(); const a = useAuthStore.getState(); return { userId: a.user?.id ?? null, baseURL: endpoint(), sessionGeneration: a.sessionGeneration, epoch } }
-export function inboundEditOwnerCurrent(owner: InboundEditOwner) { const a = useAuthStore.getState(); return !!a.token && a.user?.id === owner.userId && a.sessionGeneration === owner.sessionGeneration && endpoint() === owner.baseURL && epoch === owner.epoch }
+export function captureInboundEditOwner(): InboundEditOwner { ensureSubscriptions(); const a = useAuthStore.getState(); return { userId: a.user?.id ?? null, baseURL: currentApiEndpoint(), sessionGeneration: a.sessionGeneration, epoch } }
+export function inboundEditOwnerCurrent(owner: InboundEditOwner) { const a = useAuthStore.getState(); return !!a.token && a.user?.id === owner.userId && a.sessionGeneration === owner.sessionGeneration && currentApiEndpoint() === owner.baseURL && epoch === owner.epoch }
 export function mayViewInbound() { const a = useAuthStore.getState(); return !!a.token && hasPermission(a.user?.permissions, PERMISSIONS.INBOUND_ORDER_VIEW, a.user?.roleId) }
 export function mayUpdateInbound() { const a = useAuthStore.getState(); return !!a.token && hasPermission(a.user?.permissions, PERMISSIONS.INBOUND_ORDER_UPDATE, a.user?.roleId) }
 export const inboundEditConfig = (owner: InboundEditOwner) => ({ baseURL: owner.baseURL, _authSessionGeneration: owner.sessionGeneration, automaticReplay: false as const, _erpApiFallbackTried: true, skipGlobalError: true })

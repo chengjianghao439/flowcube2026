@@ -85,7 +85,7 @@ interface PdaAnomalyReport {
 }
 
 export const getPdaAnomalyApi = (params: { startDate?: string; endDate?: string } = {}) =>
-  client.get<PdaAnomalyReport>(`/scan-logs/anomaly?${q(params)}`)
+  client.get<PdaAnomalyReport>(`/scan-logs/anomaly?${q(params)}`, { skipGlobalError: true })
 
 // ── 仓库运营看板 ──────────────────────────────────────────────────────────────
 interface WarehouseOpsSummary {

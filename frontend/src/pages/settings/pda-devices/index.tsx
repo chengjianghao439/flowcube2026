@@ -32,11 +32,12 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import ListSummary from '@/components/shared/ListSummary'
 import PageHeader from '@/components/shared/PageHeader'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { toast } from '@/lib/toast'
 import { usePermission } from '@/hooks/usePermission'
@@ -62,6 +63,7 @@ export default function PdaDevicesPage() {
   const managePermission = useRef(canManage)
   managePermission.current = canManage
   const [keyword, setKeyword] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [secretView, setSecretView] = useState<PdaDeviceWithSecret | null>(null)
@@ -77,16 +79,20 @@ export default function PdaDevicesPage() {
     setResetTarget(null)
   }, [canManage])
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['pda-devices', keyword],
     queryFn: () => listPdaDevicesApi({ page: 1, pageSize: 20, keyword }),
   })
-  const { data: warehouses } = useQuery({
+  const warehouses = useQuery({
     queryKey: ['warehouse-options'],
     queryFn: () => getWarehousesActiveApi(),
     enabled: canManage,
   })
 
+  const warehouseError = warehouses.isError && <div role="alert"><QueryErrorState
+    title={warehouses.data ? '仓库选项刷新失败，当前显示上次读取的仓库' : '仓库选项加载失败'}
+    error={warehouses.error} onRetry={() => void warehouses.refetch()} compact
+  /></div>
   const refresh = () => qc.invalidateQueries({ queryKey: ['pda-devices'] })
 
   const createMut = useMutation({
@@ -139,7 +145,7 @@ export default function PdaDevicesPage() {
     },
     {
       key: 'activeSessions', title: '在线登录', width: 10,
-      render: v => Number(v) > 0 ? <span className="text-emerald-600">{v as number}</span> : <span className="text-muted-foreground">0</span>,
+      render: v => Number(v) > 0 ? <span className="text-success-ink">{v as number}</span> : <span className="text-muted-foreground">0</span>,
     },
     { key: 'lastSeenAt', title: '最后在线', width: 14, render: v => v ? formatDisplayDateTime(v as string) : '从未连接' },
   ]
@@ -157,30 +163,30 @@ export default function PdaDevicesPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="desktop-record-page space-y-4">
       <PageHeader
         title="PDA 设备"
         description={canManage ? '登记设备并指定作业范围。停用设备或重置密钥会让设备立即退出登录。' : '查看设备、所属仓库及在线登录情况。'}
-        actions={canManage && <Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
+        actions={<>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          {canManage && <Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
+        </>}
       />
-      <FilterCard>
-          <Input
-            className="h-9 w-64"
-            aria-label="搜索设备名称或设备码"
-            placeholder="搜索设备名称或设备码"
-            value={keyword}
-            onChange={e => { setKeyword(e.target.value); }}
-          />
-      </FilterCard>
+      <KeywordQueryChips keyword={keyword} onClear={() => setKeyword('')} />
+      <KeywordQueryDialog open={queryOpen} dialogId="pda-devices-query" title="查询 PDA 设备"
+        label="设备名称或设备码" placeholder="搜索设备名称或设备码" initial={keyword}
+        onClose={() => setQueryOpen(false)} onApply={setKeyword} />
       <section className="min-w-0" aria-label="PDA设备列表">
-        <DataTable
+        {isError ? <div role="alert"><QueryErrorState title="设备列表加载失败" error={error} onRetry={() => void refetch()} /></div> : <DataTable
           columns={columns}
           data={data?.list ?? []}
           loading={isLoading}
           rowKey="id"
           fluid
+          virtualized
+          scrollLabel="PDA 设备表格"
           columnStorageKey="pda-devices:v1"
-        />
+        />}
       </section>
 
       {!isError && !isLoading && data && (
@@ -212,7 +218,7 @@ export default function PdaDevicesPage() {
                 <SelectTrigger id={`${inputId}-create-warehouseId`} aria-describedby={`${inputId}-create-warehouse-help`}><SelectValue placeholder="选择仓库" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NO_WAREHOUSE}>{UNRESTRICTED_DEVICE_LABEL}</SelectItem>
-                  {(warehouses ?? []).map(w => (
+                  {warehouses.data?.map(w => (
                     <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -220,6 +226,7 @@ export default function PdaDevicesPage() {
               <p id={`${inputId}-create-warehouse-help`} className="mt-1 text-xs text-muted-foreground">
                 {DEVICE_SCOPE_HELP} 不限仓的设备仅由不限仓账号登记。
               </p>
+              {warehouseError}
             </div>
           </div>
           <DialogFooter>
@@ -236,39 +243,41 @@ export default function PdaDevicesPage() {
 
       {/* 密钥与绑定二维码：仅此一次 */}
       <Dialog open={canManage && !!secretView} onOpenChange={open => { if (!open) setSecretView(null) }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{<>
               密钥仅显示一次，关闭后不可再查看；如遗失，需重置密钥后重新绑定。
             </>}</>}>
             <DialogTitle>用 PDA 扫这个码完成绑定</DialogTitle>
 
           </DialogHeader>
-          {secretView && (
-            <div className="space-y-3">
-              <div className="flex justify-center rounded-xl bg-white p-4">
-                <QRCodeSVG value={buildBindingPayload(secretView)} size={200} />
+          <div className="fc-form-dialog-body space-y-4">
+            {secretView && (
+              <div className="space-y-3">
+                <div className="flex justify-center rounded-lg bg-card p-4">
+                  <QRCodeSVG value={buildBindingPayload(secretView)} size={200} marginSize={4} />
+                </div>
+                <div className="space-y-1 rounded-lg bg-muted/50 p-3 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">设备名称</span>
+                    <span>{secretView.deviceName}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">设备码</span>
+                    <span className="font-mono">{secretView.deviceCode}</span>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">密钥（扫码失败时可手动输入）</div>
+                    <div className="mt-1 break-all rounded-lg bg-background p-2 font-mono text-xs">{secretView.deviceSecret}</div>
+                  </div>
+                </div>
+                {typeof secretView.revokedSessions === 'number' && secretView.revokedSessions > 0 && (
+                  <p className="text-xs text-destructive-ink">
+                    已退出该设备原有的 {secretView.revokedSessions} 个登录，这台机器需要重新绑定才能继续作业。
+                  </p>
+                )}
               </div>
-              <div className="space-y-1 rounded-xl bg-muted/50 p-3 text-sm">
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">设备名称</span>
-                  <span>{secretView.deviceName}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">设备码</span>
-                  <span className="font-mono">{secretView.deviceCode}</span>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">密钥（扫码失败时可手动输入）</div>
-                  <div className="mt-1 break-all rounded-lg bg-background p-2 font-mono text-xs">{secretView.deviceSecret}</div>
-                </div>
-              </div>
-              {typeof secretView.revokedSessions === 'number' && secretView.revokedSessions > 0 && (
-                <p className="text-xs text-destructive-ink">
-                  已退出该设备原有的 {secretView.revokedSessions} 个登录，这台机器需要重新绑定才能继续作业。
-                </p>
-              )}
-            </div>
-          )}
+            )}
+          </div>
           <DialogFooter>
             <Button onClick={() => setSecretView(null)}>我已完成绑定</Button>
           </DialogFooter>
@@ -307,12 +316,13 @@ export default function PdaDevicesPage() {
                   <SelectTrigger id={`${inputId}-edit-warehouseId`} aria-describedby={`${inputId}-edit-warehouse-help`}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NO_WAREHOUSE}>{UNRESTRICTED_DEVICE_LABEL}</SelectItem>
-                    {(warehouses ?? []).map(w => (
+                    {warehouses.data?.map(w => (
                       <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 <p id={`${inputId}-edit-warehouse-help`} className="mt-1 text-xs text-muted-foreground">{DEVICE_SCOPE_HELP}</p>
+                {warehouseError}
               </div>
             </div>
           )}

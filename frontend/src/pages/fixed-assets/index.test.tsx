@@ -37,7 +37,7 @@ test.each([false, true])('固定资产读取和导出保留，写操作按凭证
     await act(async () => new Promise(resolve => setTimeout(resolve, 0)))
     const page = within(host)
     await vi.waitFor(() => expect(page.getByText('在用合成资产')).toBeTruthy())
-    expect(page.getByRole('button', { name: '导出' })).toBeTruthy()
+    expect(page.getByRole('button', { name: '导出 Excel' })).toBeTruthy()
     expect(Boolean(page.queryByRole('button', { name: '新增资产' }))).toBe(canManage)
     expect(Boolean(page.queryByRole('button', { name: '计提本月折旧' }))).toBe(canManage)
     expect(page.queryAllByRole('button', { name: '处置' })).toHaveLength(canManage ? 2 : 0)

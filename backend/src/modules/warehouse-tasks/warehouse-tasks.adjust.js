@@ -1,3 +1,4 @@
+const { beginResourceOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { commitFulfillment } = require('../fulfillment/fulfillment.refresh')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
@@ -9,6 +10,7 @@ const { WT_EVENT, record: recordEvent } = require('./warehouse-task-events.servi
 const { logSideEffectFailure, assertTaskScope } = require('./warehouse-tasks.helpers')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const { actor, readAdjustmentHandoff } = require('./warehouse-tasks.handoff')
+const { roundQty } = require('../../utils/unitConversion')
 
 const QTY_EPS = 1e-6
 
@@ -22,10 +24,10 @@ const QTY_EPS = 1e-6
  */
 async function reducePickScanLogForContainer(conn, { taskId, itemId, containerId, qty }) {
   let remaining = Number(qty)
-  if (!(remaining > 0)) return
+  if (!(remaining > 0)) throw new AppError('待归还数量无效', 409)
   const [rows] = await conn.query(
     `SELECT id, qty FROM scan_logs
-     WHERE task_id=? AND item_id=? AND container_id=? AND scan_purpose=1
+     WHERE task_id=? AND item_id=? AND container_id=? AND COALESCE(scan_purpose,1)=1
      ORDER BY id ASC FOR UPDATE`,
     [taskId, itemId, containerId],
   )
@@ -38,10 +40,10 @@ async function reducePickScanLogForContainer(conn, { taskId, itemId, containerId
     } else {
       await conn.query('UPDATE scan_logs SET qty = qty - ? WHERE id=?', [take, r.id])
     }
-    remaining -= take
+    remaining = roundQty(remaining - take)
   }
-  // **不动 `sorting_bin_items`**：那是历史作业记录，减量不改写它（改的是「有效量」的读法，
-  // 见 warehouse-tasks.sort.js 的 confirmedPickLabelQty）。
+  if (remaining > 0) throw new AppError('原库存条码的有效拣货记录不足，无法确认改单归还', 409, 'ADJUSTMENT_RETURN_PICK_MISMATCH')
+  return roundQty(rows.reduce((sum, row) => sum + Number(row.qty), 0) - Number(qty))
 }
 
 /**
@@ -112,16 +114,18 @@ async function applyProductDeltaWithinTransaction(conn, {
   // 第①层：未拣部分，直接下调，无需实物动作
   const unpickedBuffer = Math.max(0, Number(existingItem.required_qty) - pickedQty)
   const layer1 = Math.min(reduceQty, unpickedBuffer)
-  reduceQty -= layer1
+  reduceQty = roundQty(reduceQty - layer1)
+  if (layer1 > QTY_EPS) {
+    await partialReleaseByProduct(conn, {
+      refType: 'sale_order', refId: saleOrderId, productId, warehouseId, qty: layer1,
+    })
+  }
 
   if (reduceQty <= QTY_EPS) {
     await conn.query(
       'UPDATE warehouse_task_items SET required_qty = required_qty - ? WHERE id=?',
       [layer1, existingItem.id],
     )
-    await partialReleaseByProduct(conn, {
-      refType: 'sale_order', refId: saleOrderId, productId, warehouseId, qty: layer1,
-    })
     return {
       productId, productCode, productName,
       oldRequiredQty: Number(oldRequiredQty), newRequiredQty: Number(newRequiredQty),
@@ -183,9 +187,9 @@ async function applyProductDeltaWithinTransaction(conn, {
 
   // 第②层：物理归还库位——从任务锁定的容器里按 FIFO 拆出 reduceQty，
   // 登记待确认队列，PDA 扫码确认目标库位后才真正解锁+释放预占。
-  const containerReturns = reduceQty > QTY_EPS
-    ? await reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty: reduceQty })
-    : []
+  const containerReturns = await reserveTaskLockedContainersForReturn(conn, {
+    taskId, itemId: existingItem.id, productId, warehouseId, pickedQty, qty: reduceQty,
+  })
 
   // required_qty 立即下调到新目标（防止继续朝旧目标复核/打包）；checked_qty 清零——
   // 无论物理是否已挪动，数量变了就必须重新复核。picked_qty/sorted_qty/预占的最终释放
@@ -382,25 +386,45 @@ async function getAdjustmentDetail(adjustmentId, scopeWarehouseIds = null) {
   }
 }
 
+// 销售派发/取消/改单先持销售单锁再取任务锁。两个确认入口共用同一顺序，
+// 等待后用当前已提交的任务与账本核对旧挂起单，不在任务锁后反向等待销售单。
+async function lockAdjustmentSale(conn, entryId, isContainerReturn) {
+  const entryTable = isContainerReturn ? 'sale_order_adjustment_container_returns' : 'sale_order_adjustment_package_voids'
+  const [[sale]] = await conn.query(
+    `SELECT so.id, so.status, so.task_id FROM sale_orders so
+     JOIN sale_order_adjustments a ON a.sale_order_id=so.id
+     JOIN sale_order_adjustment_items i ON i.adjustment_id=a.id
+     JOIN ${entryTable} e ON e.adjustment_item_id=i.id
+     WHERE e.id=? FOR UPDATE OF so`, [entryId],
+  )
+  return sale
+}
+
 /**
  * PDA 扫码确认拆箱：仅做procedural确认（箱子本身在改单发起时已作废），
  * 确认后检查该改单是否已全部清零。
  */
-async function confirmPackageVoid(voidId, { operator, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
+async function confirmPackageVoid(voidId, { requestKey, operator, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
+    const sale = await lockAdjustmentSale(conn, voidId, false)
     const [[voidRow]] = await conn.query(
-      `SELECT v.id, wt.id AS warehouse_task_id, wt.warehouse_id
+      `SELECT v.id, v.status, wt.id AS warehouse_task_id, wt.warehouse_id
        FROM sale_order_adjustment_package_voids v
        INNER JOIN sale_order_adjustment_items i ON i.id = v.adjustment_item_id
        INNER JOIN sale_order_adjustments soa ON soa.id = i.adjustment_id
        INNER JOIN warehouse_tasks wt ON wt.id = soa.warehouse_task_id
-       WHERE v.id=? AND v.status=1 FOR UPDATE`,
+       WHERE v.id=? FOR UPDATE`,
       [voidId],
     )
-    if (!voidRow) throw new AppError('该拆箱项不存在或已确认', 409)
+    if (!sale || !voidRow) throw new AppError('该拆箱项不存在或已确认', 409)
     assertTaskScope(voidRow, { scopeWarehouseIds, pdaWarehouseId })
+    const resource = { resourceType: 'adjustment_package_void', resourceId: voidId }
+    const request = await beginResourceOperationRequest(conn, { requestKey, userId: operator?.userId, action: 'warehouse.adjustment-void', ...resource })
+    if (request.replay) { await conn.commit(); return request.responseData }
+    if (Number(voidRow.status) !== 1) throw new AppError('该拆箱项已确认', 409)
     const [result] = await conn.query(
       `UPDATE sale_order_adjustment_package_voids
        SET status=2, confirmed_by=?, confirmed_by_name=?, confirmed_at=NOW()
@@ -414,7 +438,8 @@ async function confirmPackageVoid(voidId, { operator, scopeWarehouseIds = null, 
        WHERE v.id=?`,
       [voidId],
     )
-    const outcome = await checkAdjustmentClearedAndFinalize(conn, Number(row.adjustment_id), { operator })
+    const outcome = await checkAdjustmentClearedAndFinalize(conn, Number(row.adjustment_id), { operator, sale })
+    await completeOperationRequest(conn, request, { ...resource, data: outcome, message: '已确认拆箱' })
     await commitFulfillment(conn, 'warehouse', voidRow.warehouse_task_id)
     return outcome
   } catch (e) { await conn.rollback(); throw e }
@@ -428,10 +453,12 @@ async function confirmPackageVoid(voidId, { operator, scopeWarehouseIds = null, 
  * createCancelReturnScanLog）同一口径，必须扫回容器当前登记的库位（即拆分时继承
  * 自原容器的库位），不允许操作员自选目标库位，否则账面库位和实物摆放位置会脱节。
  */
-async function confirmContainerReturn(returnId, { targetLocationId = null, operator, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
+async function confirmContainerReturn(returnId, { targetLocationId = null, requestKey, operator, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
+    const sale = await lockAdjustmentSale(conn, returnId, true)
     const [[ret]] = await conn.query(
       `SELECT r.*, i.product_id AS adjustment_product_id, wt.id AS warehouse_task_id, wt.warehouse_id
        FROM sale_order_adjustment_container_returns r
@@ -441,8 +468,15 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
        WHERE r.id=? FOR UPDATE`,
       [returnId],
     )
-    if (!ret) throw new AppError('该归还项不存在', 404)
+    if (!sale || !ret) throw new AppError('该归还项不存在', 404)
     assertTaskScope(ret, { scopeWarehouseIds, pdaWarehouseId })
+    const resource = { resourceType: 'adjustment_container_return', resourceId: returnId }
+    const request = await beginResourceOperationRequest(conn, { requestKey, userId: operator?.userId, action: 'warehouse.adjustment-return', ...resource })
+    if (request.replay) {
+      if (Number(targetLocationId) !== Number(ret.target_location_id)) throw new AppError('归还库位与原请求不一致，请核对原记录', 409, 'ADJUSTMENT_RETURN_RECEIPT_MISMATCH')
+      await conn.commit()
+      return request.responseData
+    }
     if (Number(ret.status) !== 1) throw new AppError('该归还项已确认，无需重复操作', 400)
 
     // 加锁顺序（2026-09-18 审计 [27]）：本仓全局约定「先 lockStockDimension(商品,仓库) 再锁单个容器」
@@ -472,8 +506,26 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
       || Number(container.product_id) !== Number(ret.adjustment_product_id)
       || Number(container.locked_by_task_id) !== Number(ret.warehouse_task_id)
       || !Number.isFinite(returnQty) || returnQty <= 0
-      || !Number.isFinite(remainingQty) || remainingQty !== returnQty) {
+      || !Number.isFinite(remainingQty) || remainingQty < returnQty) {
       throw new AppError('待归还条码与当前任务或实存数量不一致，请核对后重试', 409, 'ADJUSTMENT_RETURN_CONTAINER_INVALID')
+    }
+    const wholeOriginal = Number(ret.original_container_id) === Number(container.id)
+    if (!wholeOriginal && remainingQty !== returnQty) {
+      throw new AppError('拆分归还条码的当前实存与待归还量不一致', 409, 'ADJUSTMENT_RETURN_CONTAINER_INVALID')
+    }
+    if (wholeOriginal) {
+      // 原条码可能只拣过其中一部分。解锁整只条码前必须证明本任务的全部实拣都在本次归还内。
+      const [picks] = await conn.query(
+        `SELECT s.qty FROM scan_logs s
+         JOIN warehouse_task_items wi ON wi.id=s.item_id AND wi.task_id=s.task_id AND wi.product_id=s.product_id
+         WHERE s.task_id=? AND s.product_id=? AND s.container_id=? AND COALESCE(s.scan_purpose,1)=1
+         ORDER BY s.id FOR UPDATE`,
+        [ret.warehouse_task_id, ret.adjustment_product_id, container.id],
+      )
+      const pickedQty = roundQty(picks.reduce((sum, pick) => sum + Number(pick.qty), 0))
+      if (pickedQty !== returnQty) {
+        throw new AppError('原库存条码的实拣数量与整件归还数量不一致', 409, 'ADJUSTMENT_RETURN_PICK_MISMATCH')
+      }
     }
     // 归还库位强校验：必须扫回容器当前登记的原库位（拆分出的新容器继承同一库位，故先按源容器校验再拆分）。
     // 口径与 scan-logs 的拣货退回一致：有原库位必须放回原库位；无原库位（导入/历史容器）
@@ -516,11 +568,65 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
        WHERE r.id=?`,
       [returnId],
     )
-    const outcome = await checkAdjustmentClearedAndFinalize(conn, Number(row.adjustment_id), { operator })
+    const outcome = await checkAdjustmentClearedAndFinalize(conn, Number(row.adjustment_id), { operator, sale })
+    await completeOperationRequest(conn, request, { ...resource, data: outcome, message: '已确认归还' })
     await commitFulfillment(conn, 'warehouse', ret.warehouse_task_id)
     return outcome
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
+}
+
+async function releaseAdjustmentReservation(conn, { adj, item, sale, task, taskItem }) {
+  const invalid = () => new AppError('当前预占与原改单、任务数量不一致，请核对后再确认', 409, 'ADJUSTMENT_RETURN_RESERVATION_MISMATCH')
+  const target = Number(item.new_required_qty)
+  const expected = roundQty(target + Number(item.pending_return_qty))
+  if (Number(sale.id) !== Number(adj.sale_order_id) || !task || Number(task.sale_order_id) !== Number(sale.id) || !taskItem
+    || Number(taskItem.required_qty) !== target || Number(taskItem.picked_qty) !== expected) throw invalid()
+
+  const warehouseId = Number(task.warehouse_id)
+  await lockStockDimension(conn, item.product_id, warehouseId)
+  const [ledger] = await conn.query(
+    `SELECT qty,status FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=?
+     AND product_id=? AND warehouse_id=? AND status IN (1,2) ORDER BY id FOR UPDATE`,
+    [sale.id, item.product_id, warehouseId],
+  )
+  const active = roundQty(ledger.reduce((sum, row) => sum + (Number(row.status) === 1 ? Number(row.qty) : 0), 0))
+  if (active !== expected) {
+    // 旧版本跨层减量只登记实拣归还，整笔改前预占仍在账本内。仅在旧层差额和来源均可证时补释。
+    const old = Number(item.old_required_qty)
+    if (active !== old || old <= expected || Number(sale.status) !== 3 || Number(sale.task_id) !== Number(adj.warehouse_task_id)
+      || ledger.some(row => Number(row.status) === 2)) throw invalid()
+    const [tasks] = await conn.query(
+      `SELECT id, status, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks
+       WHERE sale_order_id=? AND (deleted_at IS NULL OR status=7)`, [sale.id],
+    )
+    if (tasks.length !== 1 || Number(tasks[0].id) !== Number(adj.warehouse_task_id)
+      || !tasks[0].adjustment_requested_at || tasks[0].cancel_requested_at
+      || Number(tasks[0].status) < 2 || Number(tasks[0].status) > 6) throw invalid()
+
+    const [lines] = await conn.query(
+      'SELECT product_id,warehouse_id,quantity,dispatched_qty,reserved_qty,shipped_qty FROM sale_order_items WHERE order_id=?', [sale.id],
+    )
+    if (lines.some(line => Number(line.warehouse_id) !== warehouseId || Number(line.shipped_qty) !== 0
+      || Number(line.quantity) !== Number(line.dispatched_qty))) throw invalid()
+    const own = lines.filter(line => Number(line.product_id) === Number(item.product_id))
+    // 普通单删行时目标为零，套单保留零目标的历史物料行。
+    if ((target > 0 && !own.length) || own.length > 1
+      || own.some(line => Number(line.quantity) !== target || Number(line.reserved_qty) !== active)) throw invalid()
+
+    const [[balance]] = await conn.query(
+      `SELECT s.reserved,
+              (SELECT COALESCE(SUM(r.qty),0) FROM stock_reservations r WHERE r.product_id=s.product_id
+               AND r.warehouse_id=s.warehouse_id AND r.status=1) AS ledger,
+              (SELECT COALESCE(SUM(b.qty),0) FROM sale_order_expected_bindings b WHERE b.sale_order_id=?
+               AND b.product_id=s.product_id AND b.warehouse_id=s.warehouse_id AND b.released_at IS NULL) AS bound
+         FROM inventory_stock s WHERE s.product_id=? AND s.warehouse_id=?`, [sale.id, item.product_id, warehouseId],
+    )
+    if (!balance || Number(balance.reserved) !== Number(balance.ledger) || Number(balance.bound) > active) throw invalid()
+  }
+  await partialReleaseByProduct(conn, {
+    refType: 'sale_order', refId: sale.id, productId: item.product_id, warehouseId, qty: roundQty(active - target),
+  })
 }
 
 /**
@@ -532,7 +638,7 @@ async function confirmContainerReturn(returnId, { targetLocationId = null, opera
  * 这里兜底处理任务在挂起期间被并发操作改变状态的极端情况不做处理，
  * 只清空标记，不重复触发状态迁移）。
  */
-async function checkAdjustmentClearedAndFinalize(conn, adjustmentId, { operator } = {}) {
+async function checkAdjustmentClearedAndFinalize(conn, adjustmentId, { operator, sale } = {}) {
   const [[adj]] = await conn.query(
     'SELECT * FROM sale_order_adjustments WHERE id=? FOR UPDATE',
     [adjustmentId],
@@ -563,13 +669,14 @@ async function checkAdjustmentClearedAndFinalize(conn, adjustmentId, { operator 
 
     // 该 product 的待确认项已全部清零：真正把 picked_qty/sorted_qty 降到新目标，释放预占
     const [[taskRow]] = await conn.query(
-      'SELECT warehouse_id FROM warehouse_tasks WHERE id=?',
+      'SELECT sale_order_id, warehouse_id FROM warehouse_tasks WHERE id=?',
       [adj.warehouse_task_id],
     )
-    await partialReleaseByProduct(conn, {
-      refType: 'sale_order', refId: adj.sale_order_id, productId: item.product_id,
-      warehouseId: Number(taskRow.warehouse_id), qty: Number(item.pending_return_qty),
-    })
+    const [[taskItemRow]] = await conn.query(
+      'SELECT id, required_qty, picked_qty FROM warehouse_task_items WHERE task_id=? AND product_id=? FOR UPDATE',
+      [adj.warehouse_task_id, item.product_id],
+    )
+    await releaseAdjustmentReservation(conn, { adj, item, sale, task: taskRow, taskItem: taskItemRow })
     await conn.query(
       `UPDATE warehouse_task_items
        SET picked_qty = ?, sorted_qty = LEAST(sorted_qty, ?)
@@ -587,22 +694,34 @@ async function checkAdjustmentClearedAndFinalize(conn, adjustmentId, { operator 
     // 已归还容器对应的原容器（可能是被拆分的原容器，也可能是整只被归还的容器本身）
     // 同步下调拣货扫码记录，见 reducePickScanLogForContainer 顶部说明。
     const [returnedContainers] = await conn.query(
-      `SELECT original_container_id, qty FROM sale_order_adjustment_container_returns
-       WHERE adjustment_item_id=? AND status=2`,
+      `SELECT original_container_id, source_container_id, qty FROM sale_order_adjustment_container_returns
+       WHERE adjustment_item_id=? AND status=2 ORDER BY id FOR UPDATE`,
       [item.id],
     )
     if (returnedContainers.length) {
-      const [[taskItemRow]] = await conn.query(
-        'SELECT id FROM warehouse_task_items WHERE task_id=? AND product_id=?',
-        [adj.warehouse_task_id, item.product_id],
-      )
-      if (taskItemRow) {
-        for (const rc of returnedContainers) {
-          await reducePickScanLogForContainer(conn, {
-            taskId: adj.warehouse_task_id, itemId: taskItemRow.id,
-            containerId: Number(rc.original_container_id), qty: Number(rc.qty),
-          })
+      for (const rc of returnedContainers) {
+        const originalId = Number(rc.original_container_id ?? rc.source_container_id)
+        const leftover = await reducePickScanLogForContainer(conn, {
+          taskId: adj.warehouse_task_id, itemId: taskItemRow.id,
+          containerId: originalId, qty: Number(rc.qty),
+        })
+        // 旧版可能将一只条码的全部实拣拆到子条码，原条码只剩未拣库存。
+        if (leftover === 0 && originalId !== Number(rc.source_container_id)) {
+          const [released] = await conn.query(
+            `UPDATE inventory_containers SET locked_by_task_id=NULL, locked_at=NULL
+             WHERE id=? AND product_id=? AND warehouse_id=? AND locked_by_task_id=?
+               AND deleted_at IS NULL AND status=?`,
+            [originalId, item.product_id, taskRow.warehouse_id, adj.warehouse_task_id, CONTAINER_STATUS.ACTIVE],
+          )
+          if (released.affectedRows !== 1) throw new AppError('拆分归还的原库存条码已变化', 409, 'ADJUSTMENT_RETURN_CONTAINER_CHANGED')
         }
+      }
+      const [activePicks] = await conn.query(
+        `SELECT qty FROM scan_logs WHERE task_id=? AND item_id=? AND COALESCE(scan_purpose,1)=1 FOR UPDATE`,
+        [adj.warehouse_task_id, taskItemRow.id],
+      )
+      if (roundQty(activePicks.reduce((sum, pick) => sum + Number(pick.qty), 0)) !== Number(item.new_required_qty)) {
+        throw new AppError('归还后有效拣货合计与新目标不一致', 409, 'ADJUSTMENT_RETURN_PICK_MISMATCH')
       }
     }
     await conn.query('UPDATE sale_order_adjustment_items SET status=2 WHERE id=?', [item.id])

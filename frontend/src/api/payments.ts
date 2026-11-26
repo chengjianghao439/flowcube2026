@@ -116,7 +116,7 @@ type ReceiptAllocation =
   | { statementId: number; amount: number }
 
 export const getReceiptsApi = (p: object) =>
-  client.get<{ list: PaymentReceipt[]; summary: { amount:number; settledAmount:number; balance:number }; pagination: unknown }>('/payments/receipts', { params: p })
+  client.get<{ list: PaymentReceipt[]; summary: { amount:number; settledAmount:number; balance:number }; pagination: Pagination }>('/payments/receipts', { params: p })
 
 export const getReceiptDetailApi = (id: number) =>
   client.get<PaymentReceipt & { settlements: ReceiptSettlement[] }>(`/payments/receipts/${id}`)

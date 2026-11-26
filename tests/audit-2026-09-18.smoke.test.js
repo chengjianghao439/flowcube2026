@@ -348,8 +348,10 @@ async function main() {
   })
 
   test('★P1 仓库范围自我提权必须被拒（清空自己那行即等于不限仓）', async f => {
+    const roleId = await insert('INSERT INTO sys_roles (code,name,is_system) VALUES (?, ?, 0)', [unique('R'), '审计限仓编辑'])
+    await conn.query("INSERT INTO sys_role_permissions (role_id,permission) VALUES (?, 'user.update')", [roleId])
     const attackerId = await insert(`INSERT INTO sys_users (username,password,real_name,role_id,role_name,is_active)
-      VALUES (?, 'x', '审计提权者', 2, '仓库管理员', 1)`, [unique('U')])
+      VALUES (?, 'x', '审计提权者', ?, '审计限仓编辑', 1)`, [unique('U'), roleId])
     // 先给他一个受限范围，再尝试自己清空
     await conn.query('INSERT INTO user_warehouse_scope (user_id,warehouse_id) VALUES (?,?)', [attackerId, f.wh])
 
@@ -362,7 +364,8 @@ async function main() {
 
     // 非超管只能授予自己的范围子集；范围内修改仍然允许。
     const otherId = await insert(`INSERT INTO sys_users (username,password,real_name,role_id,role_name,is_active)
-      VALUES (?, 'x', '审计被改者', 3, '仓管员', 1)`, [unique('U')])
+      VALUES (?, 'x', '审计被改者', ?, '审计限仓编辑', 1)`, [unique('U'), roleId])
+    await conn.query('INSERT INTO user_warehouse_scope (user_id,warehouse_id) VALUES (?,?)', [otherId, f.wh])
     await assert.rejects(
       () => usersSvc.setWarehouseScope(otherId, [f.wh2], { userId: attackerId }),
       (e) => { assert.equal(e.statusCode, 403); assert.equal(e.code, 'USER_SCOPE_GRANT_DENIED'); return true },
@@ -445,7 +448,7 @@ async function main() {
       operatorId: 1, operatorName: 'x', requestKey: unique('RK'), scopeWarehouseIds: [f.wh],
     }).then(() => null, e => e)
     if (err) assert.notEqual(err.code, 'WAREHOUSE_SCOPE_DENIED', '范围正确时不应报范围错误')
-  })
+  }, 'READ COMMITTED')
 
   // ── P2 同形态：跨仓读取/查询收口 ────────────────────────────────────────
   test('★P2 五处跨仓读取与查询必须被拦截（products/finder、containers/overdue、returns 来源单、approvals）', async f => {
@@ -1071,6 +1074,26 @@ async function main() {
     const [[row2]] = await conn.query(
       'SELECT waybill_id FROM logistics_freight_bills WHERE carrier_id=? AND tracking_no=?', [carrierId, repNo])
     assert.equal(Number(row2.waybill_id), wbId, '代表号匹配必须保持可用')
+
+    await conn.query('UPDATE logistics_waybills SET freight_type=1 WHERE id=?', [wbId])
+    const period = '2099-03'
+    await freightSvc.createFreightBill({carrierId,trackingNo:childNo,billPeriod:period,actualFreight:0.1})
+    await freightSvc.createFreightBill({carrierId,trackingNo:repNo,billPeriod:period,actualFreight:0.2})
+    const settlement = await freightSvc.generateSettlement({carrierId,billPeriod:period})
+    const readAr = async () => (await conn.query('SELECT * FROM payment_records WHERE id=?',[settlement.paymentRecordId]))[0][0]
+    assert.equal(Number((await readAr()).total_amount),0.3)
+    await conn.query('UPDATE payment_records SET paid_amount=0.30, balance=0, status=3, confirm_status=1 WHERE id=?',[settlement.paymentRecordId])
+    await freightSvc.generateSettlement({carrierId,billPeriod:period})
+    assert.equal((await readAr()).confirm_status,1,'分值合计未变保留已确认状态')
+    await assert.rejects(freightSvc.createFreightBill({carrierId,trackingNo:childNo,billPeriod:period,actualFreight:0.11}), {code:'FREIGHT_BILL_RECONCILED'})
+    // 模拟历史结算成员已出现不一致，不能把已付款隐去。
+    await conn.query('UPDATE logistics_freight_bills SET actual_freight=0.09 WHERE carrier_id=? AND tracking_no=?',[carrierId,childNo])
+    await assert.rejects(freightSvc.generateSettlement({carrierId,billPeriod:period}), {code:'FREIGHT_TOTAL_BELOW_PAID'})
+    await conn.query('UPDATE logistics_freight_bills SET actual_freight=0.11 WHERE carrier_id=? AND tracking_no=?',[carrierId,childNo])
+    await conn.query("UPDATE payment_records SET created_at='2098-11-15' WHERE id=?",[settlement.paymentRecordId])
+    await conn.query("INSERT INTO acct_periods(company_id,period,status) VALUES(1,'209811',2) ON DUPLICATE KEY UPDATE status=2")
+    await assert.rejects(freightSvc.generateSettlement({carrierId,billPeriod:period}),{code:'FINANCE_PERIOD_CLOSED'})
+    assert.equal(Number((await readAr()).total_amount),0.3)
   })
 
   test('★P3 打印机状态与 PDA 停用都不得绕过校验/事务（裸 SET status 收口）', async f => {

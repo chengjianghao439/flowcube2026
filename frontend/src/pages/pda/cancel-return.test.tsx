@@ -7,6 +7,7 @@ import { beforeEach, expect, test, vi } from 'vitest'
 import PdaCancelReturnPage from './cancel-return'
 import type { CancelReturnDetail } from '@/api/warehouse-tasks'
 import { useAuthStore } from '@/store/authStore'
+import { setApiClientBaseURL } from '@/api/client'
 import { usePdaCancelReturnDetail } from '@/hooks/usePdaCancelReturn'
 import { captureKitReadOwner } from '@/hooks/useKits'
 import { KIT_QUERY_KEY, saveKitQuery } from '@/lib/kitOperationRecovery'
@@ -18,11 +19,10 @@ const mocks = vi.hoisted(() => ({
   detailGet: vi.fn(),
   ok: vi.fn(),
   warn: vi.fn(),
-  defaults: { baseURL: '/a' },
   onScan: null as null | ((s: string) => void)
 }))
-vi.mock('@/api/client', () => ({
-  default: { defaults: mocks.defaults },
+vi.mock('@/api/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@/api/client')>(),
   payloadClient: { get: mocks.detailGet, post: (url: string, ...args: unknown[]) => url.endsWith('/box') ? mocks.box(url, ...args) : mocks.scan(url, ...args) }
 }))
 vi.mock('@/api/operation-requests', () => ({
@@ -78,7 +78,7 @@ beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   sessionStorage.clear()
   vi.resetAllMocks()
-  mocks.defaults.baseURL = '/a'
+  setApiClientBaseURL('/a')
   mocks.detailGet.mockResolvedValue(detail)
   useAuthStore
     .getState()
@@ -311,10 +311,10 @@ test('owned PDA detail rejects refresh while server differs before GET and never
   mocks.scan.mockRejectedValue({ status: 503 })
   await mount(async host => {
     expect(host.textContent).toContain('本任务应归还 1')
-    mocks.defaults.baseURL = '/b'
+    setApiClientBaseURL('/b')
     await clickText(host, '刷新')
     expect(mocks.detailGet).toHaveBeenCalledTimes(1)
-    mocks.defaults.baseURL = '/a'
+    setApiClientBaseURL('/a')
     await act(async () => { mocks.onScan!('I31'); mocks.onScan!('LOC6'); await Promise.resolve() })
     expect(mocks.scan).not.toHaveBeenCalled()
     expect(host.textContent).not.toContain('B-WT80')
@@ -326,7 +326,7 @@ test.each(['foreign-id', 'owner-left'] as const)('owned GET rejects %s response 
   await mount(async host => {
     expect(mocks.detailGet.mock.calls[0][1]).toEqual(expect.objectContaining({ baseURL: '/a' }))
     await act(async () => {
-      if (scenario === 'owner-left') mocks.defaults.baseURL = '/b'
+      if (scenario === 'owner-left') setApiClientBaseURL('/b')
       finish({ ...detail, id: scenario === 'foreign-id' ? 81 : 80, taskNo: 'ForeignWT', containers: [{ ...detail.containers[0], containerId: 31, barcode: 'I31', taskReturnQty: 7 }] })
       await new Promise(r => setTimeout(r, 5))
     })
@@ -342,8 +342,8 @@ test('GET begun at A stays fixed to A through B then A before response and choos
   await mount(async host => {
     await clickText(host, '刷新')
     expect(mocks.detailGet.mock.calls[1][1]).toEqual(expect.objectContaining({ baseURL: '/a' }))
-    await act(async () => { mocks.defaults.baseURL = '/b'; await new Promise(r => setTimeout(r, 5)) })
-    await act(async () => { mocks.defaults.baseURL = '/a'; await new Promise(r => setTimeout(r, 5)) })
+    await act(async () => { setApiClientBaseURL('/b'); await new Promise(r => setTimeout(r, 5)) })
+    await act(async () => { setApiClientBaseURL('/a'); await new Promise(r => setTimeout(r, 5)) })
     await act(async () => { finish(detail); await new Promise(r => setTimeout(r, 5)) })
     await act(async () => mocks.onScan!('I31'))
     await act(async () => { mocks.onScan!('LOC6'); await Promise.resolve() })
@@ -370,12 +370,12 @@ test('owned detail query caches same task separately by original server while de
   try {
     await render(ownerA)
     expect(host.textContent).toBe('WT80')
-    mocks.defaults.baseURL = '/b'
+    setApiClientBaseURL('/b')
     mocks.detailGet.mockResolvedValue({ ...detail, taskNo: 'B-WT80' })
     await render(ownerB)
     expect(host.textContent).toBe('B-WT80')
     expect(mocks.detailGet.mock.calls[1][1]).toEqual(expect.objectContaining({ baseURL: '/b' }))
-    mocks.defaults.baseURL = '/a'
+    setApiClientBaseURL('/a')
     mocks.detailGet.mockResolvedValue(detail)
     await render()
     expect(mocks.detailGet.mock.calls[2]).toEqual(['/warehouse-tasks/80/cancel-return-detail'])

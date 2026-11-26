@@ -19,6 +19,7 @@ interface Coordination {
   crypto: Crypto
   channel: Channel
   isOnline: () => boolean
+  allowLocalLock?: boolean
 }
 
 const PREFIX = 'flowcube-auth-rotation-v1:'
@@ -36,7 +37,7 @@ function isPublishedResult(value: unknown): value is PublishedResult {
     && 'refreshToken' in value && typeof value.refreshToken === 'string' && Boolean(value.refreshToken)
 }
 
-export function createAuthRefreshCoordinator({ withLock, storage, crypto, channel, isOnline }: Coordination) {
+export function createAuthRefreshCoordinator({ withLock, storage, crypto, channel, isOnline, allowLocalLock = false }: Coordination) {
   const recent = new Map<string, SealedResult>()
   const onLookup = (event: MessageEvent<TransferMessage>) => {
     const message = event.data
@@ -77,7 +78,7 @@ export function createAuthRefreshCoordinator({ withLock, storage, crypto, channe
         const routingDigest = await crypto.subtle.digest('SHA-256', material)
         const key = PREFIX + Array.from(new Uint8Array(routingDigest), byte => byte.toString(16).padStart(2, '0')).join('')
         const encryptionKey = await crypto.subtle.importKey('raw', material, 'AES-GCM', false, ['encrypt', 'decrypt'])
-        return await withLock(key, async () => {
+        const run = async (): Promise<RefreshResult> => {
           if (!isCurrent()) return { kind: 'superseded' }
           if (storage.getItem(key) !== null) return lookup(key, encryptionKey)
           if (!isOnline()) return { kind: 'unavailable' }
@@ -97,7 +98,18 @@ export function createAuthRefreshCoordinator({ withLock, storage, crypto, channe
             } catch { /* 本窗口已有真实回执，其它窗口保留待确认状态。 */ }
           }
           return result
-        })
+        }
+        let entered = false
+        try {
+          return await withLock(key, () => {
+            entered = true
+            return run()
+          })
+        } catch (error) {
+          if (entered || !allowLocalLock || (error as Error)?.name !== 'SecurityError') throw error
+          // file:// 可暴露 Web Locks 却在调用回调前拒绝。仍检查同一摘要标记。
+          return refreshLocally(key, isCurrent, run)
+        }
       } catch {
         return { kind: 'unavailable' }
       }
@@ -111,29 +123,63 @@ export function createAuthRefreshCoordinator({ withLock, storage, crypto, channe
 }
 
 let browserCoordinator: ReturnType<typeof createAuthRefreshCoordinator> | undefined
-const pendingLocalRotations = new Set<string>()
+// 已发过的旧凭据在当前进程不再轮换。只在内存短暂保留最近的接力结果，
+// 超出上限后只保留旧键的「已发送」记录，避免长时间持有后续有效凭据。
+const localRotations = new Map<string, Promise<RefreshResult>>()
+const recentLocalKeys = new Set<string>()
+const spentRotation = Promise.resolve<RefreshResult>({ kind: 'unknown' })
+async function refreshLocally(key: string, isCurrent: () => boolean, rotate: () => Promise<RefreshResult>): Promise<RefreshResult> {
+  if (!isCurrent()) return { kind: 'superseded' }
+  if (globalThis.navigator?.onLine === false) return { kind: 'unavailable' }
+  let flight = localRotations.get(key)
+  if (!flight) {
+    flight = Promise.resolve().then(async (): Promise<RefreshResult> => {
+      if (!isCurrent()) return { kind: 'superseded' }
+      try { return await rotate() } catch { return { kind: 'unknown' } }
+    })
+    localRotations.set(key, flight)
+    void flight.then(result => {
+      if (result.kind === 'unavailable' || result.kind === 'superseded') {
+        localRotations.delete(key)
+      } else if (isPublishedResult(result)) {
+        recentLocalKeys.add(key)
+        if (recentLocalKeys.size > TRANSFER_LIMIT) {
+          const oldest = recentLocalKeys.values().next().value!
+          recentLocalKeys.delete(oldest)
+          localRotations.set(oldest, spentRotation)
+        }
+      }
+    })
+  }
+  const result = await flight
+  return isCurrent() ? result : { kind: 'superseded' }
+}
 
 export async function coordinateAuthRefresh(attempt: RefreshAttempt): Promise<RefreshResult> {
-  // 非浏览器环境不存在共享窗口，仍记录本进程内已发过的令牌。
-  if (typeof window === 'undefined') {
-    if (globalThis.navigator?.onLine === false) return { kind: 'unavailable' }
-    const key = JSON.stringify([attempt.scope, attempt.refreshToken])
-    if (pendingLocalRotations.has(key)) return { kind: 'unknown' }
-    pendingLocalRotations.add(key)
-    const result = await attempt.rotate()
-    if (isPublishedResult(result)) pendingLocalRotations.delete(key)
-    return result
-  }
+  const local = (scope: string) => refreshLocally(JSON.stringify([scope, attempt.refreshToken]), attempt.isCurrent, attempt.rotate)
+  if (typeof window === 'undefined') return local(attempt.scope)
   try {
-    if (!navigator.locks?.request || !globalThis.crypto?.subtle || typeof BroadcastChannel !== 'function') return { kind: 'unavailable' }
-    browserCoordinator ??= createAuthRefreshCoordinator({
-      withLock: async (name, run) => await navigator.locks.request(name, run),
-      storage: localStorage,
-      crypto: globalThis.crypto,
-      channel: new BroadcastChannel(PREFIX),
-      isOnline: () => navigator.onLine !== false,
-    })
-    return browserCoordinator.refresh({ ...attempt, scope: new URL(attempt.scope || '/api', window.location.href).href.replace(/\/+$/, '') })
+    const scope = new URL(attempt.scope || '/api', window.location.href).href.replace(/\/+$/, '')
+    const allowLocalLock = window.location.protocol === 'file:' || window.location.protocol === 'http:' && !window.isSecureContext
+    if (!navigator.locks?.request || !globalThis.crypto?.subtle || typeof BroadcastChannel !== 'function') {
+      return allowLocalLock ? local(scope) : { kind: 'unavailable' }
+    }
+    if (!browserCoordinator) {
+      try {
+        browserCoordinator = createAuthRefreshCoordinator({
+          withLock: async (name, run) => await navigator.locks.request(name, run),
+          storage: localStorage,
+          crypto: globalThis.crypto,
+          channel: new BroadcastChannel(PREFIX),
+          isOnline: () => navigator.onLine !== false,
+          allowLocalLock,
+        })
+      } catch (error) {
+        if (allowLocalLock && (error as Error)?.name === 'SecurityError') return local(scope)
+        throw error
+      }
+    }
+    return browserCoordinator.refresh({ ...attempt, scope })
   } catch {
     return { kind: 'unavailable' }
   }

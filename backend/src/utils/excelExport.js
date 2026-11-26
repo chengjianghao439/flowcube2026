@@ -1,17 +1,11 @@
 const ExcelJS = require('exceljs')
 const { beijingTodayYmd } = require('./backendTime')
 
-/**
- * 日期列格式化为 YYYY-MM-DD。
- * mysql2 把 DATE/DATETIME 列返回成 JS Date 对象，直接 String(d).slice(0,10) 会截出
- * "Wed Jul 01" 这种英文格式；用 toISOString 又会转成 UTC 而整体差一天（连接池是 +08:00）。
- * 所以必须按本地时区逐段取。
- */
 function ymd(value) {
   if (!value) return ''
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}(?:$|[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$)/.test(value)) return value.slice(0, 10)
   const d = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return Number.isNaN(d.getTime()) ? String(value).slice(0, 10) : beijingTodayYmd(d)
 }
 
 /**
@@ -78,8 +72,10 @@ function fillSheet(ws, columns, data, startRow = 1) {
       // 纯日期写 yyyy-mm-dd，带时分秒的写 yyyy-mm-dd hh:mm。设置 numFmt 而不是转字符串，
       // 是为了让 Excel 里仍可按日期排序与筛选（2026-09-16 修复）。
       if (cell.value instanceof Date) {
-        const d = cell.value
-        const hasTime = d.getHours() || d.getMinutes() || d.getSeconds()
+        // Excel 日期序列没有时区，用 UTC 分量承载北京时间墙钟。
+        const d = new Date(cell.value.getTime() + 8 * 3600000)
+        cell.value = d
+        const hasTime = d.getUTCHours() || d.getUTCMinutes() || d.getUTCSeconds() || d.getUTCMilliseconds()
         cell.numFmt = hasTime ? 'yyyy-mm-dd hh:mm' : 'yyyy-mm-dd'
       }
     })

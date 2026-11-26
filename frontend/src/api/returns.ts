@@ -68,13 +68,13 @@ export interface ReturnTaskActionResult {
   noPrinterCount: number
 }
 
-export const receiveReturnApi = (id: number, data: { productId: number; packages: { qty: number }[] }, requestKey?: string) =>
+export const receiveReturnApi = (id: number, data: { productId: number; packages: { qty: number }[] }, requestKey?: string, config?: AxiosRequestConfig) =>
   client.post<ReturnTaskActionResult>(`/return-tasks/${id}/receive`, data,
-    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }), skipGlobalError: true } : { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
+    { ...config, headers: { ...config?.headers, 'X-Client': 'pda', ...(requestKey ? withRequestKeyHeaders(requestKey) : {}) }, skipGlobalError: true })
 
-export const checkReturnApi = (id: number, data: { productId: number; passedQty: number; rejectedQty?: number }, requestKey?: string) =>
+export const checkReturnApi = (id: number, data: { productId: number; passedQty: number; rejectedQty?: number }, requestKey?: string, config?: AxiosRequestConfig) =>
   client.post<ReturnTaskActionResult>(`/return-tasks/${id}/check`, data,
-    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }), skipGlobalError: true } : { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
+    { ...config, headers: { ...config?.headers, 'X-Client': 'pda', ...(requestKey ? withRequestKeyHeaders(requestKey) : {}) }, skipGlobalError: true })
 
 interface ReturnPutawayContainer {
   containerId: number; barcode: string; taskId: number; warehouseId: number; status: number
@@ -91,6 +91,6 @@ export const getReturnPutawayLocationApi = (id: number, barcode: string) =>
     params: { barcode }, headers: { 'X-Client': 'pda' }, skipGlobalError: true,
   })
 
-export const putawayReturnApi = (id: number, data: { containerId: number; locationId: number }, requestKey?: string) =>
+export const putawayReturnApi = (id: number, data: { containerId: number; locationId: number }, requestKey?: string, config?: AxiosRequestConfig) =>
   client.post(`/return-tasks/${id}/putaway`, data,
-    requestKey ? { headers: withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' }), skipGlobalError: true } : { headers: { 'X-Client': 'pda' }, skipGlobalError: true })
+    { ...config, headers: { ...config?.headers, 'X-Client': 'pda', ...(requestKey ? withRequestKeyHeaders(requestKey) : {}) }, skipGlobalError: true })

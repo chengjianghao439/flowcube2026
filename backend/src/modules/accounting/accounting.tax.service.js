@@ -1,3 +1,4 @@
+const { excludeClosingReversals } = require('./accounting.report-basis')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { SOURCE_TYPES } = require('../../constants/voucherSource')
@@ -48,7 +49,7 @@ async function profitAndLoss(companyId, period) {
        COALESCE(SUM(CASE WHEN e.direction=2 THEN e.amount END),0) AS c
      FROM acct_voucher_entries e
      JOIN acct_vouchers v ON v.id=e.voucher_id
-        AND v.source_type NOT IN (?, ?)
+        AND v.source_type NOT IN (?, ?) AND ${excludeClosingReversals()}
      JOIN acct_accounts a ON a.id=e.account_id
      WHERE a.company_id=? AND a.is_leaf=1 AND a.category IN (4,5,6) AND a.deleted_at IS NULL
        AND v.company_id=? AND v.voucher_date BETWEEN ? AND ?
@@ -72,8 +73,8 @@ async function getVatReport({ companyId = 1, period }) {
   const inputTax = await accountTurnover(cid, p, '222101')
   const adjustments = await loadAdjustments(cid, p, 1)
   const adjustTotal = round2(adjustments.reduce((s, a) => s + a.amount, 0))
-  const sales = round2(salesTax.credit)      // 销项税额 = 贷方发生额
-  const input = round2(inputTax.debit)       // 进项税额 = 借方发生额
+  const sales = round2(salesTax.credit - salesTax.debit)
+  const input = round2(inputTax.debit - inputTax.credit)
   const taxDue = round2(Math.max(0, sales - input) + adjustTotal)
   return {
     period: p, companyId: cid,

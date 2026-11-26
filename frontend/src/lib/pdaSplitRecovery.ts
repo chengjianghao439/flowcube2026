@@ -1,5 +1,6 @@
 import type { SplitContainerBody, SplitContainerResult } from '@/api/inventory'
 import { createRequestKey } from '@/lib/requestKey'
+import { currentApiEndpoint } from '@/lib/apiEndpoint'
 import { getApiClientBaseURL, subscribeApiClientBaseURL } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 
@@ -20,12 +21,14 @@ export interface SplitRecoveryRecord {
 interface SplitRecoveryNotice { busy?: boolean; message?: string; notFoundAt?: number; context?: string }
 interface Snapshot { records: SplitRecoveryRecord[]; notices: Record<string, SplitRecoveryNotice>; error: string | null }
 const empty: Snapshot = { records: [], notices: {}, error: null }
-const states = new Map<number, Snapshot>()
+const states = new Map<string, Snapshot>()
 const listeners = new Set<() => void>()
 export const splitRecoveryStorageKey = (accountId: number) => `flowcube_pda_split_v1:${accountId}`
+export const splitRequestStoragePrefix = (accountId: number, endpoint: string) => 'flowcube_pda_split_v2:' + accountId + ':' + encodeURIComponent(endpoint) + ':'
+const requestStorageKey = (record: Pick<SplitRecoveryRecord, 'accountId' | 'endpoint' | 'requestKey'>) => splitRequestStoragePrefix(record.accountId, record.endpoint) + encodeURIComponent(record.requestKey)
 export const subscribeSplitRecovery = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
-export const splitRecoverySnapshot = (accountId: number | null) => accountId == null ? empty : states.get(accountId) ?? empty
-const publish = (accountId: number, next: Snapshot) => { states.set(accountId, next); listeners.forEach(fn => fn()) }
+export const splitRecoverySnapshot = (accountId: number | null, endpoint = currentApiEndpoint()) => accountId == null ? empty : states.get(splitRequestStoragePrefix(accountId, endpoint)) ?? empty
+const publish = (accountId: number, endpoint: string, next: Snapshot) => { states.set(splitRequestStoragePrefix(accountId, endpoint), next); listeners.forEach(fn => fn()) }
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
 const positive = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0
 const quantity = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0 && Math.abs(v * 100 - Math.round(v * 100)) < 1e-8
@@ -63,31 +66,44 @@ function parseRecord(value: unknown, accountId: number): SplitRecoveryRecord {
     createdAt: typeof value.createdAt === 'string' ? value.createdAt : '', body: trustedSplitBody(value.body) ? { ...value.body } : null,
   }
 }
-function diskRecords(accountId: number) {
+function legacyRecords(accountId: number): unknown[] {
   const raw = localStorage.getItem(splitRecoveryStorageKey(accountId))
   if (raw === null) return []
   const d: unknown = JSON.parse(raw)
   if (!object(d) || d.version !== 1 || !Array.isArray(d.records)) throw new Error('原拆分恢复记录无法识别，请保留记录人工核对')
-  const records = d.records.map(r => parseRecord(r, accountId))
+  return d.records
+}
+function diskRecords(accountId: number, endpoint: string) {
+  const records = legacyRecords(accountId)
+    .filter(r => !object(r) || typeof r.endpoint !== 'string' || splitEndpoint(r.endpoint) === endpoint)
+    .map(r => parseRecord(r, accountId))
+  const prefix = splitRequestStoragePrefix(accountId, endpoint)
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key?.startsWith(prefix)) continue
+    const record = parseRecord(JSON.parse(localStorage.getItem(key) ?? 'null'), accountId)
+    if (requestStorageKey(record) !== key) throw new Error('原拆分记录与存储位置不一致，请人工核对')
+    records.push(record)
+  }
   if (new Set(records.map(r => r.requestKey)).size !== records.length) throw new Error('原拆分记录身份重复，请人工核对')
   return records
 }
 const sameSplitRecord = (a: SplitRecoveryRecord, b: SplitRecoveryRecord) => JSON.stringify(a) === JSON.stringify(b)
-export function reloadSplitRecovery(accountId: number) {
-  const prev = splitRecoverySnapshot(accountId)
+export function reloadSplitRecovery(accountId: number, endpoint = currentApiEndpoint()) {
+  const prev = splitRecoverySnapshot(accountId, endpoint)
   try {
-    const records = diskRecords(accountId)
+    const records = diskRecords(accountId, endpoint)
     const notices = Object.fromEntries(Object.entries(prev.notices).filter(([key]) => records.some(r => r.requestKey === key && prev.records.some(p => sameSplitRecord(r, p)))))
-    publish(accountId, { records, notices, error: null })
-  } catch (error) { publish(accountId, { ...prev, error: error instanceof Error ? error.message : '拆分记录读取失败，请人工核对' }) }
+    publish(accountId, endpoint, { records, notices, error: null })
+  } catch (error) { publish(accountId, endpoint, { ...prev, error: error instanceof Error ? error.message : '拆分记录读取失败，请人工核对' }) }
 }
 export function ownsStoredSplit(record: SplitRecoveryRecord) {
-  try { return diskRecords(record.accountId).some(r => sameSplitRecord(r, record)) } catch { return false }
+  try { return diskRecords(record.accountId, record.endpoint).some(r => sameSplitRecord(r, record)) } catch { return false }
 }
 export function noticeSplitRecovery(record: SplitRecoveryRecord, notice: SplitRecoveryNotice) {
   if (!ownsStoredSplit(record)) return
-  const state = splitRecoverySnapshot(record.accountId)
-  publish(record.accountId, { ...state, notices: { ...state.notices, [record.requestKey]: { ...state.notices[record.requestKey], ...notice } } })
+  const state = splitRecoverySnapshot(record.accountId, record.endpoint)
+  publish(record.accountId, record.endpoint, { ...state, notices: { ...state.notices, [record.requestKey]: { ...state.notices[record.requestKey], ...notice } } })
 }
 export function claimSplitRecovery(accountId: number, source: { sourceContainerId: number; sourceBarcode: string; productId: number; warehouseId: number; remaining: number }, body: SplitContainerBody) {
   reloadSplitRecovery(accountId)
@@ -95,19 +111,34 @@ export function claimSplitRecovery(accountId: number, source: { sourceContainerI
   if (state.error || state.records.length) throw new Error(state.error || '有原拆分结果待确认，暂勿改目标或新建请求')
   if (!positive(source.sourceContainerId) || !/^I\d+$/.test(source.sourceBarcode) || !positive(source.productId) || !positive(source.warehouseId) || !quantity(source.remaining) || !trustedSplitBody(body)) throw new Error('原拆分完整参数无法确认')
   const record: SplitRecoveryRecord = { accountId, endpoint: splitEndpoint(), ...source, action: `inventory.container.split.${source.sourceContainerId}`, requestKey: createRequestKey('pda-split'), createdAt: new Date().toISOString(), body: { ...body } }
-  try { localStorage.setItem(splitRecoveryStorageKey(accountId), JSON.stringify({ version: 1, records: [record] })) }
-  catch { throw new Error('原请求保存失败，本次没有发送，请恢复本地存储后重试') }
-  // 从磁盘规范化后立即占位；同tick两个hook不能生成第二个键。
-  reloadSplitRecovery(accountId)
-  return splitRecoverySnapshot(accountId).records[0]
+  const slot = requestStorageKey(record)
+  try {
+    if (localStorage.getItem(slot) !== null) throw new Error('请求键已被占用')
+    localStorage.setItem(slot, JSON.stringify(record))
+    const saved = diskRecords(accountId, record.endpoint)
+    if (saved.length === 1 && sameSplitRecord(saved[0], parseRecord(record, accountId))) {
+      reloadSplitRecovery(accountId, record.endpoint)
+      return saved[0]
+    }
+    // 另一标签页先占位时，只撤销本次尚未发送的记录。
+    localStorage.removeItem(slot)
+  } catch { throw new Error('原请求保存失败，本次没有发送，请恢复本地存储后重试') }
+  reloadSplitRecovery(accountId, record.endpoint)
+  throw new Error('有原拆分结果待确认，暂勿改目标或新建请求')
 }
 export function removeSplitRecovery(record: SplitRecoveryRecord) {
   if (!ownsStoredSplit(record)) return false
   try {
-    const records = diskRecords(record.accountId).filter(r => !sameSplitRecord(r, record))
-    if (records.length) localStorage.setItem(splitRecoveryStorageKey(record.accountId), JSON.stringify({ version: 1, records }))
-    else localStorage.removeItem(splitRecoveryStorageKey(record.accountId))
-    reloadSplitRecovery(record.accountId); return true
+    const slot = requestStorageKey(record)
+    if (localStorage.getItem(slot) !== null) localStorage.removeItem(slot)
+    else {
+      const legacy = legacyRecords(record.accountId).filter(r => !object(r) || r.endpoint !== record.endpoint || r.requestKey !== record.requestKey)
+      const key = splitRecoveryStorageKey(record.accountId)
+      if (legacy.length) localStorage.setItem(key, JSON.stringify({ version: 1, records: legacy }))
+      else localStorage.removeItem(key)
+    }
+    reloadSplitRecovery(record.accountId, record.endpoint)
+    return !diskRecords(record.accountId, record.endpoint).some(r => sameSplitRecord(r, record))
   } catch { noticeSplitRecovery(record, { busy: false, message: '原结果已确认，但记录清理失败，请保留并再次核对' }); return false }
 }
 export function splitRetryPayload(record: SplitRecoveryRecord, now = Date.now()): SplitContainerBody | null {

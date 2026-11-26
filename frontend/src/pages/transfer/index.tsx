@@ -1,7 +1,10 @@
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
+import { TRANSFER_STATUS_OPTIONS } from './constants'
 import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { usePermission } from '@/hooks/usePermission'
-import { PERMISSIONS } from '@/lib/permission-codes'
+import { PERMISSIONS, type PermissionCode } from '@/lib/permission-codes'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
@@ -25,14 +28,19 @@ import TransferQueryDialog, { type TransferQueryValues } from './TransferQueryDi
 import type { TransferOrder } from '@/api/transfer'
 import type { TableColumn } from '@/types'
 
-const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '待出库', '3': '在途', '4': '已完成', '5': '已取消' }
-
 /** 默认筛选的天数窗口（最近一周，含今天），口径与销售/采购/收货一致 */
 const DEFAULT_RANGE_DAYS = 7
+
+const QUICK_STATUSES = [
+  { value: '', label: '全部调拨单' },
+  ...TRANSFER_STATUS_OPTIONS,
+]
 
 export default function TransferPage() {
   // 2026-09-17 验收修复（G-10）：新建调拨按钮按权限渲染
   const { can } = usePermission()
+  const permission = useRef(can)
+  permission.current = can
   const qc = useQueryClient()
   const navigate = useNavigate()
   const { addTab } = useWorkspaceStore()
@@ -91,8 +99,8 @@ export default function TransferPage() {
   currentRowsRef.current = !isError && !isLoading ? data?.list ?? [] : []
   const canActOnTransfer = (id: number | null, statuses: TransferOrder['status'][]) => currentRowsRef.current.some(row => row.id === id && statuses.includes(row.status))
 
-  const mut = (fn: () => Promise<unknown>, id: number, statuses: TransferOrder['status'][]) => {
-    if (!canActOnTransfer(id, statuses)) return
+  const mut = (fn: () => Promise<unknown>, id: number, statuses: TransferOrder['status'][], required: PermissionCode) => {
+    if (!permission.current(required) || !canActOnTransfer(id, statuses)) return
     if (id) setPendingId(id)
     fn()
       .then(() => qc.invalidateQueries({ queryKey: ['transfer'] }))
@@ -181,7 +189,7 @@ export default function TransferPage() {
     keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
     remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
     operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
+    statusFilter && !QUICK_STATUSES.some(option => option.value === statusFilter) && { key: 'status', label: `状态：${statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
     productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
@@ -211,20 +219,20 @@ export default function TransferPage() {
           primaryVariant="outline"
           onPrimaryClick={() => goToDetail(r)}
           items={[
-            ...(r.status === 1 ? [{
+            ...(can(PERMISSIONS.TRANSFER_ORDER_CONFIRM) && r.status === 1 ? [{
               label: pendingId === r.id ? '处理中…' : '确认派发',
-              onClick: () => mut(() => confirmTransferApi(r.id), r.id, [1]),
+              onClick: () => mut(() => confirmTransferApi(r.id), r.id, [1], PERMISSIONS.TRANSFER_ORDER_CONFIRM),
               disabled: pendingId === r.id,
             }] : []),
-            ...((r.status === 1 || r.status === 2) ? [{
+            ...(can(PERMISSIONS.TRANSFER_ORDER_CANCEL) && (r.status === 1 || r.status === 2) ? [{
               label: pendingId === r.id ? '处理中…' : '取消',
-              onClick: () => openConfirm(r.id, '取消调拨', '确认取消此调拨单？', () => mut(() => cancelTransferApi(r.id), r.id, [1, 2])),
+              onClick: () => openConfirm(r.id, '取消调拨', '确认取消此调拨单？', () => mut(() => cancelTransferApi(r.id), r.id, [1, 2], PERMISSIONS.TRANSFER_ORDER_CANCEL)),
               disabled: pendingId === r.id,
               destructive: true,
               separatorBefore: true,
               afterMenuClose: true,
             }] : []),
-            ...(r.status === 3 ? [{
+            ...(can(PERMISSIONS.TRANSFER_ORDER_FORCE_CLOSE) && r.status === 3 ? [{
               label: '异常了结（运输丢失）',
               onClick: () => { setForceCloseReason(''); setForceCloseState({ open: true, id: r.id }) },
               disabled: pendingId === r.id,
@@ -248,31 +256,37 @@ export default function TransferPage() {
             导出 Excel
           </Button>
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-          {can(PERMISSIONS.TRANSFER_ORDER_CREATE) && <Button onClick={goToNew}>+ 新建调拨单</Button>}
+          {can(PERMISSIONS.TRANSFER_ORDER_CREATE) && <Button onClick={goToNew}>新建调拨单</Button>}
         </>
       } />
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip">
+          <OrderStatusFilter label="调拨状态分类" value={statusFilter} options={QUICK_STATUSES}
+            onChange={status => updateParams({ status: status || null, page: 1 })} />
+        </div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={effectiveStartDate} endDate={effectiveEndDate}
+            onClear={() => updateParams({ startDate: null, endDate: null, range: 'all', page: 1 })} />
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
           ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          {(chips.length > 0 || statusFilter || effectiveStartDate || effectiveEndDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
         </div>
-      )}
+      </div>
 
       {isError ? <QueryErrorState error={error} title="调拨列表读取失败" onRetry={() => void refetch()} />
-        : <DataTable virtualized preserveFocus retainFocusedRow={confirmState.open || forceCloseState.open} columns={columns} data={data?.list || []} loading={isLoading} onRowDoubleClick={goToDetail} />}
+        : <DataTable fluid virtualized scrollLabel="调拨单表格" columnStorageKey="transfer:v1" preserveFocus retainFocusedRow={confirmState.open || forceCloseState.open} columns={columns} data={data?.list || []} loading={isLoading} onRowDoubleClick={goToDetail} />}
 
       {!isError && !isLoading && data && !data.truncated && <ListSummary total={total} unit="单" />}
 
       <ConfirmDialog
-        open={confirmState.open && canActOnTransfer(confirmState.id, [1, 2])}
+        open={can(PERMISSIONS.TRANSFER_ORDER_CANCEL) && confirmState.open && canActOnTransfer(confirmState.id, [1, 2])}
         title={confirmState.title}
         description={confirmState.description}
         variant={confirmState.title.includes('取消') ? 'destructive' : 'default'}
@@ -281,10 +295,10 @@ export default function TransferPage() {
         onCancel={closeConfirm}
       />
 
-      <AppDialog descriptionInHeader description={<>{<>
+      <AppDialog formDialog descriptionInHeader description={<>{<>
             仅用于运输途中货物丢失、长期无法送达等无法正常扫码入库的情况。确认后，在途库存条码按运输损耗核销：不退回调出仓，也不计入调入仓；调拨单直接标记为已完成，不能撤回。
           </>}</>}
-        open={forceCloseState.open && canActOnTransfer(forceCloseState.id, [3])}
+        open={can(PERMISSIONS.TRANSFER_ORDER_FORCE_CLOSE) && forceCloseState.open && canActOnTransfer(forceCloseState.id, [3])}
         onOpenChange={(v) => { if (!v && pendingId !== forceCloseState.id) setForceCloseState({ open: false, id: null }) }}
         dialogId="transfer-force-close-dialog"
         resizable={false}
@@ -303,7 +317,7 @@ export default function TransferPage() {
               disabled={pendingId === forceCloseState.id || !forceCloseReason.trim()}
               onClick={() => {
                 if (!forceCloseState.id || !canActOnTransfer(forceCloseState.id, [3])) return
-                mut(() => forceCloseTransferApi(forceCloseState.id!, forceCloseReason.trim()), forceCloseState.id, [3])
+                mut(() => forceCloseTransferApi(forceCloseState.id!, forceCloseReason.trim()), forceCloseState.id, [3], PERMISSIONS.TRANSFER_ORDER_FORCE_CLOSE)
                 setForceCloseState({ open: false, id: null })
               }}
             >
@@ -312,7 +326,7 @@ export default function TransferPage() {
           </div>
         }
       >
-        <div className="space-y-4 px-1 py-1 text-sm leading-6">
+        <div className="space-y-4 text-sm leading-6">
 
           <LimitedTextarea
             maxLength={200}

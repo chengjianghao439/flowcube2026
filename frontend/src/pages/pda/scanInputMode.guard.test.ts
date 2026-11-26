@@ -7,30 +7,38 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from 'typescript'
 import { expect, test } from 'vitest'
 
 const pdaDir = dirname(fileURLToPath(import.meta.url))                  // src/pages/pda
 const pdaComponentsDir = join(pdaDir, '..', '..', 'components', 'pda')  // src/components/pda
 
-function sources(dir: string, suffix = '.tsx') {
-  return readdirSync(dir)
-    .filter(name => name.endsWith(suffix) && !name.includes('.test.'))
-    .map(name => ({ name, code: readFileSync(join(dir, name), 'utf8') }))
+function sources(dir: string): { name: string; hasFocus: boolean; autoFocus: boolean }[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+    const file = join(dir, entry.name)
+    if (entry.isDirectory()) return sources(file)
+    if (!/\.tsx?$/.test(entry.name) || entry.name.includes('.test.')) return []
+    const tree = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true)
+    let hasFocus = false, autoFocus = false
+    function inspect(node: ts.Node) {
+      if (ts.isJsxAttribute(node) && node.name.getText(tree) === 'autoFocus') autoFocus = true
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'focus') hasFocus = true
+      ts.forEachChild(node, inspect)
+    }
+    inspect(tree)
+    return [{ name: file, hasFocus, autoFocus }]
+  })
 }
 
 test('PDA 页面不自动聚焦输入框：除登录页外不允许 autoFocus', () => {
-  // 登录页是唯一例外：用户名框自动聚焦只为省一次点击，登录前没有扫码作业。
-  const offenders = sources(pdaDir).filter(f => f.name !== 'login.tsx' && f.code.includes('autoFocus'))
+  const offenders = sources(pdaDir).filter(f => f.name !== join(pdaDir, 'login.tsx') && f.autoFocus)
   expect(offenders.map(f => f.name)).toEqual([])
 })
 
 test('PDA 页面与组件不允许主动 focus 输入框，只有手动输入按钮可以', () => {
-  const pageOffenders = sources(pdaDir, '.ts').filter(f => f.code.includes('.focus('))
-  expect(pageOffenders.map(f => f.name)).toEqual([])
-
-  const componentOffenders = sources(pdaComponentsDir)
-    .filter(f => f.name !== 'PdaScanner.tsx' && f.code.includes('.focus('))
-  expect(componentOffenders.map(f => f.name)).toEqual([])
+  const scanner = join(pdaComponentsDir, 'PdaScanner.tsx')
+  const offenders = [...sources(pdaDir), ...sources(pdaComponentsDir)].filter(f => f.name !== scanner && f.hasFocus)
+  expect(offenders.map(f => f.name)).toEqual([])
 })
 
 test('PdaScanner 只在点「手动输入」后聚焦，不提供自动聚焦入口', () => {

@@ -1,3 +1,4 @@
+import { RETURN_STATUS_OPTIONS } from './constants'
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
 import { useEffect, useId, useState } from 'react'
 import { isReversedDateRange } from '@/lib/dateRange'
@@ -95,10 +96,7 @@ export default function ReturnQueryDialog({ open, type, initial, resetValues, on
               <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">全部状态</SelectItem>
-                <SelectItem value="1">草稿</SelectItem>
-                <SelectItem value="2">已确认</SelectItem>
-                <SelectItem value="3">已执行</SelectItem>
-                <SelectItem value="4">已取消</SelectItem>
+                {RETURN_STATUS_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </label>

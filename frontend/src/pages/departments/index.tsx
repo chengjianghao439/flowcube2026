@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
@@ -70,7 +70,7 @@ export default function DepartmentsPage() {
   const savingRef = useRef(false)
   const deletingRef = useRef(false)
   const [deleteTarget, setDeleteTarget] = useState<Department | null>(null)
-  const [search, setSearch] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [keyword, setKeyword] = useState('')
 
   // 展开状态：首次有数据时全部展开（还原原树全展开行为），此后保留用户手动收起/展开
@@ -156,10 +156,6 @@ export default function DepartmentsPage() {
       else next.add(id)
       return next
     })
-  }
-
-  function handleSearch() {
-    setKeyword(search)
   }
 
   function handleSave() {
@@ -297,49 +293,39 @@ export default function DepartmentsPage() {
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="desktop-record-page space-y-4">
       <PageHeader
         title="部门管理"
-        description="审批流可按部门负责人匹配审批人"
-        actions={canCreate ? <Button onClick={() => openCreate()}>新增部门</Button> : null}
+        description="审批流可按部门负责人匹配审批人。"
+        actions={<>
+          <div role="group" aria-label="部门层级显示" className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setExpanded(new Set(departments.map((d) => d.id)))}
+              disabled={!!kw}
+            >
+              全部展开
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setExpanded(new Set())} disabled={!!kw}>
+              全部收起
+            </Button>
+          </div>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          {canCreate && <Button onClick={() => openCreate()}>新增部门</Button>}
+        </>}
       />
 
-
-      <FilterCard>
-        <Input
-          aria-label="搜索部门名称"
-          placeholder="搜索部门名称"
-          value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && handleSearch()}
-          className="h-9 w-60"
-        />
-        <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
-        {keyword && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>
-            重置
-          </Button>
-        )}
-        <div role="group" aria-label="部门层级显示" className="ml-auto flex items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => setExpanded(new Set(departments.map((d) => d.id)))}
-            disabled={!!kw}
-          >
-            <ChevronsUpDown />全部展开
-          </Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => setExpanded(new Set())} disabled={!!kw}>
-            <ChevronsDownUp />全部收起
-          </Button>
-        </div>
-      </FilterCard>
+      <KeywordQueryChips keyword={keyword} onClear={() => setKeyword('')} />
+      <KeywordQueryDialog open={queryOpen} dialogId="departments-query" title="查询部门"
+        label="部门名称" placeholder="搜索部门名称" initial={keyword}
+        onClose={() => setQueryOpen(false)} onApply={setKeyword} />
 
       {isError ? (
         <QueryErrorState error={error} onRetry={refetch} />
       ) : (
         <DataTable
+          fluid virtualized scrollLabel="部门表格" columnStorageKey="departments:v1"
           columns={columns}
           data={rows}
           loading={isLoading}

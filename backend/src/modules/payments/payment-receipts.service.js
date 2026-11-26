@@ -75,19 +75,19 @@ async function expandStatementAllocation(conn, statementId, amount, receipt, exp
   cashCents(amount, { label: '核销金额' })
   for (const field of ['total_amount', 'settled_amount', 'balance']) storedCashCents(st[field], `原对账单${field}`)
   const amountUnits = moneyUnits(amount)
-  if (moneyUnits(st.balance) <= 0n) throw new AppError(`${st.statement_no} 已核销完毕`, 400)
-  if (amountUnits > moneyUnits(st.balance)) {
-    throw new AppError(`核销 ¥${amount.toFixed(2)} 超出 ${st.statement_no} 未核销余额 ¥${Number(st.balance).toFixed(2)}`, 400)
-  }
-
   const items = lockedItems ?? (await conn.query(
     `SELECT r.id, r.total_amount, r.paid_amount, r.balance
        FROM reconciliation_statement_items i
        JOIN payment_records r ON r.id = i.record_id
       WHERE i.statement_id = ? AND r.status <> 3
-      ORDER BY r.created_at ASC, r.id ASC`,
+      ORDER BY r.created_at ASC, r.id ASC FOR SHARE`,
     [statementId],
   ))[0]
+  const liveBalance = items.reduce((sum, row) => sum + moneyUnits(row.balance), 0n)
+  if (liveBalance <= 0n) throw new AppError(`${st.statement_no} 已核销完毕`, 400)
+  if (amountUnits > liveBalance) {
+    throw new AppError(`核销 ¥${amount.toFixed(2)} 超出 ${st.statement_no} 未核销余额 ¥${moneyNumber(liveBalance).toFixed(2)}`, 400)
+  }
   const parts = []
   let left = amountUnits
   for (const it of items) {
@@ -128,16 +128,35 @@ function resolveReceiptStatus(amount, settled) {
 async function precheckAllocations(allocations, { type, partyId = null, partyName = null } = {}) {
   allocations.forEach(a => cashCents(a.amount, { label: '核销金额' }))
   const label = Number(type) === 1 ? '付款单' : '收款单'
+  const statementIds = [...new Set(allocations.filter(a => a.statementId).map(a => a.statementId))]
+  const recordIds = [...new Set(allocations.filter(a => !a.statementId).map(a => a.recordId))]
+  const [statements] = statementIds.length ? await pool.query(
+    'SELECT id, statement_no, type, party_name, status, total_amount, settled_amount, balance FROM reconciliation_statements WHERE id IN (?) AND deleted_at IS NULL',
+    [statementIds],
+  ) : [[]]
+  const [members] = statementIds.length ? await pool.query(
+    'SELECT i.statement_id, r.total_amount,r.paid_amount,r.balance,r.status FROM reconciliation_statement_items i JOIN payment_records r ON r.id=i.record_id WHERE i.statement_id IN (?)',
+    [statementIds],
+  ) : [[]]
+  const [records] = recordIds.length ? await pool.query(
+    'SELECT id, order_no, type, party_name, status, confirm_status, total_amount, paid_amount, balance FROM payment_records WHERE id IN (?)', [recordIds],
+  ) : [[]]
+  const statementById = new Map(statements.map(row => [Number(row.id), row]))
+  const recordById = new Map(records.map(row => [Number(row.id), row]))
+  const membersByStatement = new Map()
+  for (const member of members) {
+    const id = Number(member.statement_id)
+    if (!membersByStatement.has(id)) membersByStatement.set(id, [])
+    membersByStatement.get(id).push(member)
+  }
   for (const alloc of allocations) {
     if (alloc.statementId) {
-      const [[st]] = await pool.query(
-        'SELECT statement_no, type, party_name, status, total_amount, settled_amount, balance FROM reconciliation_statements WHERE id = ? AND deleted_at IS NULL',
-        [alloc.statementId],
-      )
+      const st = statementById.get(Number(alloc.statementId))
       if (!st) throw new AppError(`对账单 ${alloc.statementId} 不存在`, 404)
       for (const field of ['total_amount', 'settled_amount', 'balance']) storedCashCents(st[field], `原对账单${field}`)
-      const [members] = await pool.query('SELECT r.total_amount,r.paid_amount,r.balance FROM reconciliation_statement_items i JOIN payment_records r ON r.id=i.record_id WHERE i.statement_id=?', [alloc.statementId])
-      for (const member of members) for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(member[field], `原账款${field}`)
+      for (const member of membersByStatement.get(Number(alloc.statementId)) || []) {
+        for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(member[field], `原账款${field}`)
+      }
       if (Number(st.type) !== Number(type)) {
         throw new AppError(`${st.statement_no} 与本${label}类型不符`, 400, 'FINANCE_BACKFILL_NOT_APPLICABLE')
       }
@@ -150,21 +169,19 @@ async function precheckAllocations(allocations, { type, partyId = null, partyNam
       if (Number(st.status) === statementSvc.ST.DRAFT) {
         throw new AppError(`${st.statement_no} 还是草稿，请先确认后再申请补录核销`, 409, 'FINANCE_BACKFILL_NOT_APPLICABLE')
       }
-      if (moneyUnits(st.balance) <= 0n) {
+      const liveBalance = (membersByStatement.get(Number(alloc.statementId)) || []).reduce((sum, row) => Number(row.status) === 3 ? sum : sum + moneyUnits(row.balance), 0n)
+      if (liveBalance <= 0n) {
         throw new AppError(`${st.statement_no} 已核销完毕，无需再申请补录`, 400, 'FINANCE_BACKFILL_NOT_APPLICABLE')
       }
-      if (moneyUnits(alloc.amount) > moneyUnits(st.balance)) {
+      if (moneyUnits(alloc.amount) > liveBalance) {
         throw new AppError(
-          `核销 ¥${Number(alloc.amount).toFixed(2)} 超出 ${st.statement_no} 未核销余额 ¥${Number(st.balance).toFixed(2)}`,
+          `核销 ¥${Number(alloc.amount).toFixed(2)} 超出 ${st.statement_no} 未核销余额 ¥${moneyNumber(liveBalance).toFixed(2)}`,
           400, 'FINANCE_BACKFILL_NOT_APPLICABLE',
         )
       }
       continue
     }
-    const [[record]] = await pool.query(
-      'SELECT order_no, type, party_name, status, confirm_status, total_amount, paid_amount, balance FROM payment_records WHERE id = ?',
-      [alloc.recordId],
-    )
+    const record = recordById.get(Number(alloc.recordId))
     if (!record) throw new AppError(`账款记录 ${alloc.recordId} 不存在`, 404)
     for (const field of ['total_amount', 'paid_amount', 'balance']) storedCashCents(record[field], `原账款${field}`)
     if (Number(record.type) !== Number(type)) {
@@ -279,6 +296,25 @@ async function applyAllocations(conn, receipt, allocations, operator, expectedTa
   const touchedStatements = [...new Set([...explicitStatementIds, ...extraStatementIds])].sort((a, b) => a - b)
   for (const sid of touchedStatements) {
     await conn.query('SELECT id FROM reconciliation_statements WHERE id=? FOR UPDATE', [sid])
+  }
+
+  // 对账单头已锁。将所有受刷新影响的成员与直核账款合并，按主键升序一次取得锁。
+  const [members] = touchedStatements.length ? await conn.query(
+    'SELECT record_id FROM reconciliation_statement_items WHERE statement_id IN (?) ORDER BY statement_id,record_id FOR SHARE',
+    [touchedStatements],
+  ) : [[]]
+  const recordIds = [...new Set([...directRecordIds, ...members.map(row => Number(row.record_id))])].sort((a, b) => a - b)
+  if (recordIds.length) await conn.query(
+    'SELECT id FROM payment_records FORCE INDEX (PRIMARY) WHERE id IN (?) ORDER BY id FOR UPDATE', [recordIds],
+  )
+  if (directRecordIds.length) {
+    const [current] = await conn.query(
+      'SELECT statement_id FROM reconciliation_statement_items WHERE record_id IN (?) ORDER BY record_id FOR SHARE', [directRecordIds],
+    )
+    const currentIds = new Set(current.map(row => Number(row.statement_id)))
+    if (currentIds.size !== extraStatementIds.length || extraStatementIds.some(id => !currentIds.has(id))) {
+      throw new AppError('账款所属对账单已变化，请重新核对后核销', 409, 'RECEIPT_STATEMENT_CHANGED')
+    }
   }
 
   // 展开对账单类分配成账款级分配：核销的钱最终必须落到 payment_records 上，账款余额才是唯一事实源，
@@ -457,7 +493,10 @@ async function create({ type, partyId, partyName, amount, paymentDate, method, a
   const own = !sharedConn
   const conn = sharedConn || await pool.getConnection()
   try {
-    if (own) await conn.beginTransaction()
+    if (own) {
+      await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
+      await conn.beginTransaction()
+    }
     const reqState = await beginCreationOperationRequest(conn, {
       requestKey,
       action: 'payment.receipt.create',
@@ -626,7 +665,10 @@ async function settle(receiptId, { allocations = [], expectedAllocation }, opera
   const own = !sharedConn
   const conn = sharedConn || await pool.getConnection()
   try {
-    if (own) await conn.beginTransaction()
+    if (own) {
+      await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
+      await conn.beginTransaction()
+    }
     const reqState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'payment.receipt.settle',

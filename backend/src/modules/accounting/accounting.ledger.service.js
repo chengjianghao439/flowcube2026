@@ -12,6 +12,7 @@
  *
  * 余额方向：资产/成本/费用(balance_dir=1)期末=借−贷；负债/权益/收入(balance_dir=2)期末=贷−借。
  */
+const { categoryBalance, excludeClosingReversals } = require('./accounting.report-basis')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { SOURCE_TYPES } = require('../../constants/voucherSource')
@@ -210,7 +211,7 @@ async function categoryNet(start, end, companyId = 1) {
       a.code, a.name
     FROM acct_accounts a
     LEFT JOIN acct_voucher_entries e ON e.account_id=a.id
-    LEFT JOIN acct_vouchers v ON v.id=e.voucher_id AND v.source_type NOT IN (?, ?)
+    LEFT JOIN acct_vouchers v ON v.id=e.voucher_id AND v.source_type NOT IN (?, ?) AND ${excludeClosingReversals()}
     WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf=1
     GROUP BY a.id, a.category, a.balance_dir, a.code, a.name`,
     [start, end, start, end, SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y, companyId])
@@ -225,7 +226,7 @@ async function categoryNet(start, end, companyId = 1) {
 async function getIncomeStatement({ period, companyId = 1 }) {
   const { start, end } = periodRange(period)
   const rows = await categoryNet(start, end, companyId)
-  const net = (code) => { const r = rows.find(x => x.code === code); if (!r) return 0; return round2((r.balance_dir === 1 ? (r.d - r.c) : (r.c - r.d))) }
+  const net = (code) => { const r = rows.find(x => x.code === code); if (!r) return 0; return categoryBalance(r) }
   // 收入类(贷方净额)取正，费用/成本类(借方净额)取正
   const revenue = net('6001')
   const cost = net('6401')
@@ -235,7 +236,7 @@ async function getIncomeStatement({ period, companyId = 1 }) {
   // 全类别净额（含新增科目如 6051 其他业务收入）：收入=贷−借，费用/成本=借−贷
   let totalRevenue = 0, totalExpense = 0
   for (const r of rows) {
-    const n = round2(r.balance_dir === 1 ? (r.d - r.c) : (r.c - r.d))
+    const n = categoryBalance(r)
     if (Number(r.category) === 5) totalRevenue += n
     else if (Number(r.category) === 4 || Number(r.category) === 6) totalExpense += n
   }
@@ -270,15 +271,13 @@ async function getBalanceSheet({ period, companyId = 1 }) {
     WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf=1
     GROUP BY a.id, a.code, a.name, a.category, a.balance_dir`, [end, end, companyId])
 
-  const bal = (r) => round2(r.balance_dir === 1 ? (r.d - r.c) : (r.c - r.d))
   const assets = [], liabilities = [], equity = []
   let assetTotal = 0, liabTotal = 0, equityTotal = 0, revenueSum = 0, expenseSum = 0
   for (const r of rows) {
-    const b = bal(r)
+    const b = categoryBalance(r)
     if (r.category === 1) {
-      const assetAmount = round2(Number(r.d) - Number(r.c))
-      if (assetAmount) assets.push({ code: r.code, name: r.name, amount: assetAmount })
-      assetTotal += assetAmount
+      if (b) assets.push({ code: r.code, name: r.name, amount: b })
+      assetTotal += b
     }
     else if (r.category === 2) { if (b) liabilities.push({ code: r.code, name: r.name, amount: b }); liabTotal += b }
     else if (r.category === 3) { if (b) equity.push({ code: r.code, name: r.name, amount: b }); equityTotal += b }

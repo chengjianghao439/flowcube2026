@@ -417,7 +417,6 @@ async function finishPicking(id, scopeWarehouseIds = null) {
     if (Number(wave.status) !== WAVE_STATUS_CODE.PICKING) {
       throw new AppError('只有"拣货中"状态可以完成拣货', 409)
     }
-    await refreshWavePickedFromTasks(conn, id)
     const [waveTasks] = await conn.query(
       `SELECT wt.id AS task_id, wt.status
        FROM picking_wave_tasks pwt
@@ -425,6 +424,7 @@ async function finishPicking(id, scopeWarehouseIds = null) {
        WHERE pwt.wave_id = ? ORDER BY wt.id ASC FOR UPDATE`,
       [id],
     )
+    await refreshWavePickedFromTasks(conn, id)
     for (const t of waveTasks) {
       // 同 finish()：成员任务可能已被单独取消，跳过已终结的，不阻塞其余任务的拣货完成判定。
       if (!WT_STATUS_ACTIVE.includes(Number(t.status))) continue

@@ -19,7 +19,7 @@ const financeRelease = /账(?:款)?(?:已经|已)?(?:对上|对齐)了/;
 const releaseReport = /(?:卡点|异常|挂起)(?:都|已经|已|算是)?(?:解(?:除|决|了)|好了|清了)|已补(?:货|齐)|货(?:都|已经|已)?(?:到了|补好了|补齐了)|授信(?:已经|已)?(?:批了|过了|通过|批准)|改单(?:已经|已)?(?:好了|完了|处理完|解除)/;
 const followupException = /先(?:处理|办)哪(?:个|项|一项|一步)|(?:重查|再查|重新核对).{0,8}(?:异常|卡点)|(?:异常|卡点)(?:还有|还剩|怎么样|先|怎么处理)|账(?:款)?(?:差异|对不上)|怎么排|谁先(?:办|处理)|哪个先(?:办|处理)|先找谁|按什么顺序/;
 const continueAfterRelease = /(?:接着|继续|续办)(?:处理|办(?:理)?|占库|补占)?/;
-const handoffAction = /^(?:(?:那|就|那就|现在|我|来|帮我|替我|请|接着|继续|把|给这单|给这张单|这张单|这单|原单)\s*)*(?:确认|提交|发货|出库|拣货|分拣|复核|打包|收款|到账|登记|核销|付款|审批|取消|作废|转派|认领)(?:[^。！？!?]{0,35})[。！？!?]*$/;
+const handoffAction = /^(?:确认|提交|发货|出库|拣货|分拣|复核|打包|收款|到账|登记|核销|付款|审批|取消|作废|转派|认领)(?:[^。！？!?]{0,35})[。！？!?]*$/;
 const explicitOther = /(?:采购|退货|调拨|盘点|收货)(?:单号|单据|单|任务)|(?<![a-z\d_-])(?:PC|PR|SR|TR|SC|RC|WT)[-_]?\d{6,}(?![a-z\d_-])/i;
 export const previousOrderMention = /上一(?:张|单|条)|上张单|前一张|刚才那(?:张|单)|之前那(?:张|单)/;
 const orderPattern = /(?<![a-z\d_-])SL[-_]?\d{6,28}(?![a-z\d_-])/gi;
@@ -44,7 +44,15 @@ export function releaseSupplementAnswer(text, pending) {
   return amount ? { ...request, requested: { line: pending.requested?.line, hasAmount: true, qty: Number(amount[1]), unit: amount[2] } } : null;
 }
 
+function isHandoffAction(text) {
+  const prefix = /(?:那|就|现在|我|来|帮我|替我|请|接着|继续|把|给这单|给这张单|这张单|这单|原单)\s*/y;
+  let offset = 0;
+  while (prefix.exec(text)) offset = prefix.lastIndex;
+  return handoffAction.test(text.slice(offset));
+}
+
 export function handoffRequest(text, contextual = false) {
+  if (typeof text !== 'string' || text.length > 4000) return null;
   const handoff = handoffWord.test(text);
   const numbers = [...new Set([...(text.match(orderPattern) ?? []),
     ...Array.from(text.matchAll(namedNumber), match => match[1])].map(no => no.toUpperCase()))];
@@ -84,7 +92,8 @@ export function handoffRequest(text, contextual = false) {
   const explicit = !otherDocument && (batchRead || (handoff && (numbers.length > 0 || handoffSubject.test(text) || standaloneHandoff.test(text))) || exception);
   const bare = /^(?:销售单号\s*(?:是|为|[：:])?\s*)?[「『“"]?[a-z][a-z\d_-]{0,18}?\d{6,28}[」』”"]?[。！？!?]*$/i.test(text);
   const deferred = reserveDeferred.test(text);
-  if (!explicit && !(contextual && (bare || followupRead.test(text) || reserveFollowup.test(text) || handoffAction.test(text) || deferred))) return null;
+  const action = isHandoffAction(text);
+  if (!explicit && !(contextual && (bare || followupRead.test(text) || reserveFollowup.test(text) || action || deferred))) return null;
   if (numbers.length > 1) return { multiple: true };
   const no = numbers[0];
   const reportedFinance = /账(?:款)?(?:差异|对不上|没对上)/.test(text);
@@ -95,7 +104,7 @@ export function handoffRequest(text, contextual = false) {
   if (contextual && reserveFollowup.test(text)) return { action: 'reserve', no };
   const reserveRequest = explicit && /(?:接着|继续|试算|准备|试占)(?:一下)?(?:给(?:这张|这|本)单)?\s*(?:占库|补占|预占)/.test(text);
   if (reserveRequest && !deferred && !/确认|提交|发货/.test(text)) return { action: 'reserve', no };
-  if (handoffAction.test(text) || (explicit && /(?:我来|帮我|替我|直接|接着|继续)[^，,。]{0,6}(?:确认|发货|出库|核销|登记收款|作废|取消|转派|认领)/.test(text))) {
+  if (action || (explicit && /(?:我来|帮我|替我|直接|接着|继续)[^，,。]{0,6}(?:确认|发货|出库|核销|登记收款|作废|取消|转派|认领)/.test(text))) {
     return { action: 'guide', no };
   }
   return { action: 'read', no, reportedFinance, financeFocus: reportedFinance || financialRelease,

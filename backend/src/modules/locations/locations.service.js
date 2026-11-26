@@ -116,10 +116,21 @@ async function findAllByWarehouseId(warehouseId, scopeWarehouseIds = null) {
   return rows.map(formatRow)
 }
 
+function validateWarehouse(warehouseId, scopeWarehouseIds) {
+  if (!Number.isSafeInteger(Number(warehouseId)) || Number(warehouseId) <= 0) throw new AppError('请选择有效仓库', 400)
+  assertInScope(scopeWarehouseIds, warehouseId, '库位')
+}
+
+async function lockActiveWarehouse(conn, id) {
+  const [[warehouse]] = await conn.query(
+    'SELECT id FROM inventory_warehouses WHERE id=? AND deleted_at IS NULL AND is_active=1 FOR SHARE', [id],
+  )
+  if (!warehouse) throw new AppError('目标仓库不存在或已停用', 400)
+}
+
 async function create(data, scopeWarehouseIds = null) {
   const { warehouseId, zone, aisle, rack, level, position, name, remark } = data
-  if (!warehouseId) throw new AppError('仓库不能为空', 400)
-  assertInScope(scopeWarehouseIds, warehouseId, '库位')
+  validateWarehouse(warehouseId, scopeWarehouseIds)
 
   const code = generateCode({ zone, aisle, rack, level, position })
   if (!code) throw new AppError('库位编码字段不完整', 400)
@@ -140,6 +151,7 @@ async function create(data, scopeWarehouseIds = null) {
   let insertId
   try {
     await conn.beginTransaction()
+    await lockActiveWarehouse(conn, warehouseId)
     const [result] = await conn.query(
       `INSERT INTO warehouse_locations
          (warehouse_id, code, zone, aisle, rack, level, position, name, remark)
@@ -159,27 +171,36 @@ async function create(data, scopeWarehouseIds = null) {
 }
 
 async function update(id, data, scopeWarehouseIds = null) {
-  await findById(id, scopeWarehouseIds)
   const { warehouseId, zone, aisle, rack, level, position, name, remark, status } = data
-  assertInScope(scopeWarehouseIds, warehouseId, '库位')
-
+  validateWarehouse(warehouseId, scopeWarehouseIds)
   const code = generateCode({ zone, aisle, rack, level, position })
   if (!code) throw new AppError('库位编码字段不完整', 400)
-
-  // 检查同仓库编码唯一（排除自身）
-  const [[exists]] = await pool.query(
-    'SELECT id FROM warehouse_locations WHERE warehouse_id = ? AND code = ? AND id <> ? AND deleted_at IS NULL',
-    [warehouseId, code, id],
-  )
-  if (exists) throw new AppError(`库位编码 ${code} 已存在`, 400)
-
-  await pool.query(
-    `UPDATE warehouse_locations
-     SET warehouse_id=?, code=?, zone=?, aisle=?, rack=?, level=?, position=?, name=?, remark=?, status=?
-     WHERE id=? AND deleted_at IS NULL`,
-    [warehouseId, code, zone, pad(aisle), pad(rack), pad(level), pad(position), name || '', remark || '', status ?? 1, id],
-  )
-  return findById(id)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[current]] = await conn.query(
+      'SELECT warehouse_id FROM warehouse_locations WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id],
+    )
+    if (!current) throw new AppError('库位不存在', 404)
+    assertInScope(scopeWarehouseIds, current.warehouse_id, '库位')
+    await lockActiveWarehouse(conn, warehouseId)
+    if (Number(current.warehouse_id) !== Number(warehouseId)) {
+      // 上架/移库提交前持有库位行锁，首次快照在取得库位锁之后建立。
+      const [[reference]] = await conn.query('SELECT id FROM inventory_containers WHERE location_id=? LIMIT 1', [id])
+      if (reference) throw new AppError('库位仍被库存条码引用，不能更换仓库', 409, 'LOCATION_HAS_CONTAINERS')
+    }
+    await conn.query(
+      `UPDATE warehouse_locations SET warehouse_id=?, code=?, zone=?, aisle=?, rack=?, level=?, position=?, name=?, remark=?, status=?
+       WHERE id=? AND deleted_at IS NULL`,
+      [warehouseId, code, zone, pad(aisle), pad(rack), pad(level), pad(position), name || '', remark || '', status ?? 1, id],
+    )
+    await conn.commit()
+  } catch (error) {
+    await conn.rollback()
+    if (error.code === 'ER_DUP_ENTRY') throw new AppError(`库位编码 ${code} 已存在`, 400)
+    throw error
+  } finally { conn.release() }
+  return findById(id, scopeWarehouseIds)
 }
 
 async function softDelete(id, scopeWarehouseIds = null) {

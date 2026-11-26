@@ -758,6 +758,8 @@ async function reprintBarcodeRecord({ category, recordId, createdBy = null, scop
   if (!Number.isSafeInteger(id) || id <= 0) throw new AppError('条码记录不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   const conn = await pool.getConnection()
   try {
+    // 渲染及回执读取应看到来源锁取得后的状态。
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
     let source
     // 每次请求先锁定并核当前来源范围。箱贴保持任务→箱的既有锁序；不引入库存维度锁。

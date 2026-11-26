@@ -17,31 +17,61 @@ import zipfile
 MAX_METADATA = 1024 * 1024
 
 
-def accept_relay_archive(destination, expected_sha, expected_bytes):
-    """受信操作端可中转同一 CI 归档；仍以 runner 计算的字节数和摘要验收。"""
-    relay = Path(str(destination) + '.relay')
+def desktop_relay_stem(run, attempt, entry):
+    if not all(re.fullmatch(r'[1-9][0-9]*', n) for n in (run, attempt)) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*\.exe', entry):
+        raise ValueError('invalid desktop relay identity')
+    directory = Path.home() / '.flowcube-release-relay'
+    directory.mkdir(mode=0o700, exist_ok=True)
+    info = directory.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+        raise ValueError('invalid desktop relay directory')
+    return directory / ('desktop-' + run + '-' + attempt + '-' + entry)
+
+
+def verify_relay(source, expected_sha, expected_bytes, output=None):
+    digest = hashlib.sha256()
+    size = 0
+    for chunk in iter(lambda: source.read(1024 * 1024), b''):
+        size += len(chunk)
+        if size > expected_bytes:
+            raise ValueError('invalid relay archive size')
+        digest.update(chunk)
+        if output is not None:
+            output.write(chunk)
+    if size != expected_bytes or digest.hexdigest() != expected_sha:
+        raise ValueError('relay SHA256 mismatch')
+
+
+def accept_relay_archive(destination, expected_sha, expected_bytes, relay_stem=None):
+    relay = Path(str(relay_stem or destination) + '.relay')
     if not relay.exists():
         return False
     if relay.is_symlink() or not relay.is_file() or relay.stat().st_size != expected_bytes:
         raise ValueError('invalid relay archive')
-    digest = hashlib.sha256()
-    with relay.open('rb') as src:
-        for chunk in iter(lambda: src.read(1024 * 1024), b''):
-            digest.update(chunk)
-    if digest.hexdigest() != expected_sha:
-        raise ValueError('relay SHA256 mismatch')
-    os.replace(relay, destination)
+    if relay_stem is None:
+        # Image archives can be large. The adjacent file is on the same filesystem.
+        with relay.open('rb') as source:
+            verify_relay(source, expected_sha, expected_bytes)
+        os.replace(relay, destination)
+    else:
+        # The login home and the publisher's private directory can be on different disks.
+        with tempfile.TemporaryDirectory(prefix='.relay-', dir=Path(destination).parent) as directory:
+            checked = Path(directory) / 'verified'
+            with relay.open('rb') as source, checked.open('xb') as output:
+                verify_relay(source, expected_sha, expected_bytes, output)
+            os.replace(checked, destination)
+        relay.unlink()
     print('==> 中转归档字节数与 SHA256 校验通过')
     return True
 
 
-def wait_for_relay(destination, expected_sha, expected_bytes, timeout=900):
+def wait_for_relay(destination, expected_sha, expected_bytes, timeout=900, relay_stem=None):
     # marker 只申请有界等待，绝不替代归档摘要校验；路径绑定本轮 run/attempt。
-    if not Path(str(destination) + '.relay.pending').is_file():
+    if not Path(str(relay_stem or destination) + '.relay.pending').is_file():
         return False
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        if accept_relay_archive(destination, expected_sha, expected_bytes):
+        if accept_relay_archive(destination, expected_sha, expected_bytes, relay_stem):
             return True
         time.sleep(1)
     raise RuntimeError('relay timed out')
@@ -151,17 +181,18 @@ def unpack_archive(zip_path, destination, expected_sha, expected_bytes, expected
 
 def main():
     destination, expected_sha, size_text = sys.argv[1:4]
-    expected_entry = sys.argv[4] if len(sys.argv) == 5 else 'flowcube-images.tar.gz'
-    if len(sys.argv) not in (4, 5) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', expected_entry):
+    expected_entry = sys.argv[4] if len(sys.argv) >= 5 else 'flowcube-images.tar.gz'
+    if len(sys.argv) not in (4, 5, 7) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', expected_entry):
         raise ValueError('invalid artifact entry')
     size = int(size_text)
     if not Path(destination).is_absolute() or not re.fullmatch('[a-f0-9]{64}', expected_sha) or not 0 < size <= 2 * 1024**3:
         raise ValueError('invalid artifact arguments')
+    relay_stem = desktop_relay_stem(sys.argv[5], sys.argv[6], expected_entry) if len(sys.argv) == 7 else None
     signed_url = sys.stdin.readline(16384).strip()
     parsed = urlsplit(signed_url)
     if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or re.search(r'[\s"\\]', signed_url):
         raise ValueError('invalid signed URL')
-    if accept_relay_archive(destination, expected_sha, size) or wait_for_relay(destination, expected_sha, size):
+    if accept_relay_archive(destination, expected_sha, size, relay_stem) or wait_for_relay(destination, expected_sha, size, relay_stem=relay_stem):
         return
     # 不将签名地址放进 ps 可见的命令参数、磁盘文件或 curl 错误日志。
     with tempfile.TemporaryDirectory(prefix=Path(destination).name + '.https-', dir=str(Path(destination).parent)) as temp:
@@ -177,7 +208,7 @@ def main():
             # 不打印异常对象、签名 URL 或 curl stderr。
             print('HTTPS artifact receive failed: curl_exit={} elapsed={:.1f}s'.format(
                 result.returncode, time.monotonic() - started), file=sys.stderr)
-            if accept_relay_archive(destination, expected_sha, size) or wait_for_relay(destination, expected_sha, size):
+            if accept_relay_archive(destination, expected_sha, size, relay_stem) or wait_for_relay(destination, expected_sha, size, relay_stem=relay_stem):
                 return
             raise RuntimeError('HTTPS transfer failed')
         unpack_archive(archive, destination, expected_sha, size, expected_entry)

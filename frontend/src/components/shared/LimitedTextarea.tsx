@@ -58,7 +58,7 @@ export const LimitedTextarea = React.forwardRef<HTMLTextAreaElement, LimitedText
           className={cn(
             'fc-character-count pointer-events-none absolute right-2.5 text-xs tabular-nums',
             singleLine ? 'top-1/2 -translate-y-1/2' : 'bottom-1.5',
-            near ? 'text-orange-500' : 'text-muted-foreground',
+            near ? 'text-warning-ink' : 'text-muted-foreground',
           )}
         >
           {len}/{maxLength}

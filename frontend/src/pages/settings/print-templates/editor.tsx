@@ -12,6 +12,8 @@ import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { useState, useRef, useEffect, useCallback, useContext, useId, type ComponentProps } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { usePrintTemplatePreview } from '@/hooks/usePrintTemplatePreview'
 import { usePermission } from '@/hooks/usePermission'
@@ -27,7 +29,7 @@ import {
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
   AlignHorizontalSpaceAround, AlignVerticalSpaceAround,
-  ChevronUp, ChevronDown, ArrowLeft, PanelLeft, PanelRight,
+  ChevronUp, ChevronDown, PanelLeft, PanelRight,
 } from 'lucide-react'
 import { getLogoApi } from '@/api/settings'
 
@@ -764,7 +766,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
                 value={el.barcodeSymbology ?? 'code128'}
                 onValueChange={v => onChange(el.id, { barcodeSymbology: v as 'code128' | 'ean13' })}
               >
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-7 py-1 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="code128">Code 128（通用）</SelectItem>
                   <SelectItem value="ean13">EAN-13（13 位数字）</SelectItem>
@@ -1070,16 +1072,19 @@ export default function PrintTemplateEditor() {
   const fieldsPanelId = useId()
   const propertiesPanelId = useId()
   const tabPath = useContext(TabPathContext)
-  const isNew   = tabPath.endsWith('/new') || tabPath === ''
-  const id      = isNew ? undefined : tabPath.split('/').pop()
+  const active = useSectionActive()
+  const pathname = tabPath.split(/[?#]/, 1)[0]
+  const isNew = pathname.endsWith('/new') || pathname === ''
+  const id = isNew ? undefined : pathname.split('/').pop()
+  const validId = !!id && /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id))
   const navigate = useNavigate()
   const qc = useQueryClient()
 
   // ── Remote data ──────────────────────────────────────────────
-  const { data: remote, isLoading } = useQuery({
+  const { data: remote, isLoading, isError, isPaused, error, refetch } = useQuery({
     queryKey: ['print-template', id],
     queryFn: () => getPrintTemplateDetailApi(+id!),
-    enabled: !isNew,
+    enabled: active && validId,
   })
 
   // 公司 Logo（image 元素预览用）：与 BrandLogo/设置页共享查询键，上传后 invalidate 即刷新
@@ -1103,7 +1108,8 @@ export default function PrintTemplateEditor() {
   const [margins, setMargins] = useState<PrintPageMargins>({ top: 8, bottom: 8, left: 0, right: 0 })
   /** 多选：Shift+点击 toggle；空数组 = 未选中 */
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [preview,    setPreview]    = useState(false)
+  const [previewRequested, setPreview] = useState(false)
+  const preview = previewRequested || !canManage
   const [fieldsOpen, setFieldsOpen] = useState(true)
   const [propertiesOpen, setPropertiesOpen] = useState(true)
   /** 画布仅影响显示与拖拽换算，不改变存库的 mm 坐标 */
@@ -1115,7 +1121,7 @@ export default function PrintTemplateEditor() {
   /** 框选（marquee，评审 P2）：空白处拖动选择多个元素 */
   const [marqueeActive, setMarqueeActive] = useState(false)
   const [marqueeRect, setMarqueeRect] = useState({ minX: 0, minY: 0, maxX: 0, maxY: 0 })
-  const marqueeStartRef = useRef<{ x: number; y: number } | null>(null)
+  const marqueeStartRef = useRef<{ x: number; y: number; pointerId: number } | null>(null)
   /** 框选刚完成（onMouseUp 已处理选中），抑制随后的 onClick 清空（评审 P2：框选与点击不互斥） */
   const marqueeJustSelectingRef = useRef(false)
 
@@ -1180,7 +1186,7 @@ export default function PrintTemplateEditor() {
       )
     }
   }
-  useDirtyGuard(tabPath, isDirty)
+  useDirtyGuard(tabPath, canManage && isDirty)
 
   // Load remote template once per template id（2026-08-21 审计 C.2 修复）：
   // 页面是 keepAlive（tabIdentity=pathname），切换 /5 → /7 组件不卸载——hydrated
@@ -1466,7 +1472,7 @@ export default function PrintTemplateEditor() {
     bumpHist(v => v + 1)
   }, [currentSnapshot, tabPath])
   useEffect(() => {
-    if (!realPreview.source || (!isNew && hydrated !== Number(id))) return
+    if (!canManage || !realPreview.source || (!isNew && hydrated !== Number(id))) return
     const key = `${tabPath}:${type}`
     if (seededPreview.current.has(key)) return
     seededPreview.current.add(key)
@@ -1479,7 +1485,7 @@ export default function PrintTemplateEditor() {
       }
       setElements(defaults)
     }
-  }, [realPreview.source, isNew, isDirty, hydrated, id, tabPath, type, paper.w, paper.h, snapshot])
+  }, [canManage, realPreview.source, isNew, isDirty, hydrated, id, tabPath, type, paper.w, paper.h, snapshot])
   const undo = useCallback(() => {
     endInputEdit()
     if (!historyPast.current.length) return
@@ -1799,7 +1805,8 @@ export default function PrintTemplateEditor() {
   }
 
   function handleResizeMouseDown(e: React.MouseEvent, el: TemplateElement, dir: ResizeDir) {
-    if (preview) return    e.preventDefault()
+    if (preview) return
+    e.preventDefault()
     e.stopPropagation()
     setSelectedIds([el.id])
     const startMouse = { x: e.clientX, y: e.clientY }
@@ -1843,6 +1850,7 @@ export default function PrintTemplateEditor() {
 
   // Keyboard: 删除 / 取消选中 / 方向键微调位置（Shift=5mm）
   useEffect(() => {
+    if (!active || preview) return
     const ARROWS: Record<string, [number, number]> = {
       ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
     }
@@ -1851,6 +1859,7 @@ export default function PrintTemplateEditor() {
       if (e.defaultPrevented) return
       const inField = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement
       const inControl = e.target instanceof Element && !!e.target.closest('button, select, [role="switch"], [role="radio"], [role="combobox"], [contenteditable="true"]')
+      if (inField || inControl) return
       const mod = e.ctrlKey || e.metaKey
       if (mod && !inField && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault()
@@ -1880,11 +1889,17 @@ export default function PrintTemplateEditor() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedIds, clampEl, duplicateGroup, redo, snapshot, undo])
+  }, [active, preview, selectedIds, clampEl, duplicateGroup, redo, snapshot, undo])
 
   // ── Loading state ────────────────────────────────────────────
   // isNew 不需要 hydrated（新建页没有远程数据）；编辑页等 remote 加载完成
-  if (!isNew && (isLoading || hydrated === null)) {
+  if (!isNew && (!validId || isError || (isPaused && hydrated === null))) {
+    return <div className="space-y-4">
+      <PageHeader title="打印模板" description="查看或编辑打印版式。" actions={<Button variant="outline" onClick={() => navigate(getWorkspaceListPath('/settings/print-templates'))}>返回列表</Button>} />
+      {!validId ? <p>模板编号无效</p> : <QueryErrorState title={isPaused ? '正在等待网络连接' : '模板加载失败'} error={error} onRetry={refetch} />}
+    </div>
+  }
+  if (!isNew && (isLoading || hydrated !== Number(id))) {
     return (
       <div className="desktop-print-editor flex h-full min-h-0 flex-col gap-5 overflow-hidden">
         <PageHeader title="编辑打印模板"
@@ -1901,7 +1916,7 @@ export default function PrintTemplateEditor() {
   return (
     <div className="desktop-print-editor flex h-full min-h-0 flex-col gap-5 overflow-hidden">
       <PageHeader
-        title={isNew ? '新建打印模板' : `编辑打印模板 #${id}`}
+        title={isNew ? '新建打印模板' : `${canManage ? '编辑' : '查看'}打印模板 #${id}`}
         description={`${preview ? '画布下方显示真实纸张尺寸，保存后打印以预览为准。' : '从字段列表拖入元素，点选后拖动、缩放或修改属性，按 Delete 删除。画布下方显示真实纸张尺寸，打印以预览为准。'}${isZplLabelType(type) ? '打印时按毫米坐标生成 ZPL。' : ''}`}
         actions={<>
           {!preview && (
@@ -1936,10 +1951,9 @@ export default function PrintTemplateEditor() {
             </div>
           )}
           <Button type="button" variant="outline" onClick={() => navigate(getWorkspaceListPath('/settings/print-templates'))}>
-            <ArrowLeft className="mr-1 size-4" />
             返回列表
           </Button>
-          <Button
+          {canManage && <Button
             type="button"
             variant="outline"
             className="gap-1.5"
@@ -1947,7 +1961,7 @@ export default function PrintTemplateEditor() {
           >
             {preview ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             {preview ? '退出预览' : '预览'}
-          </Button>
+          </Button>}
 
           {canManage && <Button type="button" onClick={handleSave} disabled={isPending} className="gap-1.5">
             {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
@@ -1958,6 +1972,7 @@ export default function PrintTemplateEditor() {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card">
         <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+          <fieldset disabled={!canManage} className="contents">
           <Input
             value={name}
             onChange={e => setName(e.target.value)}
@@ -2003,11 +2018,13 @@ export default function PrintTemplateEditor() {
                 title="高度 mm"
               />
               <span className="text-xs text-muted-foreground">宽×高</span>
-              <select aria-label="打印分辨率" title="须与打印机分辨率一致" value={dpi}
-                onChange={e => { snapshot(); setDpi(Number(e.target.value) === 300 ? 300 : 203) }}
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm">
-                <option value={203}>203 DPI</option><option value={300}>300 DPI</option>
-              </select>
+              <Select value={String(dpi)} onValueChange={value => { snapshot(); setDpi(value === '300' ? 300 : 203) }}>
+                <SelectTrigger aria-label="打印分辨率" title="须与打印机分辨率一致" className="h-9 w-auto min-w-24 px-2"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="203">203 DPI</SelectItem>
+                  <SelectItem value="300">300 DPI</SelectItem>
+                </SelectContent>
+              </Select>
               <Button
                 type="button"
                 variant="outline"
@@ -2078,6 +2095,7 @@ export default function PrintTemplateEditor() {
             </div>
           )}
 
+          </fieldset>
           <div className="flex flex-wrap items-center gap-2 xl:ml-auto">
             <div className="flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5">
               <span className="text-xs text-muted-foreground px-0.5">画布</span>
@@ -2199,43 +2217,43 @@ export default function PrintTemplateEditor() {
               className={`mx-auto shrink-0 bg-white shadow-xl ring-1 ring-border/30 ${!preview ? 'cursor-crosshair' : ''}`}
               onDragOver={handleCanvasDragOver}
               onDrop={handleCanvasDrop}
-              // 框选（评审 P2）：空白处拖选多个元素。元素自身的 mousedown 已 stopPropagation，不会误触发
-              onMouseDown={e => {
-                if (preview || e.target !== e.currentTarget) return
-                const rect = canvasRef.current!.getBoundingClientRect()
-                marqueeStartRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top }
+              onPointerDown={e => {
+                if (!active || preview || e.button !== 0 || e.target !== e.currentTarget || marqueeStartRef.current) return
+                const rect = e.currentTarget.getBoundingClientRect()
+                const x = e.clientX - rect.left, y = e.clientY - rect.top
+                marqueeStartRef.current = { x, y, pointerId: e.pointerId }
+                e.currentTarget.setPointerCapture(e.pointerId)
+                marqueeJustSelectingRef.current = false
+                setMarqueeRect({ minX: x, minY: y, maxX: x, maxY: y })
                 setMarqueeActive(true)
                 setSelectedIds([])
               }}
-              onMouseMove={e => {
-                if (!marqueeActive || !marqueeStartRef.current) return
-                const rect = canvasRef.current!.getBoundingClientRect()
-                const x = e.clientX - rect.left
-                const y = e.clientY - rect.top
-                const s = marqueeStartRef.current
-                setMarqueeRect({
-                  minX: Math.min(s.x, x), minY: Math.min(s.y, y),
-                  maxX: Math.max(s.x, x), maxY: Math.max(s.y, y),
-                })
+              onPointerMove={e => {
+                const start = marqueeStartRef.current
+                if (!start || e.pointerId !== start.pointerId) return
+                const rect = e.currentTarget.getBoundingClientRect()
+                const x = e.clientX - rect.left, y = e.clientY - rect.top
+                setMarqueeRect({ minX: Math.min(start.x, x), minY: Math.min(start.y, y), maxX: Math.max(start.x, x), maxY: Math.max(start.y, y) })
               }}
-              onMouseUp={e => {
-                if (!marqueeActive || !marqueeStartRef.current) return
-                setMarqueeActive(false)
+              onPointerUp={e => {
+                const start = marqueeStartRef.current
+                if (!start || start.pointerId !== e.pointerId) return
                 marqueeStartRef.current = null
-                // 标记本次点击是“框选”而处理的，onClick 不再清空选中
+                setMarqueeActive(false)
+                const rect = e.currentTarget.getBoundingClientRect()
+                const x = e.clientX - rect.left, y = e.clientY - rect.top
+                if (!active || preview || Math.max(Math.abs(x - start.x), Math.abs(y - start.y)) < 3) return
                 marqueeJustSelectingRef.current = true
-                const rect = canvasRef.current!.getBoundingClientRect()
-                const x = (e.clientX - rect.left) / canvasScale
-                const y = (e.clientY - rect.top) / canvasScale
-                const r = marqueeRect
-                const minX = Math.min(r.minX / canvasScale, x)
-                const maxX = Math.max(r.maxX / canvasScale, x)
-                const minY = Math.min(r.minY / canvasScale, y)
-                const maxY = Math.max(r.maxY / canvasScale, y)
-                const hit = elementsRef.current
-                  .filter(el => el.x + el.width >= minX && el.x <= maxX && el.y + el.height >= minY && el.y <= maxY)
-                  .map(el => el.id)
-                if (hit.length) setSelectedIds(hit)
+                const left = Math.min(start.x, x) / canvasScale, right = Math.max(start.x, x) / canvasScale
+                const top = Math.min(start.y, y) / canvasScale, bottom = Math.max(start.y, y) / canvasScale
+                setSelectedIds(elementsRef.current.filter(el => el.x + el.width >= left && el.x <= right
+                  && el.y + el.height >= top && el.y <= bottom).map(el => el.id))
+              }}
+              onLostPointerCapture={e => {
+                if (marqueeStartRef.current?.pointerId === e.pointerId) {
+                  marqueeStartRef.current = null
+                  setMarqueeActive(false)
+                }
               }}
               onClick={() => {
                 if (marqueeJustSelectingRef.current) {
@@ -2284,7 +2302,7 @@ export default function PrintTemplateEditor() {
                   scale={canvasScale}
                 />
               )}
-              {(!isZplLabelType(type) || !preview) && (
+              {(!isZplLabelType(type) || !previewRequested) && (
                 elements.map(el => (
                   <ElementNode
                     key={el.id}

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 const session = vi.hoisted(() => ({ sessionGeneration: 1, token: 'synthetic-access' as string | null, refreshToken: 'synthetic-refresh' as string | null, setTokens: vi.fn(), logout: vi.fn() }))
 vi.mock('@/store/authStore', () => ({ useAuthStore: { getState: () => session } }))
-vi.mock('@/store/companyStore', () => ({ useCompanyStore: { getState: () => ({ companyId: 1 }) } }))
+vi.mock('@/store/companyStore', () => ({ resetCompanyScope: vi.fn(), useCompanyStore: { getState: () => ({ companyId: 1 }) } }))
 vi.mock('@/lib/platform', () => ({ IS_CAPACITOR_PDA: false }))
 vi.mock('@/lib/authSession', () => ({ performSessionLogout: session.logout }))
 vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn() } }))

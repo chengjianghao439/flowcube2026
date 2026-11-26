@@ -48,6 +48,46 @@ function settle() {
   cli('wait', '--fn', 'document.getAnimations().every(a => a.playState !== "running")')
 }
 
+function verifyDesktopFormDensity() {
+  cli('set', 'viewport', '1024', '576')
+  cli('click', '#open-density')
+  cli('wait', '#density-dialog')
+  settle()
+  const sample = evaluate(`(() => {
+    const dialog = document.getElementById('density-dialog');
+    const body = dialog.querySelector('.fc-form-dialog-body');
+    const footer = dialog.querySelector('.fc-dialog-footer');
+    const heights = ['input', 'date', 'select', 'picker', 'compact'].map(key =>
+      document.getElementById('density-' + key).getBoundingClientRect().height);
+    const headerTop = dialog.querySelector('.fc-dialog-header').getBoundingClientRect().top;
+    const footerBottom = footer.getBoundingClientRect().bottom;
+    body.scrollTop = body.scrollHeight;
+    return {
+      heights, scrolls: body.scrollTop > 0,
+      headerFixed: dialog.querySelector('.fc-dialog-header').getBoundingClientRect().top === headerTop,
+      footerFixed: footer.getBoundingClientRect().bottom === footerBottom,
+      footerVisible: footerBottom <= innerHeight,
+    }
+  })()`)
+  assert.deepEqual(sample, { heights: [36, 36, 36, 36, 32], scrolls: true, headerFixed: true, footerFixed: true, footerVisible: true })
+  const footerStyle = evaluate(`(() => {
+    const dialog = document.getElementById('density-dialog');
+    const footer = dialog.querySelector('.fc-dialog-footer');
+    const inset = footer.getBoundingClientRect().left - dialog.getBoundingClientRect().left;
+    const surface = getComputedStyle(footer).backgroundColor;
+    dialog.classList.remove('fc-form-dialog');
+    const plainSurface = getComputedStyle(footer).backgroundColor;
+    dialog.classList.add('fc-form-dialog');
+    return { inset, surface, plainSurface };
+  })()`)
+  assert.equal(footerStyle.inset, 1, '表单底栏贴齐弹窗内边缘')
+  assert.notEqual(footerStyle.surface, 'rgba(0, 0, 0, 0)', '表单底栏显示独立底色')
+  assert.equal(footerStyle.plainSurface, 'rgba(0, 0, 0, 0)', '普通弹窗内不出现悬空灰条')
+  cli('click', '#density-dialog .fc-dialog-footer button')
+  cli('wait', '--fn', '!document.getElementById("density-dialog")')
+  console.log(JSON.stringify({ desktopForm: sample }))
+}
+
 async function captureStates() {
   const actual = {}
   for (const width of [1280, 375]) {
@@ -218,6 +258,8 @@ async function main() {
     assert.deepEqual(scoped['pda-light'], { backgroundColor: 'rgb(50, 94, 189)', borderRadius: '6px', height: '40px', fontSize: '14px' })
     assert.deepEqual(scoped['pda-login'], scoped['pda-light'])
     console.log(JSON.stringify({ desktopScope: scoped }))
+    evaluate(`document.getElementById('pda-username')?.remove()`)
+    verifyDesktopFormDensity()
     evaluate(`document.getElementById('pda-username')?.remove(); document.querySelector('main').classList.remove('desktop-workspace', 'desktop-shell-sample', 'pda-root'); document.getElementById('boundary-table').replaceWith(document.getElementById('primary'))`)
     const touch = await verifyTouchAction()
     // The real Dialog also opens/closes through its accessible buttons.

@@ -28,6 +28,8 @@
 
 const AppError = require('../utils/AppError')
 const logger = require('../utils/logger')
+const { assertQtyScale } = require('../utils/qtyPrecision')
+const { roundQty } = require('../utils/unitConversion')
 const { markFulfilled } = require('./reservationEngine')
 const { deductFromContainers, deductFromTaskLockedContainers, syncStockFromContainers, getStockProjection } = require('./containerEngine')
 
@@ -173,43 +175,41 @@ async function moveStock(conn, {
 
   // ── 容器出库路径（SALE_OUT + TASK_OUT）──────────────────────────────────────
   if (moveType === MOVE_TYPE.SALE_OUT || moveType === MOVE_TYPE.TASK_OUT) {
-    const { projection } = await assertOutboundPhysicalAvailable(conn, { productId,productName,warehouseId,qty:Math.abs(qty),reservationRefType,reservationRefId })
+    assertQtyScale(qty, '出库数量')
+    if (!(Number(qty) > 0)) throw new AppError('出库数量必须大于零', 400, 'INVALID_DEDUCTION_QTY')
+    const shipQty = roundQty(Number(qty))
+    const { projection } = await assertOutboundPhysicalAvailable(conn, {
+      productId, productName, warehouseId, qty: shipQty, reservationRefType, reservationRefId,
+    })
     const before = projection.quantity
     const reservedBefore = projection.reserved
-    const absQty = Math.abs(qty)
 
     // 2. 仍只扣本任务锁定的实物容器，不允许靠预计量实际出库。
     const deducted = lockedByTaskId
       ? await deductFromTaskLockedContainers(conn, {
-        productId, productName, warehouseId, qty: absQty, taskId: lockedByTaskId,
+        productId, productName, warehouseId, qty: shipQty, taskId: lockedByTaskId,
       })
-      : await deductFromContainers(conn, { productId, productName, warehouseId, qty: absQty })
+      : await deductFromContainers(conn, { productId, productName, warehouseId, qty: shipQty })
 
     // 3. 汇总容器 → 刷新 inventory_stock 缓存
     const after = await syncStockFromContainers(conn, productId, warehouseId)
 
-    // 4. 减少 reserved + 按本次出库量核销预占（截断即告警——出库量大于 reserved 说明预占计数已漂移）
-    //
-    // reserved 扣减必须与 markFulfilled 同处一个条件下。采购退货出库（warehouse-tasks.ship.js
-    // 对 isPurchaseReturn 显式传 reservationRefType=null）本身不携带任何预占，若在条件外无条件
-    // 扣减，会把同商品同仓下其它销售单的预占凭空释放掉：可用量虚高 → 别的订单占走同一批货 →
-    // 原订单拣货时货已不在 → 超卖。且事后 releaseByRef 的 GREATEST(0,...) 会把痕迹抹平，
-    // 根因无从追查（审计 P0-1）。无预占出库不得修改任何销售预占。
-    const hasReservation = Boolean(reservationRefType && reservationRefId)
-    if (hasReservation) {
-      if (reservedBefore < absQty) {
+    // 无预占的出库或超出本单在册预占的部分只扣实物。缓存跟随本单实际履约量。
+    if (reservationRefType && reservationRefId) {
+      const fulfilled = await markFulfilled(conn, reservationRefType, reservationRefId, productId, warehouseId, shipQty)
+      if (reservedBefore < fulfilled) {
         logger.error(
-          '[GUARD] reserved 收敛截断：出库释放预占时 reserved 小于出库量',
-          null,
-          { moveType, productId, warehouseId, refNo, shipQty: absQty, reserved: reservedBefore },
+          '[GUARD] reserved 收敛截断：缓存小于本次核销量',
+          null, { moveType, productId, warehouseId, refNo, shipQty, fulfilled, reserved: reservedBefore },
           'StockClampGuard',
         )
       }
-      await conn.query(
-        'UPDATE inventory_stock SET reserved=GREATEST(0, reserved-?) WHERE product_id=? AND warehouse_id=?',
-        [absQty, productId, warehouseId],
-      )
-      await markFulfilled(conn, reservationRefType, reservationRefId, productId, warehouseId, absQty)
+      if (fulfilled > 0) {
+        await conn.query(
+          'UPDATE inventory_stock SET reserved=GREATEST(0, reserved-?) WHERE product_id=? AND warehouse_id=?',
+          [fulfilled, productId, warehouseId],
+        )
+      }
     }
 
     // ATP 允许 reserved 大于当前现货。这里只核销本单实际履约量，不能把其它销售的
@@ -239,7 +239,7 @@ async function moveStock(conn, {
       await writeInventoryLog(conn, {
         moveType, type: 2,
         productId, warehouseId, supplierId,
-        quantity: absQty, beforeQty: before, afterQty: after, unitPrice,
+        quantity: shipQty, beforeQty: before, afterQty: after, unitPrice,
         refType, refId, refNo,
         containerId: primaryContainerId, sourceType: logSourceType, sourceRefId: logSourceRefId,
         remark: logRemark, operatorId, operatorName,

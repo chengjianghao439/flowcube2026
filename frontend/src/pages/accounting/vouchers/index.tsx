@@ -1,3 +1,5 @@
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DatePicker } from '@/components/shared/DatePicker'
@@ -13,7 +15,7 @@ import { ReportTable } from '@/components/shared/ReportTable'
 
 import { useId, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { Plus, RefreshCw, Download, FileText, Undo2, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -44,6 +46,11 @@ import {
 } from '@/types/accounting'
 import VoucherQueryDialog, { type VoucherQueryValues } from './VoucherQueryDialog'
 
+const VOUCHER_STATUS_OPTIONS = [
+  { value: '', label: '全部凭证' },
+  ...Object.entries(VOUCHER_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+]
+
 const PAGE_SIZE = 20
 const fmtDate = (v: string) => formatDisplayDate(v, '')
 const voucherSourceLabel = ({ sourceType, sourceTypeName }: Pick<Voucher, 'sourceType' | 'sourceTypeName'>) =>
@@ -71,7 +78,7 @@ function ReconciliationCard() {
   const uncovered = Number(unposted?.uncovered ?? 0)
   const uncoveredCount = Number(unposted?.uncoveredCount ?? 0)
   return (
-    <div className="mb-4">
+    <div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {items.map(it => (
           <div key={it.name} className={cn('card-base p-3', !it.matched && 'border-warning/40')}>
@@ -156,11 +163,11 @@ function GenerateDialog({ open, onClose }: { open: boolean; onClose: () => void 
   }
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="fc-form-dialog sm:max-w-xl">
         <DialogHeader description={<>{<>
             从采购结算/销售收入成本/收付款/费用报销/退货/盘点/运费结算/手工应付等业务事实全量重算生成凭证。可反复执行，重复生成不会产生多余凭证。
           </>}</>}><DialogTitle>生成本期凭证</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-1">
+        <div className="fc-form-dialog-body space-y-4 py-1">
 
           <div className="space-y-1.5">
             <Label>会计期间（YYYYMM）</Label>
@@ -188,7 +195,7 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
   const { data: v, isLoading, isError, error, refetch } = useVoucher(id)
   return (
     <Dialog open={!!id} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-6xl">
+      <DialogContent className="fc-form-dialog sm:max-w-6xl">
         <DialogHeader description={!isError && (isLoading || !v) ? <span role="status">加载中…</span> : '核对凭证分录、来源与状态。'}>
           <DialogTitle className="flex items-center gap-2">
             凭证 {!isError && v?.voucherNo}
@@ -196,45 +203,48 @@ function DetailDialog({ id, onClose }: { id: number | null; onClose: () => void 
             {!isError && v?.isReversal === 1 && <SoftStatusLabel label="红字" tone="danger" />}
           </DialogTitle>
         </DialogHeader>
-        {isError ? <QueryErrorState compact error={error} onRetry={() => void refetch()} /> : isLoading || !v ? null : (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-              <div><span className="text-muted-foreground">日期：</span>{fmtDate(v.voucherDate)}</div>
-              <div title={v.sourceType}><span className="text-muted-foreground">来源：</span>{voucherSourceLabel(v)}</div>
-              <div className="col-span-2"><span className="text-muted-foreground">来源单号：</span>{v.sourceNo || '—'}</div>
-              <div className="col-span-2 sm:col-span-4"><span className="text-muted-foreground">摘要：</span>{v.summary || '—'}</div>
-            </div>
-            <div className="overflow-x-auto rounded-lg border border-border/60">
-              <ReportTable className="w-full text-sm">
-                <thead className="text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium">摘要</th>
-                    <th className="px-3 py-2 text-left font-medium">科目</th>
-                    <th className="px-3 py-2 text-left font-medium">往来</th>
-                    <th className="px-3 py-2 text-right font-medium">借方</th>
-                    <th className="px-3 py-2 text-right font-medium">贷方</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {v.entries?.map(e => (
-                    <tr key={e.id} className="border-t border-border/40">
-                      <td className="px-3 py-2">{e.summary || '—'}</td>
-                      <td className="px-3 py-2"><span className="font-mono text-doc-code-muted">{e.accountCode}</span> {e.accountName}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{e.auxName || '—'}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{e.direction === 1 ? amount(e.amount) : ''}</td>
-                      <td className="px-3 py-2 text-right tabular-nums">{e.direction === 2 ? amount(e.amount) : ''}</td>
+        <div className="fc-form-dialog-body space-y-4">
+          {isError ? <QueryErrorState compact error={error} onRetry={() => void refetch()} /> : isLoading || !v ? null : (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                <div><span className="text-muted-foreground">日期：</span>{fmtDate(v.voucherDate)}</div>
+                <div title={v.sourceType}><span className="text-muted-foreground">来源：</span>{voucherSourceLabel(v)}</div>
+                <div className="col-span-2"><span className="text-muted-foreground">来源单号：</span>{v.sourceNo || '—'}</div>
+                <div className="col-span-2 sm:col-span-4"><span className="text-muted-foreground">摘要：</span>{v.summary || '—'}</div>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-border/60">
+                <ReportTable className="w-full text-sm">
+                  <thead className="text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">摘要</th>
+                      <th className="px-3 py-2 text-left font-medium">科目</th>
+                      <th className="px-3 py-2 text-left font-medium">往来</th>
+                      <th className="px-3 py-2 text-right font-medium">借方</th>
+                      <th className="px-3 py-2 text-right font-medium">贷方</th>
                     </tr>
-                  ))}
-                  <tr className="border-t-2 border-border bg-muted/20 font-medium">
-                    <td className="px-3 py-2" colSpan={3}>合计</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{amount(v.totalDebit)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{amount(v.totalCredit)}</td>
-                  </tr>
-                </tbody>
-              </ReportTable>
+                  </thead>
+                  <tbody>
+                    {v.entries?.map(e => (
+                      <tr key={e.id} className="border-t border-border/40">
+                        <td className="px-3 py-2">{e.summary || '—'}</td>
+                        <td className="px-3 py-2"><span className="font-mono text-doc-code-muted">{e.accountCode}</span> {e.accountName}</td>
+                        <td className="px-3 py-2 text-muted-foreground">{e.auxName || '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{e.direction === 1 ? amount(e.amount) : ''}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">{e.direction === 2 ? amount(e.amount) : ''}</td>
+                      </tr>
+                    ))}
+                    <tr className="border-t-2 border-border bg-muted/20 font-medium">
+                      <td className="px-3 py-2" colSpan={3}>合计</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{amount(v.totalDebit)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{amount(v.totalCredit)}</td>
+                    </tr>
+                  </tbody>
+                </ReportTable>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={onClose}>关闭</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -274,59 +284,61 @@ function ManualDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-6xl" onOpenAutoFocus={event => {
+      <DialogContent className="fc-form-dialog sm:max-w-6xl" onOpenAutoFocus={event => {
         event.preventDefault()
         titleRef.current?.focus()
       }}>
-        <DialogHeader description="填写记账日期、摘要与借贷分录。">
+        <DialogHeader>
           <DialogTitle ref={titleRef} tabIndex={-1}>手工凭证录入</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-1">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor={`${fieldId}-date`}>记账日期 *</Label>
-              <DatePicker id={`${fieldId}-date`} value={voucherDate} onChange={setVoucherDate} disabled={isPending} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor={`${fieldId}-summary`}>摘要</Label>
-              <Input id={`${fieldId}-summary`} value={summary} onChange={e => setSummary(e.target.value)} placeholder="整张凭证摘要（选填）" disabled={isPending} />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            {rows.map((r, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Select value={r.accountId ? String(r.accountId) : ''} onValueChange={val => setRow(i, { accountId: Number(val) })} disabled={isPending}>
-                  <SelectTrigger className="h-9 flex-1" aria-label={`第 ${i + 1} 行科目`}><SelectValue placeholder="选择科目" /></SelectTrigger>
-                  <SelectContent>
-                    {accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.code} {a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Select value={String(r.direction)} onValueChange={val => setRow(i, { direction: Number(val) })} disabled={isPending}>
-                  <SelectTrigger className="h-9 w-20" aria-label={`第 ${i + 1} 行借贷方向`}><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="1">借</SelectItem><SelectItem value="2">贷</SelectItem></SelectContent>
-                </Select>
-                <Input type="number" value={r.amount} onChange={e => setRow(i, { amount: e.target.value })}
-                  placeholder="金额" aria-label={`第 ${i + 1} 行金额`} className="w-32 text-right tabular-nums" disabled={isPending} />
-                <Input value={r.summary} onChange={e => setRow(i, { summary: e.target.value })}
-                  placeholder="行摘要" aria-label={`第 ${i + 1} 行摘要`} className="w-40" disabled={isPending} />
-                <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive-ink" aria-label="删除本行分录"
-                  onClick={() => setRows(rs => rs.length > 2 ? rs.filter((_, idx) => idx !== i) : rs)} disabled={isPending || rows.length <= 2}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+        <div className="fc-form-dialog-body space-y-4 desktop-entry-controls">
+          <div className="space-y-3 py-1">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor={`${fieldId}-date`}>记账日期 *</Label>
+                <DatePicker id={`${fieldId}-date`} value={voucherDate} onChange={setVoucherDate} disabled={isPending} />
               </div>
-            ))}
-            <Button variant="outline" size="sm" onClick={() => setRows(rs => [...rs, emptyRow(rs.length % 2 === 0 ? 1 : 2)])} disabled={isPending}>
-              <Plus className="mr-1 h-3.5 w-3.5" />添加分录
-            </Button>
-          </div>
+              <div className="space-y-1.5">
+                <Label htmlFor={`${fieldId}-summary`}>摘要</Label>
+                <Input id={`${fieldId}-summary`} value={summary} onChange={e => setSummary(e.target.value)} placeholder="整张凭证摘要（选填）" disabled={isPending} />
+              </div>
+            </div>
 
-          <div className="flex items-center justify-end gap-4 rounded-md bg-muted/30 px-3 py-2 text-sm">
-            <span>借方合计 <span className="tabular-nums font-medium">{amount(debit)}</span></span>
-            <span>贷方合计 <span className="tabular-nums font-medium">{amount(credit)}</span></span>
-            {balanced
-              ? <SoftStatusLabel label="借贷平衡" tone="success" />
-              : <SoftStatusLabel label="借贷不平" tone="danger" />}
+            <div className="space-y-2">
+              {rows.map((r, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Select value={r.accountId ? String(r.accountId) : ''} onValueChange={val => setRow(i, { accountId: Number(val) })} disabled={isPending}>
+                    <SelectTrigger className="h-9 flex-1" aria-label={`第 ${i + 1} 行科目`}><SelectValue placeholder="选择科目" /></SelectTrigger>
+                    <SelectContent>
+                      {accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.code} {a.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={String(r.direction)} onValueChange={val => setRow(i, { direction: Number(val) })} disabled={isPending}>
+                    <SelectTrigger className="h-9 w-20" aria-label={`第 ${i + 1} 行借贷方向`}><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="1">借</SelectItem><SelectItem value="2">贷</SelectItem></SelectContent>
+                  </Select>
+                  <Input type="number" value={r.amount} onChange={e => setRow(i, { amount: e.target.value })}
+                    placeholder="金额" aria-label={`第 ${i + 1} 行金额`} className="w-32 text-right tabular-nums" disabled={isPending} />
+                  <Input value={r.summary} onChange={e => setRow(i, { summary: e.target.value })}
+                    placeholder="行摘要" aria-label={`第 ${i + 1} 行摘要`} className="w-40" disabled={isPending} />
+                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground hover:text-destructive-ink" aria-label="删除本行分录"
+                    onClick={() => setRows(rs => rs.length > 2 ? rs.filter((_, idx) => idx !== i) : rs)} disabled={isPending || rows.length <= 2}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => setRows(rs => [...rs, emptyRow(rs.length % 2 === 0 ? 1 : 2)])} disabled={isPending}>
+                <Plus className="mr-1 h-3.5 w-3.5" />添加分录
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-end gap-4 rounded-md bg-muted/30 px-3 py-2 text-sm">
+              <span>借方合计 <span className="tabular-nums font-medium">{amount(debit)}</span></span>
+              <span>贷方合计 <span className="tabular-nums font-medium">{amount(credit)}</span></span>
+              {balanced
+                ? <SoftStatusLabel label="借贷平衡" tone="success" />
+                : <SoftStatusLabel label="借贷不平" tone="danger" />}
+            </div>
           </div>
         </div>
         <DialogFooter>
@@ -359,7 +371,7 @@ export default function VouchersPage() {
   const total = data?.pagination?.total ?? 0
 
   // ── 查询弹窗筛选值 ──
-  const initialQuery: VoucherQueryValues = { period, sourceType, status, keyword }
+  const initialQuery = useMemo(() => ({ period, sourceType, status, keyword }), [period, sourceType, status, keyword])
   function applyQuery(v: VoucherQueryValues) {
     setPeriod(v.period)
     setSourceType(v.sourceType)
@@ -373,7 +385,6 @@ export default function VouchersPage() {
   const chips = [
     period && { key: 'period', label: `期间：${period}`, onRemove: () => setPeriod('') },
     sourceType && { key: 'sourceType', label: `来源：${VOUCHER_SOURCE_OPTIONS.find(o => o.value === sourceType)?.label ?? sourceType}`, onRemove: () => setSourceType('') },
-    status && { key: 'status', label: `状态：${VOUCHER_STATUS_LABELS[Number(status)] ?? status}`, onRemove: () => setStatus('') },
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
@@ -403,69 +414,63 @@ export default function VouchersPage() {
         {r.isReversal === 1 && <SoftStatusLabel label="红字" tone="danger" />}
       </span>
     ) },
-    { key: 'actions', title: '操作', width: 180, render: (_v, r) => (
-      <div className="flex items-center gap-1">
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setDetailId(r.id)}>
-          <FileText className="mr-1 h-3.5 w-3.5" />查看
-        </Button>
-        {canManage && r.status !== 3 && r.isReversal !== 1 && (
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-warning-ink" onClick={() => setReverseTarget(r)}>
-            <Undo2 className="mr-1 h-3.5 w-3.5" />冲销
-          </Button>
-        )}
-        {canManage && r.sourceType === 'manual' && !r.isReversal && !r.reversedId && r.status !== 3 && (
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive-ink" aria-label="删除这张凭证" onClick={() => setDeleteTarget(r)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        )}
-      </div>
-    ) },
+    { key: 'actions', title: '操作', width: 140, render: (_v, row) => {
+      const items: TableActionItem[] = []
+      if (canManage && row.status !== 3 && row.isReversal !== 1) {
+        items.push({ label: '冲销', destructive: true, afterMenuClose: true, onClick: () => setReverseTarget(row) })
+      }
+      if (canManage && row.sourceType === 'manual' && !row.isReversal && !row.reversedId && row.status !== 3) {
+        items.push({ label: '删除这张凭证', destructive: true, afterMenuClose: true, onClick: () => setDeleteTarget(row) })
+      }
+      return <TableActionsMenu rowLabel={row.voucherNo} primaryVariant="outline" primaryLabel="查看" onPrimaryClick={() => setDetailId(row.id)} items={items} />
+    } },
   ]
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="记账凭证"
-        description="由业务事实自动生成的借贷凭证，可导出通用记账凭证或金蝶 KIS 格式"
+        description="查看、生成、录入与导出记账凭证。"
         actions={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            {canManage && <Button variant="outline" onClick={() => setGenOpen(true)}><RefreshCw className="mr-1.5 h-4 w-4" />生成本期凭证</Button>}
-            {canManage && <Button variant="outline" onClick={() => setManualOpen(true)}><Plus className="mr-1.5 h-4 w-4" />手工录入</Button>}
+          <div className="flex flex-wrap items-center gap-2">
             {canExport && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline"><Download className="mr-1.5 h-4 w-4" />导出</Button>
+                  <Button variant="outline">导出 Excel</Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => doExport('generic')}>通用记账凭证 Excel</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => doExport('kingdee')}>金蝶 KIS 格式</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => doExport('generic')}>通用记账凭证 Excel（按期间）</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => doExport('kingdee')}>金蝶 KIS 格式（按期间）</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+            {canManage && <Button variant="outline" onClick={() => setGenOpen(true)}>生成本期凭证</Button>}
+            {canManage && <Button variant="default" onClick={() => setManualOpen(true)}>手工录入</Button>}
           </div>
         }
       />
 
 
       <ReconciliationCard />
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip"><OrderStatusFilter label="凭证状态分类" value={status} options={VOUCHER_STATUS_OPTIONS} onChange={setStatus} /></div>
+        {chips.length > 0 && (
+          <div className="fc-filter-bar-filters">
+            {chips.map(c => (
+              <span key={c.key} className="fc-query-chip">
+                {c.label}
+                <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          </div>
+        )}
+      </div>
 
-      {/* 当前生效筛选（可逐项移除） */}
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
-
-      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />}
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable fluid virtualized scrollLabel="记账凭证表格" columns={columns} data={list} loading={isLoading} emptyText="暂无凭证，点击「生成本期凭证」" columnStorageKey="acct-vouchers" />}
 
       {!isError && !isLoading && data && <ListSummary total={total} unit="张" />}
 

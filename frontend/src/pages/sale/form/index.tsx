@@ -246,7 +246,7 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
     <div ref={entryRef} data-order-entry onKeyDown={handleEntryKeyDown} className="flex flex-col gap-2.5">
       <ActionBar
         title="新建销售单"
-        description={handling ? `处理来源：${handling.source.data?.source.productName ?? '核对中'}；仅原商品、原仓、基本单位，客户由员工选择。可关联 ${handling.source.data?.source.budget.availableQuantity ?? '—'}` : '填写客户、商品与发货信息。'}
+        description={handling ? `处理来源：${handling.source.data?.source.productName ?? '核对中'}；仅原商品、原仓、基本单位，客户由员工选择。可关联 ${handling.source.data?.source.budget.availableQuantity ?? '—'}。` : '填写客户、商品与发货信息。'}
         subtitle={<UnsavedBadge show={isDirty} />}
         rightActions={
           <>

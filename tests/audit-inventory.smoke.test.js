@@ -232,13 +232,102 @@ async function main() {
     const [[active]] = await conn.query('SELECT SUM(qty) AS qty FROM stock_reservations WHERE product_id=? AND status=1', [f.productId])
     assert.equal(stock.reserved, Number(active.qty))
   })
+  test('出库5件只核销本单2件预占，另单10件保持可履约', async f => {
+    const containerId = await f.container(15)
+    const sale = await f.sale(5), other = await f.sale(10)
+    await f.reserve(sale, 2)
+    await f.reserve(other, 10)
+    await f.ship(sale, containerId, 5)
+    const stock = await f.stock()
+    assert.equal(stock.quantity, 10)
+    assert.equal(stock.reserved, 10)
+    const [ledger] = await conn.query(
+      'SELECT ref_id, status, qty FROM stock_reservations WHERE product_id=? ORDER BY ref_id', [f.productId])
+    assert.deepEqual(ledger.map(r => [Number(r.ref_id), Number(r.status), Number(r.qty)]),
+      [[sale.saleId, 2, 2], [other.saleId, 1, 10]])
+  })
+  for (const qty of [0, -1]) {
+    for (const action of ['reserve', 'ship', 'taskDeduct']) {
+      test(`${action} 拒绝数量 ${qty}，保留原库存和流水`, async f => {
+        const containerId = await f.container(3)
+        const sale = await f.sale(3)
+        await conn.query('UPDATE inventory_containers SET locked_by_task_id=? WHERE id=?', [sale.saleId, containerId])
+        const call = action === 'reserve' ? f.reserve(sale, qty)
+          : action === 'ship' ? f.ship(sale, containerId, qty)
+          : ce.deductFromTaskLockedContainers(conn, { productId: f.productId, warehouseId: wh, taskId: sale.saleId, qty })
+        await assert.rejects(call, error => error.statusCode === 400)
+        const stock = await f.stock()
+        assert.equal(stock.quantity, 3)
+        assert.equal(stock.reserved, 0)
+        const [[logs]] = await conn.query('SELECT COUNT(*) n FROM inventory_logs WHERE product_id=?', [f.productId])
+        assert.equal(Number(logs.n), 0)
+      })
+    }
+  }
+  for (const locked of [true, false]) {
+    test(`出库跳过零余量 ACTIVE 盒且流水指向实扣容器，任务锁定=${locked}`, async f => {
+      const sale = await f.sale(1)
+      const shell = await ce.createContainer(conn, { productId: f.productId, warehouseId: wh, initialQty: 0,
+        sourceType: ce.SOURCE_TYPE.MANUAL, barcode: 'B' + unique('S'), containerType: 2 })
+      const full = await f.container(2)
+      if (locked) await conn.query('UPDATE inventory_containers SET locked_by_task_id=? WHERE id IN (?)', [sale.saleId, [shell.containerId, full]])
+      await ie.moveStock(conn, { moveType: ie.MOVE_TYPE.TASK_OUT, productId: f.productId, warehouseId: wh, qty: 1,
+        refType: 'warehouse_task', refId: sale.saleId, lockedByTaskId: locked ? sale.saleId : null })
+      const [[box]] = await conn.query('SELECT status FROM inventory_containers WHERE id=?', [shell.containerId])
+      assert.equal(Number(box.status), ce.CONTAINER_STATUS.ACTIVE)
+      const [logs] = await conn.query('SELECT container_id, quantity FROM inventory_logs WHERE product_id=?', [f.productId])
+      assert.deepEqual(logs.map(r => [Number(r.container_id), Number(r.quantity)]), [[full, 1]])
+    })
+  }
+  for (const status of [3, 4, 5, 6]) {
+    test(`零余量状态 ${status} 的目标盒禁止并货`, async f => {
+      const source = await f.container(3)
+      const target = await ce.createContainer(conn, { productId: f.productId, warehouseId: wh, initialQty: 0,
+        sourceType: ce.SOURCE_TYPE.MANUAL, barcode: 'B' + unique('T'), containerType: 2, containerStatus: status })
+      await assert.rejects(ce.splitContainer(conn, { containerId: source, targetContainerId: target.containerId, qty: 1 }),
+        error => error.statusCode === 400 && /目标塑料盒状态/.test(error.message))
+    })
+    test(`任务归还拒绝状态 ${status} 的原容器`, async f => {
+      const source = await f.container(3)
+      await conn.query('UPDATE inventory_containers SET status=?,locked_by_task_id=31 WHERE id=?', [status, source])
+      await assert.rejects(ce.splitTaskLockedContainerForReturn(conn, { taskId: 31, containerId: source, qty: 3 }),
+        error => error.statusCode === 409)
+    })
+  }
+
+  test('整组履约兼容入口返回实际核销量，重复核销为零', async f => {
+    await f.container(6)
+    const sale = await f.sale(5)
+    await f.reserve(sale, 2)
+    await f.reserve(sale, 3)
+    assert.equal(await re.markFulfilled(conn, 'sale_order', sale.saleId, f.productId, wh), 5)
+    assert.equal(await re.markFulfilled(conn, 'sale_order', sale.saleId, f.productId, wh), 0)
+  })
+  test('空盒可再次承接库存，异常目标编号或目标数量精度必须先拒绝', async f => {
+    const source = await f.container(3)
+    const box = await ce.createContainer(conn, { productId: f.productId, warehouseId: wh, initialQty: 0,
+      sourceType: ce.SOURCE_TYPE.MANUAL, barcode: 'B' + unique('T'), containerType: 2, containerStatus: ce.CONTAINER_STATUS.EMPTY })
+    for (const target of [0, -1, 'abc', 1.2]) {
+      await assert.rejects(ce.splitContainer(conn, { containerId: source, targetContainerId: target, qty: 1 }),
+        error => error.statusCode === 400)
+    }
+    await conn.query('UPDATE product_items SET allow_decimal_qty=0 WHERE id=?', [f.productId])
+    await conn.query('UPDATE inventory_containers SET remaining_qty=0.5,status=1 WHERE id=?', [box.containerId])
+    await assert.rejects(ce.splitContainer(conn, { containerId: source, targetContainerId: box.containerId, qty: 1 }),
+      error => error.code === 'QTY_INTEGER_REQUIRED')
+    await conn.query('UPDATE inventory_containers SET remaining_qty=0,status=2 WHERE id=?', [box.containerId])
+    const moved = await ce.splitContainer(conn, { containerId: source, targetContainerId: box.containerId, qty: 1 })
+    assert.equal(moved.targetQtyAfter, 1)
+    assert.equal(moved.sourceRemainingAfter, 2)
+    assert.equal((await f.stock()).quantity, 3)
+  })
   for (const action of ['withdrawConfirm', 'reject']) {
     test(`F04 ${action} 拦截有效销售绑定`, async f => {
       if (action === 'reject') await conn.query('UPDATE purchase_orders SET status=5 WHERE id=?', [f.poId])
       await f.reserve(await f.sale(5), 5)
       const call = () => action === 'reject' ? purchase.reject(f.poId, { reason: '测试驳回' }, operator) : purchase.withdrawConfirm(f.poId, operator)
       await assert.rejects(call(), error => error.code === 'BINDING_SALE_DEPENDENCY')
-    })
+    }, action === 'withdrawConfirm' ? 'READ COMMITTED' : 'REPEATABLE READ')
   }
   test('F04 旧草稿绑定不能被采购改量/重建明细抹除', async f => {
     await f.reserve(await f.sale(5), 5)
@@ -297,7 +386,7 @@ async function main() {
     await f.ship(a, containerId, 2)
     assert.equal(await f.bindingQty(a), 0)
     await purchase.cancel(f.poId, operator)
-  })
+  }, 'READ COMMITTED')
   test('F05 上架兑现后撤回收货不能移除现货预占支撑', async f => {
     const a = await f.sale(5)
     await f.reserve(a, 5)
@@ -370,14 +459,19 @@ async function main() {
       serviceOverride = {
         query: async (...args) => {
           const result = await other.query(...args)
-          if (String(args[0]).includes('SELECT DISTINCT task_id')) snapshotTaken()
+          if (/SELECT\s+DISTINCT\s+(?:\w+\.)?task_id\s+FROM\s+inbound_task_items/i.test(args[0])) snapshotTaken()
           return result
         },
         beginTransaction: () => other.beginTransaction(), commit: () => other.commit(),
         rollback: () => other.rollback(), release() {},
       }
       const pending = purchase.withdrawConfirm(f.poId, operator).then(() => null, error => error)
-      await snapshot
+      // 关联收货单预读完成后才提交占库事务。查询形状变化必须明确失败，不能默挂。
+      let timer
+      try {
+        await Promise.race([snapshot, pending.then(error => { throw error || new Error('撤回先于关联收货单预读完成') }),
+          new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('未收到关联收货单预读信号')), 5000) })])
+      } finally { clearTimeout(timer) }
       await conn.commit()
       const rejection = await pending
       assert.equal(rejection?.code, 'BINDING_SALE_DEPENDENCY')
@@ -406,6 +500,51 @@ async function main() {
       assert.equal((await f.stock()).reserved, 5)
     } finally {
       await other.rollback()
+      await other.end()
+      await conn.rollback()
+      await cleanCommittedFixture(f)
+    }
+  })
+  test('整单释放必须先锁所有商品策略、再依序锁残留绑定和预占的库存维度', async f => {
+    const sale = await f.sale(4)
+    await f.reserve(sale, 4)
+    // 旧版本履约已关闭预占，但该维度仍有采购绑定。
+    await conn.query('UPDATE stock_reservations SET status=2 WHERE ref_id=? AND product_id=?', [sale.saleId, f.productId])
+    const second = await insert("INSERT INTO product_items (code,name,unit) VALUES (?,'释放测试','个')", [unique('P')])
+    await insert(`INSERT INTO stock_reservations (product_id,warehouse_id,qty,ref_type,ref_id,ref_no,status)
+      VALUES (?,?,1,'sale_order',?,'测试',1)`, [second, wh, sale.saleId])
+    await conn.query('UPDATE inventory_stock SET reserved=0 WHERE product_id=? AND warehouse_id=?', [f.productId, wh])
+    await conn.query('INSERT INTO inventory_stock (product_id,warehouse_id,quantity,reserved) VALUES (?,?,0,1)', [second, wh])
+    const locks = []
+    const productPolicy = new Set()
+    const trace = { query(sql, params) {
+      if (sql.includes('FROM product_items') && sql.includes('FOR SHARE')) {
+        for (const id of params[0]) productPolicy.add(Number(id))
+      }
+      if (/INSERT INTO inventory_stock/.test(sql)) {
+        assert.deepEqual([...productPolicy].sort((a,b) => a-b), [f.productId, second], '锁首个库存维度前必须取得全部策略锁')
+        locks.push(Number(params[0]))
+      }
+      return conn.query(sql, params)
+    } }
+    await re.releaseByRef(trace, 'sale_order', sale.saleId)
+    assert.deepEqual(locks, [f.productId, second])
+    assert.equal(await f.bindingQty(), 0)
+  })
+  test('旧快照漏掉只有预计绑定的维度时拒绝整单释放', async f => {
+    const sale = await f.sale(5)
+    await conn.commit()
+    const other = await mysql.createConnection(databaseOptions)
+    try {
+      await conn.beginTransaction()
+      await conn.query('SELECT id FROM sale_order_expected_bindings WHERE sale_order_id=?', [sale.saleId])
+      await other.query(`INSERT INTO sale_order_expected_bindings
+        (sale_order_id,sale_order_item_id,purchase_order_id,purchase_item_id,product_id,warehouse_id,qty)
+        VALUES (?,?,?,?,?,?,1)`, [sale.saleId, sale.itemId, f.poId, f.poiId, f.productId, wh])
+      await assert.rejects(re.releaseByRef(conn, 'sale_order', sale.saleId), /维度已变化/)
+      await conn.rollback()
+      assert.equal(await f.bindingQty(), 1)
+    } finally {
       await other.end()
       await conn.rollback()
       await cleanCommittedFixture(f)

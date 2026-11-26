@@ -1,3 +1,5 @@
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -19,7 +21,7 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
 import { useContext, useId, useRef, useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
+import { Loader2, Plus, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Input } from '@/components/ui/input'
@@ -33,6 +35,7 @@ import { ActionBar } from '@/components/shared/ActionBar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { OrderFact, OrderFacts } from '@/components/shared/OrderFacts'
 import { ProductFinder } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -78,6 +81,8 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   onSaved?: () => void
 }) {
   const qc = useQueryClient()
+  const { can } = usePermission()
+  const canEdit = can(PERMISSIONS.TRANSFER_ORDER_CREATE)
   const isEdit = !!editOrder
   const [procurementDraft] = useState<Partial<TransferOrder> | undefined>(() => {
     if (editOrder) return undefined
@@ -139,7 +144,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   const isDirty = isEdit
     ? JSON.stringify({ fromWarehouseId, toWarehouseId, remark, items }) !== editSnapshotRef.current
     : !!(fromWarehouseId || toWarehouseId || remark || items.length)
-  useDirtyGuard(tabPath, isDirty)
+  useDirtyGuard(tabPath, canEdit && isDirty)
 
   const createMutate = useMutation({ mutationFn: createTransferApi })
   const updateMutate = useMutation({ mutationFn: (v: { id: number; data: Parameters<typeof updateTransferApi>[1] }) => updateTransferApi(v.id, v.data) })
@@ -187,7 +192,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
   }
 
   async function handleSubmit() {
-    if (!active || saving) return
+    if (!active || !canEdit || saving) return
     setValidationAttempted(true)
     const headerField = fromIssue ? 'from' : toIssue ? 'to' : addIssue ? 'add' : null
     if (headerField) {
@@ -244,6 +249,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 
   const totalQuantity = items.reduce((s, i) => s + i.quantity, 0)
 
+  if (!canEdit) return <p>当前账号没有编辑调拨单的权限</p>
   return (
     <div ref={entryRef} className="desktop-document-form desktop-entry-controls flex flex-col gap-3">
       {incomingDraft && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border bg-muted/30 px-4 py-3 text-sm"><p>收到采购调拨建议：{incomingDraft.fromWarehouseName} → {incomingDraft.toWarehouseName}。{isDirty ? '当前有未保存内容，带入将替换当前表单。' : '核对后带入表单。'}</p><div className="flex gap-2"><Button size="sm" variant="outline" disabled={saving} onClick={() => setAppliedProcurementKey(incomingKey)}>保留当前表单</Button><Button size="sm" disabled={saving} onClick={applyProcurementDraft}>带入采购建议</Button></div></div>}
@@ -321,6 +327,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       <SectionCard
         title="调拨明细"
         compact
+        noPadding
         actions={
           <div data-entry-field="add" className="flex flex-wrap items-center gap-2">
             <OrderFieldError id={errorId('add')}>{addError}</OrderFieldError>
@@ -332,13 +339,12 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         }
       >
         {items.length === 0 ? (
-          <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
-            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">还没有调拨明细，点击上方&ldquo;添加商品&rdquo;开始录入</p>
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+            <p className="text-sm text-muted-foreground">暂无调拨明细</p>
           </div>
         ) : (
           <>
-          <div className="overflow-x-auto">
+          <div role="region" tabIndex={0} aria-label="调拨商品明细" className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
             <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '调拨数量', width: 96, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="transfer-entry-items" minWidth={760}>
               <tbody>
                 {items.map((item, index) => {
@@ -403,8 +409,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             </ResizableTable>
           </div>
 
-          <div className="desktop-entry-summary flex items-center justify-between border-t border-border pt-4">
-            <p className="text-muted-body">商品种数：{items.length} 种　合计数量：{totalQuantity}</p>
+          <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+            <span className="mr-auto tabular-nums">商品种数：{items.length} 种</span>
+            <strong className="tabular-nums"><span className="mr-2 font-normal">合计数量</span>{totalQuantity}</strong>
           </div>
           </>
         )}
@@ -433,6 +440,10 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
 }
 
 function DetailView({ transferId, closeTab, tabPath }: { transferId: number; closeTab: (targetPath?: string) => void; tabPath: string }) {
+  const { can } = usePermission()
+  const permission = useRef(can)
+  permission.current = can
+  const canEdit = can(PERMISSIONS.TRANSFER_ORDER_CREATE)
   const qc = useQueryClient()
   const { data: order, isLoading } = useQuery({
     queryKey: ['transfer', transferId],
@@ -468,12 +479,12 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
       </div>
     )
   }
-  if (editing) {
+  if (editing && canEdit && order.status === 1) {
     return <FormView editOrder={order} closeTab={closeTab} tabPath={tabPath} onSaved={() => setEditing(false)} />
   }
 
-  const canConfirm = order.status === 1
-  const canCancel  = order.status === 1 || order.status === 2
+  const canConfirm = can(PERMISSIONS.TRANSFER_ORDER_CONFIRM) && order.status === 1
+  const canCancel = can(PERMISSIONS.TRANSFER_ORDER_CANCEL) && (order.status === 1 || order.status === 2)
   const showProgress = order.status >= 3 // 在途/已完成：展示 PDA 扫码进度
 
   return (
@@ -485,20 +496,22 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
         rightActions={
           <>
             {canCancel && (
-              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
-                onClick={() => ask('取消调拨单', '取消后此调拨单将无法恢复，请确认操作。', 'destructive', () => {
-                  setConfirmState(s => ({ ...s, open: false })); cancelMutate.mutate()
-                })}>
-                取消
-              </Button>
+              <div role="group" aria-label="调拨撤销操作" className="flex items-center gap-2 border-r border-border pr-2">
+                <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
+                  onClick={() => ask('取消调拨单', '取消后此调拨单将无法恢复，请确认操作。', 'destructive', () => {
+                    setConfirmState(s => ({ ...s, open: false })); if (permission.current(PERMISSIONS.TRANSFER_ORDER_CANCEL)) cancelMutate.mutate()
+                  })}>
+                  取消
+                </Button>
+              </div>
             )}
-            {order.status === 1 && (
+            {canEdit && order.status === 1 && (
               <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>编辑</Button>
             )}
             {canConfirm && (
               <Button disabled={isPending}
                 onClick={() => ask('确认并派发', '派发到 PDA 后由仓库扫码完成调拨。', 'default', () => {
-                  setConfirmState(s => ({ ...s, open: false })); confirmMutate.mutate()
+                  setConfirmState(s => ({ ...s, open: false })); if (permission.current(PERMISSIONS.TRANSFER_ORDER_CONFIRM)) confirmMutate.mutate()
                 }, '确认派发')}>
                 确认派发
               </Button>
@@ -508,46 +521,36 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
       />
 
       <OrderDetailSections type="transfer" id={order.id}>
-      <SectionCard title="基础信息" compact>
-        <dl className="desktop-document-facts grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
-          {[
-            ['调出仓库',   order.fromWarehouseName],
-            ['调入仓库', order.toWarehouseName],
-            ['经办人',   order.operatorName],
-            ['创建时间', formatDisplayDateTime(order.createdAt)],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <dt className="mb-0.5 text-helper">{label}</dt>
-              <dd className="font-medium">{value}</dd>
-            </div>
-          ))}
-          {order.remark && (
-            <div className="desktop-field-wide col-span-3">
-              <dt className="mb-0.5 text-helper">备注</dt>
-              <dd>{order.remark}</dd>
-            </div>
-          )}
-        </dl>
+      <SectionCard title="基础信息" compact contentClassName="p-3">
+        <OrderFacts>
+          <OrderFact label="调出仓库">{order.fromWarehouseName}</OrderFact>
+          <OrderFact label="调入仓库">{order.toWarehouseName}</OrderFact>
+          <OrderFact label="经办人">{order.operatorName}</OrderFact>
+          <OrderFact label="创建时间">{formatDisplayDateTime(order.createdAt)}</OrderFact>
+          {order.remark && <OrderFact label="备注" className="sm:col-span-2">{order.remark}</OrderFact>}
+        </OrderFacts>
       </SectionCard>
 
-      <SectionCard title="调拨明细" compact>
+      <SectionCard title="调拨明细" compact noPadding
+        contentClassName="[&>.desktop-table]:!rounded-none [&>.desktop-table]:!border-0 [&>.desktop-table]:!shadow-none">
         <DataTable
           columns={[
             ...productIdentityColumns({ compact: true }),
             { key: 'unit', title: '单位', width: 70, render: v => <span className="text-muted-foreground">{String(v)}</span> },
             { key: 'quantity', title: '计划', width: 90 },
             ...(showProgress ? [
-              { key: 'deductedQty', title: '已出库', width: 90, render: v => <span className="text-amber-600">{(v as number) ?? 0}</span> },
-              { key: 'receivedQty', title: '已入库', width: 90, render: v => <span className="text-emerald-600">{(v as number) ?? 0}</span> },
+              { key: 'deductedQty', title: '已出库', width: 90, render: v => <span className="text-warning-ink">{(v as number) ?? 0}</span> },
+              { key: 'receivedQty', title: '已入库', width: 90, render: v => <span className="text-success-ink">{(v as number) ?? 0}</span> },
             ] as TableColumn<TransferItem>[] : []),
           ] satisfies TableColumn<TransferItem>[]}
           data={order.items ?? []}
           rowKey="id"
+          scrollLabel="调拨商品明细"
           emptyText="暂无调拨明细"
         />
 
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-muted-body">共 {order.items?.length ?? 0} 种商品</p>
+        <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+          <span className="mr-auto tabular-nums">共 {order.items?.length ?? 0} 种商品</span>
         </div>
       </SectionCard>
 
@@ -556,7 +559,7 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
       <div className="h-4" />
 
       <ConfirmDialog
-        open={confirmState.open}
+        open={confirmState.open && (confirmState.variant === 'destructive' ? canCancel : canConfirm)}
         title={confirmState.title}
         description={confirmState.description}
         variant={confirmState.variant}

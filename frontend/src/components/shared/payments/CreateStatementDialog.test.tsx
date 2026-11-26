@@ -29,7 +29,8 @@ vi.mock('@/components/finder/SupplierFinder', () => ({
     <button onClick={onClose}>取消选择供应商</button>
   </>,
 }))
-vi.mock('@tanstack/react-query', () => ({
+vi.mock('@tanstack/react-query', async original => ({
+  ...await original<typeof import('@tanstack/react-query')>(),
   useQuery: ({ enabled, queryKey }: { enabled: boolean; queryKey: unknown[] }) => {
     fixture.queryKeys.push(queryKey)
     return { data: enabled ? fixture.candidates : undefined, isFetching: fixture.isFetching }

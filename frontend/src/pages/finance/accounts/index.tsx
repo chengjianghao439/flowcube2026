@@ -7,7 +7,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
@@ -61,47 +63,45 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
   const fieldId = useId()
   const [v, setV] = useState<AcctQuery>(initial)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
+  function apply() {
+    onApply(v)
+    onClose()
+  }
   return (
-    <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="fc-form-dialog max-w-lg">
-        <DialogHeader description={"设置资金账户的筛选条件。"}><DialogTitle>查询资金账户</DialogTitle></DialogHeader>
-        <div className="fc-form-dialog-body space-y-3">
+    <QueryDialog open={open} dialogId="finance-accounts-query" title="查询资金账户" width={520}
+      onClose={onClose} resetLabel="清空" onReset={() => setV(EMPTY_ACCT_QUERY)} onApply={apply}>
+      <div className="grid gap-3 px-5 py-4">
+        <div className="space-y-1">
+          <Label htmlFor={`${fieldId}-keyword`}>关键字</Label>
+          <Input id={`${fieldId}-keyword`} className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
+            onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) apply() }}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV(p => ({ ...p, keyword: e.target.value }))} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor={`${fieldId}-keyword`}>关键字</Label>
-            <Input id={`${fieldId}-keyword`} className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV(p => ({ ...p, keyword: e.target.value }))} />
+            <Label htmlFor={`${fieldId}-type`}>账户类型</Label>
+            <Select value={v.type || '__all__'} onValueChange={x => setV(p => ({ ...p, type: x === '__all__' ? '' : x }))}>
+              <SelectTrigger id={`${fieldId}-type`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部</SelectItem>
+                {TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-type`}>账户类型</Label>
-              <Select value={v.type || '__all__'} onValueChange={x => setV(p => ({ ...p, type: x === '__all__' ? '' : x }))}>
-                <SelectTrigger id={`${fieldId}-type`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部</SelectItem>
-                  {TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-active`}>状态</Label>
-              <Select value={v.isActive || '__all__'} onValueChange={x => setV(p => ({ ...p, isActive: x === '__all__' ? '' : x }))}>
-                <SelectTrigger id={`${fieldId}-active`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部</SelectItem>
-                  <SelectItem value="1">启用</SelectItem>
-                  <SelectItem value="0">停用</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1">
+            <Label htmlFor={`${fieldId}-active`}>状态</Label>
+            <Select value={v.isActive || '__all__'} onValueChange={x => setV(p => ({ ...p, isActive: x === '__all__' ? '' : x }))}>
+              <SelectTrigger id={`${fieldId}-active`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部</SelectItem>
+                <SelectItem value="1">启用</SelectItem>
+                <SelectItem value="0">停用</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setV(EMPTY_ACCT_QUERY)}>清空</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </QueryDialog>
   )
 }
 
@@ -135,7 +135,7 @@ export default function FinanceAccountsPage() {
     if (!canDelete) setDeleteTarget(null)
   }, [canDelete])
 
-  const { data, isLoading } = useVisibleQuery({
+  const { data, isLoading, isError, error, refetch } = useVisibleQuery({
     queryKey: ['finance-accounts', query],
     queryFn: () => getAccountsApi({
       keyword: query.keyword || undefined,
@@ -282,7 +282,7 @@ export default function FinanceAccountsPage() {
         description="余额由流水实时汇总，不可直接修改。"
         actions={(
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => downloadExport('/export/finance-accounts').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/finance-accounts').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canCreate && <Button onClick={openCreate}>新建账户</Button>}
           </div>
@@ -290,13 +290,15 @@ export default function FinanceAccountsPage() {
       />
 
 
-      {summary && <SummaryStrip items={[
+      {!isError && summary && <SummaryStrip items={[
         { label: `资金合计（${summary.accountCount} 个账户）`, value: money(summary.totalBalance) },
       ]} />}
 
       <QueryChips chips={queryChips} onClearAll={() => setQuery(EMPTY_ACCT_QUERY)} />
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+      {isError ? <QueryErrorState title="资金账户加载失败" error={error} onRetry={() => void refetch()} /> :
+        <DataTable fluid virtualized scrollLabel="资金账户表格" columnStorageKey="finance-accounts" columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />}
+      {!isError && !isLoading && data && <ListSummary total={data.summary?.accountCount ?? data.list.length} unit="个" />}
 
       <AccountsQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={setQuery} />
 
@@ -321,7 +323,7 @@ export default function FinanceAccountsPage() {
             <div className="space-y-1">
               <Label htmlFor={`${fieldId}-type`}>类型 *</Label>
               <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
-                <SelectTrigger id={`${fieldId}-type`} className="h-10"><SelectValue /></SelectTrigger>
+                <SelectTrigger id={`${fieldId}-type`} className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TYPE_OPTIONS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                 </SelectContent>
@@ -369,7 +371,7 @@ export default function FinanceAccountsPage() {
       {/* 账户流水 */}
       <Dialog open={!!txAccount} onOpenChange={v => !v && setTxAccount(null)}>
         <DialogContent className="fc-form-dialog max-w-4xl">
-          <DialogHeader description="核对该账户全部日期的收支与余额。"><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
           <div className="fc-form-dialog-body space-y-4">
             {txAccount && (
               <div className="text-sm text-muted-foreground">
@@ -384,7 +386,7 @@ export default function FinanceAccountsPage() {
               <QueryErrorState error={transactionsQuery.error} onRetry={() => void transactionsQuery.refetch()} title="账户流水加载失败" compact />
             ) : transactionsQuery.isLoading ? (
               <p role="status" className="text-sm text-muted-foreground">正在加载账户流水…</p>
-            ) : transactions && <div className="max-h-96 overflow-y-auto rounded-md border">
+            ) : transactions && <div className="rounded-md border">
               <ReportTable className="w-full text-sm">
                 <thead className="sticky top-0 text-xs text-muted-foreground">
                   <tr>

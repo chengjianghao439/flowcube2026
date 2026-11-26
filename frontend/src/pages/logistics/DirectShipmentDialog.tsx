@@ -35,9 +35,9 @@ export function DirectShipmentDialog({ waybill, onClose, onSaved, submitDisabled
     onSuccess: () => { toast.success('寄件资料已保存，等待自动下单'); onSaved(); onClose() },
     onError: (e: Error) => toast.error(e.message || '保存失败'),
   })
-  return <Dialog open onOpenChange={v => { if (!v && !mutation.isPending) onClose() }}><DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+  return <Dialog open onOpenChange={v => { if (!v && !mutation.isPending) onClose() }}><DialogContent className="fc-form-dialog max-w-2xl">
     <DialogHeader description={<>{submitDisabled && <span role="status">原运单最新状态待核对，草稿已保留，暂不能提交。 </span>}本批 {waybill.shipment?.packages.length || 0} 件，按实际打包箱数自动填写。重量由快递员称重确认。</>}><DialogTitle>补充寄件资料</DialogTitle></DialogHeader>
-    <div className="space-y-5 py-2">
+    <div className="fc-form-dialog-body space-y-5 py-2">
       <ContactFields title="寄件人" value={sender} onChange={setSender} />
       <ContactFields title="收件人" value={receiver} onChange={setReceiver} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

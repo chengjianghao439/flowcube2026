@@ -1,3 +1,4 @@
+import { PageDescription } from './PageDescription'
 import { useContext, type ReactNode } from 'react'
 import { PageHeaderContext } from './PageHeaderContext'
 
@@ -23,7 +24,7 @@ export default function PageHeader({ title, description, status, actions }: Page
               <div className="desktop-page-status flex min-w-0 flex-wrap items-center gap-2 text-sm">{status}</div>
             )}
           </div>
-          <p className="desktop-page-description mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+          <PageDescription>{description}</PageDescription>
         </div>
         {actions && (
           <div className="flex w-full max-w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end">{actions}</div>

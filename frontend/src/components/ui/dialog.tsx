@@ -32,11 +32,26 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+function hasDialogDescription(node: React.ReactNode): boolean {
+  let found = false
+  React.Children.forEach(node, child => {
+    if (found || !React.isValidElement(child)) return
+    if (child.type === DialogDescription) { found = true; return }
+    const childProps = child.props as { description?: React.ReactNode; children?: React.ReactNode }
+    if (child.type === DialogHeader && childProps.description != null) { found = true; return }
+    if (childProps.children && hasDialogDescription(childProps.children)) found = true
+  })
+  return found
+}
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }
+>(({ className, children, hideClose, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
   const focusReturn = useDialogFocusReturn({ onOpenAutoFocus, onCloseAutoFocus })
+  const ariaDescribedByProps = 'aria-describedby' in props || hasDialogDescription(children)
+    ? {}
+    : { 'aria-describedby': undefined }
   return (
   <DialogPortal>
     <DialogOverlay />
@@ -51,14 +66,15 @@ const DialogContent = React.forwardRef<
         "fc-dialog fixed inset-0 z-50 m-auto grid h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-lg",
         className
       )}
+      {...ariaDescribedByProps}
       {...props}
       {...focusReturn}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+      {!hideClose && <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
         <X className="h-4 w-4" />
         <span className="sr-only">关闭</span>
-      </DialogPrimitive.Close>
+      </DialogPrimitive.Close>}
     </DialogPrimitive.Content>
   </DialogPortal>
   )

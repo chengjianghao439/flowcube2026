@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -63,7 +62,7 @@ function ReadFeedback({ title, query }: { title: string; query: ReadState }) {
 }
 
 function Count({ card }: { card: WorkbenchCard }) {
-  return <Badge variant="outline" className="shrink-0 whitespace-nowrap tabular-nums">{card.count} {cardUnits[card.key] ?? '项待办'}</Badge>
+  return <SoftStatusLabel tone="draft" className="shrink-0 whitespace-nowrap tabular-nums" label={`${card.count} ${cardUnits[card.key] ?? '项待办'}`} />
 }
 
 function JobGroup({ section, onOpen }: { section: JobSection; onOpen: Open }) {
@@ -101,7 +100,7 @@ function JobGroup({ section, onOpen }: { section: JobSection; onOpen: Open }) {
                       <span className="min-w-0">
                         <span className="flex flex-wrap items-center gap-2">
                           <span className="break-words text-sm font-medium text-primary">{item.title}</span>
-                          {item.badge && <Badge variant="outline">{item.badge}</Badge>}
+                          {item.badge && <SoftStatusLabel label={item.badge} tone="info" />}
                         </span>
                         {item.subtitle && <span className="mt-0.5 block break-words text-xs leading-5 text-muted-foreground">{item.subtitle}</span>}
                       </span>
@@ -123,7 +122,7 @@ function ReminderBlock({ items, query, onOpen }: { items: NotificationItem[]; qu
     <section aria-label="财务与系统提醒" className={cardFrame}>
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
         <h2 className="text-section-title">财务与系统提醒</h2>
-        {items.length > 0 && <Badge variant="outline">{items.length} 类提醒</Badge>}
+        {items.length > 0 && <SoftStatusLabel label={`${items.length} 类提醒`} tone="info" />}
       </div>
       <ReadFeedback title="财务与系统提醒" query={query} />
       {items.length === 0 && !!query.data && !query.isError && !query.isPaused && !query.isFetching &&

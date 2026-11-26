@@ -11,7 +11,7 @@ const { pool: appPool } = require('../backend/src/config/db')
 
 const prefix = `smoke_rename_${Date.now().toString(36)}_`
 const ownUsers = []
-let ctx, adminToken, editorToken, editorRoleId, targetId, targetToken, targetPassword
+let ctx, adminToken, editorToken, editorId, editorRoleId, targetId, targetToken, targetPassword
 
 async function createUser(suffix, roleId, password) {
   const username = prefix + suffix
@@ -30,13 +30,16 @@ before(async () => {
   assert.ok(adminToken)
   const [role] = await ctx.pool.query('INSERT INTO sys_roles(code,name,is_system) VALUES(?,?,0)', [prefix + 'role', '账号编辑测试'])
   editorRoleId = role.insertId
-  await ctx.pool.query('INSERT INTO sys_role_permissions(role_id,permission) VALUES(?,?)', [editorRoleId, 'user.update'])
+  await ctx.pool.query('INSERT INTO sys_role_permissions(role_id,permission) VALUES ?', [[
+    [editorRoleId, 'user.update'], [editorRoleId, 'user.delete'],
+  ]])
   const editorPassword = crypto.randomBytes(24).toString('hex')
   const editor = await createUser('editor', editorRoleId, editorPassword)
+  editorId = editor.id
   editorToken = (await login(ctx.http, editor.username, editorPassword)).token
   assert.ok(editorToken)
   targetPassword = crypto.randomBytes(24).toString('hex')
-  const target = await createUser('target', 2, targetPassword)
+  const target = await createUser('target', editorRoleId, targetPassword)
   targetId = target.id
   targetToken = (await login(ctx.http, target.username, targetPassword)).token
   assert.ok(targetToken)
@@ -46,6 +49,7 @@ before(async () => {
 after(async () => {
   if (ctx) {
     if (ownUsers.length) {
+      await ctx.pool.query('DELETE FROM user_warehouse_scope WHERE user_id IN (?)', [ownUsers])
       await ctx.pool.query('DELETE FROM refresh_token_sessions WHERE user_id IN (?)', [ownUsers])
       await ctx.pool.query('DELETE FROM auth_audit_logs WHERE user_id IN (?) OR username LIKE ?', [ownUsers, `${prefix}%`])
       await ctx.pool.query('DELETE FROM sys_users WHERE id IN (?)', [ownUsers])
@@ -102,4 +106,22 @@ test('administrator can include development accounts in the list without exposin
   assert.equal(visible.data.data.pagination.total, ownUsers.length)
   assert.ok(visible.data.data.list.some(user => user.username === prefix + 'renamed'))
   assert.ok(visible.data.data.list.every(user => !Object.hasOwn(user, 'password')))
+})
+
+test('同仓且现有权限相同的委派管理员可编辑、设置仓库并删除合成账号', async () => {
+  const target = await createUser('delegated', editorRoleId, crypto.randomBytes(24).toString('hex'))
+  await ctx.pool.query('INSERT INTO user_warehouse_scope(user_id,warehouse_id) VALUES ?', [[
+    [editorId, ctx.warehouse.id], [target.id, ctx.warehouse.id],
+  ]])
+  const url = `/api/users/${target.id}`
+  const updated = await ctx.http.put(url, { token: editorToken, json: { realName: '委派编辑', isActive: true } })
+  assert.equal(updated.status, 200)
+  const scoped = await ctx.http.put(url + '/warehouse-scope', { token: editorToken, json: { warehouseIds: [ctx.warehouse.id] } })
+  assert.equal(scoped.status, 200)
+  assert.deepEqual(scoped.data.data.warehouseIds, [ctx.warehouse.id])
+  const removed = await ctx.http.delete(url, { token: editorToken })
+  assert.equal(removed.status, 200)
+  const [[saved]] = await ctx.pool.query('SELECT real_name, deleted_at FROM sys_users WHERE id=?', [target.id])
+  assert.equal(saved.real_name, '委派编辑')
+  assert.ok(saved.deleted_at)
 })

@@ -71,8 +71,12 @@ async function main() {
     log.assert('禁用后 token 被拒（401）', disabledTokenRes.status === 401, `status=${disabledTokenRes.status}`)
   } finally {
     const summary = log.summary()
-    await ctx.close()
-    process.exit(summary.failed > 0 ? 1 : 0)
+    if (summary.failed > 0) process.exitCode = 1
+    try {
+      await ctx.close()
+    } finally {
+      await require('../backend/src/config/db').pool.end()
+    }
   }
 }
 

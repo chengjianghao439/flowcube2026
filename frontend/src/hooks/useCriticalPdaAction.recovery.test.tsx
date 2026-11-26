@@ -65,8 +65,24 @@ test('服务器切换不将旧原键查询或重发到新服务器',async()=>{
  await act(async()=>setApiClientBaseURL('/other-api'))
  await act(async()=>{await critical.confirmPending();await critical.retryPending().catch(()=>{})})
  expect(api.receipt).toHaveBeenCalledTimes(receiptCalls);expect(api.retry).not.toHaveBeenCalled()
- expect(critical.pendingRecord?.requestKey).toBe(original.requestKey)
+ expect(critical.pendingRecord).toBeNull()
+ expect(critical.submitBlocked).toBe(false)
+ await expect(first()).resolves.toMatchObject({endpoint:new URL('/other-api', window.location.origin).href})
+ const second = critical.pendingRecord!
+ expect(second.requestKey).not.toBe(original.requestKey)
+ expect(second.endpoint).not.toBe(original.endpoint)
+ const stored = (key: string) => localStorage.getItem('pda_owned_request_v3:1:'+key)
+ expect(stored(original.requestKey)).toBeTruthy()
  await act(async()=>setApiClientBaseURL('/api'))
+ expect(critical.pendingRecord?.requestKey).toBe(original.requestKey)
+ api.receipt.mockResolvedValue({status:'success',data:{containers:[]}})
+ await vi.waitFor(()=>expect(critical.confirming).toBe(false))
+ await act(async()=>{await critical.confirmPending()})
+ expect(stored(original.requestKey)).toBeNull()
+ expect(stored(second.requestKey)).toBeTruthy()
+ api.receipt.mockResolvedValue({status:'pending',data:null})
+ await act(async()=>setApiClientBaseURL('/other-api'))
+ expect(critical.pendingRecord?.requestKey).toBe(second.requestKey)
 })
 test('Web Locks缺失或另一窗口持锁时首次不发送',async()=>{
  const executor=vi.fn()
@@ -186,4 +202,57 @@ test('另一窗口在预留await后完成原键，迟到首POST守卫不调用�
  const executor=vi.fn()
  await act(async()=>{expect((await critical.run(executor,{taskId:7,requestBody:body})).kind).toBe('pending')})
  expect(executor).not.toHaveBeenCalled();expect(critical.pendingRecord?.metadata?.requestBody).toEqual(body);expect(api.confirmed).not.toHaveBeenCalled()
+})
+
+test.each(['void', 'return'])('改单 %s 核对原明细回执且重试保持原键和原库位', async kind => {
+  await act(async () => root.unmount())
+  action = `warehouse.adjustment-${kind}.31`
+  await mount()
+  const entry = kind === 'return' ? {returnId: 17, locationId: 8} : {voidId: 17}
+  const originalBody = {adjustmentId: 31, ...entry}
+  await act(async () => {
+    await critical.run(async () => { throw Object.assign(Error('合成连接中断'), {status: 503}) }, {...entry, requestBody: originalBody})
+  })
+  await vi.waitFor(() => expect(api.receipt).toHaveBeenCalled())
+  const record = critical.pendingRecord!
+  expect(api.receipt.mock.calls[0].slice(0,2)).toEqual([record.requestKey, `warehouse.adjustment-${kind}.17`])
+  api.retry.mockResolvedValue({finalized:false})
+  await act(async () => { await critical.retryPending() })
+  expect(api.retry.mock.calls[0][0].metadata.requestBody).toEqual(originalBody)
+  expect(api.retry.mock.calls[0][1]).toBe(record.requestKey)
+  expect(critical.pendingRecord).toBeNull()
+})
+
+test('原服务器写入仍在等待时，新服务器不展示旧状态且可处理同号作业', async () => {
+  let release!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const executor = vi.fn(async () => { await gate; return {} })
+  let prior!: ReturnType<typeof critical.run>
+  await act(async () => { prior = critical.run(executor, {taskId:7,requestBody:body}) })
+  await vi.waitFor(() => expect(executor).toHaveBeenCalledOnce())
+  await act(async () => setApiClientBaseURL('/other-api'))
+  let nextKey: string
+  try {
+    expect(critical.pendingRecord).toBeNull()
+    expect(critical.phase).toBe('idle')
+    const next = await first()
+    nextKey = next.requestKey
+    expect(next.endpoint).toBe(new URL('/other-api', window.location.origin).href)
+  } finally { await act(async () => { release(); await prior }) }
+  expect(critical.pendingRecord?.requestKey).toBe(nextKey!)
+  expect(api.confirmed).not.toHaveBeenCalled()
+})
+
+test('原服务器保存的错单定位只阻断原服务器', async () => {
+  const original = await first()
+  const key = 'pda_owned_request_v3:1:' + original.requestKey
+  localStorage.setItem(key, JSON.stringify({...original,metadata:{taskId:8}}))
+  await act(async () => window.dispatchEvent(new StorageEvent('storage',{key})))
+  expect(critical.blockedReason).toContain('原作业记录读取失败')
+  await act(async () => setApiClientBaseURL('/other-api'))
+  expect(critical.submitBlocked).toBe(false)
+  expect((await first()).endpoint).toBe(new URL('/other-api', window.location.origin).href)
+  expect(localStorage.getItem(key)).toBeTruthy()
+  await act(async () => setApiClientBaseURL('/api'))
+  expect(critical.blockedReason).toContain('原作业记录读取失败')
 })

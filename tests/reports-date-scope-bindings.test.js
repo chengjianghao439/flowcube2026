@@ -7,6 +7,12 @@ const projection = require('../backend/src/modules/inventory/inventoryProjection
 const file = path.resolve(__dirname, '../backend/src/modules/reports/reports.query.js')
 const methods = ['fetchPurchaseStatsRows', 'fetchSaleStatsRows', 'fetchInventoryStatsRows', 'fetchWavePerformanceRows', 'fetchPurchasePriceTrend']
 const plain = value => JSON.parse(JSON.stringify(value))
+// Exercise the real document-scope SQL builder without loading the database pool.
+const scopeFile = require.resolve('../backend/src/utils/saleDocumentScope')
+const requireScope = require('node:module').createRequire(scopeFile)
+const scopeModule = { exports: {} }
+vm.runInNewContext(fs.readFileSync(scopeFile, 'utf8'), { module: scopeModule,
+  require: name => name === './warehouseScope' ? {} : requireScope(name) }, { filename: scopeFile })
 function load(code = fs.readFileSync(file, 'utf8'), dateHelpers = helpers, turnoverRow = null) {
   const calls = [], module = { exports: {} }
   const mocks = {
@@ -15,6 +21,7 @@ function load(code = fs.readFileSync(file, 'utf8'), dateHelpers = helpers, turno
       return turnoverRow && sql.includes('AS inbound_qty') ? [[turnoverRow]] : [[]]
     } } },
     './reports.helpers': dateHelpers,
+    '../../utils/saleDocumentScope': scopeModule.exports,
     '../../utils/backendTime': { beijingTodayYmd: () => '2026-11-18' },
     '../inventory/inventoryProjection': projection,
     '../../utils/warehouseScope': { scopeFilter: (ids, column) => !Array.isArray(ids) ? { sql: '', params: [] } : !ids.length ? { sql: ' AND 1=0', params: [] } : { sql: ` AND ${column} IN (?)`, params: [ids] } },
@@ -31,6 +38,8 @@ function expected(call, params) {
   if (dated) { if (params.startDate) out.push(params.startDate); if (params.endDate) out.push(params.endDate) }
   if (Array.isArray(params.scopeWarehouseIds) && params.scopeWarehouseIds.length) {
     out.push(params.scopeWarehouseIds)
+    // Sales reports bind the same warehouse scope to the header and every saved line.
+    if (/(?:FROM|JOIN) sale_orders o\b/i.test(call.sql)) out.push(params.scopeWarehouseIds)
     if (turnover) out.push(params.scopeWarehouseIds, params.scopeWarehouseIds)
   }
   return out

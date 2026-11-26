@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { chooseSelectOption } from '@/test/chooseSelectOption'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -6,6 +7,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { getByRole } from '@testing-library/dom'
+import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { DEFAULT_LABEL_ELEMENTS } from '@/constants/printFieldDefs'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
@@ -28,8 +30,8 @@ beforeEach(() => {
   qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
 })
 afterEach(() => { act(() => root.unmount()); qc.clear(); host.remove(); vi.restoreAllMocks() })
-async function render(path = '/settings/print-templates/10') {
-  await act(async () => { root.render(<MemoryRouter><QueryClientProvider client={qc}><TabPathContext.Provider value={path}><PrintTemplateEditor /></TabPathContext.Provider></QueryClientProvider></MemoryRouter>) })
+async function render(path = '/settings/print-templates/10', active = true) {
+  await act(async () => { root.render(<MemoryRouter><QueryClientProvider client={qc}><TabPathContext.Provider value={path}><SectionVisibilityContext.Provider value={active}><PrintTemplateEditor /></SectionVisibilityContext.Provider></TabPathContext.Provider></QueryClientProvider></MemoryRouter>) })
   for (let i = 0; i < 3; i++) await act(async () => { await new Promise(r => setTimeout(r, 20)) })
 }
 function btn(text: string) { return [...host.querySelectorAll('button')].find(b => b.textContent?.trim() === text || b.getAttribute('aria-label') === text)! }
@@ -143,12 +145,12 @@ test('新增标签字段可拖入并显示真实值，保存仅保存字段定�
 
 test('DPI is saved and participates in undo/redo', async () => {
   await render()
-  const select = host.querySelector<HTMLSelectElement>('select[aria-label="打印分辨率"]')!
-  expect(select.value).toBe('203')
-  await act(async () => { select.value = '300'; select.dispatchEvent(new Event('change', { bubbles: true })) })
+  const select = () => getByRole(host, 'combobox', { name: '打印分辨率' })
+  expect(select().textContent).toBe('203 DPI')
+  await chooseSelectOption(select(), '300 DPI')
   await click('保存'); expect(mocks.save.mock.calls.at(-1)![0].layout.dpi).toBe(300)
-  await click('撤销'); expect(select.value).toBe('203')
-  await click('重做'); expect(select.value).toBe('300')
+  await click('撤销'); expect(select().textContent).toBe('203 DPI')
+  await click('重做'); expect(select().textContent).toBe('300 DPI')
 })
 
 test('坐标完整输入只占一条撤销记录，另一次输入可独立撤销重做', async () => {
@@ -298,4 +300,48 @@ test('对齐分段组支持方向键且不能清空已有对齐，多选附加�
   await act(async () => { await user.keyboard('{ArrowRight}') })
   await click('保存')
   expect(mocks.save.mock.calls.at(-1)![0].layout.elements[0]).toMatchObject({ x: element.x + 1, y: element.y })
+})
+
+
+test('隐藏模板不消费工作区撤销键，返回可见页才消费', async () => {
+  await render(undefined, false)
+  function undoKey() {
+    const event = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true })
+    act(() => { window.dispatchEvent(event) })
+    return event.defaultPrevented
+  }
+  expect(undoKey()).toBe(false)
+  await render(undefined, true)
+  expect(undoKey()).toBe(true)
+  await click('预览')
+  expect(undoKey()).toBe(false)
+})
+
+test('带查询参数读取正确模板，读取失败显示重试', async () => {
+  mocks.detail.mockRejectedValueOnce(new Error('模板暂不可读'))
+  await render('/settings/print-templates/10?source=list')
+  expect(mocks.detail).toHaveBeenCalledWith(10)
+  expect(host.textContent).toContain('模板暂不可读')
+  await click('重试')
+  await render('/settings/print-templates/10?source=list')
+  expect(host.textContent).toContain('真实测试商品')
+})
+
+test('拖到画布外释放后，下一次空白点选不沿用旧框选范围', async () => {
+  await render()
+  const canvas = host.querySelector<HTMLElement>('.cursor-crosshair')!
+  const capture = vi.fn()
+  canvas.setPointerCapture = capture
+  const pointer = (type: string, x: number, y: number) => act(() => {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 })
+    Object.defineProperty(event, 'pointerId', { value: 1 })
+    canvas.dispatchEvent(event)
+  })
+  pointer('pointerdown', 0, 0)
+  pointer('pointerup', 1000, 1000)
+  expect(capture).toHaveBeenCalledWith(1)
+  expect(btn('复制选中元素').disabled).toBe(false)
+  pointer('pointerdown', 900, 900)
+  pointer('pointerup', 900, 900)
+  expect(btn('复制选中元素').disabled).toBe(true)
 })

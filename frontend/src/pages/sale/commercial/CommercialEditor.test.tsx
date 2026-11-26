@@ -1070,3 +1070,12 @@ test('query-only pending adjustment keeps warehouse confirmation status and live
     expect(done).not.toHaveBeenCalled()
   }, order, true, done)
 })
+
+test('改单保留成交折扣只读，草稿编辑可调整折扣', async () => {
+  await mount(async () => {
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="折扣金额"]')?.disabled).toBe(true)
+  }, order, true)
+  await mount(async () => {
+    expect(document.querySelector<HTMLInputElement>('input[aria-label="折扣金额"]')?.disabled).toBe(false)
+  }, order, false)
+})

@@ -124,3 +124,37 @@ test('已持久化的未决拆分可返回工作台，核对入口仍可见且�
   expect(localStorage.getItem(key())).toBeTruthy(); await click('更多功能')
   expect(host.textContent).toContain('库存查询'); expect(requests.filter(r => r.method === 'post')).toHaveLength(0)
 })
+
+test.each([['fill','整件放入盒','https://plastic.invalid/api'],['repack','盒还原整件','https://plastic.invalid/api'],['fill','整件放入盒','/api']])('冷启动按原 %s 作业提供核对入口 %s %s', async (operation, label, apiBase) => {
+  setApiClientBaseURL(apiBase)
+  const action = `plastic_box.${operation}.12`
+  const requestKey = 'cold-fixture'
+  localStorage.setItem(`pda_owned_request_v3:${owner}:${requestKey}`,JSON.stringify({
+    requestKey,action,requestAction:action,label,createdAt:new Date().toISOString(),
+    endpoint:new URL(apiBase, window.location.origin).href,deviceCode:'offline-device',deviceWarehouseId:null,
+    metadata:{boxId:12,barcode:'B12',boxBarcode:'B12',sourceContainerId:11,sourceBarcode:'I11',expectedSourceQty:3},
+  }))
+  await draw()
+  const buttons = [...host.querySelectorAll('button')].filter(visible)
+  expect(buttons.find(b => b.textContent?.startsWith('整件拆出散件盒'))?.disabled).toBe(true)
+  expect(buttons.find(b => b.textContent?.startsWith(label))?.disabled).toBe(false)
+  await click(label)
+  if (operation === 'repack') {
+    await act(async () => { setApiClientBaseURL('https://plastic-b.invalid/api'); setApiClientBaseURL('https://plastic.invalid/api') })
+    await vi.waitFor(() => expect([...host.querySelectorAll('button')].find(b => visible(b) && b.textContent === '确认上次结果')).toBeDefined())
+  }
+  expect(requests.some(r => r.method === 'post')).toBe(false)
+})
+
+test('异服的旧拆分回执不会锁住当前服务器的塑料盒入口', async () => {
+  seed()
+  const original = localStorage.getItem(key())
+  setApiClientBaseURL('https://plastic-b.invalid/api')
+  await draw()
+  const button = (label:string) => [...host.querySelectorAll('button')].find(b => visible(b) && b.textContent?.startsWith(label))
+  expect(button('整件放入盒')?.disabled).toBe(false)
+  await act(async () => setApiClientBaseURL('https://plastic.invalid/api'))
+  expect(button('整件放入盒')?.disabled).toBe(true)
+  expect(button('整件拆出散件盒')?.disabled).toBe(false)
+  expect(localStorage.getItem(key())).toBe(original)
+})

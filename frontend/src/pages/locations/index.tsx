@@ -18,7 +18,7 @@ import { LOCATION_STATUS_OPTIONS, type Location, type CreateLocationParams } fro
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { downloadExport } from '@/lib/exportDownload'
-import { AppliedFilters } from '@/pages/warehouse-structure/AppliedFilters'
+import { QueryChips } from '@/components/shared/QueryChips'
 import { toast } from '@/lib/toast'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import LocationQueryDialog, { type LocationQueryValues } from './LocationQueryDialog'
@@ -169,7 +169,7 @@ export default function LocationsPage() {
         canSubmit={() => !!form.warehouseId && !!form.code}
         headerActions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/locations', exportFilters).catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/locations', exportFilters).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
@@ -190,7 +190,7 @@ export default function LocationsPage() {
             ]}
           />
         )}
-        renderToolbar={chips.length > 0 ? <AppliedFilters chips={chips} onClear={clearAll} /> : null}
+        renderToolbar={<QueryChips chips={chips.map(({ key, label, onRemove }) => ({ key, text: label, onClear: onRemove }))} onClearAll={clearAll} />}
         renderForm={(editing, _open, locked) => (
           <div className="space-y-3 py-2">
             <div>

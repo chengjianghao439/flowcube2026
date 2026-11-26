@@ -44,6 +44,7 @@ const commands = Object.freeze([
   "node tests/users-roles.smoke.test.js",
   "npm run smoke:reports",
   "npm run smoke:reports-values",
+  "npm run smoke:backend-business-invariants",
   "npm run smoke:report-cost-basis",
   "npm run smoke:price-change-history",
   "npm run smoke:product-price-history-integrity",

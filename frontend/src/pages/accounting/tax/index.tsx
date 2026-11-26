@@ -1,3 +1,6 @@
+import * as Tabs from '@radix-ui/react-tabs'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import ListSummary from '@/components/shared/ListSummary'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { money } from '@/lib/format'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -24,6 +27,8 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 
+const TAX_REPORTS = [{ value: 'vat', label: '增值税' }, { value: 'income', label: '所得税' }] as const
+
 export default function TaxFilingPage() {
   const { companyId } = useCompanyStore()
   const [period, setPeriod] = useState(() => beijingPeriod())
@@ -32,26 +37,30 @@ export default function TaxFilingPage() {
     <div className="space-y-4">
       <PageHeader
         title="报税数据"
-        description="从会计科目发生额实时投影增值税/所得税申报表要素（税会差异，即税法与会计口径的差异，用调整项手工维护），供报税参考。"
-        actions={<Button variant="outline" onClick={() => downloadExport('/export/tax-adjustments').catch(e => toast.error((e as Error).message))}>导出</Button>}
+        description="查看增值税与所得税申报数据及税会差异调整。"
+        actions={<Button variant="outline" onClick={() => downloadExport('/export/tax-adjustments').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>}
       />
 
 
-      <FilterCard className="mb-4">
-        <div className="text-sm font-medium">申报期间</div>
-        <Input aria-label="申报期间" value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-32 text-center" />
-        <div className="flex gap-1">
-          <Button size="sm" variant={tab === 'vat' ? 'default' : 'outline'} onClick={() => setTab('vat')}>增值税</Button>
-          <Button size="sm" variant={tab === 'income' ? 'default' : 'outline'} onClick={() => setTab('income')}>所得税</Button>
-        </div>
+      <FilterCard>
+        <label className="flex items-center gap-2 text-sm font-medium">申报期间
+          <Input aria-label="申报期间" value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-32 text-center" />
+        </label>
       </FilterCard>
 
-      <KeepAliveSection active={tab === 'vat'}>
-        <TaxReport companyId={companyId} period={period} tab="vat" />
-      </KeepAliveSection>
-      <KeepAliveSection active={tab === 'income'}>
-        <TaxReport companyId={companyId} period={period} tab="income" />
-      </KeepAliveSection>
+      <Tabs.Root value={tab} onValueChange={value => { if (value === 'vat' || value === 'income') setTab(value) }}>
+        <Tabs.List aria-label="税种" className="fc-underline-tabs mb-4">
+          {TAX_REPORTS.map(report => <Tabs.Trigger key={report.value} value={report.value} onClick={() => setTab(report.value)}
+            className="min-h-10 border-b-2 border-transparent px-3 py-2 text-sm font-normal text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring data-[state=active]:border-primary data-[state=active]:font-semibold data-[state=active]:text-foreground">
+            {report.label}
+          </Tabs.Trigger>)}
+        </Tabs.List>
+        {TAX_REPORTS.map(report => <Tabs.Content key={report.value} value={report.value} forceMount hidden={tab !== report.value}>
+          <KeepAliveSection active={tab === report.value}>
+            <TaxReport companyId={companyId} period={period} tab={report.value} />
+          </KeepAliveSection>
+        </Tabs.Content>)}
+      </Tabs.Root>
     </div>
   )
 }
@@ -99,10 +108,13 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
   const adjColumns: TableColumn<TaxAdjustment>[] = [
     { key: 'period', title: '期间', width: 100, render: v => <span className="text-doc-code">{String(v)}</span> },
     { key: 'adjustItem', title: '调整项' },
-    { key: 'amount', title: '金额', width: 120, align: 'right', render: v => <span className={`tabular-nums ${Number(v) !== 0 ? 'text-amber-600 font-medium' : ''}`}>{money(Number(v))}</span> },
+    { key: 'amount', title: '金额', width: 120, align: 'right', render: v => <span className={`tabular-nums ${Number(v) !== 0 ? 'text-warning-ink font-medium' : ''}`}>{money(Number(v))}</span> },
     { key: 'remark', title: '备注', expandableText: true, render: v => String(v || '—') },
   ]
-  if (canManage) adjColumns.push({ key: 'id', title: '操作', width: 80, render: (_, r) => <Button size="sm" variant="ghost" className="text-destructive-ink" onClick={() => { if (active && canManage && readReady) removeAdj(r.id) }}>删除</Button> })
+  if (canManage) adjColumns.push({
+    key: 'id', title: '操作', width: 80, render: (_, r) => <TableActionsMenu primaryVariant="outline" primaryLabel="删除" rowLabel={r.adjustItem}
+      onPrimaryClick={() => { if (active && canManage && readReady) removeAdj(r.id) }} items={[]} />,
+  })
 
   if (!validPeriod) return <p role="status" className="py-6 text-sm text-muted-foreground">请输入有效的申报期间（YYYYMM）</p>
   if (reportQuery.isPaused || adjustmentsQuery.isPaused) return <p role="status" className="py-6 text-sm text-muted-foreground">报税数据读取已暂停，请恢复网络连接后重试</p>
@@ -136,7 +148,8 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
                 <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={submitAdjustment}>添加</Button>
               </div>}
             </div>
-            <DataTable columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
+            <DataTable virtualized fluid scrollLabel="增值税调整项表格" columnStorageKey="acct-tax-vat" columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
+            <ListSummary total={adjustments?.length ?? 0} unit="项" />
           </div>
         </div>
       ) : (
@@ -162,7 +175,8 @@ function TaxReport({ companyId, period, tab }: { companyId: number; period: stri
                 <Button size="sm" disabled={!adjItem.trim() || isPending} onClick={submitAdjustment}>添加</Button>
               </div>}
             </div>
-            <DataTable columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
+            <DataTable virtualized fluid scrollLabel="所得税调整项表格" columnStorageKey="acct-tax-income" columns={adjColumns} data={adjustments ?? []} rowKey="id" emptyText="无调整项" />
+            <ListSummary total={adjustments?.length ?? 0} unit="项" />
           </div>
         </div>
       )}

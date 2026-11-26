@@ -14,7 +14,7 @@ const { getExpectedForPair } = require('../backend/src/utils/expectedStock')
 const ref = `C4-${randomUUID().slice(0, 8)}`
 let server, http, token, headers, warehouse, location, supplier, customer, operator, deviceId
 let dropCloseKey = null
-const taskIds = [], poIds = [], productIds = [], saleIds = []
+const taskIds = [], poIds = [], productIds = [], saleIds = [], transferIds = [], destinationIds = []
 const fixturePath = `/tmp/flowcube-c4-smoke-${ref}.json`
 async function rows(sql, args = []) { return (await pool.query(sql, args))[0] }
 async function one(sql, args) { return (await rows(sql, args))[0] }
@@ -53,7 +53,7 @@ before(async () => {
 // 清理只按本轮捕获的 ID；业务事实保留供失败诊断，不做全表/前缀清理。
 after(async () => {
   if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
-  require('node:fs').writeFileSync(fixturePath, JSON.stringify({ ref, warehouse, location, supplier, customer, taskIds, poIds, productIds, saleIds }, null, 2), { mode: 0o600 })
+  require('node:fs').writeFileSync(fixturePath, JSON.stringify({ ref, warehouse, location, supplier, customer, taskIds, poIds, productIds, saleIds, transferIds, destinationIds }, null, 2), { mode: 0o600 })
   console.log(`[fixtures] ${fixturePath}`)
   try { if (deviceId) {
     await pool.query('DELETE FROM pda_device_sessions WHERE device_id=?', [deviceId])
@@ -252,4 +252,77 @@ test('收货阶段、上架进度和打印异常独立，收货中不被覆盖',
   const { buildReceiptStatus } = require('../backend/src/modules/inbound-tasks/inbound-tasks.status')
   assert.deepEqual(buildReceiptStatus({ status: 2, auditStatus: 0, putawayStatus: { key: 'putting_away' }, exceptionFlags: { hasException: true } }), { key: 'receiving', label: '收货中' })
   assert.deepEqual(buildReceiptStatus({ status: 4, auditStatus: 1, exceptionFlags: { hasException: true } }), { key: 'audited', label: '已完成' })
+})
+
+async function inTransitAfterEarlyPutaway() {
+  const f = await fixture(10)
+  const { containers: [box] } = await receive(f, 4)
+  await put(f, box)
+  const code = 'W0-' + randomUUID().slice(0, 8)
+  const destination = await insert('INSERT INTO inventory_warehouses (code,name) VALUES (?,?)', [code, code])
+  destinationIds.push(destination)
+  const transfer = ok(await post('/transfer', {
+    fromWarehouseId: warehouse.id, fromWarehouseName: warehouse.name,
+    toWarehouseId: destination, toWarehouseName: code,
+    items: [{ productId: f.product.id, productCode: f.product.code, productName: f.product.name, unit: '个', quantity: 4 }],
+  }))
+  transferIds.push(transfer.id)
+  ok(await post('/transfer/' + transfer.id + '/confirm'))
+  ok(await post('/transfer/' + transfer.id + '/scan-out', { containerBarcode: box.containerCode }, { headers }))
+  return { f, box, destination }
+}
+test('在途箱不计入收货待上架明细、数量与超时标记', async () => {
+  const { f, box, destination } = await inTransitAfterEarlyPutaway()
+  const queries = require('../backend/src/modules/inbound-tasks/inbound-tasks.query')
+  const summary = (await queries.loadInboundTaskClosureSummary([f.taskId])).get(f.taskId)
+  assert.equal(summary.waitingContainers, 0)
+  assert.equal(summary.waitingQty, 0)
+  assert.equal(summary.putawayQty, 4)
+  assert.equal(summary.totalContainers, 1)
+  assert.deepEqual(await queries.listWaitingContainers(f.taskId, [warehouse.id]), [])
+  await pool.query('UPDATE inventory_containers SET putaway_deadline_at=DATE_SUB(NOW(), INTERVAL 1 DAY) WHERE id=?', [box.containerId])
+  assert.ok(!(await queries.listAllPendingPutawayContainers([warehouse.id, destination])).some(row => Number(row.id) === Number(box.containerId)))
+  assert.equal(Number((await one('SELECT is_overdue FROM inventory_containers WHERE id=?', [box.containerId])).is_overdue), 0)
+})
+test('提前上架的在途箱不会阻止末箱收货结算', async () => {
+  const { f } = await inTransitAfterEarlyPutaway()
+  const { containers: [last] } = await receive(f, 6)
+  await put(f, last)
+  assert.equal(Number((await task(f)).audit_status), 1)
+  assert.equal(Number((await ap(f)).total_amount), 100)
+})
+
+test('工作台与履约仅展示收货仓仍待上架的箱和打印异常', async () => {
+  const { fetchRoleWorkbenchRows } = require('../backend/src/modules/reports/reports.query')
+  const { getInboundClosureThresholds } = require('../backend/src/utils/inboundThresholds')
+  const { detect } = require('../backend/src/modules/fulfillment/fulfillment.detect')
+  const thresholds = await getInboundClosureThresholds()
+  const workbench = () => fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds: [warehouse.id], batchSize: 200 })
+  const initialCount = Number((await workbench()).waitingPutawayCount.count)
+  const { f, box, destination } = await inTransitAfterEarlyPutaway()
+  const { containers: [waiting] } = await receive(f, 2)
+  const [source] = await rows('SELECT transfer_order_id, warehouse_id FROM inventory_containers WHERE id=?', [box.containerId])
+  const ids = [box.containerId, waiting.containerId]
+  await rows('UPDATE inventory_containers SET putaway_deadline_at=NOW()-INTERVAL 1 DAY WHERE id IN (?)', [ids])
+  const printIds = []
+  for (const id of ids) {
+    printIds.push(await insert("INSERT INTO print_jobs (ref_type,ref_id,title,content,status) VALUES ('inventory_container',?,?,?,3)", [id, ref, ref]))
+  }
+  async function check() {
+    const report = await workbench()
+    assert.equal(Number(report.waitingPutawayCount.count), initialCount + 1)
+    assert.deepEqual(report.waitingPutawayRows.map(c => Number(c.id)).filter(id => ids.includes(id)), [waiting.containerId])
+    const issues = await detect(pool, 'inbound', { id: f.taskId, status: 2, warehouse_id: warehouse.id })
+    assert.deepEqual(issues.map(i => i.key).sort(), [`putaway:${waiting.containerId}`, `print:${printIds[1]}`].sort())
+  }
+  await check()
+  // 分别只保留在途标记或异仓，覆盖两项独立条件。
+  try {
+    await rows('UPDATE inventory_containers SET warehouse_id=? WHERE id=?', [warehouse.id, box.containerId])
+    await check()
+    await rows('UPDATE inventory_containers SET transfer_order_id=NULL, warehouse_id=? WHERE id=?', [destination, box.containerId])
+    await check()
+  } finally {
+    await rows('UPDATE inventory_containers SET transfer_order_id=?, warehouse_id=? WHERE id=?', [source.transfer_order_id, source.warehouse_id, box.containerId])
+  }
 })

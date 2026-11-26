@@ -36,7 +36,7 @@ export function QueryDialog({ open, dialogId, title, description, width = 520, c
   return (
     <AppDialog open={open} dialogId={dialogId} title={title} defaultWidth={width}
       resizable={false} sizeToContent captureFocusOnOpen descriptionInHeader
-      description={description ?? (typeof title === 'string' ? `设置${title.replace(/查询/g, '')}的筛选条件。` : '设置筛选条件，查询当前列表。')}
+      description={description}
       onOpenChange={next => { if (!next) onClose() }}
       onOpenAutoFocus={focusCondition} onCloseAutoFocus={onCloseAutoFocus}
       footer={<div className="fc-query-dialog-actions flex flex-wrap items-center justify-between gap-2">

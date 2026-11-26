@@ -1,3 +1,8 @@
+import { OrderEntryUnitSelect } from '@/components/shared/OrderEntryUnitSelect'
+import { Textarea } from '@/components/ui/textarea'
+import { PERMISSIONS as P } from '@/lib/permission-codes'
+import { usePermission } from '@/hooks/usePermission'
+import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { ReturnToSourceOrder } from '@/pages/returns/ReturnSourceButton'
@@ -30,6 +35,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { OrderFact, OrderFacts } from '@/components/shared/OrderFacts'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
@@ -421,7 +427,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
       {createdReturn && <div role="status" className="rounded-md border p-3 space-y-2"><p>退货单 {createdReturn.returnNo} 已创建，可查看单据。</p><Button variant="outline" disabled={!ownerCurrent} onClick={() => openCreatedReturn(createdReturn)}>查看已创建退货单</Button></div>}
       {(sourceError || write.error || !ownerCurrent) && <p role="alert" className="text-sm text-destructive-ink">{sourceError || write.error || '登录或服务器已变化，草稿保留'}</p>}
       {write.pending && <div className="rounded-md border p-3 space-y-2"><p>原创建结果待确认。刷新只保留查询身份，不会重新提交。</p><Button disabled={write.busy} onClick={() => void write.queryOriginal().then(answer => { if (answer?.queryOnly) toast.success(`原退货单 ${answer.data.returnNo} 结果已核实，当前草稿未修改，请自行打开原单`); else if (answer && write.canApply(answer)) created(answer.data) })}>查询原创建结果</Button><Button disabled={write.busy || !write.canRetry} onClick={() => void write.retry().then(answer => { if (answer && write.canApply(answer)) created(answer.data) })}>按原创建请求重试</Button></div>}
-      {write.conflict && <div className="space-y-2 rounded-md border p-3"><p>原成交版本已变化，先备份当前草稿，再重读来源；不会自动合并。</p><Button onClick={() => void backup.copy(snapshot)}>复制草稿内容</Button><Button disabled={!backup.copied} onClick={() => { if (backup.canReload()) { clearSourceBinding(); backup.invalidate() } }}>备份后清除来源</Button>{backup.text && <><textarea aria-label="退货草稿备份" readOnly value={backup.text} /><Button onClick={() => backup.acknowledge(backup.text)}>已备份草稿</Button></>}</div>}
+      {write.conflict && <div className="space-y-2 rounded-md border p-3"><p>原成交版本已变化，先备份当前草稿，再重读来源；不会自动合并。</p><Button onClick={() => void backup.copy(snapshot)}>复制草稿内容</Button><Button disabled={!backup.copied} onClick={() => { if (backup.canReload()) { clearSourceBinding(); backup.invalidate() } }}>备份后清除来源</Button>{backup.text && <><Textarea aria-label="退货草稿备份" readOnly value={backup.text} className="min-h-28 font-mono text-xs" /><Button onClick={() => backup.acknowledge(backup.text)}>已备份草稿</Button></>}</div>}
       <fieldset disabled={locked || submitting} className="contents">
       <SectionCard title="退货信息" compact>
         <div className="desktop-form-fields grid grid-cols-3 gap-x-5 gap-y-4">
@@ -495,6 +501,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
       <SectionCard
         title="退货明细"
         compact
+        noPadding
         actions={!boundSource ? (
           <div data-entry-field="add" className="space-y-1">
             <Button type="button" size="sm" variant="outline" aria-describedby={errorId('add')} onClick={addItem} className="gap-1.5">+ 添加商品</Button>
@@ -503,7 +510,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
         ) : undefined}
       >
         {items.length === 0 ? (
-          <div data-entry-field="details" className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+          <div data-entry-field="details" className="flex min-h-32 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
             {boundSource ? (
               <>
                 <p className="text-sm text-muted-foreground">{noReturnableSourceItems
@@ -516,7 +523,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
           </div>
         ) : (
           <>
-          <div className="overflow-x-auto">
+          <div role="region" tabIndex={0} aria-label="销售退货商品明细" className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
             <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 80, align: 'right' }, { key: 'unitPrice', title: isOrdinaryNet ? '原单价参考 (¥)' : '单价 (¥)', width: 96, align: 'right' }, { key: 'amount', title: isOrdinaryNet ? '净冲减金额' : '金额', width: 112, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="sale-return-entry-items" minWidth={900}>
               <tbody>
                 {items.map(item => {
@@ -548,14 +555,12 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
                         } />
                         <td className="py-2.5 text-center text-muted-body">
                           {(!boundSource && item.units && item.units.filter(u => !u.isBase).length > 0) ? (
-                            <select
-                              aria-label="退货商品单位"
-                              value={item.entryUnit || item.unit}
-                              onChange={e => updateItem(item._key, 'entryUnit', e.target.value)}
-                              className="h-8 rounded-md border border-border bg-background px-1 text-sm"
-                            >
-                              {(item.units || []).map(u => <option key={u.unitName} value={u.unitName}>{u.unitName}</option>)}
-                            </select>
+                            <OrderEntryUnitSelect
+                              label={`${item.productName || '商品'}录入单位`}
+                              value={item.entryUnit || item.unit || ''}
+                              units={item.units || []}
+                              onChange={value => updateItem(item._key, 'entryUnit', value)}
+                            />
                           ) : ((item.entryUnit && item.entryUnit !== item.unit) ? item.entryUnit : (item.unit || '—'))}
                         </td>
                         <td data-entry-field={quantityField} className="py-2.5 pr-2">
@@ -603,12 +608,9 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
               </tbody>
             </ResizableTable>
           </div>
-          <div className="desktop-entry-summary flex items-center justify-between border-t border-border pt-4">
-            <p className="text-muted-body">退货明细：{items.length} 行</p>
-            <div className="text-right">
-              <p className="text-helper">{isOrdinaryNet ? '净冲减金额' : '合计金额'}</p>
-              <p className="text-2xl font-semibold text-foreground">{isKit ? '本次以保存后估算为准' : isOrdinaryNet ? '提交后核定' : money(total)}</p>
-            </div>
+          <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+            <span className="mr-auto tabular-nums">退货明细：{items.length} 行</span>
+            <strong className="tabular-nums"><span className="mr-2 font-normal">{isOrdinaryNet ? '净冲减金额' : '合计金额'}</span>{isKit ? '本次以保存后估算为准' : isOrdinaryNet ? '提交后核定' : money(total)}</strong>
           </div>
           </>
         )}
@@ -670,7 +672,7 @@ function TaskProgressCard({ task }: { task: SaleReturn['task'] }) {
               <div key={step.status} className="flex items-center gap-1 flex-1 last:flex-none">
                 <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                   isDone ? 'bg-primary/10 text-primary'
-                    : isCurrent ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : isCurrent ? 'bg-warning/10 text-warning-ink border border-warning/30'
                     : 'bg-muted/30 text-muted-foreground'
                 }`}>
                   <span>{isDone ? '✓' : isCurrent ? '●' : '○'}</span>
@@ -712,7 +714,7 @@ const REVERSE_PROGRESS_STEPS = [
 function ReverseTaskCard({ reverse }: { reverse: SaleReturnReverseTask }) {
   const currentIdx = REVERSE_PROGRESS_STEPS.findIndex(s => s.status === reverse.status)
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-5 space-y-4">
+    <div className="rounded-lg border border-warning/30 bg-warning/5 p-5 space-y-4">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">返货出库（把已入库的货退回客户）</h3>
@@ -733,7 +735,7 @@ function ReverseTaskCard({ reverse }: { reverse: SaleReturnReverseTask }) {
               <div key={step.status} className="flex items-center gap-1 flex-1 last:flex-none">
                 <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                   isDone ? 'bg-primary/10 text-primary'
-                    : isCurrent ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                    : isCurrent ? 'bg-warning/10 text-warning-ink border border-warning/30'
                     : 'bg-muted/30 text-muted-foreground'
                 }`}>
                   <span>{isDone ? '✓' : isCurrent ? '●' : '○'}</span>
@@ -748,7 +750,7 @@ function ReverseTaskCard({ reverse }: { reverse: SaleReturnReverseTask }) {
         </div>
       )}
       {reverse.containers.length > 0 && (
-        <div className="rounded-md border border-amber-200 bg-card p-3 text-xs space-y-1">
+        <div className="rounded-md border border-warning/30 bg-card p-3 text-xs space-y-1">
           <p className="font-medium text-foreground">
             待退回客户的库存条码（{reverse.containers.length} 个）
           </p>
@@ -764,14 +766,18 @@ function ReverseTaskCard({ reverse }: { reverse: SaleReturnReverseTask }) {
 }
 
 function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabPath: string }) {
+  const { can } = usePermission()
+  const canConfirm = can(P.RETURN_ORDER_CONFIRM)
+  const canCancel = can(P.RETURN_ORDER_CANCEL)
+  const active = useSectionActive()
   const qc = useQueryClient()
   const [detailOwner] = useState(captureKitReadOwner)
   const facts = useSourceReturnFacts(returnId, detailOwner)
   const detailQuery = useQuery({
     queryKey: ['return-sale-detail', returnId, detailOwner.baseURL, detailOwner.userId, detailOwner.sessionGeneration],
     queryFn: async () => { assertKitReadOwner(detailOwner); const data = await getSaleReturnDetailApi(returnId, commercialReadConfig(detailOwner)); assertKitReadOwner(detailOwner); if (data.id !== returnId) throw new Error('原退货单身份不符'); return data },
-    enabled: !!returnId,
-    refetchInterval: 8000,
+    enabled: active && !!returnId,
+    refetchInterval: active ? 8000 : false,
   })
   const ret = detailQuery.data
   const isKit = ret?.items?.some(item => item.dispatchComponentId != null) ?? false
@@ -785,6 +791,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
   const [pending, setPending] = useState(false)
 
   async function handleConfirm() {
+    if (!canConfirm) return
     try {
       setPending(true)
       if (isKit) {
@@ -798,6 +805,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
     } catch { /* 业务失败由原全局反馈显示，保留单据。 */ } finally { setPending(false); setConfirmOpen(false) }
   }
   async function handleCancel() {
+    if (!canCancel) return
     try {
       setPending(true)
       const answer = isKit ? await facts.perform('cancel') : null
@@ -835,12 +843,14 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         subtitle={<StatusBadge type="returns" status={ret.status} />}
         rightActions={
           <>
-            {(ret.status === 1 || ret.status === 2) && (
-              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending || facts.blocked} onClick={() => setCancelOpen(true)}>
-                <X className="h-4 w-4 mr-1" />取消
-              </Button>
+            {canCancel && (ret.status === 1 || ret.status === 2) && (
+              <div role="group" aria-label="退货撤销操作" className="flex items-center gap-2 border-r border-border pr-2">
+                <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending || facts.blocked} onClick={() => setCancelOpen(true)}>
+                  <X className="h-4 w-4 mr-1" />取消
+                </Button>
+              </div>
             )}
-            {ret.status === 1 && (
+            {canConfirm && ret.status === 1 && (
               <Button disabled={pending || facts.blocked} onClick={() => setConfirmOpen(true)}>确认（派发到 PDA）</Button>
             )}
           </>
@@ -859,30 +869,19 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
 
       <OrderDetailSections type="sale-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
       {ret.reverseTask && <ReverseTaskCard reverse={ret.reverseTask} />}
-      <SectionCard title="基础信息" compact>
-        <dl className="desktop-document-facts grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
-          {[
-            ['客户', ret.customerName],
-            ['仓库', ret.warehouseName],
-            ['关联销售单', ret.saleOrderNo || '—'],
-            ['经办人', ret.operatorName],
-            ['创建时间', formatDisplayDateTime(ret.createdAt)],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <dt className="mb-0.5 text-helper">{label}</dt>
-              <dd className="font-medium">{value}</dd>
-            </div>
-          ))}
-          {ret.remark && (
-            <div className="desktop-field-wide col-span-3">
-              <dt className="mb-0.5 text-helper">备注</dt>
-              <dd>{ret.remark}</dd>
-            </div>
-          )}
-        </dl>
+      <SectionCard title="基础信息" compact contentClassName="p-3">
+        <OrderFacts>
+          <OrderFact label="客户">{ret.customerName}</OrderFact>
+          <OrderFact label="仓库">{ret.warehouseName}</OrderFact>
+          <OrderFact label="关联销售单">{ret.saleOrderNo || '—'}</OrderFact>
+          <OrderFact label="经办人">{ret.operatorName}</OrderFact>
+          <OrderFact label="创建时间">{formatDisplayDateTime(ret.createdAt)}</OrderFact>
+          {ret.remark && <OrderFact label="备注" className="sm:col-span-2">{ret.remark}</OrderFact>}
+        </OrderFacts>
       </SectionCard>
 
-      <SectionCard title="退货明细" compact>
+      <SectionCard title="退货明细" compact noPadding
+        contentClassName="[&>.desktop-table]:!rounded-none [&>.desktop-table]:!border-0 [&>.desktop-table]:!shadow-none">
         <DataTable
           columns={[
             ...productIdentityColumns({ compact: true }),
@@ -900,16 +899,14 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
           ] satisfies TableColumn<ReturnItem>[]}
           data={ret.items ?? []}
           rowKey="id"
+          scrollLabel="销售退货商品明细"
           emptyText="暂无退货明细"
         />
-        <div className="desktop-entry-summary mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-muted-body">共 {ret.items?.length ?? 0} 行退货明细</p>
-          <div className="text-right">
-            <p className="text-helper">{isKit ? (ret.status === 3 ? '本单实际净冲减' : ret.status === 4 ? '原估算（已取消，不作为冲减）' : '本单预计最多冲减') : isOrdinaryNet ? netLabel : '合计金额'}</p>
-            <p className="text-2xl font-semibold text-foreground">{isKit || isOrdinaryNet ? `¥${returnNet(ret.totalAmount, ret)}` : money(Number(ret.totalAmount))}</p>
-          </div>
+        <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+          <span className="mr-auto tabular-nums">共 {ret.items?.length ?? 0} 行退货明细</span>
+          <strong className="tabular-nums"><span className="mr-2 font-normal">{isKit ? (ret.status === 3 ? '本单实际净冲减' : ret.status === 4 ? '原估算（已取消，不作为冲减）' : '本单预计最多冲减') : isOrdinaryNet ? netLabel : '合计金额'}</span>{isKit || isOrdinaryNet ? `¥${returnNet(ret.totalAmount, ret)}` : money(Number(ret.totalAmount))}</strong>
+          {isKit && <p className="w-full text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为系统按实际合格入仓结果确定的净冲减，金额以分计；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由系统确定。'} 原分摊毛预算、实际净冲减与会计凭证金额按各自业务依据核定；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
         </div>
-        {isKit && <p className="mt-3 text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为系统按实际合格入仓结果确定的净冲减，金额以分计；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由系统确定。'} 原分摊毛预算、实际净冲减与会计凭证金额按各自业务依据核定；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
       </SectionCard>
 
       </OrderDetailSections>
@@ -917,7 +914,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       <div className="h-4" />
 
       <ConfirmDialog
-        open={confirmOpen}
+        open={canConfirm && confirmOpen}
         title="确认销售退货单"
         description="确认后将派发到 PDA，由仓库人员扫码收货、质检、上架；上架完成后自动增加库存并冲减应收账款。"
         confirmText="确认"
@@ -926,7 +923,7 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         onCancel={() => setConfirmOpen(false)}
       />
       <ConfirmDialog
-        open={cancelOpen}
+        open={canCancel && cancelOpen}
         title="取消销售退货单"
         description="取消后此退货单将无法恢复，请确认操作。若该退货单已有合格品入库，系统不会直接取消，而是生成一张返货出库单，等仓库把这批货退回客户后自动取消。"
         variant="destructive"

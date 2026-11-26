@@ -32,6 +32,14 @@ const PATHS = [
     file: 'backend/src/engine/containerEngine.js',
     fn: 'splitContainer（同仓容器拆分）',
   },
+  {
+    file: 'backend/src/engine/containerEngine.js',
+    fn: 'splitTaskLockedContainerForReturn（拆出待归还容器）',
+  },
+  {
+    file: 'backend/src/engine/containerEngine.js',
+    fn: 'reserveTaskLockedContainersForReturn（分配待归还容器）',
+  },
 ]
 
 /** 维度锁：对 inventory_stock 单行 FOR UPDATE（容器锁的前置） */

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from 'react'
+import { chooseSelectOption } from '@/test/chooseSelectOption'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -95,15 +96,22 @@ async function renderPrice(price: unknown) {
 }
 
 async function fill(label: string, value: string) {
-  const input = host.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLSelectElement
-  expect(input).not.toBeNull()
+  const control = host.querySelector<HTMLElement>(`[aria-label="${label}"]`)
+  expect(control).not.toBeNull()
+  if (control instanceof HTMLButtonElement) {
+    expect(value).toBe('997208')
+    await chooseSelectOption(control, '合成收入账户')
+    return
+  }
+  const input = control as HTMLInputElement
   await act(async () => {
-    const prototype = input instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
-    Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(input, value)
+    if (label === '真实银行回款日') input.focus()
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
     input.dispatchEvent(new Event('input', { bubbles: true }))
-    input.dispatchEvent(new Event('change', { bubbles: true }))
   })
+  if (label === '真实银行回款日') await act(async () => input.blur())
 }
+
 
 test.each(['3.0000', '3.00000000', '3.00000001', '9999999999.99999999'])(
   '真实退款新建页原成交单价 %s 保留服务端全部位数', async price => {

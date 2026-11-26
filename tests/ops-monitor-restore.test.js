@@ -51,6 +51,8 @@ if (cmd === 'df') { console.log('Filesystem 1024-blocks Used Available Capacity 
 if (cmd === 'sleep') process.exit(0);
 if (cmd === 'docker') {
  const a = args.join(' ');
+ if (s === 'cleanup-fails' && args[0] === 'rm') process.exit(1);
+ if (s === 'table-query-fails' && a.includes('COUNT(*)') && a.includes('sys_users')) process.exit(1);
  if (args[0] === 'compose') console.log('flowcube-' + args.at(-1));
  else if (args[0] === 'volume') {
    const state = process.env.OPS_TEST_VOLUME_STATE;
@@ -131,7 +133,7 @@ test('显式指定历史备份允许验证恢复能力，但提示文件年龄',
   assert.equal(r.restoreStatus, null, '历史手工演练不得覆盖自动演练结果')
 })
 
-for (const [scenario, options] of [['import-fails', {}], ['missing-tables', {}], ['corrupt', { corrupt: true }]]) {
+for (const [scenario, options] of [['import-fails', {}], ['missing-tables', {}], ['table-query-fails', {}], ['cleanup-fails', {}], ['corrupt', { corrupt: true }]]) {
   test(`恢复演练仍拒绝 ${scenario}`, () => {
     const r = runOps('restore-check.sh', scenario, options)
     assert.equal(r.status, 1, r.stdout + r.stderr)
@@ -388,4 +390,24 @@ else process.exit(1);
   assert.equal(drift.status, 1, drift.stderr)
   assert.match(drift.stderr, /MySQL 备份期间来源变化/)
   assert.deepEqual(drift.archives, [])
+})
+
+test('首次安装 cron 保留已有条目，重复安装不会追加，五条任务使用实际根目录', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube cron-'))
+  t.after(() => fs.rmSync(dir, {recursive:true, force:true}))
+  fs.mkdirSync(path.join(dir,'scripts'))
+  fs.copyFileSync(path.join(root,'scripts/install-cron.sh'),path.join(dir,'scripts/install-cron.sh'))
+  const cron = path.join(dir,'crontab')
+  fs.writeFileSync(cron, '#!/bin/sh\nif [ "$1" = "-l" ]; then [ -f "$STORE" ] || { echo "no crontab for fixture" >&2; exit 1; }; cat "$STORE"; else cat > "$STORE"; fi\n', {mode:0o755})
+  const stored = path.join(dir,'table')
+  const install = () => spawnSync('bash',[path.join(dir,'scripts/install-cron.sh')],{encoding:'utf8',env:{...process.env,PATH:dir+':'+process.env.PATH,STORE:stored}})
+  const result = install()
+  assert.equal(result.status, 0, result.stderr)
+  const rows = fs.readFileSync(stored,'utf8')
+  assert.equal(rows.trimEnd().split('\n').length, 5)
+  assert.ok(fs.statSync(path.join(dir,'backups')).isDirectory())
+  assert.ok(rows.includes(dir.replaceAll(' ', '\\ ')))
+  fs.appendFileSync(stored,'# retained\n')
+  assert.equal(install().status, 0)
+  assert.equal(fs.readFileSync(stored,'utf8'), rows+'# retained\n')
 })

@@ -100,7 +100,7 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
 
   return (
     <>
-    <AppDialog descriptionInHeader
+    <AppDialog formDialog descriptionInHeader
       description={!applied ? <>填写{partyLabel}与期间后点「查待对账账款」</> : isError ? '请重新读取待对账账款。' : isFetching ? <span role="status">加载中…</span> : !list.length ? '该期间内没有未对账的月结账款' : '选择往来方、账期与本次对账的账款。'}
       open={open}
       onOpenChange={v => { if (!v) onClose() }}
@@ -119,7 +119,7 @@ export function CreateStatementDialog({ open, onClose, type, onCreated }: Props)
         </div>
       }
     >
-      <div className="flex h-full flex-col gap-4 p-5">
+      <div className="flex h-full flex-col gap-4">
         <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-[minmax(0,2fr)_repeat(2,minmax(160px,1fr))]">
           <div className="space-y-1">
             <Label htmlFor={partyInputId}>{partyLabel} *</Label>

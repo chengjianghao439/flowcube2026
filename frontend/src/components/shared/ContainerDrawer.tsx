@@ -10,7 +10,7 @@ import { EmptyState } from './EmptyState'
 
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2, Package2, Box, ChevronDown, ChevronUp } from 'lucide-react'
+import { Loader2, Package2, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription,
 } from '@/components/ui/sheet'
@@ -46,17 +46,10 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
       >
         {/* ── 顶部信息区 ───────────────────────────────────────────────── */}
         <SheetHeader className="desktop-container-header border-b px-6 py-5 pr-12">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <Box className="h-4 w-4 text-primary" />
-            </div>
-            <div className="min-w-0">
-              <SheetTitle className="break-words text-base">
-                {item?.productName ?? '—'}
-              </SheetTitle>
-              <SheetDescription>{item?.warehouseName || '库存条码'}</SheetDescription>
-              {item && <div className="mt-4"><ProductIdentityDetails product={item} /></div>}
-            </div>
+          <div className="min-w-0">
+            <SheetTitle className="break-words text-base">{item?.productName ?? '—'}</SheetTitle>
+            <SheetDescription>{item?.warehouseName || '库存条码'}</SheetDescription>
+            {item && <div className="mt-4"><ProductIdentityDetails product={item} /></div>}
           </div>
 
           {/* 库存摘要 */}
@@ -90,9 +83,7 @@ export default function ContainerDrawer({ open, onClose, item }: ContainerDrawer
               )}
             </div>
             {!isLoading && containers && (
-              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                {visible.length} 个
-              </span>
+              <SoftStatusLabel label={`${visible.length} 个`} tone="info" />
             )}
           </div>
 

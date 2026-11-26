@@ -13,28 +13,44 @@
 require('dotenv').config()
 
 const { pool } = require('../src/config/db')
-const { syncStockFromContainers } = require('../src/engine/containerEngine')
+const { lockStockDimension, syncStockFromContainers } = require('../src/engine/containerEngine')
 
 async function main() {
   const [pairs] = await pool.query(`
     SELECT product_id, warehouse_id FROM inventory_stock
     UNION
     SELECT product_id, warehouse_id FROM inventory_containers WHERE status = 1 AND deleted_at IS NULL
+    ORDER BY product_id, warehouse_id
   `)
 
   console.log(`[Resync] 共 ${pairs.length} 个 product_id+warehouse_id 组合待校准`)
 
   let changed = 0
   for (const { product_id, warehouse_id } of pairs) {
-    const [[before]] = await pool.query(
-      'SELECT quantity FROM inventory_stock WHERE product_id=? AND warehouse_id=?',
-      [product_id, warehouse_id],
-    )
-    const after = await syncStockFromContainers(pool, product_id, warehouse_id)
-    const beforeQty = before ? Number(before.quantity) : 0
-    if (Math.abs(beforeQty - after) > 0.0001) {
-      changed++
-      console.log(`[Resync] product=${product_id} warehouse=${warehouse_id}: ${beforeQty} → ${after}`)
+    const conn = await pool.getConnection()
+    let reusable = true
+    try {
+      await conn.beginTransaction()
+      await lockStockDimension(conn, product_id, warehouse_id)
+      const [[before]] = await conn.query(
+        'SELECT quantity FROM inventory_stock WHERE product_id=? AND warehouse_id=? FOR UPDATE',
+        [product_id, warehouse_id],
+      )
+      const after = await syncStockFromContainers(conn, product_id, warehouse_id)
+      await conn.commit()
+      const beforeQty = Number(before.quantity)
+      if (beforeQty !== after) {
+        changed++
+        console.log(`[Resync] product=${product_id} warehouse=${warehouse_id}: ${beforeQty} → ${after}`)
+      }
+    } catch (error) {
+      try { await conn.rollback() } catch {
+        reusable = false
+        conn.destroy()
+      }
+      throw error
+    } finally {
+      if (reusable) conn.release()
     }
   }
 
@@ -44,7 +60,7 @@ async function main() {
 main()
   .catch((error) => {
     console.error(error.message || error)
-    process.exit(1)
+    process.exitCode = 1
   })
   .finally(async () => {
     try {

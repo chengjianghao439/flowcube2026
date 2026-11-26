@@ -1,5 +1,7 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useAuthStore } from '@/store/authStore'
+import { getApiClientBaseRevision, subscribeApiClientBaseURL } from '@/api/client'
+import { currentApiEndpoint } from '@/lib/apiEndpoint'
 
 import { clearPendingSessionStorage, discardUnclaimedRequest, memoryUnclaimedRequests, readPendingStorage, saveOwnedPending, readOwnedCriticalPending, saveOwnedCriticalPending, removeOwnedCriticalPending, retainCriticalTerminal, readCriticalTerminal } from '@/lib/pendingRequestStorage'
 
@@ -23,6 +25,9 @@ let records = EMPTY
 let loaded = false
 let staleStorage = false
 let storageError: string | null = null
+const invalidEndpoints = new Set<string>()
+const belongsToEndpoint = (record: PendingRequestRecord, endpoint: string) => !record.endpoint || record.endpoint === endpoint
+const invalidBindingMessage = '原作业记录内容或单据定位不一致，请保留记录并核对'
 const listeners = new Set<() => void>()
 const subscribe = (listener: () => void) => {
   listeners.add(listener)
@@ -65,6 +70,7 @@ function getSnapshot(): PendingRequestRecord[] {
   loaded = true
   records = EMPTY
   storageError = null
+  invalidEndpoints.clear()
   if (!user || !token) return records
   try {
     const { stored } = readPendingStorage()
@@ -73,8 +79,12 @@ function getSnapshot(): PendingRequestRecord[] {
       records = doc.records.filter(isRecord).filter(item => !item.unverifiedOwner)
     }
     const persistent = readOwnedCriticalPending(user.id)
-    if (!persistent.every(isRecord) || !persistent.every(validOwnedBinding)) throw Error('原作业记录内容或单据定位不一致，请保留记录并核对')
-    records = [...records, ...persistent]
+    records = [...records]
+    for (const record of persistent) {
+      if (isRecord(record) && validOwnedBinding(record)) records.push(record)
+      else if (record && typeof record === 'object' && 'endpoint' in record && typeof record.endpoint === 'string' && record.endpoint) invalidEndpoints.add(record.endpoint)
+      else throw Error(invalidBindingMessage)
+    }
   } catch (e) { storageError = e instanceof Error ? e.message : '原作业记录读取失败，请稍后核对' }
   records = [...unclaimedRecords(), ...records]
   return records
@@ -94,11 +104,15 @@ useAuthStore.subscribe((next, previous) => {
 export function usePendingRequests() {
   const generation = useAuthStore(state => state.sessionGeneration)
   const userId = useAuthStore(state => state.user?.id)
-  const currentRecords = useSyncExternalStore(subscribe, getSnapshot, () => EMPTY)
+  const allRecords = useSyncExternalStore(subscribe, getSnapshot, () => EMPTY)
+  const endpointRevision = useSyncExternalStore(subscribeApiClientBaseURL, getApiClientBaseRevision, getApiClientBaseRevision)
+  const endpoint = currentApiEndpoint()
+  const currentRecords = useMemo(() => allRecords.filter(record => belongsToEndpoint(record, endpoint)), [allRecords, endpoint])
+  const activeStorageError = storageError || (invalidEndpoints.has(endpoint) ? invalidBindingMessage : null)
   const update = useCallback((transform: (current: PendingRequestRecord[]) => PendingRequestRecord[]) => {
     const auth = useAuthStore.getState()
     // 退出前发起的异步请求不能污染下一次登录。
-    if (!auth.token || !auth.user || auth.sessionGeneration !== generation || auth.user.id !== userId) return false
+    if (!auth.token || !auth.user || auth.sessionGeneration !== generation || auth.user.id !== userId || getApiClientBaseRevision() !== endpointRevision) return false
     const current = getSnapshot()
     const next = transform(current)
     if (next === current) return false
@@ -106,27 +120,31 @@ export function usePendingRequests() {
     savePendingRequests()
     emit()
     return true
-  }, [generation, userId])
+  }, [endpointRevision, generation, userId])
   // 检查与插入在共享快照上同步完成，防止同 tick 的两个 hook 都执行关键写入。
   const claimPending = useCallback((record: PendingRequestRecord): boolean => {
+    if (!belongsToEndpoint(record, endpoint) || getApiClientBaseRevision() !== endpointRevision) return false
+    const sameAction = (item: PendingRequestRecord) => item.action === record.action && belongsToEndpoint(item, endpoint)
     if (record.endpoint) {
       const auth = useAuthStore.getState()
       if (!auth.user || auth.sessionGeneration !== generation || auth.user.id !== userId) return false
-      if (storageError) throw Error(storageError)
-      if (getSnapshot().some(item => item.action === record.action)) return false
+      if (getSnapshot().some(sameAction)) return false
+      if (storageError || invalidEndpoints.has(endpoint)) throw Error(storageError || invalidBindingMessage)
       const stored = readOwnedCriticalPending(auth.user.id)
-      if (stored.some(r => isRecord(r) && r.action === record.action)) return false
+      if (stored.some(r => isRecord(r) && (r.requestKey === record.requestKey || sameAction(r)))) return false
       saveOwnedCriticalPending(auth.user.id, record)
     }
-    return update(current => current.some(item => item.action === record.action) ? current : [...current, record])
-  }, [generation, update, userId])
+    return update(current => current.some(sameAction) ? current : [...current, record])
+  }, [endpoint, endpointRevision, generation, update, userId])
   const addPending = useCallback((record: PendingRequestRecord) => {
+    if (!belongsToEndpoint(record, endpoint)) return
     update(current => current.some(item => item.action === record.action && item.unverifiedOwner)
-      ? current : [...current.filter(item => item.action !== record.action), record])
-  }, [update])
+      ? current : [...current.filter(item => item.action !== record.action || !belongsToEndpoint(item, endpoint)), record])
+  }, [endpoint, update])
   const isPendingCurrent = useCallback((record: PendingRequestRecord) => {
     const auth = useAuthStore.getState()
     if (!auth.user || auth.user.id !== userId || auth.sessionGeneration !== generation) return false
+    if (!belongsToEndpoint(record, endpoint) || getApiClientBaseRevision() !== endpointRevision) return false
     if (!record.endpoint) return getSnapshot().some(item => item.action === record.action && item.requestKey === record.requestKey)
     try {
       const stored = readOwnedCriticalPending(auth.user.id)
@@ -135,11 +153,11 @@ export function usePendingRequests() {
       // A missing old tab copy can only be used for GET; the hook checks the marker's immutable hash.
       return !!readCriticalTerminal(auth.user.id, record)
     } catch { return false }
-  }, [generation, userId])
+  }, [endpoint, endpointRevision, generation, userId])
   const removePending = useCallback(async (action: string, requestKey?: string, outcome?: 'success' | 'failed', data?: unknown, original?: PendingRequestRecord) => {
-    const sameSession = () => { const auth = useAuthStore.getState(); return auth.user?.id === userId && auth.sessionGeneration === generation && !!auth.token }
+    const sameSession = () => { const auth = useAuthStore.getState(); return auth.user?.id === userId && auth.sessionGeneration === generation && !!auth.token && getApiClientBaseRevision() === endpointRevision }
     if (!sameSession()) return false
-    const removed = getSnapshot().filter(item => item.action === action && !item.unverifiedOwner && (!requestKey || item.requestKey === requestKey))
+    const removed = getSnapshot().filter(item => item.action === action && belongsToEndpoint(item, endpoint) && !item.unverifiedOwner && (!requestKey || item.requestKey === requestKey))
     if (!removed.length && original?.endpoint && original.action === action && original.requestKey === requestKey && isPendingCurrent(original)) removed.push(original)
     for (const r of removed) if (r.endpoint && userId) {
       if (!outcome) throw Error('原作业结果尚未确认，请保留原记录')
@@ -150,7 +168,7 @@ export function usePendingRequests() {
     if (!sameSession()) return false
     update(current => current.filter(item => !removed.some(r => JSON.stringify(r) === JSON.stringify(item))))
     return true
-  }, [generation, isPendingCurrent, update, userId])
+  }, [endpoint, endpointRevision, generation, isPendingCurrent, update, userId])
   const clearAll = useCallback(() => update(current => current.filter(item => item.unverifiedOwner || item.endpoint)), [update])
   const discardUnclaimed = useCallback((action: string, requestKey: string) => {
     update(current => {
@@ -158,5 +176,5 @@ export function usePendingRequests() {
       return current.filter(item => !item.unverifiedOwner || item.action !== action || item.requestKey !== requestKey)
     })
   }, [update])
-  return { records: currentRecords, addPending, claimPending, removePending, discardUnclaimed, clearAll, pendingCount: currentRecords.length, storageError, isPendingCurrent }
+  return { records: currentRecords, addPending, claimPending, removePending, discardUnclaimed, clearAll, pendingCount: currentRecords.length, storageError: activeStorageError, isPendingCurrent }
 }

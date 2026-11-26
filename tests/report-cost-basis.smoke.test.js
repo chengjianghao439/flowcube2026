@@ -24,6 +24,7 @@ const path = require('path')
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 
+require('./helpers/testEnvironment').configureTestEnvironment()
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-only-secret-not-used-for-auth-0123456789'
 
 const ROOT = path.resolve(__dirname, '..')

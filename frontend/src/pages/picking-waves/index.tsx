@@ -1,14 +1,17 @@
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 import { ResizableTable } from '@/components/shared/ResizableTable'
-import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { ProductIdentityCells } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 /**
  * 批次拣货管理页
  * 路由：/picking-waves
  */
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
@@ -22,7 +25,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import {
   getWavesApi, getWaveByIdApi, startWaveApi, finishPickingApi, finishWaveApi, cancelWaveApi,
   WAVE_STATUS_LABEL, WAVE_PRIORITY_LABEL,
-  type PickingWave, type WaveStatus,
+  type PickingWave,
 } from '@/api/picking-waves'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
@@ -71,7 +74,17 @@ function getWaveClosureCopy(wave: PickingWave | null) {
   return { stageLabel: wave.statusName, description: '当前批次可继续查看执行与打印信息。', nextAction: '检查处理进度' }
 }
 
+const QUICK_STATUSES = [
+  { value: '', label: '全部批次' },
+  ...Object.entries(WAVE_STATUS_LABEL).map(([value, label]) => ({ value, label })),
+]
+
 export default function PickingWavesPage() {
+  const { can } = usePermission()
+  const canManage = can(PERMISSIONS.PICKING_WAVE_MANAGE)
+  const canPrint = can(PERMISSIONS.PRINT_JOB_VIEW)
+  const managePermission = useRef(canManage)
+  managePermission.current = canManage
   const qc = useQueryClient()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -145,9 +158,8 @@ export default function PickingWavesPage() {
   }
 
   const openPath = useCallback((path: string, title: string) => {
-    addTab({ key: path, title, path })
-    navigate(path)
-  }, [addTab, navigate])
+    if (canPrint && addTab({ ...buildWorkspaceTabRegistrationFromPath(path), title })) navigate(path)
+  }, [canPrint, addTab, navigate])
 
   // ── 查询弹窗筛选值 ──
   const initialQuery = useMemo<WaveQueryValues>(() => ({
@@ -167,7 +179,7 @@ export default function PickingWavesPage() {
   const chips = [
     warehouseFilter && { key: 'warehouse', label: `仓库：${warehouseName || warehouseFilter}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null }) },
     keyword && { key: 'keyword', label: `批次号：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
-    statusFilter && { key: 'status', label: `状态：${WAVE_STATUS_LABEL[Number(statusFilter) as WaveStatus] ?? statusFilter}`, onRemove: () => updateParams({ status: null }) },
+    statusFilter && !QUICK_STATUSES.some(option => option.value === statusFilter) && { key: 'status', label: `状态：${statusFilter}`, onRemove: () => updateParams({ status: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns = useMemo<TableColumn<PickingWave>[]>(() => [
@@ -231,55 +243,61 @@ export default function PickingWavesPage() {
           primaryVariant="outline"
           items={[
             { label: '查看打印进度', onClick: () => openWaveDetail(row, 'print-closure') },
-            { label: '打开出库补打', onClick: () => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(row.waveNo)}`, '条码打印查询') },
+            ...(canPrint ? [{ label: '打开出库补打', onClick: () => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(row.waveNo)}`, '条码打印查询') }] : []),
           ]}
         />
       ),
     },
-  ], [openPath, openWaveDetail])
+  ], [canPrint, openPath, openWaveDetail])
 
   const detailCopy = getWaveClosureCopy(detail ?? null)
 
   return (
-    <div className="desktop-wave-page space-y-5">
+    <div className="desktop-wave-page space-y-4">
       <PageHeader
         title="批次拣货"
         description="核对批次拣货、分拣与打印进度。"
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/picking-waves', exportParams).catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/picking-waves', exportParams).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <AppliedDateRange label="创建日期" startDate={startDate} endDate={endDate}
-          onClear={() => updateParams({ startDate: null, endDate: null })} />
-        {chips.map(c => (
-          <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-            {c.label}
-            <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        {hasFilters && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip">
+          <OrderStatusFilter label="拣货批次状态分类" value={statusFilter} options={QUICK_STATUSES}
+            onChange={status => updateParams({ status: status || null })} />
+        </div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={startDate} endDate={endDate}
+            onClear={() => updateParams({ startDate: null, endDate: null })} />
+          {chips.map(c => (
+            <span key={c.key} className="fc-query-chip">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {hasFilters && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+        </div>
       </div>
 
       {error instanceof ApiClientError && error.status === 403 ? (
         <EmptyState variant="no-permission" description="当前账号无权查看拣货批次。" />
       ) : isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} title="批次列表加载失败" /> : <>
-        <DataTable columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id"
+        <DataTable fluid virtualized scrollLabel="拣货批次表格" columnStorageKey="picking-waves:v1" columns={columns} data={data?.list ?? []} loading={isLoading} rowKey="id"
           emptyState={hasFilters ? (
             <EmptyState variant="no-result" title="没有符合条件的拣货批次"
-              action={<Button variant="outline" size="sm" onClick={clearAll}>清除筛选</Button>} />
+              action={<Button variant="outline" size="sm" onClick={clearAll}>清空</Button>} />
           ) : <EmptyState variant="no-data" title="暂无拣货批次" description="当前可查看的仓库还没有拣货批次。" />} />
-        {!isLoading && <ListSummary total={total} unit="个" />}
+        {!isLoading && data && <ListSummary total={total} unit="个" />}
       </>}
 
       <Dialog open={!!selectedWaveId} onOpenChange={v => !v && closeDetail()}>
-        <DialogContent className="desktop-wave-dialog max-w-6xl">
+        <DialogContent className="fc-form-dialog desktop-wave-dialog max-w-6xl">
           <DialogHeader description={detailError ? '核对批次任务、执行进度与异常。'
             : detailLoading ? <span role="status">正在加载批次详情…</span>
             : detail ? <>{detailCopy.description} 下一步动作：{detailCopy.nextAction}。</>
@@ -289,8 +307,8 @@ export default function PickingWavesPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <div className="max-h-[75vh] space-y-5 overflow-y-auto py-2">
-            {detailError ? <QueryErrorState error={detailFailure} onRetry={() => { void retryDetail() }} title="批次详情加载失败" /> : detailLoading ? null : detail ? <OrderDetailSections type="wave" id={selectedWaveId || 0} initialView={focus === 'print-closure' ? 'print' : focus ? 'progress' : 'info'} printProgress={<div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>打开出库补打</Button></div>}>
+          <div className="fc-form-dialog-body space-y-5 py-2">
+            {detailError ? <QueryErrorState error={detailFailure} onRetry={() => { void retryDetail() }} title="批次详情加载失败" /> : detailLoading ? null : detail ? <OrderDetailSections type="wave" id={selectedWaveId || 0} initialView={focus === 'print-closure' ? 'print' : focus ? 'progress' : 'info'} printProgress={canPrint && <div className="flex justify-end"><Button size="sm" variant="outline" onClick={() => openPath(`/settings/barcode-print-query?category=outbound&keyword=${encodeURIComponent(detail?.waveNo ?? '')}`, '条码打印查询')}>打开出库补打</Button></div>}>
             <section className="desktop-wave-progress rounded-lg border border-primary/20 bg-primary/5 px-4 py-4">
               <p className="text-sm font-semibold text-foreground">当前进度：{detailCopy.stageLabel}</p>
             </section>
@@ -301,11 +319,11 @@ export default function PickingWavesPage() {
                   <h3 className="text-card-title">批次商品汇总</h3>
                   <p className="text-muted-body">按商品查看应拣与已拣，快速定位缺口。</p>
                 </div>
-                <div className="overflow-x-auto"><ResizableTable columns={[...productIdentityColumns(), { key: 'totalQty', title: '应拣', width: 80, align: 'right' }, { key: 'pickedQty', title: '已拣', width: 80, align: 'right' }]} columnStorageKey="picking-wave-items" minWidth={960}>
+                <div className="overflow-x-auto"><ResizableTable columns={[{ key: 'product', title: '商品', width: 280 }, { key: 'totalQty', title: '应拣', width: 80, align: 'right' }, { key: 'pickedQty', title: '已拣', width: 80, align: 'right' }]} columnStorageKey="picking-wave-items-summary" minWidth={440}>
                   <tbody className="divide-y divide-border">
                     {detail.items.map(item => (
                       <tr key={item.id}>
-                        <ProductIdentityCells product={item} />
+                        <td className="px-3 py-2"><ProductIdentitySummary product={item} /></td>
                         <td className="px-3 py-2 text-right tabular-nums">{item.totalQty}</td>
                         <td className="px-3 py-2 text-right tabular-nums">{item.pickedQty}</td>
                       </tr>
@@ -318,10 +336,10 @@ export default function PickingWavesPage() {
           </div>
 
           <DialogFooter className="gap-2">
-            {!detailError && detail?.status === 1 ? <Button onClick={() => startMut.mutate(detail.id)} disabled={startMut.isPending}>开始拣货</Button> : null}
-            {!detailError && detail?.status === 2 ? <Button onClick={() => finishPickMut.mutate(detail.id)} disabled={finishPickMut.isPending}>完成拣货</Button> : null}
-            {!detailError && detail?.status === 3 ? <Button onClick={() => finishMut.mutate(detail.id)} disabled={finishMut.isPending}>完成批次</Button> : null}
-            {!detailError && detail && [1, 2, 3].includes(detail.status) ? (
+            {canManage && !detailError && detail?.status === 1 ? <Button onClick={() => startMut.mutate(detail.id)} disabled={startMut.isPending}>开始拣货</Button> : null}
+            {canManage && !detailError && detail?.status === 2 ? <Button onClick={() => finishPickMut.mutate(detail.id)} disabled={finishPickMut.isPending}>完成拣货</Button> : null}
+            {canManage && !detailError && detail?.status === 3 ? <Button onClick={() => finishMut.mutate(detail.id)} disabled={finishMut.isPending}>完成批次</Button> : null}
+            {canManage && !detailError && detail && [1, 2, 3].includes(detail.status) ? (
               <Button
                 variant="destructive"
                 onClick={() => confirmAction({
@@ -329,7 +347,7 @@ export default function PickingWavesPage() {
                   description: `确定取消批次「${detail.waveNo}」吗？此操作不可随意撤销。`,
                   variant: 'destructive',
                   confirmText: '取消批次',
-                  onConfirm: () => cancelMut.mutate(detail.id),
+                  onConfirm: () => { if (managePermission.current) cancelMut.mutate(detail.id) },
                 })}
                 disabled={cancelMut.isPending}
               >

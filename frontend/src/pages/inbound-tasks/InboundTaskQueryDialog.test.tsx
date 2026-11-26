@@ -23,3 +23,18 @@ test('轮询的新 initial 对象不覆盖本次打开的草稿；重开/重置�
     await click('重置'); await click('查询'); expect(onApply).toHaveBeenLastCalledWith(initial)
   } finally { await act(async () => root.unmount()); host.remove() }
 })
+
+test('起始日期晚于默认截止时按钮与关键字回车均不能应用', async () => {
+  const host = document.createElement('div'); document.body.append(host)
+  const root = createRoot(host), onApply = vi.fn()
+  try {
+    await act(async () => root.render(<Page open initial={{ ...initial, startDate: '2026-10-10', endDate: '' }}
+      resetValues={{ startDate: initial.startDate, endDate: initial.endDate }} onClose={() => {}} onApply={onApply} />))
+    const dialog = document.querySelector('[role="dialog"]')!
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('未填结束日期时使用 2026-10-09')
+    const applyButton = [...dialog.querySelectorAll('button')].find(button => button.textContent === '查询')!
+    expect(applyButton.disabled).toBe(true)
+    await act(async () => dialog.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+    expect(onApply).not.toHaveBeenCalled()
+  } finally { await act(async () => root.unmount()); host.remove() }
+})

@@ -1,4 +1,6 @@
-import { payloadClient as client } from './client'
+import apiClient, { getApiClientBaseRevision, payloadClient as client } from './client'
+import { getOperationRequestStatusApi } from './operation-requests'
+import { useAuthStore } from '@/store/authStore'
 import type { PaginatedData } from '@/types'
 import type { StockCheck, CreateCheckParams, AbcClassRow, CycleCandidate, CycleRulesResult, CoverageRow, PendingScanCheck, ScanCheckDetail } from '@/types/stockcheck'
 import { withRequestKeyHeaders } from '@/lib/requestKey'
@@ -7,7 +9,28 @@ export const getCheckDetailApi = (id: number) => client.get<StockCheck>(`/stockc
 export const createCheckApi    = (data: CreateCheckParams) => client.post<{ id: number }>('/stockcheck', data)
 // ERP 盘点详情自行展示失败原因并保留草稿，避免全局与页面重复提示。
 export const updateCheckItemsApi = (id: number, items: { id: number; actualQty: number }[]) => client.put<null>(`/stockcheck/${id}/items`, { items }, { skipGlobalError: true })
-export const submitCheckApi    = (id: number) => client.post<null>(`/stockcheck/${id}/submit`, undefined, { skipGlobalError: true })
+// 每份盘点仅能正式提交一次，键由账号和盘点单唯一确定，可跨重开恢复。
+export async function submitCheckApi(id: number) {
+  const { user, sessionGeneration } = useAuthStore.getState()
+  if (!user?.id) throw new Error('登录状态已变化，请重新打开盘点单')
+  const requestKey = `stockcheck-submit-${user.id}-${id}`
+  const baseURL = apiClient.defaults.baseURL
+  const revision = getApiClientBaseRevision()
+  const config = { baseURL, automaticReplay: false as const, _erpApiFallbackTried: true, skipGlobalError: true }
+  try {
+    return await client.post<null>(`/stockcheck/${id}/submit`, undefined, {
+      ...config, headers: withRequestKeyHeaders(requestKey),
+    })
+  } catch (error) {
+    const status = (error as { status?: number })?.status
+    if (status && status < 500 && status !== 408) throw error
+    if (revision !== getApiClientBaseRevision() || sessionGeneration !== useAuthStore.getState().sessionGeneration) throw error
+    const receipt = await getOperationRequestStatusApi(requestKey, `stockcheck.submit.${id}`, config).catch(() => null)
+    if (revision !== getApiClientBaseRevision() || sessionGeneration !== useAuthStore.getState().sessionGeneration) throw error
+    if (receipt?.status === 'success' && receipt.resourceType === 'stockcheck' && Number(receipt.resourceId) === id) return null
+    throw new Error('盘点提交结果待核对，请刷新详情；仍为盘点中时可用原请求重试')
+  }
+}
 export const refreshCheckItemApi = (id: number, itemId: number) => client.post<{ itemId: number; productName: string; bookQty: number }>(`/stockcheck/${id}/items/${itemId}/refresh`, undefined, { skipGlobalError: true })
 export const cancelCheckApi    = (id: number) => client.post<null>(`/stockcheck/${id}/cancel`, undefined, { skipGlobalError: true })
 

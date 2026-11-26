@@ -35,7 +35,7 @@ import { qtyStep } from '@/lib/qtyStep'
 interface ScannedContainer {
   barcode: string
   individual: boolean
-  bookQty: number
+  bookQty: number | null
   countedQty: number
 }
 
@@ -206,7 +206,7 @@ function CheckWork({ checkId }: { checkId: number }) {
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">
                       实盘
                       <Input quantity
-                        type="number" min={0} max={s.bookQty} step={qtyStep(allowDecimalOf(activeItem?.productId))}
+                        type="number" min={0} max={s.bookQty ?? undefined} step={qtyStep(allowDecimalOf(activeItem?.productId))}
                         data-scanner-manual="true"
                         aria-label={`${s.barcode} 实盘数量`} className="min-h-11 w-20 text-right tabular-nums"
                         disabled={saveAction.submitBlocked}
@@ -217,7 +217,7 @@ function CheckWork({ checkId }: { checkId: number }) {
                           setScanned(prev => prev.map(x => x.barcode === s.barcode ? { ...x, countedQty: Number.isFinite(v) ? v : 0 } : x))
                         }}
                       />
-                      <span className={s.countedQty !== s.bookQty ? 'text-warning-ink' : ''}>/ 账面 {s.bookQty}</span>
+                      <span className={s.countedQty !== s.bookQty ? 'text-warning-ink' : ''}>/ 账面 {s.bookQty ?? '待核对'}</span>
                     </span>
                   )}
                   <button type="button" className="min-h-11 min-w-11 px-2 text-xs text-destructive-ink shrink-0"
@@ -254,7 +254,7 @@ function CheckWork({ checkId }: { checkId: number }) {
               if (saveAction.submitBlocked) return
               setActiveItem(it)
               // 断点续扫：回显已扫集（整行替换语义要求带全量重提交）
-              setScanned(it.scans.map(s => ({ barcode: s.barcode, individual: s.individual, bookQty: s.countedQty, countedQty: s.countedQty })))
+              setScanned(it.scans.map(s => ({ barcode: s.barcode, individual: s.individual, bookQty: s.containerBookQty ?? null, countedQty: s.countedQty })))
             }}>
               <PdaCard>
                 <div className="flex items-center justify-between">

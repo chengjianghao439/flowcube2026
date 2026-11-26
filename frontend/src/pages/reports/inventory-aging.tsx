@@ -1,5 +1,6 @@
 import { ReportQueryFeedback } from './ReportQueryFeedback'
 import { money, qty } from '@/lib/format'
+import { ContentTabs } from '@/components/shared/ContentTabs'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
@@ -96,7 +97,7 @@ export default function InventoryAgingPage() {
     <div className="space-y-4">
       <PageHeader
         title="存放时长与滞销"
-        description={`存放时长自入库本仓起算（调拨、拆分会重置）。库存金额按平均成本、成本参考价、销售参考价的顺序估算。从未出库的库存纳入滞销，有出库记录时按本仓最近出库是否超过 ${staleDays} 天判断。`}
+        description={`库龄自入库本仓起算，超 ${staleDays} 天或从未出库的库存纳入滞销。`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -105,20 +106,6 @@ export default function InventoryAgingPage() {
         }
       />
 
-
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
 
       <ReportQueryFeedback title="存放明细" hasData={!!agingQ.data} isError={agingQ.isError} isFetching={agingQ.isFetching} error={agingQ.error} onRetry={() => void agingQ.refetch()} />
       {buckets.length > 0 && <SummaryStrip items={buckets.map(bucket => ({
@@ -130,20 +117,29 @@ export default function InventoryAgingPage() {
         </>,
       }))} />}
 
-      <div className="flex gap-1 border-b border-border">
-        {([{ k: 'aging', l: '存放明细' }, { k: 'expiry', l: '效期预警' }] as const).map(t => (
-          <button key={t.k} type="button" onClick={() => setTab(t.k)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === t.k ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}>{t.l}</button>
-        ))}
-      </div>
-
-      <KeepAliveSection active={tab === 'aging' && (!agingQ.isError || !!agingQ.data)}>
-        <DataTable columns={agingCols} data={list} loading={agingQ.isLoading} rowKey="id" scrollLabel="存放明细表格" emptyText="暂无库存数据" />
-      </KeepAliveSection>
-      <KeepAliveSection active={tab === 'expiry'}>
-        <ReportQueryFeedback title="效期预警" hasData={!!expiryQ.data} isError={expiryQ.isError} isFetching={expiryQ.isFetching} error={expiryQ.error} onRetry={() => void expiryQ.refetch()} />
-        {(!expiryQ.isError || !!expiryQ.data) && <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" scrollLabel="效期预警表格" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />}
-      </KeepAliveSection>
+      <ContentTabs variant="underline" value={tab} onValueChange={setTab} label="库存存放与效期"
+        rightSlot={chips.length > 0 ? (
+          <>
+            {chips.map(c => (
+              <span key={c.key} className="fc-query-chip">
+                {c.label}
+                <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          </>
+        ) : undefined}
+        tabs={[
+        { value: 'aging', label: '存放明细', content: <KeepAliveSection active={!agingQ.isError || !!agingQ.data}>
+          <DataTable columns={agingCols} data={list} loading={agingQ.isLoading} rowKey="id" scrollLabel="存放明细表格" emptyText="暂无库存数据" />
+        </KeepAliveSection> },
+        { value: 'expiry', label: '效期预警', content: <>
+          <ReportQueryFeedback title="效期预警" hasData={!!expiryQ.data} isError={expiryQ.isError} isFetching={expiryQ.isFetching} error={expiryQ.error} onRetry={() => void expiryQ.refetch()} />
+          {(!expiryQ.isError || !!expiryQ.data) && <DataTable columns={expiryCols} data={expiryList} loading={expiryQ.isLoading} rowKey="id" scrollLabel="效期预警表格" emptyText="暂无临期 / 过期批次（仅批次管理商品参与效期预警）" />}
+        </> },
+      ]} />
 
       <InventoryAgingQueryDialog
         open={queryOpen}

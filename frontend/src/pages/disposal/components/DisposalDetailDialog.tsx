@@ -1,8 +1,9 @@
+import { Textarea } from '@/components/ui/textarea'
 import { ReportTable } from '@/components/shared/ReportTable'
 import type { DisposalOrder } from '@/types/disposal'
 import { money } from '@/lib/format'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { Fragment, useRef, useState } from 'react'
 import { toast } from '@/lib/toast'
 import { confirmAction } from '@/lib/confirm'
@@ -87,13 +88,14 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
   return (
     <>
     <Dialog open={open} onOpenChange={(next) => { if (!next && !actionLocked) onClose() }}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="fc-form-dialog max-w-6xl max-h-[90vh]">
         <DialogHeader description={disposal && !allScrap ? <span role="alert">{status === 3 ? '本单含促销、退供应商或异常明细，不能直接扣库。请返回列表选择“整单签认”，核对全部旧行后由另一名人员签认处理意图，再走正常销售、采购退货或重新报废流程；未签认前保持旧单。' : status === 4 ? '历史直接处置记录仅供追溯，不补单、不重算历史金额、不再次执行。' : '本单含旧处理方式；草稿／待审可先取消后手动走正常销售或采购退货，待审仍可按原规则驳回。不能把旧行改成报废。'}</span> : "核对来源明细、审批与处理进度。"}>
           <DialogTitle className="flex items-center gap-3">
             滞销处理单详情
             {disposal && <SoftStatusLabel label={statusLabel} tone={STATUS_TONE[disposal.status] ?? 'draft'} />}
           </DialogTitle>
         </DialogHeader>
+        <div className="fc-form-dialog-body">
         <OrderDetailSections type="disposal" id={id || 0}>
 
         {isLoading && <p className="text-center py-8 text-muted-foreground">加载中…</p>}
@@ -114,8 +116,8 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
             </div>
 
             <div className="overflow-x-auto">
-              <ReportTable className="w-full min-w-[1440px] text-sm"><thead><tr>
-                <ProductIdentityHeaders />
+              <ReportTable className="w-full min-w-[680px] text-sm"><thead><tr>
+                <th className="min-w-48 px-3 py-2 text-left">商品</th>
                 <th className="w-20">单位</th>
                 <th className="w-32">数量</th>
                 <th className="w-44">历史参考价</th>
@@ -124,7 +126,7 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
               </tr></thead><tbody>
               {disposal.items?.map(item => (
                 <Fragment key={item.id}><tr className="border-b last:border-0 text-sm">
-                  <ProductIdentityCells product={item} />
+                  <td className="px-3 py-3 align-top"><ProductIdentitySummary product={item} /></td>
                   <td className="text-muted-foreground">{item.unit}</td>
                   <td className="tabular-nums">{item.quantity}</td>
                   <td className="tabular-nums">{money(item.unitValue)}</td>
@@ -133,13 +135,14 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
                     <SoftStatusLabel label={DISPOSE_TYPE_LABELS[item.disposeType]} tone={DISPOSE_TYPE_TONES[item.disposeType]} />
                   </td>
                 </tr>
-                {item.remark && <tr><td colSpan={10} className="text-xs text-muted-foreground">行备注：{item.remark}</td></tr>}
+                {item.remark && <tr><td colSpan={6} className="text-xs text-muted-foreground">行备注：{item.remark}</td></tr>}
                 </Fragment>
               ))}
             </tbody></ReportTable></div>
           </div>
         )}
         </OrderDetailSections>
+        </div>
         <DialogFooter className="gap-2">
           {canSubmit && (
             <Button onClick={() => confirmAction({
@@ -189,11 +192,11 @@ export default function DisposalDetailDialog({ open, onClose, id, initialDetail,
     </Dialog>
 
     <Dialog open={rejectOpen && readable && status === 2 && can(PERMISSIONS.INVENTORY_DISPOSAL_APPROVE)} onOpenChange={setRejectOpen}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader description={"填写驳回原因，供申请人核对。"}><DialogTitle>驳回处置单</DialogTitle></DialogHeader>
-        <div className="space-y-2 py-2">
+      <DialogContent className="fc-form-dialog max-w-lg">
+        <DialogHeader><DialogTitle>驳回处置单</DialogTitle></DialogHeader>
+        <div className="fc-form-dialog-body space-y-2 py-2">
           <Label>驳回原因</Label>
-          <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateRejectDraft({ reason: e.target.value })} placeholder="必填，将展示给经办人" />
+          <Textarea aria-label="驳回原因" className="min-h-28" value={rejectReason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateRejectDraft({ reason: e.target.value })} placeholder="必填，将展示给经办人" />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setRejectOpen(false)}>取消</Button>

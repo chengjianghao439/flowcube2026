@@ -57,8 +57,10 @@
 - `main` 是发布来源，更新主线只触发检查与桌面验证构建。网页和 PDA 由正式发布入口显式触发。浏览器和桌面发布前必须等待**实际待发布 SHA** 的 Tests 与 Security Scan 成功，旧 SHA、失败、取消或超时不放行。桌面手动 checkout_ref 用实际 git HEAD，版本输入须匹配其 package。联合发布的 PDA 等本次编号对应的同 SHA 网页部署成功。
 - **部署临界区共用 `flowcube-server-deploy` 且不取消执行中的任务**：浏览器部署、桌面正式发布与 PDA 的 publish job 串行；桌面 push main 仅验证构建，PDA 等待浏览器的 job 不占部署组。服务器 `flock -w 1800` 是兜底。浏览器部署步骤 150 分钟 / job 210 分钟，预算覆盖上传 2700 秒、合并 610 秒、等锁 1800 秒、部署 2400 秒及回退宽限 600 秒，另容纳 HTTPS/中转尝试 545 秒和预检等开销；不能只增加内层而让外层先强杀。
 - 跨境直连不可用时，已授权操作端可中转**本次 run/attempt 的同一 GitHub artifact**：可先创建同路径 `.relay.pending` 申请最多 300 秒等待，再验证 GitHub artifact ZIP 的 `digest`、唯一归档条目和大小，再通过复用 SSH 上传到 `/tmp/flowcube-images-<run>-<attempt>.tar.gz.relay.partial`，上传完成后原子改名为 `.relay`。接收器在直连前及下载失败后检查该文件，必须匹配 runner 计算的归档字节数与 SHA256 才采用；符号链接、大小/摘要不符均拒绝。不得本地重建镜像或绕过后续 OCI revision、迁移、页面和回退门禁。CI 收尾清理本轮中转文件。
-- GitHub 草稿 Release 可能无法按 tag 查询；附件核对与重试清理须使用已取得的 Release ID，发现已有草稿则复用，不能重复创建。若桌面安装包已上线且附件已上传，仅草稿转正失败，运行 `recover-release-asset.yml`，传原 tag、tag 构建 run ID 和已核验的正式 HTTPS 站点（不依赖历史 `ERP_ORIGIN` Secret）：只下载原 CI artifact，校验原构建 SHA、同提交测试/浏览器/PDA、线上包摘要及 GitHub 附件摘要后转正，不重新构建或改写线上包。原失败运行保留，补发布运行独立记录。
-- PDA 与桌面包统一调用 `scripts/transfer-release-asset.sh`：PDA 传递本轮 APK artifact ID，桌面 EXE artifact 必须在正式发布前上传；接收器只接受指定的唯一 APK/EXE 文件名，并核对 runner 字节数与摘要，SCP 回退同样复算摘要。中转路径分别为 `/tmp/flowcube-pda-<run>-<attempt>.apk.relay`、`/tmp/flowcube-desktop-release/v<version>/<原始EXE文件名>.relay`；可提前以 `.relay.partial` 写入再原子改名，所有中转路径由 EXIT trap 收尾。
+- 只读服务器诊断在连接前验证进程数（十进制 1 至 200）和绝对路径，再将经过验证的参数逐项传给固定的采集脚本。路径用空格分隔，可用 ASCII 字母、数字和 `._/@+-`，禁止连续两点。诊断与桌面附件恢复的 checkout 均关闭凭据持久化。
+- 后端镜像的启动脚本由 root 持有，模式为 0755。入口调整挂载目录权属后再将业务进程降权到 node。
+- GitHub 草稿 Release 可能无法按 tag 查询；附件核对与重试清理须使用已取得的 Release ID，发现已有草稿则复用，不能重复创建。若桌面安装包已上线且附件已上传，仅草稿转正失败，从 `main` 运行 `recover-release-asset.yml`，恢复作业使用桌面发布环境 `flowcube-release-desktop`。作业通过环境保护之后取得附件写权限。传原 tag、tag 构建 run ID 和已核验的正式 HTTPS 站点（不依赖历史 `ERP_ORIGIN` Secret）：只下载原 CI artifact，校验原构建 SHA、同提交测试/浏览器/PDA、线上包摘要及 GitHub 附件摘要后转正，不重新构建或改写线上包。原失败运行保留，补发布运行独立记录。
+- PDA 与桌面包统一调用 `scripts/transfer-release-asset.sh`：PDA 传递本轮 APK artifact ID，桌面 EXE artifact 必须在正式发布前上传；接收器只接受指定的唯一 APK/EXE 文件名，并核对 runner 字节数与摘要，SCP 回退同样复算摘要。中转路径分别为 `/tmp/flowcube-pda-<run>-<attempt>.apk.relay`、`~/.flowcube-release-relay/desktop-<run>-<attempt>-<原始EXE文件名>.relay`；可提前以 `.relay.partial` 写入再原子改名，桌面中转与发布使用同一 SSH 账号，家目录内的中转目录权限为 0700。接收器边复制边按 runner 的字节数和 SHA256 校验，在本次随机私有发布目录中原子落盘。中转端清理本次 run/attempt 的标记和残件，发布端的 EXIT trap 清理随机目录。
 - 账款与对账验收使用拆分后的 `/payments/{payable,receivable}` 和 `/reports/reconciliation/{payable,receivable}`；旧入口会重定向，不可断言停留在旧地址。真实浏览器夹具须读取项目 HashRouter 别名规则，不能用不跳转的模拟页面掩盖失配。
 - 镜像 HTTPS 接收器须兼容生产 Python 3.6：文本输入使用 `universal_newlines=True`，临时文件清理捕获 `FileNotFoundError`；禁止依赖 `text=True` / `unlink(missing_ok=True)`。完整成功路径兼容回归见 `tests/deploy-artifact.test.js`。
 - **跨境上传按实际方向核对**：runner → 服务器上传和服务器 → 外网下载不能互相推算。历史记录的入站聚合约 97 KB/s 只说明当时链路慢，不证明当前网络完全不可达，也不保证增加并行度一定加速。镜像优先由服务器通过 HTTPS 下载本次 CI 的临时 artifact，150 秒下载预算、1100 秒远程执行预算（含最多 900 秒中转等待）；签名 URL 仅走 stdin，GitHub token 留在 runner。ZIP 只允许唯一预期归档，核对大小和 SHA256 后原子落盘；无 Python/curl、网络错误、摘要不符均明确降级。失败时保留 8 片并行 SCP 上传；单片和整批同为 2700 秒，避免 900 秒的单片先结束。按序合并后核对字节数，随后仍由 `server-update.sh` 核对 SHA-256 与 OCI revision。SSH 控制指令复用连接，八个 SCP 数据流各用独立控制连接以保留并行 TCP。`always()` 清理步骤只清本次 run/attempt 的归档、bootstrap、接收脚本、下载临时目录和分片目录，并删除本次 Actions 临时镜像 artifact（保底保留期 1 天）；SSH 续行中不得插入注释截断远程命令。
@@ -137,7 +139,7 @@
 
 回归 `tests/pack-finish-receipt-tx.smoke.test.js`（9 项，含 commit / 回执写入 / 回执构建读三种故障注入各自全量回滚 + 原键可重试）。**本批改动了共用的打印任务查询，发版前全量门禁待跑。**
 
-## 标签入队失败的两类降级计数（**仅批 A「还原整件」已分开；其它调用点尚未分开**）
+## 标签入队失败的两类降级计数
 
 `buildLabelBody` 先取默认 ZPL 模板，取不到（例如模板解析失败会降级返回 `null`）再回退**本地光栅渲染 worker**。入队失败时只写 `status=3` 的失败记录供补打，**不回滚**调用方事务（收货 / 容器拆分 / 还原整件 / 完成装箱都是「货已经动了」的事实记录）。
 
@@ -150,11 +152,7 @@
 
 注意：**改坏模板构造不出「渲染失败」**——模板解析失败只会降级返回 `null` 并回退光栅渲染，不抛错。要真实触发只有 worker 故障/繁忙/超时。回归见 `tests/label-render-degrade.smoke.test.js` 与 `smoke:plastic-box-batch-a`（后者用 `require.cache` 打桩注入，默认透传真实实现）。
 
-**适用范围（务必限定，勿外推）**：截至 2026-09-29，**只有批 A 的「还原整件」**（`plastic-boxes.service.js` 的 `repack`，判据 `/label render failed/.test(errorMessage)`）按上表把两类原因分开计数。
-
-**其它既有调用点尚未分开**，典型例子：收货 `backend/src/modules/inbound-tasks/inbound-tasks.command.js:659` 仍是
-`if (!job?.id || job.unprintable) noPrinterCount += 1`——**渲染失败也会被计入「无可用打印机」**。旧 `split` 等调用点同样未区分。
-**本轮不顺改**这些调用点；不得据本节推断「全系统两类降级已统一口径」。
+收货回执使用 `noPrinterCount` 和 `printFailedCount` 区分两种失败，容器拆分与还原整件使用 `noPrinterCount` 和 `renderFailedCount`。核对渲染降级时应同时检查失败任务的原因、两个回执字段和库存事务结果。完成装箱的回执走对应的打印调度提示。
 
 ## 2026-09-29 · 发布门禁的「页面标题必须与产品同源」（attempt 2 事故）
 
@@ -327,3 +325,21 @@ HTTP 连接关闭还不能证明业务 Promise 已完成。路由装配完成后
 ### 成对备份与异地状态
 
 日常数据库备份配对小满持久目录的流式归档，记录真实容器/卷身份、独立时间点和文件摘要。数据库独立成功后保留 SQL，缺小满归档时告警并停止生成成对回执。异地可选服务按周期复制，先传两种数据文件，再传本轮冻结的回执名单；同名冲突报错。启用宿主监控的异地探测后，可用成对回执新鲜度与上轮成功状态推送故障。实际配置和恢复责任见 [部署说明](DEPLOY.md#日常成对备份与异地副本)。
+
+失败任务重试锁定当前来源和任务；容器已删除或作废、未配置打印机或打印内容为空时保留失败记录。相同来源已有有效任务导致重试冲突时返回 409。
+
+
+### 备份演练与发布暂存
+
+首次安装 cron 会创建备份目录并安装缺少的任务，后续保留已有任务与自定义时间。恢复演练把 SQL 查询异常和演练容器清理失败计入失败状态，完成清理后才报告通过。桌面发布为每次任务创建私有远端临时目录，按文件只读挂载脚本与产物，由容器的 node 用户访问下载目录。准备 GitHub 草稿前，发布命令用同一 node 身份与可写挂载检查下载目录、当前版本、暂存及保留期清理实际需要的目录写入和搜索权限。预检只读元数据，缺失目录检查最近的已有父目录，错误时报告阻塞路径。
+
+核对迁移 219 遗留的单据或标签模板时，在已核准的数据环境运行 `node backend/scripts/audit-template-elements.js`。结果只有模板 ID、类型与分类。`encoded-array` 表示字符串可解为数组，`needs-original` 表示需要对照原模板或备份。
+
+
+### 原生安装包更新与 Windows RAW 打印
+
+桌面安装包的主进程只从随包资源 `renderer/native-update-origin.txt` 读取更新源。构建使用 `VITE_ERP_PRODUCTION_ORIGIN`，仅 HTTPS 启用更新。修改业务 API 地址后仍向原发布站检查版本。清单、下载和跳转均锁定该来源。GitHub 附件仍可由发布站的 `/current/` 镜像交付。
+
+安装前先重取清单和摘要，启动时复核文件及上级目录的重解析点，并在只允许共享读取的文件句柄上再次计算 SHA-256。句柄持有至系统接受启动。当前 Windows 发布配置保留未签名策略。启用 Authenticode 的前置工作包括确定发布者证书及轮换重叠期，在受保护的 Windows 发布环境配置签名，验证安装器和卸载器签名及可信时间戳。先发布能识别签名的过渡版本，再要求可信链与预置发布者证书同时匹配，并用实际 Windows 普通账户验证 UAC、拒绝签名不符、取消和再次启动。
+
+Windows RAW 打印直接运行安装包 `app.asar.unpacked/lib/print-zpl-raw.ps1`。每份标签使用独立私有临时目录中的独占文件；Windows 依赖用户临时目录的 ACL。提交子进程超时为 30 秒，同时最多接收 8 个批次，按批逐份提交，失败后结合打印机队列核对实际结果。桌面入口使用独立 CSP 文档，禁用子框架导航和默认 Chromium 权限。

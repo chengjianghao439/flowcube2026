@@ -66,6 +66,7 @@ const createCancelReturnBoxScan = async (req, res, next) => {
       operatorName: operator.operatorName,
       requestKey: extractRequestKey(req),
       scopeWarehouseIds: req.user?.warehouseIds ?? null,
+      pdaWarehouseId: req.pda?.warehouseId ?? null,
     })
     return successResponse(res, data, data.finalized ? '拆箱确认完成，任务已取消' : '拆箱确认已记录', 201)
   } catch (e) { next(e) }

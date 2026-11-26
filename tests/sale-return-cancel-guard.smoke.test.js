@@ -660,10 +660,14 @@ async function main() {
   } catch (e) {
     console.error(`\n[中止于 step=${step}] ${e.message}`)
     console.error(e.stack)
+    throw e
   } finally {
     // 只按本脚本记录的 ID 精确删除，绝不按名字/模糊条件删（污染共享夹具会让多个套件集体变红）
     const safe = async (label, sql, params) => {
-      try { await pool.query(sql, params) } catch (e) { console.error(`[清理告警] ${label}: ${e.message}`) }
+      try { await pool.query(sql, params) } catch (e) {
+        process.exitCode = 1
+        console.error(`[清理失败] ${label}: ${e.message}`)
+      }
     }
     // 只删本轮 INSERT 的行，按 id 精确删——不用 (warehouse_id, print_type) 条件删：
     // 共享库若有并发任务在此刻替换了同一 (warehouse, print_type) 绑定，按条件删会删到别人的行。

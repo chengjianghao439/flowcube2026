@@ -7,6 +7,7 @@ const { calcMonthlyTax, netPay } = require('./hr.tax')
 const { normalizePagination } = require('../../utils/pagination')
 const { beginOperationRequest, completeOperationRequest } = require('../../utils/operationRequest')
 const { beijingTodayYmd } = require('../../utils/backendTime')
+const { assertPeriodOpen } = require('../accounting/accounting.period.service')
 const { lockAccountingCompany } = require('../accounting/accounting.period-lock')
 const { loadPayrollDependencies, matchesTaxSnapshot, assertTaxSnapshot, assertNoCalculatedSuccessor } = require('./hr.dependencies')
 
@@ -266,11 +267,15 @@ async function calculatePayroll(id, operator, companyId = 1) {
 /** 发放工资：生成 4 张凭证（计提/单位社保/代扣/发放），工资单 → 已发放。 */
 async function payPayroll(id, { paidDate }, operator, companyId = 1) {
   const cid = Number(companyId) || 1
-  const date = String(paidDate || beijingTodayYmd())
+  const date = paidDate ?? beijingTodayYmd()
+  const stamp = Date.parse(`${date}T00:00:00Z`)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(stamp) || new Date(stamp).toISOString().slice(0,10) !== date) {
+    throw new AppError('请填写有效的工资发放日期', 400)
+  }
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    await lockAccountingCompany(conn, cid)
+    await assertPeriodOpen(conn, date.slice(0,7).replace('-', ''), cid)
     const [[payroll]] = await conn.query(
       'SELECT * FROM hr_payrolls WHERE id = ? AND company_id = ? FOR UPDATE', [Number(id), cid],
     )

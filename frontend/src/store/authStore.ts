@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { resetCompanyScope } from './companyStore'
 import type { User } from '@/types'
 
 const AUTH_SESSION_KEY = 'flowcube-auth-v3'
@@ -56,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       login: (token, refreshToken, user) => {
+        resetCompanyScope()
         set((state) => ({
           sessionGeneration: state.sessionGeneration + 1,
           token,
@@ -74,6 +76,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        resetCompanyScope()
         try {
           // 两处都清：切换存储位置后不留残影
           sessionStorage.removeItem(AUTH_SESSION_KEY)

@@ -1,5 +1,5 @@
 import { qty } from '@/lib/format'
-import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { money } from '@/lib/format'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -51,7 +51,7 @@ export default function AvgCostReconciliationPage() {
   }
 
   const columns: TableColumn<AvgCostRow>[] = [
-    ...productIdentityColumns(),
+    { key: 'productId', title: '商品', width: 248, render: (_, row) => <ProductIdentitySummary product={row} /> },
     { key: 'warehouseName', title: '仓库', width: 120, render: (v, row) => String(v || `仓库 #${row.warehouseId}`) },
     { key: 'unitCost', title: '单位成本', width: 90, align: 'right', render: (v, row) => <CurrentValuationCost value={v as number | null | undefined} source={row.unitCostSource} productName={row.productName} /> },
     { key: 'cacheQty', title: '账面数量', width: 100, align: 'right', render: v => <span className="tabular-nums">{fmtQty(v)}</span> },

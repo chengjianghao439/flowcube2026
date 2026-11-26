@@ -1,3 +1,4 @@
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { usePermission } from '@/hooks/usePermission'
 import { approvalSource, approvalNavigationPath, pendingApprovalRowKey, pendingApprovalProgress, pendingApprovalTime, pendingApprovalAmountLabel, pendingApprovalAmount } from '@/lib/approvalBusiness'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -6,7 +7,6 @@ import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
-import { Button } from '@/components/ui/button'
 import { usePendingApprovals } from '@/hooks/useApprovals'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import type { PendingApproval } from '@/types/approval'
@@ -74,11 +74,9 @@ export default function ApprovalPendingPage() {
       title: '操作',
       width: 110,
       render: (_, row) => (
-        <div className="space-y-1"><Button size="sm" variant="outline" disabled={isFetching || isError || !approvalSource(row.bizType, row.bizId, can).path}
-          title={approvalSource(row.bizType, row.bizId, can).reason || undefined}
-          onClick={() => openSource(row)}>
-          去审批
-        </Button>
+        <div className="space-y-1"><TableActionsMenu primaryVariant="outline" primaryLabel="去审批"
+          primaryDisabled={isFetching || isError || !approvalSource(row.bizType, row.bizId, can).path}
+          onPrimaryClick={() => openSource(row)} items={[]} />
         {approvalSource(row.bizType, row.bizId, can).reason && <p className="text-xs text-muted-foreground">{approvalSource(row.bizType, row.bizId, can).reason}</p>}
         </div>
       ),
@@ -91,8 +89,8 @@ export default function ApprovalPendingPage() {
         title="待我审批"
         description={!isError && data && !isFetching && data.truncated ? <span role="status">仅显示前 {list.length.toLocaleString()} 条，共 {total.toLocaleString()} 条，待办未全部读取；请先处理现有待办后刷新。</span> : '核对待办申请并进入原单处理。'}
       />
-      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="审批待办读取失败" compact /> : <>
-      <DataTable
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="审批待办读取失败" /> : <>
+      <DataTable fluid columnStorageKey="approvals-pending" scrollLabel="审批待办表格"
         columns={columns}
         data={isError ? [] : list}
         loading={isLoading || isFetching}

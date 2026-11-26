@@ -45,6 +45,12 @@ function Location() { const location = useLocation(); return <output data-locati
 async function mount(path = '/kits?keyword=APPLIED&page=3') { await act(async () => root.render(<QueryClientProvider client={query}><MemoryRouter initialEntries={[path]}><Location /><div data-workspace-scroll style={{ height: 480, overflow: 'auto' }}><KitsPage /></div></MemoryRouter></QueryClientProvider>)) }
 const button = (name: string, scope: ParentNode = document.body) => [...scope.querySelectorAll<HTMLButtonElement>('button,[role="menuitem"]')].find(b => b.textContent?.trim() === name || b.getAttribute('aria-label') === name)!
 async function click(name: string, scope: ParentNode = document.body) { const b = button(name, scope); expect(b).toBeTruthy(); expect(!!b.disabled).toBe(false); await act(async () => b.click()) }
+async function openQuery() {
+  await click('查询', host)
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const input = dialog.querySelector<HTMLInputElement>('input[name="keyword"]')!
+  return { dialog, input }
+}
 async function change(input: HTMLInputElement, value: string) { await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) }) }
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -81,15 +87,18 @@ test('配件续批失败拒绝部分结果，原条件可重试', async () => {
 })
 test('配件缓存403隐藏旧行和旧计数，保留未应用搜索输入', async () => {
   respond = url => batch(url, 1); await mount('/kits?keyword=APPLIED'); await wait(() => expect(cache()?.state.status).toBe('success'))
-  const input = host.querySelector<HTMLInputElement>('[aria-label="搜索成套配件"]')!; await change(input, '尚未应用')
+  const { dialog, input } = await openQuery()
+  await change(input, '尚未应用')
   respond = () => failure(403); await act(async () => { await query.invalidateQueries({ queryKey: ['kits'] }) }); await wait(() => expect(cache()?.state.status).toBe('error'))
   expect(host.textContent).not.toMatch(/KIT-SYN-|共 1 条/); expect(input.value).toBe('尚未应用')
+  await click('取消', dialog)
   respond = url => batch(url, 1); await click('重试'); await wait(() => expect(cache()?.state.status).toBe('success'))
   for (const url of requests) expect(url.searchParams.get('keyword')).toBe('APPLIED')
 })
 test('配件查询只在显式提交后应用，URL清理旧页码', async () => {
   respond = url => batch(url, 201); await mount(); await wait(() => expect(cache()?.state.status).toBe('success'))
-  const input = host.querySelector<HTMLInputElement>('[aria-label="搜索成套配件"]')!; await change(input, 'NEW'); await click('查询'); await wait(() => expect(cache()?.state.status).toBe('success'))
+  const { dialog, input } = await openQuery()
+  await change(input, 'NEW'); await click('查询', dialog); await wait(() => expect(cache()?.state.status).toBe('success'))
   expect(requests.slice(-2).every(url => url.searchParams.get('keyword') === 'NEW')).toBe(true)
   expect(host.querySelector('[data-location]')?.textContent).toBe('/kits?keyword=NEW')
 })

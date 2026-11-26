@@ -28,6 +28,8 @@ function load(rel, mocks, extra = {}) {
 function harness(t, { hash, content = 'installer', stream, redirect, installerError = false, platform = 'win32', packaged = true } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-update-test-'))
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  fs.mkdirSync(path.join(dir, 'renderer'))
+  fs.writeFileSync(path.join(dir, 'renderer', 'native-update-origin.txt'), 'https://updates.example.test')
   const url = 'https://updates.example.test/current/flowcube-2.0.0.exe'
   const manifest = { version: '2.0.0', notes: '更新说明', url,
     sha256: hash === undefined ? crypto.createHash('sha256').update(content).digest('hex') : hash }
@@ -37,7 +39,7 @@ function harness(t, { hash, content = 'installer', stream, redirect, installerEr
   const app = { getVersion: () => '1.0.0', getPath: () => dir, requestSingleInstanceLock: () => false,
     quit() {}, exit() { exits++ }, on: (name, fn) => events.set(name, fn), isPackaged: packaged }
   const win = { isDestroyed: () => false, webContents: { isDestroyed: () => false,
-    executeJavaScript: async () => 'https://updates.example.test',
+    executeJavaScript: async () => 'https://custom-api.example.test',
     send: (name, payload) => { for (const fn of listeners.get(name) || []) fn({}, payload) },
   } }
   const rendererGuard = require('../desktop/lib/rendererSecurity').createRendererGuard()
@@ -80,11 +82,11 @@ function harness(t, { hash, content = 'installer', stream, redirect, installerEr
       },
     },
   }
-  const extra = { process: { env: {}, platform, on() {} } }
+  const extra = { process: { env: {}, resourcesPath: dir, platform, on() {} } }
   const update = load('desktop/lib/updateCheck.js', { electron, 'node:child_process': {
     execFile: (file, args, options, callback) => {
       opened.push({ file, args, options })
-      callback(installerError ? new Error('UAC denied') : null)
+      callback(installerError ? Object.assign(new Error('launcher declined'), { code: installerError }) : null)
     },
   } }, extra)
   load('desktop/main.js', { electron, 'electron-log/main': quiet, './lib/updateCheck': update, './lib/localPrint': {}, './lib/rendererSecurity': { createRendererGuard: () => rendererGuard } }, extra)
@@ -119,7 +121,7 @@ test('the main process obtains its own manifest and downloads without launching 
   await h.bridge.triggerUpdateCheck({ downloadUrl: 'https://other.example.test/evil.exe' })
   assert.equal(h.update.getUpdateState().stage, 'ready')
   assert.ok(states.some(state => state.stage === 'downloading' && state.percent === 100))
-  assert.ok(h.calls.every(c => !String(c.url).includes('other.example.test')))
+  assert.ok(h.calls.every(c => new URL(c.url).origin === 'https://updates.example.test'))
   assert.equal(h.opened.length, 0)
   assert.equal(h.exits(), 0)
   assert.equal(h.boxes.length, 0)
@@ -132,8 +134,8 @@ test('the packaged startup checks and downloads once even if the renderer sends 
       if (state.stage === 'ready' || state.stage === 'error') resolve(state)
     })
   })
-  h.bridge.notifyApiOriginReady('https://updates.example.test')
-  h.bridge.notifyApiOriginReady('https://updates.example.test')
+  h.bridge.notifyApiOriginReady('https://custom-api.example.test')
+  h.bridge.notifyApiOriginReady('https://custom-api.example.test')
   const state = await completed
   assert.equal(state.stage, 'ready')
   assert.equal(h.calls.filter(call => call.url.endsWith('/api/app-update/latest')).length, 1)
@@ -149,15 +151,22 @@ test('restart without a verified installer is rejected, while explicit restart r
   assert.equal(h.opened.length, 1)
   assert.match(h.opened[0].args.join(' '), /--updated.*\/S.*--force-run/)
   assert.match(h.opened[0].options.env.FLOWCUBE_INSTALLER_PATH, /update-cache.*\.exe$/)
+  assert.equal(h.opened[0].options.env.FLOWCUBE_INSTALLER_SHA256, h.manifest.sha256)
+  const script = h.opened[0].args.at(-1)
+  assert.match(script, /ReparsePoint[\s\S]*FileShare]::Read[\s\S]*Get-FileHash -InputStream[\s\S]*Start-Process[\s\S]*Dispose/)
   assert.equal(h.exits(), 1)
 })
 
 test('installer downloads across a trusted HTTPS redirect and refuses an HTTP downgrade', async t => {
-  const https = 'https://cdn.example.test/release.exe'
+  const https = 'https://updates.example.test/verified/release.exe'
   const redirected = harness(t, { redirect: https })
   await redirected.bridge.triggerUpdateCheck()
   assert.equal(redirected.update.getUpdateState().stage, 'ready')
   assert.ok(redirected.calls.some(call => call.url === https))
+  const foreign = harness(t, { redirect: 'https://cdn.example.test/release.exe' })
+  await foreign.bridge.triggerUpdateCheck()
+  assert.equal(foreign.update.getUpdateState().stage, 'error')
+  assert.ok(foreign.calls.every(call => new URL(call.url).origin === 'https://updates.example.test'))
   const insecure = harness(t, { redirect: 'http://cdn.example.test/release.exe' })
   await insecure.bridge.triggerUpdateCheck()
   assert.equal(insecure.update.getUpdateState().stage, 'error')
@@ -271,4 +280,40 @@ test('same or older and unsupported installations never download an EXE', async 
   await mac.bridge.triggerUpdateCheck()
   assert.equal(mac.update.getUpdateState().stage, 'unsupported')
   assert.equal(mac.calls.length, 0)
+})
+
+
+test('启动前文件锁内复核失败会清除待安装状态', async t => {
+  const h = harness(t, { installerError: 31 })
+  await h.bridge.triggerUpdateCheck()
+  await h.bridge.restartToUpdate()
+  assert.equal(h.update.getUpdateState().stage, 'error')
+  assert.equal(h.exits(), 0)
+  await assert.rejects(h.bridge.restartToUpdate(), /下载|校验/)
+})
+
+test('桌面窗口限制框架导航和权限，打包时生成专用 CSP 文档', () => {
+  const source = fs.readFileSync(path.join(root, 'desktop/main.js'), 'utf8').replace(/^\s*\/\/.*$/gm, '')
+  assert.match(source, /'will-frame-navigate'[\s\S]{0,150}!event.isMainFrame[\s\S]{0,130}event.preventDefault/)
+  assert.match(source, /setPermissionRequestHandler\([\s\S]{0,140}rendererGuard\.allowsPermission/)
+  assert.match(source, /setPermissionCheckHandler\([\s\S]{0,160}rendererGuard\.allowsPermission/)
+  assert.match(source, /path.join\(rendererDist\(\), 'desktop.html'\)/)
+  const updateSource = fs.readFileSync(path.join(root, 'desktop/lib/updateCheck.js'), 'utf8')
+  assert.match(updateSource, /try \{ Assert-NoReparse \$file\.FullName;/)
+  const { createRendererGuard } = require('../desktop/lib/rendererSecurity')
+  const guard = createRendererGuard()
+  const trustedUrl = 'file:///app/renderer/desktop.html#/'
+  const contents = { isDestroyed: () => false, mainFrame: { url: trustedUrl }, getURL: () => trustedUrl }
+  guard.register(contents, trustedUrl)
+  assert.equal(guard.allowsPermission(contents, 'clipboard-sanitized-write', { isMainFrame: true, requestingUrl: trustedUrl }), true)
+  assert.equal(guard.allowsPermission(contents, 'notifications', { isMainFrame: true, requestingOrigin: 'file://' }), true)
+  assert.equal(guard.allowsPermission(contents, 'clipboard-read', { isMainFrame: true, requestingUrl: trustedUrl }), false)
+  assert.equal(guard.allowsPermission(contents, 'media', { isMainFrame: true, requestingUrl: trustedUrl }), false)
+  assert.equal(guard.allowsPermission(contents, 'clipboard-sanitized-write', { isMainFrame: false, requestingUrl: trustedUrl }), false)
+  assert.equal(guard.allowsPermission(contents, 'clipboard-sanitized-write', { isMainFrame: true, requestingUrl: 'file:///app/renderer/other.html' }), false)
+  assert.equal(guard.allowsPermission(contents, 'notifications', { isMainFrame: true, requestingOrigin: 'https://evil.example' }), false)
+  const config = fs.readFileSync(path.join(root, 'frontend/vite.config.ts'), 'utf8').replace(/^\s*\/\/.*$/gm, '')
+  assert.match(config, /script-src 'self';/)
+  assert.match(config, /frame-src 'none'; object-src 'none'/)
+  assert.match(config, /http-equiv="Content-Security-Policy"/)
 })

@@ -30,6 +30,10 @@ test('receipt allocations settle exact cents and reject fractional-cent actual c
       if (sql.includes('SELECT payment_date FROM payment_receipts')) return [[{ payment_date: '2026-09-27' }]]
       if (sql.includes('FROM payment_receipts')) return [[{ id: 1, receipt_no: 'RC', amount: '0.3', settled_amount: '0', status: 1, type: 2, party_name: 'test' }]]
       if (sql.includes('SELECT DISTINCT statement_id')) return [[]]
+      if (sql === 'SELECT statement_id FROM reconciliation_statement_items WHERE record_id IN (?) ORDER BY record_id FOR SHARE') {
+        assert.deepEqual(Array.from(args[0]), [1, 2])
+        return [[]]
+      }
       if (sql.includes('FROM payment_records')) return [[{ id: args[0], order_no: 'SO', balance: args[0] === 1 ? '0.1' : '0.2', total_amount: args[0] === 1 ? '0.1' : '0.2', paid_amount: '0', type: 2, party_name: 'test', status: 1 }]]
       if (sql.startsWith('UPDATE payment_records')) recordWrites.push(args)
       if (sql.startsWith('UPDATE payment_receipts')) receiptWrite = args

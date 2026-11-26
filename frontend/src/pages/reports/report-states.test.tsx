@@ -4,12 +4,14 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import PdaAnomalyPage from './pda-anomaly'
+import { getPdaAnomalyApi } from '@/api/reports'
 import ProfitAnalysisPage from './profit-analysis'
 import InventoryAgingPage from './inventory-aging'
 import { getProfitAnalysisApi } from '@/api/reports'
 import { getInventoryAgingApi, getExpiryAlertsApi } from '@/api/inventory'
 
-vi.mock('@/api/reports', () => ({ getProfitAnalysisApi: vi.fn() }))
+vi.mock('@/api/reports', () => ({ getPdaAnomalyApi: vi.fn(), getProfitAnalysisApi: vi.fn() }))
 vi.mock('@/api/inventory', () => ({ getInventoryAgingApi: vi.fn(), getExpiryAlertsApi: vi.fn() }))
 vi.mock('./InventoryAgingQueryDialog', () => ({ default: () => null }))
 vi.mock('@/hooks/useActiveWorkspaceTab', () => ({ useActiveWorkspaceTab: () => true }))
@@ -89,4 +91,20 @@ it('效期失败单独提示，缓存库龄汇总仍可见', async () => {
   expect(host.textContent).toContain('效期预警加载失败')
   expect(host.textContent).toContain('¥400.00')
   expect(visibleText()).not.toContain('暂无临期 / 过期批次')
+})
+
+
+it('仅报表查看权不触发扫码统计，也没有无权的销售和库存跳转', async () => {
+  await render(<PdaAnomalyPage />)
+  expect(host.textContent).toContain('没有查看扫码记录的权限')
+  expect(getPdaAnomalyApi).not.toHaveBeenCalled()
+  vi.mocked(getProfitAnalysisApi).mockResolvedValue(report)
+  await render(<ProfitAnalysisPage />)
+  expect(host.textContent).toContain('SO-REPORT-1')
+  const saleRow = [...host.querySelectorAll('tr')].find(row => row.textContent?.includes('SO-REPORT-1'))
+  expect(saleRow).toBeTruthy()
+  expect(saleRow!.classList.contains('cursor-pointer'), '无销售查看权的行不应展示可双击光标').toBe(false)
+  expect(host.textContent).not.toContain('打开原单')
+  expect(host.textContent).not.toContain('查看销售订单')
+  expect(host.textContent).not.toContain('查看库存总览')
 })

@@ -25,7 +25,7 @@ function makeFlowMock() {
       else if (kw.includes('演示客户')) hits = [{ id: 1, type: 'customer', title: '演示客户甲公司' }];
       return ok(res, hits);
     }
-    if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, allowDecimalQty: false }); }
+    if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, unit: '个', allowDecimalQty: false }); }
     if (p === '/api/customers/1') return ok(res, { id: 1, name: '演示客户甲公司', priceLevel: 'A', creditLimit: null });
     if (p === '/api/warehouses') return ok(res, { list: [{ id: 1, name: '华东一仓' }, { id: 2, name: '华南二仓' }] });
     if (p === '/api/inventory/query-by-product') {

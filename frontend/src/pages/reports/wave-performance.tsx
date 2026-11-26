@@ -14,7 +14,6 @@ import { ApiClientError } from '@/api/client'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import type { StatusTone } from '@/lib/statusTone'
-import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { usePollingReport } from '@/hooks/usePollingReport'
 import { beijingYmd, formatDisplayDateTime, shiftYmd } from '@/lib/dateTime'
@@ -135,13 +134,10 @@ export default function WavePerformancePage() {
   ]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="批次效率"
         description="核对批次时长、商品分布与效率。"
-        actions={(
-          <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
-        )}
       />
 
       {error instanceof ApiClientError && error.status === 403 ? (

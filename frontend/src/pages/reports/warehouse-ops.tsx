@@ -100,13 +100,13 @@ export default function WarehouseOpsPage() {
         actions={(
           <div className="flex flex-wrap gap-2">
             <span className="desktop-page-meta">实时数据 · 每分钟自动刷新 · 更新于 {updatedTime}</span>
-            <Button size="sm" variant="outline" onClick={() => openPath('/reports/wave-performance', '批次效率')}>
+            <Button variant="outline" onClick={() => openPath('/reports/wave-performance', '批次效率')}>
               查看批次效率
             </Button>
-            <Button size="sm" variant="outline" onClick={() => openPath('/reports/pda-anomaly', 'PDA 异常分析')}>
+            <Button variant="outline" onClick={() => openPath('/reports/pda-anomaly', 'PDA 异常分析')}>
               查看异常分析
             </Button>
-            <Button size="sm" variant="outline" disabled={isFetching} onClick={() => void refetch()}>
+            <Button variant="outline" disabled={isFetching} onClick={() => void refetch()}>
               {isFetching ? '刷新中…' : '立即刷新'}
             </Button>
           </div>
@@ -191,10 +191,10 @@ export default function WarehouseOpsPage() {
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-xs text-muted-foreground">扫码 {op.scanCount}</span>
                       {op.errorCount != null && op.errorCount > 0 && (
-                        <span className="text-xs text-red-500">错误 {op.errorCount}（{op.errorRate}）</span>
+                        <span className="text-xs text-destructive-ink">错误 {op.errorCount}（{op.errorRate}）</span>
                       )}
                       {op.efficiency && (
-                        <span className="text-xs text-green-600">{op.efficiency} 件/分</span>
+                        <span className="text-xs text-foreground">{op.efficiency} 件/分</span>
                       )}
                     </div>
                   </div>
@@ -213,11 +213,11 @@ export default function WarehouseOpsPage() {
           >
             {data.recentErrors ? <div className="space-y-2">
               {data.recentErrors.slice(0, 6).map(e => (
-                <div key={e.id} className="flex items-start gap-2 rounded-lg bg-red-50 border border-red-100 px-3 py-2">
-                  <AlertTriangle className="size-4 text-red-400 shrink-0 mt-0.5" />
+                <div key={e.id} className="flex items-start gap-2 rounded-lg bg-destructive/5 border border-destructive/30 px-3 py-2">
+                  <AlertTriangle className="size-4 text-destructive-ink shrink-0 mt-0.5" />
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-red-700 min-w-0 whitespace-normal [overflow-wrap:anywhere]">{e.reason}</p>
-                    <p className="text-xs text-red-500">{e.operatorName} · {e.barcode} · {formatDisplayDateTime(e.createdAt)}</p>
+                    <p className="text-xs font-medium text-destructive-ink min-w-0 whitespace-normal [overflow-wrap:anywhere]">{e.reason}</p>
+                    <p className="text-xs text-destructive-ink">{e.operatorName} · {e.barcode} · {formatDisplayDateTime(e.createdAt)}</p>
                   </div>
                 </div>
               ))}

@@ -31,7 +31,7 @@ vi.mock('@/hooks/useCarriers',()=>({useCarriersActive:()=>({data:[]})}))
 vi.mock('@/hooks/useUserOptions',()=>({useUserOptions:()=>({options:[]}),userOptionLabel:()=>''}))
 vi.mock('@/hooks/useProductQtyPolicies',()=>({useProductQtyPolicies:()=>()=>true}))
 vi.mock('@/components/finder',()=>({CustomerFinder:()=>null,SupplierFinder:()=>null,ProductFinder:()=>null,CategoryFinder:()=>null}))
-// 不挂载活动/relatedEvents边界；实际单据内容和返回动作仍由真实页面渲染。
+// 活动边界使用夹具，详情内容和工作区标签关闭沿用实际组件。
 vi.mock('@/components/shared/OrderDetailSections',()=>({OrderDetailSections:({children}:{children:React.ReactNode})=><>{children}</>}))
 vi.mock('@/components/print/OrderPrintOverlay',()=>({OrderPrintOverlay:()=>null}))
 const h=retentionHarness()
@@ -48,13 +48,13 @@ beforeEach(()=>{
  edge.logs.mockResolvedValue(list({...row,method:'GET',path:'/purchase',statusCode:200,module:'purchase',userId:7,userName:'合成',requestBody:{keyword:'KEEP'},responseBody:{list:[]}}))
  edge.writes.mockRejectedValue(new Error('本轮不操作写入'))
 })
-test('采购计划真实筛选→真实详情页返回列表，控件/请求/结果保留',async()=>{
- await h.render('/procurement');const input=h.host.querySelector<HTMLInputElement>('[placeholder="搜索计划编号/名称…"]')!;await h.input(input,'KEEP');await h.click('搜索');expect(edge.plans).toHaveBeenLastCalledWith(expect.objectContaining({keyword:'KEEP'}))
- await h.click('查看');expect(h.current()).toBe('/procurement/42');expect(h.activeText()).toContain('采购计划 SYN42');await h.click('返回列表');expect(h.current()).toBe('/procurement');expect(input.value).toBe('KEEP');expect(h.activeText()).toContain('条件命中记录');expect(edge.plans.mock.calls.every(([p])=>!p.keyword||p.keyword==='KEEP')).toBe(true)
+test('采购计划真实筛选→关闭真实详情标签，控件/请求/结果保留',async()=>{
+ await h.render('/procurement');await h.click('查询');const input=document.querySelector<HTMLInputElement>('[placeholder="搜索计划编号/名称…"]')!;await h.input(input,'KEEP');await h.enter(input);expect(edge.plans).toHaveBeenLastCalledWith(expect.objectContaining({keyword:'KEEP'}))
+ await h.click('查看');expect(h.current()).toBe('/procurement/42');expect(h.activeText()).toContain('采购计划 SYN42');await h.closeActive();expect(h.current()).toBe('/procurement');expect(h.activeText()).toContain('KEEP');await h.click('查询');expect(document.querySelector<HTMLInputElement>('[role="dialog"] input')?.value).toBe('KEEP');await h.click('取消');expect(h.activeText()).toContain('条件命中记录');expect(edge.plans.mock.calls.every(([p])=>!p.keyword||p.keyword==='KEEP')).toBe(true)
 })
-test('物流真实查询→真实详情返回，日期/关键词/请求结果保留',async()=>{
+test('物流真实查询→关闭真实详情标签，日期/关键词/请求结果保留',async()=>{
  await h.render('/logistics');await h.click('查询');const input=document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!;await h.input(input,'KEEP');await h.enter(input);expect(edge.waybills).toHaveBeenLastCalledWith(expect.objectContaining({keyword:'KEEP'}));const params=edge.waybills.mock.calls.at(-1)![0]
- await h.click('详情');expect(h.current()).toBe('/logistics/42');expect(h.activeText()).toContain('SYN42');await h.click('返回列表');expect(h.activeText()).toContain('关键字：KEEP');expect(edge.waybills.mock.calls.at(-1)![0]).toEqual(params);await h.click('查询');expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!.value).toBe('KEEP');await h.click('取消')
+ await h.click('详情');expect(h.current()).toBe('/logistics/42');expect(h.activeText()).toContain('SYN42');await h.closeActive();expect(h.activeText()).toContain('关键字：KEEP');expect(edge.waybills.mock.calls.at(-1)![0]).toEqual(params);await h.click('查询');expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!.value).toBe('KEEP');await h.click('取消')
 })
 for(const item of [{page:'/products',spy:'products',title:'SYN42'},{page:'/transfer',spy:'transfers',title:'SYN42'},{page:'/returns/purchase',spy:'purchaseReturns',title:'SYN42'},{page:'/returns/sale',spy:'saleReturns',title:'SYN42'}] as const)test('真实'+item.page+'列表→真实表单/详情→关闭，已应用查询保留',async()=>{
  const original=item.page+'?keyword=KEEP&status=1&warehouseId=10&startDate='+date+'&endDate='+date;await h.render(original);expect(edge[item.spy].mock.calls.some(([params])=>params.keyword==='KEEP')).toBe(true);const params=edge[item.spy].mock.calls.at(-1)![0]

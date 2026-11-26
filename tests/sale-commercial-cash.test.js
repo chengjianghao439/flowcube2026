@@ -14,6 +14,11 @@ function fixture({prior=[],noAR=false,gross='.03',discount='.01',component='.03'
   if(q.startsWith('SELECT id,return_item_id,checked_qty'))return [[{id:30,return_item_id:40,checked_qty:qty,rejected_qty:0,putaway_qty:qty}]]
   if(q.startsWith('SELECT sri.id,sri.dispatch_component_id'))return [[{id:40,dispatch_component_id:1,source_qty:3,confirmed_amount:String(Number(component)),order_id:9}]]
   if(q.startsWith('SELECT id,total_amount,paid_amount,balance'))return [noAR?[]:[{id:50,total_amount:'.02',paid_amount:0,balance:'.02'}].map(r=>({...r,total_amount:Number(r.total_amount),balance:Number(r.balance)}))]
+  if(q.includes('SELECT id, type, order_id, order_no FROM payment_records'))return [noAR?[]:[{id:50,type:2,order_id:9,order_no:'SO'}]]
+  if(q.includes('FROM reconciliation_statement_items'))return [[{statement_id:51}]]
+  if(q.includes('FROM reconciliation_statements'))return [[{id:51}]]
+  if(q.includes('SELECT * FROM payment_records'))return [noAR?[]:[{id:50,type:2,order_id:9,order_no:'SO',total_amount:0.02,paid_amount:0,balance:0.02}]]
+  if(q.includes('SELECT id FROM payment_records'))return [[]]
   if(q.startsWith('SELECT refund_amount,financial_amount'))return [prior]
   if(q.startsWith('SELECT dispatch_component_id,return_task_item_id'))return [prior.map((r,i)=>({dispatch_component_id:1,return_task_item_id:100+i,qualified_qty:1,refund_amount:r.refund_amount}))]
   if(q.startsWith('SELECT id,checked_qty,rejected_qty,putaway_qty'))return [prior.map((r,i)=>({id:100+i,checked_qty:1,rejected_qty:0,putaway_qty:1}))]
@@ -21,7 +26,15 @@ function fixture({prior=[],noAR=false,gross='.03',discount='.01',component='.03'
   if(q.startsWith('UPDATE sale_return_items')||q.startsWith('UPDATE sale_returns'))return [{affectedRows:1}]
   throw Error('Unexpected SQL '+q)
  }}
- const svc=load('modules/sale/sale.commercial-returns.js',{'../../utils/cashMoney':cash,'../../utils/AppError':AppError,'../../utils/warehouseScope':{},'../../utils/qtyPrecision':{},'../../utils/unitConversion':{roundQty:n=>Math.round(Number(n)*100)/100,round8:n=>Math.round(Number(n)*1e8)/1e8},'./sale.commercial-money.math':math,'./sale.commercial-refund-budget':{},'./sale.commercial-money':{invalid(reason){throw new AppError(reason,409,'SALE_COMMERCIAL_SOURCE_INVALID')}},'./sale.commercial-financial':financial})
+ const returnsHelpers = load('modules/returns/returns.helpers.js', {
+   '../../utils/cashMoney': cash,
+   '../../utils/AppError': AppError,
+   '../../utils/codeGenerator': {},
+   '../payments/payment-events.service': {},
+   '../payments/reconciliation-statements.service': {},
+   '../../utils/requestContext': {},
+ })
+ const svc=load('modules/sale/sale.commercial-returns.js',{'../returns/returns.helpers': returnsHelpers,'../../utils/cashMoney':cash,'../../utils/AppError':AppError,'../../utils/warehouseScope':{},'../../utils/qtyPrecision':{},'../../utils/unitConversion':{roundQty:n=>Math.round(Number(n)*100)/100,round8:n=>Math.round(Number(n)*1e8)/1e8},'./sale.commercial-money.math':math,'./sale.commercial-refund-budget':{},'./sale.commercial-money':{invalid(reason){throw new AppError(reason,409,'SALE_COMMERCIAL_SOURCE_INVALID')}},'./sale.commercial-financial':financial})
  return {svc,conn,rows,sql}
 }
 test('actual kit completion uses saved exact-cent priorF, all three component refunds total net .02',async()=>{const prior=[],values=[];for(let i=0;i<3;i++){const f=fixture({prior}),ctx=await f.svc.lockExecution(f.conn,7),amount=await f.svc.complete(f.conn,20,7,ctx);values.push(amount);assert.equal(f.rows.length,1);prior.push({refund_amount:f.rows[0][7],financial_amount:f.rows[0][8]})}assert.deepEqual(values,[.01,0,.01]);assert.equal(prior.reduce((n,r)=>n+cash.storedCashCents(r.financial_amount),0n),2n)})
@@ -32,3 +45,11 @@ test('positive source budget without AR refuses and different-connection context
 test('known dispatch basis disagreement rejects pre-stock and locking queries use exact known PKs',async()=>{const f=fixture({badBasis:true});await assert.rejects(f.svc.lockExecution(f.conn,7),e=>e.statusCode===409);assert.ok(f.sql.filter(s=>/sale_dispatch_groups.*FOR SHARE/.test(s.q)).every(s=>s.q.includes('WHERE id IN (?)')));assert.equal(f.rows.length,0)})
 test('new kit computed cash target supports zero, cents, and conservative cent draft bound',()=>{assert.equal(financial.financialTarget({orderGross:'0.03',discount:'0.01'},'0.01'),1n);assert.equal(financial.financialRefundEstimate({orderGross:'0.03',discount:'0.01'},'0.01'),.01);assert.equal(financial.financialTarget({orderGross:0,discount:0},0),0n)})
 test('legacy period cut is proved equal or rejected before new shipment money',()=>{assert.doesNotThrow(()=>financial.assertLegacyCut({orderGross:'1.00',discount:'0.10'},'0.33'));assert.throws(()=>financial.assertLegacyCut({orderGross:'1.25',discount:'0.63'},'0.01'),e=>e.statusCode===409&&e.code==='CASH_LEGACY_PRECISION_REVIEW_REQUIRED')})
+
+test('套单组件退货先锁全部对账单，再锁原应收，之后核累计退款',async()=>{
+ const f=fixture(), ctx=await f.svc.lockExecution(f.conn,7)
+ await f.svc.complete(f.conn,20,7,ctx)
+ const index=pattern=>f.sql.findIndex(({q})=>pattern.test(q))
+ const statement=index(/FROM reconciliation_statements.*FOR UPDATE/), record=index(/FROM payment_records.*FOR UPDATE/)
+ assert.ok(statement>=0 && statement<record && record<index(/SELECT refund_amount,financial_amount/))
+})

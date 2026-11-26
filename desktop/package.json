@@ -1,7 +1,7 @@
 {
   "name": "flowcube-desktop",
   "private": true,
-  "version": "0.14.7",
+  "version": "0.14.8",
   "description": "极序 Flow 桌面客户端（Electron）",
   "main": "main.js",
   "engines": {
@@ -45,6 +45,9 @@
       "lib/**/*.ps1",
       ".git-build-sha",
       "build/icon.png"
+    ],
+    "asarUnpack": [
+      "lib/print-zpl-raw.ps1"
     ],
     "extraResources": [
       {

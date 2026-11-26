@@ -5,7 +5,10 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { TabPathContext } from '@/components/layout/TabPathContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import PageHeader from '@/components/shared/PageHeader';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/shared/DatePicker';
+import { ActionBar } from '@/components/shared/ActionBar';
+import { SectionCard } from '@/components/shared/SectionCard';
 import DataTable from '@/components/shared/DataTable';
 import { Label } from '@/components/ui/label';
 import { QueryErrorState } from '@/components/shared/QueryErrorState';
@@ -88,17 +91,19 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
     const displaySource = source.data || (frozenDisplay ? submitted.source : undefined);
     const displayAmount = frozenDisplay ? submitted.amount : amount;
     const displayAccounts = frozenDisplay ? [submitted.account] : accounts.data;
-    return <div className="space-y-4">
-      <PageHeader title="供应商退款"
-        description={scope.error || !accountRight || (source.data && !sourceCashReady) ? <>{scope.error && <span role="alert">{scope.error} </span>}{!accountRight && <span role="alert">选择收入账户需要账户查看权限，请联系管理人员核对授权。 </span>}{source.data && !sourceCashReady && <span role="alert">历史来源金额含不足一分的尾差，请先核对；原值保留，不会自动凑整退款。</span>}</> : '退款草稿来自准确采购退货，确认仅冻结退款；实际收款另行登记。'}  />
+    return <div className="desktop-document-form flex flex-col gap-3">
+      <ActionBar title="供应商退款"
+        rightActions={write.result ? <Button onClick={openCreated}>查看已创建退款单</Button> : <Button type="submit" form={`${fieldId}-form`} disabled={!ready || write.busy}>{write.busy ? '保存中…' : '保存退款草稿'}</Button>}
+        description={scope.error || !accountRight || (source.data && !sourceCashReady) ? <>{scope.error && <span role="alert">{scope.error}。 </span>}{!accountRight && <span role="alert">选择收入账户需要账户查看权限，请联系管理人员核对授权。 </span>}{source.data && !sourceCashReady && <span role="alert">历史来源金额含不足一分的尾差，请先核对；原值保留，不会自动凑整退款。</span>}</> : '退款草稿来自准确采购退货，确认仅冻结退款；实际收款另行登记。'}  />
 
       {(source.isError || accounts.isError) && <QueryErrorState compact error={source.error || accounts.error} title="退款来源核对失败" description="准确来源或收入账户读取失败，原输入保留，写动作暂停。" onRetry={() => { source.retry(); accounts.retry(); }} />}
-      {displaySource && <section aria-label="准确退款来源" className="space-y-3">
+      {displaySource && <section aria-label="准确退款来源">
+        <SectionCard title="退款来源" compact contentClassName="space-y-3">
         <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
           <p>原采购退货 <span className="text-doc-code">{displaySource.returnNo}</span></p>
           <p>原采购 <span className="text-doc-code">{displaySource.orderNo}</span></p>
         </div>
-        <dl className="grid grid-cols-1 gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-3">
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div><dt className="text-xs text-muted-foreground">退货原价总额</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundCashLabel(displaySource.grossAmount)}</dd></div>
           <div><dt className="text-xs text-muted-foreground">本退货剩余额度</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundCashLabel(displaySource.availableAmount)}</dd></div>
           <div><dt className="text-xs text-muted-foreground">当前净已付</dt><dd className="mt-1 text-base font-semibold tabular-nums">{refundCashLabel(displaySource.currentPaidAmount)}</dd></div>
@@ -110,20 +115,27 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
           { key: 'quantity', title: '基本量', width: 120, align: 'right', render: (_, item) => <span className="tabular-nums">{item.quantity} {item.unit}</span> },
           { key: 'unitPrice', title: '原成交单价', width: 140, align: 'right', render: value => <span className="tabular-nums">{sourceUnitPriceLabel(value)}</span> },
         ]} />
+        </SectionCard>
       </section>}
-      <fieldset ref={formRef} disabled={!ready || write.busy} className="space-y-4 rounded-lg border border-border bg-card p-4">
+      <form id={`${fieldId}-form`} onSubmit={event => { event.preventDefault(); void save(); }}>
+      <SectionCard title="退款登记" compact>
+      <fieldset ref={formRef} disabled={!ready || write.busy} className="min-w-0 space-y-4">
         <div className="grid max-w-3xl gap-4 sm:grid-cols-2">
           <div className="space-y-1.5" data-entry-field="date">
             <Label htmlFor={`${fieldId}-date`}>真实银行回款日 *</Label>
-            <Input id={`${fieldId}-date`} type="date" aria-label="真实银行回款日" value={date} onChange={e => { if (scope.current()) setDate(e.target.value); }}
+            <DatePicker id={`${fieldId}-date`} aria-label="真实银行回款日" className="h-9" disabled={!ready || write.busy} value={date} onChange={value => { if (scope.current()) setDate(value); }}
               aria-invalid={showFieldErrors && !!dateError} aria-describedby={showFieldErrors && dateError ? `${fieldId}-date-error` : undefined} />
             <OrderFieldError id={`${fieldId}-date-error`}>{showFieldErrors && dateError}</OrderFieldError>
           </div>
           <div className="space-y-1.5" data-entry-field="account">
             <Label htmlFor={`${fieldId}-account`}>收入账户 *</Label>
-            <select id={`${fieldId}-account`} aria-label="收入账户" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              aria-invalid={showFieldErrors && !!accountError} aria-describedby={showFieldErrors && accountError ? `${fieldId}-account-error` : undefined}
-              value={account} onChange={e => { if (scope.current()) setAccount(e.target.value); }}><option value="">请选择收入账户</option>{displayAccounts?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
+            <Select value={account || '__none__'} disabled={!ready || write.busy} onValueChange={value => { if (scope.current()) setAccount(value === '__none__' ? '' : value); }}>
+              <SelectTrigger id={`${fieldId}-account`} aria-label="收入账户" className="h-9"
+                aria-invalid={showFieldErrors && !!accountError} aria-describedby={showFieldErrors && accountError ? `${fieldId}-account-error` : undefined}>
+                <SelectValue placeholder="请选择收入账户" />
+              </SelectTrigger>
+              <SelectContent><SelectItem value="__none__">请选择收入账户</SelectItem>{displayAccounts?.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}</SelectContent>
+            </Select>
             <OrderFieldError id={`${fieldId}-account-error`}>{showFieldErrors && accountError}</OrderFieldError>
           </div>
         </div>
@@ -151,11 +163,12 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
             <p className="text-sm">{frozenDisplay ? '原请求退款合计' : '本次退款合计'} <span className="ml-2 text-base font-semibold tabular-nums">{refundCashLabel(displayAmount)}</span></p>
             <OrderFieldError>{showFieldErrors && totalError}</OrderFieldError>
           </div>
-          <Button disabled={!ready || write.busy} onClick={() => void save()}>{write.busy ? '保存中…' : '保存退款草稿'}</Button>
         </div>
       </fieldset>
+      </SectionCard>
+      </form>
       <RefundRecoveryPanel write={write} />
-      {write.result && <section className="space-y-2"><p role="status">退款单 {write.result.refundNo} 已创建，尚未实际收款。</p><Button onClick={openCreated}>查看已创建退款单</Button></section>}
+      {write.result && <p role="status">退款单 {write.result.refundNo} 已创建，尚未实际收款。</p>}
     </div>;
 
 }
@@ -163,6 +176,6 @@ export default function SupplierRefundCreatePage() {
     const tab = useContext(TabPathContext), location = useLocation(), path = tab || location.pathname + location.search, params = new URLSearchParams(path.split('?')[1] || ''), values = params.getAll('purchaseReturnId');
     const id = values.length === 1 && /^[1-9]\d*$/.test(values[0]) && Number.isSafeInteger(Number(values[0])) ? Number(values[0]) : null;
     if (path.split('?')[0] !== '/supplier-refunds/new' || !id)
-        return <div className="space-y-4"><PageHeader title="供应商退款" description={<span role="alert">退款来源定位无效或缺少完整原单查看权限，请从准确采购退货草稿打开；原输入保留。</span>} /></div>;
+        return <div className="desktop-document-form flex flex-col gap-3"><ActionBar title="供应商退款" description={<span role="alert">退款来源定位无效或缺少完整原单查看权限，请从准确采购退货草稿打开；原输入保留。</span>} /></div>;
     return <CreateRefundDraft key={buildWorkspaceTabRegistrationFromPath(path).key} purchaseReturnId={id} identity={buildWorkspaceTabRegistrationFromPath(path).key}/>;
 }

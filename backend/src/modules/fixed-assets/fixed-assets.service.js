@@ -1,3 +1,4 @@
+const { cashCents, storedCashCents, cashText, cashNumber } = require('../../utils/cashMoney')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode, generateMasterCode } = require('../../utils/codeGenerator')
@@ -112,9 +113,9 @@ async function findAsset(id, companyId = 1) {
 
 /** 新增固定资产卡片。校验：原值>0、残值率 0-1、年限>0、购置日期有效。 */
 async function createAsset({ assetName, category, departmentId, departmentName, acquireDate, originalCost, residualRate, usefulMonths, remark }, operator, companyId = 1) {
-  const cost = Number(originalCost)
+  const cost = cashText(cashCents(originalCost, {label:'资产原值'}))
   if (!String(assetName || '').trim()) throw new AppError('请填写资产名称', 400)
-  if (!Number.isFinite(cost) || cost <= 0) throw new AppError('原值必须大于 0', 400)
+  if (Number(cost) <= 0) throw new AppError('原值必须大于 0', 400)
   const rate = residualRate == null || residualRate === '' ? 0.05 : Number(residualRate)
   if (!Number.isFinite(rate) || rate < 0 || rate >= 1) throw new AppError('残值率须在 [0,1) 之间', 400)
   const months = Number(usefulMonths)
@@ -242,8 +243,10 @@ async function disposeAsset(id, { disposeType, disposeDate, income = 0, expense 
     if (Number(fa.status) === 3) throw new AppError('该资产已处置，请勿重复操作', 400)
     if (![1, 2].includes(Number(disposeType))) throw new AppError('处置类型无效：1出售 2报废', 400)
     if (dDate < dateOnly(fa.acquire_date)) throw new AppError('处置日期不能早于购置日期', 400)
-    const inc = Number(income) || 0
-    const exp = Number(expense) || 0
+    const incCents = cashCents(income ?? 0, {label:'处置收入'})
+    const expCents = cashCents(expense ?? 0, {label:'处置费用'})
+    if (incCents < 0n || expCents < 0n) throw new AppError('处置收入和费用不可为负',400)
+    const inc = cashNumber(incCents), exp = cashNumber(expCents)
     const accountMap = await engine.loadAccountMap(conn, cid)
     const allocSeq = await engine.makeSeqAllocator(conn, cid)
     const depreciation = await depreciateAsset(conn, fa, {
@@ -252,7 +255,8 @@ async function disposeAsset(id, { disposeType, disposeDate, income = 0, expense 
     const accum = depreciation.accum
 
     // 生成处置凭证：借 累计折旧 / 借(贷) 固定资产清理 → 收入 → 结平
-    const netBook = engine.round2(Number(fa.original_cost) - accum)
+    const netBookCents = storedCashCents(fa.original_cost, '资产原值') - storedCashCents(accum, '累计折旧')
+    const netBook = cashNumber(netBookCents)
     const disposeNo = await generateDailyCode(conn, '固处', 'fixed_asset_disposals', 'dispose_no')
     const [dr] = await conn.query(
       `INSERT INTO fixed_asset_disposals
@@ -279,7 +283,7 @@ async function disposeAsset(id, { disposeType, disposeDate, income = 0, expense 
       legs.push({ code: '1002', direction: DIR.CREDIT, amount: exp, summary: `${fa.asset_name} 支付清理费` })
     }
     // 清理科目余额 = 净值 − 收入 + 费用；>0 = 净损失，<0 = 净收益
-    const balance = engine.round2(netBook - inc + exp)
+    const balance = cashNumber(netBookCents - incCents + expCents)
     if (balance >= 0) {
       legs.push({ code: '6115', direction: DIR.DEBIT, amount: balance, summary: `${fa.asset_name} 处置净损失` })
       legs.push({ code: '1606', direction: DIR.CREDIT, amount: balance, summary: `${fa.asset_name} 清理科目结平` })

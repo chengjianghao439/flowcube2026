@@ -21,13 +21,11 @@ export function SaleOrderItemsSection({ hasItems, onAdd, children, allowAdd = tr
         <Plus className="h-4 w-4" />添加商品
       </Button></> : undefined
     }>
-      {hasItems && !compact && <p className="mb-2 text-xs text-muted-foreground">数量、单价按 Enter 前进，Shift+Enter 返回；末行可继续添加商品。</p>}
       {hasItems ? children : compact ? <div className="flex min-h-32 items-center justify-center px-4 py-6 text-sm text-muted-foreground">尚未添加商品</div> : (
         <div className="flex items-center justify-center gap-4 py-10 text-left">
           <PackageOpen className="h-9 w-9 shrink-0 text-muted-foreground/50" />
           <div>
             <p className="text-sm font-medium">添加本单商品</p>
-            <p className="mt-1 text-xs text-muted-foreground">点击右上角“添加商品”，选择后填写数量与单价。</p>
           </div>
         </div>
       )}

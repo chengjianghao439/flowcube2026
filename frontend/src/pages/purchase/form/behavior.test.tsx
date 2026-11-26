@@ -153,6 +153,26 @@ test.each(['permission', 'status'])('编辑中%s变化暂停保存并保留草�
   await click('保存修改'); expect(state.write).not.toHaveBeenCalled()
 })
 
+test.each([
+  { status: 1, primary: '提交', dangerous: ['取消'] },
+  { status: 5, primary: '审批通过', dangerous: ['取消', '驳回'] },
+] as const)('采购单状态 $status 在最右保留一个主操作 $primary', async ({ status, primary, dangerous }) => {
+  state.order = { ...order(), status }
+  await render('/purchase/12')
+  const actions = host.querySelector('.desktop-action-buttons')!
+  expect([...actions.querySelectorAll('.bg-primary')].map(button => button.textContent)).toEqual([primary])
+  expect(actions.lastElementChild?.textContent).toBe(primary)
+  expect(actions.firstElementChild?.getAttribute('role')).toBe('group')
+  expect([...actions.firstElementChild!.querySelectorAll('button')].map(button => button.textContent)).toEqual(dangerous)
+})
+
+test('采购草稿仅有编辑权限时以编辑为主操作', async () => {
+  state.order = order()
+  state.allowed = new Set([P.PURCHASE_ORDER_CREATE, P.PURCHASE_ORDER_VIEW])
+  await render('/purchase/12')
+  expect(host.querySelector('.desktop-action-buttons > .bg-primary:last-child')?.textContent).toBe('编辑')
+})
+
 test.each([1, 2, 3, 4, 5] as const)('状态%s的只读权限不暴露写操作', async status => {
   state.order = { ...order(), status }; state.allowed = new Set([P.PURCHASE_ORDER_VIEW])
   await render('/purchase/12?edit=1')

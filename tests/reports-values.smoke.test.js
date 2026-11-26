@@ -95,6 +95,9 @@ async function verifyProfitAnalysis(ctx, log) {
     await addOrder(900, 0, [[0, 1, 900, 3]], { date: '2040-06-14' })
     await addOrder(900, 0, [[0, 1, 900, 3]], { status: 5 })
     const params = { startDate: day, endDate: day, scopeWarehouseIds: [a] }
+    const saleStats = await reportsSvc.saleStats(params)
+    log.assert('销售统计按整单明细仓限定，月和客户金额均排除混仓单', near(saleStats.byMonth[0]?.totalAmount, 600)
+      && near(saleStats.byCustomer[0]?.totalAmount, 600))
     const data = await reportsSvc.profitAnalysis(params)
     log.assert('同额多行销售单各计一次，销售额扣整单折扣并排除跨仓/日期外/取消单', near(data.summary.saleAmount, 540), JSON.stringify(data.summary))
     log.assert('成本快照优先、零快照保留、缺快照回退主档成本', near(data.summary.costAmount, 64))

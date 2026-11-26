@@ -6,7 +6,7 @@ import { handlingQty, mayHandle } from '@/lib/disposalHandlingRecovery'
 import { createDisposalApi } from '@/api/disposal'
 import { money, qty } from '@/lib/format'
 import { formatDisplayDateTime } from '@/lib/dateTime'
-import { ProductIdentityCells, ProductIdentityHeaders } from '@/components/shared/ProductIdentityCells'
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useId, useRef, useState } from 'react'
 import { OrderFieldError } from '@/components/shared/OrderFieldError'
 import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
@@ -160,7 +160,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
             <div className="space-y-1" data-entry-field="warehouse">
               <Label htmlFor={`${fieldId}-warehouse`}>选择仓库 *</Label>
               <Select value={whId || '__none__'} onValueChange={v => { if (!current()) return; if (rows.length) { toast.warning('已有圈选，先主动移除或清空圈选后再换仓；原数量保留'); return }; setWhId(v === '__none__' ? '' : v) }}>
-                <SelectTrigger id={`${fieldId}-warehouse`} className="h-10 w-full" aria-invalid={!!warehouseError}
+                <SelectTrigger id={`${fieldId}-warehouse`} className="h-9 w-full" aria-invalid={!!warehouseError}
                   aria-describedby={warehouseError ? `${fieldId}-warehouse-error` : undefined}><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">请选择</SelectItem>
@@ -192,9 +192,9 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
           <div data-entry-field="items" tabIndex={-1}>
             <OrderFieldError className="mb-2">{itemsError}</OrderFieldError>
             <div className="border rounded-lg max-h-56 overflow-auto">
-            <ReportTable className="w-full min-w-[1480px] text-sm"><thead className="sticky top-0 z-10"><tr>
+            <ReportTable className="w-full min-w-[780px] text-sm"><thead className="sticky top-0 z-10"><tr>
               <th className="w-14 text-center">选择</th>
-              <ProductIdentityHeaders />
+              <th className="min-w-48 px-3 py-2 text-left">商品</th>
               <th className="w-40">有效在库／参考量</th>
               <th className="w-40">全部在库参考估值</th>
               <th className="w-44">最后出库</th>
@@ -207,7 +207,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                   <td className="text-center">
                     <input type="checkbox" checked={selected} disabled={s.totalQty <= 0 && !selected} onChange={() => toggleSuggestion(s)} className="accent-primary" />
                   </td>
-                  <ProductIdentityCells product={s} />
+                  <td className="px-3 py-3 align-top"><ProductIdentitySummary product={s} /></td>
                   <td className="tabular-nums">{qty(s.onHandQty)}{s.unit}／{qty(s.totalQty)}{s.unit}<p className="text-xs text-muted-foreground">预占 {qty(s.reservedQty)}；{basis[s.valuationBasis]} {money(s.unitValue)}</p>{s.totalQty <= 0 && <p className="text-xs text-destructive-ink">参考量为零或异常，请核对</p>}</td>
                   <td className="tabular-nums">{money(s.totalValue)}</td>
                   <td className="text-xs text-muted-foreground">
@@ -222,7 +222,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
               )
             })}
             {!suggestions?.list?.length && (
-              <tr><td colSpan={10} className="text-center py-6 text-sm text-muted-foreground">
+              <tr><td colSpan={6} className="text-center py-6 text-sm text-muted-foreground">
                 {whId ? '没有符合筛选的滞销商品' : '请先选择仓库'}
               </td></tr>
             )}
@@ -250,8 +250,8 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
             <div className="space-y-2">
               <Label>处置明细（{rows.length} 项）</Label>
               <div className="border rounded-lg overflow-x-auto">
-                <ReportTable className="w-full min-w-[1500px] text-sm"><thead><tr>
-                  <ProductIdentityHeaders />
+                <ReportTable className="w-full min-w-[740px] text-sm"><thead><tr>
+                  <th className="min-w-48 px-3 py-2 text-left">商品</th>
                   <th className="w-36">处置数量</th>
                   <th className="w-40">处置方式</th>
                   <th className="w-60">备注</th>
@@ -261,7 +261,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
                   const error = r.quantityInputError || (validationAttempted ? rowQuantityError(r) : '')
                   const errorId = `${fieldId}-quantity-${r.suggestion.productId}-error`
                   return <tr key={r.suggestion.productId} className="border-b last:border-0 text-sm">
-                    <ProductIdentityCells product={r.suggestion} />
+                    <td className="px-3 py-3 align-top"><ProductIdentitySummary product={r.suggestion} /></td>
                     <td data-entry-field={`quantity-${r.suggestion.productId}`}>
                       <div className="flex items-center gap-1">
                         <Input quantity aria-label={`${r.suggestion.productName}处置数量`}

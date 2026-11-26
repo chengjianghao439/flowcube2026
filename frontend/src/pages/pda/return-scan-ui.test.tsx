@@ -7,11 +7,12 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import PdaCancelReturnPage from './cancel-return'
 import PdaAdjustmentPage from './adjustment'
 import { useAuthStore } from '@/store/authStore'
+import { setApiClientBaseURL } from '@/api/client'
 import type { AdjustmentDetail, CancelReturnDetail } from '@/api/warehouse-tasks'
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), defaults: { baseURL: '/fixture' } }))
-vi.mock('@/api/client', () => ({
-  default: { defaults: mocks.defaults },
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
+vi.mock('@/api/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@/api/client')>(),
   payloadClient: { get: mocks.get, post: mocks.post },
 }))
 const cancelDetail: CancelReturnDetail = {
@@ -50,6 +51,7 @@ let root: Root
 let qc: QueryClient
 
 beforeEach(() => {
+  setApiClientBaseURL('/fixture')
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   sessionStorage.clear()
   localStorage.clear()

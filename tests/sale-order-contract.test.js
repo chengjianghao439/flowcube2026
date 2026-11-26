@@ -165,9 +165,13 @@ test('同商品分仓时扫码记录按任务仓库归属', () => {
 })
 
 test('按数量发货只派发请求量并拒绝超过已占未发量', () => {
-  const rows = [{ id: 3, product_name: '商品A', reserved_qty: 10, dispatched_qty: 3 }]
+  const rows = [{ id: 3, product_name: '商品A', quantity: 10, reserved_qty: 10, dispatched_qty: 3 }]
   assert.equal(selectDispatchRows(rows, { items: [{ id: 3, qty: 2 }] })[0].requested_ship_qty, 2)
   assert.equal(selectDispatchRows(rows, { itemIds: [3] })[0].requested_ship_qty, 7)
+  const reduced = [{ ...rows[0], quantity: 4 }]
+  assert.equal(selectDispatchRows(reduced, { itemIds: [3] })[0].requested_ship_qty, 1)
+  assert.deepEqual(selectDispatchRows([{ ...rows[0], quantity: 2 }]), [])
+  assert.throws(() => selectDispatchRows(reduced, { items: [{ id: 3, qty: 2 }] }), /不能超过/)
   assert.throws(() => selectDispatchRows(rows, { items: [{ id: 3, qty: 8 }] }), /不能超过/)
   assert.throws(() => selectDispatchRows(rows, { items: [{ id: 3, qty: 1 }, { id: 3, qty: 1 }] }), /重复/)
   assert.throws(() => selectDispatchRows(rows, { items: [{ id: 3, qty: 1 }, { id: 99, qty: 1 }] }), /不存在或不可发货/)

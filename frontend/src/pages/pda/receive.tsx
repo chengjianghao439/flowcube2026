@@ -19,6 +19,7 @@ import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qty } from '@/lib/format'
 import { qtyStep, roundQuantity } from '@/lib/qtyStep'
 
+import PdaInboundReceiptNotice from '@/components/pda/PdaInboundReceiptNotice'
 import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import PdaOverReceiveDialog, { type OverReceiveReasonCode } from '@/components/pda/PdaOverReceiveDialog'
 
@@ -287,7 +288,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
     setBoxes(Array.from({ length: defaultCount }, () => fill))
   }
 
-  function selectProduct(productId: number) {
+  function selectProduct(productId: number | null) {
     setSelectedProductId(productId)
     // 按箱收货：切到配了辅助单位的商品时，第一箱预填箱规（每箱件数），率由系统给定不可改（文档03 Phase4b）
     resetBoxes(1, boxFill(selectableProducts.find(x => x.productId === productId) ?? null))
@@ -367,8 +368,7 @@ function ReceiveRunner({ task, readError, onRetry }: { task: InboundTask; readEr
           const next = selectableProducts.find(
             item => item.productId !== product.productId && item.remainingQty > 0,
           ) ?? null
-          setSelectedProductId(next?.productId ?? null)
-          resetBoxes(1, boxFill(next))
+          selectProduct(next?.productId ?? null)
         }
       } else {
         // 原输入与原请求一起冻结，不清空或换键。
@@ -597,12 +597,13 @@ export default function PdaReceivePage() {
     )
   }
 
-  if (isError && !task) return <div className="min-h-screen bg-background"><PdaHeader title="收货" onBack={() => navigate('/pda/inbound')} /><div className="mx-auto max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
+  const recoveryNotice = <PdaInboundReceiptNotice taskId={taskId} operation="receive" />
+  if (isError && !task) return <div className="min-h-screen bg-background"><PdaHeader title="收货" onBack={() => navigate('/pda/inbound')} />{recoveryNotice}<div className="mx-auto max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
 
   if (isLoading || !task) {
     return (
       <div className="min-h-screen bg-background">
-        <PdaHeader title="收货" onBack={() => navigate('/pda/inbound')} />
+        <PdaHeader title="收货" onBack={() => navigate('/pda/inbound')} />{recoveryNotice}
         <PdaLoading className="h-40 mt-8" />
       </div>
     )
@@ -611,6 +612,7 @@ export default function PdaReceivePage() {
   if (!task.submittedAt) {
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
+        {recoveryNotice}
         <p className="text-muted-foreground">该收货订单尚未提交，请先在 ERP 中提交后再收货。</p>
         <button type="button" className="min-h-11 rounded-md px-3 text-primary font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => navigate('/pda/inbound')}>返回列表</button>
       </div>
@@ -626,6 +628,7 @@ export default function PdaReceivePage() {
   if (task.status >= 3) {
     return (
       <div className="min-h-screen bg-background p-6 text-center space-y-3">
+        {recoveryNotice}
         <p className="text-muted-foreground">
           {task.status === 3
             ? '本单已全部收货。扫码上架时，先扫库存条码，再扫本仓库位条码或输入库位编码。'
@@ -641,5 +644,5 @@ export default function PdaReceivePage() {
     )
   }
 
-  return <ReceiveRunner task={task} readError={isError} onRetry={() => { void refetch() }} />
+  return <ReceiveRunner key={task.id} task={task} readError={isError} onRetry={() => { void refetch() }} />
 }

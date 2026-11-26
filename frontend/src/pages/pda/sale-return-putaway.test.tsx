@@ -6,11 +6,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import Page from './sale-return-putaway'
 
+const originalConfig = { baseURL: 'https://fixture.test/api', automaticReplay: false }
 const api = vi.hoisted(() => ({ task: vi.fn(), container: vi.fn(), location: vi.fn(), putaway: vi.fn(), ok: vi.fn(), err: vi.fn() }))
 vi.mock('@/api/returns', () => ({ getReturnTaskByIdApi: api.task, getReturnPutawayContainerApi: api.container, getReturnPutawayLocationApi: api.location, putawayReturnApi: api.putaway }))
 vi.mock('@/hooks/usePdaFeedback', () => ({ usePdaFeedback: () => ({ flash: null, ok: api.ok, err: api.err }) }))
 vi.mock('@/hooks/useCriticalPdaAction', () => ({ useCriticalPdaAction: ({ onConfirmed }: { onConfirmed: () => void }) => ({
-  run: async (execute: (key: string) => Promise<unknown>) => { const data = await execute('stable-key'); onConfirmed(); return { kind: 'success', data } },
+  run: async (execute: (key: string, config: typeof originalConfig) => Promise<unknown>) => { const data = await execute('stable-key', originalConfig); onConfirmed(); return { kind: 'success', data } },
   submitBlocked: false, phase: 'idle',
 }) }))
 
@@ -48,7 +49,7 @@ test.each([['I000123', 'R000456'], ['CNT000123', 'LOC-A01']])('%s then %s submit
   expect(api.container).toHaveBeenCalledWith(31, container)
   await scan(location)
   expect(api.location).toHaveBeenCalledWith(31, location)
-  expect(api.putaway).toHaveBeenCalledWith(31, { containerId: 917, locationId: 804 }, 'stable-key')
+  expect(api.putaway).toHaveBeenCalledWith(31, { containerId: 917, locationId: 804 }, 'stable-key', originalConfig)
   expect(api.ok).toHaveBeenCalledWith(expect.stringContaining('上架成功'))
 })
 
@@ -143,5 +144,5 @@ test('a late write receipt from the previous task does not clear the newly scann
   await act(async () => finishPrevious({ taskId: 31, containerId: 917 }))
   expect(host.textContent).toContain('I000918')
   await scan('LOC-A01')
-  expect(api.putaway).toHaveBeenLastCalledWith(32, { containerId: 918, locationId: 804 }, 'stable-key')
+  expect(api.putaway).toHaveBeenLastCalledWith(32, { containerId: 918, locationId: 804 }, 'stable-key', originalConfig)
 })

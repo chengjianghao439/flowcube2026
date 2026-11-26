@@ -16,6 +16,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { X, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
+import { resolveErpLoginDestination } from '@/router/erpLoginDestination'
+import { useAuthStore } from '@/store/authStore'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import { confirmDirtyLeave } from '@/lib/unsavedChanges'
@@ -23,7 +25,14 @@ import { buildWorkspaceTabRegistration, normalizeWorkspacePath } from '@/router/
 import { getRouteListPath } from '@/router/routeRegistry'
 
 export function WorkspaceTabs() {
-  const { tabs, removeTab, closeOthers, closeAll } = useWorkspaceStore()
+  const { tabs: registeredTabs, removeTab, closeOthers, closeAll } = useWorkspaceStore()
+  const user = useAuthStore(state => state.user)
+  const canOpenDashboard = !user || resolveErpLoginDestination(user, '/dashboard') === '/dashboard'
+  const tabs = canOpenDashboard ? registeredTabs : registeredTabs.filter(tab => tab.key !== '/dashboard')
+  const destination = (path: string) => {
+    const currentUser = useAuthStore.getState().user
+    return currentUser && path.split(/[?#]/, 1)[0] === '/dashboard' ? resolveErpLoginDestination(currentUser, path) : path
+  }
   const dirtyTabs = useDirtyGuardStore(s => s.dirtyTabs)
   const pendingConfirm = useDirtyGuardStore(s => s.pendingConfirm)
   const navigate = useNavigate()
@@ -122,7 +131,7 @@ export function WorkspaceTabs() {
   // 切换到另一个标签：KeepAlive 保留组件实例与草稿，无需确认
   const handleTabClick = (key: string, path: string) => {
     if (key === activeKey) return
-    navigate(path)
+    navigate(destination(path))
   }
 
   // 关闭某个标签：检查该 tab 自身是否有未保存内容
@@ -139,10 +148,10 @@ export function WorkspaceTabs() {
           // 详情/表单类标签有明确归属的列表页，关闭后应回到那里，而非任意相邻标签
           const listPath = closingTab ? getRouteListPath(normalizeWorkspacePath(closingTab.path)) : undefined
           if (listPath) {
-            navigate(getWorkspaceListPath(listPath))
+            navigate(destination(getWorkspaceListPath(listPath)))
           } else {
             const newTab = useWorkspaceStore.getState().tabs.find(t => t.key === newKey)
-            if (newTab) navigate(newTab.path)
+            if (newTab) navigate(destination(newTab.path))
           }
         }
         // 关闭非激活 tab 时无路径变化，不需要 navigate
@@ -204,7 +213,7 @@ export function WorkspaceTabs() {
     guardedAction(otherKeys, () => {
       closeOthers(activeKey)
       const cur = useWorkspaceStore.getState().tabs.find(t => t.key === activeKey)
-      if (cur) navigate(cur.path)
+      if (cur) navigate(destination(cur.path))
       setMenuOpen(false)
     })
   }
@@ -214,7 +223,7 @@ export function WorkspaceTabs() {
     const allKeys = tabs.filter(t => t.closable).map(t => t.key)
     guardedAction(allKeys, () => {
       closeAll()
-      navigate('/dashboard')
+      navigate(destination('/dashboard'))
       setMenuOpen(false)
     })
   }

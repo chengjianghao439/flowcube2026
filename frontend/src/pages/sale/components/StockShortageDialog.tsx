@@ -15,24 +15,26 @@ interface Props { open: boolean; onClose: () => void; shortages: StockShortageIt
 export default function StockShortageDialog({ open, onClose, shortages }: Props) {
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) onClose() }}>
-      <DialogContent className="max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl">
+      <DialogContent className="fc-form-dialog max-h-[90dvh] w-[calc(100%-2rem)] max-w-xl">
         <DialogHeader description={<>{<>以下商品本次占库数量超过可用库存，请关闭后回占库弹窗调整数量：</>}</>}><DialogTitle className="flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-destructive-ink" />可用库存不足</DialogTitle></DialogHeader>
 
-        <div className="max-h-72 overflow-auto rounded-md border">
-          <ReportTable className="w-full text-sm">
-            <thead className="sticky top-0 data-table-header text-xs text-muted-foreground">
-              <tr><th className="px-3 py-2 text-left font-medium">商品</th><th className="px-3 py-2 text-right font-medium">本次需占</th><th className="px-3 py-2 text-right font-medium">可用数量</th></tr>
-            </thead>
-            <tbody className="divide-y">
-              {shortages.map((s, index) => (
-                <tr key={`${s.productId}-${index}`}>
-                  <td className="max-w-48 break-words px-3 py-3 font-medium">{s.productName}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{s.required}</td>
-                  <td className="px-3 py-3 text-right font-medium tabular-nums text-destructive-ink">{s.available}</td>
-                </tr>
-              ))}
-            </tbody>
-          </ReportTable>
+        <div className="fc-form-dialog-body">
+          <div className="rounded-md border">
+            <ReportTable className="w-full text-sm">
+              <thead className="sticky top-0 data-table-header text-xs text-muted-foreground">
+                <tr><th className="px-3 py-2 text-left font-medium">商品</th><th className="px-3 py-2 text-right font-medium">本次需占</th><th className="px-3 py-2 text-right font-medium">可用数量</th></tr>
+              </thead>
+              <tbody className="divide-y">
+                {shortages.map((s, index) => (
+                  <tr key={`${s.productId}-${index}`}>
+                    <td className="max-w-48 break-words px-3 py-3 font-medium">{s.productName}</td>
+                    <td className="px-3 py-3 text-right tabular-nums">{s.required}</td>
+                    <td className="px-3 py-3 text-right font-medium tabular-nums text-destructive-ink">{s.available}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </ReportTable>
+          </div>
         </div>
         <DialogFooter>
           <Button onClick={onClose}>关闭，调整数量</Button>

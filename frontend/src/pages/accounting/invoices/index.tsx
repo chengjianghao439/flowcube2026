@@ -8,7 +8,7 @@ import { DatePicker } from '@/components/shared/DatePicker'
  */
 import { useMemo, useState, useEffect, useId, useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Plus, Pencil, Trash2, Search, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -146,7 +146,7 @@ function InvoiceDialog({ open, invoiceType, edit, onClose }: { open: boolean; in
           <div className="space-y-1.5">
             <Label htmlFor={`${inputId}-taxRate`}>税率</Label>
             <Select value={f.taxRate} onValueChange={v => { if (draft.canEdit()) setF(s => ({ ...s, taxRate: v })) }} disabled={isPending}>
-              <SelectTrigger id={`${inputId}-taxRate`} className="h-10"><SelectValue /></SelectTrigger>
+              <SelectTrigger id={`${inputId}-taxRate`} className="h-9"><SelectValue /></SelectTrigger>
               <SelectContent>{TAX_RATES.map(r => <SelectItem key={r} value={String(r)}>{(r * 100).toFixed(0)}%</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -244,12 +244,12 @@ export default function InvoicesPage() {
         : r.invoiceType === 1 && r.status === 2 ? { label: '抵扣', action: 'deduct' as const }
           : r.invoiceType === 2 && r.status === 1 ? { label: '红冲', action: 'redFlush' as const } : null
       if (!primary) return null
-      return <TableActionsMenu primaryLabel={primary.label} primaryVariant={primary.action === 'redFlush' ? 'destructive' : 'outline'}
+      return <TableActionsMenu primaryLabel={primary.label} primaryVariant="outline"
         onPrimaryClick={() => doStatus(r, primary.action, primary.label)}
         items={r.status === 1 ? [
-          { label: '编辑', icon: <Pencil className="mr-1.5 h-3.5 w-3.5" />, disabled: isFetching || isError, afterMenuClose: true,
+          { label: '编辑', disabled: isFetching || isError, afterMenuClose: true,
             onClick: () => { setEditTarget(r); setDialogOpen(true) } },
-          { label: '删除', icon: <Trash2 className="mr-1.5 h-3.5 w-3.5" />, destructive: true, separatorBefore: true, disabled: isFetching || isError, afterMenuClose: true,
+          { label: '删除', destructive: true, separatorBefore: true, disabled: isFetching || isError, afterMenuClose: true,
             onClick: () => { setDeleteRefreshNotice(false); setDeleteTarget(r) } },
         ] : []} />
     } },
@@ -259,41 +259,43 @@ export default function InvoicesPage() {
     <div className="space-y-4">
       <PageHeader
         title="发票管理"
-        description="进项/销项发票池与认证抵扣台账；税额在生成凭证时按发票自动拆分为进项/销项税额"
-        actions={canManage && <Button onClick={() => { setEditTarget(null); setDialogOpen(true) }}><Plus className="mr-1.5 h-4 w-4" />录入{invoiceType === 1 ? '进项' : '销项'}发票</Button>}
+        description="维护进项与销项发票及认证抵扣台账。"
+        actions={<>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          {canManage && <Button onClick={() => { setEditTarget(null); setDialogOpen(true) }}>录入{invoiceType === 1 ? '进项' : '销项'}发票</Button>}
+        </>}
       />
 
-
-      <div className="fc-segmented-control w-fit" role="group" aria-label="发票类型">
+      <div className="space-y-3">
+        <div className="fc-underline-tabs" role="group" aria-label="发票类型">
           {[{ v: 1, l: '进项发票' }, { v: 2, l: '销项发票' }].map(t => (
             <button key={t.v} type="button" aria-pressed={invoiceType === t.v}
-              onClick={() => { if (invoiceType !== t.v) { setInvoiceType(t.v); setStatus('') } }} className="fc-segmented-option">{t.l}</button>
+              onClick={() => { if (invoiceType !== t.v) { setInvoiceType(t.v); setStatus('') } }}>{t.l}</button>
           ))}
+        </div>
+        <div className="fc-filter-bar">
+          <OrderStatusFilter variant="segmented" label="发票状态分类" value={status} options={[
+            { value: '', label: '全部状态' },
+            ...Object.entries(INVOICE_STATUS_LABELS[invoiceType]).map(([value, label]) => ({ value, label })),
+          ]} onChange={setStatus} />
+          {chips.length > 0 && <div className="fc-filter-bar-filters">
+            {chips.map(chip => <span key={chip.key} className="fc-query-chip">
+              {chip.label}<button type="button" onClick={chip.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${chip.label}」`}><X className="h-3 w-3" /></button>
+            </span>)}
+            <Button size="sm" variant="ghost" onClick={() => { setKeyword(''); setStatus('') }}>清空</Button>
+          </div>}
+        </div>
       </div>
-
-      <div className="fc-list-toolbar">
-        <OrderStatusFilter label="发票状态分类" value={status} options={[
-          { value: '', label: '全部状态' },
-          ...Object.entries(INVOICE_STATUS_LABELS[invoiceType]).map(([value, label]) => ({ value, label })),
-        ]} onChange={setStatus} />
-        <div className="fc-list-toolbar-actions"><Button variant="outline" onClick={() => setQueryOpen(true)}><Search className="mr-1.5 h-4 w-4" aria-hidden />查询</Button></div>
-      </div>
-      {chips.length > 0 && <div className="fc-list-filter-chips flex flex-wrap items-center gap-2">
-        {chips.map(chip => <span key={chip.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-          {chip.label}<button type="button" onClick={chip.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${chip.label}」`}><X className="h-3 w-3" /></button>
-        </span>)}
-        <Button size="sm" variant="ghost" onClick={() => { setKeyword(''); setStatus('') }}>清空</Button>
-      </div>}
 
       {deleteRefreshNotice && <p role="status" className="text-sm text-muted-foreground">删除未完成，请核对刷新后的发票列表。</p>}
 
       {isError ? (
-          <QueryErrorState error={error} onRetry={() => void refetch()} title="发票列表加载失败" compact />
+          <QueryErrorState error={error} onRetry={() => void refetch()} title="发票列表加载失败" />
         ) : (
-          <DataTable columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" scrollLabel="发票列表表格" columnStorageKey={`acct-invoices-${invoiceType}`} />
+          <DataTable fluid virtualized scrollLabel="发票列表表格" columns={columns} data={list} loading={isLoading} emptyText="暂无发票，点击右上角录入" columnStorageKey={`acct-invoices-${invoiceType}`} />
         )}
 
-      {!isError && <ListSummary total={total} unit="张" />}
+      {!isError && !isLoading && data && <ListSummary total={total} unit="张" />}
 
       <InvoiceQueryDialog open={queryOpen} invoiceType={invoiceType} initial={initialQuery} onClose={() => setQueryOpen(false)} onApply={applyQuery} />
 

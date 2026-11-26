@@ -341,3 +341,20 @@ test.each([
   expect(writes[0].path).toBe(allowedWrite)
   if (endpoint === 'force-close') expect(JSON.parse(writes[0].body)).toEqual({ reason: '合法本地原因' })
 })
+
+test('倒置日期阻断提交；清除已应用日期只清日期，并保持原单号和状态', async () => {
+  respond = url => batch(url, 1)
+  await mount(); await wait(() => expect(transferQuery()?.state.status).toBe('success'))
+  await click('查询')
+  const dialog = document.querySelector('[role="dialog"]')!
+  await change(dialog.querySelector<HTMLInputElement>('input[type="date"]')!, '2026-10-16')
+  const before = requests.length
+  expect((button('查询', dialog) as HTMLButtonElement).disabled).toBe(true)
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('起始日期不能晚于结束日期')
+  await act(async () => dialog.querySelector('input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(requests).toHaveLength(before)
+  await click('取消', dialog); await click('清除日期限制')
+  await wait(() => expect(requests.at(-1)?.searchParams.has('startDate')).toBe(false))
+  expect(requests.at(-1)?.searchParams.has('endDate')).toBe(false)
+  expect(currentListQuery()).toMatchObject({ keyword: initialQuery.keyword, status: initialQuery.status, range: 'all' })
+})

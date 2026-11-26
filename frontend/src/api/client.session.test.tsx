@@ -256,3 +256,83 @@ test('同会话已正常换令牌后，旧业务首次401仍可续期并重放',
   expect(calls.filter(c => c.url === '/late-401')).toHaveLength(2)
   expect(useAuthStore.getState().isAuthenticated).toBe(true)
 })
+
+test.each([false,true])('切服往返后忽略原请求的成功或失败（错误=%s）', async fails => {
+  const gate = deferred(), {setApiClientBaseURL} = await import('./client')
+  transport = async config => {
+    await gate.promise
+    if (fails) throw failure(config,403,'PDA_SESSION_REQUIRED')
+    return ok(config)
+  }
+  const result = api.get('/fixture',{skipGlobalError:true}).catch(e=>e)
+  setApiClientBaseURL('/other-api')
+  setApiClientBaseURL('/api')
+  gate.release()
+  expect(axios.isCancel(await result)).toBe(true)
+  expect((await import('./pda-session')).ensureDeviceSession).not.toHaveBeenCalled()
+})
+
+test('切服和退出均清除账套，续期保持原账套和销售、退款归属', async () => {
+  const {setApiClientBaseURL} = await import('./client')
+  const reorder = await import('@/lib/saleReorder'), refund = await import('@/lib/supplierRefundRecovery')
+  const r = reorder.captureReorderOwner(), f = refund.captureRefundOwner()
+  useCompanyStore.getState().setCompany(3,'旧账套')
+  useAuthStore.getState().setTokens('rotated','rotated-r')
+  expect(reorder.reorderOwnerCurrent(r)).toBe(true)
+  expect(refund.refundOwnerCurrent(f)).toBe(true)
+  expect(useCompanyStore.getState().companyId).toBe(3)
+  useAuthStore.getState().logout()
+  expect(useCompanyStore.getState().companyId).toBe(1)
+  useCompanyStore.getState().setCompany(5,'旧服务器')
+  setApiClientBaseURL('/other-api')
+  try { expect(useCompanyStore.getState().companyId).toBe(1) } finally {setApiClientBaseURL('/api')}
+})
+
+test('损坏的持久化账套选择不能变成请求头', async()=>{
+  localStorage.setItem('flowcube-accounting-company', JSON.stringify({state:{companyId:-2,companyName:'损坏'},version:0}))
+  await useCompanyStore.persist.rehydrate()
+  expect(useCompanyStore.getState()).toMatchObject({companyId:1,companyName:null})
+})
+
+test('设备票据错误未附请求基址时使用当前 API', async () => {
+  const { ensureDeviceSession } = await import('./pda-session')
+  vi.mocked(ensureDeviceSession).mockResolvedValueOnce({ token: 'renewed-device', expiresAt: null, warehouseId: 1, scopes: [] })
+  transport = async config => {
+    if (calls.length === 1) throw failure({ ...config, baseURL: undefined }, 403, 'PDA_SESSION_REQUIRED')
+    return ok(config)
+  }
+  await api.get('/fixture')
+  expect(ensureDeviceSession).toHaveBeenCalledOnce()
+  expect(calls.map(c => c.baseURL)).toEqual(['/api', '/api'])
+})
+
+test.each([401, 403])('同一 API 路径的相对及绝对地址可处理 %s 并重试一次', async status => {
+  const { ensureDeviceSession } = await import('./pda-session')
+  if (status === 403) vi.mocked(ensureDeviceSession).mockResolvedValueOnce({ token: 'renewed-device', expiresAt: null, warehouseId: 1, scopes: [] })
+  const fallback = transport
+  transport = async config => {
+    if (config.url !== '/fixture') return fallback(config)
+    if (calls.filter(request => request.url === '/fixture').length === 1) {
+      throw failure(config, status, status === 401 ? 'AUTH_TOKEN_EXPIRED' : 'PDA_SESSION_REQUIRED')
+    }
+    return ok(config)
+  }
+  const baseURL = new URL('/api/', window.location.href).href
+  const result = await api.get('/fixture', { baseURL, skipGlobalError: true })
+  expect(result.status).toBe(200)
+  expect(calls.filter(c => c.url === '/fixture').map(c => c.baseURL)).toEqual([baseURL, baseURL])
+  expect(calls.filter(c => c.url === '/auth/refresh')).toHaveLength(status === 401 ? 1 : 0)
+  expect(ensureDeviceSession).toHaveBeenCalledTimes(status === 403 ? 1 : 0)
+})
+
+test.each([
+  [401, '/other-api'], [403, '/other-api'],
+  [401, 'https://other.test/api'], [403, 'https://other.test/api'],
+] as const)('收到 %s 时拒绝不同端点 %s 的认证结果', async (status, baseURL) => {
+  transport = async config => { throw failure(config, status, status === 401 ? 'AUTH_SESSION_INVALID' : 'PDA_SESSION_REQUIRED') }
+  const outcome = await api.get('/fixture', { baseURL, skipGlobalError: true }).catch(error => error)
+  expect(axios.isCancel(outcome)).toBe(true)
+  expect(calls).toHaveLength(1)
+  expect(useAuthStore.getState().token).toBe('A-access')
+  expect((await import('./pda-session')).ensureDeviceSession).not.toHaveBeenCalled()
+})

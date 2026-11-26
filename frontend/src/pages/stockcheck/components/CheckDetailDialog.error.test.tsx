@@ -19,6 +19,7 @@ const f = vi.hoisted(() => ({
   refetch: vi.fn(),
   check: undefined as StockCheck | undefined,
 }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => true }) }))
 vi.mock('@/hooks/useStockCheck', () => ({
   useCheckDetail: () => ({ data: f.check, isLoading: false, error: f.readError, refetch: f.refetch }),
   useUpdateCheckItems: () => ({ mutateAsync: f.save, isPending: false }),
@@ -261,5 +262,17 @@ it('后台改为扫码明细后，旧手填错误不会挡住其他行保存', a
     await draw()
     await click('保存实盘数')
     expect(f.save).toHaveBeenCalledExactlyOnceWith({ id: 1, items: [{ id: 11, actualQty: 4 }] })
+  } finally { await act(async () => root.unmount()) }
+})
+
+it('提交前先保存本次输入，保存失败保留草稿并停止提交', async () => {
+  const { root, click, input } = await mount()
+  try {
+    await input('6')
+    await click('提交盘点')
+    await click('确认提交盘点')
+    expect(f.save).toHaveBeenCalledWith({ id: f.check!.id, items: [{ id: f.check!.items![0].id, actualQty: 6 }] })
+    expect(f.submit).not.toHaveBeenCalled()
+    expect(f.closed).not.toHaveBeenCalled()
   } finally { await act(async () => root.unmount()) }
 })

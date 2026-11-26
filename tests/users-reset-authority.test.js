@@ -18,9 +18,8 @@ function fixture({ actorPermissions = ['user.reset_password', 'report.view'], ta
   const conn = { async query(sql, params) {
     assert.match(sql, /^SELECT/, 'authorization models never write users, credentials or sessions')
     calls.push({ sql, params })
-    if (sql.includes('FROM sys_roles') && sql.includes(' IN ')) return [[...new Set(params)].filter(id => roles.has(id)).map(id => ({ id }))]
-    if (sql.includes('FROM sys_roles')) return [roleMissing ? [] : [{ id: params[0] }]]
-    if (sql.includes("permission='user.reset_password'")) return [roles.get(params[0])?.has('user.reset_password') ? [{ permission: 'user.reset_password' }] : []]
+    if (sql.includes('FROM sys_roles') && sql.includes(' IN ')) return [params[0].filter(id => roles.has(id) && !(roleMissing && id === targetRole)).map(id => ({ id }))]
+    if (sql.includes('AND permission=?')) return [roles.get(params[0])?.has(params[1]) ? [{ permission: params[1] }] : []]
     if (sql.includes('permission NOT IN')) return [[...roles.get(params[0])].filter(p => !roles.get(params[1])?.has(p)).map(permission => ({ permission }))]
     if (sql.includes('FROM user_warehouse_scope')) return [[...actorScope.map(warehouse_id => ({ user_id: 10, warehouse_id })), ...targetScope.map(warehouse_id => ({ user_id: 20, warehouse_id }))]]
     throw Error('Unmodeled authorization read: ' + sql)
@@ -59,16 +58,15 @@ test('cached warehouseIds cannot replace the actual current scopes', async () =>
 })
 test('guard is inside locked reset callback and before the existing UPDATE; actual reset is never called', () => {
   const body = service().resetPassword.toString()
-  assert.match(body, /withLockedTarget\(id, operator, async \(conn, target, actor\)/)
-  assert.ok(body.indexOf('await assertCanResetTarget(conn, target, actor)') < body.indexOf('UPDATE sys_users'))
+  assert.match(body, /withLockedTarget\(id, operator, 'user\.reset_password', async conn => conn\.query\(/)
   assert.match(body, /token_version = COALESCE\(token_version, 0\) \+ 1/)
 })
 test('removing either subset gate is detected by an actual pure authorization counterexample', async () => {
-  const roleBroken = source.replace('await assertCanAssignRole(actor, Number(target.role_id), conn)', '')
+  const roleBroken = source.replace('await assertRoleSubset(actor, targetRoleId, conn)', '')
   assert.notEqual(roleBroken, source)
   const role = fixture({ targetPermissions: ['report.view', 'user.update'] })
   await service(roleBroken).assertCanResetTarget(role.conn, role.target, role.actor)
-  const scopeBroken = source.replace('if (allowed.size && (!requested.length', 'if (false && (!requested.length')
+  const scopeBroken = source.replace('if (allowed.size && (!targetWarehouses.length', 'if (false && (!targetWarehouses.length')
   assert.notEqual(scopeBroken, source)
   const scope = fixture({ targetScope: [] })
   await service(scopeBroken).assertCanResetTarget(scope.conn, scope.target, scope.actor)
@@ -92,3 +90,37 @@ test('actual reset route retains permission and schema gates with the entire pas
   assert.equal((await run(['user.reset_password'], 'x')).response.success, false); assert.equal(captured.length, 0)
   await run(['user.reset_password'], 'schema-only'); assert.equal(captured.length, 1); assert.equal(captured[0][0], 20); assert.equal(captured[0][2].roleId, 5)
 })
+
+test('管理账号的四类写入在持有用户锁时核对操作权限与目标原权限、原仓库', () => {
+  const clean = source.replace(/^\s*\/\/.*$/gm, '')
+  function verify(code) {
+    const exported = service(code)
+    for (const [method, permission] of [['update', 'user.update'], ['setWarehouseScope', 'user.update'], ['softDelete', 'user.delete'], ['resetPassword', 'user.reset_password']]) {
+      assert.ok(exported[method].toString().includes(", operator, '" + permission + "',"), method)
+    }
+    const locked = code.slice(code.indexOf('async function withLockedTarget('), code.indexOf('async function update('))
+    const locks = locked.indexOf('ORDER BY id FOR UPDATE')
+    const guard = locked.indexOf('await assertCanManageTarget(conn, target,')
+    assert.ok(locks >= 0 && guard > locks && locked.indexOf('await action(') > guard)
+  }
+  verify(clean)
+  assert.throws(() => verify(clean.replace('await assertCanManageTarget(conn, target,', 'await skippedPolicy(conn, target,')), { code: 'ERR_ASSERTION' })
+})
+
+for (const permission of ['user.update', 'user.delete']) {
+  test('授权策略按操作复核目标现有权限与仓库 ' + permission, async () => {
+    const manage = service().assertCanManageTarget
+    const actorPermissions = [permission, 'report.view']
+    const check = row => {
+      const f = fixture({ actorPermissions, ...row })
+      return manage(f.conn, f.target, f.actor, permission)
+    }
+    await check({})
+    await check({ actorScope: [], targetScope: [] })
+    await assert.rejects(check({ actorPermissions: ['report.view'] }), { code: 'PERMISSION_DENIED' })
+    await assert.rejects(check({ targetPermissions: ['report.view', 'other.view'] }), { code: 'ROLE_ASSIGN_DENIED' })
+    for (const targetScope of [[], [2, 3]]) {
+      await assert.rejects(check({ targetScope }), { code: 'USER_SCOPE_GRANT_DENIED' })
+    }
+  })
+}

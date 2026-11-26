@@ -13,6 +13,7 @@ function fixture(file) {
   const scope = load('backend/src/utils/warehouseScope.js', { '../config/db': { pool } })
   return { calls, svc: load(file, {
     '../../config/db': { pool }, '../../utils/warehouseScope': scope, '../../utils/codeGenerator': {},
+    '../../utils/saleDocumentScope': load('backend/src/utils/saleDocumentScope.js', { './warehouseScope': scope }),
     './logistics.direct': {}, './finance-accounts.service': {}, '../accounting/finance-period.guard': {},
     '../../utils/logger': {}, '../../utils/statusTransition': {}, '../../utils/selfApprove': {}, '../../engine/containerEngine': { CONTAINER_STATUS: {} },
     '../../utils/operationRequest': {},

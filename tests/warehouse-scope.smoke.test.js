@@ -271,6 +271,15 @@ async function scenarioStockcheckAndReturnsScope(ctx, log, adminToken, scopedTok
   const mineCheck = await mkCheck(mine)
   const otherCheck = await mkCheck(others)
 
+  const scopedStock = await http.get(`/api/inventory/stock?productIds=${checkProduct.id}&pageSize=1`, { token: scopedToken })
+  const result = scopedStock.data?.data
+  log.assert('精确库存列表和总数仅包含本次商品及授权仓', scopedStock.status === 200 && Number(result?.pagination.total) === 1 &&
+    result.list.length === 1 && Number(result.list[0].productId) === checkProduct.id && Number(result.list[0].warehouseId) === mine.id)
+  const filteredStock = await http.get(`/api/inventory/stock?productIds=${checkProduct.id}&warehouseId=${others.id}`, { token: scopedToken })
+  log.assert('精确库存延续列表仓库范围', Number(filteredStock.data?.data?.pagination.total) === 0)
+  const invalid = await http.get('/api/inventory/stock?productIds=0', { token: scopedToken })
+  log.assert('精确库存拒绝无效商品编号', invalid.status === 400)
+
   const checkList = await http.get('/api/stockcheck?pageSize=200', { token: scopedToken })
   const checkIds = (checkList.data?.data?.list || []).map(r => Number(r.id))
   log.assert(

@@ -104,3 +104,14 @@ test('菜单组件卸载取消尚未执行的只读详情交接',async()=>{
   act(()=>callbacks.select());act(()=>root.render(<span>页面已关闭</span>))
   act(()=>callbacks.close(new Event('closeAutoFocus',{cancelable:true})));expect(secondary).not.toHaveBeenCalled()
 })
+
+test('菜单关闭前原动作失去资格，即使还留有其他操作也不能打开旧弹窗', async () => {
+  const other = { label: '查看', onClick: vi.fn() }
+  await openMenu([{ label: '删除', afterMenuClose: true, onClick: secondary }, other])
+  const callbacks = menuCallbacks()
+  act(() => callbacks.select())
+  await render(true, false, [other])
+  act(() => callbacks.close(new Event('closeAutoFocus', { cancelable: true })))
+  expect(secondary).not.toHaveBeenCalled()
+  expect(other.onClick).not.toHaveBeenCalled()
+})

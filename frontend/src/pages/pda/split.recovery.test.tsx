@@ -22,6 +22,10 @@ let readReceipt: (() => Promise<unknown>) | null
 let post: (config: InternalAxiosRequestConfig) => Promise<unknown>
 let load: ((config: InternalAxiosRequestConfig) => Promise<unknown>) | null
 const key = () => `flowcube_pda_split_v1:${owner}`
+const storedNew = (endpoint = 'https://split-a.invalid/api') => {
+  const prefix = 'flowcube_pda_split_v2:' + owner + ':' + encodeURIComponent(endpoint) + ':'
+  return Object.keys(localStorage).filter(k => k.startsWith(prefix)).map(k => JSON.parse(localStorage.getItem(k)!))
+}
 const success = { sourceContainerId: 11, sourceBarcode: 'I11', sourceRemainingAfter: 7, newContainerId: 12, newBarcode: 'B12', newContainerKind: 'plastic_box', productId: 3, warehouseId: 8, printJobId: null, printJobIds: [], noPrinterCount: 0, renderFailedCount: 0 }
 const record = () => ({ accountId: owner, endpoint: 'https://split-a.invalid/api', sourceContainerId: 11, sourceBarcode: 'I11', productId: 3, warehouseId: 8, remaining: 10, action: 'inventory.container.split.11', requestKey: 'original-key', createdAt: new Date().toISOString(), body: { qty: 3, printLabel: true } })
 const seed = (r: object = record()) => localStorage.setItem(key(), JSON.stringify({ version: 1, records: [r] }))
@@ -51,18 +55,18 @@ test('真实PDA拆分5xx保留原账号/服务器/源码/完整body/key，重挂
   await mount(); await click('扫描I11'); await act(flush); await input('3'); await click('确认拆分'); await act(flush)
   const submitted = requests.find(r => r.method === 'post')!
   expect(submitted.headers.get('X-Request-Key')).toBeTruthy(); expect(submitted.headers.get('X-Client')).toBe('pda')
-  const stored = JSON.parse(localStorage.getItem(key())!).records[0]
+  const [stored] = storedNew()
   expect(stored).toMatchObject({ accountId: owner, endpoint: 'https://split-a.invalid/api', sourceContainerId: 11, sourceBarcode: 'I11', body: { qty: 3, printLabel: false } })
   expect(stored.requestKey).toBe(submitted.headers.get('X-Request-Key'))
   expect(host.querySelector<HTMLInputElement>('input[type="number"]')?.disabled).toBe(true)
   act(() => root!.unmount()); root = null; const count = requests.length; await mount(); await act(flush)
   expect(host.textContent).toContain('原提交'); expect(host.textContent).toContain('I11'); expect(requests).toHaveLength(count)
-  await click('重新扫码'); expect(host.textContent).toContain('I11'); expect(localStorage.getItem(key())).toBeTruthy()
+  await click('重新扫码'); expect(host.textContent).toContain('I11'); expect(storedNew()).toEqual([stored])
 })
 test('首发明确未执行的业务拒绝释放记录并保留输入可修正；恢复重试4xx仍保留原未知', async () => {
   post = async config => { throw new AxiosError('rejected', 'ERR_BAD_REQUEST', config, {}, { status: 400, statusText: 'Bad Request', data: { success: false, message: '个体条码不可拆分', code: 'INDIVIDUAL_CONTAINER_NO_SPLIT', data: { containerSplitNotExecuted: true } }, headers: {}, config }) }
   await mount(); await click('扫描I11'); await act(flush); await input('3'); await click('确认拆分'); await act(flush)
-  expect(localStorage.getItem(key())).toBeNull(); expect(host.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('3')
+  expect(storedNew()).toHaveLength(0); expect(host.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('3')
   expect(host.querySelector<HTMLInputElement>('input[type="number"]')?.disabled).toBe(false)
   seed(); act(() => root!.unmount()); root = null; await mount(); await click('查询原拆分结果'); await act(flush); await click('按原内容重试'); await act(flush)
   expect(localStorage.getItem(key())).toBeTruthy()
@@ -71,7 +75,7 @@ test('首发明确未执行的业务拒绝释放记录并保留输入可修正�
 test.each(['PERMISSION_DENIED', 'WAREHOUSE_SCOPE_DENIED'])('首发已知前置403可修正；恢复重试同拒绝不能抹掉原未知：%s', async code => {
   post = async config => { throw new AxiosError('denied', 'ERR_BAD_REQUEST', config, {}, { status: 403, statusText: 'Forbidden', data: { success: false, message: '无权执行', code, data: null }, headers: {}, config }) }
   await mount(); await click('扫描I11'); await act(flush); await input('3'); await click('确认拆分'); await act(flush)
-  expect(localStorage.getItem(key())).toBeNull(); expect(host.querySelector<HTMLInputElement>('input[type="number"]')?.disabled).toBe(false)
+  expect(storedNew()).toHaveLength(0); expect(host.querySelector<HTMLInputElement>('input[type="number"]')?.disabled).toBe(false)
   seed(); act(() => root!.unmount()); root = null; await mount(); await click('查询原拆分结果'); await act(flush); await click('按原内容重试'); await act(flush)
   expect(localStorage.getItem(key())).toBeTruthy()
 })
@@ -97,7 +101,7 @@ test('A→B→A改址后的迟到POST成功不得确认或清原记录', async (
   act(() => [...host.querySelectorAll('button')].find(b => b.textContent === '确认拆分')!.click()); await act(flush)
   act(() => { setApiClientBaseURL('https://split-b.invalid/api'); setApiClientBaseURL('https://split-a.invalid/api') })
   await act(async () => { resolve(success); await flush() })
-  expect(localStorage.getItem(key())).toBeTruthy(); expect(host.textContent).not.toContain('拆分成功')
+  expect(storedNew()).toHaveLength(1); expect(host.textContent).not.toContain('拆分成功')
 })
 test('扫描load在动作隐藏后迟到不填入表单；后台scanner不吃广播', async () => {
   let resolve!: (data: unknown) => void; load = () => new Promise(r => { resolve = r })
@@ -111,7 +115,7 @@ test('撤权→恢复后的迟到成功仍不得清原记录；撤写权可查�
   await mount(); await click('扫描I11'); await act(flush); await input('3')
   act(() => [...host.querySelectorAll('button')].find(b => b.textContent === '确认拆分')!.click()); await act(flush)
   act(() => { useAuthStore.getState().updateUser({ permissions: [] }); useAuthStore.getState().updateUser({ permissions: [PERMISSIONS.INVENTORY_VIEW, PERMISSIONS.INVENTORY_CONTAINER_SPLIT] }) })
-  await act(async () => { resolve(success); await flush() }); expect(localStorage.getItem(key())).toBeTruthy()
+  await act(async () => { resolve(success); await flush() }); expect(storedNew()).toHaveLength(1)
   act(() => useAuthStore.getState().updateUser({ permissions: [] })); await click('查询原拆分结果'); await act(flush)
   expect(requests.filter(r => r.method === 'get' && r.url?.startsWith('/system/request-status'))).toHaveLength(1)
   expect([...host.querySelectorAll('button')].some(b => b.textContent === '按原内容重试' && !b.disabled)).toBe(false)
@@ -158,4 +162,81 @@ test.each(['account', 'server-roundtrip'])('保留的来源草稿不能跨读取
   })
   expect(host.textContent).not.toContain('离线商品'); expect(host.querySelector('input[type="number"]')).toBeNull()
   expect(requests.filter(r => r.method === 'post')).toHaveLength(0); expect(host.textContent).toContain('重新扫码')
+})
+
+test('同账号跨服务器拆分保留旧格式原回执，新服务器独立提交同源码', async () => {
+  seed()
+  const original = localStorage.getItem(key())
+  setApiClientBaseURL('https://split-b.invalid/api')
+  await mount()
+  expect(host.textContent).not.toContain('original-key')
+  await click('扫描I11'); await act(flush)
+  expect(host.querySelector('input[type="number"]')).toBeTruthy()
+  await input('3'); await click('确认拆分'); await act(flush)
+  const posted = requests.filter(r => r.method === 'post')
+  expect(posted).toHaveLength(1)
+  expect(posted[0].baseURL).toBe('https://split-b.invalid/api')
+  const secondKey = String(posted[0].headers.get('X-Request-Key'))
+  expect(secondKey).not.toBe('original-key')
+  expect(host.textContent).toContain(secondKey)
+  expect(localStorage.getItem(key())).toBe(original)
+  await act(async () => setApiClientBaseURL('https://split-a.invalid/api'))
+  expect(host.textContent).toContain('original-key')
+  expect(host.textContent).not.toContain(secondKey)
+  status = 'success'
+  await click('查询原拆分结果'); await act(flush)
+  expect(localStorage.getItem(key())).toBeNull()
+  await act(async () => setApiClientBaseURL('https://split-b.invalid/api'))
+  expect(host.textContent).toContain(secondKey)
+  expect(requests.filter(r => r.method === 'post')).toHaveLength(1)
+})
+
+test('同一份旧拆分数组的两台服务器可各自核对，保留兄弟原记录', async () => {
+  const first = record()
+  const second = {...first, endpoint:'https://split-b.invalid/api', requestKey:'other-server-key'}
+  localStorage.setItem(key(),JSON.stringify({version:1, records:[first,second]}))
+  status = 'success'
+  await mount()
+  expect(host.textContent).not.toContain(second.requestKey)
+  await click('查询原拆分结果'); await act(flush)
+  expect(JSON.parse(localStorage.getItem(key())!).records).toEqual([second])
+  await act(async () => setApiClientBaseURL(second.endpoint))
+  expect(host.textContent).toContain(second.requestKey)
+  await click('查询原拆分结果'); await act(flush)
+  expect(localStorage.getItem(key())).toBeNull()
+  expect(requests.filter(r => r.method === 'post')).toHaveLength(0)
+})
+
+test('另一窗口同时保存的同服务器拆分先占位，本窗口保留原请求且不发送', async () => {
+  const rawSet = Storage.prototype.setItem
+  vi.spyOn(Storage.prototype,'setItem').mockImplementation(function(this:Storage, slot, serialized) {
+    rawSet.call(this,slot,serialized)
+    if (!slot.startsWith('flowcube_pda_split_v2:')) return
+    const parked = {...JSON.parse(serialized),requestKey:'other-tab-key'}
+    rawSet.call(this,slot.slice(0,slot.lastIndexOf(':')+1)+'other-tab-key',JSON.stringify(parked))
+  })
+  await mount(); await click('扫描I11'); await act(flush); await input('3'); await click('确认拆分'); await act(flush)
+  expect(requests.filter(r => r.method === 'post')).toHaveLength(0)
+  expect(storedNew().map(r=>r.requestKey)).toEqual(['other-tab-key'])
+  expect(host.textContent).toContain('other-tab-key')
+})
+
+test('两台服务器使用相同原键时各自查询，迟到的旧服回执保留待核', async () => {
+  const first = record()
+  const second = { ...first, endpoint: 'https://split-b.invalid/api' }
+  localStorage.setItem(key(), JSON.stringify({ version: 1, records: [first, second] }))
+  let resolveFirst!: (receipt: unknown) => void
+  const confirmed = { status: 'success', data: success, resourceType: 'inventory_container', resourceId: 11 }
+  readReceipt = () => new Promise(resolve => { resolveFirst = resolve })
+  await mount()
+  await click('查询原拆分结果')
+  await act(flush)
+  await act(async () => setApiClientBaseURL(second.endpoint))
+  readReceipt = async () => confirmed
+  await click('查询原拆分结果')
+  await act(flush)
+  expect(requests.filter(r => r.url?.startsWith('/system/request-status')).map(r => r.baseURL))
+    .toEqual([first.endpoint, second.endpoint])
+  await act(async () => { resolveFirst(confirmed); await flush() })
+  expect(JSON.parse(localStorage.getItem(key())!).records).toEqual([first])
 })

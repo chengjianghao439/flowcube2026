@@ -1,9 +1,10 @@
 import { useContext } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { usePermission } from '@/hooks/usePermission'
 import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { resolveRoutePermission, resolveRouteTitle } from '@/router/routeDefinitions'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { PageViewNavigation } from '@/components/shared/PageViewNavigation'
 import { PageHeaderContext } from '@/components/shared/PageHeaderContext'
 import WarehousesPage from '@/pages/warehouses'
 import LocationsPage from '@/pages/locations'
@@ -33,19 +34,16 @@ export default function WarehouseStructurePage() {
   const { Component } = activeView
 
   const navigation = visibleViews.length > 1 && (
-    <nav aria-label="仓库结构视图" className="mb-4 flex flex-wrap gap-x-5 gap-y-1 border-b border-border">
-      {visibleViews.map(({ path }) => {
-        const current = path === pathname
-        // 分拣格管理沿用普通入口，订单交接只从订单的任务链接进入。
-        const destination = path === '/sorting-bins' ? path : getWorkspaceListPath(current ? ownPath : path)
-        return <Link key={path} to={destination} aria-current={current ? 'page' : undefined}
-          className={`border-b-2 px-2.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${current ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-transparent font-medium text-muted-foreground hover:text-foreground'}`}
-        >{resolveRouteTitle(path)}</Link>
-      })}
-    </nav>
+    <PageViewNavigation label="仓库结构视图" activePath={pathname}
+      views={visibleViews.map(({ path }) => ({
+        path,
+        label: resolveRouteTitle(path)?.replace(/管理$/, '') ?? path,
+        // 分拣格管理沿用普通入口，订单交接只从对应任务链接进入。
+        to: path === '/sorting-bins' ? path : getWorkspaceListPath(path === pathname ? ownPath : path),
+      }))} />
   )
 
-  return <PageHeaderContext.Provider value={navigation ? { title: '仓库结构', navigation } : null}>
+  return <PageHeaderContext.Provider value={navigation ? { navigation } : null}>
     <Component />
   </PageHeaderContext.Provider>
 }

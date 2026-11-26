@@ -210,3 +210,26 @@ test('旧绑定作业的设备拒绝晚到时不使用新绑定重发作业', as
   expect(calls.map(request => request.url)).toEqual(['/warehouse-tasks/42/complete', '/pda/sessions'])
   expect(getDeviceSession()?.token).toBe('new-binding-ticket')
 })
+
+test('同一登录设备的两次并发换票共享一次成功结果', async () => {
+  const gate = deferred()
+  transport = async config => { await gate.promise; return ok(config,'renewed-device') }
+  const first = ensureDeviceSession(), second = ensureDeviceSession()
+  gate.release()
+  const tickets = await Promise.all([first,second])
+  expect(tickets.map(ticket=>ticket?.token)).toEqual(['renewed-device','renewed-device'])
+  expect(calls.filter(call=>call.url==='/pda/sessions')).toHaveLength(1)
+})
+
+test('原生票据已在内存生效但持久化尚未完成时仍共享原换票', async () => {
+  const {secureStorage} = await import('@/lib/secureStorage')
+  const gate = deferred()
+  const save = vi.spyOn(secureStorage,'setItem').mockImplementation(async () => gate.promise)
+  const first = ensureDeviceSession()
+  await vi.waitFor(() => expect(save).toHaveBeenCalled())
+  const second = ensureDeviceSession()
+  gate.release()
+  const tickets = await Promise.all([first,second])
+  expect(calls).toHaveLength(1)
+  expect(tickets.map(item=>item?.token)).toEqual(['renewed-device','renewed-device'])
+})

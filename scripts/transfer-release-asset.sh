@@ -8,13 +8,12 @@ base=$(basename "$file")
 [[ "$base" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || exit 2
 sha=$(node -e 'const fs=require("fs"),c=require("crypto"); console.log(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$file")
 bytes=$(node -e 'console.log(require("fs").statSync(process.argv[1]).size)' "$file")
-helper="/tmp/flowcube-asset-receiver-${GITHUB_RUN_ID:?}-${GITHUB_RUN_ATTEMPT:?}.py"
+helper=""
 opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 -o ServerAliveCountMax=6)
 cleanup() {
   timeout -k 5 30 ssh "${opts[@]}" -p "$port" "$target" \
     "rm -f '$helper' '$destination.relay.pending' '$destination.relay.partial' '$destination.relay'" >/dev/null 2>&1 || true
 }
-trap cleanup EXIT
 make_verified_exe_readable() {
   if [[ "$base" == *.exe ]]; then
     # The verified installer is a release asset. A private relay umask may leave
@@ -24,7 +23,15 @@ make_verified_exe_readable() {
     timeout -k 5 30 ssh "${opts[@]}" -p "$port" "$target" "$command"
   fi
 }
-printf -v receive_command '%q ' python3 "$helper" "$destination" "$sha" "$bytes" "$base"
+helper=$(timeout -k 5 30 ssh "${opts[@]}" -p "$port" "$target" 'umask 077; mktemp /tmp/flowcube-asset-receiver.XXXXXXXXXX')
+[[ "$helper" =~ ^/tmp/flowcube-asset-receiver\.[a-zA-Z0-9]{10}$ ]] || { echo '远端接收脚本暂存路径无效' >&2; exit 1; }
+trap cleanup EXIT
+receive_args=(python3 "$helper" "$destination" "$sha" "$bytes" "$base")
+if [[ "$base" == *.exe ]]; then
+  [[ "${GITHUB_RUN_ID:-}" =~ ^[1-9][0-9]*$ && "${GITHUB_RUN_ATTEMPT:-}" =~ ^[1-9][0-9]*$ ]] || exit 2
+  receive_args+=("$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+fi
+printf -v receive_command '%q ' "${receive_args[@]}"
 if [ -n "${DEPLOY_ARTIFACT_ID:-}" ] && timeout -k 5 30 scp "${opts[@]}" -P "$port" scripts/receive-deploy-artifact.py "$target:$helper"; then
   if node scripts/deploy-artifact-url.js | timeout -k 10 1100 ssh "${opts[@]}" -p "$port" "$target" "$receive_command"; then
     make_verified_exe_readable

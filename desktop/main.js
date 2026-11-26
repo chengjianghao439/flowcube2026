@@ -150,34 +150,10 @@ function rendererDist() {
   return path.join(__dirname, '..', 'frontend', 'dist')
 }
 
-function normalizeApiOrigin(raw) {
-  if (!raw || typeof raw !== 'string') return ''
-  const t = raw.trim().replace(/\/$/, '')
-  if (!t) return ''
-  try {
-    const u = new URL(t.startsWith('http') ? t : `http://${t}`)
-    return `${u.protocol}//${u.host}`
-  } catch {
-    return ''
-  }
-}
-
 function buildDesktopClientInfo() {
   return getPrintClientIdentity().getInfo()
 }
 
-async function getRendererApiOrigin(win) {
-  const script = `(function(){
-    try {
-      var v = localStorage.getItem('API_BASE_URL') || window.__FLOWCUBE_DEFAULT_API_ORIGIN__ || '';
-      return v.trim();
-    } catch (e) { return ''; }
-  })()`
-  const raw = await win.webContents.executeJavaScript(script, true)
-  return normalizeApiOrigin(raw)
-}
-
-/** 打包后自动更新检查延迟：给引导写入 API 根地址留时间 */
 const PACKAGED_UPDATE_CHECK_DELAY_MS = Math.min(
   30_000,
   Math.max(800, Number(process.env.FLOWCUBE_UPDATE_CHECK_DELAY_MS) || 1800),
@@ -185,21 +161,19 @@ const PACKAGED_UPDATE_CHECK_DELAY_MS = Math.min(
 
 /** 安装包仅触发一次自动更新检查（IPC 优先，避免引导写入 localStorage 晚于主进程定时器） */
 let packagedUpdateCheckStarted = false
-function triggerPackagedUpdateCheck(win, originRaw) {
+function triggerPackagedUpdateCheck(win) {
   if (!supportsWindowsUpdate(app) || packagedUpdateCheckStarted) return
-  const origin = normalizeApiOrigin(originRaw)
-  if (!origin) return
   packagedUpdateCheckStarted = true
   setTimeout(() => {
-    checkAppUpdate(app, win, () => origin).catch((err) => {
+    checkAppUpdate(app, win).catch((err) => {
       log.error('[FlowCube] 自动更新检查失败:', err)
     })
   }, PACKAGED_UPDATE_CHECK_DELAY_MS)
 }
 
-onRenderer('flowcube:api-origin-ready', (event, origin) => {
+onRenderer('flowcube:api-origin-ready', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
-  if (win && !win.isDestroyed()) triggerPackagedUpdateCheck(win, origin)
+  if (win && !win.isDestroyed()) triggerPackagedUpdateCheck(win)
 })
 
 handleRenderer('flowcube:get-app-version', () => app.getVersion())
@@ -209,7 +183,7 @@ handleRenderer('flowcube:is-packaged', () => app.isPackaged)
 handleRenderer('flowcube:trigger-update-check', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win.isDestroyed()) return
-  await checkAppUpdate(app, win, () => getRendererApiOrigin(win), { manual: true })
+  await checkAppUpdate(app, win, { manual: true })
 })
 
 handleRenderer('flowcube:get-update-state', () => getUpdateState())
@@ -222,8 +196,7 @@ handleRenderer('flowcube:cancel-update-download', (event) => {
 handleRenderer('flowcube:restart-to-update', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (!win || win.isDestroyed()) throw new Error('更新窗口不可用')
-  const apiOrigin = await getRendererApiOrigin(win)
-  await restartToUpdate(app, win, apiOrigin, quitForInstaller)
+  await restartToUpdate(app, win, quitForInstaller)
 })
 
 onRenderer('flowcube:close-accept', (event) => {
@@ -306,6 +279,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+      allowRunningInsecureContent: false,
     },
   })
 
@@ -344,7 +321,7 @@ function createWindow() {
     if (mainWindow === win) mainWindow = null
   })
 
-  const indexHtml = path.join(rendererDist(), 'index.html')
+  const indexHtml = path.join(rendererDist(), 'desktop.html')
   const url = pathToFileURL(indexHtml).href + '#/'
   rendererGuard.register(win.webContents, url)
   win.webContents.on('will-navigate', (event, targetUrl) => {
@@ -353,6 +330,15 @@ function createWindow() {
   win.webContents.on('will-redirect', (event, targetUrl) => {
     if (!rendererGuard.allowsNavigation(win.webContents, targetUrl)) event.preventDefault()
   })
+  win.webContents.on('will-frame-navigate', event => {
+    if (!event.isMainFrame || !rendererGuard.allowsNavigation(win.webContents, event.url)) event.preventDefault()
+  })
+  win.webContents.session.setPermissionRequestHandler((contents, permission, callback, details) => {
+    callback(rendererGuard.allowsPermission(contents, permission, details))
+  })
+  win.webContents.session.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => (
+    rendererGuard.allowsPermission(contents, permission, { ...details, requestingOrigin })
+  ))
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   win.webContents.on('will-attach-webview', event => event.preventDefault())
   win.loadURL(url).catch((err) => {
@@ -360,31 +346,7 @@ function createWindow() {
   })
 
   if (supportsWindowsUpdate(app)) {
-    win.webContents.once('did-finish-load', () => {
-      setTimeout(async () => {
-        if (packagedUpdateCheckStarted) return
-        try {
-          let origin = await getRendererApiOrigin(win)
-          if (!origin) {
-            await new Promise((r) => setTimeout(r, 3000))
-            origin = await getRendererApiOrigin(win)
-          }
-          if (!origin) {
-            await new Promise((r) => setTimeout(r, 5000))
-            origin = await getRendererApiOrigin(win)
-          }
-          if (!origin) {
-            log.warn(
-              '[FlowCube] 更新检查已禁用：未解析到 API 根地址（API_BASE_URL runtime override 或构建期默认值）',
-            )
-            return
-          }
-          triggerPackagedUpdateCheck(win, origin)
-        } catch (err) {
-          log.error('[FlowCube] 自动更新检查（fallback）失败:', err)
-        }
-      }, 8000)
-    })
+    win.webContents.once('did-finish-load', () => triggerPackagedUpdateCheck(win))
   }
 
   return win

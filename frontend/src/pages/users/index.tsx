@@ -3,7 +3,8 @@ import { useAuthStore } from '@/store/authStore'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { ListQueryDialog } from '@/components/shared/ListQueryDialog'
+import { QueryChips } from '@/components/shared/QueryChips'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -33,10 +34,10 @@ export default function UsersPage() {
   const canResetPwd = can(PERMISSIONS.USER_RESET_PASSWORD)
   const canDelete = can(PERMISSIONS.USER_DELETE)
 
-  const [keyword, setKeyword] = useState('')
+  const [filters, setFilters] = useState({ keyword: '', showDevelopment: false })
+  const { keyword, showDevelopment } = filters
+  const [queryOpen, setQueryOpen] = useState(false)
   const [scopeTarget, setScopeTarget] = useState<{ id: number; name: string } | null>(null)
-  const [search, setSearch] = useState('')
-  const [showDevelopment, setShowDevelopment] = useState(false)
 
   const [formOpen, setFormOpen] = useState(false)
   const [editUser, setEditUser] = useState<SysUser | null>(null)
@@ -51,9 +52,10 @@ export default function UsersPage() {
   const total = data?.pagination?.total ?? 0
   const { mutate: deleteUser, isPending: deleting } = useDeleteUser()
 
-  function handleSearch() {
-    setKeyword(search)
-  }
+  const chips = [
+    ...(keyword ? [{ key: 'keyword', text: `关键词：${keyword}`, onClear: () => setFilters(prev => ({ ...prev, keyword: '' })) }] : []),
+    ...(hideDevelopment === '0' ? [{ key: 'development', text: '显示开发账号', onClear: () => setFilters(prev => ({ ...prev, showDevelopment: false })) }] : []),
+  ]
 
   function handleEdit(user: SysUser) {
     setEditUser(user)
@@ -128,13 +130,14 @@ export default function UsersPage() {
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="desktop-record-page space-y-4">
       <PageHeader
         title="用户管理"
-        description={!isError && !isLoading && data?.truncated ? <><span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 个，请缩小查询范围。</span>{operatorRoleId === 1 && ' 可编辑登录账号；原密码无法查看，需要更换时请使用“重置密码”'}</> : operatorRoleId === 1 ? '可编辑登录账号；原密码无法查看，需要更换时请使用“重置密码”' : '维护登录账号、角色与启用状态。'}
+        description={!isError && !isLoading && data?.truncated ? <><span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 个，请缩小查询范围。</span>{operatorRoleId === 1 && ' 可编辑登录账号；原密码无法查看，需要更换时请使用“重置密码”。'}</> : operatorRoleId === 1 ? '可编辑登录账号；原密码无法查看，需要更换时请使用“重置密码”。' : '维护登录账号、角色与启用状态。'}
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/users', { keyword, hideDevelopment }).catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/users', { keyword, hideDevelopment }).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canCreate && (
               <Button onClick={() => { setEditUser(null); setFormOpen(true) }}>
                 新增用户
@@ -144,34 +147,24 @@ export default function UsersPage() {
         }
       />
 
-
-      <FilterCard>
-        <Input
-          aria-label="搜索账号或姓名"
-          placeholder="搜索账号或姓名"
-          value={search}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-          onKeyDown={(e: React.KeyboardEvent) => e.key === 'Enter' && handleSearch()}
-          className="h-9 w-60"
-        />
-        <Button size="sm" variant="outline" onClick={handleSearch}>搜索</Button>
-        {keyword && (
-          <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>
-            重置
-          </Button>
-        )}
-        {operatorRoleId === 1 && (
-          <label className="ml-auto flex items-center gap-2 text-sm text-foreground">
-            <input
-              type="checkbox"
-              checked={showDevelopment}
-              onChange={event => { setShowDevelopment(event.target.checked) }}
-              className="size-4 accent-primary"
-            />
-            显示开发账号
+      <QueryChips chips={chips} onClearAll={() => setFilters({ keyword: '', showDevelopment: false })} />
+      <ListQueryDialog open={queryOpen} dialogId="users-query" title="查询用户" initial={filters}
+        empty={{ keyword: '', showDevelopment: false }} onClose={() => setQueryOpen(false)} onApply={setFilters}>
+        {(draft, setDraft) => <>
+          <label className="col-span-full flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">账号或姓名</span>
+            <Input className="h-9" placeholder="搜索账号或姓名" value={draft.keyword}
+              onChange={event => setDraft({ ...draft, keyword: event.target.value })} />
           </label>
-        )}
-      </FilterCard>
+          {operatorRoleId === 1 && (
+            <label className="flex items-center gap-2 text-sm text-foreground">
+              <input type="checkbox" checked={draft.showDevelopment} className="size-4 accent-primary"
+                onChange={event => setDraft({ ...draft, showDevelopment: event.target.checked })} />
+              显示开发账号
+            </label>
+          )}
+        </>}
+      </ListQueryDialog>
 
       {isError ? (
         <QueryErrorState error={error} onRetry={refetch} />
@@ -182,7 +175,7 @@ export default function UsersPage() {
             data={data?.list ?? []}
             loading={isLoading}
             rowKey="id"
-            virtualized
+            virtualized fluid scrollLabel="用户表格" columnStorageKey="users:v1"
             preserveFocus
             retainFocusedRow={formOpen || resetOpen || !!deleteTarget || !!scopeTarget}
           />

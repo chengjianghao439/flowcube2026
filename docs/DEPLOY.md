@@ -54,7 +54,7 @@ Compose 只向 backend 注入以下模型变量，不能传给 Vite 构建或写
 - **Caddy 模板**：`docker/Caddyfile`（含部署说明）。换服务器时按模板填真实域名/公网 IP/内网 IP，写入服务器 `/etc/caddy/Caddyfile` 后 `systemctl reload caddy`。
 - **前端容器端口**：必须映射 `127.0.0.1:8080:80`，让出宿主机 80 给 Caddy 做 ACME 验证（见 `docker-compose.yml`）。**不要改回 80**，否则 Caddy 证书自动续期会失败。
 - **客户端必须验证服务端证书身份**：桌面端已移除按 IP 放行任意证书的过渡逻辑；旧模板的 IP 自签站点不能作为可信更新源。恢复证书故障应修复域名/证书链，不能禁用证书校验。
-- **`.env` 生产项**（服务器 `/opt/flowcube/.env`）：`APP_PUBLIC_URL=https://jixuflow.com`（桌面更新链）、`TRUST_PROXY=1`。部署支持来源列表的新后端后，可设 `CORS_ORIGIN=https://jixuflow.com,https://localhost`（Web 与当前内置 Android PDA）、`CORS_ALLOW_NULL_ORIGIN=1`（Electron file://）、`CORS_REFLECT=0`；旧版 v0.9.2 不支持多来源和字符串 null，不能提前切换配置。来源列表是精确匹配，不允许其他协议、端口或子域；null 来源无法区分不同本地文件，业务鉴权仍不可省略。实际设备 Origin 需在客户端验收时确认。
+- **`.env` 生产项**（服务器 `/opt/flowcube/.env`）：`APP_PUBLIC_URL=https://jixuflow.com`（桌面更新链）、`TRUST_PROXY=1`。基础 Compose 从环境读取精确来源列表，例如 `CORS_ORIGIN=https://jixuflow.com,https://localhost`，`CORS_REFLECT=0`。基础配置仅在显式启用 `CORS_ALLOW_NULL_ORIGIN=1` 时接纳 Electron file 页面发送的 null 来源。叠加 `docker-compose.prod.yml` 时该开关固定为 0，服务器 .env 无法覆盖。部署前按实际 Compose 组合核对最终环境，并用目标桌面端与 PDA 各验证一次 API。
 - **CI 的 erp_origin**：由 `scripts/read-deploy-config.js` 读 `deploy/production.local.json`，发布后健康检查/页面烟雾自动走域名。
 
 ## 发布原则
@@ -327,7 +327,7 @@ node backend/scripts/check-error-tracking.js --send-test # 显式发送无业务
 
 浏览器、桌面、PDA 发布及服务器诊断工作流现在要求仓库 Actions 变量 `FLOWCUBE_SSH_KNOWN_HOSTS`，内容是通过既有可信连接或服务器控制台等独立渠道核对的 known_hosts 公钥行（非22端口使用 `[host]:port`）。不自动采信 ssh-keyscan，也不提供 accept-new 回退；未配置时任务在联网部署前失败。v0.11.0 发布准备中，已通过 2026-09-19 保存的本机主机键建立严格校验连接，并与服务器本地 ED25519 公钥指纹一致后设置仓库变量；主机键轮换仍须重新核对。
 
-生产 CORS 必须在启动前迁移到明确来源列表，禁用 `CORS_REFLECT`、移除 `*`，Electron 仅通过 `CORS_ALLOW_NULL_ORIGIN` 单独放行。v0.11.0 发布准备中已只读核查布尔状态，并在服务器保留仅服务器可读的原配置备份后设置 Web `https://jixuflow.com`、当前内置 PDA `https://localhost`、桌面 `null` 来源；未回显其他生产配置。实际 Android 设备来源和联网能力仍需安装验收。
+生产 CORS 必须在启动前迁移到明确来源列表，禁用 `CORS_REFLECT`、移除 `*`，启用生产覆盖文件后会拒绝 null 来源；仅基础 Compose 可通过 `CORS_ALLOW_NULL_ORIGIN` 单独放行。v0.11.0 发布准备中已只读核查布尔状态，并在服务器保留仅服务器可读的原配置备份后设置 Web `https://jixuflow.com`、当前内置 PDA `https://localhost`、桌面 `null` 来源；未回显其他生产配置。实际 Android 设备来源和联网能力仍需安装验收。
 
 ## 迁移前本次备份门禁（A37）
 

@@ -2,6 +2,7 @@ const { pool } = require('../../config/db')
 const { assertBoundWarehouseInScope } = require('../../utils/warehouseScope')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
+const { CONTAINER_STATUS } = require('../../engine/containerEngine')
 const { resolvePrinterForJob, normalizeJobType } = require('./print-dispatch')
 const { recordPrintSuccess, recordPrintFailure } = require('./printer-health')
 const { appendInboundPrintEventByJob } = require('./print-jobs.helpers')
@@ -11,6 +12,7 @@ const { requireClientIdentity } = require('../printers/print-client-auth')
 const {
   STATUS,
   MAX_RETRY,
+  CONTAINER_VOID_MESSAGE,
   ttlMinutes,
   parsePriority,
 } = require('./print-jobs.status')
@@ -367,17 +369,48 @@ async function fail(id, { ackToken, errorMessage } = {}, scopeWarehouseIds = nul
 }
 
 async function retry(id, scopeWarehouseIds = null) {
-  await findById(id, scopeWarehouseIds)
-  const [ur] = await pool.query(
-    `UPDATE print_jobs
-     SET status=?, retry_count=0, error_message=NULL, ack_token=NULL, dispatched_at=NULL, expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE)
-     WHERE id=? AND status=?`,
-    [STATUS.PENDING, ttlMinutes(), id, STATUS.FAILED],
-  )
-  if (!ur.affectedRows) {
-    throw new AppError('打印任务状态已变化，无法重试', 409, 'PRINT_JOB_STATE_CONFLICT')
-  }
-  return findById(id)
+  const conn = await pool.getConnection()
+  try {
+    // 撤回顺序为容器→打印任务。事务外只定位来源，持锁后复核归属和可打印状态。
+    const [[ref]] = await conn.query('SELECT ref_type,ref_id,warehouse_id FROM print_jobs WHERE id=?', [id])
+    if (!ref) throw new AppError('打印任务不存在', 404, 'PRINT_JOB_NOT_FOUND')
+    assertBoundWarehouseInScope(scopeWarehouseIds, ref.warehouse_id, '打印任务')
+    await conn.beginTransaction()
+    let source
+    if (ref.ref_type === 'inventory_container') {
+      ;[[source]] = await conn.query(
+        'SELECT id,status,warehouse_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL FOR SHARE', [ref.ref_id],
+      )
+    }
+    const [[job]] = await conn.query(
+      'SELECT ref_type,ref_id,warehouse_id,status,error_message,printer_id,content FROM print_jobs WHERE id=? FOR UPDATE', [id],
+    )
+    if (!job) throw new AppError('打印任务不存在', 404, 'PRINT_JOB_NOT_FOUND')
+    assertBoundWarehouseInScope(scopeWarehouseIds, job.warehouse_id, '打印任务')
+    if (job.status !== STATUS.FAILED || job.ref_type !== ref.ref_type || job.ref_id !== ref.ref_id) {
+      throw new AppError('打印任务状态或来源已变化，无法重试', 409, 'PRINT_JOB_STATE_CONFLICT')
+    }
+    if (source) assertBoundWarehouseInScope(scopeWarehouseIds, source.warehouse_id, '库存条码')
+    if (job.error_message === CONTAINER_VOID_MESSAGE || (ref.ref_type === 'inventory_container' &&
+        (!source || Number(source.status) === CONTAINER_STATUS.VOID))) {
+      throw new AppError('原库存条码已作废或删除，无法重试', 409, 'PRINT_BARCODE_CONTAINER_VOID')
+    }
+    if (!job.printer_id || !String(job.content || '').trim()) {
+      throw new AppError('缺少打印机或打印内容，请从原单据重新补打', 409, 'PRINT_JOB_UNPRINTABLE')
+    }
+    await conn.query(
+      `UPDATE print_jobs SET status=?, retry_count=0, error_message=NULL, ack_token=NULL, dispatched_at=NULL,
+       expires_at=DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id=? AND status=?`,
+      [STATUS.PENDING, ttlMinutes(), id, STATUS.FAILED],
+    )
+    const result = await findById(id, scopeWarehouseIds, conn)
+    await conn.commit()
+    return result
+  } catch (error) {
+    await conn.rollback()
+    if (error.code === 'ER_DUP_ENTRY') throw new AppError('已有相同来源的有效打印任务，请核对打印记录', 409, 'PRINT_JOB_STATE_CONFLICT')
+    throw error
+  } finally { conn.release() }
 }
 
 module.exports = {

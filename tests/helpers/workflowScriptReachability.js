@@ -49,6 +49,13 @@ function workflowScriptReachability({ scripts, workflow, ownedRunner }) {
     if (commands.has(`npm run ${name}`)) return true
     if (name.startsWith('smoke:') && matrixSuites.has(name.slice('smoke:'.length))) return true
     // This explicit mapping keeps fixture writes behind the owned runner.
+    if (['smoke:purchase-repair', 'smoke:legacy-receivable-repair'].includes(name)) {
+      const branches = ownedRunner.split('\nelse\n')
+      const repair = branches.at(-1).split('\nfi\n')[0]
+      return commands.has('npm run repair:smoke-ephemeral')
+        && scripts['repair:smoke-ephemeral'] === 'bash scripts/repair-smoke-ephemeral.sh'
+        && repair.split('\n').some(line => line.trim() === 'run_smoke ' + name)
+    }
     const mode = ownedModes[name]
     if (mode) {
       const dispatcher = `smoke:${mode}-owned`

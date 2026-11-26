@@ -52,6 +52,6 @@ test('同时展示晚于需求与未确认数量，有日期无风险也不承�
 
 test('无历史快照时明确缺少依据，不合成生成时数值', () => {
   act(() => root.render(<ProcurementSupplyExplanation supply={supply} snapshot={null} />))
-  expect(host.textContent).toContain('没有保存生成时的需求数据')
+  expect(host.textContent).toContain('缺少生成时的完整需求与覆盖数据')
   expect(host.querySelector('table')).toBeNull()
 })

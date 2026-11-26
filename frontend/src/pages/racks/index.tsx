@@ -23,7 +23,7 @@ import { RACK_STATUS_OPTIONS } from '@/types/racks'
 import { getLocalPrintEnvironmentKind } from '@/lib/desktopLocalPrint'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
 import { downloadExport } from '@/lib/exportDownload'
-import { AppliedFilters } from '@/pages/warehouse-structure/AppliedFilters'
+import { QueryChips } from '@/components/shared/QueryChips'
 import RackQueryDialog, { type RackQueryValues } from './RackQueryDialog'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 
@@ -101,7 +101,7 @@ export default function RacksPage() {
       else toast.success(res.message)
     },
     onError: (e: unknown) =>
-      toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '扫描校验失败'),
+      toast.error(e instanceof Error && e.message ? e.message : '扫描校验失败'),
   })
 
   const printMut = useMutation({
@@ -149,7 +149,7 @@ export default function RacksPage() {
       <BaseCrudPage<Rack>
         title="货架管理"
       description="维护货架位置、条码与标签。"
-        notice={localPrintEnv === 'ok' ? '货架唯一条码（H）与标签打印' : localPrintEnv === 'browser' ? '浏览器可提交打印任务。如需使用本机标签打印机，请打开极序 Flow 桌面客户端。' : '本机打印暂不可用。请退出后重新打开极序 Flow；若仍无法打印，请联系管理员。'}
+        notice={localPrintEnv === 'ok' ? '货架唯一条码（H）与标签打印。' : localPrintEnv === 'browser' ? '浏览器可提交打印任务。如需使用本机标签打印机，请打开极序 Flow 桌面客户端。' : '本机打印暂不可用。请退出后重新打开极序 Flow；若仍无法打印，请联系管理员。'}
         canCreate={can(PERMISSIONS.RACK_CREATE)}
       canEdit={can(PERMISSIONS.RACK_UPDATE)}
       canDelete={can(PERMISSIONS.RACK_DELETE)}
@@ -174,11 +174,11 @@ export default function RacksPage() {
         canSubmit={(editing) => !!form.code && (!!editing || !!form.warehouseId)}
         headerActions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/racks').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/racks').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
-        renderToolbar={chips.length > 0 ? <AppliedFilters chips={chips} onClear={clearAll} /> : null}
+        renderToolbar={<QueryChips chips={chips.map(({ key, label, onRemove }) => ({ key, text: label, onClear: onRemove }))} onClearAll={clearAll} />}
         renderActions={(row, helpers) => (
           <TableActionsMenu
             primaryLabel="打印"
@@ -355,7 +355,7 @@ export default function RacksPage() {
               maxPositions: form.maxPositions,
               status:       form.status,
               remark:       form.remark,
-            })
+            }, { skipGlobalError: true })
           }
           return createRackApi({
             warehouseId:  form.warehouseId,
@@ -365,7 +365,7 @@ export default function RacksPage() {
             maxLevels:    form.maxLevels,
             maxPositions: form.maxPositions,
             remark:       form.remark       || undefined,
-          })
+          }, { skipGlobalError: true })
         }}
       />
       <RackQueryDialog

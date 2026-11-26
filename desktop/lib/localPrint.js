@@ -6,7 +6,7 @@
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
-const { execFile, execFileSync } = require('child_process')
+const { execFile } = require('child_process')
 
 function powershellExe() {
   const root = process.env.SystemRoot || process.env.windir
@@ -22,18 +22,25 @@ function stripUtf8Bom(s) {
   return t
 }
 
-async function printZplViaLp(queue, content) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fc_desktop_zpl_'))
+const RAW_TIMEOUT_MS = 30_000
+
+async function withLabelFile(content, submit) {
+  const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'fc_desktop_zpl_'))
   try {
-    fs.chmodSync(tmpDir, 0o700)
-    const tmpFile = path.join(tmpDir, 'label.zpl')
-    fs.writeFileSync(tmpFile, content, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
-    await new Promise((resolve, reject) => {
-      execFile('lp', ['-d', queue, '-o', 'raw', tmpFile], err => err ? reject(err) : resolve())
-    })
+    await fs.promises.chmod(dir, 0o700)
+    const file = path.join(dir, 'label.zpl')
+    await fs.promises.writeFile(file, content, { flag: 'wx', mode: 0o600 })
+    await submit(file)
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+    await fs.promises.rm(dir, { recursive: true, force: true })
   }
+}
+
+async function printZplViaLp(queue, content) {
+  await withLabelFile(content, file => new Promise((resolve, reject) => {
+    execFile('lp', ['-d', queue, '-o', 'raw', file], { timeout: RAW_TIMEOUT_MS },
+      error => error ? reject(error) : resolve())
+  }))
 }
 
 /** 将 stderr/stdout 转为可读字符串（Windows 上 PowerShell 常为系统代码页，避免全乱码） */
@@ -51,73 +58,22 @@ function bufferForWindowsRaw(stringContent) {
   return Buffer.from(stringContent, 'utf8')
 }
 
-function printZplWindowsRaw(printerName, payload) {
-  const name = String(printerName || '').trim()
-  if (!name) throw new Error('打印机名称为空')
-  const buf = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload ?? ''), 'utf8')
-  const tmpZpl = path.join(
-    os.tmpdir(),
-    `fc_zpl_${Date.now()}_${Math.random().toString(36).slice(2, 10)}.zpl`,
-  )
-  fs.writeFileSync(tmpZpl, buf, { flag: 'w' })
-
-  const bundled = path.join(__dirname, 'print-zpl-raw.ps1')
-  let tmpPs1 = null
-  try {
-    if (!fs.existsSync(bundled)) {
-      throw new Error('缺少内置 RAW 打印脚本 print-zpl-raw.ps1（请重新安装 FlowCube 桌面端）')
-    }
-    const scriptText = fs.readFileSync(bundled, 'utf8')
-    tmpPs1 = path.join(os.tmpdir(), `fc_raw_${Date.now()}.ps1`)
-    fs.writeFileSync(tmpPs1, scriptText, 'utf8')
-
-    try {
-      execFileSync(
-        powershellExe(),
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-ExecutionPolicy',
-          'Bypass',
-          '-File',
-          tmpPs1,
-          '-ZplPath',
-          tmpZpl,
-        ],
-        {
-          maxBuffer: 1024 * 1024,
-          windowsHide: true,
-          encoding: 'buffer',
-          env: {
-            ...process.env,
-            /** UTF-16 进程环境块，比命令行参数更可靠传递中文打印机名 */
-            FC_PRINTER_NAME: name,
-          },
-        },
-      )
-    } catch (e) {
-      const stderr = decodeWindowsProcessOutput(e?.stderr)
-      const stdout = decodeWindowsProcessOutput(e?.stdout)
-      const combined = (stderr || stdout || e?.message || '').trim()
-      throw new Error(
-        combined ||
-          'Windows RAW 打印失败。请核对打印机名称、驱动是否支持 RAW（推荐 ZDesigner），并查看主进程日志。',
-      )
-    }
-  } finally {
-    try {
-      fs.unlinkSync(tmpZpl)
-    } catch {
-      /* 忽略 */
-    }
-    if (tmpPs1) {
-      try {
-        fs.unlinkSync(tmpPs1)
-      } catch {
-        /* 忽略 */
-      }
-    }
-  }
+async function printZplWindowsRaw(printerName, payload) {
+  const directory = __dirname.replace(/([\\/])app\.asar(?=[\\/])/, '$1app.asar.unpacked')
+  const script = path.join(directory, 'print-zpl-raw.ps1')
+  await fs.promises.access(script, fs.constants.R_OK)
+  await withLabelFile(payload, file => new Promise((resolve, reject) => {
+    execFile(powershellExe(), [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script, '-ZplPath', file,
+    ], {
+      timeout: RAW_TIMEOUT_MS, maxBuffer: 1024 * 1024, windowsHide: true, encoding: 'buffer',
+      env: { ...process.env, FC_PRINTER_NAME: printerName },
+    }, (error, stdout, stderr) => {
+      if (!error) return resolve()
+      const detail = decodeWindowsProcessOutput(stderr) || decodeWindowsProcessOutput(stdout) || error.message
+      reject(new Error(detail.trim() || 'Windows RAW 打印失败，请核对驱动和打印机队列'))
+    })
+  }))
 }
 
 /**
@@ -144,7 +100,7 @@ async function printZpl(opts) {
     /* 忽略 */
   }
   if (platform === 'win32') {
-    printZplWindowsRaw(printerName, winPayload || Buffer.from(content, 'utf8'))
+    await printZplWindowsRaw(printerName, winPayload || Buffer.from(content, 'utf8'))
     return
   }
   try {

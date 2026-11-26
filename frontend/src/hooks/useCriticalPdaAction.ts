@@ -26,8 +26,16 @@ async function bodyFingerprint(body: unknown) {
 }
 const requestIdentity = (record: PendingRequestRecord) => ({ action: record.action, requestAction: record.requestAction, taskId: record.metadata?.taskId ?? null, checkId: record.metadata?.checkId ?? null, itemId: record.metadata?.itemId ?? null, body: record.metadata?.requestBody })
 const resource = (record: PendingRequestRecord) => {
+  const adjustment = /^warehouse\.adjustment-(void|return)\.([1-9]\d*)$/.exec(record.action)
+  if (adjustment) {
+    const isReturn = adjustment[1] === 'return'
+    const id = Number(isReturn ? record.metadata?.returnId : record.metadata?.voidId)
+    return { type: isReturn ? 'adjustment_container_return' : 'adjustment_package_void', id, kind: 'adjustment' }
+  }
   if (record.action === 'package.create') return { type: 'warehouse_task', id: Number(record.metadata?.taskId), kind: 'packageCreate' }
   const receive = /^inbound\.receive\.([1-9]\d*)$/.exec(record.action)
+  const returnTask = /^return\.(?:receive|check|putaway)\.([1-9]\d*)$/.exec(record.action)
+  if (returnTask) return { type: 'return_task', id: Number(returnTask[1]), kind: 'returnTask' }
   const count = /^stockcheck\.scan\.([1-9]\d*)$/.exec(record.action)
   return receive ? { type: 'inbound_task', id: Number(receive[1]), kind: 'receive' } : count ? { type: 'stockcheck', id: Number(count[1]), kind: 'stockcheck' } : null
 }
@@ -35,6 +43,10 @@ function assertReceiptIdentity(record: PendingRequestRecord, receipt: OperationR
   const expected = resource(record)
   if (!expected) return
   if (receipt.resourceType != null && receipt.resourceType !== expected.type || receipt.resourceId != null && receipt.resourceId !== expected.id) throw Error('返回结果与原单据不一致，请保留原记录并核对')
+  if (receipt.status === 'success' && expected.kind === 'returnTask') {
+    const data = receipt.data as { taskId?: unknown } | null
+    if (data?.taskId !== expected.id) throw Error('返回结果与原退货任务不一致，请保留原记录并核对')
+  }
   if (receipt.status === 'success' && expected.kind === 'stockcheck' && (record.endpoint || record.metadata?.itemId)) {
     const data = receipt.data as { itemId?: unknown } | null
     if (data?.itemId !== record.metadata?.itemId) throw Error('返回结果与原盘点商品不一致，请保留原记录并核对')
@@ -75,21 +87,33 @@ export function useCriticalPdaAction<T>({ action, requestAction, label, onConfir
   const networkStatus = useNetworkStatus()
   const { records, claimPending, removePending, discardUnclaimed, storageError, isPendingCurrent } = usePendingRequests()
   const matches = useMemo(() => records.filter(item => item.action === action), [records, action])
-  const observed = useRef<{ record: PendingRequestRecord; userId: number | null } | null>(null)
+  const observed = useRef(new Map<string, PendingRequestRecord>())
   const renderOwner = captureInboundEditOwner()
-  if (matches[0]) observed.current = { record: matches[0], userId: renderOwner.userId }
-  const lostRecord = !matches[0] && observed.current?.userId === renderOwner.userId && observed.current.record.endpoint === renderOwner.baseURL ? observed.current.record : null
+  const ownerKey = JSON.stringify([renderOwner.userId, renderOwner.baseURL, action])
+  if (matches[0]?.endpoint) observed.current.set(ownerKey, matches[0])
+  const lostRecord = matches[0] ? null : observed.current.get(ownerKey) ?? null
   const pendingRecord = matches[0] ?? lostRecord
   const [confirming, setConfirming] = useState(false), [phase, setPhase] = useState<CriticalPdaActionPhase>('idle')
   const [phaseMessage, setPhaseMessage] = useState<string | null>(null), [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null)
-  const autoConfirmRef = useRef<string | null>(null), flight = useRef(false)
+  const activeView = useRef({ ownerKey, epoch: renderOwner.epoch, busy: false, autoConfirmed: '' })
+  if (activeView.current.ownerKey !== ownerKey || activeView.current.epoch !== renderOwner.epoch) {
+    activeView.current = { ownerKey, epoch: renderOwner.epoch, busy: false, autoConfirmed: '' }
+    setConfirming(false)
+    setPhase('idle')
+    setPhaseMessage(null)
+    setLastErrorMessage(null)
+  }
+  const view = activeView.current
+  const lastUnverifiedQuery = useRef<string | null>(null)
   const statusAction = requestAction || action
   const capture = useCallback((record?: PendingRequestRecord) => {
     const owner = captureInboundEditOwner(), visible = visibility.current.epoch
     if (record?.endpoint) {
       if (record.action !== action || record.requestAction !== statusAction) throw Error('原操作的单据定位不一致，请保留记录并核对')
       const expected = resource(record)
+      if (expected?.kind === 'adjustment' && (!Number.isSafeInteger(expected.id) || expected.id <= 0)) throw Error('原改单明细不完整，请人工核对')
       if (expected?.kind === 'receive' && record.metadata?.taskId !== expected.id) throw Error('原收货单定位不一致，请保留记录并核对')
+      if (expected?.kind === 'returnTask' && record.metadata?.taskId != null && record.metadata.taskId !== expected.id) throw Error('原退货任务定位不一致，请保留记录并核对')
       if (expected?.kind === 'stockcheck' && (record.metadata?.checkId !== expected.id || !Number.isSafeInteger(record.metadata?.itemId) || Number(record.metadata?.itemId) <= 0)) throw Error('原盘点单或商品定位不一致，请保留记录并核对')
     }
     if (record?.endpoint && (record.endpoint !== owner.baseURL || !sameDevice(record))) throw Error('服务器或设备已变化，请回原服务器和设备确认上次结果')
@@ -97,17 +121,22 @@ export function useCriticalPdaAction<T>({ action, requestAction, label, onConfir
     const current = () => mounted.current && visibility.current.active && visibility.current.epoch === visible && inboundEditOwnerCurrent(owner) && (!record || sameDevice(record) && (!isPendingCurrent || isPendingCurrent(record)))
     return { current, config: inboundEditConfig(owner), owner }
   }, [action, isPendingCurrent, statusAction])
-  const receiptAction = useCallback((record: PendingRequestRecord) => /^transfer\.scan(?:Out|In)\.[1-9]\d*$/.test(statusAction)
-    ? statusAction : record.unverifiedOwner ? requestAction || record.requestAction || statusAction : record.requestAction || statusAction, [requestAction, statusAction])
+  const receiptAction = useCallback((record: PendingRequestRecord) => {
+    const expected = resource(record)
+    if (expected?.kind === 'adjustment') return action.replace(/\.\d+$/, '.' + expected.id)
+    if (expected?.kind === 'returnTask') return record.action
+    if (/^transfer\.scan(?:Out|In)\.[1-9]\d*$/.test(statusAction)) return statusAction
+    return (record.unverifiedOwner && requestAction) || record.requestAction || statusAction
+  }, [action, requestAction, statusAction])
   const finish = useCallback(async (record: PendingRequestRecord, status: 'success' | 'failed', data?: unknown, message?: string) => {
     if (record.unverifiedOwner) discardUnclaimed(action, record.requestKey)
     assertReceiptIdentity(record, { status, data, message: '' })
     if (await removePending(action, record.requestKey, status, data, record) === false) return
-    observed.current = null
+    observed.current.delete(ownerKey)
     setPhase(status === 'success' ? 'idle' : 'failed'); setPhaseMessage(null)
     setLastErrorMessage(status === 'failed' ? message || `${record.label}未执行，可检查原输入后重新提交。` : null)
     if (status === 'success') await onConfirmed?.(data as T, { recovered: true, requestKey: record.requestKey })
-  }, [action, discardUnclaimed, onConfirmed, removePending])
+  }, [action, discardUnclaimed, onConfirmed, ownerKey, removePending])
   useEffect(() => {
     if (!lostRecord || !active || renderOwner.userId == null || !sameDevice(lostRecord)) return
     try {
@@ -115,12 +144,12 @@ export function useCriticalPdaAction<T>({ action, requestAction, label, onConfir
       if (!terminal) { setPhase('pending'); setPhaseMessage('原记录已变化但结果尚未确认，请保留原内容并人工核对。'); return }
       if (terminal.compact) { setPhase('pending'); setPhaseMessage('原操作已确认，请查询原结果详情；暂勿重新提交。'); return }
       assertReceiptIdentity(lostRecord, { status: terminal.status, data: terminal.data, message: '' })
-      observed.current = null
+      observed.current.delete(ownerKey)
       setPhase(terminal.status === 'success' ? 'idle' : 'failed'); setPhaseMessage(null)
       if (terminal.status === 'success') void onConfirmed?.(terminal.data as T, { recovered: true, requestKey: lostRecord.requestKey })
       else setLastErrorMessage('已确认原操作未执行，可核对原输入后重新提交。')
     } catch (e) { setPhase('pending'); setPhaseMessage((e as Error).message) }
-  }, [active, lostRecord, onConfirmed, renderOwner])
+  }, [active, lostRecord, onConfirmed, ownerKey, renderOwner])
   const query = useCallback(async (record: PendingRequestRecord, captured: ReturnType<typeof capture>) => {
     if (record.endpoint && captured.owner.userId) await matchingCompactTerminal(criticalTerminalKey(captured.owner.userId, record.requestKey), record)
     if (record.requestFingerprint && await bodyFingerprint(requestIdentity(record)) !== record.requestFingerprint) throw Error('原请求正文或单据定位已变化，请保留记录并人工核对')
@@ -136,23 +165,26 @@ export function useCriticalPdaAction<T>({ action, requestAction, label, onConfir
     return status
   }, [finish, receiptAction])
   const confirmPending = useCallback(async (): Promise<CriticalPdaConfirmResult | null> => {
-    if (!visibility.current.active || !pendingRecord || networkStatus !== 'online' || flight.current || matches.length > 1) return null
+    if (!visibility.current.active || !pendingRecord || networkStatus !== 'online' || view.busy || matches.length > 1) return null
     let captured: ReturnType<typeof capture>
     try { captured = capture(pendingRecord) } catch (e) { setPhaseMessage((e as Error).message); return null }
-    flight.current = true; setConfirming(true); setPhase('confirming'); setLastErrorMessage(null)
+    view.busy = true; setConfirming(true); setPhase('confirming'); setLastErrorMessage(null)
     setPhaseMessage(`正在确认${pendingRecord.label}的结果，请勿重复提交。`)
     try { return await query(pendingRecord, captured) }
     catch (e) {
       if (captured.current()) { setPhase('pending'); setPhaseMessage(`暂时无法确认${pendingRecord.label}结果。${(e as Error).message || '请稍后再次确认。'}`) }
       return null
-    } finally { flight.current = false; if (mounted.current) setConfirming(false) }
-  }, [capture, matches.length, networkStatus, pendingRecord, query])
+    } finally { view.busy = false; if (mounted.current && activeView.current === view) setConfirming(false) }
+  }, [capture, matches.length, networkStatus, pendingRecord, query, view])
   useEffect(() => {
-    if (!active || networkStatus !== 'online' || !pendingRecord || phase === 'submitting' || flight.current) return
-    if (autoConfirmRef.current === pendingRecord.requestKey) return
-    autoConfirmRef.current = pendingRecord.requestKey
+    if (!active || networkStatus !== 'online' || !pendingRecord || phase === 'submitting' || view.busy) return
+    if (pendingRecord.unverifiedOwner) {
+      if (lastUnverifiedQuery.current === pendingRecord.requestKey) return
+      lastUnverifiedQuery.current = pendingRecord.requestKey
+    } else if (view.autoConfirmed === pendingRecord.requestKey) return
+    view.autoConfirmed = pendingRecord.requestKey
     void confirmPending()
-  }, [active, networkStatus, pendingRecord, phase, confirmPending])
+  }, [active, networkStatus, pendingRecord, phase, confirmPending, view])
   const blockedReason = useMemo(() => {
     if (storageError) return '原作业记录读取失败，请保留记录并核对，暂勿提交。'
     if (matches.length > 1) return '存在多笔待核对原操作，请保留全部记录并人工核对。'
@@ -166,11 +198,11 @@ export function useCriticalPdaAction<T>({ action, requestAction, label, onConfir
   ): Promise<{ kind: 'success'; data: T } | { kind: 'pending'; requestKey: string }> => {
     if (!visibility.current.active) throw Error('请回到原作业页面再提交')
     if (networkStatus !== 'online') throw Error('网络已断开，关键操作不可提交')
-    if (pendingRecord || flight.current) throw Error(`${label}结果待确认，请先确认后再重试`)
+    if (pendingRecord || view.busy) throw Error(`${label}结果待确认，请先确认后再重试`)
     const initial = capture(), claimId = `${initial.owner.userId}:${initial.owner.baseURL}:${action}`
     if (activeClaims.has(claimId)) throw Error(`${label}结果待确认，请先确认后再重试`)
     if (!navigator.locks?.request) throw Error('此客户端无法安全保存原操作，请使用支持本地恢复的客户端')
-    activeClaims.add(claimId); flight.current = true
+    activeClaims.add(claimId); view.busy = true
     try { return await navigator.locks.request(`flowcube-pda:${claimId}`, { ifAvailable: true }, async lock => {
       if (!lock) throw Error('另一窗口正在提交原操作，请先等待并查询原结果')
       if (!initial.current()) throw Error('登录状态或服务器已变化，请重新核对原操作')
@@ -194,22 +226,22 @@ export function useCriticalPdaAction<T>({ action, requestAction, label, onConfir
         if (!captured.current()) return { kind: 'pending' as const, requestKey }
         assertReceiptIdentity(record, { status: 'success', data, message: '' })
         if (await removePending(action, requestKey, 'success', data, record) === false) return { kind: 'pending' as const, requestKey }
-        observed.current = null; setPhase('idle'); setPhaseMessage(null)
+        observed.current.delete(ownerKey); setPhase('idle'); setPhaseMessage(null)
         await onConfirmed?.(data, { recovered: false, requestKey })
         return { kind: 'success' as const, data }
       } catch (e) {
         if (!captured.current()) return { kind: 'pending' as const, requestKey }
         if (isUncertain(e)) { setPhase('pending'); setPhaseMessage(`${label}结果待确认，请先确认原结果，暂勿重复提交。`); return { kind: 'pending' as const, requestKey } }
         if (await removePending(action, requestKey, 'failed', undefined, record) === false) return { kind: 'pending' as const, requestKey }
-        observed.current = null; setPhase('failed'); setPhaseMessage(null); setLastErrorMessage((e as Error).message || `${label}未执行，请检查后重试。`)
+        observed.current.delete(ownerKey); setPhase('failed'); setPhaseMessage(null); setLastErrorMessage((e as Error).message || `${label}未执行，请检查后重试。`)
         throw e
       }
-    }) } finally { flight.current = false; activeClaims.delete(claimId) }
-  }, [action, capture, claimPending, label, networkStatus, onConfirmed, pendingRecord, removePending, statusAction])
+    }) } finally { view.busy = false; activeClaims.delete(claimId) }
+  }, [action, capture, claimPending, label, networkStatus, onConfirmed, ownerKey, pendingRecord, removePending, statusAction, view])
   const retryPending = useCallback(async () => {
-    if (!pendingRecord || !retryExecutor || pendingRecord.unverifiedOwner || !pendingRecord.endpoint || !pendingRecord.requestFingerprint || flight.current || networkStatus !== 'online' || matches.length > 1) throw Error('原操作尚不能安全重试，请先核对原结果')
+    if (!pendingRecord || !retryExecutor || pendingRecord.unverifiedOwner || !pendingRecord.endpoint || !pendingRecord.requestFingerprint || view.busy || networkStatus !== 'online' || matches.length > 1) throw Error('原操作尚不能安全重试，请先核对原结果')
     const captured = capture(pendingRecord)
-    flight.current = true; setConfirming(true)
+    view.busy = true; setConfirming(true)
     try {
       const receipt = await query(pendingRecord, captured)
       if (receipt?.status !== 'not_found') return receipt
@@ -228,8 +260,8 @@ export function useCriticalPdaAction<T>({ action, requestAction, label, onConfir
         if (captured.current()) { setPhase('pending'); setPhaseMessage(`原操作仍待确认。${(e as Error).message || '请继续查询原结果。'}`) }
       }
       return null
-    } finally { flight.current = false; if (mounted.current) setConfirming(false) }
-  }, [capture, finish, matches.length, networkStatus, pendingRecord, query, retryExecutor])
+    } finally { view.busy = false; if (mounted.current && activeView.current === view) setConfirming(false) }
+  }, [capture, finish, matches.length, networkStatus, pendingRecord, query, retryExecutor, view])
   return { networkStatus, pendingRecord, confirming, phase, phaseMessage, lastErrorMessage, blockedReason, submitBlocked: Boolean(blockedReason), run, confirmPending, retryPending,
     canRetry: !!retryExecutor && !!pendingRecord?.endpoint && !!pendingRecord.requestFingerprint && !pendingRecord.unverifiedOwner && sameDevice(pendingRecord),
     clearPending: () => {

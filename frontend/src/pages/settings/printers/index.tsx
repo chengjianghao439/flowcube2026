@@ -1,3 +1,6 @@
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { useQuery } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import { Check, Monitor } from 'lucide-react'
 import { payloadClient as apiClient } from '@/api/client'
@@ -12,6 +15,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
  * 添加打印机：仅在极序 Flow 桌面端从本机系统已安装列表中选择（与系统「打印机」设置一致）。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -81,48 +85,43 @@ interface BindDialogProps {
 function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDialogProps) {
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="fc-form-dialog sm:max-w-2xl">
         <DialogHeader description={<>{<>
           {printer.name} <span className="text-doc-code">({printer.code})</span>
         </>} {<>
           与添加打印机时的「设备类型」不同：此处指定各业务场景使用的打印机。已绑定本项时再次点击可解除绑定。
         </>}</>}><DialogTitle>绑定业务用途</DialogTitle></DialogHeader>
-
-
-        <div className="grid grid-cols-2 gap-3">
-          {BIND_TYPES.map(t => {
-            const isBound = bindings[t.key]?.printer_code === printer.code
-            const currentCode = bindings[t.key]?.printer_code
-            return (
-              <button
-                key={t.key}
-                type="button"
-                disabled={busy}
-                aria-pressed={isBound}
-                onClick={() => onToggleBind(t.key, printer)}
-                className={[
-                  'w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:opacity-60',
-                  isBound ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border hover:bg-muted/40',
-                ].join(' ')}
-              >
-                <div className="font-medium">{t.label}</div>
-                <div className="mt-0.5 text-helper leading-snug">{t.desc}</div>
-                {currentCode && !isBound && (
-                  <div className="mt-1 text-xs text-warning-ink">当前已绑：{currentCode}</div>
-                )}
-                {isBound && <div className="mt-1 flex items-center gap-1 text-xs font-medium text-primary"><Check className="h-3.5 w-3.5 shrink-0" aria-hidden />已绑定本机 · 再点解除</div>}
-              </button>
-            )
-          })}
+        <div className="fc-form-dialog-body space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            {BIND_TYPES.map(t => {
+              const isBound = bindings[t.key]?.printer_code === printer.code
+              const currentCode = bindings[t.key]?.printer_code
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={isBound}
+                  onClick={() => onToggleBind(t.key, printer)}
+                  className={[
+                    'w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors disabled:opacity-60',
+                    isBound ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border hover:bg-muted/40',
+                  ].join(' ')}
+                >
+                  <div className="font-medium">{t.label}</div>
+                  <div className="mt-0.5 text-helper leading-snug">{t.desc}</div>
+                  {currentCode && !isBound && (
+                    <div className="mt-1 text-xs text-warning-ink">当前已绑：{currentCode}</div>
+                  )}
+                  {isBound && <div className="mt-1 flex items-center gap-1 text-xs font-medium text-primary"><Check className="h-3.5 w-3.5 shrink-0" aria-hidden />已绑定本机 · 再点解除</div>}
+                </button>
+              )
+            })}
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          className="mt-4 w-full text-muted-body hover:text-foreground disabled:opacity-60"
-        >
-          关闭
-        </button>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>关闭</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -136,7 +135,9 @@ function sourceBadgeLabel(source?: string) {
 
 export default function PrintersPage() {
   const { can } = usePermission()
-  const canManagePrinters = can(PERMISSIONS.PRINT_PRINTER_MANAGE)
+  const printerQuery = usePrinters()
+  const { data: printers = [], isLoading, isSuccess, refetch: refetchPrinters } = printerQuery
+  const canManagePrinters = can(PERMISSIONS.PRINT_PRINTER_MANAGE) && isSuccess
   const managePermissionRef = useRef(canManagePrinters)
   managePermissionRef.current = canManagePrinters
   const [showAddDialog, setShowAddDialog] = useState(false)
@@ -144,8 +145,7 @@ export default function PrintersPage() {
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
   const [selectedName, setSelectedName] = useState<string>('')
-  const [registrationWarehouses, setRegistrationWarehouses] = useState<Array<{ id: number; name: string }>>([])
-  const [warehouseId, setWarehouseId] = useState<string>('')
+  const [selectedWarehouseId, setWarehouseId] = useState<string>('')
   const [registering, setRegistering] = useState(false)
   const [addType, setAddType] = useState<1 | 2 | 3>(1)
   const [bindTarget, setBindTarget] = useState<Printer | null>(null)
@@ -156,20 +156,18 @@ export default function PrintersPage() {
   const canUseSystemPrinters =
     isDesktop && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
 
-  const { data: printers = [], isLoading, isSuccess, refetch: refetchPrinters } = usePrinters()
-  useEffect(() => {
-    if (!canUseSystemPrinters || !canManagePrinters) return
-    let active = true
-    apiClient.get<Array<{ id: number; name: string }>>('/printers/registration-warehouses').then(rows => {
-      if (!active) return
-      setRegistrationWarehouses(rows)
-      if (rows.length === 1) setWarehouseId(String(rows[0].id))
-    }).catch(() => {})
-    return () => { active = false }
-  }, [canUseSystemPrinters, canManagePrinters])
+  const warehouseQuery = useQuery({
+    queryKey: ['printers', 'registration-warehouses'],
+    queryFn: () => apiClient.get<Array<{ id: number; name: string }>>('/printers/registration-warehouses', { skipGlobalError: true }),
+    enabled: canUseSystemPrinters && canManagePrinters,
+  })
+  const registrationWarehouses = warehouseQuery.data
+  const warehouseId = registrationWarehouses?.some(row => String(row.id) === selectedWarehouseId)
+    ? selectedWarehouseId : registrationWarehouses?.length === 1 ? String(registrationWarehouses[0].id) : ''
+  const warehouseReady = warehouseQuery.isSuccess && !!warehouseId
 
   async function registerThisDesktop() {
-    if (!managePermissionRef.current) return
+    if (!managePermissionRef.current || !warehouseReady) return
     const origin = getEffectiveApiOrigin()
     const bridge = window.flowcubeDesktop
     if (!origin || !bridge?.resetPrintClientIdentity || !bridge.setPrintClientCredential || !warehouseId) { toast.error('请升级桌面端并选择本机所属仓库'); return }
@@ -196,7 +194,7 @@ export default function PrintersPage() {
   }
 
   async function associateWithThisDesktop(printer: Printer) {
-    if (!managePermissionRef.current) return
+    if (!managePermissionRef.current || !warehouseReady) return
     const origin = getEffectiveApiOrigin()
     const bridge = window.flowcubeDesktop
     if (!bridge || !origin || !warehouseId || !await bridge.getPrintClientCredential?.(origin)) { toast.error('请先选择仓库并注册本机'); return }
@@ -217,7 +215,8 @@ export default function PrintersPage() {
     [printers],
   )
 
-  const { data: bindings = {} } = usePrinterBindings()
+  const bindingQuery = usePrinterBindings()
+  const bindings = bindingQuery.data ?? {}
 
   const loadSystemPrinters = useCallback(async () => {
     if (!canUseSystemPrinters) {
@@ -271,18 +270,18 @@ export default function PrintersPage() {
   const bindBusy = bindMutation.isPending || unbindMutation.isPending
 
   function togglePrinterBinding(type: BindType, printer: Printer) {
-    if (!managePermissionRef.current) return
+    if (!managePermissionRef.current || !bindingQuery.isSuccess) return
     const row = bindings[type]
     const isBoundHere = row?.printer_code === printer.code
     if (isBoundHere) {
       unbindMutation.mutate(type, {
         onSuccess: () => toast.success(`已解除「${BIND_TYPES.find(t => t.key === type)?.label}」绑定`),
-        onError: (e: any) => toast.error(e?.response?.data?.message || '解除绑定失败'),
+        onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '解除绑定失败'),
       })
     } else {
       bindMutation.mutate({ type, printerId: printer.id }, {
         onSuccess: () => toast.success(`已绑定 ${printer.code} → ${BIND_TYPES.find(t => t.key === type)?.label}`),
-        onError: (e: any) => toast.error(e?.response?.data?.message || '绑定失败'),
+        onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '绑定失败'),
       })
     }
   }
@@ -302,7 +301,7 @@ export default function PrintersPage() {
     const aliasName = (aliasDraft[p.clientId] ?? p.clientAliasName ?? '').trim()
     aliasMutation.mutate({ clientId: p.clientId, aliasName }, {
       onSuccess: () => toast.success('设备名称已更新'),
-      onError: (e: any) => toast.error(e?.response?.data?.message || '更新设备名称失败'),
+      onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '更新设备名称失败'),
     })
   }
 
@@ -329,7 +328,7 @@ export default function PrintersPage() {
     const code = ensureUniquePrinterCode(baseCode, existingCodes)
     const description = `本机系统打印机`
     const origin = getEffectiveApiOrigin()
-    if (!warehouseId || !origin || !await window.flowcubeDesktop?.getPrintClientCredential?.(origin)) { toast.error('请先选择仓库并注册本机'); return }
+    if (!warehouseReady || !origin || !await window.flowcubeDesktop?.getPrintClientCredential?.(origin)) { toast.error('请先选择仓库并注册本机'); return }
     const clientInfo = await window.flowcubeDesktop?.getClientInfo?.().catch(() => null)
     if (!managePermissionRef.current) return
     addPrinter.mutate({
@@ -345,7 +344,7 @@ export default function PrintersPage() {
         setShowAddDialog(false)
         setSelectedName('')
       },
-      onError: (e: any) => toast.error(e?.response?.data?.message || '添加失败'),
+      onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '添加失败'),
     })
   }
 
@@ -406,8 +405,8 @@ export default function PrintersPage() {
         <div className="space-y-1">
           <div className="flex items-start gap-2 font-medium text-foreground"><Monitor className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden /><span className="min-w-0">{getDeviceName(p)}</span></div>
           {canManagePrinters && <div className="flex items-center gap-2">
-            <input
-              className="input h-8 w-32"
+            <Input
+              className="h-8 w-32"
               aria-label={`设备别名 ${getDeviceName(p)}`}
               placeholder={p.clientHostname || p.clientId}
               value={aliasDraft[p.clientId] ?? p.clientAliasName ?? ''}
@@ -422,16 +421,15 @@ export default function PrintersPage() {
     },
     {
       key: 'bindings', title: '绑定', width: 160,
-      render: (_, p) => (
-        <div>
-          {canManagePrinters && <Button size="sm" variant="outline" onClick={() => setBindTarget(p)}>绑定用途</Button>}
-          {getBoundLabels(p.code) && <div className="mt-1 text-xs text-blue-700">{getBoundLabels(p.code)}</div>}
-        </div>
-      ),
+      render: (_, p) => <span className="text-xs text-info-ink">{getBoundLabels(p.code) || '—'}</span>,
     },
     {
       key: 'id', title: '操作', width: 100,
-      render: (_, p) => <div className="space-y-2">{canManagePrinters && canUseSystemPrinters && <Button size="sm" variant="outline" disabled={registering} onClick={() => { void associateWithThisDesktop(p) }}>关联本机</Button>}{canManagePrinters && <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>删除</Button>}</div>,
+      render: (_, p) => canManagePrinters ? <TableActionsMenu primaryVariant="outline" primaryLabel="绑定用途" primaryDisabled={!bindingQuery.isSuccess} menuDisabled={false} rowLabel={p.name}
+        onPrimaryClick={() => setBindTarget(p)} items={[
+          ...(canUseSystemPrinters ? [{ label: '关联本机', disabled: registering || !warehouseReady, onClick: () => { void associateWithThisDesktop(p) } }] : []),
+          { label: '删除', destructive: true, afterMenuClose: true, onClick: () => setDeleteTarget(p) },
+        ]} /> : null,
     },
   ]
 
@@ -446,10 +444,11 @@ export default function PrintersPage() {
           {canManagePrinters && <div className="mt-3 flex items-center gap-3">
             <Select value={warehouseId} onValueChange={setWarehouseId}>
               <SelectTrigger className="w-48"><SelectValue placeholder="本机所属仓库" /></SelectTrigger>
-              <SelectContent>{registrationWarehouses.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
+              <SelectContent>{registrationWarehouses?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}</SelectContent>
             </Select>
-            <Button variant="outline" disabled={registering || !warehouseId} onClick={() => { void registerThisDesktop() }}>重新注册本机</Button>
+            <Button variant="outline" disabled={registering || !warehouseReady} onClick={() => { void registerThisDesktop() }}>重新注册本机</Button>
           </div>}
+          {warehouseQuery.isError && <QueryErrorState error={warehouseQuery.error} onRetry={warehouseQuery.refetch} title="可注册仓库加载失败" />}
           <p className="mt-2 text-helper">重新注册会撤销本机旧凭据；请将已有本机打印机逐台点击「关联本机」。已领取任务需先人工核对原打印结果。</p>
           <p className="mt-2 text-muted-body leading-relaxed">
             点击「添加打印机」选择本机已安装的设备，再绑定标签用途。打印机名称需与系统中的名称保持一致。
@@ -458,61 +457,64 @@ export default function PrintersPage() {
       ) : null}
 
       <Dialog open={showAddDialog && canManagePrinters} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{<>
               仅可选择当前操作系统中已安装的打印机（与「设置 → 打印机」列表一致）。浏览器中无法枚举本机设备，请使用桌面客户端。
             </>}</>}>
             <DialogTitle>从本机添加打印机</DialogTitle>
 
           </DialogHeader>
-          <div className="space-y-4">
-            {listLoading && <p className="text-muted-body">正在加载本机打印机…</p>}
-            {listError && <p className="text-sm text-destructive-ink">{listError}</p>}
-            {!listLoading && !listError && systemList.length > 0 && (
-              <>
-                <div>
-                  <label className="text-label mb-1 block">本机打印机 <span className="text-destructive-ink">*</span></label>
-                  <Select value={selectedName} onValueChange={setSelectedName}>
-                    <SelectTrigger className="input w-full">
-                      <SelectValue placeholder="请选择" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {selectableSystemPrinters.map(p => (
-                        <SelectItem key={p.name} value={p.name} disabled={p.alreadyInErp}>
-                          {p.displayName || p.name}
-                          {p.isDefault ? ' （默认）' : ''}
-                          {p.alreadyInErp ? ' — 已在系统中' : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-label mb-1 block">设备类型 <span className="text-destructive-ink">*</span></label>
-                  <Select value={String(addType)} onValueChange={v => setAddType(+v as 1 | 2 | 3)}>
-                    <SelectTrigger className="input w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">标签打印机（ZPL 热敏等）</SelectItem>
-                      <SelectItem value="2">面单打印机</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="mt-1.5 text-helper leading-relaxed">
-                    此为硬件分类，与下方列表中的「绑定用途」无关。实际打印所用的打印机请在添加后使用「绑定用途」指定（如产品条码、货架条码等）。
-                    打印链路统一使用 ZPL 指令，A4 / 文档打印机无法参与，故不在此列出。
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="space-y-4">
+              {listLoading && <p className="text-muted-body">正在加载本机打印机…</p>}
+              {listError && <p className="text-sm text-destructive-ink">{listError}</p>}
+              {!listLoading && !listError && systemList.length > 0 && (
+                <>
+                  <div>
+                    <label htmlFor="system-printer-name" className="text-label mb-1 block">本机打印机 <span className="text-destructive-ink">*</span></label>
+                    <Select value={selectedName} onValueChange={setSelectedName}>
+                      <SelectTrigger id="system-printer-name">
+                        <SelectValue placeholder="请选择" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectableSystemPrinters.map(p => (
+                          <SelectItem key={p.name} value={p.name} disabled={p.alreadyInErp}>
+                            {p.displayName || p.name}
+                            {p.isDefault ? ' （默认）' : ''}
+                            {p.alreadyInErp ? ' — 已在系统中' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label htmlFor="system-printer-type" className="text-label mb-1 block">设备类型 <span className="text-destructive-ink">*</span></label>
+                    <Select value={String(addType)} onValueChange={v => setAddType(+v as 1 | 2 | 3)}>
+                      <SelectTrigger id="system-printer-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">标签打印机（ZPL 热敏等）</SelectItem>
+                        <SelectItem value="2">面单打印机</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-1.5 text-helper leading-relaxed">
+                      此为硬件分类，与下方列表中的「绑定用途」无关。实际打印所用的打印机请在添加后使用「绑定用途」指定（如产品条码、货架条码等）。
+                      打印链路统一使用 ZPL 指令，A4 / 文档打印机无法参与，故不在此列出。
+                    </p>
+                  </div>
+                  <p className="text-helper">
+                    保存时将自动生成符合规则的编码，并与列表中已有编码去重。
                   </p>
-                </div>
-                <p className="text-helper">
-                  保存时将自动生成符合规则的编码，并与列表中已有编码去重。
-                </p>
-              </>
-            )}
-            {!listLoading && canUseSystemPrinters && systemList.length === 0 && !listError && (
-              <p className="text-muted-body">暂无数据，请点击刷新重试。</p>
-            )}
+                </>
+              )}
+              {!listLoading && canUseSystemPrinters && systemList.length === 0 && !listError && (
+                <p className="text-muted-body">暂无数据，请点击刷新重试。</p>
+              )}
+            </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)}>取消</Button>
             <Button type="button" variant="outline" onClick={() => void loadSystemPrinters()} disabled={listLoading}>
               刷新列表
             </Button>
@@ -520,7 +522,7 @@ export default function PrintersPage() {
               type="button"
               onClick={() => void confirmAddFromSystem()}
               disabled={
-                addPrinter.isPending ||
+                !warehouseReady || addPrinter.isPending ||
                 listLoading ||
                 !selectedName ||
                 selectableSystemPrinters.find(p => p.name === selectedName)?.alreadyInErp === true
@@ -532,10 +534,11 @@ export default function PrintersPage() {
         </DialogContent>
       </Dialog>
 
-      <DataTable columns={cols} data={printers} loading={isLoading} rowKey="id" emptyText="暂无打印机" />
+      {bindingQuery.isError && <QueryErrorState error={bindingQuery.error} onRetry={bindingQuery.refetch} title="打印用途绑定加载失败" />}
+      {printerQuery.isError ? <QueryErrorState error={printerQuery.error} onRetry={printerQuery.refetch} title="打印机列表加载失败" /> : <DataTable fluid columnStorageKey="settings-printers" scrollLabel="打印机表格" virtualized columns={cols} data={printers} loading={isLoading} rowKey="id" emptyText="暂无打印机" />}
       {isSuccess && <ListSummary total={printers.length} unit="台" />}
 
-      {bindTarget && canManagePrinters && (
+      {bindTarget && canManagePrinters && bindingQuery.isSuccess && (
         <BindDialog
           printer={bindTarget}
           bindings={bindings}
@@ -556,7 +559,7 @@ export default function PrintersPage() {
           if (!deleteTarget || !managePermissionRef.current) return
           del.mutate(deleteTarget.id, {
             onSuccess: () => { toast.success('已删除'); setDeleteTarget(null) },
-            onError: (e: any) => toast.error(e?.response?.data?.message || '删除失败'),
+            onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '删除失败'),
           })
         }}
         onCancel={() => setDeleteTarget(null)}

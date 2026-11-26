@@ -12,7 +12,6 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
  * - 列表筛选（关键词/复杂查询）→ 可选 renderToolbar 插槽
  */
 import { useContext, useRef, useState, type ReactNode } from 'react'
-import { Plus } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
@@ -199,7 +198,7 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
         actions={
           <>
             {headerActions}
-            {canCreate && <Button onClick={openCreate} aria-label={createLabel}><Plus className="mr-1.5 h-4 w-4" aria-hidden />{createLabel}</Button>}
+            {canCreate && <Button onClick={openCreate} aria-label={createLabel}>{createLabel}</Button>}
           </>
         }
       />
@@ -209,15 +208,15 @@ export default function BaseCrudPage<T extends RowLike>(props: Props<T>) {
       {error instanceof ApiClientError && error.status === 403 ? (
         <EmptyState variant="no-permission" description={`当前账号无权查看${title.replace(/管理$/, '')}。`} />
       ) : isError ? (
-        <QueryErrorState error={error} onRetry={() => void refetch()} title={`${title}加载失败`} compact />
-      ) : <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyState={emptyState ?? <EmptyState variant="no-data" title={emptyText ?? `暂无${title.replace(/管理$/, '')}`} description={emptyText ? undefined : renderToolbar ? '当前列表没有匹配记录，可使用上方查询核对筛选范围。' : canCreate ? `使用右上角「${createLabel}」添加记录。` : '当前没有可查看的记录。'} />} />}
+        <QueryErrorState error={error} onRetry={() => void refetch()} title={`${title}加载失败`} />
+      ) : <DataTable fluid virtualized scrollLabel={`${title}表格`} columnStorageKey={`base-crud-${queryKey[0]}`} columns={columns} data={list} loading={isLoading} rowKey="id" emptyState={emptyState ?? <EmptyState variant="no-data" title={emptyText ?? `暂无${title.replace(/管理$/, '')}`} description={emptyText ? undefined : renderToolbar ? '当前列表没有匹配记录，可使用上方查询核对筛选范围。' : canCreate ? `使用右上角「${createLabel}」添加记录。` : '当前没有可查看的记录。'} />} />}
       {!isError && !isLoading && <ListSummary total={(data as { pagination?: { total?: number } } | undefined)?.pagination?.total ?? list.length} unit={recordUnit} />}
 
       <Dialog open={formOpen} onOpenChange={v => !v && closeDialog()}>
         <DialogContent ref={formDialogRef} className={`fc-form-dialog fc-master-form ${formWidthClass}`} aria-busy={saveMut.isPending}>
           <DialogHeader description={editing && (formIdentity ? formIdentity(editing) : editTargetLabel(editing)) ? <>
                 正在编辑：<span className="font-medium text-foreground">{formIdentity ? formIdentity(editing) : editTargetLabel(editing)}</span>
-              </> : (`填写${title.replace(/管理$/, '')}资料并核对必填项。`)}>
+              </> : undefined}>
             {/* 编辑态与默认（新建）态必须一眼可分：编辑态带「编辑中」标识 + 编辑对象 */}
             <DialogTitle className="flex flex-wrap items-center gap-2">
               {formTitle ? formTitle(editing) : (editing ? `编辑${title.replace(/管理$/, '')}` : `新建${title.replace(/管理$/, '')}`)}

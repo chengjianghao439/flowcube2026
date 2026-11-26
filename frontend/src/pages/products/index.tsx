@@ -10,6 +10,7 @@ import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import CategoryPathDisplay from '@/components/shared/CategoryPathDisplay'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -90,7 +91,7 @@ export default function ProductsPage() {
   }
 
   const PAGE_SIZE = 20
-  const { data, isLoading } = useProducts({
+  const { data, isLoading, isError, error, refetch } = useProducts({
     page: 1, pageSize: PAGE_SIZE, keyword, categoryId: catFilter,
     status: statusFilter || undefined,
     supplierId: supplierId ?? undefined,
@@ -211,8 +212,8 @@ export default function ProductsPage() {
       <PageHeader title="商品管理"
         description="维护商品资料、分类与数量规则。"  actions={
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={()=>downloadExport('/export/stock').catch(e=>toast.error((e as Error).message))}>导出库存</Button>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           {can(PERMISSIONS.PRODUCT_CREATE) && <Button variant="outline" onClick={()=>setImportOpen(true)}>批量导入</Button>}
           <Button variant="outline" onClick={()=>navigate('/categories')}>分类管理</Button>
           {can(PERMISSIONS.PRODUCT_CREATE) && <Button onClick={()=>navigate('/products/new')}>新增商品</Button>}
@@ -222,7 +223,7 @@ export default function ProductsPage() {
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
@@ -233,14 +234,18 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <ProductsTable virtualized columns={cols} data={data?.list ?? EMPTY_PRODUCTS} loading={isLoading} rowKey="id" scrollLabel="商品管理表格" />
-      <ListSummary total={total} unit="件" />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="商品列表加载失败" /> : (
+        <>
+          <ProductsTable virtualized columns={cols} data={data?.list ?? EMPTY_PRODUCTS} loading={isLoading} rowKey="id" scrollLabel="商品管理表格" />
+          {!isLoading && data && <ListSummary total={total} unit="件" />}
+        </>
+      )}
 
       {/* 批量导入弹窗 */}
       <Dialog open={importOpen} onOpenChange={v=>{ setImportOpen(v); if(!v) setImportResult(null) }}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="fc-form-dialog max-w-3xl">
           <DialogHeader description={<>{<>请先下载模板，按照格式填写后上传。编码已存在的商品将自动跳过。</>}</>}><DialogTitle>批量导入商品</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="fc-form-dialog-body space-y-4 py-2">
 
             <ImportSteps template={
               <div className="flex gap-2">

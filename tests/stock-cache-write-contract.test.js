@@ -54,55 +54,60 @@ const SYNC_ALLOWLIST = new Map([
     '只把 PENDING_QA 拆成 待质检/待上架/不合格，三种状态都不计入 ACTIVE 合计，缓存不受影响'],
 ])
 
-const REMAINING_QTY_WRITE = /UPDATE\s+inventory_containers[\s\S]{0,300}?remaining_qty/gi
-/**
- * 缓存字段的写入只认两种真实语句形态：
- *   UPDATE inventory_stock ... SET <field> = ...
- *   INSERT INTO inventory_stock (...) VALUES ... ON DUPLICATE KEY UPDATE <field> = ...
- * 第一版漏了后者（`containerEngine` 的 upsert 就是这种写法），又把 `SELECT ... const reserved =`
- * 和文档注释里的字样算成写入——所以这里先剥注释，再只匹配这两种形态。
- */
-const STOCK_WRITE = new RegExp(
-  '(?:UPDATE\\s+inventory_stock[\\s\\S]{0,300}?SET\\s[\\s\\S]{0,200}?(quantity|reserved)\\s*=)'
-  + '|(?:INSERT\\s+INTO\\s+inventory_stock[\\s\\S]{0,300}?ON\\s+DUPLICATE\\s+KEY\\s+UPDATE\\s[\\s\\S]{0,200}?(quantity|reserved)\\s*=)',
-  'gi',
-)
-const SYNC_CALL = /syncStockFromContainers\s*\(/
+const { parse, visit, owner, functionName, callName, literals, filesUnder } = require('./helpers/contractSource')
 
-/** 剥注释：等长空白替换，保留偏移与行号（AGENTS §0.1：源码文本契约测试先去注释）。 */
-function stripComments(src) {
-  return src
-    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length))
-}
-
-function collect(dir, out = []) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name)
-    if (e.isDirectory()) collect(p, out)
-    else if (e.name.endsWith('.js')) out.push(p)
+// 只读取赋值左值。引号内的文字、表达式内的逗号及 SQL 注释均不参与分列。
+function assignments(sql) {
+  if (!/inventory_(?:stock|containers)/i.test(sql)) return []
+  const tokens = (sql.match(/'(?:\\[\s\S]|''|[^'\\])*'|"(?:\\[\s\S]|""|[^"\\])*"|\x60(?:\x60\x60|[^\x60])*\x60|\/\*[\s\S]*?\*\/|--[ \t][^\n]*|#[^\n]*|[\w$]+|[^\s]/g) || [])
+    .filter(t => !t.startsWith('/*') && !t.startsWith('--') && !t.startsWith('#'))
+    .map(t => t.startsWith('\x60') ? t.slice(1, -1).replaceAll('\x60\x60', '\x60').toLowerCase() : t.toLowerCase())
+  let table, start
+  if (tokens[0] === 'update') {
+    table = tokens[1]
+    start = tokens.indexOf('set')
+  } else if (tokens[0] === 'insert' && tokens[1] === 'into') {
+    table = tokens[2]
+    start = tokens.findIndex((t, i) => t === 'update' && tokens.slice(i - 3, i).join(' ') === 'on duplicate key')
   }
-  return out
-}
-
-/** 找出所在函数名与函数体范围（顶层 function / 箭头常量函数 / 对象方法）。 */
-function enclosingFunction(lines, startLine) {
-  for (let i = startLine; i >= 0; i--) {
-    const m = lines[i].match(
-      /^(?:async\s+)?function\s+([A-Za-z0-9_$]+)|^(?:const|let)\s+([A-Za-z0-9_$]+)\s*=\s*async\s*\(|^\s{2}([A-Za-z0-9_$]+)\s*:\s*async\s*\(/,
-    )
-    if (!m) continue
-    let end = lines.length
-    for (let j = i + 1; j < lines.length; j++) {
-      if (/^(async )?function |^const .*=\s*async|^module\.exports/.test(lines[j])) { end = j; break }
+  if (!['inventory_stock', 'inventory_containers'].includes(table) || start == null || start < 0) return []
+  const fields = []
+  let atStart = true, depth = 0
+  for (let i = start + 1; i < tokens.length; i++) {
+    const token = tokens[i]
+    if (depth === 0 && ['where', 'order', 'limit', ';'].includes(token)) break
+    if (atStart) {
+      const pos = tokens[i + 1] === '.' ? i + 2 : i
+      if (tokens[pos + 1] === '=' && ['quantity', 'reserved', 'remaining_qty'].includes(tokens[pos])) {
+        fields.push({ table, field: tokens[pos] })
+      }
+      atStart = false
     }
-    return { name: m[1] || m[2] || m[3], from: i, to: end, body: lines.slice(i, end).join('\n') }
+    if (token === '(') depth++
+    if (token === ')') depth--
+    if (token === ',' && !depth) atStart = true
   }
-  return { name: '(文件顶层)', from: 0, to: lines.length, body: lines.join('\n') }
+  return fields
+}
+
+function stockWrites(source) {
+  const writes = []
+  if (!/inventory_(?:stock|containers)/i.test(source)) return writes
+  const tree = parse(source)
+  const synced = new Set()
+  visit(tree, node => {
+    if (callName(node) === 'syncStockFromContainers') synced.add(owner(node))
+    const sql = literals(node)
+    if (!sql) return
+    for (const point of assignments(sql)) {
+      writes.push({ ...point, fn: owner(node), line: tree.getLineAndCharacterOfPosition(node.getStart()).line + 1 })
+    }
+  })
+  return writes.map(({ table, field, fn, line }) => ({ table, field, name: functionName(fn), sync: synced.has(fn), line }))
 }
 
 function main() {
-  const files = collect(SRC)
+  const files = filesUnder(SRC, name => name.endsWith('.js'))
   assert.ok(files.length > 200, `后端源码文件数异常（${files.length}），目录结构可能变了`)
 
   const problems = []
@@ -112,38 +117,21 @@ function main() {
 
   for (const file of files) {
     const rel = path.relative(ROOT, file)
-    const src = stripComments(fs.readFileSync(file, 'utf8'))
-    const lines = src.split('\n')
-
-    // ── A：缓存字段的唯一写入口 ─────────────────────────────────────────
-    STOCK_WRITE.lastIndex = 0
-    let m
-    while ((m = STOCK_WRITE.exec(src)) !== null) {
-      const field = m[1] || m[2]
-      qtyWrites++
-      const line = src.slice(0, m.index).split('\n').length
-      const allowed = field === 'quantity' ? QUANTITY_WRITERS : RESERVED_WRITERS
-      if (!allowed.has(rel)) {
-        problems.push(`${rel}:${line} 直接写 inventory_stock.${field}——`
-          + (field === 'quantity'
-            ? '唯一合法入口是 containerEngine.syncStockFromContainers()（容器汇总才是一手数据）'
-            : '只能经 reservationEngine / inventoryEngine 的合法入口变更'))
+    for (const point of stockWrites(fs.readFileSync(file, 'utf8'))) {
+      const { table, field, line, name, sync } = point
+      if (table === 'inventory_stock') {
+        qtyWrites++
+        const allowed = field === 'quantity' ? QUANTITY_WRITERS : RESERVED_WRITERS
+        if (!allowed.has(rel) || (field === 'quantity' && name !== 'syncStockFromContainers')) {
+          problems.push(rel + ':' + line + ' ' + name + ' 直接写库存缓存 ' + field)
+        }
+      } else if (field === 'remaining_qty') {
+        remainingWrites++
+        if (sync) continue
+        const key = rel + '::' + name
+        if (SYNC_ALLOWLIST.has(key)) usedAllow.add(key)
+        else problems.push(rel + ':' + line + ' 在 ' + name + ' 写 remaining_qty 后缺少维度同步')
       }
-    }
-
-    // ── B：写 remaining_qty 的函数必须刷缓存或有豁免 ─────────────────────
-    REMAINING_QTY_WRITE.lastIndex = 0
-    let w
-    while ((w = REMAINING_QTY_WRITE.exec(src)) !== null) {
-      remainingWrites++
-      const line = src.slice(0, w.index).split('\n').length
-      const fn = enclosingFunction(lines, line - 1)
-      if (SYNC_CALL.test(fn.body)) continue
-      const key = `${rel}::${fn.name}`
-      if (SYNC_ALLOWLIST.has(key)) { usedAllow.add(key); continue }
-      problems.push(`${rel}:${line} 在 ${fn.name}() 里改了 remaining_qty 但同函数内没有 `
-        + 'syncStockFromContainers()：事实源变了却没刷 inventory_stock.quantity 缓存，'
-        + '会静默漂移。请补刷新，或在守卫豁免表里写明「为什么这次改动不改变该维度的 ACTIVE 合计」')
     }
   }
 
@@ -172,4 +160,5 @@ function main() {
   process.exit(problems.length ? 1 : 0)
 }
 
-main()
+module.exports = { stockWrites }
+if (require.main === module) main()

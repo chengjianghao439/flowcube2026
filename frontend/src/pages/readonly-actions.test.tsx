@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/authStore'
 import { PERMISSIONS as P } from '@/lib/permission-codes'
 import type { User } from '@/types'
 import ReturnsPage from './returns'
+import FreightReconciliationPage from './logistics/freight-reconciliation'
 import LogisticsPage from './logistics'
 import InventoryPage from './inventory'
 import ProductsPage from './products'
@@ -59,6 +60,8 @@ function dataFor(path: string) {
   if (path === '/products/3') return product
   if (path === '/carriers') return list([carrier])
   if (path === '/carriers/active') return [carrier]
+  if (path === '/logistics/freight/bills') return list([{ id: 3, carrierId: 11, carrierName: '合成承运商', trackingNo: 'SYN-11', billPeriod: '202611', actualFreight: 10, freightType: 1 }])
+  if (path === '/logistics/freight/settlements') return list()
   if (path === '/logistics') return list()
   if (path === '/print-templates') return [template]
   if (path === '/printers') return [printer]
@@ -222,6 +225,7 @@ test('分类创建、更新、删除分别授权，查看仍显示树', async ()
   await draw(<CategoriesPage />, '/categories')
   expect(host.textContent).toContain(category.name)
   for (const name of ['新增一级分类', '新增子分类', '编辑', '停用', '删除']) expect(queryByRole(host, 'button', { name })).toBeNull()
+  expect(queryByRole(host, 'button', { name: '更多操作' })).toBeNull()
   await act(async () => authorize([P.CATEGORY_CREATE]))
   expect(getByRole(host, 'button', { name: '新增一级分类' })).toBeTruthy()
   expect(getByRole(host, 'button', { name: '新增子分类' })).toBeTruthy()
@@ -269,9 +273,9 @@ test.each([1, 2] as const)('只读往来 type=%s 保留流水和核销列表，�
   await draw(<PaymentsView type={type} />, '/payments')
   expect(queryByRole(host, 'button', { name: /^登记[收付]款$/ })).toBeNull()
   expect(getByRole(host, 'button', { name: '流水' })).toBeTruthy()
-  expect(queryByRole(host, 'button', { name: type === 1 ? '付款核销' : '收款核销' })).toBeNull()
-  expect(getByRole(host, 'button', { name: '账款明细' })).toBeTruthy()
-  await click(type === 1 ? '付款流水' : '收款流水')
+  expect(queryByRole(host, 'tab', { name: type === 1 ? '付款核销' : '收款核销' })).toBeNull()
+  expect(getByRole(host, 'tab', { name: '账款明细', selected: true })).toBeTruthy()
+  await act(async () => userEvent.click(getByRole(host, 'tab', { name: type === 1 ? '付款流水' : '收款流水' })))
   expect(queryByRole(host, 'button', { name: /^登记[收付]款$/ })).toBeNull()
   expect(queryByRole(host, 'button', { name: '继续核销' })).toBeNull()
   await vi.waitFor(async () => {
@@ -279,7 +283,7 @@ test.each([1, 2] as const)('只读往来 type=%s 保留流水和核销列表，�
     expect(getByRole(host, 'button', { name: '明细' })).toBeTruthy()
   })
   await act(async () => authorize([P.PAYMENT_EXECUTE]))
-  expect(getByRole(host, 'button', { name: type === 1 ? '付款核销' : '收款核销' })).toBeTruthy()
+  expect(getByRole(host, 'tab', { name: type === 1 ? '付款核销' : '收款核销' })).toBeTruthy()
   expect(getByRole(host, 'button', { name: /^登记[收付]款$/ })).toBeTruthy()
 })
 
@@ -342,10 +346,16 @@ test('打印机查看不授予别名保存、状态切换或用途绑定', async
   expect(host.textContent).toContain(printer.name)
   expect(queryByRole(host, 'button', { name: '保存' })).toBeNull()
   expect(queryByRole(host, 'button', { name: '在线' })).toBeNull()
-  expect(queryByRole(host, 'button', { name: '绑定用途' })).toBeNull()
+  expect(queryByRole(host, 'button', { name: `绑定用途 ${printer.name}` })).toBeNull()
   await act(async () => authorize([P.PRINT_PRINTER_MANAGE]))
   expect(getByRole(host, 'button', { name: '保存' })).toBeTruthy()
-  expect(getByRole(host, 'button', { name: '绑定用途' })).toBeTruthy()
+  await click(`绑定用途 ${printer.name}`, host)
+  const binding = getByRole(document.body, 'dialog', { name: '绑定业务用途' })
+  expect(binding.querySelector(':scope > .fc-form-dialog-body [aria-pressed]')).toBeTruthy()
+  const footer = binding.querySelector<HTMLElement>(':scope > .fc-dialog-footer')!
+  expect(getByRole(footer, 'button', { name: '关闭' }).classList.contains('fc-button')).toBe(true)
+  await click('关闭', footer)
+  expect(queryByRole(document.body, 'dialog', { name: '绑定业务用途' })).toBeNull()
   await act(async () => authorize())
   expect(queryByRole(host, 'button', { name: '保存' })).toBeNull()
   expect(writes).toEqual([])
@@ -361,8 +371,43 @@ test('打印机关联本机等待设备读取期间撤权，不发送更新请�
     getSystemPrinters: async () => [{ name: printer.name }],
   })
   authorize([P.PRINT_PRINTER_MANAGE]); await draw(<PrintersPage />, '/settings/printers')
-  await click('关联本机'); expect(release).toBeTypeOf('function')
+  await click(`更多操作 ${printer.name}`, host)
+  await vi.waitFor(async () => {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)) })
+    expect(getByRole(document.body, 'menuitem', { name: `关联本机 ${printer.name}` }).getAttribute('aria-disabled')).not.toBe('true')
+  })
+  await act(async () => { await userEvent.click(getByRole(document.body, 'menuitem', { name: `关联本机 ${printer.name}` })) })
+  expect(release).toBeTypeOf('function')
   await act(async () => authorize())
   await act(async () => { release('synthetic-only'); await new Promise(resolve => setTimeout(resolve, 5)) })
+  expect(writes).toEqual([])
+})
+
+test('打印用途读取失败时，列表仍可查看且绑定入口关闭', async () => {
+  deniedReads.add('/printer-bindings')
+  authorize([P.PRINT_PRINTER_MANAGE])
+  await draw(<PrintersPage />, '/settings/printers')
+  expect(host.textContent).toContain(printer.name)
+  expect(host.textContent).toContain('打印用途绑定加载失败')
+  const actualBinding = queryByRole(host, 'button', { name: `绑定用途 ${printer.name}` }) as HTMLButtonElement | null
+  expect(!actualBinding || actualBinding.disabled).toBe(true)
+  const more = getByRole(host, 'button', { name: `更多操作 ${printer.name}` }) as HTMLButtonElement
+  expect(more.disabled, '用途读取失败不应阻止独立删除动作').toBe(false)
+  await click(`更多操作 ${printer.name}`, host)
+  expect(getByRole(document.body, 'menuitem', { name: `删除 ${printer.name}` })).toBeTruthy()
+  expect(writes).toEqual([])
+})
+
+
+test('独立运费对账权限只读取账单和汇总，撤权后隐藏录单入口', async () => {
+  useAuthStore.getState().updateUser({ roleId: 5, permissions: [P.LOGISTICS_FREIGHT_RECONCILE] })
+  await draw(<FreightReconciliationPage />, '/logistics/freight-reconciliation')
+  expect(reads).toContain('/logistics/freight/bills')
+  expect(reads).toContain('/logistics/freight/settlements')
+  expect(reads).not.toContain('/carriers/active')
+  expect(host.textContent).toContain('合成承运商')
+  expect((getByRole(host, 'button', { name: '录入账单' }) as HTMLButtonElement).disabled).toBe(false)
+  await act(async () => authorize())
+  expect(queryByRole(host, 'button', { name: '录入账单' })).toBeNull()
   expect(writes).toEqual([])
 })

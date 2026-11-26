@@ -61,7 +61,7 @@ function DetailSections({ type, id, children, progress, printProgress, initialVi
     // 2026-09-14 用户决定：收货订单只显示任务进度，不展示打印记录（补打只在打印记录页）。
     ...(['sale-return', 'wave'].includes(type) ? [{ key: 'print' as const, label: type === 'wave' ? '装箱与打印' : '标签打印', Icon: Printer }] : []),
     { key: 'log' as const, label: '操作记录', Icon: History }]
-  return <ContentTabs label="订单详情" value={selected} onValueChange={setSelected}
+  return <ContentTabs label="订单详情" value={selected} onValueChange={setSelected} variant="wide"
     className={compactTabs ? 'fc-content-tabs-compact' : undefined}
     tabs={tabs.map(tab => ({
       value: tab.key, label: tab.label, Icon: tab.Icon,

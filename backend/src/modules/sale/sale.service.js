@@ -1,4 +1,5 @@
-const {cashNumber,sumCashCents}=require('../../utils/cashMoney')
+const { financialTarget, assertLegacyCut } = require('./sale.commercial-financial')
+const {cashNumber,sumCashCents,storedCashCents}=require('../../utils/cashMoney')
 const handlingGuards = require('../disposal/disposal.handling.target-guards')
 const commercialDispatch = require('./sale.commercial-dispatch')
 const commercialStore = require('./sale.commercial-store')
@@ -123,7 +124,7 @@ const itemAggJoin = `
            SUM(quantity) AS ordered_total_qty,
            SUM(shipped_qty) AS shipped_total_qty,
            COUNT(DISTINCT warehouse_id) AS warehouse_count,
-           SUM(CASE WHEN dispatched_qty < reserved_qty THEN 1 ELSE 0 END) AS undispatched_count,
+           SUM(CASE WHEN dispatched_qty < LEAST(reserved_qty, quantity) THEN 1 ELSE 0 END) AS undispatched_count,
            SUM(CASE WHEN reserved_qty < quantity THEN 1 ELSE 0 END) AS unreserved_count
     FROM sale_order_items GROUP BY order_id
   ) soi_agg ON soi_agg.order_id = so.id
@@ -435,7 +436,7 @@ async function findAll({ page=1, pageSize=20, keyword='', status=null, productId
               SUM(quantity) AS ordered_total_qty,
               SUM(shipped_qty) AS shipped_total_qty,
               COUNT(DISTINCT warehouse_id) AS warehouse_count,
-              SUM(CASE WHEN dispatched_qty < reserved_qty THEN 1 ELSE 0 END) AS undispatched_count,
+              SUM(CASE WHEN dispatched_qty < LEAST(reserved_qty, quantity) THEN 1 ELSE 0 END) AS undispatched_count,
               SUM(CASE WHEN reserved_qty < quantity THEN 1 ELSE 0 END) AS unreserved_count
        FROM sale_order_items WHERE order_id IN (?) GROUP BY order_id`,
       [pageIds],
@@ -1355,20 +1356,20 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
       ? items
       : allItemRows.map(r => ({ id: r.id, qty: Math.max(0, Number(r.quantity) - (Number(r.reserved_qty) || 0)) }))
     const reserveItems = []
-    // 同一明细行在 items 里出现多次时，逐项累计已占量，防止重复 id 绕过「占库量≤未占余量」校验超占
-    const processedById = new Map()
+    const requestedIds = new Set()
+    const selectedWarehouses = new Map()
     for (const it of effectiveItems) {
       const row = itemById.get(Number(it.id))
       if (!row) throw new AppError(`明细行 ${it.id} 不存在`, 400)
+      const lineId = Number(it.id)
+      if (requestedIds.has(lineId)) throw new AppError(`明细行 ${lineId} 重复提交`, 400)
+      requestedIds.add(lineId)
       const qty = Number(it.qty)
       if (!(qty > 0)) continue   // 本次不占该行
-      const processed = processedById.get(Number(it.id)) || 0
-      const already = (Number(row.reserved_qty) || 0) + processed
-      const remain = Number(row.quantity) - already
+      const remain = Number(row.quantity) - Number(row.reserved_qty || 0)
       if (qty > remain + 1e-6) {
         throw new AppError(`商品「${row.product_name}」本次占库量 ${qty} 超过未占余量 ${remain}`, 400)
       }
-      processedById.set(Number(it.id), processed + qty)
       const whId = it.warehouseId != null ? Number(it.warehouseId)
         : (row.warehouse_id != null ? Number(row.warehouse_id) : Number(orderRow.warehouse_id))
       assertInScope(scopeWarehouseIds, whId, '销售单')
@@ -1387,9 +1388,14 @@ async function reserveStock(id, operator, items = [], { scopeWarehouseIds = null
           'RESERVE_WAREHOUSE_CHANGE_NOT_ALLOWED',
         )
       }
+      selectedWarehouses.set(lineId, whId)
       reserveItems.push({ ...row, reserveQty: qty, warehouseId: whId })
     }
     if (!reserveItems.length) throw new AppError('本次没有有效的占库数量', 400)
+    assertNoDuplicateSaleItemLines(allItemRows.map(row => ({
+      productId: row.product_id,
+      warehouseId: selectedWarehouses.get(Number(row.id)) ?? row.warehouse_id,
+    })), orderRow.warehouse_id)
     if (releaseEventId != null) {
       if (!requestState.id || !operator?.userId || !expectedReserveFingerprint || expectedReservationEventId == null || !items.length) {
         throw new AppError('请从原释放批次重新预览，再确认补占', 400)
@@ -1562,6 +1568,14 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
       assertStatusAction('sale', 'ship', orderRow.status)
     }
 
+    if (orderRow.commercial_model !== 'kit-v1') {
+      const [pendingTasks] = await conn.query(
+        'SELECT id FROM warehouse_tasks WHERE sale_order_id=? AND deleted_at IS NULL AND (cancel_requested_at IS NOT NULL OR adjustment_requested_at IS NOT NULL) ORDER BY id FOR SHARE',
+        [id],
+      )
+      if (pendingTasks.length) throw new AppError('请先完成仓库取消或改单确认，再发起出库', 409, 'SALE_DISPATCH_EXECUTION_PENDING')
+    }
+
     const commercialBatch = orderRow.commercial_model === 'kit-v1' ? await commercialDispatch.select(conn,orderRow,commercialGroups,scopeWarehouseIds) : null
     if (commercialBatch) items=commercialBatch.items
     // Only new linked dispatches validate the entire current line set. Eligibility
@@ -1572,7 +1586,7 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
     }
     // 取「已占未发完」的行，再按新 items 或兼容的旧 itemIds 契约选择本批数量。
     let [itemRows] = await conn.query(
-      'SELECT * FROM sale_order_items WHERE order_id = ? AND dispatched_qty < reserved_qty ORDER BY id',
+      'SELECT * FROM sale_order_items WHERE order_id = ? AND dispatched_qty < LEAST(reserved_qty, quantity) ORDER BY id',
       [id],
     )
     if (!itemRows.length) throw new AppError('该销售单已无可发货明细，请先占库', 400)
@@ -1584,7 +1598,7 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
       const whId = r.warehouse_id != null ? Number(r.warehouse_id) : Number(orderRow.warehouse_id)
       const whName = r.warehouse_name || orderRow.warehouse_name
       assertInScope(scopeWarehouseIds, whId, '销售单')
-      const shipQty = r.requested_ship_qty ?? (Number(r.reserved_qty) - Number(r.dispatched_qty))
+      const shipQty = r.requested_ship_qty
       if (!groups.has(whId)) groups.set(whId, { warehouseId: whId, warehouseName: whName, items: [] })
       groups.get(whId).items.push({
         id: r.id,
@@ -1625,7 +1639,7 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
     }
     // 标记本次已派发：按实际请求量累加，支持同一明细分多次创建任务。
     for (const r of itemRows) {
-      const dispatchedQty = r.requested_ship_qty ?? (Number(r.reserved_qty) - Number(r.dispatched_qty))
+      const dispatchedQty = r.requested_ship_qty
       await conn.query(
         'UPDATE sale_order_items SET dispatched_qty = dispatched_qty + ? WHERE id = ?',
         [dispatchedQty, r.id],
@@ -1648,7 +1662,7 @@ async function ship(id, operator, { itemIds = null, items = null, scopeWarehouse
 
     // 是否还有「已占未发」的行（用于事件描述与前端「继续发货」入口判断）
     const [[{ remaining }]] = await conn.query(
-      'SELECT COUNT(*) AS remaining FROM sale_order_items WHERE order_id = ? AND dispatched_qty < reserved_qty',
+      'SELECT COUNT(*) AS remaining FROM sale_order_items WHERE order_id = ? AND dispatched_qty < LEAST(reserved_qty, quantity)',
       [id],
     )
     const partial = Number(remaining) > 0
@@ -1712,20 +1726,19 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
         productId: itemById.get(Number(it.id))?.product_id,
         qty: it.qty, label: '释放占库数量',
       })))
-      // 同一明细行在 items 里出现多次时，逐项累计已释放量，防止重复 id 绕过「释放量≤已占量」校验超释
-      const processedById = new Map()
+      const requestedIds = new Set(items.map(item => Number(item.id)))
+      if (requestedIds.size !== items.length) throw new AppError('释放占库不能重复提交同一明细行', 400)
+      const released = []
       for (const it of items) {
         const row = itemById.get(Number(it.id))
         if (!row) throw new AppError(`明细行 ${it.id} 不存在`, 400)
         const qty = Number(it.qty)
         if (!(qty > 0)) continue
-        const processed = processedById.get(Number(it.id)) || 0
-        const already = (Number(row.reserved_qty) || 0) - processed
+        const already = Number(row.reserved_qty) || 0
         if (qty > already + 1e-6) {
           throw new AppError(`商品「${row.product_name}」释放数量 ${qty} 超过已占量 ${already}`, 400)
         }
-        processedById.set(Number(it.id), processed + qty)
-        const whId = row.warehouse_id != null ? Number(row.warehouse_id) : Number(orderRow.warehouse_id)
+        const whId = Number(row.warehouse_id ?? orderRow.warehouse_id)
         await partialReleaseByProduct(conn, {
           refType: 'sale_order', refId: Number(orderRow.id),
           productId: row.product_id, warehouseId: whId, qty,
@@ -1734,6 +1747,7 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
           'UPDATE sale_order_items SET reserved_qty = reserved_qty - ? WHERE id = ?',
           [qty, row.id],
         )
+        released.push({ itemId: Number(row.id), qty, warehouseId: whId, unit: row.unit })
       }
       const [[{ remaining }]] = await conn.query(
         'SELECT COALESCE(SUM(reserved_qty), 0) AS remaining FROM sale_order_items WHERE order_id = ?',
@@ -1747,10 +1761,7 @@ async function releaseStock(id, operator, items = null, scopeWarehouseIds = null
       await appendSaleEvent(conn, id, 'released',
         toStatus === SALE_STATUS.DRAFT ? '取消占库' : '部分取消占库',
         toStatus === SALE_STATUS.DRAFT ? `销售单 ${orderRow.order_no} 已取消占库并恢复草稿` : `销售单 ${orderRow.order_no} 已释放部分预占`,
-        operator, { released: [...processedById].map(([itemId, qty]) => {
-          const row = itemById.get(itemId)
-          return { itemId, qty, warehouseId: Number(row.warehouse_id ?? orderRow.warehouse_id), unit: row.unit }
-        }) })
+        operator, { released })
     } else {
       // 整单释放
       const [scopeRows] = await conn.query('SELECT id, warehouse_id, reserved_qty, unit FROM sale_order_items WHERE order_id = ? FOR UPDATE', [id])
@@ -1786,7 +1797,9 @@ async function closeCommercialRemainder(conn, order) {
   const products=new Map(physical.map(p=>[Number(p.product_id),{code:p.product_code,name:p.product_name,unit:p.unit,article_number:p.article_number,spec:p.spec,color:p.color}]))
   const warehouses=new Map(physical.map(p=>[Number(p.warehouse_id),{name:p.warehouse_name}]))
   const resolved=commercialResolver.materialize(targets,products,warehouses)
-  const discount=calculateDiscountApplied({discount:order.discount_amount,shippedGross:resolved.total,orderGross:order.total_amount})
+  const basis = {orderGross:order.total_amount, discount:order.discount_amount}
+  if (order.cash_policy == null) assertLegacyCut(basis,resolved.total)
+  const discount = cashNumber(storedCashCents(resolved.total) - financialTarget(basis,resolved.total))
   await commercialStore.save(conn,order.id,Number(order.commercial_revision)+1,resolved)
   await conn.query('UPDATE sale_orders SET discount_amount=? WHERE id=?',[discount,order.id])
   await conn.query(`UPDATE sale_order_items soi SET reserved_qty=(SELECT COALESCE(SUM(sr.qty),0) FROM stock_reservations sr

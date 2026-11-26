@@ -56,13 +56,13 @@ test('纯选择查询聚焦可用条件，不因日期输入打开日历', () =>
 })
 
 
-test('查询弹窗只有一处标题下说明，原提示优先，否则按查询对象说明用途', () => {
+test('查询弹窗未传说明时不生成套话，传入说明时只在标题下展示一处', () => {
   const close = vi.fn(), apply = vi.fn(), reset = vi.fn()
   const root = draw(<QueryDialog open dialogId="caption-query" title="查询采购单" onClose={close} onApply={apply} onReset={reset}><input aria-label="单号" /></QueryDialog>)
   const dialog = getByRole(document.body, 'dialog')
-  expect(dialog.querySelectorAll('.fc-dialog-caption')).toHaveLength(1)
-  expect(dialog.querySelector('.fc-app-dialog-header .fc-dialog-caption')?.textContent).toContain('采购单')
+  expect(dialog.querySelectorAll('.fc-dialog-caption')).toHaveLength(0)
   act(() => root.render(<QueryDialog open dialogId="caption-query" title="查询采购单" description="日期清空后按全部期间查询。" onClose={close} onApply={apply} onReset={reset}><input aria-label="单号" /></QueryDialog>))
+  expect(dialog.querySelectorAll('.fc-dialog-caption')).toHaveLength(1)
   expect(dialog.querySelector('.fc-dialog-caption')?.textContent).toBe('日期清空后按全部期间查询。')
   expect(dialog.textContent?.match(/日期清空后/g)).toHaveLength(1)
   act(() => getByRole(dialog, 'button', { name: '重置' }).click())
@@ -90,4 +90,39 @@ test('普通弹窗说明与ARIA关联统一；未启用说明的共用头保留�
   expect(caption.tagName).toBe('DIV')
   expect(caption.querySelectorAll(':scope > p')).toHaveLength(2)
   expect(caption.querySelector('p p')).toBeNull()
+})
+
+test.each([
+  { startDate: '2026-10-20', endDate: '2026-10-10', dueStart: '', dueEnd: '', errorLabel: '起始日期', fixLabel: '创建日期（止）' },
+  { startDate: '', endDate: '', dueStart: '2026-10-20', dueEnd: '2026-10-10', errorLabel: '到期日的起始日期', fixLabel: '到期日（止）' },
+])('账款单号回车沿当前草稿查询，$fixLabel 倒置时保留输入且禁用查询', ({ errorLabel, fixLabel, ...range }) => {
+  const apply = vi.fn(), close = vi.fn()
+  const initial = { ...EMPTY_PAYMENT_QUERY, ...range, partyName: '合成供应商' }
+  draw(<PaymentQueryDialog open initial={initial} onClose={close} onApply={apply} partyType={1} showDueDate
+    labels={{ docLabel: '关联单号', partyLabel: '供应商', statusText: v => v, dateLabel: '创建日期', amountLabel: '账款金额' }}
+    statusOptions={[]} />)
+  const dialog = getByRole(document.body, 'dialog')
+  const docNo = getByRole(dialog, 'textbox', { name: '关联单号' }) as HTMLInputElement
+  function type(input: HTMLInputElement, value: string) {
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+  function enter(isComposing = false) {
+    act(() => { docNo.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing })) })
+  }
+  type(docNo, 'QA-付款')
+  enter()
+  expect(getByRole(dialog, 'alert').textContent).toContain(errorLabel)
+  expect((getByRole(dialog, 'button', { name: '查询' }) as HTMLButtonElement).disabled).toBe(true)
+  expect(apply).not.toHaveBeenCalled(); expect(close).not.toHaveBeenCalled()
+  const end = getByRole(dialog, 'textbox', { name: fixLabel }) as HTMLInputElement
+  type(end, '2026-10-22')
+  act(() => { end.dispatchEvent(new FocusEvent('focusout', { bubbles: true })) })
+  enter(true)
+  expect(apply).not.toHaveBeenCalled()
+  enter()
+  expect(apply).toHaveBeenCalledExactlyOnceWith({ ...initial, docNo: 'QA-付款', [range.dueStart ? 'dueEnd' : 'endDate']: '2026-10-22' })
+  expect(close).toHaveBeenCalledTimes(1)
 })

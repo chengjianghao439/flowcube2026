@@ -1,3 +1,6 @@
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { EmptyState } from '@/components/shared/EmptyState'
 /**
  * PDA 异常数据分析页
  * 路由：/reports/pda-anomaly（挂入现有报表中心）
@@ -10,7 +13,6 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { ReportPanel } from '@/components/shared/ReportPanel'
 import { StatTile } from '@/components/dashboard/StatTile'
-import { Button } from '@/components/ui/button'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { usePollingReport } from '@/hooks/usePollingReport'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -29,6 +31,13 @@ function BarRow({ label, value, max, color = CHART_TONES.destructive }: { label:
 }
 
 export default function PdaAnomalyPage() {
+  const { can } = usePermission()
+  return can(PERMISSIONS.SCAN_LOG_VIEW)
+    ? <AnomalyReport />
+    : <EmptyState variant="no-permission" description="当前账号没有查看扫码记录的权限。" />
+}
+
+function AnomalyReport() {
   const recent7d = getRelativeDateRange(7)
   const recent30d = getRelativeDateRange(30)
   const monthRange = getMonthDateRange()
@@ -43,9 +52,12 @@ export default function PdaAnomalyPage() {
     queryKey: ['pda-anomaly', applied],
     queryFn: () => getPdaAnomalyApi(applied),
     intervalMs: 60_000,
+    stopOnForbidden: true,
   })
 
   const { data, isLoading, isError, error, dataUpdatedAt, refetch } = pdaAnomalyQ
+
+  if ((error as { status?: number } | null)?.status === 403) return <EmptyState variant="no-permission" description="当前账号没有查看扫码记录的权限。" />
 
   const apply = () => setApplied({ startDate: startDate || undefined, endDate: endDate || undefined })
   const presetItems = [
@@ -61,13 +73,10 @@ export default function PdaAnomalyPage() {
   const maxBc    = Math.max(...(data?.byBarcode       ?? []).map(r => r.count),       1)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="PDA 异常分析"
         description="核对扫码错误、撤销与异常趋势。"
-        actions={(
-          <Button variant="outline" onClick={() => refetch()}>立即刷新</Button>
-        )}
       />
 
       {isError && !data && (

@@ -6,10 +6,14 @@ import { Input } from '../../frontend/src/components/ui/input'
 import { Button } from '../../frontend/src/components/ui/button'
 import { Badge } from '../../frontend/src/components/ui/badge'
 import { SummaryStrip } from '../../frontend/src/components/shared/SummaryStrip'
-import { Dialog, DialogContent, DialogTitle } from '../../frontend/src/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../../frontend/src/components/ui/dialog'
+import { Select, SelectTrigger, SelectValue } from '../../frontend/src/components/ui/select'
+import { PickerField } from '../../frontend/src/components/shared/PickerField'
+import { DatePicker } from '../../frontend/src/components/shared/DatePicker'
 
 function Fixture() {
   const [open, setOpen] = useState(true)
+  const [densityOpen, setDensityOpen] = useState(false)
   const [actions, setActions] = useState(0)
   const [pointer, setPointer] = useState('')
   return <>
@@ -42,6 +46,21 @@ function Fixture() {
     <div className="flex flex-col divide-y divide-border"><div hidden>隐藏</div><div id="divide-y-first" className="h-4" /><div id="divide-y-second" className="h-4" /></div>
     <div className="flex flex-col divide-y sm:divide-y-0 divide-border"><div id="responsive-divide-first" className="h-4" /><div id="responsive-divide-second" className="h-4" /></div>
     <div className="flex flex-col divide-y divide-y-reverse"><div id="reverse-divide-first" className="h-4" /><div id="reverse-divide-second" className="h-4" /></div>
+    <Button id="open-density" onClick={() => setDensityOpen(true)}>查看控件</Button>
+    <Dialog open={densityOpen} onOpenChange={setDensityOpen}>
+      <DialogContent id="density-dialog" className="fc-form-dialog">
+        <DialogHeader description="核对输入和滚动"><DialogTitle>查询条件</DialogTitle></DialogHeader>
+        <div className="fc-form-dialog-body space-y-4">
+          <Input id="density-input" aria-label="金额" />
+          <DatePicker id="density-date" aria-label="日期" value="" onChange={() => {}} />
+          <Select><SelectTrigger id="density-select" aria-label="账户"><SelectValue placeholder="请选择" /></SelectTrigger></Select>
+          <PickerField id="density-picker" value="合成客户" placeholder="请选择" onOpen={() => {}} />
+          <Input id="density-compact" className="h-8" aria-label="紧凑输入" />
+          <div style={{ height: '700px' }} />
+        </div>
+        <DialogFooter><Button onClick={() => setDensityOpen(false)}>返回查询</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   </section>
   </>
 }

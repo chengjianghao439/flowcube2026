@@ -3,12 +3,13 @@
  *
  * 规则：
  *  - 期间结账（acct_periods.status=2）后，该期间的凭证禁止新建/红冲/删除/重算生成——要改先反结账。
- *  - 结账前置：当期损益（category 5/6）必须已结转到 4103 本年利润，且结转凭证内容与当前业务
+ *  - 结账前置：当期损益（category 4/5/6）必须已结转到 4103 本年利润，且结转凭证内容与当前业务
  *    重算结果一致（source_hash 比对）——不允许"结转了但之后又来了新业务凭证"的半新不旧状态结账；
  *    12 月 additionally 要求「4103 → 4104 利润分配」的年结凭证同样是最新的。
  *  - 结转凭证走 voucher-engine 的 upsertVoucher（UNIQUE(source_type,source_id) 幂等 + source_hash
  *    跳过未变），与业务凭证同一套语义；损益全零的期间不产生结转凭证（not_required）。
  */
+const { excludeClosingReversals } = require('./accounting.report-basis')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const logger = require('../../utils/logger')
@@ -57,8 +58,8 @@ async function loadPlNets(conn, period, companyId = 1) {
        JOIN acct_voucher_entries e ON e.account_id = a.id
        JOIN acct_vouchers v ON v.id = e.voucher_id
         AND v.voucher_date BETWEEN ? AND ?
-        AND v.source_type NOT IN (?, ?)
-      WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf = 1 AND a.category IN (5, 6)
+        AND v.source_type NOT IN (?, ?) AND ${excludeClosingReversals()}
+      WHERE a.company_id = ? AND a.deleted_at IS NULL AND a.is_leaf = 1 AND a.category IN (4, 5, 6)
       GROUP BY a.id, a.code, a.name, a.category, a.balance_dir
       ORDER BY a.code ASC`,
     // INNER JOIN + ON 条件：范围/来源过滤交给 JOIN，行不命中直接不参与——
@@ -116,7 +117,7 @@ async function buildYearClosingSpec(conn, period, companyId = 1) {
        JOIN acct_vouchers v ON v.id = e.voucher_id
        JOIN acct_accounts a ON a.id = e.account_id
       WHERE a.code = '4103' AND a.company_id = ? AND a.deleted_at IS NULL
-        AND v.source_type <> ?
+        AND v.source_type <> ? AND ${excludeClosingReversals(true)}
         AND v.voucher_date BETWEEN ? AND ?`,
     [companyId, SOURCE_TYPES.PERIOD_CLOSE_Y, `${y}-01-01`, `${y}-12-31`],
   )
@@ -133,30 +134,33 @@ async function buildYearClosingSpec(conn, period, companyId = 1) {
   }
 }
 
-/** 某期间结转凭证的新鲜度：current=最新 / stale=结转后有新业务发生 / missing=未生成 / not_required=损益为零无需结转 */
+async function currentClosingVoucher(conn, companyId, sourceType, sourceId) {
+  const [[voucher]] = await conn.query(
+    `SELECT v.id, v.source_hash, v.status FROM acct_vouchers root
+       JOIN acct_vouchers v ON (v.id=root.id OR v.source_root_id=root.id)
+        AND v.company_id=root.company_id AND v.is_reversal=0
+      WHERE root.company_id=? AND root.source_type=? AND root.source_id=?
+      ORDER BY v.id DESC LIMIT 1`, [companyId,sourceType,sourceId])
+  return voucher
+}
+
+function closingFreshness(spec, voucher) {
+  const active = voucher && Number(voucher.status) !== 3
+  if (!spec) return active ? 'stale' : 'not_required'
+  if (!active) return 'missing'
+  return voucher.source_hash === engine.hashSpec(spec.voucherDate,spec.legs) ? 'current' : 'stale'
+}
+
 async function closingStatus(conn, period, companyId = 1) {
-  const spec = await buildPlClosingSpec(conn, period, companyId)
-  const [[v]] = await conn.query(
-    'SELECT id, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ? AND company_id = ?',
-    [SOURCE_TYPES.PERIOD_CLOSE, Number(period), companyId],
-  )
-  const pl = !spec
-    ? (v && Number(v.status) !== 3 ? 'stale' : 'not_required')  // 无需结转但存在未冲销的结转凭证 = 过期
-    : (!v || Number(v.status) === 3 ? 'missing'
-      : (v.source_hash === engine.hashSpec(spec.voucherDate, spec.legs.map(l => ({ ...l, amount: engine.round2(l.amount) })).filter(l => l.amount > 0)) ? 'current' : 'stale'))
+  const spec = await buildPlClosingSpec(conn,period,companyId)
+  const voucher = await currentClosingVoucher(conn,companyId,SOURCE_TYPES.PERIOD_CLOSE,Number(period))
   let year = null
-  if (period.slice(4, 6) === '12') {
-    const yspec = await buildYearClosingSpec(conn, period, companyId)
-    const [[yv]] = await conn.query(
-      'SELECT id, source_hash, status FROM acct_vouchers WHERE source_type = ? AND source_id = ? AND company_id = ?',
-      [SOURCE_TYPES.PERIOD_CLOSE_Y, Number(period.slice(0, 4)), companyId],
-    )
-    year = !yspec
-      ? (yv && Number(yv.status) !== 3 ? 'stale' : 'not_required')
-      : (!yv || Number(yv.status) === 3 ? 'missing'
-        : (yv.source_hash === engine.hashSpec(yspec.voucherDate, yspec.legs.map(l => ({ ...l, amount: engine.round2(l.amount) })).filter(l => l.amount > 0)) ? 'current' : 'stale'))
+  if (period.endsWith('12')) {
+    const yearSpec = await buildYearClosingSpec(conn,period,companyId)
+    const yearVoucher = await currentClosingVoucher(conn,companyId,SOURCE_TYPES.PERIOD_CLOSE_Y,Number(period.slice(0,4)))
+    year = closingFreshness(yearSpec,yearVoucher)
   }
-  return { pl, year }
+  return { pl:closingFreshness(spec,voucher), year }
 }
 
 /** 结转快照写入（文档10 功能3）：把结转凭证各分录落 acct_closing_details，供追溯。 */
@@ -182,36 +186,27 @@ async function generateClosingVouchers(period, userId, companyId = 1) {
     const accountMap = await engine.loadAccountMap(conn, companyId)
     const allocSeq = await engine.makeSeqAllocator(conn, companyId)
     const results = []
-    const plSpec = await buildPlClosingSpec(conn, p, companyId)
-    if (plSpec) {
-      const r = await engine.upsertVoucher(conn, plSpec, accountMap, allocSeq, userId, companyId)
-      results.push({ kind: '损益结转', ...r })
-      if (r.id) {
-        await conn.query('DELETE FROM acct_closing_details WHERE company_id=? AND period=? AND closing_type=?', [companyId, p, 'pl_month'])
-        await writeClosingDetails(conn, companyId, p, 'pl_month', r.id, plSpec.legs)
+    // 年结必须在本月损益结转完成后重读 4103。
+    for (const annual of p.endsWith('12') ? [false,true] : [false]) {
+      const sourceType = annual ? SOURCE_TYPES.PERIOD_CLOSE_Y : SOURCE_TYPES.PERIOD_CLOSE
+      const sourceId = Number(annual ? p.slice(0,4) : p)
+      let spec = await (annual ? buildYearClosingSpec : buildPlClosingSpec)(conn,p,companyId)
+      if (!spec) {
+        const previous = await currentClosingVoucher(conn,companyId,sourceType,sourceId)
+        if (!previous || Number(previous.status) === 3) continue
+        // 归零仍须冲回最后一版实际分录；保留原凭证、明细及来源锚点供以后追溯。
+        spec = {sourceType,sourceId,voucherDate:periodRange(p).end,legs:[]}
       }
-    }
-    if (p.slice(4, 6) === '12') {
-      const ySpec = await buildYearClosingSpec(conn, p, companyId)
-      if (ySpec) {
-        const r = await engine.upsertVoucher(conn, ySpec, accountMap, allocSeq, userId, companyId)
-        // 已冲销(3)的年结凭证不会被自动重算覆盖（保留冲销痕迹）。必须显式报错而不是静默 skip
-        // （2026-09-18 审计 P1）：静默 skip 会让界面一直停在「年终结转凭证未生成」，
-        // 用户反复点「生成」也没有任何变化，不知道要去处理那张已冲销的凭证。
-        if (r.skipped && r.reason === 'reversed') {
-          throw new AppError(
-            `${p.slice(0, 4)} 年的年终结转凭证已被冲销，系统不会自动覆盖已冲销凭证。`
-            + '请先在会计凭证页核对该冲销记录并从业务上确认本年利润，再联系管理员处理后再结账。',
-            409,
-            'ACCT_YEAR_CLOSING_VOUCHER_REVERSED',
-            { voucherId: r.id ?? null, period: p },
-          )
-        }
-        results.push({ kind: '年终结转', ...r })
-        if (r.id) {
-          await conn.query('DELETE FROM acct_closing_details WHERE company_id=? AND period=? AND closing_type=?', [companyId, p, 'year'])
-          await writeClosingDetails(conn, companyId, p, 'year', r.id, ySpec.legs)
-        }
+      const r = await engine.upsertVoucher(conn,spec,accountMap,allocSeq,userId,companyId)
+      if (r.skipped && r.reason === 'reversed') {
+        const kind = annual ? '年终结转' : '损益结转'
+        throw new AppError(`${p} 的${kind}凭证已人工冲销，请核对冲销记录后处理`,409,
+          annual ? 'ACCT_YEAR_CLOSING_VOUCHER_REVERSED' : 'ACCT_CLOSING_VOUCHER_REVERSED',
+          {voucherId:r.id, period:p})
+      }
+      results.push({kind:annual ? '年终结转' : '损益结转',...r})
+      if ((r.created || r.updated) && spec.legs.length) {
+        await writeClosingDetails(conn,companyId,p,annual ? 'year' : 'pl_month',r.id,spec.legs)
       }
     }
     const status = await closingStatus(conn, p, companyId)

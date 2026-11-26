@@ -45,8 +45,8 @@ const turnoverColumns: TableColumn<InventoryStats['turnover'][number] & { rank: 
   { key: 'code', title: '编码', width: 120, render: v => <span className="text-muted-foreground">{String(v)}</span> },
   { key: 'name', title: '名称', width: 180, render: v => <span className="font-medium">{String(v)}</span> },
   { key: 'unit', title: '单位', width: 70 },
-  { key: 'inboundQty', title: '入库量', width: 95, render: v => <span className="text-green-600">+{String(v)}</span> },
-  { key: 'outboundQty', title: '出库量', width: 95, render: v => <span className="text-red-500">-{String(v)}</span> },
+  { key: 'inboundQty', title: '入库量', width: 95, render: v => <span className="text-success-ink">+{String(v)}</span> },
+  { key: 'outboundQty', title: '出库量', width: 95, render: v => <span className="text-destructive-ink">-{String(v)}</span> },
   { key: 'currentQty', title: '当前库存', width: 100, render: v => <span className="font-semibold">{String(v)}</span> },
   { key: 'periodEndQty', title: '期末库存', width: 95, render: v => v == null ? '—' : String(v) },
   { key: 'avgStock', title: '平均库存', width: 100, render: v => v == null ? '—' : String(v) },
@@ -119,7 +119,7 @@ export default function ReportsPage() {
   const activeQ = tab === 'purchase' ? purchaseQ : tab === 'sale' ? saleQ : invQ
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="报表中心"
         description="查看采购、销售与库存统计。"

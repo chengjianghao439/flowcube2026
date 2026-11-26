@@ -24,7 +24,7 @@ test.each([false, true])('采购新建入口按 purchase.order.create 开放：$
   try {
     await act(async () => root.render(<QueryClientProvider client={cache}><MemoryRouter initialEntries={['/purchase']}><Page /><Location /></MemoryRouter></QueryClientProvider>))
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
-    const create = [...host.querySelectorAll('button')].find(button => button.textContent === '+ 新建采购单')
+    const create = [...host.querySelectorAll('button')].find(button => button.textContent === '新建采购单')
     expect(!!create).toBe(canCreate)
     if (create) {
       await act(async () => create.click())

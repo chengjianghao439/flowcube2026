@@ -83,7 +83,7 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
     saleRow = await lockStatusRow(conn, {
       table: 'sale_orders',
       id: saleOrderId,
-      columns: 'id, status, order_no, customer_id, total_amount, discount_amount, commercial_model, commercial_revision, warehouse_id, disposal_handling_link_id',
+      columns: 'id, status, order_no, customer_id, total_amount, discount_amount, cash_policy, commercial_model, commercial_revision, warehouse_id, disposal_handling_link_id',
       entityName: '销售单',
     })
     // Establish the customer serialization gate before any RR consistent read.
@@ -178,7 +178,12 @@ async function shipWithinTransaction(conn, id, operator, saleData, { requestKey,
   const isReturnOut = isPurchaseReturn || isSaleReturnReverse
 
   {
-    const [shipmentRows] = await conn.query('SELECT product_id,product_name,picked_qty,allow_decimal_qty_snapshot FROM warehouse_task_items WHERE task_id=? ORDER BY id FOR UPDATE', [id])
+    const [shipmentRows] = await conn.query('SELECT id,product_id,product_name,picked_qty,sale_return_item_id,allow_decimal_qty_snapshot FROM warehouse_task_items WHERE task_id=? ORDER BY id FOR UPDATE', [id])
+    if (!isPurchaseReturn && !commercialShipment && !handlingLink) {
+      items = await getLockedSaleShipItems(conn, taskRow, shipmentRows)
+      warehouseId = Number(taskRow.warehouse_id)
+      totalAmount = saleRow ? Number(saleRow.total_amount) : items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
+    }
     await assertQtyPrecision(conn, shipmentRows.map(item => ({ productId: item.product_id,
       productName: item.product_name, qty: item.picked_qty, label: '实际出库数量' })))
   }
@@ -341,7 +346,7 @@ async function ship(id, operator, saleData, { requestKey, scopeWarehouseIds = nu
     if (purchaseReturnIdentity) {
       // 原PR范围仍在锁后重核，早检不能替代准确PO/PR门。
       assertTaskScope({ warehouse_id: purchaseReturnIdentity.warehouse_id }, { scopeWarehouseIds, pdaWarehouseId })
-    } else if (!saleData) saleData = await getShipContext(id)
+    } else if (!saleData) saleData = { saleOrderId: taskIdentity.sale_order_id }
     if (taskIdentity.task_type !== 'purchase_return' && Number(saleData?.saleOrderId || 0) !== Number(taskIdentity.sale_order_id || 0)) {
       throw new AppError('出库预检与任务销售来源不一致，请刷新后核对', 409, 'SALE_SHIP_SOURCE_CHANGED')
     }
@@ -351,6 +356,29 @@ async function ship(id, operator, saleData, { requestKey, scopeWarehouseIds = nu
     return payload
   } catch (e) { await conn.rollback(); throw e }
   finally { conn.release() }
+}
+
+async function getLockedSaleShipItems(conn, task, rows) {
+  if (!rows.length) throw new AppError('任务无出库明细', 400)
+  const reverse = task.task_type === 'sale_return_out'
+  const [prices] = reverse
+    ? await conn.query('SELECT id, product_id, unit_price FROM sale_return_items WHERE return_id=? ORDER BY id FOR SHARE', [task.return_id])
+    : await conn.query('SELECT product_id, unit_price FROM sale_order_items WHERE order_id=? AND warehouse_id=? ORDER BY id FOR SHARE',
+      [task.sale_order_id,task.warehouse_id])
+  const byKey = new Map()
+  for (const row of prices) {
+    const key = Number(reverse ? row.id : row.product_id)
+    if (byKey.has(key)) throw new AppError('出库明细关联多条销售行，请核对原销售单',409)
+    byKey.set(key, row)
+  }
+  return rows.map(row => {
+    const price = byKey.get(Number(reverse ? row.sale_return_item_id : row.product_id))
+    if (Number(row.picked_qty) && (!price || Number(price.product_id) !== Number(row.product_id))) {
+      throw new AppError('出库任务缺少对应的原单明细，请核对',409,reverse ? 'SALE_RETURN_ITEM_LINK_MISSING' : 'SALE_SHIP_SOURCE_CHANGED')
+    }
+    return { productId:Number(row.product_id), productName:row.product_name, quantity:Number(row.picked_qty),
+      unitPrice:price?.unit_price == null ? null : Number(price.unit_price) }
+  })
 }
 
 async function getLockedPurchaseReturnShipContext(conn, taskRow, lockedReturn) {

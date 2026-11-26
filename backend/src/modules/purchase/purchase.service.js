@@ -441,31 +441,40 @@ async function getApprovalThreshold() {
   return Number.isFinite(n) && n > 0 ? n : 0
 }
 
+// 收货/上架先持收货任务锁，再锁采购单。收货建单持采购单锁后才插入新任务。
+async function lockPurchaseAndInboundTasks(conn, id, scopeWarehouseIds) {
+  const [[owner]] = await conn.query('SELECT warehouse_id FROM purchase_orders WHERE id=? AND deleted_at IS NULL', [id])
+  if (!owner) throw new AppError('采购单不存在', 404)
+  assertInScope(scopeWarehouseIds, owner.warehouse_id, '采购单')
+  const membersSql = `SELECT DISTINCT i.task_id FROM inbound_task_items i JOIN inbound_tasks t ON t.id=i.task_id
+    WHERE i.purchase_order_id=? AND t.deleted_at IS NULL AND t.status<>5 ORDER BY i.task_id`
+  const [candidates] = await conn.query(membersSql, [id])
+  const ids = candidates.map(row => row.task_id)
+  const [taskRows] = ids.length ? await conn.query(
+    `SELECT id,task_no,status,submitted_at FROM inbound_tasks FORCE INDEX (PRIMARY)
+      WHERE id IN (?) AND deleted_at IS NULL AND status<>5 ORDER BY id FOR UPDATE`, [ids],
+  ) : [[]]
+  const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, entityName: '采购单' })
+  assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
+  const [current] = await conn.query(membersSql, [id])
+  if (current.length !== taskRows.length || current.some((row, index) => Number(row.task_id) !== Number(taskRows[index].id))) {
+    throw new AppError('关联收货单已变化，请刷新采购单后重试', 409, 'PURCHASE_INBOUND_TASKS_CHANGED')
+  }
+  return { orderRow, taskRows }
+}
+
 async function withdrawConfirm(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
-    // 与 cancel()/receive() 保持同样的加锁顺序（先 inbound_tasks 后 purchase_orders），避免并发死锁。
-    // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找。
-    const [taskIdRows] = await conn.query(
-      'SELECT DISTINCT task_id FROM inbound_task_items WHERE purchase_order_id = ?',
-      [id],
-    )
-    const taskIds = taskIdRows.map(r => Number(r.task_id))
-    const [taskRows] = taskIds.length
-      ? await conn.query(
-          `SELECT id, task_no FROM inbound_tasks WHERE id IN (?) AND deleted_at IS NULL AND status <> 5 FOR UPDATE`,
-          [taskIds],
-        )
-      : [[]]
+    const { orderRow, taskRows } = await lockPurchaseAndInboundTasks(conn, id, scopeWarehouseIds)
     if (taskRows.length) {
       throw new AppError(
         `该采购单已创建收货订单 ${taskRows.map(t => t.task_no).join('、')}，请先取消收货订单后再撤回确认`,
         409,
       )
     }
-    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, columns: 'id, status, warehouse_id', entityName: '采购单' })
-    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
     const rule = assertStatusAction('purchase', 'withdrawConfirm', orderRow.status)
     await assertNoActiveSaleBinding(conn, id, '撤回采购单')
     await compareAndSetStatus(conn, {
@@ -552,27 +561,9 @@ async function reject(id, { reason }, operator, scopeWarehouseIds = null) {
 async function cancel(id, operator, scopeWarehouseIds = null) {
   const conn = await pool.getConnection()
   try {
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
-
-    // 混合采购单收货单的 inbound_tasks.purchase_order_id 头字段为空，须按明细行关联查找涉及本采购单的收货单。
-    // 加锁顺序必须与 receive()/putaway()（含上架完成自动结算）保持一致（先 inbound_tasks 后 purchase_orders），
-    // 否则并发下两边反向加锁会触发 InnoDB 死锁。
-    const [taskIdRows] = await conn.query(
-      'SELECT DISTINCT task_id FROM inbound_task_items WHERE purchase_order_id = ?',
-      [id],
-    )
-    const taskIds = taskIdRows.map(r => Number(r.task_id))
-    // 与 receive() 锁的是同一行（inbound_tasks 主键），避免与 PDA 现场收货并发时产生竞态
-    const [taskRows] = taskIds.length
-      ? await conn.query(
-          `SELECT id, task_no, status FROM inbound_tasks
-           WHERE id IN (?) AND deleted_at IS NULL AND status <> 5 FOR UPDATE`,
-          [taskIds],
-        )
-      : [[]]
-
-    const orderRow = await lockStatusRow(conn, { table: 'purchase_orders', id, entityName: '采购单' })
-    assertInScope(scopeWarehouseIds, orderRow.warehouse_id, '采购单')
+    const { orderRow, taskRows } = await lockPurchaseAndInboundTasks(conn, id, scopeWarehouseIds)
     const cancelRule = assertStatusAction('purchase', 'cancel', orderRow.status)
     await assertNoActiveSaleBinding(conn, id, '取消采购单')
 
@@ -587,13 +578,15 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
       if (Number(received) > 0) {
         throw new AppError(`采购单在收货订单 ${taskRow.task_no} 中已产生实际收货，请先处理收货流程`, 409)
       }
+      if (taskRow.submitted_at) throw new AppError('收货单已提交，无法随采购取消移除明细', 409)
+      assertStatusAction('inboundTask', 'cancel', taskRow.status)
     }
 
     // 校验通过：本采购单在这些收货单里都还没实际收货，安全移出对应明细；
     // 收货单因此变空则整单级联取消（等同混单前的行为），否则保留收货单继续处理其余采购单的明细
     for (const taskRow of taskRows) {
       const [[{ remain }]] = await conn.query(
-        'SELECT COUNT(*) AS remain FROM inbound_task_items WHERE task_id = ? AND purchase_order_id <> ?',
+        'SELECT COUNT(*) AS remain FROM inbound_task_items WHERE task_id = ? AND NOT (purchase_order_id <=> ?)',
         [taskRow.id, id],
       )
       await conn.query(
@@ -601,7 +594,6 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
         [taskRow.id, id],
       )
       if (Number(remain) === 0) {
-        assertStatusAction('inboundTask', 'cancel', taskRow.status)
         await compareAndSetStatus(conn, {
           table: 'inbound_tasks',
           id: Number(taskRow.id),
@@ -619,6 +611,7 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
           { purchaseOrderId: id, purchaseOrderNo: orderRow.order_no },
         )
       } else {
+        await conn.query('UPDATE inbound_tasks SET lock_version=lock_version+1 WHERE id=?', [taskRow.id])
         await appendInboundEvent(
           conn,
           Number(taskRow.id),

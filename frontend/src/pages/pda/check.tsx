@@ -245,20 +245,44 @@ export default function PdaCheckPage() {
   const pct         = totalPick > 0 ? Math.min(100, Math.round(totalChecked / totalPick * 100)) : 0
   const linesDone   = items.length > 0 && items.every(i => (i.checkedQty ?? 0) === i.pickedQty)
 
+  const recoveryNotice = (
+    <PdaCriticalActionNotice
+      blockedReason={checkAction.blockedReason}
+      pendingRecord={checkAction.pendingRecord}
+      confirming={checkAction.confirming}
+      phase={checkAction.phase}
+      phaseMessage={checkAction.phaseMessage}
+      lastErrorMessage={checkAction.lastErrorMessage}
+      onConfirm={() => {
+        void checkAction.confirmPending().then((status) => {
+          if (!status) return
+          if (status.status === 'pending') warn(status.message || '系统还未确认结果，请稍后再查')
+          if (status.status === 'state_unconfirmed') warn(status.message)
+          if (status.status === 'not_found') warn(status.message || '未找到上次复核记录；请刷新任务后再决定是否重扫')
+          if (status.status === 'failed') err(status.message || '上次复核未成功，请检查后重试')
+        })
+      }}
+      onClear={() => checkAction.clearPending()}
+      onDismissError={() => checkAction.clearError()}
+    />
+  )
+
   if (step === 'select-task') {
     return (
-      <TaskSelectStep
+      <>{recoveryNotice}<TaskSelectStep
         onSelect={task => {
           setSelectedTask(task)
+          navigate(`/pda/check/${task.id}`)
           setStep('checking')
         }}
-      />
+      /></>
     )
   }
 
   if (taskId <= 0) {
     return (
       <PdaTaskState
+        notice={recoveryNotice}
         title="缺少复核任务"
         description="未找到复核任务信息，请返回列表重新选择。"
         actionText="选择任务"
@@ -273,6 +297,7 @@ export default function PdaCheckPage() {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <PdaHeader title="复核作业" onBack={() => setStep('select-task')} />
+        {recoveryNotice}
         <div className="flex flex-1 items-center justify-center">
           <div className="space-y-3 text-center">
             <PdaLoading className="h-10" />
@@ -286,6 +311,7 @@ export default function PdaCheckPage() {
   if (taskError || !taskDetail) {
     return (
       <PdaTaskState
+        notice={recoveryNotice}
         title="复核任务不存在"
         description={(taskLoadError as { message?: string })?.message || `未找到任务 #${taskId}，请确认任务是否已被删除或状态已变化。`}
         actionText="选择其他任务"
@@ -300,6 +326,7 @@ export default function PdaCheckPage() {
   if (!currentDone && taskDetail.status !== WT_STATUS.CHECKING) {
     return (
       <PdaTaskState
+        notice={recoveryNotice}
         title="当前任务不能复核"
         description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。复核页只允许处理「待复核」任务，请选择其他待复核任务。`}
         actionText="选择其他任务"
@@ -313,6 +340,7 @@ export default function PdaCheckPage() {
   if (currentDone) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 text-center">
+        {recoveryNotice}
         {allChecked
           ? <CircleCheck className="mx-auto mb-6 h-20 w-20 text-success-ink" />
           : <ClipboardList className="mx-auto mb-6 h-20 w-20 text-muted-foreground" />}
@@ -362,25 +390,7 @@ export default function PdaCheckPage() {
 
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-4 py-4 space-y-3">
-          <PdaCriticalActionNotice
-            blockedReason={checkAction.blockedReason}
-            pendingRecord={checkAction.pendingRecord}
-            confirming={checkAction.confirming}
-            phase={checkAction.phase}
-            phaseMessage={checkAction.phaseMessage}
-            lastErrorMessage={checkAction.lastErrorMessage}
-            onConfirm={() => {
-              void checkAction.confirmPending().then((status) => {
-                if (!status) return
-                if (status.status === 'pending') warn(status.message || '系统还未确认结果，请稍后再查')
-                if (status.status === 'state_unconfirmed') warn(status.message)
-                if (status.status === 'not_found') warn(status.message || '未找到上次复核记录；请刷新任务后再决定是否重扫')
-                if (status.status === 'failed') err(status.message || '上次复核未成功，请检查后重试')
-              })
-            }}
-            onClear={() => checkAction.clearPending()}
-            onDismissError={() => checkAction.clearError()}
-          />
+          {recoveryNotice}
 
           {taskLoading && (
             <div className="flex h-40 items-center justify-center">

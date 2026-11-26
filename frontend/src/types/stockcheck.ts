@@ -73,6 +73,7 @@ export interface PendingScanCheck {
 interface ScanEntry {
   containerId: number
   barcode: string
+  containerBookQty?: number | null
   countedQty: number
   /** 单件库存条码（一件一码）：扫到即计 1，无数量录入 */
   individual: boolean

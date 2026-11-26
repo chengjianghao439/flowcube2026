@@ -26,7 +26,7 @@ export const confirmedDisposal = (record: Pick<DisposalExecutionRecord, 'userId'
 export function rememberConfirmedDisposal(record: DisposalExecutionRecord, result: DisposalExecutionResult) { confirmed.set(recordIdentity(record), result) }
 const listeners = new Set<() => void>()
 let generation = 0, revision = 0
-const actor = () => { const a = useAuthStore.getState(); return JSON.stringify([a.token, a.sessionGeneration, a.user?.id, a.user?.roleId, a.user?.permissions]) }
+const actor = () => { const a = useAuthStore.getState(); return JSON.stringify([!!a.token, a.sessionGeneration, a.user?.id, a.user?.roleId, a.user?.permissions]) }
 let lastActor = actor()
 function notify() { revision++; listeners.forEach(listener => listener()) }
 function ownerChanged() { generation++; confirmed.clear(); notify() }

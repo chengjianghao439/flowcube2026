@@ -81,3 +81,23 @@ test('销售履约详情在异常尚未登记时返回实时种类，不带来�
   assert.equal(result.detectedCount, 3)
   assert.deepEqual(Array.from(result.issues, issue => issue.conditionActive), [true, false])
 })
+
+test('同一延期采购的多笔绑定只产生一个事项，保留合计数量与最早交期', async () => {
+  const module = { exports: {} }
+  const deps = {
+    '../../utils/backendTime': { beijingTodayYmd: () => '2026-11-25' },
+    './fulfillment.rules': rules,
+    './fulfillment.access': { definition: () => ({ path: '/sale' }) },
+    '../../utils/inboundThresholds': {},
+    './fulfillment.delivery': { saleDelivery: async () => ({ items: [{ id: 3, productCode: 'P', unit: '个', sources: [
+      { bound: true, orderId: 4, date: '2026-11-24', quantity: 2 },
+      { bound: true, orderId: 4, date: '2026-11-21', quantity: 3.5 },
+    ] }] }) },
+  }
+  runInNewContext(readFileSync(require.resolve('../backend/src/modules/fulfillment/fulfillment.detect'), 'utf8'),
+    { module, require: key => deps[key] })
+  const issues = await module.exports.detect({ query: async () => [[]] }, 'sale', { id: 1, status: 2 })
+  assert.equal(issues.length, 1)
+  assert.equal(issues[0].key, 'purchase-delay:3:4')
+  assert.match(issues[0].reason, /5\.5 个.*2026-11-21/)
+})

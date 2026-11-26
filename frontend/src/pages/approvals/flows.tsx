@@ -1,3 +1,4 @@
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useState, useId } from 'react'
 import { Plus } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
@@ -56,7 +57,7 @@ const emptyFlow = (): FlowDraft => ({ bizType: 'purchase_order', name: '', minAm
 const NO_CHOICE = '__none__'
 
 export default function ApprovalFlowsPage() {
-  const { data: flows = [], isSuccess } = useApprovalFlows()
+  const { data: flows = [], isSuccess, isLoading, isError, error, refetch } = useApprovalFlows()
   const { mutate: createFlow, isPending: creating } = useCreateApprovalFlow()
   const { mutate: updateFlow, isPending: updating } = useUpdateApprovalFlow()
   const { mutate: deleteFlow } = useDeleteApprovalFlow()
@@ -192,12 +193,12 @@ export default function ApprovalFlowsPage() {
     <div className="space-y-4">
       <PageHeader
         title="审批流配置"
-        description="按业务类型 + 金额区间配置多级审批节点（指定角色 / 部门负责人 / 指定用户）"
+        description="按业务类型与金额配置多级审批节点。"
         actions={<Button onClick={openCreate}>新增审批流</Button>}
       />
 
 
-      <DataTable columns={columns} data={flows} loading={false} rowKey="id" />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable fluid columnStorageKey="approval-flows" scrollLabel="审批流配置表格" virtualized columns={columns} data={flows} loading={isLoading} rowKey="id" />}
       {isSuccess && <ListSummary total={flows.length} unit="个" />}
 
       <Dialog open={formOpen} onOpenChange={v => { if (!v) draft.requestClose() }}>

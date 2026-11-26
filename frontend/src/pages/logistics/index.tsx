@@ -1,3 +1,4 @@
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { RecordIdentity } from '@/components/shared/RecordIdentity'
 /**
  * 物流运单列表页
@@ -37,6 +38,11 @@ import { todayYmd } from '@/lib/dateTime'
 function fmtMoney(v: number | null): string {
   return v == null ? '—' : Number(v).toFixed(2)
 }
+
+const QUICK_STATUSES = [
+  { value: 'all', label: '全部运单' },
+  ...WAYBILL_STATUS_OPTIONS,
+]
 
 export default function LogisticsPage() {
   const nav = useNavigate()
@@ -81,17 +87,17 @@ export default function LogisticsPage() {
   const trackMut = useMutation({
     mutationFn: () => setWaybillTrackingApi(trackTarget!.id, trackingInput.trim(), { skipGlobalError: true }),
     onSuccess: () => { toast.success('已录入快递单号'); invalidate(); setTrackTarget(null); setTrackingInput('') },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '录入失败'),
+    onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '录入失败'),
   })
   const retryMut = useMutation({
     mutationFn: (id: number) => retryWaybillApi(id, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已提交处理；已发送的平台订单仅查询原单'); invalidate() },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
+    onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '操作失败'),
   })
   const voidMut = useMutation({
     mutationFn: (id: number) => voidWaybillApi(id, undefined, { skipGlobalError: true }),
     onSuccess: () => { toast.success('运单本地记录已作废'); invalidate() },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
+    onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '操作失败'),
   })
 
   function reset() { setApplied({ keyword: '', status: 'all', carrierId: null, startDate: '', endDate: '' }) }
@@ -110,7 +116,7 @@ export default function LogisticsPage() {
 
   const chips = [
     applied.keyword && { key: 'keyword', label: `关键字：${applied.keyword}`, onRemove: () => setApplied({ ...applied, keyword: '' }) },
-    applied.status !== 'all' && { key: 'status', label: `状态：${WAYBILL_STATUS_OPTIONS.find(o => o.value === applied.status)?.label ?? applied.status}`, onRemove: () => setApplied({ ...applied, status: 'all' }) },
+    applied.status && !QUICK_STATUSES.some(option => option.value === applied.status) && { key: 'status', label: `状态：${applied.status}`, onRemove: () => setApplied({ ...applied, status: 'all' }) },
     applied.carrierId && { key: 'carrier', label: `承运商：${carrierMap.get(applied.carrierId) ?? applied.carrierId}`, onRemove: () => setApplied({ ...applied, carrierId: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
@@ -167,45 +173,51 @@ export default function LogisticsPage() {
         description={description}
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/waybills', exportParams).catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/waybills', exportParams).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" onClick={() => refetch()}>刷新</Button>
           </>
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <AppliedDateRange label="创建日期" startDate={applied.startDate} endDate={applied.endDate} onClear={clearDateRange} />
-        {chips.map(c => (
-          <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-            {c.label}
-            <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        {(chips.length > 0 || applied.startDate || applied.endDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip">
+          <OrderStatusFilter label="运单状态分类" value={applied.status} options={QUICK_STATUSES}
+            onChange={status => setApplied(current => ({ ...current, status }))} />
+        </div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={applied.startDate} endDate={applied.endDate} onClear={clearDateRange} />
+          {chips.map(c => (
+            <span key={c.key} className="fc-query-chip">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {(chips.length > 0 || applied.status !== 'all' || applied.startDate || applied.endDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+        </div>
       </div>
 
       {isError ? (
-        <QueryErrorState error={error} onRetry={() => void refetch()} title="运单加载失败" compact />
+        <QueryErrorState error={error} onRetry={() => void refetch()} title="运单加载失败" />
       ) : (
         <>
-          <DataTable
+          <DataTable fluid virtualized scrollLabel="物流运单表格" columnStorageKey="logistics:v1"
             columns={columns}
             data={list}
             loading={isLoading}
             rowKey="id"
-            emptyText={chips.length || applied.startDate || applied.endDate ? '没有符合条件的运单' : '暂无运单'}
+            emptyText={chips.length || applied.status !== 'all' || applied.startDate || applied.endDate ? '没有符合条件的运单' : '暂无运单'}
           />
           {data && <ListSummary total={data.pagination?.total ?? list.length} unit="张运单" />}
         </>
       )}
 
       <Dialog open={!!trackTarget} onOpenChange={v => { if (!v) { setTrackTarget(null); setTrackingInput('') } }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="fc-form-dialog max-w-lg">
           <DialogHeader description={<>{<>运单 {trackTarget?.waybillNo}｜{trackTarget?.carrierName ?? '未指定承运商'}</>}</>}><DialogTitle>录入快递单号</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-3">
+          <div className="fc-form-dialog-body space-y-4 py-3">
 
             <div>
               <Label htmlFor="logistics-tracking-number">快递单号</Label>

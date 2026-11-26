@@ -5,7 +5,7 @@
  *  - 凭证是业务事实的**投影**：本引擎**只读业务事实表、只写 acct_***，绝不 UPDATE payment_records /
  *    inventory_stock / finance_accounts / 采购销售单等任何业务表。
  *  - **全量重算 + 幂等**：按 UNIQUE(company_id, source_type, source_id, source_period) upsert。同一业务事件反复生成不新增；
- *    采购结算和销售期间金额变化追加反冲/新版本，归零或来源消失也显式反冲；其它来源沿用 upsert。
+ *    采购结算、销售及损益和年度结转金额变化追加反冲/新版本，归零或来源消失也显式反冲；其它来源沿用 upsert。
  *    source_hash 未变则跳过；采购/销售来源人工冲销后停止自动恢复。
  *  - **借贷平衡**：每张凭证入库前 assert（借合计 === 贷合计），不平抛错不入库。
  *  - 不塞进任何结算事务；由用户在凭证页点「生成本期凭证」或（将来）定时任务触发，走独立事务。
@@ -115,11 +115,12 @@ async function insertEntries(conn, voucherId, legs, accountMap) {
 async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, companyId = 1) {
   const cid = Number(companyId) || 1
   const isSale = SALE_TYPES.includes(spec.sourceType)
+  const revisable = isSale || [SOURCE_TYPES.PURCHASE_SETTLE,SOURCE_TYPES.PERIOD_CLOSE,SOURCE_TYPES.PERIOD_CLOSE_Y].includes(spec.sourceType)
   const isExactMoney = isSale || spec.sourceType === SOURCE_TYPES.SUPPLIER_REFUND_IN
   const legs = isExactMoney ? normalizeSaleLegs(spec.legs) : spec.legs
     .map(l => ({ ...l, amount: round2(l.amount) }))
     .filter(l => l.amount > 0)
-  if (!legs.length && spec.sourceType !== SOURCE_TYPES.PURCHASE_SETTLE && !SALE_TYPES.includes(spec.sourceType)) return { skipped: true, reason: 'empty' }
+  if (!legs.length && !revisable) return { skipped: true, reason: 'empty' }
   const { debit, credit } = isExactMoney ? saleBalance(legs) : assertBalanced(legs)
   const voucherDate = toDateStr(spec.voucherDate)
   const period = periodOf(voucherDate)
@@ -133,7 +134,7 @@ async function upsertVoucher(conn, spec, accountMap, allocSeq, createdBy, compan
     [cid, spec.sourceType, spec.sourceId, spec.sourcePeriod || ''],
   )
 
-  if (existing && (spec.sourceType === SOURCE_TYPES.PURCHASE_SETTLE || SALE_TYPES.includes(spec.sourceType))) {
+  if (existing && revisable) {
     return reviseSourceVoucher(conn, { root: existing, spec, legs, voucherDate, period, hash, debit, credit,
       accountMap, allocSeq, createdBy, companyId: cid, insertEntries })
   }

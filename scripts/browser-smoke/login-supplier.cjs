@@ -83,7 +83,8 @@ async function main() {
         capture(code + '-' + source)
       }
       if (code === 'payment-only') {
-        cli('find', 'role', 'tab', 'click', '--name', '仪表盘', '--exact')
+        assert.equal(evaluate('[...document.querySelectorAll("[role=tab]")].some(el => el.textContent?.trim() === "仪表盘")'), false, '无仪表盘权限不应展示仪表盘标签')
+        evaluate('location.hash = "#/dashboard"')
         cli('wait', '--url', '**#/403'); cli('wait', '--text', '无访问权限')
         assert.equal(inspect().calls.some(call => call.url?.startsWith('/dashboard/')), false)
         capture('payment-only-dashboard-denied', true)

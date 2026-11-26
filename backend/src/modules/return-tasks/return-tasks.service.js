@@ -517,7 +517,7 @@ async function putaway(conn, taskId, { containerId, locationId, requestKey, user
 
   // 验证库位
   const [[location]] = await conn.query(
-    'SELECT * FROM warehouse_locations WHERE id = ? AND status = 1 AND deleted_at IS NULL',
+    'SELECT * FROM warehouse_locations WHERE id = ? AND status = 1 AND deleted_at IS NULL FOR SHARE',
     [locationId],
   )
   if (!location) throw new AppError('库位不存在或已停用', 404)

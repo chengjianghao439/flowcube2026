@@ -8,7 +8,6 @@
  */
 
 import { useEffect, useState } from 'react'
-import { Plus } from 'lucide-react'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -134,7 +133,7 @@ function AccountFormDialog({ open, mode, parentAcct, editAcct, onClose }: FormDi
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
+      <DialogContent className="fc-form-dialog sm:max-w-3xl">
         <DialogHeader description={lockCore ? "系统预置科目：编码、名称、分类与方向不可修改，仅可调整排序与备注。" : ("填写科目编码、名称、分类与记账方向。")}>
           <DialogTitle>
             {mode === 'create'
@@ -142,94 +141,92 @@ function AccountFormDialog({ open, mode, parentAcct, editAcct, onClose }: FormDi
               : `编辑科目 · ${editAcct?.code} ${editAcct?.name}`}
           </DialogTitle>
         </DialogHeader>
-
-
-
-        <form onSubmit={handleSubmit} className="space-y-4 py-1">
-          <div className="grid grid-cols-2 gap-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>科目编码 *</Label>
+                <Input
+                  value={form.code}
+                  onChange={e => set('code', e.target.value)}
+                  placeholder="如 1001 / 660101"
+                  disabled={isPending || mode === 'edit'}
+                  className="font-mono"
+                />
+                {mode === 'edit' && <p className="text-[11px] text-muted-foreground">编码创建后不可修改</p>}
+              </div>
+              <div className="space-y-1.5">
+                <Label>科目名称 *</Label>
+                <Input
+                  value={form.name}
+                  onChange={e => set('name', e.target.value)}
+                  placeholder="如 库存现金"
+                  disabled={isPending || lockCore}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>科目类别 *</Label>
+                <Select
+                  value={String(form.category)}
+                  onValueChange={v => onCategoryChange(Number(v))}
+                  disabled={isPending || lockCore}
+                >
+                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORY_OPTIONS.map(c => (
+                      <SelectItem key={c} value={String(c)}>{c} · {ACCOUNT_CATEGORY_LABELS[c]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>余额方向 *</Label>
+                <Select
+                  value={String(form.balanceDir)}
+                  onValueChange={v => set('balanceDir', Number(v))}
+                  disabled={isPending || lockCore}
+                >
+                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">借</SelectItem>
+                    <SelectItem value="2">贷</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>排序</Label>
+                <Input
+                  type="number"
+                  value={form.sortOrder}
+                  onChange={e => set('sortOrder', Number(e.target.value))}
+                  placeholder="数字越小越靠前"
+                  disabled={isPending}
+                />
+              </div>
+              <div className="flex items-end gap-2 pb-1.5">
+                <input
+                  type="checkbox"
+                  id="acct-aux"
+                  checked={form.auxType === 1}
+                  onChange={e => set('auxType', e.target.checked ? 1 : 0)}
+                  disabled={isPending || lockCore}
+                  className="accent-primary"
+                />
+                <Label htmlFor="acct-aux" className={cn('cursor-pointer', (isPending || lockCore) && 'opacity-50')}>
+                  往来核算（挂客户/供应商）
+                </Label>
+              </div>
+            </div>
             <div className="space-y-1.5">
-              <Label>科目编码 *</Label>
+              <Label>备注</Label>
               <Input
-                value={form.code}
-                onChange={e => set('code', e.target.value)}
-                placeholder="如 1001 / 660101"
-                disabled={isPending || mode === 'edit'}
-                className="font-mono"
-              />
-              {mode === 'edit' && <p className="text-[11px] text-muted-foreground">编码创建后不可修改</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label>科目名称 *</Label>
-              <Input
-                value={form.name}
-                onChange={e => set('name', e.target.value)}
-                placeholder="如 库存现金"
-                disabled={isPending || lockCore}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>科目类别 *</Label>
-              <Select
-                value={String(form.category)}
-                onValueChange={v => onCategoryChange(Number(v))}
-                disabled={isPending || lockCore}
-              >
-                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map(c => (
-                    <SelectItem key={c} value={String(c)}>{c} · {ACCOUNT_CATEGORY_LABELS[c]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>余额方向 *</Label>
-              <Select
-                value={String(form.balanceDir)}
-                onValueChange={v => set('balanceDir', Number(v))}
-                disabled={isPending || lockCore}
-              >
-                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">借</SelectItem>
-                  <SelectItem value="2">贷</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>排序</Label>
-              <Input
-                type="number"
-                value={form.sortOrder}
-                onChange={e => set('sortOrder', Number(e.target.value))}
-                placeholder="数字越小越靠前"
+                value={form.remark}
+                onChange={e => set('remark', e.target.value)}
+                placeholder="选填"
                 disabled={isPending}
               />
             </div>
-            <div className="flex items-end gap-2 pb-1.5">
-              <input
-                type="checkbox"
-                id="acct-aux"
-                checked={form.auxType === 1}
-                onChange={e => set('auxType', e.target.checked ? 1 : 0)}
-                disabled={isPending || lockCore}
-                className="accent-primary"
-              />
-              <Label htmlFor="acct-aux" className={cn('cursor-pointer', (isPending || lockCore) && 'opacity-50')}>
-                往来核算（挂客户/供应商）
-              </Label>
-            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>备注</Label>
-            <Input
-              value={form.remark}
-              onChange={e => set('remark', e.target.value)}
-              placeholder="选填"
-              disabled={isPending}
-            />
-          </div>
-
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>取消</Button>
             <Button type="submit" disabled={isPending || !form.code.trim() || !form.name.trim()}>
@@ -308,7 +305,6 @@ export default function AccountsPage() {
         description="查看企业会计准则下的科目层级与记账属性。"
         actions={canManage && (
           <Button onClick={handleAddRoot}>
-            <Plus className="mr-1.5 h-4 w-4" />
             新增一级科目
           </Button>
         )}

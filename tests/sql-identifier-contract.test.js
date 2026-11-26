@@ -43,68 +43,47 @@ const SQLISH = /\b(?:FROM|INTO|UPDATE|DELETE)\b|\bJOIN\s+[A-Za-z_]/i
 /** 扫描下限：低于这个数说明解析逻辑失效了（而不是代码变干净了）。 */
 const MIN_IDENTIFIER_POINTS = 15
 
-const GUARD_RE = (root) =>
-  new RegExp(`assertSql(?:Identifier|ColumnList)\\(\\s*${root}\\b`)
+const { ts, parse, visit, owner, callName, filesUnder } = require('./helpers/contractSource')
 
-/**
- * 可机械验证的安全形式。每条的判据都要能被正则检查：
- *  1. 硬编码三元白名单：`const table = type === 2 ? 'sale_orders' : 'purchase_orders'`
- *  2. 文件内定义的箭头函数参数：`const pendingTask = alias => ...`（调用点也在同文件）
- *  3. for-of 字面量数组：`for (const table of ['sale_orders', ...])`
- * 三种形态的外部输入都进不来；换成任何其它形态都会落回「必须显式校验」。
- */
-const SAFE_FORMS = [
-  {
-    name: '硬编码三元白名单',
-    withinFunction: true,
-    test: (text, root) =>
-      new RegExp(
-        `const\\s+${root}\\s*=\\s*[^;\\n]*\\?\\s*'[A-Za-z_][A-Za-z0-9_]*'\\s*:\\s*'[A-Za-z_][A-Za-z0-9_]*'`,
-      ).test(text),
-  },
-  {
-    name: 'for-of 字面量数组',
-    withinFunction: true,
-    test: (text, root) => new RegExp(`for\\s*\\(\\s*const\\s+${root}\\s+of\\s*\\[`).test(text),
-  },
-  {
-    name: '文件内箭头函数参数',
-    withinFunction: false,
-    test: (text, root) => new RegExp(`[\\s(,;]${root}\\s*=>`).test(text),
-  },
-]
-
-function listFiles(dir, out = []) {
-  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    const p = path.join(dir, e.name)
-    if (e.isDirectory()) listFiles(p, out)
-    else if (e.name.endsWith('.js')) out.push(p)
-  }
-  return out
+function scopeOf(node) {
+  while (node && !ts.isBlock(node) && !ts.isSourceFile(node)) node = node.parent
+  return node
 }
 
-/** 从插值点向上找最近的函数定义行；找不到就退回文件开头。 */
-function functionStart(lines, lineIdx) {
-  for (let i = lineIdx; i >= 0; i--) {
-    const line = lines[i]
-    if (/^\s*(async\s+)?function\s+[A-Za-z_$]/.test(line)) return i
-    if (/^\s*(module\.exports|exports)\s*\./.test(line)) continue
-    // 箭头函数赋值：必须整行就是定义（`const x = (a) => {` / `const x = a => {`），
-    // 否则会把 `const p = list.map(() => '?')` 这类表达式误判成函数起点——
-    // 本测试第一版就因此漏掉了 compareAndSetStatus 内已有的校验。
-    if (
-      /^\s*(const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(async\s+)?(\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*\{?\s*$/.test(
-        line,
-      )
-    ) {
-      return i
+function identifierPoints(source) {
+  if (!source.includes('\${')) return []
+  const tree = parse(source)
+  const points = []
+  const proofs = []
+  const literalId = node => ts.isStringLiteralLike(node) && /^[A-Za-z_][A-Za-z0-9_]*$/.test(node.text)
+  visit(tree, node => {
+    if (['assertSqlIdentifier', 'assertSqlColumnList'].includes(callName(node)) && node.arguments.length) {
+      proofs.push({ name: node.arguments[0].getText(), node, scope: scopeOf(node), guard: true })
     }
-  }
-  return 0
+    if (ts.isVariableDeclaration(node) && node.initializer && ts.isConditionalExpression(node.initializer)
+      && (node.parent.flags & ts.NodeFlags.Const) && literalId(node.initializer.whenTrue) && literalId(node.initializer.whenFalse)) {
+      proofs.push({ name: node.name.getText(), node, scope: scopeOf(node) })
+    }
+    if (ts.isForOfStatement(node) && ts.isVariableDeclarationList(node.initializer)
+      && (node.initializer.flags & ts.NodeFlags.Const) && ts.isArrayLiteralExpression(node.expression)
+      && node.expression.elements.every(literalId)) {
+      proofs.push({ name: node.initializer.declarations[0].name.getText(), node: node.expression, scope: node.statement })
+    }
+    if (!ts.isTemplateExpression(node) || !SQLISH.test(node.head.text + ' ' + node.templateSpans.map(s => s.literal.text).join(' '))) return
+    for (const span of node.templateSpans) {
+      const expr = span.expression.getText()
+      const name = expr.split(/[.[(]/)[0].trim()
+      if (!IDENTIFIER_LIKE.test(name)) continue
+      const proof = proofs.find(p => (p.name === name || p.name === expr) && owner(p.node) === owner(span) && p.node.end <= span.getStart()
+        && p.scope && p.scope.pos <= span.pos && p.scope.end >= span.end)
+      points.push({ name, line: tree.getLineAndCharacterOfPosition(span.getStart()).line + 1, proof })
+    }
+  })
+  return points
 }
 
 function main() {
-  const files = listFiles(SRC)
+  const files = filesUnder(SRC, name => name.endsWith('.js'))
   assert.ok(files.length > 200, `扫描到的后端文件太少（${files.length}），目录结构可能变了`)
 
   const problems = []
@@ -113,42 +92,12 @@ function main() {
   let exempted = 0
 
   for (const file of files) {
-    const raw = fs.readFileSync(file, 'utf8')
-    // 源码里转义的反引号（`FROM \`${table}\``）会被 /`[^`]*`/ 当成模板结束符，
-    // 把模板切成碎片——碎片里往往没有 SQL 关键字，于是插值被整段漏扫。
-    // 本测试第一版就因此看不见 `generateMasterCode` 的 `${table}`。
-    // 用等长占位符替换后再扫描（不动行号），提取时还原。
-    const src = raw.replace(/\\`/g, '\u0001')
-    const lines = src.split('\n')
     const rel = path.relative(ROOT, file)
-
-    for (const tpl of src.matchAll(/`[^`]*`/g)) {
-      const tplText = tpl[0].replace(/\u0001/g, '\\`')
-      if (!SQLISH.test(tplText)) continue
-      for (const im of tpl[0].matchAll(/\$\{([^}]{1,120})\}/g)) {
-        const expr = im[1].trim()
-        const root = expr.split(/[.[(]/)[0].trim()
-        if (!IDENTIFIER_LIKE.test(root)) continue
-        points++
-
-        const lineIdx = src.slice(0, tpl.index).split('\n').length - 1 + tpl[0].slice(0, im.index).split('\n').length - 1
-        const start = functionStart(lines, lineIdx)
-        const scopeText = lines.slice(start, lineIdx + 1).join('\n')
-
-        if (GUARD_RE(root).test(scopeText)) {
-          guarded++
-          continue
-        }
-        const form = SAFE_FORMS.find((f) => f.test(f.withinFunction ? scopeText : src, root))
-        if (form) {
-          exempted++
-          continue
-        }
-        problems.push(
-          `${rel}:${lineIdx + 1} 的 \`\${${expr}}\` 是 SQL 标识符插值，但函数内没有 ` +
-            `assertSqlIdentifier/assertSqlColumnList(${root}, …)，也不属于已登记的三种安全形式`,
-        )
-      }
+    for (const point of identifierPoints(fs.readFileSync(file, 'utf8'))) {
+      points++
+      if (point.proof?.guard) guarded++
+      else if (point.proof) exempted++
+      else problems.push(rel + ':' + point.line + ' 缺少 SQL 标识符校验 ' + point.name)
     }
   }
 
@@ -166,4 +115,5 @@ function main() {
   console.log('  [OK] SQL 标识符插值都有守卫')
 }
 
-main()
+module.exports = { identifierPoints }
+if (require.main === module) main()

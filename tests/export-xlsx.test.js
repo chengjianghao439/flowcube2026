@@ -45,7 +45,7 @@ const COLUMNS = [
 
 test('日期列写成日期单元格，并指定 yyyy-mm-dd / yyyy-mm-dd hh:mm 数字格式', async () => {
   const ws = await exportToWorksheet(COLUMNS, [
-    { d: new Date(2026, 8, 16), t: new Date(2026, 8, 16, 19, 55), s: '2026-09-16 19:55' },
+    { d: new Date('2026-09-16T00:00:00+08:00'), t: new Date('2026-09-16T19:55:00+08:00'), s: '2026-09-16 19:55' },
   ])
   const row = ws.getRow(2)
 
@@ -65,7 +65,7 @@ test('日期列写成日期单元格，并指定 yyyy-mm-dd / yyyy-mm-dd hh:mm �
 
 test('零时刻的日期不为它加时分（避免纯日期列显示成 00:00）', async () => {
   const ws = await exportToWorksheet(COLUMNS, [
-    { d: new Date(2026, 0, 1), t: new Date(2026, 0, 1, 0, 0, 0), s: '' },
+    { d: new Date('2026-01-01T00:00:00+08:00'), t: new Date('2026-01-01T00:00:00+08:00'), s: '' },
   ])
   const row = ws.getRow(2)
   assert.equal(row.getCell(1).numFmt, 'yyyy-mm-dd')
@@ -104,4 +104,16 @@ test('正式对账单的长单位抬头完整换行，不固定20pt裁切', asyn
   assert.equal(ws.getCell('A2').value, `客户：${name}`)
   assert.equal(ws.getCell('A2').alignment.wrapText, true)
   assert.ok(ws.getRow(2).height > 20)
+})
+
+test('北京午夜及正午写入确切 Excel 日期序列号', async () => {
+  const midnight = new Date('2026-07-01T00:00:00+08:00')
+  const noon = new Date('2026-07-01T12:00:00+08:00')
+  const ws = await exportToWorksheet(COLUMNS, [{ d:midnight, t:noon }])
+  const serial = address => 25569 + ws.getCell(address).value.getTime() / 86400000
+  assert.equal(serial('A2'), 46204)
+  assert.equal(serial('B2'), 46204.5)
+  const { ymd } = require('../backend/src/utils/excelExport')
+  assert.equal(ymd(midnight), '2026-07-01')
+  assert.equal(ymd('2026-07-01'), '2026-07-01')
 })

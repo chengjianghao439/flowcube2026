@@ -21,7 +21,7 @@ import { useContext, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ActionBar } from '@/components/shared/ActionBar'
 import { SectionCard } from '@/components/shared/SectionCard'
-import { ArrowLeft, CircleDollarSign, PackageCheck, Printer, Send, Undo2, X, type LucideIcon } from 'lucide-react'
+import { CircleDollarSign, PackageCheck, Printer, Send, Undo2, X, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useWorkspaceStore } from '@/store/workspaceStore'
@@ -146,7 +146,7 @@ export default function InboundTaskDetailPage() {
   }
 
   if (error && (!task || blocksInboundRead(error))) {
-    return <div className="space-y-3"><QueryErrorState error={error} title={inboundReadTitle(error)} onRetry={() => { void refetchTask() }} /><Button variant="outline" onClick={closeTab}>返回收货列表</Button></div>
+    return <QueryErrorState error={error} title={inboundReadTitle(error)} onRetry={() => { void refetchTask() }} />
   }
 
   if (isLoading || !task) {
@@ -162,47 +162,46 @@ export default function InboundTaskDetailPage() {
         subtitle={<SoftStatusLabel label={receiptStatus?.label ?? task.statusName} tone={statusTone} />}
         rightActions={
           <>
-            {canEdit && <Button variant="outline" size="sm" onClick={() => {
+            {(canCancel || canVoidReceipt) && (
+              <div role="group" aria-label="收货撤销操作" className="flex items-center gap-2 border-r border-border pr-2 last:border-r-0 last:pr-0">
+                {canCancel && (
+                  <Button
+                    variant="outline"
+                    className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
+                    disabled={cancelMut.isPending}
+                    onClick={() => setCancelConfirmOpen(true)}
+                  >
+                    <X className="mr-1 h-4 w-4" />取消任务
+                  </Button>
+                )}
+                {canVoidReceipt && (
+                  <Button
+                    variant="outline"
+                    className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
+                    disabled={voidReceiptMut.isPending}
+                    onClick={() => setVoidConfirmOpen(true)}
+                  >
+                    <Undo2 className="mr-1 h-4 w-4" />撤回收货
+                  </Button>
+                )}
+              </div>
+            )}
+            {canEdit && <Button variant="outline" onClick={() => {
               if (!isInboundDraftEditable(task) || !can(PERMISSIONS.INBOUND_ORDER_UPDATE)) return
               const path = `/inbound-tasks/${task.id}/edit`
               useWorkspaceStore.getState().addTab({ key: path, path, title: `编辑 ${task.taskNo}` }); navigate(path)
             }}>编辑</Button>}
-            {canCancel && (
-              <Button
-                variant="outline"
-                className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
-                size="sm"
-                disabled={cancelMut.isPending}
-                onClick={() => setCancelConfirmOpen(true)}
-              >
-                <X className="mr-1 h-4 w-4" />取消任务
-              </Button>
-            )}
-            {canVoidReceipt && (
-              <Button
-                variant="outline"
-                className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
-                size="sm"
-                disabled={voidReceiptMut.isPending}
-                onClick={() => setVoidConfirmOpen(true)}
-              >
-                <Undo2 className="mr-1 h-4 w-4" />撤回收货
-              </Button>
-            )}
             {canCloseReceiving && (
               <Button
                 variant="outline"
-                size="sm"
                 onClick={() => setCloseReceivingConfirmOpen(true)}
               >
                 结束本次收货
               </Button>
             )}
-            {canPrint && <Button variant="outline" size="sm" disabled={!!error} onClick={() => setPrintOpen(true)}><Printer className="mr-1 h-4 w-4" />打印</Button>}
-            <Button variant="outline" size="sm" onClick={closeTab}><ArrowLeft className="mr-1 h-4 w-4" />返回列表</Button>
+            {canPrint && <Button variant="outline" disabled={!!error} onClick={() => setPrintOpen(true)}><Printer className="mr-1 h-4 w-4" />打印</Button>}
             {canSubmit && (
               <Button
-                size="sm"
                 onClick={() => {
                   if (!validId) return
                   submitMut.mutate(validId, {
@@ -225,7 +224,7 @@ export default function InboundTaskDetailPage() {
         }
       />
 
-      <section aria-label="收货摘要" className="desktop-inbound-summary overflow-hidden rounded-xl border border-border bg-card">
+      <section aria-label="收货摘要" className="desktop-inbound-summary overflow-hidden rounded-lg border border-border bg-card">
       <div className="grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
         <StatusCard
           icon={PackageCheck}

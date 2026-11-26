@@ -289,7 +289,7 @@ test('发布前用 CI 实际域名校验可信主机键，只有 IP 时拒绝', 
     fs.writeFileSync(hosts, `deploy.example.test,192.0.2.10 ${pubkey}\n`)
     const matched = run()
     assert.equal(matched.status, 0, matched.stdout + matched.stderr)
-    assert.doesNotMatch(matched.stdout + matched.stderr, new RegExp(pubkey.split(' ')[1]))
+    assert.equal((matched.stdout + matched.stderr).includes(pubkey.split(' ')[1]), false, '预检输出不得包含完整公钥')
   } finally { fs.rmSync(temp, { recursive: true, force: true }) }
 })
 
@@ -350,12 +350,16 @@ test('桌面发布两侧均预检，阶段失败只保留原包并收尾本次�
   stub('scp', 'stage=scp\n' + event)
   stub('scripts/transfer-release-asset.sh', 'stage=transfer\n' + event)
   stub('ssh', [
+    'if [[ "$*" == *"docker run"* ]]; then',
+    '  [[ "$*" == *"--user node:node --entrypoint node"* ]] || exit 34',
+    '  [[ "$*" == *"target=/tmp/release-desktop.js"*readonly* && "$*" == *"target=/tmp/fixture.exe"*readonly* ]] || exit 35',
+    'fi',
     'case "$*" in',
     '  *"rm -rf"*) stage=cleanup;;',
-    '  *"-O exit"*) exit 0;;',
-    '  *"--dry-run"*) stage=server-check;;',
+    '  *"-O exit"*|*"chmod 0644"*) exit 0;;',
+    '  *"--dry-run"*) [[ "$*" == *"--check-write-access"* && "$*" != *"target=/isolated/downloads,readonly"* ]] || exit 36; stage=server-check;;',
     '  *"docker run"*) stage=public-server;;',
-    '  *"mkdir -p"*) stage=mkdir;;',
+    '  *"mktemp -d"*) echo /tmp/flowcube-desktop-release.Abc123def0; stage=mkdir;;',
     '  *) exit 33;;',
     'esac',
     event,
