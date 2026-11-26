@@ -225,12 +225,14 @@ docker exec "$CONTAINER_ID" \
 # 导入失败时要拿到真实原因：旧写法把 stderr 丢进 /dev/null，只报「备份可能损坏」，
 # 让一份完好的备份被误判（2026-09-14）。这里落盘再透出，区分文件损坏与语法问题。
 IMPORT_LOG="$(mktemp)"
+trap - ERR
 set +e
 { gunzip -c "$FILE" | normalize_trigger_terminators \
   | DOCKER_COMMAND_TIMEOUT="$RESTORE_TIMEOUT_SECONDS" docker exec -i "$CONTAINER_ID" \
       mysql -uroot -prestore_check_pw "$RESTORE_DB" >/dev/null; } 2>"$IMPORT_LOG"
 IMPORT_RC=$?
 set -e
+trap 'fail "恢复演练在第 ${LINENO} 行失败（退出码 $?）"' ERR
 if [ "$IMPORT_RC" -ne 0 ]; then
   IMPORT_DETAIL="$(grep -v -i 'using a password' "$IMPORT_LOG" 2>/dev/null \
     | grep -v '^[[:space:]]*$' | head -1 || true)"

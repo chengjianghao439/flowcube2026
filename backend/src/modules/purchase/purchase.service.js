@@ -569,8 +569,6 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
 
     // 本采购单在收货单里已产生实际收货（即便是混单场景），不能随取消动作静默消失，必须先走收货流程处理
     for (const taskRow of taskRows) {
-      assertStatusAction('inboundTask', 'cancel', taskRow.status)
-      if (taskRow.submitted_at) throw new AppError('收货单已提交，无法随采购取消移除明细', 409)
       const [[{ received }]] = await conn.query(
         `SELECT COALESCE(SUM(received_qty), 0) AS received
          FROM inbound_task_items
@@ -580,6 +578,8 @@ async function cancel(id, operator, scopeWarehouseIds = null) {
       if (Number(received) > 0) {
         throw new AppError(`采购单在收货订单 ${taskRow.task_no} 中已产生实际收货，请先处理收货流程`, 409)
       }
+      if (taskRow.submitted_at) throw new AppError('收货单已提交，无法随采购取消移除明细', 409)
+      assertStatusAction('inboundTask', 'cancel', taskRow.status)
     }
 
     // 校验通过：本采购单在这些收货单里都还没实际收货，安全移出对应明细；

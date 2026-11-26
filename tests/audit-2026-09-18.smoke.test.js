@@ -448,7 +448,7 @@ async function main() {
       operatorId: 1, operatorName: 'x', requestKey: unique('RK'), scopeWarehouseIds: [f.wh],
     }).then(() => null, e => e)
     if (err) assert.notEqual(err.code, 'WAREHOUSE_SCOPE_DENIED', '范围正确时不应报范围错误')
-  })
+  }, 'READ COMMITTED')
 
   // ── P2 同形态：跨仓读取/查询收口 ────────────────────────────────────────
   test('★P2 五处跨仓读取与查询必须被拦截（products/finder、containers/overdue、returns 来源单、approvals）', async f => {
