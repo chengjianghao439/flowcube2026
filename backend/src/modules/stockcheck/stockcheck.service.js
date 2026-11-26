@@ -123,7 +123,7 @@ async function getScanItems(id, scopeWarehouseIds = null) {
   const [items] = await pool.query(
     `SELECT ici.id, ici.product_id, ici.product_code, ici.product_name, ici.unit, ici.book_qty, ici.actual_qty,
             (SELECT COUNT(*) FROM inventory_containers c
-              WHERE c.product_id = ici.product_id AND c.warehouse_id = ? AND c.status = 1 AND c.deleted_at IS NULL) AS book_container_count,
+              WHERE c.product_id = ici.product_id AND c.warehouse_id = ? AND c.status = 1 AND c.deleted_at IS NULL AND c.locked_by_task_id IS NULL) AS book_container_count,
             (SELECT COUNT(*) FROM inventory_check_item_containers s WHERE s.check_item_id = ici.id) AS scanned_container_count
        FROM inventory_check_items ici
       WHERE ici.check_id = ? ORDER BY ici.id ASC`,
@@ -134,16 +134,18 @@ async function getScanItems(id, scopeWarehouseIds = null) {
   if (itemIds.length) {
     const [scanRows] = await pool.query(
       `SELECT s.check_item_id, s.container_id, s.barcode, s.counted_qty,
+              CASE WHEN c.warehouse_id = ? AND c.status = 1 AND c.deleted_at IS NULL AND c.locked_by_task_id IS NULL
+                   THEN c.remaining_qty END AS container_book_qty,
               (c.container_type = 1 AND c.initial_qty = 1) AS individual
          FROM inventory_check_item_containers s
          LEFT JOIN inventory_containers c ON c.id = s.container_id
         WHERE s.check_item_id IN (?) ORDER BY s.id ASC`,
-      [itemIds],
+      [check.warehouse_id, itemIds],
     )
     for (const r of scanRows) {
       const k = Number(r.check_item_id)
       if (!scansByItem.has(k)) scansByItem.set(k, [])
-      scansByItem.get(k).push({ containerId: Number(r.container_id), barcode: r.barcode, countedQty: Number(r.counted_qty), individual: Number(r.individual) === 1 })
+      scansByItem.get(k).push({ containerId: Number(r.container_id), barcode: r.barcode, containerBookQty: r.container_book_qty == null ? null : Number(r.container_book_qty), countedQty: Number(r.counted_qty), individual: Number(r.individual) === 1 })
     }
   }
   return {
@@ -216,9 +218,9 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
     const containerByBarcode = new Map()
     if (normalized.length) {
       const [rows] = await conn.query(
-        `SELECT id, barcode, remaining_qty, container_type, initial_qty, product_id, warehouse_id, status
+        `SELECT id, barcode, remaining_qty, container_type, initial_qty, product_id, warehouse_id, status, locked_by_task_id
            FROM inventory_containers
-          WHERE barcode IN (${normalized.map(() => '?').join(',')}) AND deleted_at IS NULL`,
+          WHERE barcode IN (${normalized.map(() => '?').join(',')}) AND deleted_at IS NULL ORDER BY id FOR SHARE`,
         normalized.map(n => n.barcode),
       )
       for (const c of rows) containerByBarcode.set(String(c.barcode).toUpperCase(), c)
@@ -235,6 +237,7 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
       if (Number(full.warehouse_id) !== Number(checkRow.warehouse_id) || Number(full.status) !== CONTAINER_STATUS.ACTIVE) {
         throw new AppError(`条码 ${n.barcode} 不是本仓在库条码（可能在其他仓库或已出库），请核实`, 400, 'SCAN_CONTAINER_NOT_IN_STOCK')
       }
+      if (c.locked_by_task_id != null) throw new AppError('该库存条码正在拣货，不能录入盘点', 409, 'SCAN_CONTAINER_LOCKED')
       const individual = Number(c.container_type) === 1 && Number(c.initial_qty) === 1
       let counted
       if (individual) {
@@ -273,6 +276,9 @@ async function saveItemContainerScans(id, itemId, scans, operator, scopeWarehous
 async function create({ warehouseId, warehouseName, remark, operator, scopeWarehouseIds = null, checkType = 1, scopeType = null, scopeValue = null, productIds = null }, borrowedConnection = null) {
   assertInScope(scopeWarehouseIds, warehouseId, '盘点单')
   const type = Number(checkType) === 2 ? 2 : 1
+  if (type === 2 && (!Array.isArray(productIds) || !productIds.length)) {
+    throw new AppError('循环抽盘须选择有货商品', 400, 'STOCKCHECK_PRODUCT_SCOPE_REQUIRED')
+  }
   const conn = borrowedConnection || await pool.getConnection()
   try {
     if (!borrowedConnection) {
@@ -513,6 +519,10 @@ async function submit(id, operator, scopeWarehouseIds = null, requestKey = null)
             lockedContainers: Number(lockedRow.n),
             lockedQty: Number(lockedRow.qty),
           }, 'StockcheckScanGuard')
+        }
+        const eligible = new Set(bookContainers.map(c => Number(c.id)))
+        if (scanRows.some(scan => !eligible.has(Number(scan.container_id)))) {
+          throw new AppError('已扫库存条码归属或拣货状态已变化，请重新盘点', 409, 'SCAN_CONTAINER_CHANGED')
         }
         const losses = []
         for (const bc of bookContainers) {

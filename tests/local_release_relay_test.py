@@ -6,6 +6,7 @@ import json
 import pathlib
 import tempfile
 import unittest
+from unittest import mock
 import warnings
 import zipfile
 
@@ -96,6 +97,33 @@ class RelayTests(unittest.TestCase):
         self.assertEqual(value, ('deploy-images-123-2', 'flowcube-images.tar.gz', '/tmp/flowcube-images-123-2.tar.gz'))
         with self.assertRaises(ValueError): relay.artifact_spec('image', self.run_fixture(id='123;evil'), '1.2.3')
         with self.assertRaises(ValueError): relay.artifact_spec('desktop', self.run_fixture(), '../x')
+
+    def test_desktop_sender_and_receiver_share_run_scoped_inbox(self):
+        receiver_path = pathlib.Path(relay.__file__).with_name('receive-deploy-artifact.py')
+        spec = importlib.util.spec_from_file_location('receiver', receiver_path)
+        receiver = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(receiver)
+        _, entry, remote = relay.artifact_spec('desktop', self.run_fixture(run_attempt=2), '1.2.3')
+        with tempfile.TemporaryDirectory() as work:
+            home = pathlib.Path(work) / 'home'
+            private = pathlib.Path(work) / 'publisher-random'
+            home.mkdir(); private.mkdir()
+            with mock.patch.object(pathlib.Path, 'home', return_value=home):
+                inbox = receiver.desktop_relay_stem('123', '2', entry)
+            self.assertEqual(home / remote, inbox)
+            self.assertEqual(inbox.parent.stat().st_mode & 0o777, 0o700)
+            data = b'fixture installer'
+            ready = pathlib.Path(str(inbox) + '.relay')
+            ready.write_bytes(data)
+            dest = private / entry
+            self.assertNotEqual(relay.artifact_spec('desktop', self.run_fixture(), '1.2.3')[2], remote)
+            argv = ['receiver', str(dest), hashlib.sha256(data).hexdigest(), str(len(data)), entry, '123', '2']
+            with mock.patch.object(pathlib.Path, 'home', return_value=home), mock.patch.object(receiver.sys, 'argv', argv), \
+                    mock.patch.object(receiver.sys, 'stdin', io.StringIO('https://fixture.invalid/artifact')), \
+                    mock.patch.object(receiver.subprocess, 'run', side_effect=AssertionError('expected local relay')):
+                receiver.main()
+            self.assertEqual(dest.read_bytes(), data)
+            self.assertFalse(ready.exists())
 
     def zip_fixture(self, entries):
         buf = io.BytesIO()

@@ -125,7 +125,11 @@ async function complete(conn,returnId,taskId,context=null) {
   const items=sourceItems.map(i=>{const q=qaByItem.get(Number(i.id));if(!q)invalid('退货明细缺少真实QA行');return {...i,taskItemId:q.id,checked_qty:q.checked_qty,rejected_qty:q.rejected_qty,putaway_qty:q.putaway_qty}})
   if(!items.length)invalid('退货明细缺少原出库批次')
   if(Number(items[0].order_id)!==context.orderId)invalid('套单实际退货与预锁来源不一致')
-  const [[ar]]=await conn.query('SELECT id,total_amount,paid_amount,balance FROM payment_records WHERE type=2 AND order_id=? FOR UPDATE',[items[0].order_id])
+  // 同一应收串行化不同组件的净额分配；其已加入的对账单须先锁。
+  context.paymentContext = await require('../returns/returns.helpers').lockReturnPaymentRecord(conn, {
+    recordType:2, orderId:context.orderId,
+  })
+  const ar = context.paymentContext?.record
   if(ar)for(const field of ['total_amount','paid_amount','balance'])cash.storedCashCents(ar[field],`原套单应收${field}`)
   const [allReceipts]=await conn.query('SELECT refund_amount,financial_amount FROM sale_commercial_refund_receipts WHERE order_id=? ORDER BY id FOR SHARE',[items[0].order_id])
   let beforeCents=allReceipts.reduce((n,r)=>n+cash.storedCashCents(r.refund_amount,'原套单已退毛额'),0n),actualFinancial=allReceipts.reduce((n,r)=>n+cash.storedCashCents(r.financial_amount,'原套单已退实际净额'),0n)

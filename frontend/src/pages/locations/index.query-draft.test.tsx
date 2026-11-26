@@ -223,7 +223,7 @@ test('库位导出使用应用后的完整筛选，忽略后来取消的查询�
   await openQuery()
   await edit(draft)
   await click('取消', dialog())
-  await click('导出')
+  await click('导出 Excel')
   await wait(() => expect(download).toHaveBeenCalledOnce())
   const exported = requests.filter(url => url.pathname === '/api/export/locations').at(-1)
   expect(Object.fromEntries(exported!.searchParams)).toEqual({

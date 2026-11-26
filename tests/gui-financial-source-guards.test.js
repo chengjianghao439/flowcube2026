@@ -62,6 +62,7 @@ test('没有同承运商寄付证据的账单不得创建应付', async t => {
     rollback: async () => {},
     release: () => {},
     async query(sql) {
+      if (sql.includes('FROM acct_companies')) return [[{id:1}]]
       if (sql.includes('FROM carriers')) return [[{ id: 1, name: '合成承运商' }]]
       if (sql.includes('FROM logistics_freight_settlements')) return [[]]
       if (sql.includes('FROM logistics_freight_bills')) {
@@ -76,4 +77,26 @@ test('没有同承运商寄付证据的账单不得创建应付', async t => {
   t.mock.method(pool, 'getConnection', async () => conn)
   await assert.rejects(freight.generateSettlement({ carrierId: 1, billPeriod: '2026-11' }), { code: 'FREIGHT_NO_ELIGIBLE_BILLS' })
   assert.deepEqual(writes, [])
+})
+
+test('运费账单录入拒绝半分', async t => {
+  const deny = async () => { throw Error('不应访问数据库') }
+  t.mock.method(pool,'query',deny)
+  t.mock.method(pool,'getConnection',deny)
+  await assert.rejects(freight.createFreightBill({carrierId:1,trackingNo:'T',actualFreight:0.005}), {code:'CASH_PRECISION_INVALID'})
+})
+
+test('闭期工资发放在查工资单前被拒，非法日期不能推进工资单', async t => {
+  const hr = require('../backend/src/modules/hr/hr.service')
+  const queries = []
+  const conn = {beginTransaction:async()=>{},release(){},rollback:async()=>{},query:async sql=>{
+    queries.push(sql)
+    if (sql.includes('acct_companies')) return [[{id:1}]]
+    if (sql.includes('acct_periods')) return [[{status:2}]]
+    throw Error('意外访问工资单')
+  }}
+  t.mock.method(pool,'getConnection',async()=>conn)
+  await assert.rejects(hr.payPayroll(1,{paidDate:'2026-02-31'},{}), e=>e.statusCode===400)
+  await assert.rejects(hr.payPayroll(1,{paidDate:'2026-02-28'},{}), {code:'ACCT_PERIOD_CLOSED'})
+  assert.ok(queries.every(sql=>!sql.includes('hr_payrolls')))
 })

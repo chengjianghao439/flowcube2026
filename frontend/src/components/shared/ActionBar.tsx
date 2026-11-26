@@ -41,9 +41,15 @@
  * ```
  */
 
+import { PageDescription } from './PageDescription'
+import { ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface ActionBarProps {
+  /** 返回已应用筛选的原列表。 */
+  onBack?: () => void
+
   /** 页面主标题，支持字符串或自定义 JSX（text-xl font-semibold 由组件提供） */
   title: React.ReactNode
 
@@ -65,6 +71,7 @@ interface ActionBarProps {
 }
 
 export function ActionBar({
+  onBack,
   title,
   description,
   subtitle,
@@ -78,6 +85,11 @@ export function ActionBar({
         sticky && 'sticky top-0 z-10 -mx-6 -mt-6',
       )}
     >
+      {onBack && (
+        <Button type="button" variant="ghost" size="icon" className="h-9 w-9 shrink-0" title="返回列表" onClick={onBack}>
+          <ArrowLeft aria-hidden="true" /><span className="sr-only">返回列表</span>
+        </Button>
+      )}
       {/* 左侧：标题与状态同行，说明位于下一行 */}
       <div className="desktop-page-heading-main min-w-0 flex-1">
         <div className="desktop-page-identity flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
@@ -88,12 +100,12 @@ export function ActionBar({
             <div className="flex items-center">{subtitle}</div>
           )}
         </div>
-        <p className="desktop-page-description mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+        <PageDescription>{description}</PageDescription>
       </div>
 
-      {/* 右侧：操作按钮 —— 统一压到 sm 尺寸，详情/表单页顶栏比列表页工具栏更紧凑 */}
+      {/* 顶栏的单个操作与分组操作都保持 36px。 */}
       {rightActions && (
-        <div className="desktop-action-buttons flex flex-wrap items-center gap-2 [&>button]:h-9 [&>button]:px-3">{rightActions}</div>
+        <div className="desktop-action-buttons flex flex-wrap items-center gap-2 [&_.fc-button]:h-9 [&_.fc-button]:px-3">{rightActions}</div>
       )}
     </div>
   )

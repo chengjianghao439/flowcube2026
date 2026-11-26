@@ -42,7 +42,12 @@ async function main() {
 
   // periodSvc 自开事务（pool.getConnection），测试无法用外层事务与其共享——
   // 因此这里不走「事务内 rollback」模式，改为：测试后显式清理本次产生的数据。
+  const cleanupVoucherIds = []
   const cleanup = async () => {
+    if (cleanupVoucherIds.length) {
+      await conn.query('DELETE FROM acct_voucher_entries WHERE voucher_id IN (?)',[cleanupVoucherIds])
+      await conn.query('DELETE FROM acct_vouchers WHERE id IN (?)',[cleanupVoucherIds])
+    }
     await conn.query('DELETE FROM acct_voucher_entries WHERE voucher_id IN (SELECT id FROM acct_vouchers WHERE voucher_no LIKE ?)', ['V-CLOSE-%'])
     await conn.query('DELETE FROM acct_vouchers WHERE voucher_no LIKE ?', ['V-CLOSE-%'])
     await conn.query('DELETE FROM acct_voucher_entries WHERE voucher_id IN (SELECT id FROM acct_vouchers WHERE source_type IN (?, ?))', [SOURCE_TYPES.PERIOD_CLOSE, SOURCE_TYPES.PERIOD_CLOSE_Y])
@@ -173,6 +178,57 @@ async function main() {
     log.assert('★12 月：反结账后重生成仍为 current（yspec 不因凭证存在而变 null）',
       regenYear.status?.year === 'current', JSON.stringify(regenYear.status))
 
+    const zeroDate = '2097-07-31', zeroPeriod = '209707'
+    const original = await insVoucher(randomRef('V-CLOSE-Z').slice(0,30), zeroDate, [
+      {accountId:acct6001.id,code:'6001',name:'收入',direction:2,amount:20},
+    ],zeroPeriod)
+    await periodSvc.generateClosingVouchers(zeroPeriod,1)
+    const zeroReverse = await require('../backend/src/modules/accounting/accounting.voucher.service').reverseVoucher(original,1)
+    cleanupVoucherIds.push(zeroReverse.id)
+    const zero = await periodSvc.generateClosingVouchers(zeroPeriod,1)
+    log.assert('损益归零时冲回旧结转，重复生成保持无需结转', zero.status.pl === 'not_required' && (await periodSvc.generateClosingVouchers(zeroPeriod,1)).status.pl === 'not_required')
+    await insVoucher(randomRef('V-CLOSE-Z2').slice(0,30), zeroDate, [
+      {accountId:acct6001.id,code:'6001',name:'收入',direction:2,amount:10},
+    ],zeroPeriod)
+    const restored = await periodSvc.generateClosingVouchers(zeroPeriod,1)
+    log.assert('归零后新增业务生成新结转版本', restored.status.pl==='current')
+
+    // 年结红字只抵消年结。普通业务红字仍计入利润与税额。
+    const voucherSvc = require('../backend/src/modules/accounting/accounting.voucher.service')
+    const ledger = require('../backend/src/modules/accounting/accounting.ledger.service')
+    const group = require('../backend/src/modules/accounting/consolidation.service')
+    const tax = require('../backend/src/modules/accounting/accounting.tax.service')
+    const query = { period: '209812', companyId: 1 }
+    const before = await Promise.all([ledger.getIncomeStatement(query), group.getConsolidatedIncomeStatement({...query,groupId:1}), tax.getIncomeTaxReport(query)])
+    const [[yearVoucher]] = await conn.query('SELECT id FROM acct_vouchers WHERE company_id=1 AND source_type=? AND source_id=2098', [SOURCE_TYPES.PERIOD_CLOSE_Y])
+    cleanupVoucherIds.push((await voucherSvc.reverseVoucher(yearVoucher.id,1)).id)
+    const [[monthly]] = await conn.query('SELECT id FROM acct_vouchers WHERE company_id=1 AND source_type=? AND source_id=209812', [SOURCE_TYPES.PERIOD_CLOSE])
+    cleanupVoucherIds.push((await voucherSvc.reverseVoucher(monthly.id,1)).id)
+    const afterStatus = await periodSvc.closingStatus(conn,query.period)
+    log.assert('年结及月结双双红冲，4103 的全年实际业务净额为零', afterStatus.year==='not_required')
+    const after = await Promise.all([ledger.getIncomeStatement(query), group.getConsolidatedIncomeStatement({...query,groupId:1}), tax.getIncomeTaxReport(query)])
+    log.assert('结转红冲后单体/合并利润、所得税维持业务发生净额', before[0].profit === after[0].profit && before[1].netProfit === after[1].netProfit && before[2].profitTotal === after[2].profitTotal, JSON.stringify(after.map(r=>r.profit ?? r.netProfit ?? r.profitTotal)))
+    let rejectedMonth = false
+    try { await periodSvc.generateClosingVouchers('209812', 1) } catch(e) { rejectedMonth = e.code === 'ACCT_CLOSING_VOUCHER_REVERSED' }
+    log.assert('已人工冲销的非零月结必须明确报错', rejectedMonth)
+
+    await insVoucher(randomRef('V-CLOSE-BACK').slice(0,30), '2098-12-31', [
+      {accountId:acct6001.id,code:'6001',name:'收入',direction:1,amount:900},
+      {accountId:acct6601.id,code:'6601',name:'费用',direction:2,amount:200},
+    ], '209812')
+    log.assert('业务归零且月结已冲销，不需再结转', (await periodSvc.closingStatus(conn,'209812')).pl==='not_required')
+
+    const [[input]] = await conn.query("SELECT id FROM acct_accounts WHERE company_id=1 AND code='222101'")
+    const [[output]] = await conn.query("SELECT id FROM acct_accounts WHERE company_id=1 AND code='222102'")
+    const beforeVat = await tax.getVatReport(query)
+    const vatVoucher = await insVoucher(randomRef('V-CLOSE-VAT').slice(0,30), '2098-12-29', [
+      {accountId:input.id,code:'222101',name:'进项',direction:1,amount:13},
+      {accountId:output.id,code:'222102',name:'销项',direction:2,amount:13},
+    ], '209812')
+    cleanupVoucherIds.push((await voucherSvc.reverseVoucher(vatVoucher,1)).id)
+    const afterVat = await tax.getVatReport(query)
+    log.assert('普通业务红字抵消进销项发生额', beforeVat.salesTaxAmount===afterVat.salesTaxAmount && beforeVat.inputTaxAmount===afterVat.inputTaxAmount)
+
     // ── 扫码盘点：个体容器扫到计 1、数量容器预填账面 ───────────────────
     log.section('扫码盘点（POST /api/stockcheck/:id/items/:itemId/scan）')
     const stockcheckSvc = require('../backend/src/modules/stockcheck/stockcheck.service')
@@ -228,6 +284,12 @@ async function main() {
     const scanQty = await stockcheckSvc.saveItemContainerScans(ck.insertId, cki.insertId,
       [{ barcode: qtyBarcode, countedQty: 5 }], { userId: 1 }, null, null, ctx.warehouse.id)
     log.assert('★ 数量容器预填账面计 5', Number(scanQty.actualQty) === 5, JSON.stringify(scanQty))
+
+    await stockcheckSvc.saveItemContainerScans(ck.insertId, cki.insertId,
+      [{ barcode: qtyBarcode, countedQty: 0 }], { userId: 1 }, null, null, ctx.warehouse.id)
+    const scanDetail = await stockcheckSvc.getScanItems(ck.insertId, [ctx.warehouse.id])
+    const resumed = scanDetail.items.find(row => row.id === cki.insertId)?.scans.find(row => row.barcode === qtyBarcode)
+    log.assert('续扫回显上次实盘 0 与容器当前账面 5', resumed?.countedQty === 0 && resumed?.containerBookQty === 5)
 
     // 汇总：两容器共 6 = 账面 6 → 无差异
     const final = await stockcheckSvc.saveItemContainerScans(ck.insertId, cki.insertId,

@@ -5,7 +5,7 @@ import type { AxiosError, AxiosRequestConfig, AxiosResponse, InternalAxiosReques
 import { Capacitor } from '@capacitor/core'
 import { IS_CAPACITOR_PDA } from '@/lib/platform'
 import { useAuthStore } from '@/store/authStore'
-import { useCompanyStore } from '@/store/companyStore'
+import { resetCompanyScope, useCompanyStore } from '@/store/companyStore'
 import { isAccountingRequest } from '@/lib/companyScope'
 import { toast } from '@/lib/toast'
 import { performSessionLogout } from '@/lib/authSession'
@@ -35,14 +35,25 @@ const authRefreshClient = axios.create()
 let apiBaseRevision = 0
 let refreshInFlight: { sessionGeneration: number; refreshToken: string; baseURL: string | undefined; baseRevision: number; promise: Promise<RefreshResult> } | null = null
 const revokedAccessCodes = new Set(['AUTH_SESSION_INVALID', 'AUTH_USER_NOT_FOUND', 'AUTH_USER_DISABLED'])
+function matchesActiveApiBase(requestBase: string | undefined) {
+  const activeBase = apiClient.defaults.baseURL
+  if (requestBase == null || requestBase === activeBase) return true
+  const pageURL = typeof window === 'undefined' ? undefined : window.location.href
+  try {
+    const requested = new URL(requestBase, pageURL)
+    const active = new URL(activeBase || '/', pageURL)
+    return requested.href.replace(/\/+$/, '') === active.href.replace(/\/+$/, '')
+  } catch { return false }
+}
+
 async function tryRefreshTokens(config: InternalAxiosRequestConfig): Promise<RefreshResult> {
   assertCurrentAuthSession(config)
   const { token, refreshToken, sessionGeneration } = useAuthStore.getState()
   if (!refreshToken) return { kind: 'unavailable' }
-  const baseURL = config.baseURL ?? apiClient.defaults.baseURL
+  const baseURL = apiClient.defaults.baseURL
   const baseRevision = apiBaseRevision
   // 旧服务器的迟到401不能把原会话的刷新凭据发送到新服务器。
-  if (baseURL !== apiClient.defaults.baseURL) return { kind: 'superseded' }
+  if (!matchesActiveApiBase(config.baseURL)) return { kind: 'superseded' }
   if (refreshInFlight?.sessionGeneration === sessionGeneration && refreshInFlight.refreshToken === refreshToken
     && refreshInFlight.baseURL === baseURL && refreshInFlight.baseRevision === baseRevision) return refreshInFlight.promise
   const isCurrentSession = () => {
@@ -180,12 +191,16 @@ declare module 'axios' {
     _companyScopeId?: number
     /** 首次派发的登录会话；正常令牌轮换不改变归属。禁止持久化。 */
     _authSessionGeneration?: number
+    _apiBaseRevision?: number
     /** PDA 作业与换票均绑定原设备代次。 */
     _pdaBindingGeneration?: number
   }
 }
 
 function assertCurrentAuthSession(config?: AxiosRequestConfig): void {
+  if (config?._apiBaseRevision != null && config._apiBaseRevision !== apiBaseRevision) {
+    throw new axios.CanceledError('服务器已切换，请重新操作')
+  }
   if (config?._authSessionGeneration != null && config._authSessionGeneration !== useAuthStore.getState().sessionGeneration) {
     throw new axios.CanceledError('登录状态已变化，请重新操作')
   }
@@ -232,6 +247,7 @@ async function tryErpApiFallbackAndRetry(config: InternalAxiosRequestConfig): Pr
     setApiBase(n)
     const nextBase = `${n}/api`
     setApiClientBaseURL(nextBase)
+    config._apiBaseRevision = apiBaseRevision
     config.baseURL = nextBase
     return true
   }
@@ -258,6 +274,7 @@ export function setApiClientBaseURL(baseURL: string | undefined): void {
   if (apiClient.defaults.baseURL === baseURL) return
   apiClient.defaults.baseURL = baseURL
   apiBaseRevision++
+  resetCompanyScope()
   for (const listener of apiBaseURLListeners) listener()
 }
 
@@ -267,6 +284,7 @@ apiClient.interceptors.request.use(
     assertCurrentPdaBinding(config)
     const { token, sessionGeneration } = useAuthStore.getState()
     config._authSessionGeneration ??= sessionGeneration
+    config._apiBaseRevision ??= apiBaseRevision
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -332,7 +350,7 @@ apiClient.interceptors.response.use(
     const rawMsg  = error.message
     const cfg     = error.config as InternalAxiosRequestConfig | undefined
 
-    if (status === 401 && cfg && (cfg.baseURL ?? apiClient.defaults.baseURL) !== apiClient.defaults.baseURL) {
+    if (status === 401 && cfg && !matchesActiveApiBase(cfg.baseURL)) {
       return Promise.reject(new axios.CanceledError('服务器已变化，忽略原服务器登录结果'))
     }
 
@@ -360,6 +378,7 @@ apiClient.interceptors.response.use(
       && !(cfg as RetriableConfig).__pdaSessionRetried
     ) {
       assertCurrentAuthSession(cfg)
+      if (!matchesActiveApiBase(cfg.baseURL)) throw new axios.CanceledError('服务器已切换，请重新操作')
       const renewed = await ensureDeviceSession()
       assertCurrentAuthSession(cfg)
       assertCurrentPdaBinding(cfg)
@@ -492,6 +511,7 @@ export const payloadClient = {
     // 在整次列表读取开始时绑定会话/账套，避免续批随用户切换而混入另一范围。
     const fixedConfig: AxiosRequestConfig = {
       ...config,
+      _apiBaseRevision: config?._apiBaseRevision ?? apiBaseRevision,
       _authSessionGeneration: config?._authSessionGeneration ?? useAuthStore.getState().sessionGeneration,
       ...(isAccountingRequest(url) ? { _companyScopeId: config?._companyScopeId ?? useCompanyStore.getState().companyId } : {}),
     }
@@ -503,10 +523,15 @@ export const payloadClient = {
     queryParams.delete('page'); queryParams.delete('pageSize')
     const encodedQuery = queryParams.toString()
     const requestUrl = encodedQuery ? `${path}?${encodedQuery}` : path
-    return collectAllRecords((page, pageSize, snapshotId) => payloadRequest(apiClient.get<T>(requestUrl, {
-      ...fixedConfig,
-      params: { ...params, ...(snapshotId ? { snapshotId } : {}), ...(hasBatchParams || page > 1 ? { page, pageSize: pageSize ?? 200 } : {}) },
-    })), config?.signal, undefined, identityOf).catch((error: unknown) => {
+    return collectAllRecords(async (page, pageSize, snapshotId) => {
+      const response = await apiClient.get<T>(requestUrl, {
+        ...fixedConfig,
+        ...(page > 1 ? { _erpApiFallbackTried: true } : {}),
+        params: { ...params, ...(snapshotId ? { snapshotId } : {}), ...(hasBatchParams || page > 1 ? { page, pageSize: pageSize ?? 200 } : {}) },
+      })
+      fixedConfig._apiBaseRevision = response.config._apiBaseRevision
+      return unwrapPayload(response)
+    }, config?.signal, undefined, identityOf).catch((error: unknown) => {
       // 传输错误已由拦截器提示；这里只补完整性校验失败，不能静默显示残缺/空列表。
       if (!config?.skipGlobalError && !(error instanceof ApiClientError) && !axios.isCancel(error)
         && !(error instanceof DOMException && error.name === 'AbortError')) {

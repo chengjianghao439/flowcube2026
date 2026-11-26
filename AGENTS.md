@@ -28,14 +28,14 @@
 - **范围校验必须覆盖读写路径**：`scan-logs` 四条写路径、`POST /admin/putaway`、`findMyTasks`/`findMyTaskSkuSummary`/`getTaskStats`（空范围返回空）
 - **范围校验还必须覆盖**：`GET /products/finder`、`GET /containers/overdue`、`GET /returns/{purchase,sale}/source-order`（逐行校验发货仓）、`GET /approvals/biz/:bizType/:bizId`（`BIZ_DOC_META` + `sys_role_permissions`，未知 400）、`print-jobs` 列表 / **统计 `/stats`** / **打印机健康 `/printer-health`** / 条码补打（统计与健康分别按 `print_jobs.warehouse_id` 与打印机 `printers.warehouse_id` 过滤；回归 `tests/print-jobs-warehouse-scope.smoke.test.js`）
 - **`print-jobs` 三张条码子查询分别用 `c.` / `wt.` / `j.warehouse_id`**；SQL 文本替换必须带足上下文并真跑三种范围
-- **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；写路由必须 `requirePermission`（`fulfillment.routes.js`）
+- **`complete-local` 同 `complete-client`/`fail-client` 做工作站校验**；打印任务写路由由 `print-jobs.routes.js` 注册并校验权限
 - **数量精度是两位小数（0.01）**：所有数量列 `DECIMAL(_,2)`，用户原量及未取整换算结果超过两位先拒绝，合法值再用 `unitConversion.roundQty`；订单总额及实际退货/资金/核销金额按分，单价、成本、授信限额及中间计算保持各自精度。逐项核对 `10000` 的业务含义，不机械替换（`docs/business-semantics.md`、`docs/cash-cents-policy.md`）。
 - **库存唯一事实源是 ACTIVE 容器的 `inventory_containers.remaining_qty`**，`inventory_stock.quantity` 只是缓存；唯一合法缓存写入口是 `syncStockFromContainers()`，禁止业务代码直接 UPDATE quantity（详见 `docs/inventory-transaction-invariants.md`）
 - **写操作幂等**：前端发稳定 `X-Request-Key`，后端走 `beginOperationRequest`/`completeOperationRequest`；重放返回原回执，不得重复加库存、推进状态或入账（详见 `docs/inventory-transaction-invariants.md`）
 - **批量写入用 `VALUES ?`（mysql2 二维数组）且先判空**：空数组会 `ER_PARSE_ERROR`；禁止循环内逐行 INSERT/UPDATE（`procurement.service.js`、`hr.service.js`）
 - **`updateInvoice` 的 `assertInvoiceQuota` 必须传同一事务 `conn`**
 - **销售退货可退量按 `wt.warehouse_id = COALESCE(soi.warehouse_id, 销售单头仓)` 关联**（`returns-sale.service.js`）
-- **先 `lockStockDimension` 再锁容器**：`splitContainer` 与 `confirmContainerReturn` 都按此序（`warehouse-tasks.adjust.js`）
+- **容器拆分与改单归还先 `lockStockDimension` 再锁容器；整单释放先锁全部商品策略、再锁预占及预计绑定涉及的库存维度。** 回归 `test:inventory-lock-order`、`smoke:audit-inventory`（详见 `docs/inventory-transaction-invariants.md`）。
 - **月结对账导出透传全部筛选并取 `EXPORT_MAX_ROWS`、超限即拒**；年结排除自身凭证（`export.service.js`）
 - **占库期与执行期改单共用 `assertNoDuplicateSaleItemLines`**（在 `hydrateSaleInput` 之后）；改单挂起期间拣货/复核扫码补 `adjustment_requested_at` 并 409（措辞同 `check.js`）
 - **改单只写商品明细与订单金额**（状态机 `adjust.from=[2,3,6]`）：订单客户/出库仓库/承运商/运费/收货信息**不被更新**，前端改单视图必须给 `SaleOrderHeaderFields` 传 `headerReadOnly`——否则界面可编辑、`PUT /sale/:id/adjust` 返回 200 却**静默丢弃**，其中改客户还会按新客户价格重算单价并写回金额（`docs/business-semantics.md`）
@@ -68,6 +68,7 @@
 
 ## 0.2 有守卫的规则
 
+- 销售交接动作识别、只读诊断参数、恢复发布附件、后端入口脚本权限与用户原权限范围见 `docs/verification-commands.md` 的仓库守卫索引。
 - 按 `docs/verification-commands.md` 的「仓库守卫索引」选择检查。新增可机械验证的约束接入测试与 CI，并反向验证。
 - 项目规则统一使用 `AGENTS.md`，子目录需要补充时用同名文件。仓库目录禁止 `AGENTS.override.md` 和 `CLAUDE.md`，以保持共享规则入口一致。检查规则链、必读入口及引用 → `npm run test:agents-md-guard`。
 

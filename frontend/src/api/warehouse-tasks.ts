@@ -441,29 +441,35 @@ export const getAdjustmentDetailApi = (adjustmentId: number) =>
   client.get<AdjustmentDetail>(`/warehouse-tasks/adjustments/${adjustmentId}`)
 
 /** 拆箱确认：箱子在改单发起时已由系统作废，这里只是扫码确认物理已拆箱处理 */
-export const confirmAdjustmentPackageVoidApi = (voidId: number, requestKey?: string) =>
+export const confirmAdjustmentPackageVoidApi = (voidId: number, requestKey?: string, config?: AxiosRequestConfig) =>
   client.post<{ finalized: boolean }>(
     `/warehouse-tasks/adjustments/package-voids/${voidId}/confirm`,
     {},
     {
+      ...config,
       skipGlobalError: true,
-      headers: requestKey
-        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
-        : { 'X-Client': 'pda' },
+      headers: {
+        ...config?.headers,
+        'X-Client': 'pda',
+        ...(requestKey ? withRequestKeyHeaders(requestKey) : {}),
+      },
     },
   )
 
 /**
  * 归还确认：扫容器条码 + 扫目标库位条码，确认放回、解锁容器。
  */
-export const confirmAdjustmentContainerReturnApi = (returnId: number, targetLocationId: number, requestKey?: string) =>
+export const confirmAdjustmentContainerReturnApi = (returnId: number, targetLocationId: number, requestKey?: string, config?: AxiosRequestConfig) =>
   client.post<{ finalized: boolean }>(
     `/warehouse-tasks/adjustments/container-returns/${returnId}/confirm`,
     { targetLocationId },
     {
+      ...config,
       skipGlobalError: true,
-      headers: requestKey
-        ? withRequestKeyHeaders(requestKey, { 'X-Client': 'pda' })
-        : { 'X-Client': 'pda' },
+      headers: {
+        ...config?.headers,
+        'X-Client': 'pda',
+        ...(requestKey ? withRequestKeyHeaders(requestKey) : {}),
+      },
     },
   )

@@ -560,12 +560,16 @@ async function forceCloseInTransit(id, operator, { reason } = {}, scopeWarehouse
       'SELECT id, barcode, product_id, remaining_qty FROM inventory_containers WHERE transfer_order_id=? AND status=? AND deleted_at IS NULL FOR UPDATE',
       [id, CONTAINER_STATUS.PENDING_PUTAWAY],
     )
-    if (!containers.length) {
-      throw new AppError('该调拨单已无在途库存条码，无需异常了结', 409)
+    const [lines] = await conn.query(
+      'SELECT id, quantity, deducted_qty, received_qty FROM transfer_order_items WHERE order_id=? ORDER BY id FOR UPDATE', [id],
+    )
+    const shortLines = lines.filter(line => Number(line.deducted_qty) < Number(line.quantity))
+    if (!containers.length && (!shortLines.length || !lines.every(line => Number(line.deducted_qty) === Number(line.received_qty)))) {
+      throw new AppError('无可核销的在途库存或已收齐的短发行，请核对调拨明细', 409)
     }
-    await conn.query(
-      'UPDATE inventory_containers SET status = ?, transfer_order_id = NULL, has_transfer_history = 1 WHERE transfer_order_id = ? AND status = ?',
-      [CONTAINER_STATUS.VOID, id, CONTAINER_STATUS.PENDING_PUTAWAY],
+    if (containers.length) await conn.query(
+      'UPDATE inventory_containers SET status = ?, transfer_order_id = NULL, has_transfer_history = 1 WHERE id IN (?)',
+      [CONTAINER_STATUS.VOID, containers.map(c => c.id)],
     )
     await compareAndSetStatus(conn, {
       table: 'transfer_orders', id, fromStatus: 3, toStatus: 4, entityName: '调拨单',
@@ -575,13 +579,16 @@ async function forceCloseInTransit(id, operator, { reason } = {}, scopeWarehouse
       transferOrderId: Number(id),
       orderNo: orderRow.order_no,
       eventType: TRANSFER_EVENT.COMPLETED,
-      title: '调拨单异常了结（运输损耗核销）',
-      description: `原因：${reason}；核销在途容器 ${containers.length} 个：${containers.map(c => `${c.barcode}×${c.remaining_qty}`).join('、')}`,
+      title: containers.length ? '调拨单异常了结（运输损耗核销）' : '调拨单短发结案',
+      description: containers.length
+        ? `原因：${reason}；核销在途容器 ${containers.length} 个：${containers.map(c => `${c.barcode}×${c.remaining_qty}`).join('、')}`
+        : `原因：${reason}；${shortLines.length} 条明细仍有未发数量，已发数量均已入库`,
       operatorId: operator?.userId ?? null,
       operatorName: operator?.realName ?? null,
       requestId: getRequestId(),
       payload: {
         reason,
+        shortLines: shortLines.map(line => ({ itemId: line.id, planned: Number(line.quantity), shipped: Number(line.deducted_qty) })),
         voidedContainers: containers.map(c => ({ id: c.id, barcode: c.barcode, productId: c.product_id, qty: Number(c.remaining_qty) })),
       },
     })

@@ -9,7 +9,8 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
 import type { TransferOrder } from '@/api/transfer'
 
-const api = vi.hoisted(() => ({ detail: vi.fn(), create: vi.fn(), update: vi.fn() }))
+vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => api.manage }) }))
+const api = vi.hoisted(() => ({ manage: true, detail: vi.fn(), create: vi.fn(), update: vi.fn() }))
 vi.mock('@/api/transfer', async original => ({
   ...await original<typeof import('@/api/transfer')>(),
   getTransferDetailApi: api.detail,
@@ -31,6 +32,7 @@ const order: TransferOrder = {
 }
 let host: HTMLDivElement, root: Root, query: QueryClient
 beforeEach(() => {
+  api.manage = true
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
   host = document.createElement('div')
   document.body.append(host)
@@ -103,4 +105,16 @@ test('编辑时整数数量错误显示在明细，修正后按原单保存', as
   expect(quantity.getAttribute('aria-invalid')).not.toBe('true')
   await click('保存修改')
   expect(api.update.mock.calls[0]).toMatchObject([7, { fromWarehouseId: 1, toWarehouseId: 2, items: [{ productId: 40, quantity: 3 }] }])
+})
+
+
+test('只读账号在调拨详情无编辑、派发和取消入口', async () => {
+  api.manage = false
+  api.detail.mockResolvedValue(order)
+  await render('/transfer/7')
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 25)) })
+  expect(host.textContent).toContain('TR-7')
+  for (const label of ['编辑', '确认派发', '取消']) {
+    expect([...host.querySelectorAll('button')].some(button => button.textContent === label)).toBe(false)
+  }
 })

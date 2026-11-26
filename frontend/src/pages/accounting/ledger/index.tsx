@@ -1,5 +1,7 @@
+import { Button } from '@/components/ui/button'
 import { amount } from '@/lib/format'
 import { FilterCard } from '@/components/shared/FilterCard'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { ReportTable } from '@/components/shared/ReportTable'
 /**
  * 总账 / 试算平衡（文档 10 · Phase 2）
@@ -9,7 +11,7 @@ import { ReportTable } from '@/components/shared/ReportTable'
 import { useId, useState } from 'react'
 import { Scale, FileText } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import PageHeader from '@/components/shared/PageHeader'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { cn } from '@/lib/utils'
@@ -22,47 +24,50 @@ const m = amount
 const cell = (v: number) => (v ? m(v) : '')
 
 function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: number | null; code?: string; name?: string; period: string; onClose: () => void }) {
-  const { data, isLoading } = useAccountLedger(accountId, period)
+  const { data, isLoading, isError, error, refetch } = useAccountLedger(accountId, period)
   return (
     <Dialog open={!!accountId} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-5xl">
-        <DialogHeader description={isLoading || !data ? <span role="status">加载中…</span> : '核对科目逐笔发生额与余额。'}><DialogTitle>明细账 · {code} {name} <span className="text-sm font-normal text-muted-foreground">（{period}）</span></DialogTitle></DialogHeader>
-        {isLoading || !data ? null : (
-          <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/60">
-            <ReportTable className="w-full text-sm">
-              <thead className="sticky top-0 text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">日期</th>
-                  <th className="px-3 py-2 text-left font-medium">凭证号</th>
-                  <th className="px-3 py-2 text-left font-medium">摘要</th>
-                  <th className="px-3 py-2 text-right font-medium">借方</th>
-                  <th className="px-3 py-2 text-right font-medium">贷方</th>
-                  <th className="px-3 py-2 text-right font-medium">余额</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-t border-border/40 bg-muted/20">
-                  <td className="px-3 py-2 text-muted-foreground" colSpan={5}>期初余额</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{m(data.openingBalance)}</td>
-                </tr>
-                {data.list.map((e, i) => (
-                  <tr key={i} className="border-t border-border/40">
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDisplayDate(e.voucherDate, '')}</td>
-                    <td className="px-3 py-2 font-mono text-doc-code-muted">{e.voucherNo}</td>
-                    <td className="px-3 py-2">{e.summary || '—'}{e.auxName ? <span className="text-muted-foreground"> · {e.auxName}</span> : ''}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{cell(e.debit)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{cell(e.credit)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{m(e.balance)}</td>
+      <DialogContent className="fc-form-dialog sm:max-w-5xl">
+        <DialogHeader description={isLoading ? <span role="status">加载中…</span> : '核对科目逐笔发生额与余额。'}><DialogTitle>明细账 · {code} {name} <span className="text-sm font-normal text-muted-foreground">（{period}）</span></DialogTitle></DialogHeader>
+        <div className="fc-form-dialog-body space-y-4">
+          {isError ? <div role="alert"><QueryErrorState title="明细账加载失败" error={error} onRetry={() => void refetch()} compact /></div> : data && (
+            <div className="rounded-lg border border-border/60">
+              <ReportTable className="w-full text-sm">
+                <thead className="sticky top-0 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">日期</th>
+                    <th className="px-3 py-2 text-left font-medium">凭证号</th>
+                    <th className="px-3 py-2 text-left font-medium">摘要</th>
+                    <th className="px-3 py-2 text-right font-medium">借方</th>
+                    <th className="px-3 py-2 text-right font-medium">贷方</th>
+                    <th className="px-3 py-2 text-right font-medium">余额</th>
                   </tr>
-                ))}
-                <tr className="border-t-2 border-border bg-muted/30 font-medium">
-                  <td className="px-3 py-2" colSpan={5}>期末余额</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{m(data.closingBalance)}</td>
-                </tr>
-              </tbody>
-            </ReportTable>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  <tr className="border-t border-border/40 bg-muted/20">
+                    <td className="px-3 py-2 text-muted-foreground" colSpan={5}>期初余额</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{m(data.openingBalance)}</td>
+                  </tr>
+                  {data.list.map((e, i) => (
+                    <tr key={i} className="border-t border-border/40">
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDisplayDate(e.voucherDate, '')}</td>
+                      <td className="px-3 py-2 font-mono text-doc-code-muted">{e.voucherNo}</td>
+                      <td className="px-3 py-2">{e.summary || '—'}{e.auxName ? <span className="text-muted-foreground"> · {e.auxName}</span> : ''}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{cell(e.debit)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{cell(e.credit)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{m(e.balance)}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-border bg-muted/30 font-medium">
+                    <td className="px-3 py-2" colSpan={5}>期末余额</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{m(data.closingBalance)}</td>
+                  </tr>
+                </tbody>
+              </ReportTable>
+            </div>
+          )}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={onClose}>关闭</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -72,7 +77,7 @@ export default function LedgerPage() {
   const [period, setPeriod] = useState(beijingPeriod)
   const periodId = useId()
   const validPeriod = isLedgerPeriod(period)
-  const { data, isLoading } = useTrialBalance(period)
+  const { data, isLoading, isError, error, refetch } = useTrialBalance(period)
   const [detail, setDetail] = useState<TrialBalanceRow | null>(null)
   const list = data?.list ?? []
   const t = data?.totals
@@ -80,7 +85,7 @@ export default function LedgerPage() {
   return (
     <div>
       <PageHeader title="总账与试算平衡"
-        description="查看科目期初、本期发生与期末余额；借贷发生额和期末余额应各自平衡"  />
+        description="核对科目期初、本期发生与期末余额。"  />
 
 
       <FilterCard className="mb-4">
@@ -89,7 +94,7 @@ export default function LedgerPage() {
           placeholder="YYYYMM" aria-invalid={!validPeriod || undefined}
           aria-describedby={!validPeriod ? `${periodId}-error` : undefined} className="h-9 w-36 font-mono" />
         {!validPeriod && <p id={`${periodId}-error`} role="alert" className="text-xs text-destructive-ink">请输入六位会计期间（YYYYMM），月份为 01–12。</p>}
-        {validPeriod && data && (
+        {validPeriod && !isError && data && (
           <span className="ml-2 flex items-center gap-2">
             {data.balanced.period && data.balanced.closing
               ? <SoftStatusLabel label="试算平衡" tone="success" />
@@ -98,7 +103,8 @@ export default function LedgerPage() {
         )}
       </FilterCard>
 
-      {validPeriod && <div className="card-base overflow-x-auto p-0">
+      {validPeriod && isError && <div role="alert"><QueryErrorState title="试算平衡表加载失败" error={error} onRetry={() => void refetch()} compact /></div>}
+      {validPeriod && !isError && <div className="card-base overflow-x-auto p-0">
         <ReportTable className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/40 text-xs text-muted-foreground">

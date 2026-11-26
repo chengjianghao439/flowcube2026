@@ -230,3 +230,18 @@ test('Android 用包内身份和版号拒绝同版或更早的安装包，并在
   assert.match(source, /Settings\.ACTION_MANAGE_UNKNOWN_APP_SOURCES/)
   assert.match(source, /Build\.VERSION\.SDK_INT < Build\.VERSION_CODES\.O/)
 })
+
+
+test('原生更新只分享专用安装目录，安装前强制校验来源、摘要和下载长度', () => {
+  const native = path.join(root, 'frontend/android/app/src/main')
+  const xml = fs.readFileSync(path.join(native, 'res/xml/file_paths.xml'), 'utf8')
+  assert.match(xml, /<cache-path[^>]+path="updates\/"/)
+  assert.doesNotMatch(xml, /<external-path|path="\."/)
+  assert.match(fs.readFileSync(path.join(native, 'AndroidManifest.xml'), 'utf8'), /android:allowBackup="false"/)
+  const plugin = fs.readFileSync(path.join(native, 'java/com/flowcube/pda/PdaAppUpdatePlugin.java'), 'utf8')
+  assert.match(plugin, /setInstanceFollowRedirects\(false\)/)
+  assert.match(plugin, /expectedSha256 == null/)
+  assert.match(plugin, /native-update-origin\.txt/)
+  assert.match(plugin, /downloaded != contentLength/)
+  assert.match(plugin, /downloaded > MAX_APK_BYTES/)
+})

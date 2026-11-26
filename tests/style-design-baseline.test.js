@@ -3,6 +3,16 @@ const assert = require('node:assert/strict')
 const golden = require('./fixtures/frontend-style-v3.json')
 const { legacyDesignBaseline: designBaseline, designBaseline: desktopBaseline } = require('../scripts/browser-smoke/style-design-baseline.cjs')
 
+test('单行与多行限字字段共用接近上限的警告文字颜色', () => {
+  const { readFileSync } = require('node:fs')
+  const { join } = require('node:path')
+  for (const name of ['LimitedInput', 'LimitedTextarea']) {
+    const source = readFileSync(join(__dirname, '../frontend/src/components/shared', name + '.tsx'), 'utf8')
+      .split('\n').filter(line => !/^\s*(?:\/\/|\/\*|\*)/.test(line)).join('\n')
+    assert.match(source, /near\s*\?\s*['"]text-warning-ink['"]\s*:\s*['"]text-muted-foreground['"]/, name)
+  }
+})
+
 test('reviewed F12 change touches exactly nine dark text colors, leaving v3 golden immutable', () => {
   const original = JSON.stringify(golden), updated = designBaseline(golden), changes = []
   for (const [state, controls] of Object.entries(golden)) for (const [id, props] of Object.entries(controls)) {
@@ -62,4 +72,11 @@ test('ERP 临时浮层使用菜单阴影，层叠对话框只让最上方遮罩�
   assert.match(css, /\[data-radix-popper-content-wrapper\] > :is\(\[role="menu"\],\[role="listbox"\],\[role="dialog"\]\)\s*\{[^}]*box-shadow:\s*var\(--desktop-shadow-menu\)/)
   assert.match(css, /\[data-radix-popper-content-wrapper\] :is\(\[role="menu"\],\[role="listbox"\]\)\s*\{[^}]*box-shadow:\s*var\(--desktop-shadow-menu\)/)
   assert.match(css, /body:has\(\.desktop-shell-sample\) > \.fc-dialog-overlay:has\(~ \.fc-dialog-overlay\)\s*\{[^}]*background:\s*transparent/)
+})
+
+test('筛选标签沿用主题的强调底色和文字色', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../frontend/src/styles/desktop-page-samples.css'), 'utf8')
+  const chip = css.match(/\.fc-query-chip\s*\{([^}]+)\}/)?.[1]
+  assert.match(chip, /background:\s*hsl\(var\(--accent\)\)/)
+  assert.match(chip, /\bcolor:\s*hsl\(var\(--accent-foreground\)\)/)
 })

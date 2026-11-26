@@ -31,8 +31,11 @@ export default function PdaCriticalActionNotice({
   const submitting = phase === 'submitting'
   const confirmingState = phase === 'confirming'
   const failed = Boolean(lastErrorMessage)
-  const original = pendingRecord?.metadata?.requestBody as { productId?: number; packages?: Array<{ qty: number }>; scans?: Array<{ barcode: string; countedQty?: number }> } | undefined
+  const original = pendingRecord?.metadata?.requestBody as { productId?: number; passedQty?: number; rejectedQty?: number; packages?: Array<{ qty: number }>; scans?: Array<{ barcode: string; countedQty?: number }> } | undefined
   const originalPackages = Array.isArray(original?.packages) && original.packages.every(p => p && typeof p.qty === 'number' && Number.isFinite(p.qty)) ? original.packages : null
+  const originalCheck = pendingRecord?.action.startsWith('return.check.') && original &&
+    typeof original.passedQty === 'number' && Number.isFinite(original.passedQty) &&
+    typeof original.rejectedQty === 'number' && Number.isFinite(original.rejectedQty) ? original : null
   const originalScans = Array.isArray(original?.scans) && original.scans.every(s => s && typeof s.barcode === 'string' && (s.countedQty === undefined || typeof s.countedQty === 'number' && Number.isFinite(s.countedQty))) ? original.scans : null
 
   if (!blockedReason && !submitting && !confirmingState && !failed) return null
@@ -72,7 +75,11 @@ export default function PdaCriticalActionNotice({
         {pendingRecord ? (
           <p className="text-xs text-warning-ink">记录号:{pendingRecord.requestKey.slice(0, 8)}（报修时提供）</p>
         ) : null}
+        {pendingRecord?.action.startsWith('return.putaway.') && pendingRecord.metadata?.containerId != null && (
+          <p className="text-xs leading-5">原上架：{String(pendingRecord.metadata.containerBarcode || pendingRecord.metadata.containerId)} → {String(pendingRecord.metadata.locationCode || pendingRecord.metadata.locationId)}</p>
+        )}
         {originalPackages && <p className="text-xs leading-5">原收货：{String(pendingRecord?.metadata?.productName || `商品 #${original?.productId}`)} · {originalPackages.length} 箱 · 每箱数量 {originalPackages.map(p => p.qty).join('、')}</p>}
+        {originalCheck && <p className="text-xs leading-5">原质检：{String(pendingRecord?.metadata?.productName || `商品 #${originalCheck.productId}`)} · 合格 {originalCheck.passedQty}、不合格 {originalCheck.rejectedQty}</p>}
         {originalScans && <p className="text-xs leading-5 [overflow-wrap:anywhere]">原盘点：{String(pendingRecord?.metadata?.productName || '')} · {originalScans.map(s => `${s.barcode} ×${s.countedQty ?? 1}`).join('；')}</p>}
       </div>
       {pendingRecord ? (

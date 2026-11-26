@@ -1,7 +1,11 @@
+import { ContentTabs } from '@/components/shared/ContentTabs'
+import { usePermission } from '@/hooks/usePermission'
+import { canOpenWorkbenchPath } from '@/lib/workbench'
+import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import { money } from '@/lib/format'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
-import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -9,7 +13,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { ReportQueryFeedback } from './ReportQueryFeedback'
@@ -35,6 +39,8 @@ function SummaryCard({ label, value, hint, negative, onClick }: { label: string;
 }
 
 export default function ProfitAnalysisPage() {
+  const { can } = usePermission()
+  const canOpen = (path: string) => canOpenWorkbenchPath(path, can)
   const active = useActiveWorkspaceTab()
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -74,8 +80,7 @@ export default function ProfitAnalysisPage() {
   const stockRows = useMemo(() => (data?.stockValue ?? []).map(row => ({ ...row, rowId: `${row.id}-${row.warehouseId}` })), [data?.stockValue])
 
   function openPath(path: string, title: string) {
-    addTab({ key: path, title, path })
-    navigate(path)
+    if (canOpen(path) && addTab({ ...buildWorkspaceTabRegistrationFromPath(path), title })) navigate(path)
   }
 
   function applyFilters() {
@@ -106,44 +111,44 @@ export default function ProfitAnalysisPage() {
     { key: 'totalAmount', title: '销售额', width: 110, align: 'right', render: v => <span className="font-medium">{money(Number(v))}</span> },
     { key: 'costAmount', title: '成本', width: 150, align: 'right', render: costCell },
     { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive-ink' : 'text-success-ink'}`}>{money(Number(v))}</span> },
-    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
-    { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '销售单详情')}>打开原单</Button> },
+    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <SoftStatusLabel label={`${Number(v).toFixed(1)}%`} tone="draft" /> },
+    { key: 'path', title: '操作', width: 120, render: v => canOpen(String(v)) && <Button size="sm" variant="outline" onClick={() => openPath(String(v), '销售单详情')}>打开原单</Button> },
   ]
 
   const productColumns: TableColumn<ProfitProductRow>[] = [
-    ...productIdentityColumns({code: 'code', name: 'name'}),
+    { key: 'productId', title: '商品', width: 248, render: (_, row) => <ProductIdentitySummary product={row} /> },
     { key: 'unit', title: '单位', width: 70 },
     { key: 'totalQty', title: '销售量', width: 90, align: 'right', render: v => <span>{Number(v).toFixed(2)}</span> },
     { key: 'revenueAmount', title: '销售额', width: 110, align: 'right', render: v => <span>{money(Number(v))}</span> },
     { key: 'costAmount', title: '成本', width: 150, align: 'right', render: costCell },
     { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive-ink' : 'text-success-ink'}`}>{money(Number(v))}</span> },
-    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
-    { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '商品管理')}>查看商品</Button> },
+    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <SoftStatusLabel label={`${Number(v).toFixed(1)}%`} tone="draft" /> },
+    { key: 'path', title: '操作', width: 120, render: v => canOpen(String(v)) && <Button size="sm" variant="outline" onClick={() => openPath(String(v), '商品管理')}>查看商品</Button> },
   ]
 
   const stockColumns: TableColumn<ProfitStockValueRow>[] = [
-    ...productIdentityColumns({code: 'code', name: 'name'}),
+    { key: 'productId', title: '商品', width: 248, render: (_, row) => <ProductIdentitySummary product={row} /> },
     { key: 'warehouseName', title: '仓库', width: 120 },
     { key: 'unit', title: '单位', width: 70 },
     { key: 'totalQty', title: '库存数量', width: 100, align: 'right', render: v => <span className="font-medium">{Number(v).toFixed(2)}</span> },
     { key: 'totalValue', title: '库存金额', width: 120, align: 'right', render: v => <span className="font-semibold">{money(Number(v))}</span> },
-    { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '库存总览')}>查看库存</Button> },
+    { key: 'path', title: '操作', width: 120, render: v => canOpen(String(v)) && <Button size="sm" variant="outline" onClick={() => openPath(String(v), '库存总览')}>查看库存</Button> },
   ]
 
   const slowColumns: TableColumn<ProfitSlowMovingRow>[] = [
-    ...productIdentityColumns({ code: 'code', name: 'name' }),
+    { key: 'productId', title: '商品', width: 248, render: (_, row) => <ProductIdentitySummary product={row} /> },
     { key: 'unit', title: '单位', width: 70 },
     { key: 'currentQty', title: '库存数量', width: 110, align: 'right' },
     { key: 'stockValue', title: '库存金额', width: 120, align: 'right', render: v => money(Number(v)) },
     { key: 'lastOutboundAt', title: '最后出库', width: 160, render: v => v ? formatDisplayDateTime(String(v)) : '无出库记录' },
-    { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '库存总览')}>查看库存</Button> },
+    { key: 'path', title: '操作', width: 120, render: v => canOpen(String(v)) && <Button size="sm" variant="outline" onClick={() => openPath(String(v), '库存总览')}>查看库存</Button> },
   ]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="利润 / 库存分析"
-        description="日期仅筛选已完成销售单的开单时间。销售净额扣除整单折扣，商品净额按明细金额比例分摊；毛利为净额减成本估算。库存与滞销为当前授权仓库数据，不随日期变化。"
+        description="查看销售毛利、商品毛利与库存金额分析。"
         actions={(
           <div className="flex flex-wrap gap-2">
             <Button variant="outline"
@@ -153,8 +158,8 @@ export default function ProfitAnalysisPage() {
               }).catch(e => toast.error((e as Error).message))}>
               导出排行榜
             </Button>
-            <Button variant="outline" onClick={() => openPath('/sale', '销售订单')}>查看销售订单</Button>
-            <Button variant="outline" onClick={() => openPath('/inventory/overview', '库存总览')}>查看库存总览</Button>
+            {canOpen('/sale') && <Button variant="outline" onClick={() => openPath('/sale', '销售订单')}>查看销售订单</Button>}
+            {canOpen('/inventory/overview') && <Button variant="outline" onClick={() => openPath('/inventory/overview', '库存总览')}>查看库存总览</Button>}
             <Button disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '正在刷新…' : '立即刷新'}</Button>
           </div>
         )}
@@ -190,63 +195,45 @@ export default function ProfitAnalysisPage() {
 
       <ReportQueryFeedback title="利润 / 库存分析" hasData={!!data} isError={isError} isFetching={isFetching} error={error} onRetry={() => void refetch()} />
 
-      <div className="flex flex-wrap gap-1 border-b border-border">
-        {([
-          { key: 'sale' as const, label: '销售毛利' },
-          { key: 'product' as const, label: '商品毛利' },
-          { key: 'stock' as const, label: '库存金额' },
-          { key: 'slow' as const, label: '滞销库存' },
-        ]).map(item => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => setTab(item.key)}
-            aria-pressed={tab === item.key}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <ContentTabs value={tab} onValueChange={setTab} label="利润与库存分析" tabs={[
+        { value: 'sale', label: '销售毛利', content: <KeepAliveSection active={!isError || !!data}>
+          <p className="mb-3 text-xs text-muted-foreground">按毛利展示前 20 单；上方汇总覆盖全部符合条件的销售单。</p>
+          <DataTable
+            columns={saleColumns}
+            data={data?.saleOrders ?? []}
+            loading={isLoading}
+            emptyText="暂无销售毛利数据"
+            onRowDoubleClick={canOpen('/sale') ? row => openPath(row.path, row.orderNo) : undefined}
+          />
+        </KeepAliveSection> },
+        { value: 'product', label: '商品毛利', content: <KeepAliveSection active={!isError || !!data}>
+          <p className="mb-3 text-xs text-muted-foreground">按毛利展示前 20 种商品，销售额已分摊整单折扣。</p>
+          <DataTable
+            columns={productColumns}
+            data={data?.products ?? []}
+            loading={isLoading}
+            emptyText="暂无商品毛利数据"
+            onRowDoubleClick={canOpen('/products') ? row => openPath(row.path, row.name) : undefined}
+          />
+        </KeepAliveSection> },
+        { value: 'stock', label: '库存金额', content: <KeepAliveSection active={!isError || !!data}>
+          <p className="mb-3 text-xs text-muted-foreground">按库存金额展示前 30 条商品与仓库组合；汇总覆盖全部库存。按商品成本价估值，无成本价时参考售价，仅供经营分析。</p>
+          <DataTable
+            columns={stockColumns}
+            data={stockRows}
+            rowKey="rowId"
+            loading={isLoading}
+            emptyText="暂无库存金额数据"
+            onRowDoubleClick={canOpen('/inventory/overview') ? row => openPath(row.path, row.name) : undefined}
+          />
+        </KeepAliveSection> },
+        { value: 'slow', label: '滞销库存', content: <KeepAliveSection active={!isError || !!data}>
+          <p className="mb-3 text-xs leading-5 text-muted-foreground">在授权仓库合并计算：仍有库存，且最近 90 天无出库（含无出库记录）。按金额展示前 30 种商品，上方数量与金额覆盖全部符合条件的商品。</p>
+          <DataTable columns={slowColumns} data={data?.slowMoving ?? []} loading={isLoading} emptyText="暂无符合条件的滞销库存" />
+          {canOpen('/reports/inventory-aging') && <Button className="mt-3" variant="outline" onClick={() => openPath('/reports/inventory-aging', '存放时长与滞销')}>按仓库查看存放时长与效期</Button>}
+        </KeepAliveSection> },
+      ]} />
 
-      <KeepAliveSection active={tab === 'sale' && (!isError || !!data)}>
-        <p className="mb-3 text-xs text-muted-foreground">按毛利展示前 20 单；上方汇总覆盖全部符合条件的销售单。</p>
-        <DataTable
-          columns={saleColumns}
-          data={data?.saleOrders ?? []}
-          loading={isLoading}
-          emptyText="暂无销售毛利数据"
-          onRowDoubleClick={row => openPath(row.path, row.orderNo)}
-        />
-      </KeepAliveSection>
-
-      <KeepAliveSection active={tab === 'product' && (!isError || !!data)}>
-        <p className="mb-3 text-xs text-muted-foreground">按毛利展示前 20 种商品，销售额已分摊整单折扣。</p>
-        <DataTable
-          columns={productColumns}
-          data={data?.products ?? []}
-          loading={isLoading}
-          emptyText="暂无商品毛利数据"
-          onRowDoubleClick={row => openPath(row.path, row.name)}
-        />
-      </KeepAliveSection>
-
-      <KeepAliveSection active={tab === 'stock' && (!isError || !!data)}>
-        <p className="mb-3 text-xs text-muted-foreground">按库存金额展示前 30 条商品与仓库组合；汇总覆盖全部库存。按商品成本价估值，无成本价时参考售价，仅供经营分析。</p>
-        <DataTable
-          columns={stockColumns}
-          data={stockRows}
-          rowKey="rowId"
-          loading={isLoading}
-          emptyText="暂无库存金额数据"
-          onRowDoubleClick={row => openPath(row.path, row.name)}
-        />
-      </KeepAliveSection>
-      <KeepAliveSection active={tab === 'slow' && (!isError || !!data)}>
-        <p className="mb-3 text-xs leading-5 text-muted-foreground">在授权仓库合并计算：仍有库存，且最近 90 天无出库（含无出库记录）。按金额展示前 30 种商品，上方数量与金额覆盖全部符合条件的商品。</p>
-        <DataTable columns={slowColumns} data={data?.slowMoving ?? []} loading={isLoading} emptyText="暂无符合条件的滞销库存" />
-        <Button className="mt-3" variant="outline" onClick={() => openPath('/reports/inventory-aging', '存放时长与滞销')}>按仓库查看存放时长与效期</Button>
-      </KeepAliveSection>
     </div>
   )
 }

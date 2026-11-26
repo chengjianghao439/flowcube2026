@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { chooseTableAction } from '@/test/chooseTableAction'
+import { chooseSelectOption } from '@/test/chooseSelectOption'
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
@@ -84,7 +86,7 @@ test('实际意图商品Finder+员工基本量保存完整body，不把库存参
  posts.length=0;actualAdapter()
  await page('/disposals',async()=>{
   await click('保存处理意图');await click('选择意图商品');await click('选择夹具商品')
-  const select=document.querySelector<HTMLSelectElement>('select[aria-label="处理仓库"]')!;await act(async()=>{select.value='8';select.dispatchEvent(new Event('change',{bubbles:true}))})
+  await chooseSelectOption(document.querySelector<HTMLButtonElement>('[role="combobox"][id$="-warehouse"]')!, '原仓')
   await input(document.querySelector<HTMLInputElement>('input[aria-label="意图基本量"]')!,'1.5')
   const save=[...document.querySelectorAll('[role="dialog"] button')].find(b=>b.textContent==='保存处理意图')!;await act(async()=>save.dispatchEvent(new MouseEvent('click',{bubbles:true})))
   expect(posts).toHaveLength(1);expect(posts[0].body).toMatchObject({productId:3,warehouseId:8,unit:'个',handlingType:1,quantity:1.5});expect(posts[0].body).not.toHaveProperty('totalQty')
@@ -93,7 +95,7 @@ test('实际意图商品Finder+员工基本量保存完整body，不把库存参
 test('完整mixed旧单签认展示所有历史行与批准；漂移保原preview/fingerprint、不执行报废',async()=>{
  posts.length=0;actualAdapter({history:true,signError:true})
  await page('/disposals',async()=>{
-  await click('整单签认');expect(document.body.textContent).toContain('历史商品1');expect(document.body.textContent).toContain('历史商品2');expect(document.body.textContent).toContain('历史商品3');expect(document.body.textContent).toContain('历史批准人');expect(document.body.textContent).toContain('3.1234')
+  await chooseTableAction('DP19', '整单签认');expect(document.body.textContent).toContain('历史商品1');expect(document.body.textContent).toContain('历史商品2');expect(document.body.textContent).toContain('历史商品3');expect(document.body.textContent).toContain('历史批准人');expect(document.body.textContent).toContain('3.1234')
   await input(document.querySelector<HTMLInputElement>('input[aria-label="签认说明"]')!,'全旧行核对');await click('确认整单签认')
   expect(posts).toHaveLength(1);expect(posts[0].path).toBe('/disposals/19/sign-conversion');expect(posts[0].body).toMatchObject({reason:'全旧行核对',snapshotFingerprint:'a'.repeat(64)})
   expect(document.body.textContent).toContain('历史商品3');expect(posts.some(p=>p.path.includes('/dispose'))).toBe(false)
@@ -127,7 +129,7 @@ test.each(['pure-scrap','executed'])('完整预览%s已不符合旧签认资格�
     ? { ...snapshot, head: { ...snapshot.head, status: 4 } }
     : { ...snapshot, items: snapshot.items.map(row => ({ ...row, dispose_type: 3 })) } })
   await page('/disposals', async () => {
-    await click('整单签认')
+    await chooseTableAction('DP19', '整单签认')
     await input(document.querySelector<HTMLInputElement>('[aria-label="签认说明"]')!, '已核对原单')
     const confirm = [...document.querySelectorAll('button')].find(b => b.textContent === '确认整单签认')!
     expect(confirm.disabled).toBe(true)

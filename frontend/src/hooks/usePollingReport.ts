@@ -12,18 +12,20 @@ export function usePollingReport<TData, TError = unknown>({
   queryKey,
   queryFn,
   intervalMs = 60_000,
+  stopOnForbidden = false,
   ...rest
 }: {
   queryKey: QueryKey
   queryFn: () => Promise<TData>
   intervalMs?: number
+  stopOnForbidden?: boolean
 } & Omit<UseQueryOptions<TData, TError>, 'queryKey' | 'queryFn' | 'refetchInterval' | 'enabled'>) {
   const isActiveTab = useActiveWorkspaceTab()
   const query = useQuery<TData, TError>({
     queryKey,
     queryFn,
     enabled: isActiveTab,
-    refetchInterval: isActiveTab ? intervalMs : false,
+    refetchInterval: q => isActiveTab && !(stopOnForbidden && (q.state.error as { status?: number } | null)?.status === 403) ? intervalMs : false,
     ...rest,
   })
   return {

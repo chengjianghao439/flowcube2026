@@ -63,6 +63,8 @@ function fixture({ container = {}, ret = {}, dim = {}, location = {}, failAfterR
     release() { assert.equal(active, false, 'transaction must end before release'); releaseCount++; lifecycle.push('release') },
     async query(sql, params = []) {
       queries.push({ sql, params })
+      if (sql.startsWith('SET TRANSACTION ISOLATION LEVEL')) return [[]]
+      if (sql.startsWith('SELECT so.id, so.status, so.task_id')) return [[{ id: 9, status: 3, task_id: 7 }]]
       if (sql.includes('FROM sale_order_adjustment_container_returns r') && sql.includes('wt.id AS warehouse_task_id')) return [[{ ...state.ret }]]
       if (sql.startsWith('SELECT product_id, warehouse_id FROM inventory_containers')) return [[{ product_id: state.container.product_id, warehouse_id: state.container.warehouse_id, ...dim }]]
       if (sql.includes('FROM product_items')) return [[{ id: 11, name: '合成商品', allow_decimal_qty: 1 }]]
@@ -99,6 +101,10 @@ function fixture({ container = {}, ret = {}, dim = {}, location = {}, failAfterR
     },
   }
   const api = load(source, {
+    '../../utils/operationRequest': {
+      beginResourceOperationRequest: async (_conn, { requestKey }) => { assert.equal(requestKey, undefined); return { enabled: false } },
+      completeOperationRequest: async (_conn, request) => { assert.equal(request.enabled, false) },
+    },
     '../fulfillment/fulfillment.refresh': { commitFulfillment: async connection => connection.commit() },
     '../../config/db': { pool: { getConnection: async () => conn } },
     '../../utils/AppError': AppError,

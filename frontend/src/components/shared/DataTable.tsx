@@ -208,7 +208,7 @@ export default function DataTable<T extends object>({
   return (
     <div className="desktop-table min-w-0 max-w-full rounded-lg border border-border bg-card overflow-hidden">
       {scrollLabel && hasHorizontalOverflow && (
-        <p id={scrollHintId} className="border-b border-border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+        <p id={scrollHintId} className="sr-only">
           可横向滚动查看其余列。聚焦表格后也可按左右方向键。
         </p>
       )}

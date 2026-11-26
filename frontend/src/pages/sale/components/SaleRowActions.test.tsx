@@ -120,3 +120,16 @@ test.each([1,6])('普通列表状态%s的原未决请求转入详情核对，禁
     expect(writes.length).toBeGreaterThan(0);expect(writes.every(item=>item.getAttribute('aria-disabled')==='true')).toBe(true)
   } finally { await act(async()=>root.unmount());host.remove();localStorage.removeItem(key);useAuthStore.setState(previous) }
 })
+
+test.each([1, 6])('套单状态 %s 的占库由详情承接', status => {
+  useAuthStore.setState({ user: { roleId: 2, permissions: [PERMISSIONS.SALE_ORDER_RESERVE] } as never })
+  const host = document.createElement('div'), root = createRoot(host), detail = vi.fn(), reserve = vi.fn()
+  try {
+    act(() => root.render(<SaleRowActions row={{ id: 42, status, commercialModel: 'kit-v1' } as SaleOrder}
+      anyPending={false} onAsk={vi.fn()} onReserveSale={reserve} onCancelSale={vi.fn()} onDeleteSale={vi.fn()}
+      onViewTask={vi.fn()} onDetail={detail} onEdit={vi.fn()} onPrint={vi.fn()} />))
+    act(() => host.querySelector('button')!.click())
+    expect(detail).toHaveBeenCalledOnce()
+    expect(reserve).not.toHaveBeenCalled()
+  } finally { act(() => root.unmount()); useAuthStore.setState({ user: null }) }
+})

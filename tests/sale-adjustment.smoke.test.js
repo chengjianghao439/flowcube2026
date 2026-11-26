@@ -4,13 +4,16 @@
 const { setTimeout: delay } = require('node:timers/promises')
 const {
   createLogger,
+  createPurchaseOrder,
+  confirmPurchaseOrder,
   prepareSmokeContext,
   dbQuery,
   login,
   randomRef,
 } = require('./helpers/smokeTestKit')
 
-const { createContainer, syncStockFromContainers, SOURCE_TYPE, CONTAINER_STATUS } = require('../backend/src/engine/containerEngine')
+const { reserve } = require('../backend/src/engine/reservationEngine')
+const { createContainer, syncStockFromContainers, splitTaskLockedContainerForReturn, lockStockDimension, SOURCE_TYPE, CONTAINER_STATUS } = require('../backend/src/engine/containerEngine')
 
 async function seedActiveContainer(pool, { product, warehouse, qty, locationId = null }) {
   const conn = await pool.getConnection()
@@ -70,10 +73,10 @@ async function shipToTask(http, token, pool, saleId) {
   return Number(saleRow.task_id)
 }
 
-async function pickWholeContainer(ctx, token, { taskId, itemId, container, product, qty }) {
+async function pickContainer(ctx, token, { taskId, itemId, container, product, qty, scanMode = '整件' }) {
   const resp = await ctx.http.post('/api/scan-logs', {
     token, headers: ctx.pdaHeaders(),
-    json: { taskId, itemId, containerId: container.containerId, barcode: container.barcode, productId: Number(product.id), qty, scanMode: '整件' },
+    json: { taskId, itemId, containerId: container.containerId, barcode: container.barcode, productId: Number(product.id), qty, scanMode },
   })
   if (!resp.ok) throw new Error(`pick scan failed: ${JSON.stringify(resp.data)}`)
   return resp
@@ -187,7 +190,7 @@ async function scenarioIncrease(log, ctx, token) {
   const taskId = await shipToTask(ctx.http, token, ctx.pool, saleId)
   const [itemRow] = await dbQuery(ctx.pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
 
-  await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 2 })
+  await pickContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 2 })
   const readyPath = `/api/warehouse-tasks/${taskId}/ready`
   const readyKey = randomRef('PICK-DONE')
   const readyHeaders = ctx.pdaHeaders({ 'X-Request-Key': readyKey })
@@ -224,7 +227,7 @@ async function scenarioIncrease(log, ctx, token) {
 
   // 补拣剩余1件，验证正常流程能重新走通
   const extraContainer = await seedActiveContainer(ctx.pool, { product: ctx.product, warehouse: ctx.warehouse, qty: 1, locationId: ctx.location.id })
-  await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container: extraContainer, product: ctx.product, qty: 1 })
+  await pickContainer(ctx, token, { taskId, itemId: itemRow.id, container: extraContainer, product: ctx.product, qty: 1 })
   const ready2 = await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
   log.assert('补拣完成后可重新推进到待分拣(3)', ready2.ok, JSON.stringify(ready2.data))
 }
@@ -251,7 +254,7 @@ async function scenarioWaveFinishLockOrder(log, ctx, token) {
   if (!started.ok) throw new Error(`开始波次失败：${started.status}`)
   for (const [index, member] of members.entries()) {
     const [[item]] = await pool.query('SELECT id FROM warehouse_task_items WHERE task_id=?', [member.taskId])
-    await pickWholeContainer(ctx, token, { taskId: member.taskId, itemId: item.id, container: containers[index], product: ctx.product, qty: 1 })
+    await pickContainer(ctx, token, { taskId: member.taskId, itemId: item.id, container: containers[index], product: ctx.product, qty: 1 })
   }
   const picked = await http.post(`${wavePath}/finish-picking`, { token })
   if (!picked.ok) throw new Error(`完成波次拣货失败：${picked.status}`)
@@ -313,6 +316,236 @@ async function scenarioDecreaseImmediate(log, ctx, token) {
   log.assert('预占已释放到1', Number(resv.total) === 1, JSON.stringify(resv))
 }
 
+async function scenarioCrossLayerPartialPicks(log, ctx, token) {
+  log.section('跨层减量：立即释放未拣预占，按两只容器实拣份额归还，余量实际出库')
+  const { pool, http, warehouse } = ctx
+  const product = { code: randomRef('ADJ-P'), name: '跨层减量测试商品', unit: '个' }
+  const [newProduct] = await pool.query(
+    'INSERT INTO product_items (code,name,unit,sale_price_a) VALUES (?,?,?,10)',
+    [product.code, product.name, product.unit],
+  )
+  product.id = Number(newProduct.insertId)
+  const seed = qty => seedActiveContainer(pool, { product, warehouse, qty, locationId: ctx.location.id })
+  const first = await seed(10)
+  const second = await seed(5)
+  const po = await createPurchaseOrder(http, token, { supplier: ctx.supplier, warehouse, product, quantity: 3 })
+  const confirmed = await confirmPurchaseOrder(http, token, po.data?.data?.id)
+  log.assert('3件预计库存来自已提交的采购单', po.ok && confirmed.ok, JSON.stringify(confirmed.data))
+  const order = await createSaleOrder(http, token, { customer: ctx.customer, warehouse, product, quantity: 18 })
+  const saleId = Number(order.data?.data?.id)
+  const taskId = await shipToTask(http, token, pool, saleId)
+  const [item] = await dbQuery(pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
+  const balances = async () => {
+    const [row] = await dbQuery(pool,
+      `SELECT s.reserved, s.quantity,
+              (SELECT COALESCE(SUM(qty),0) FROM stock_reservations WHERE ref_type='sale_order' AND ref_id=? AND status=1) AS ledger,
+              (SELECT COALESCE(SUM(qty),0) FROM sale_order_expected_bindings WHERE sale_order_id=? AND released_at IS NULL) AS bound,
+              (SELECT reserved_qty FROM sale_order_items WHERE order_id=? AND product_id=s.product_id) AS line_reserved
+         FROM inventory_stock s WHERE product_id=? AND warehouse_id=?`, [saleId, saleId, saleId, product.id, warehouse.id])
+    return Object.fromEntries(Object.entries(row).map(([k, v]) => [k, Number(v)]))
+  }
+  const before = await balances()
+  log.assert('改单前15件现货及3件采购预计量已支撑18件预占', before.ledger === 18 && before.bound === 3, JSON.stringify(before))
+  await pickContainer(ctx, token, { taskId, itemId: item.id, container: first, product, qty: 4, scanMode: '散件' })
+  await pickContainer(ctx, token, { taskId, itemId: item.id, container: second, product, qty: 5 })
+  const adjustment = await requestAdjustment(ctx, token, saleId, itemsFrom(product, 3), { 'X-Request-Key': randomRef('ADJ-REQ') })
+  log.assert('18件需求、已拣9件减至3件进入待归还', adjustment.ok && adjustment.data?.data?.pending === true, JSON.stringify(adjustment.data))
+  const pending = await balances()
+  log.assert('9件未拣量立即释放，采购绑定清零，实拣的9件仍由原单预占',
+    pending.ledger === 9 && pending.reserved === 9 && pending.line_reserved === 9 && pending.bound === 0, JSON.stringify(pending))
+  const detail = await http.get(`/api/warehouse-tasks/adjustments/${adjustment.data?.data?.adjustmentId}`, { token })
+  const returns = detail.data?.data?.items?.[0]?.containerReturns ?? []
+  const correctReturns = returns.length === 2 && returns[0].containerId === first.containerId
+    && returns[0].qty === 4 && returns[0].containerRemainingQty === 10
+    && returns[1].containerId !== second.containerId && returns[1].qty === 2
+  log.assert('第一只原容器实存10、归还全部实拣4，第二只从实拣5中拆出2', correctReturns, JSON.stringify(returns))
+  if (!correctReturns) return
+
+  const confirm = id => http.post(`/api/warehouse-tasks/adjustments/container-returns/${id}/confirm`, {
+    token, headers: ctx.pdaHeaders(), json: { targetLocationId: Number(ctx.location.id) },
+  })
+  const partial = await confirm(returns[0].id)
+  const duplicate = await confirm(returns[0].id)
+  const intermediate = await balances()
+  const [unlocked] = await dbQuery(pool, 'SELECT remaining_qty, locked_by_task_id FROM inventory_containers WHERE id=?', [first.containerId])
+  log.assert('整只归位保留10件实存，分批确认重试不重复解锁或释放预占',
+    partial.ok && partial.data?.data?.finalized === false && !duplicate.ok
+    && unlocked.locked_by_task_id === null && Number(unlocked.remaining_qty) === 10 && intermediate.ledger === 9,
+    JSON.stringify({ partial: partial.data, duplicate: duplicate.status, unlocked, intermediate }))
+
+  // 第一只条码已实际归位，另一任务可以重新拣走。原单稍后收尾只能减少自己的流水和预占。
+  const nextOrder = await createSaleOrder(http, token, { customer: ctx.customer, warehouse, product, quantity: 1 })
+  const nextTask = await shipToTask(http, token, pool, nextOrder.data.data.id)
+  const [nextItem] = await dbQuery(pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [nextTask])
+  await pickContainer(ctx, token, { taskId: nextTask, itemId: nextItem.id, container: first, product, qty: 1, scanMode: '散件' })
+
+  // 模拟确认前原有效拣货流水与归还凭据不符。必须整笔回滚，补齐原凭据后同一项可重新确认。
+  const [scan] = await dbQuery(pool, 'SELECT id,qty FROM scan_logs WHERE task_id=? AND item_id=? AND container_id=? AND scan_purpose=1', [taskId, item.id, second.containerId])
+  for (const [qty, label] of [[1, '有效拣货不足'], [6, '剩余有效拣货超过新目标']]) {
+    await pool.query('UPDATE scan_logs SET qty=? WHERE id=?', [qty, scan.id])
+    try {
+      const corrupt = await confirm(returns[1].id)
+      const [rollback] = await dbQuery(pool,
+        'SELECT r.status, c.locked_by_task_id FROM sale_order_adjustment_container_returns r JOIN inventory_containers c ON c.id=r.source_container_id WHERE r.id=?', [returns[1].id])
+      const unchanged = await balances()
+      log.assert(`${label}时返回409，最后一项、容器锁和预占均回滚`,
+        corrupt.status === 409 && Number(rollback.status) === 1 && Number(rollback.locked_by_task_id) === taskId && unchanged.ledger === 9,
+        JSON.stringify({ status: corrupt.status, rollback, unchanged }))
+    } finally {
+      await pool.query('UPDATE scan_logs SET qty=? WHERE id=?', [scan.qty, scan.id])
+    }
+  }
+
+  const final = await confirm(returns[1].id)
+  const after = await balances()
+  const scans = await dbQuery(pool, 'SELECT container_id, qty FROM scan_logs WHERE task_id=? AND COALESCE(scan_purpose,1)=1', [taskId])
+  log.assert('最终确认后只保留第二只原容器实拣3件，账本和行预占均为3',
+    final.ok && final.data?.data?.finalized && scans.length === 1 && Number(scans[0].container_id) === second.containerId
+    && Number(scans[0].qty) === 3 && after.ledger === 3 && after.reserved === 4 && after.line_reserved === 3,
+    JSON.stringify({ final: final.data, scans, after }))
+  if (!final.ok) return
+  const [reused] = await dbQuery(pool,
+    `SELECT c.locked_by_task_id, s.qty FROM inventory_containers c JOIN scan_logs s ON s.container_id=c.id
+     WHERE c.id=? AND s.task_id=? AND s.item_id=? AND COALESCE(s.scan_purpose,1)=1`, [first.containerId, nextTask, nextItem.id])
+  log.assert('原单收尾后下一任务的容器锁、1件实拣和预占均保留',
+    Number(reused?.locked_by_task_id) === nextTask && Number(reused?.qty) === 1 && after.reserved - after.ledger === 1, JSON.stringify(reused))
+  const cancel = await http.post(`/api/sale/${nextOrder.data.data.id}/cancel`, { token })
+  const putBack = await http.post('/api/scan-logs/cancel-return', {
+    token, headers: ctx.pdaHeaders(),
+    json: { taskId: nextTask, barcode: first.barcode, containerId: first.containerId, locationId: Number(ctx.location.id) },
+  })
+  log.assert('下一任务通过原销售取消入口归还复用条码', cancel.ok && putBack.ok, JSON.stringify(putBack.data))
+  const pda = () => ({ token, headers: ctx.pdaHeaders() })
+  const ready = await http.put(`/api/warehouse-tasks/${taskId}/ready`, pda())
+  const sorted = await http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { ...pda(), json: {} })
+  const checked = await http.post('/api/scan-logs/check', { ...pda(), json: { taskId, barcode: second.barcode } })
+  const pkg = await http.post('/api/packages', { ...pda(), json: { warehouseTaskId: taskId } })
+  const packageId = Number(pkg.data?.data?.id)
+  const added = await http.post(`/api/packages/${packageId}/add-item`, { ...pda(), json: { productCode: product.code, qty: 3 } })
+  const closed = await http.put(`/api/packages/${packageId}/finish`, pda())
+  await pool.query("UPDATE print_jobs SET status=2 WHERE ref_type='package' AND ref_id=?", [packageId])
+  const packed = await http.put(`/api/warehouse-tasks/${taskId}/pack-done`, pda())
+  const shipped = await http.put(`/api/warehouse-tasks/${taskId}/ship`, pda())
+  const done = await balances()
+  const stages = [ready, sorted, checked, pkg, added, closed, packed, shipped]
+  log.assert('改单余量完成拣货、分拣、复核、装箱和出库，实存12、有效预占及绑定归零',
+    stages.every(r => r.ok) && done.quantity === 12 && done.reserved === 0 && done.ledger === 0 && done.bound === 0,
+    JSON.stringify({ stages: stages.map(r => r.data?.message), done }))
+}
+
+async function scenarioLegacyPendingReservation(log, ctx, token, extra) {
+  log.section(`旧待确认队列：校验尚在原单账本内的 ${extra} 件未拣预占`)
+  const { pool, http, warehouse } = ctx
+  const product = { code: randomRef('ADJ-L'), name: '历史改单测试商品', unit: '个' }
+  const [created] = await pool.query('INSERT INTO product_items (code,name,unit,sale_price_a) VALUES (?,?,?,10)', [product.code, product.name, product.unit])
+  product.id = Number(created.insertId)
+  const container = await seedActiveContainer(pool, { product, warehouse, qty: 6, locationId: ctx.location.id })
+  const purchase = await createPurchaseOrder(http, token, { supplier: ctx.supplier, warehouse, product, quantity: 4 })
+  const confirmedPurchase = await confirmPurchaseOrder(http, token, purchase.data.data.id)
+  if (!confirmedPurchase.ok) throw new Error(confirmedPurchase.data.message)
+  const order = await createSaleOrder(http, token, { customer: ctx.customer, warehouse, product, quantity: 10 })
+  const saleId = order.data.data.id
+  const taskId = await shipToTask(http, token, pool, saleId)
+  const [item] = await dbQuery(pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
+  await pickContainer(ctx, token, { taskId, itemId: item.id, container, product, qty: 6 })
+  const adjustment = await requestAdjustment(ctx, token, saleId, itemsFrom(product, 4))
+  const detail = await http.get(`/api/warehouse-tasks/adjustments/${adjustment.data.data.adjustmentId}`, { token })
+  const entry = detail.data.data.items[0].containerReturns[0]
+  const [line] = await dbQuery(pool, 'SELECT id FROM sale_order_items WHERE order_id=? AND product_id=?', [saleId, product.id])
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    // 重建旧版挂起账本：用同一预占引擎恢复原单的预计绑定、预占流水与缓存。
+    await reserve(conn, { productId: product.id, warehouseId: warehouse.id, qty: extra,
+      refType: 'sale_order', refId: saleId, refItemId: line.id, refNo: order.data.data.orderNo, includeExpected: true })
+    await conn.query('UPDATE sale_order_items SET reserved_qty=reserved_qty+? WHERE id=?', [extra, line.id])
+    await conn.commit()
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally { conn.release() }
+
+  const confirm = () => http.post(`/api/warehouse-tasks/adjustments/container-returns/${entry.id}/confirm`, {
+    token, headers: ctx.pdaHeaders(), json: { targetLocationId: Number(ctx.location.id) },
+  })
+  if (extra === 4) {
+    const [sibling] = await pool.query(
+      `INSERT INTO warehouse_tasks (task_no,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name,status)
+       SELECT ?,sale_order_id,sale_order_no,customer_id,customer_name,warehouse_id,warehouse_name,2 FROM warehouse_tasks WHERE id=?`, [randomRef('ADJ-WT'), taskId])
+    try {
+      const denied = await confirm()
+      log.assert('旧队列若另有关联任务，拒绝推断原单超额预占', denied.status === 409, JSON.stringify(denied.data))
+    } finally {
+      await pool.query('DELETE FROM warehouse_tasks WHERE id=? AND sale_order_id=?', [sibling.insertId, saleId])
+    }
+    await pool.query('UPDATE inventory_stock SET reserved=reserved-1 WHERE product_id=? AND warehouse_id=?', [product.id, warehouse.id])
+    try {
+      const denied = await confirm()
+      log.assert('旧队列若维度缓存和总账不符，拒绝补释', denied.status === 409, JSON.stringify(denied.data))
+    } finally {
+      await pool.query('UPDATE inventory_stock SET reserved=reserved+1 WHERE product_id=? AND warehouse_id=?', [product.id, warehouse.id])
+    }
+  }
+  const response = await confirm()
+  const [state] = await dbQuery(pool, `SELECT
+      (SELECT SUM(qty) FROM stock_reservations WHERE ref_id=? AND ref_type='sale_order' AND status=1) AS ledger,
+      (SELECT COALESCE(SUM(qty),0) FROM sale_order_expected_bindings WHERE sale_order_id=? AND released_at IS NULL) AS bound,
+      (SELECT reserved FROM inventory_stock WHERE product_id=? AND warehouse_id=?) AS cache_qty,
+      (SELECT reserved_qty FROM sale_order_items WHERE id=?) AS line_qty,
+      r.status, c.locked_by_task_id FROM sale_order_adjustment_container_returns r
+      JOIN inventory_containers c ON c.id=r.source_container_id WHERE r.id=?`,
+    [saleId,saleId,product.id,warehouse.id,line.id,entry.id])
+  if (extra === 4) {
+    log.assert('旧队列可证缺少4件未拣释放，确认同时解绑采购并使有效预占、缓存、销售明细均为4',
+      response.ok && response.data.data.finalized && Number(state.ledger) === 4 && Number(state.cache_qty) === 4
+      && Number(state.line_qty) === 4 && Number(state.bound) === 0 && Number(state.status) === 2, JSON.stringify({ response: response.data, state }))
+  } else {
+    log.assert('超额1件与旧未拣层4件不符，409保留原7件预占、1件绑定、容器锁及待确认状态',
+      response.status === 409 && Number(state.ledger) === 7 && Number(state.cache_qty) === 7 && Number(state.line_qty) === 7
+      && Number(state.bound) === 1 && Number(state.status) === 1 && Number(state.locked_by_task_id) === taskId, JSON.stringify({ response: response.data, state }))
+  }
+}
+
+async function scenarioLegacySplitReturn(log, ctx, token) {
+  log.section('升级前待确认的拆分归还：原容器仅包含未拣实物')
+  const { pool, http, product, warehouse } = ctx
+  const seed = qty => seedActiveContainer(pool, { product, warehouse, qty, locationId: ctx.location.id })
+  const first = await seed(10)
+  const second = await seed(4)
+  const order = await createSaleOrder(http, token, { customer: ctx.customer, warehouse, product, quantity: 8 })
+  const taskId = await shipToTask(http, token, pool, order.data.data.id)
+  const [item] = await dbQuery(pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
+  for (const container of [first, second]) await pickContainer(ctx, token, { taskId, itemId: item.id, container, product, qty: 4 })
+  const adjustment = await requestAdjustment(ctx, token, order.data.data.id, itemsFrom(product, 4))
+  const detail = await http.get(`/api/warehouse-tasks/adjustments/${adjustment.data.data.adjustmentId}`, { token })
+  const ret = detail.data.data.items[0].containerReturns[0]
+
+  // 按旧版本存储形态，在隔离库把应归还的4件拆到子条码，余下6件仍锁在原任务。
+  if (ret.containerId === first.containerId) {
+    const conn = await pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      await lockStockDimension(conn, product.id, warehouse.id)
+      const split = await splitTaskLockedContainerForReturn(conn, { taskId, containerId: first.containerId, qty: 4 })
+      await conn.query('UPDATE sale_order_adjustment_container_returns SET source_container_id=? WHERE id=?', [split.containerId, ret.id])
+      await conn.commit()
+    } catch (err) {
+      await conn.rollback()
+      throw err
+    } finally {
+      conn.release()
+    }
+  }
+  const confirmed = await http.post(`/api/warehouse-tasks/adjustments/container-returns/${ret.id}/confirm`, {
+    token, headers: ctx.pdaHeaders(), json: { targetLocationId: Number(ctx.location.id) },
+  })
+  const [source] = await dbQuery(pool, 'SELECT remaining_qty,locked_by_task_id FROM inventory_containers WHERE id=?', [first.containerId])
+  const ready = await http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
+  log.assert('旧拆分队列归还后，原条码剩余6件已解锁，另一只条码继续完成拣货',
+    confirmed.ok && source.locked_by_task_id === null && Number(source.remaining_qty) === 6 && ready.ok,
+    JSON.stringify({ confirmed: confirmed.data, source, ready: ready.data }))
+}
+
 // ── 场景③：减量——命中已打包部分，需要PDA拆箱+归还双重确认才真正生效 ──
 async function scenarioDecreasePendingConfirm(log, ctx, token) {
   log.section('Scenario: 改单减量 — 命中已打包部分，PDA确认后生效')
@@ -322,7 +555,7 @@ async function scenarioDecreasePendingConfirm(log, ctx, token) {
   const taskId = await shipToTask(ctx.http, token, ctx.pool, saleId)
   const [itemRow] = await dbQuery(ctx.pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
 
-  await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 2 })
+  await pickContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 2 })
   await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
   await ctx.http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: ctx.pdaHeaders(), json: {} })
   const [containerRow] = await dbQuery(ctx.pool, 'SELECT id, barcode, location_id FROM inventory_containers WHERE id=?', [container.containerId])
@@ -365,14 +598,27 @@ async function scenarioDecreasePendingConfirm(log, ctx, token) {
   const pendingListResp = await ctx.http.get('/api/warehouse-tasks/adjustments/pending', { token })
   log.assert('待处理列表能查到该任务', (pendingListResp.data?.data || []).some(t => Number(t.id) === taskId), JSON.stringify(pendingListResp.data?.data))
 
-  const confirmVoidResp = await ctx.http.post(`/api/warehouse-tasks/adjustments/package-voids/${voidId}/confirm`, { token, headers: ctx.pdaHeaders() })
+  const voidKey = randomRef('void-confirm')
+  const returnKey = randomRef('return-confirm')
+  const confirmVoid = () => ctx.http.post(`/api/warehouse-tasks/adjustments/package-voids/${voidId}/confirm`, { token, headers: { ...ctx.pdaHeaders(), 'X-Request-Key': voidKey } })
+  const confirmVoidResp = await confirmVoid()
   log.assert('确认拆箱成功但尚未finalize(还有容器待归还)', confirmVoidResp.ok && confirmVoidResp.data?.data?.finalized === false, JSON.stringify(confirmVoidResp.data))
 
-  const confirmReturnResp = await ctx.http.post(`/api/warehouse-tasks/adjustments/container-returns/${returnId}/confirm`, {
-    token, headers: ctx.pdaHeaders(), json: { targetLocationId: Number(containerRow.location_id) },
+  const confirmReturn = () => ctx.http.post(`/api/warehouse-tasks/adjustments/container-returns/${returnId}/confirm`, {
+    token, headers: { ...ctx.pdaHeaders(), 'X-Request-Key': returnKey }, json: { targetLocationId: Number(containerRow.location_id) },
   })
+  const confirmReturnResp = await confirmReturn()
   log.assert('确认归还成功且finalize=true(最后一项)', confirmReturnResp.ok && confirmReturnResp.data?.data?.finalized === true, JSON.stringify(confirmReturnResp.data))
 
+  for (const [action, entryId, key, replay, finalized] of [
+    ['warehouse.adjustment-void', voidId, voidKey, confirmVoid, false],
+    ['warehouse.adjustment-return', returnId, returnKey, confirmReturn, true],
+  ]) {
+    const receipt = await ctx.http.get(`/api/system/request-status/${key}?action=${action}.${entryId}`, { token, headers: ctx.pdaHeaders() })
+    log.assert(`${action} 原键回执保存该明细及原结果`, receipt.data?.data?.status === 'success' && Number(receipt.data.data.resourceId) === entryId && receipt.data.data.data?.finalized === finalized)
+    const again = await replay()
+    log.assert(`${action} 对已完成明细复用原键返回原结果`, again.ok && again.data?.data?.finalized === finalized)
+  }
   const [itemFinal] = await dbQuery(ctx.pool, 'SELECT required_qty, picked_qty, sorted_qty, checked_qty FROM warehouse_task_items WHERE task_id=?', [taskId])
   log.assert('picked_qty已降到新目标1', Number(itemFinal.picked_qty) === 1, JSON.stringify(itemFinal))
   log.assert('checked_qty已清零等待重新复核', Number(itemFinal.checked_qty) === 0, JSON.stringify(itemFinal))
@@ -422,7 +668,7 @@ async function scenarioDecreaseWhileStillPicking(log, ctx, token) {
   const saleId = Number(saleCreate.data?.data?.id)
   const taskId = await shipToTask(ctx.http, token, ctx.pool, saleId)
   const [itemRow] = await dbQuery(ctx.pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
-  await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 3 })
+  await pickContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 3 })
 
   const [taskBefore] = await dbQuery(ctx.pool, 'SELECT status FROM warehouse_tasks WHERE id=?', [taskId])
   log.assert('改单前任务仍在拣货中(2)（已拣满但未点ready）', Number(taskBefore.status) === 2, JSON.stringify(taskBefore))
@@ -467,7 +713,7 @@ async function scenarioPackagingClosure(log, ctx, token) {
   const taskId = await shipToTask(ctx.http, token, ctx.pool, saleId)
   const [itemRow] = await dbQuery(ctx.pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
 
-  await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 5 })
+  await pickContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 5 })
   await ctx.http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
   await ctx.http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: ctx.pdaHeaders(), json: {} })
   const [containerRow] = await dbQuery(ctx.pool, 'SELECT barcode FROM inventory_containers WHERE id=?', [container.containerId])
@@ -507,7 +753,7 @@ async function scenarioSaleReturnQualifiedQty(log, ctx, token) {
   const [itemRow] = await dbQuery(pool, 'SELECT id FROM warehouse_task_items WHERE task_id=?', [taskId])
 
   // 完整出库链到已出库(7)
-  await pickWholeContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 10 })
+  await pickContainer(ctx, token, { taskId, itemId: itemRow.id, container, product: ctx.product, qty: 10 })
   await http.put(`/api/warehouse-tasks/${taskId}/ready`, { token, headers: ctx.pdaHeaders() })
   await http.put(`/api/warehouse-tasks/${taskId}/sort-done`, { token, headers: ctx.pdaHeaders(), json: {} })
   const [cRow] = await dbQuery(pool, 'SELECT barcode FROM inventory_containers WHERE id=?', [container.containerId])
@@ -673,6 +919,10 @@ async function main() {
     await scenarioIncrease(log, ctx, token)
     await scenarioWaveFinishLockOrder(log, ctx, token)
     await scenarioDecreaseImmediate(log, ctx, token)
+    await scenarioCrossLayerPartialPicks(log, ctx, token)
+    await scenarioLegacySplitReturn(log, ctx, token)
+    await scenarioLegacyPendingReservation(log, ctx, token, 4)
+    await scenarioLegacyPendingReservation(log, ctx, token, 1)
     await scenarioDecreasePendingConfirm(log, ctx, token)
     await scenarioIncreaseWhileStillPicking(log, ctx, token)
     await scenarioDecreaseWhileStillPicking(log, ctx, token)

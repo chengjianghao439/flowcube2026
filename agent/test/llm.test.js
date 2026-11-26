@@ -67,7 +67,7 @@ function makeFlowMock() {
       else if ('演示客户甲公司'.includes(kw) && kw) hits = [{ id: 1, type: 'customer', title: '演示客户甲公司' }];
       return ok(res, hits);
     }
-    if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, allowDecimalQty: false }); }
+    if (/^\/api\/products\/\d+$/.test(p)) { const id = Number(p.split('/').pop()); return ok(res, { id, unit: '个', allowDecimalQty: false }); }
     if (p === '/api/customers/1') return ok(res, { id: 1, name: '演示客户甲公司', priceLevel: 'A', creditLimit: null });
     if (p === '/api/payments/' && req.method === 'GET') return ok(res, { list: [{ id: 11, orderNo: 'SO-M1', totalAmount: 100, paidAmount: 0, balance: 100, status: 1, createdAt: '2026-10-20T00:00:00.000Z', partyName: '演示客户甲公司' }] });
     if (p === '/api/finance/accounts/active') return ok(res, [{ id: 1, name: '基本户' }]);

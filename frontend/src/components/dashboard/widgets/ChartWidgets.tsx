@@ -1,3 +1,4 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ChartContainer } from '@/components/shared/ChartContainer'
 import { ChartTooltipContent, ChartLegendContent } from '@/components/shared/ChartPresentation'
 import { useState } from 'react'
@@ -115,7 +116,12 @@ export function ChartSaleTrend() {
   const choices = [{key:'totalAmount',label:'订单金额'}, {key:'shippedAmount',label:'已出库订单金额'}, {key:'orderCount',label:'订单数'}] as const
   const count = metric === 'orderCount'
   const label = choices.find(c=>c.key===metric)!.label
-  return <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="月度销售趋势" icon={TrendingUp} bodyClassName="flex flex-col" action={<select aria-label="销售趋势指标" value={metric} onChange={e=>setMetric(e.target.value as typeof metric)} className="h-8 max-w-full rounded-md border border-border bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{choices.map(c=><option key={c.key} value={c.key}>{c.label}</option>)}</select>}>
+  return <ChartWidgetShell loading={isLoading} error={error} onRetry={() => void refetch()} title="月度销售趋势" icon={TrendingUp} bodyClassName="flex flex-col" action={
+    <Select value={metric} onValueChange={value => setMetric(value as typeof metric)}>
+      <SelectTrigger aria-label="销售趋势指标" className="h-9 w-auto max-w-full px-2 text-xs"><SelectValue /></SelectTrigger>
+      <SelectContent align="end">{choices.map(choice => <SelectItem key={choice.key} value={choice.key}>{choice.label}</SelectItem>)}</SelectContent>
+    </Select>
+  }>
     <p className="mb-2 text-xs text-muted-foreground">按订单创建月份归集 · {count ? '单位：单' : '单位：元，沿用报表订单金额'}{metric === 'shippedAmount' && ' · 仅统计已出库状态订单'}</p>
     {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} compact/> : isLoading ? <div className="h-40 rounded bg-muted motion-safe:animate-pulse"/> : !data?.byMonth.length ? <p className={EMPTY_HINT}>该区间内暂无销售</p> : <div className="min-h-0 flex-1"><ChartContainer width="100%" height="100%">
       <BarChart data={data.byMonth} margin={{top:12,right:12,left:0,bottom:4}}>

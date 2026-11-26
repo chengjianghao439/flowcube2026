@@ -1,5 +1,20 @@
 # 后端 / API / 数据库规范
 
+## 小满续办、库存和 Flow 回执
+
+从聊天引用以前的任务时，先以当前员工和仓库范围调用 `assertTaskAccess`，再读取单号、批次、行仓及历史结果。权限变化后可由员工给出完整单号，以当前来源另查。交接卡刷新保留曾展示的来源权限、办理权限和仓库范围。规则和模型开销售草稿都用原话逐行核对商品、数量与明示单位，无法配对时请员工补充。
+
+`GET /api/inventory/stock` 支持可选的 `productIds`，传入逗号分隔的 1 至 100 个正整数，配合 `warehouseId` 或当前用户范围。列表和总数应用相同的商品与仓库条件。小满先查到具体商品，再批量读这些商品的库存。Flow 回执只在服务明确返回 `not_found` 时当作缺失。原请求仍在处理、响应不可解析或返回冲突时，保留原请求键并提示核对。
+
+### 小满按业务图拆分计划
+
+| 顺序 | 模块边界 | 迁移时验证 |
+|---|---|---|
+| 1 | 提取库存查询与销售草稿，分别封装库位读取和建单预览，保留现有工具、来源检查与任务仓库范围 | 同轮、续办、改仓、单位、分页及规则与模型对照 |
+| 2 | 将销售交接与占库的试算、确认、回执恢复移至各自业务模块，通过同一授权检查读取任务 | 撤权、释放批次、原单状态变化、原键恢复和冷启动 |
+| 3 | 将收款与核销、退货与月结、补货与采购、简报与工作台分别迁移，保留已保存的图名及状态标识 | 跨期、金额分、分次核销、有限范围角色的记录恢复 |
+| 4 | `agent.js` 只负责消息来源、路由、授权、任务互斥及分派；各模块导出已有试算、确认或恢复入口 | 每次迁移运行 `npm run test:agent`，比较相同输入的工具调用、回执、状态及可见字段 |
+
 ## ERP 与小满写接口契约
 
 销售草稿、收款登记和核销的公共契约以正式 Express 路由的请求校验和回执字段为准。前端 Vitest 通过 ERP API 封装和小满客户端向同一回环测试服务发请求，复用正式路由、校验、控制器和回执逻辑。离线夹具核对缺项拒绝、请求键、资源身份和响应字段。`smoke:go-live-owned` 继续用独占 MySQL 验证两种客户端请求的同键回放，以及销售单、收款流水和核销明细的唯一性。
@@ -64,6 +79,8 @@ routes/controller/service 分工及统一 `successResponse` / `AppError` 信封�
 小满 `/chat` 可带工作区的 `previousTaskId`。歧义回复带 `detachTask` 和 `keepReferences` 时，客户端收起卡片，将暂存的当前编号作为 `referenceTaskId` 发送。该编号只供有明确指代的消息使用。读取相应记录时复核本人、当前权限、仓库范围及单据类型。有明确单号时也核对单号一致。候选顺序绑定服务端返回的 `candidateKey`、任务及候选字段，按序号选择须带当前键，再按稳定候选 ID 复查。带键的候选按钮也验证版本。口头确认无法触发业务写入。
 
 小满的复合查询按原句顺序执行最多三个已支持的只读步骤。每次完成一个步骤就持久化进度，后续失败或需要候选时暂停。回看与续办逐项复核已经展示的子任务及当前候选所需查看权限和仓库范围，已完成结果沿原查询时点保留。
+
+销售交接识别沿用对话入口的 4000 字符上限。动作前缀从左到右逐词消费，一次识别结果复用于原单追问和办理指引。
 
 小满销售交接按完整销售单号读取正式销售详情及履约事项、仓库任务列表和客户往来应收列表。三路分别使用当前 `sale.order.view`、`warehouse.task.view` 和 `payment.view`，复用各接口的既有范围，另核对销售头仓、行仓及仓库任务仓。列表候选按完整单号等值匹配，独立来源对应的销售单 ID 须一致。仓库响应通过 `adjustmentPending` 布尔字段表达改单挂起。交接按白名单字段生成，原履约备注和跳转地址不参与回复。旧交接快照重复核对本人、已用权限和仓库范围。接续占库复用原 B2 预览及确认版本。
 
@@ -158,6 +175,8 @@ routes/controller/service 分工及统一 `successResponse` / `AppError` 信封�
 - 数据库列注释可能过期，状态含义以常量和执行代码为准。不能凭历史迁移文本认定生产已经存在某列。
 
 ### 空库内置打印模板订正（297，2026-10-21）
+
+219 盘点脚本检查单据和标签模板的 `elements`，只输出编号、类型和分类。声明 ZPL 的标签可使用正文布局，单据仍须具备数组布局。
 
 219在 `JSON_SET` 中传入 `CAST(... AS CHAR)`，把产品标签的 `elements` 从数组改成了字符串，导致真实模板列表在校验该行时整页失败。297仅在 type=8、精确内置名称/thermal75纸型、系统创建且布局只有 `elements` 一个字段时，比对完整解包数组与079种子经“规格→型号”后的固定已知内容，再恢复数组。不是按同名、元素数量或字符串前缀判断；无效/截断、自定义内容、额外字段、其它创建者/类型/纸型保持。ID、默认选择及其它模板不改，重复执行无变化；001—296及认可岗位表保持原样。
 
@@ -321,13 +340,13 @@ E1质量窄修（2026-10-05）：共享退货账款 helper 的初始普通 ident
 
 `disposal.handling.operations`按领域全局operation UUID、action、actor、原key、完整canonical载荷与SHA256持久防重。意图UUID另有唯一预算，来源/原响应/成功操作同conn一次commit，失败整笔回滚。无TTL、不以单头状态猜success；原创建响应保留revision1，后续协调revision变化不能覆写原ACK。`GET /handling-operations/:operationUuid?intentUuid=…&action=disposal.handling.source.create&requestKey=…`仅认证读取本人精确原结果，校验当前原仓范围及操作/来源/载荷/资源/响应身份，不附目标单据或价款，不授写权或原单VIEW；pending/not_found仍待核对。H1目前只识别普通来源创建action，未来操作未开放。
 
-迁移277源码增加来源/关联/持久操作/旧单转换四表及三个目标头nullable marker；从已核最大276递增。字符容量沿实际主档（商品code50/name150、仓code30/name100、unit20、用户名50），ID沿BIGINT UNSIGNED；数量DECIMAL(12,2)，原金额列不动。canonical原文存LONGTEXT并核JSON有效；UUID/hash用ascii_bin。列形状、具名CHECK、索引名/列序/唯一性/前缀、FK名/列序/父表/RESTRICT均以information_schema核对，缺失补齐、未知形状失败。历史目标line ID及旧处置item ID不设删除重建明细FK；证据不级联删除、不回填历史。这里只写迁移源码与纯拆句/结构核对，未执行DDL或schema对账；MySQL元数据规范化、重复迁移、索引/EXPLAIN及真实事务并发另验。H2正常目标创建、H3真实事实、H4解除、H5签认、H6UI均未实现。
+迁移279源码增加来源/关联/持久操作/旧单转换四表及三个目标头nullable marker；字符容量沿实际主档（商品code50/name150、仓code30/name100、unit20、用户名50），ID沿BIGINT UNSIGNED；数量DECIMAL(12,2)，原金额列不动。canonical原文存LONGTEXT并核JSON有效；UUID/hash用ascii_bin。列形状、具名CHECK、索引名/列序/唯一性/前缀、FK名/列序/父表/RESTRICT均以information_schema核对，缺失补齐、未知形状失败。历史目标line ID及旧处置item ID不设删除重建明细FK；证据不级联删除、不回填历史。这里只写迁移源码与纯拆句/结构核对，未执行DDL或schema对账；MySQL元数据规范化、重复迁移、索引/EXPLAIN及真实事务并发另验。H2正常目标创建、H3真实事实、H4解除、H5签认、H6UI均未实现。
 
-277修补：外键constraint symbol在MySQL内属于全数据库命名空间，三个头marker须分别用`fk_dh277_sale_link/fk_dh277_pr_link/fk_dh277_disposal_link`，各段KEY_COLUMN_USAGE/REFERENTIAL_CONSTRAINTS名称与真实ADD声明一致。同表重复幂等repair可沿同名，不同表不能复用FK symbol；同表索引名`idx_dh277_link`仍可各表独立使用。新增离线迁移源码守卫检查跨表symbol唯一及metadata owner/name归属；这只关闭已发现静态命名缺口，不代替MySQL DDL验收。
+279修补：外键constraint symbol在MySQL内属于全数据库命名空间，三个头marker须分别用`fk_dh277_sale_link/fk_dh277_pr_link/fk_dh277_disposal_link`，各段KEY_COLUMN_USAGE/REFERENTIAL_CONSTRAINTS名称与真实ADD声明一致。同表重复幂等repair可沿同名，不同表不能复用FK symbol；同表索引名`idx_dh277_link`仍可各表独立使用。新增离线迁移源码守卫检查跨表symbol唯一及metadata owner/name归属；这只关闭已发现静态命名缺口，不代替MySQL DDL验收。
 
-277 CHECK漂移核对再次收窄：禁止对CHECK_CLAUSE全局LOWER/删括号/去introducer后比较，删除分组会把弱式当作一致。现对12个具名CHECK逐项使用`BINARY @dh277_check = BINARY <有限打印原文>`，保留标识符、字面量、空格及全部逻辑/比较/算术括号；状态和target字符串在CREATE/ADD显式`_utf8mb4`。只接受本迁移可推导的一个MySQL8打印形式，未知fail-loud；不自动DROP或重建未知约束。
+279 CHECK漂移核对再次收窄：禁止对CHECK_CLAUSE全局LOWER/删括号/去introducer后比较，删除分组会把弱式当作一致。现对12个具名CHECK逐项使用`BINARY @dh277_check = BINARY <有限打印原文>`，保留标识符、字面量、空格及全部逻辑/比较/算术括号；状态和target字符串在CREATE/ADD显式`_utf8mb4`。只接受本迁移可推导的一个MySQL8打印形式，未知fail-loud；不自动DROP或重建未知约束。
 
-源码依据（2026-10-05静读，非DB结果）：[sql_check_constraint.cc](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/sql_check_constraint.cc)的print_expr使用QT_FORCE_INTRODUCERS；[item_cmpfunc.cc](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/item_cmpfunc.cc)的AND/OR、IN、IS NULL/IS NOT NULL各保留括号，[sql_yacc.yy](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/sql_yacc.yy)只展平同类AND/OR；[item_func.cc](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/item_func.cc)比较/算术有各自括号、函数保留参数打印；[item_json_func.h](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/item_json_func.h)确认JSON_VALID为bool，打印不加<>0。官方[check_constraints.result](https://raw.githubusercontent.com/mysql/mysql-server/8.0/mysql-test/r/check_constraints.result)也表明CHECK_CLAUSE是AST打印，而非原DDL括号字面串。实际有限原文直接列在277及本域测试；单纯保留原DDL串同样不能证明重跑一致。
+源码依据（2026-10-05静读，非DB结果）：[sql_check_constraint.cc](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/sql_check_constraint.cc)的print_expr使用QT_FORCE_INTRODUCERS；[item_cmpfunc.cc](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/item_cmpfunc.cc)的AND/OR、IN、IS NULL/IS NOT NULL各保留括号，[sql_yacc.yy](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/sql_yacc.yy)只展平同类AND/OR；[item_func.cc](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/item_func.cc)比较/算术有各自括号、函数保留参数打印；[item_json_func.h](https://raw.githubusercontent.com/mysql/mysql-server/8.0/sql/item_json_func.h)确认JSON_VALID为bool，打印不加<>0。官方[check_constraints.result](https://raw.githubusercontent.com/mysql/mysql-server/8.0/mysql-test/r/check_constraints.result)也表明CHECK_CLAUSE是AST打印，而非原DDL括号字面串。实际有限原文直接列在279及本域测试；单纯保留原DDL串同样不能证明重跑一致。
 
 守卫提取迁移真实SET检查条件，用本域有限表达式模型执行12个canonical正例、未知形式拒绝和缺约束ADD分支；两个弱式反例分别允许TERMINATED A=R=E=0、NULL evidence+bad-json response，而正确分组拒绝。这里只证明源级打印推导/判断模型，MySQL首次执行、CHECK_CLAUSE精确打印、幂等重跑和元数据对账仍须在独立环境验证，未修改已执行迁移。
 
@@ -337,7 +356,7 @@ E1质量窄修（2026-10-05）：共享退货账款 helper 的初始普通 ident
 
 锁/顺序为 source X→领域永久完整身份当前核对→仅新操作 revision 与当前基础 Q/A/R 预算→原 hydrate/fold/准确 PO 校验及当前主档→真实基本量 A 对同一预算比较→原头/明细/事件→按新头 SELECT 真实单行 ID→link、nullable 头 marker、revision 和永久原响应→原 generic 完成→原一次 commit。动态目标表/归属列/单号列仅取闭合静态映射且按 SQL 标识符规范校验。link/marker/永久结果任一失败整笔回滚；无永久结果而 generic 已成功明确 409 待核对，不能事后补关联。永久回放在旧 revision 拒绝之前，不依赖 generic TTL；用冻结 link 身份/A、原 minimal DTO 和当前头 marker/完整仓范围核对，允许原头软删、以后合法部分关闭缩量/删行，不重建或改写原响应。
 
-本人永久操作新增精确 `disposal.handling.sale.create`、`disposal.handling.purchase_return.create`、`disposal.handling.scrap.create` 三 action，继续本人 actor/key/intent/operation 身份及当前源/目标范围核对，仅认证，不附目标价格或授 VIEW/CREATE。原 SOURCE_CREATE ACK 形状不变。277 源码未改/未执行；本批离线 SQL 边界与回滚模型不能替代实际 MySQL 事务/锁等待验收。
+本人永久操作新增精确 `disposal.handling.sale.create`、`disposal.handling.purchase_return.create`、`disposal.handling.scrap.create` 三 action，继续本人 actor/key/intent/operation 身份及当前源/目标范围核对，仅认证，不附目标价格或授 VIEW/CREATE。原 SOURCE_CREATE ACK 形状不变。279 源码未改/未执行；本批离线 SQL 边界与回滚模型不能替代实际 MySQL 事务/锁等待验收。
 
 
 ## 2026-10-05 H3：关联目标行与实际出库接点
@@ -360,23 +379,23 @@ H3规格窄修：linked 新派发在原成功 ACK 后先 `FOR SHARE` 读取完�
 
 `POST /api/disposals/handling-sources/:id/links/:linkId/release` 严格接原 UUID、正安全版本和 1–500 字说明，路由 source/link ID 也纳入 canonical 载荷。自己的下一事务显式 RC：source X→准确 PR 原 PO S（适用时）→target 头 X→link X；不新增事实表锁。当前完整来源/关联/marker/目标范围身份先于永久原操作重放，原 ACK 先于新 revision/预算/TTL 事实拒绝。仅新操作核 revision、全来源预算和闭合事实，绝对写 R=A−E，link 与 source revision 各 CAS affectedRows=1，version1 完整冻结证明、固定响应和永久操作同 conn 一次 commit，失败全 rollback。
 
-精确 action 为 `disposal.handling.link.release.<linkId>`，resource 为 `disposal_handling_link`；本人结果仅原认证、原 UUID/action/key/actor/intent 及当前完整范围，固定 DTO 只有 sourceId/linkId/E/R/revision。冻结证据重算校验真实创建身份、终结/任务/流水/实物及必要字段；成功重放不因后续 revision、缩行/删行或流水 TTL 重算、重释。SO 无 shipped_at 列；无 WT 的 SO 强证明要求真实 task_id 及 SOI shipped/dispatched/reserved 字段明确存在，WT 的 shipped_at/取消/调整标记仍须明确。未知形态 fail-loud。277 未改、未执行；H5 签认、H6 UI 和供应商退款尚未接入。
+精确 action 为 `disposal.handling.link.release.<linkId>`，resource 为 `disposal_handling_link`；本人结果仅原认证、原 UUID/action/key/actor/intent 及当前完整范围，固定 DTO 只有 sourceId/linkId/E/R/revision。冻结证据重算校验真实创建身份、终结/任务/流水/实物及必要字段；成功重放不因后续 revision、缩行/删行或流水 TTL 重算、重释。SO 无 shipped_at 列；无 WT 的 SO 强证明要求真实 task_id 及 SOI shipped/dispatched/reserved 字段明确存在，WT 的 shipped_at/取消/调整标记仍须明确。未知形态 fail-loud。279 未改、未执行；H5 签认、H6 UI 和供应商退款尚未接入。
 
-H4 规格窄修：SO4 必须有准确正量 WT7 实扣 E>0；仅 WT8 或缺全部实发历史仍待核对，不能由当前 SOI 推 E0。legacy 授权改用纯 `proof.conversionIdentity` 核完整固定转换 DTO、全旧行一对一来源、来源冻结主档/创建身份/原响应与成功永久 operation；canonical null 或只有 id/originalDisposalId 不能授权。`disposal.handling.legacy.convert.<旧单ID>` 与 `SHA256(stableJson({version:1,head,items,approval}))` 固定，items/DTO sources 按旧行 ID 升序。payload 严格含 originalDisposalId/operationUuid/snapshotFingerprint/reason；头/行采用已定原199全部字段加头277 marker、准确 DECIMAL 文本与 JSON 时间，原响应每源 revision 固定1，当前协调版本不改原 ACK。H4 只验证该冻结协议，不实现 H5 serializer、路由或创建。
+H4 规格窄修：SO4 必须有准确正量 WT7 实扣 E>0；仅 WT8 或缺全部实发历史仍待核对，不能由当前 SOI 推 E0。legacy 授权改用纯 `proof.conversionIdentity` 核完整固定转换 DTO、全旧行一对一来源、来源冻结主档/创建身份/原响应与成功永久 operation；canonical null 或只有 id/originalDisposalId 不能授权。`disposal.handling.legacy.convert.<旧单ID>` 与 `SHA256(stableJson({version:1,head,items,approval}))` 固定，items/DTO sources 按旧行 ID 升序。payload 严格含 originalDisposalId/operationUuid/snapshotFingerprint/reason；头/行采用已定原199全部字段加头279 marker、准确 DECIMAL 文本与 JSON 时间，原响应每源 revision 固定1，当前协调版本不改原 ACK。H4 只验证该冻结协议，不实现 H5 serializer、路由或创建。
 
 release 已持本源 X 后，全转换来源与原永久 operation 仅同 conn 非锁批读不可变身份/原响应，不锁其他 source，避免 sourceA X→sourceB S 的交叉解除环。缺、重、多来源、错映射、错 actor/key/body/hash/resource 或旧快照 fingerprint 不符均在新解除占位前拒绝。
 
-H4 质量 PR 窄修：共享 evaluate 对每个采购退货 WT 要求 `sale_order_id` 字段明确存在且严格 NULL，0/缺字段/任何销售 ID 均待核对；当前 `SELECT *` 和 version1 冻结快照都须保留这一身份。PR4 必须无已发证据且 E0 才可闭合、释放 A，夹带准确 WT7/正量实扣也不能释放 A−E。PR3 当前 A/全集 E=A/实物闭合的 R0 规则保持。仅事实条件变化，无新增 WT/物理锁、查询或277变更。
+H4 质量 PR 窄修：共享 evaluate 对每个采购退货 WT 要求 `sale_order_id` 字段明确存在且严格 NULL，0/缺字段/任何销售 ID 均待核对；当前 `SELECT *` 和 version1 冻结快照都须保留这一身份。PR4 必须无已发证据且 E0 才可闭合、释放 A，夹带准确 WT7/正量实扣也不能释放 A−E。PR3 当前 A/全集 E=A/实物闭合的 R0 规则保持。仅事实条件变化，无新增 WT/物理锁、查询或279变更。
 
 ## 2026-10-05 H5：旧批准整单签认与永久回执
 
-新增真实 `/api/disposals/:id/conversion-snapshot`（原 VIEW）和 `/:id/sign-conversion`（原 VIEW+APPROVE），原 ID/当前整仓范围由后端核对。预览用一个显式只读 RR 连接读取原头及 `inventory_disposal_items WHERE disposal_id=? ORDER BY id`，不 JOIN 商品、不筛软删或漏掉物理缺档行；返回完整 version1 快照/指纹及已有转换最小摘要。共享 serializer 包含原199头18字段（加277 marker）及全部11行字段，items 按 ID 排序；qty 两位、金额四位采用准确 DECIMAL 文本规范化（只消除多余零，不舍入异常量/估值），Date 沿真实 JSON toJSON，不用当前主档名称、单位或参考价覆盖历史。
+新增真实 `/api/disposals/:id/conversion-snapshot`（原 VIEW）和 `/:id/sign-conversion`（原 VIEW+APPROVE），原 ID/当前整仓范围由后端核对。预览用一个显式只读 RR 连接读取原头及 `inventory_disposal_items WHERE disposal_id=? ORDER BY id`，不 JOIN 商品、不筛软删或漏掉物理缺档行；返回完整 version1 快照/指纹及已有转换最小摘要。共享 serializer 包含原199头18字段（加279 marker）及全部11行字段，items 按 ID 排序；qty 两位、金额四位采用准确 DECIMAL 文本规范化（只消除多余零，不舍入异常量/估值），Date 沿真实 JSON toJSON，不用当前主档名称、单位或参考价覆盖历史。
 
 签认 body 严格只收 operationUuid/snapshotFingerprint/reason（1–500字）；路径原 ID 进入 canonical payload。自己取得 conn，原头 X→全部旧行 X→actor S，自批仅当前 allow_self_approve=1，role1不默认豁免。当前写授权/范围先于永久 ACK，新签再核原 status3、至少1/2、完整全行基本量/类型/creator/批准/空 marker 及指纹；漂移409不自动重取。库存日志按准确 disposal ref、log source 或原单号取全部候选，台账按原ID或单号取候选，不先筛正确 move/SKU/仓隐藏脏痕迹。旧执行日期/任何候选拒绝；无日志单独不能证明未执行。
 
 actor/准确 warehouse/product 父 S 在各自 FK INSERT 前取得，product IDs 排序；父仍存在的停用/软删允许保存历史意图，物理缺失整单拒绝。混合3也按每个原行创建独立 intent UUID，共享此次 operation UUID，一次非空 VALUES ? 批插；按准确 legacy IDs+operation 同 conn 回读真实 source IDs，不猜自增连续。原头/行/批准/updated_at不 UPDATE。conversion、全 sources 同 canonical 原 DTO，永久 completeConversion 后同 conn 校验 H4 conversionIdentity，唯一一次 commit；任一失败全 rollback。不逐行调用自提交 createSource，不写库存/资金/审批。
 
-永久 action 为 disposal.handling.legacy.convert.<旧ID>，resource=inventory_disposal_conversion/真实转换ID，legacy_disposal_id准确且 intent/source/target 五字段 NULL。原 DTO 固定 id/originalDisposalId/disposalNo/operationUuid/snapshotFingerprint/sources，各 source revision 固定1并按旧行ID排序；永久 ACK 优先于新快照/主档/revision/已有转换门，不依赖 generic TTL。auth-only handling-operations 先识别合法转换 action，不伪造单一 intent，核本人原 UUID/action/key、完整转换/全来源身份和当前原仓范围；只返回原最小 DTO，无估值或当前预算。只读查询普通 SELECT、POST 重放当前 head/conversion读且不锁 peer sources；原 create/target/release 分支保持。原 dispose 的新执行在成功 ACK 分支后、库存维度/容器前检查已转换，原合法成功 replay 保留。277不改/未执行；SQL/隐式 FK/并发真实验证待隔离环境。
+永久 action 为 disposal.handling.legacy.convert.<旧ID>，resource=inventory_disposal_conversion/真实转换ID，legacy_disposal_id准确且 intent/source/target 五字段 NULL。原 DTO 固定 id/originalDisposalId/disposalNo/operationUuid/snapshotFingerprint/sources，各 source revision 固定1并按旧行ID排序；永久 ACK 优先于新快照/主档/revision/已有转换门，不依赖 generic TTL。auth-only handling-operations 先识别合法转换 action，不伪造单一 intent，核本人原 UUID/action/key、完整转换/全来源身份和当前原仓范围；只返回原最小 DTO，无估值或当前预算。只读查询普通 SELECT、POST 重放当前 head/conversion读且不锁 peer sources；原 create/target/release 分支保持。原 dispose 的新执行在成功 ACK 分支后、库存维度/容器前检查已转换，原合法成功 replay 保留。279不改/未执行；SQL/隐式 FK/并发真实验证待隔离环境。
 
 ### 供应商退款 F1：非现金基础与原回执
 
@@ -384,7 +403,7 @@ actor/准确 warehouse/product 父 S 在各自 FK INSERT 前取得，product IDs
 
 非现金写的下一事务 RC 锁序为公司身份 S→用户/角色/授权 S→PO S→PR X→既有自身 RF X→收入账户 S→原 receipt 升序 X→statement 升序 X→AP X→原 entry 升序 S/当前 allocation 预算。新 RF 在完整父门和预算之后 INSERT；allocation 非空 `VALUES ?`，事件、永久操作与原 ACK 一次提交，任一步失败整体回滚。取消只改状态/本次操作者/时间及自身预算状态，允许原收入账户停用但仍存在，不重新绑定来源。
 
-待执行源码迁移 278 是三张专用表，唯一 UUID/原单号/created-operation、refund-entry 对及预算索引；所有新 FK RESTRICT，历史原 OUT/原付款账户及冗余 AP/PR 等身份不新增后置硬 FK。pending operation 资源 FK 为 NULL；future own IN 与收到时账户 type 留空。列、索引、FK owner/列序/父表/规则和每个 CHECK 的有限 MySQL8 AST 打印形式均 fail-loud 核对，保留逻辑括号并使用 BINARY，不自动重建未知约束。CHECK 明确排除收到 type 和成功 resource 的 NULL/UNKNOWN 弱式。278 未执行，首次/幂等重跑、隐式父锁与并发须隔离 MySQL 验证。
+待执行源码迁移 280 是三张专用表，唯一 UUID/原单号/created-operation、refund-entry 对及预算索引；所有新 FK RESTRICT，历史原 OUT/原付款账户及冗余 AP/PR 等身份不新增后置硬 FK。pending operation 资源 FK 为 NULL；future own IN 与收到时账户 type 留空。列、索引、FK owner/列序/父表/规则和每个 CHECK 的有限 MySQL8 AST 打印形式均 fail-loud 核对，保留逻辑括号并使用 BINARY，不自动重建未知约束。CHECK 明确排除收到 type 和成功 resource 的 NULL/UNKNOWN 弱式。280 未执行，首次/幂等重跑、隐式父锁与并发须隔离 MySQL 验证。
 
 原直付 entry 与原 receipt 使用独立自增计数，可合法共用数字 ID；准确 parent 决定 OUT 的 `(biz_type=2,biz_id,biz_no)` 三元组。只该准确三元组要求唯一，再校账户/公司/日期/本金，不能按金额等属性从重复三元组中挑一条。另一原单号同 ID 不误拒，也不代替另一 parent 的完整证明。
 
@@ -395,7 +414,7 @@ actor/准确 warehouse/product 父 S 在各自 FK INSERT 前取得，product IDs
 
 当前对账候选由实际 `reconciliation_statement_items` 取得，不能只用旧 entry.statement_id；statement 门后、AP 门内当前重核完整成员集合，漂移拒绝，不晚追锁新 statement。真实 `refreshSettlement(conn,id,{currentRead:true,exactMoney:true})` 只在 F2 用 BigInt 全程汇总/四位字符串写回，保留 paid=min、balance=max、草稿及 total>0 结清规则；默认/E1 currentRead 数字 DTO 不变。
 
-真实 IN、余额刷新、AP paid/balance/status、own allocation received、对账投影、准确供应商往来、专用事件、RF3/实际账户类型/资金绑定/凭证待生成与永久固定 ACK 同 conn 一次提交，任一失败全回滚。只有精确已存在成功永久操作可先于新闭期、启用/状态和额度门回原 ACK；内部借用回放及本人 GET 仍核当前本人、全仓范围、不可变来源和唯一准确 IN，不能按 RF3 猜成功。新操作继续完整写权限；HTTP receive 路由门不放宽。永久固定 DTO 不混入提交后凭证结果，F3 才接实际会计生成/核对/保存，借用调用方须外层 commit 后才调用收尾边界。278 未改、未执行。
+真实 IN、余额刷新、AP paid/balance/status、own allocation received、对账投影、准确供应商往来、专用事件、RF3/实际账户类型/资金绑定/凭证待生成与永久固定 ACK 同 conn 一次提交，任一失败全回滚。只有精确已存在成功永久操作可先于新闭期、启用/状态和额度门回原 ACK；内部借用回放及本人 GET 仍核当前本人、全仓范围、不可变来源和唯一准确 IN，不能按 RF3 猜成功。新操作继续完整写权限；HTTP receive 路由门不放宽。永久固定 DTO 不混入提交后凭证结果，F3 才接实际会计生成/核对/保存，借用调用方须外层 commit 后才调用收尾边界。280 未改、未执行。
 
 ### 供应商退款会计投影 F3（本地源码，未接数据库）
 
@@ -409,7 +428,7 @@ F2 默认 postcommit 现在调用真实单笔 `settleReceivedVoucher`：新账�
 F3 修后凭证证明逐腿同时核科目 ID/编码、方向、分位金额、辅助类型及单位身份/名称：供应商 2202 的 aux_type 必须为 1，资金 1001/1002 必须为 0，缺失字段拒绝。原引擎 hash 保持不变，不能用 hash 相等替代辅助类型证据；实际 prove/default postcommit/closePeriod 共用此本域证明。
 
 
-F3 凭证核对结果严格沿278现字段保存：generated 写完整证明所得准确正 voucher_id 与 NULL 错误；完整零分写 voucher_id=NULL 与「零分投影已核对/无需凭证」；pending 写 NULL 与最多500个字符的错误。RF没有 voucher_generated_at，不能伪写时间或新增迁移绕过。真实详情返回原 voucher_id/error，列表现8字段保持，未来UI据详情呈现；voucher_id本身不能替代完整来源/腿证明。
+F3 凭证核对结果严格沿280现字段保存：generated 写完整证明所得准确正 voucher_id 与 NULL 错误；完整零分写 voucher_id=NULL 与「零分投影已核对/无需凭证」；pending 写 NULL 与最多500个字符的错误。RF没有 voucher_generated_at，不能伪写时间或新增迁移绕过。真实详情返回原 voucher_id/error，列表现8字段保持，未来UI据详情呈现；voucher_id本身不能替代完整来源/腿证明。
 
 ### 供应商退款补录 F4 的有限接点（2026-10-05）
 
@@ -417,7 +436,7 @@ F3 凭证核对结果严格沿278现字段保存：generated 写完整证明所�
 
 已锁申请以服务器 `DATE_FORMAT(approved_at,'%Y-%m-%d')` 取首次批准日期，不取今日、客户端或快照日期。内部 locator 与完整 RF 冻结身份在 RF X 后先核；借用原 F2 同连接执行，没有内层事务管理或池读取。申请写痕与真实 IN 同提交，随后才单笔 F3 核对与结果保存。永久申请核完整 actor/UUID/action/key/RF canonical body/hash/source快照，16位申请指纹只是附加校验；显式控制原因在 HTTP 同键复用中也必须一致。本人 `GET /supplier-refunds/backfill-applications/:uuid` 仅认证、精确原身份与当前完整仓范围，不加 VIEW/写权，不返回价款或自动 POST。
 
-申请自己的所有关联资金必须准确只有一条（不先过滤 biz6 隐藏错误类型），再核 RF/方向/金额/账户/真实日/批准 override/backfillID 与 F3 完整源及凭证。`inspectBackfillVouchers` 新种类是同一只读 RR 的完整单源/prove，不调用生成或保存。结果沿实际260的时间/error300与278的 voucher_id/error500，无新时间列/迁移；零分有专有“已核对/无需分位凭证”结果，不能仅靠时间字段判生成。所有 SQL/等锁/真实期间行为仍待隔离 MySQL。
+申请自己的所有关联资金必须准确只有一条（不先过滤 biz6 隐藏错误类型），再核 RF/方向/金额/账户/真实日/批准 override/backfillID 与 F3 完整源及凭证。`inspectBackfillVouchers` 新种类是同一只读 RR 的完整单源/prove，不调用生成或保存。结果沿实际260的时间/error300与280的 voucher_id/error500，无新时间列/迁移；零分有专有“已核对/无需分位凭证”结果，不能仅靠时间字段判生成。所有 SQL/等锁/真实期间行为仍待隔离 MySQL。
 
 F4 共享来源窄修：`loadSources` 对本批 backfill IDs 一次批取全部 `finance_account_transactions`，不按 biz_type/金额预筛；每个申请必须恰一条且 ID 等于 RF 已绑定资金，再核原完整来源与批准身份。该门共用于单笔、批量生成与结账；已执行申请也沿 `originalFund` 全关联集合核对原 ACK/head 的准确资金 ID，不以按 ACK ID 单独读出的行代替唯一性。无申请的普通来源不加此查询，无新锁/事务/迁移。
 
@@ -425,7 +444,7 @@ F4 后提交窄修：`settleVouchersFor` 的种类读取也进入凭证失败隔
 
 ### 2026-10-06：首次 MySQL8.0.46 CHECK 字符串边界修补
 
-本轮专属临时实例首次执行 277，在 CREATE 后的精确 CHECK 对账中拒绝了自己创建的约束；当时迁移 ledger 只记录到 276，277/278 均为未提交、未发布的新源码。真实 `CHECK_CLAUSE` 的字符串边界包含反斜线及单引号两个字节（92、39），例如 `_utf8mb4\'sale_order\'`；追加 `NO_BACKSLASH_ESCAPES` 后只读元数据仍返回相同原文。278 原三张 CREATE 的诊断读取也确认同类边界，未记录为完整迁移成功。此前 2026-10-05 的源码打印推导遗漏该反斜线，不能作为真实数据库通过证据。
+本轮专属临时实例首次执行 279，在 CREATE 后的精确 CHECK 对账中拒绝了自己创建的约束；此处记述合并前专属测试库的试跑，主线迁移号为 279 与 280。真实 `CHECK_CLAUSE` 的字符串边界包含反斜线及单引号两个字节（92、39），例如 `_utf8mb4\'sale_order\'`；追加 `NO_BACKSLASH_ESCAPES` 后只读元数据仍返回相同原文。280 原三张 CREATE 的诊断读取也确认同类边界，未记录为完整迁移成功。此前 2026-10-05 的源码打印推导遗漏该反斜线，不能作为真实数据库通过证据。
 
 仅 277 的 `ck_dhl_target/ck_dhl_budget` 与 278 的 `ck_sro_resource/ck_sra_state` 的 BINARY 精确期望改为完整 `CONCAT(...,CHAR(92,39),...)` 字面构造；字符串片段不含反斜线转义，构造不依赖会话 SQL_MODE。CREATE/缺约束 ADD 的业务表达式、其他 CHECK、列形状、索引和 FK 保持原字节；不改已成功执行的 001–276。仍只接受各约束已知完整原文，不 LOWER/REPLACE、不删括号/空格/introducer，不自动重建未知约束。
 
@@ -587,3 +606,21 @@ GET /auth/me仅增加hasUnrestrictedWarehouseScope只读布尔，严格来自当
 Express 4.22.3 / body-parser 1.20.9、multer 2.5.0 同步修复请求体与上传拒绝服务问题。新增回归接入既有 test:acceptance-fixes：真实错误对象的 400 响应、超上限数组在元素解析前拒绝、真实路由的登录/回执/打印机/设备状态中文错误，以及原到期时间格式。安全修复不以离线测试代替同发布 SHA 的完整独立数据库 CI。
 
 独立数据库 CI 随后覆盖到打印机绑定省略仓库的路径：Zod 4 的对象解析把原 union+transform 的缺省输出视为 nonoptional，提前返回 400。绑定正文和解绑查询在原归一化后显式 default(0)，恢复省略/空值的公司级语义；限仓仍由原范围闸门返回 403，未修改权限。真实路由回归覆盖省略、空字串、null、数字零、字串零和指定仓，两种接口都核对解析输出，并先复现红例。最终完整独立数据库门禁须在后续修复 SHA 重跑。
+
+Excel 日期单元格将 mysql2 的北京时间业务时刻转换为 UTC 分量相同的 Excel 墙钟日期，保留日期数字格式和排序能力。纯日期文本按原业务日输出；带偏移的时间戳先换算到北京时间。
+
+
+采购撤回、取消按收货任务到采购单的顺序取得锁，锁后重查收货单集合，若创建交易刚提交则返回 409 请刷新。混单只允许移除未提交、尚未开始收货的明细，并推进版本。收付款核销按对账单编号、账款编号依次锁住本批涉及的成员，使用实时成员余额分配；直核账款的对账归属在锁后变化时返回 409。
+
+
+### 货架编码与单据快照
+
+迁移 302 按仓库和编码限制活跃货架的唯一性。停用与软删分别处理，只有软删行释放编码。对账逐项核对完整列与顺序，前缀和表达式均不能替代正式键列。遇到重复活跃编码、未知的同名索引或生成列形状，先核对数据库元数据和业务记录，再重跑迁移。303 保留原文件名，先检查早期版本覆盖的 25 列。304 统一检查 29 列后扩宽已知旧宽度，包括收货、波次明细与路线的商品名，以及销售成交组件的规格。已有旧 303 记录的库直接执行 304。生成列、意外类型、宽度或空值约束使迁移停止。已达标的宽度、NULL / NOT NULL、字面默认值、注释、字符集和排序规则均保留，含 `NO_BACKSLASH_ESCAPES` 模式。可在独立测试库运行 `node --test tests/schema-reconcile.smoke.test.js` 验证。
+
+
+财务补录核销预检按 ID 批量读取对账单、成员与账款，再按输入顺序逐项校验。正式写入仍在原事务中复核。静态守卫按 SQL 所属函数校验缓存写入、标识符和财务加锁次序。
+
+
+### PDA 改单确认回执
+
+拆箱与容器归还分别以 `warehouse.adjustment-void.<拆箱项ID>`、`warehouse.adjustment-return.<归还项ID>` 保存回执。两条确认路由先锁原销售单与作业明细，核当前仓库范围及设备仓，再开始资源幂等操作。业务推进和回执一起提交。归还的原键回放还核对实扫库位。结果查询按员工、原键及具体明细定位，在原任务仓复核范围。前端只允许员工以完整的原请求重试，切换明细或库位需核对原操作。

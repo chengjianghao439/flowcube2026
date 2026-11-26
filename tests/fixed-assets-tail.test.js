@@ -53,7 +53,7 @@ function fixture({ cost = 100, rate = .05, months = 6, source = original, closed
   }
   const stubs = {
     '../../config/db': { pool: { getConnection: async () => { events.push('connection'); return conn } } },
-    '../../utils/AppError': AppError, '../../utils/codeGenerator': { generateDailyCode: async () => '处置夹具-99' },
+    '../../utils/cashMoney': require('../backend/src/utils/cashMoney'), '../../utils/AppError': AppError, '../../utils/codeGenerator': { generateDailyCode: async () => '处置夹具-99' },
     '../accounting/voucher-engine': { round2, loadAccountMap: async () => new Map(), makeSeqAllocator: async () => async () => 1, upsertVoucher: async (_conn, spec, _accounts, _seq, _user, company) => {
       assert.equal(company, companyId)
       if (typeof failVoucher === 'function' ? failVoucher(spec) : failVoucher) throw new AppError('合成凭证失败', 500, 'FIXTURE_VOUCHER_FAILURE')
@@ -65,6 +65,7 @@ function fixture({ cost = 100, rate = .05, months = 6, source = original, closed
   const loaded = { exports: {} }
   vm.runInNewContext(source + '\nmodule.exports.actualDepreciateAsset = depreciateAsset;', { module: loaded, require: name => { if (!(name in stubs)) throw new Error('Offline denied module: ' + name); return stubs[name] } }, { filename })
   return {
+    create: loaded.exports.createAsset,
     run: period => loaded.exports.runDepreciation({ period, companyId }, {}),
     direct: options => loaded.exports.actualDepreciateAsset(conn, asset, options, new Map(), async () => 1, {}, companyId),
     dispose: (id, data, company) => loaded.exports.disposeAsset(id, data, {}, company),
@@ -197,4 +198,13 @@ test('资产 B 的实际处置单和凭证采用其最终确认金额与日期',
   assert.equal(result.gain, -27.5)
   assert.equal(facts.asset.status, 3)
   assert.deepEqual(f.events.slice(-2), ['commit', 'release'])
+})
+
+test('资产购置、处置的实际金额拒绝非分输入，处置未记账', async () => {
+  const f = fixture()
+  for (const values of [{income:100.006,expense:0},{income:100,expense:0.004}]) {
+    await assert.rejects(f.dispose(7, {disposeType:1,disposeDate:'2099-02-01',...values}, 2), {code:'CASH_PRECISION_INVALID'})
+  }
+  assert.equal(f.facts().disposals.length, 0)
+  await assert.rejects(f.create({assetName:'测试',originalCost:100.005,usefulMonths:6,acquireDate:'2099-01-01'}), {code:'CASH_PRECISION_INVALID'})
 })

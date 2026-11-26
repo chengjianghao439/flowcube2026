@@ -166,7 +166,7 @@ async function create({ type, partyName, periodStart, periodEnd, recordIds = [],
     )
     const statementId = r.insertId
 
-    for (const recordId of recordIds) {
+    for (const recordId of [...new Set(recordIds.map(Number))].sort((a, b) => a - b)) {
       const [[rec]] = await conn.query('SELECT * FROM payment_records WHERE id=? FOR UPDATE', [Number(recordId)])
       if (!rec) throw new AppError(`账款 ${recordId} 不存在`, 404)
       if (Number(rec.type) !== Number(type)) throw new AppError(`${rec.order_no} 与本对账单类型不符`, 400)

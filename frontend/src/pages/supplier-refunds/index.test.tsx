@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { chooseSelectOption } from '@/test/chooseSelectOption'
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
@@ -37,7 +38,24 @@ afterEach(() => { vi.restoreAllMocks(); client.defaults.adapter = originalAdapte
 async function mount(path: string, create = false) { const host = document.createElement('div'); document.body.append(host); const root = createRoot(host), qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }); let tab = path; const render = async () => { await act(async () => { root.render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={[path]}><TabPathContext.Provider value={tab}>{create ? <SupplierRefundCreatePage /> : <SupplierRefundPage />}</TabPathContext.Provider></MemoryRouter></QueryClientProvider>); await new Promise(r => setTimeout(r, 15)); }); }; await render(); await act(async () => { await new Promise(r => setTimeout(r, 20)); }); return { host, qc, render, setTab: (p: string) => { tab = p; }, close: async () => { await act(async () => root.unmount()); qc.clear(); host.remove(); } }; }
 const buttons = (text: string) => Array.from(document.querySelectorAll('button')).filter(b => b.textContent?.includes(text));
 async function click(text: string) { const b = buttons(text).find(b => !b.disabled); expect(b, `active button ${text}`).toBeTruthy(); await act(async () => { b!.click(); await new Promise(r => setTimeout(r, 15)); }); }
-async function fill(label: string, value: string) { const input = document.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLSelectElement; expect(input).toBeTruthy(); await act(async () => { Object.getOwnPropertyDescriptor(input instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); }); }
+async function fill(label: string, value: string) {
+    const control = document.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+    expect(control).toBeTruthy();
+    if (control instanceof HTMLButtonElement) {
+        expect(label).toBe('收入账户');
+        expect(value).toBe('42');
+        await chooseSelectOption(control, '收入账户');
+        return;
+    }
+    const input = control as HTMLInputElement;
+    await act(async () => {
+        if (label === '真实银行回款日') input.focus();
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    if (label === '真实银行回款日') await act(async () => input.blur());
+}
 test('准确PR原价/两位现金预算和原付款分配，实际页面POSTunknown持久完整体且不改原日期/重发', async () => { const m = await mount('/supplier-refunds/new?purchaseReturnId=11', true); try {
     expect(m.host.textContent).toContain('PR11');
     expect(m.host.textContent).toContain('3.0000');
@@ -65,7 +83,10 @@ test('已创建原回执仍呈现提交的两位现金金额和原分配，不�
   await fill('真实银行回款日','2026-10-01');await fill('收入账户','42');await fill('原付款分配21退款金额','0.01');await click('保存退款草稿')
   expect(document.body.textContent).toContain('RF61');expect(document.body.textContent).toContain('¥0.01')
   expect((document.querySelector('[aria-label="原付款分配21退款金额"]') as HTMLInputElement)?.value).toBe('0.01')
-  expect(buttons('保存退款草稿').every(b=>b.disabled)).toBe(true)
+  expect(buttons('保存退款草稿')).toHaveLength(0)
+  const action = m.host.querySelector<HTMLButtonElement>('.desktop-action-bar .desktop-action-buttons button')
+  expect(action?.textContent).toBe('查看已创建退款单')
+  expect(action?.disabled).toBe(false)
  }finally{await m.close()}
 })
 test.each([1, 2, 3, 4])('状态%d准确detail动作，state3不撤销，确认只RF1与真实confirmAllowed', async (value) => { status = value; const m = await mount('/supplier-refunds?detailId=61'); try {
@@ -194,3 +215,21 @@ test.each([1,2])('legacy fractional refund status %d blocks new cash confirmatio
  const m=await mount('/supplier-refunds?detailId=61')
  try{expect(document.body.textContent).toContain('¥0.0067（待核）');expect(buttons('确认退款单').some(b=>!b.disabled)).toBe(false);expect(buttons('登记实际已收到').some(b=>!b.disabled)).toBe(false);expect(buttons('取消退款单').some(b=>!b.disabled)).toBe(true);expect(calls.filter(c=>c.method==='post')).toEqual([])}finally{await m.close()}
 })
+
+test('回款日草稿被改成非法日期时不沿用之前的有效日提交', async () => {
+    const page = await mount('/supplier-refunds/new?purchaseReturnId=11', true);
+    try {
+        await fill('真实银行回款日', '2026-10-01');
+        await fill('收入账户', '42');
+        await fill('原付款分配21退款金额', '0.01');
+        await fill('真实银行回款日', '2026-02-30');
+        await click('保存退款草稿');
+        const date = document.querySelector<HTMLInputElement>('[aria-label="真实银行回款日"]')!;
+        expect(date.value).toBe('2026-02-30');
+        expect(date.getAttribute('aria-invalid')).toBe('true');
+        expect(calls.filter(call => call.method === 'post')).toEqual([]);
+        expect(readRefundRecords()).toEqual([]);
+    } finally {
+        await page.close();
+    }
+});

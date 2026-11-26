@@ -338,13 +338,21 @@ test('桌面发布必须清理服务器侧中转目录（防 /tmp 长期累积�
   assert.ok(step && step.run, '找不到「Publish EXE to canonical download directory」步骤')
   assert.match(step.run, /bash scripts\/publish-desktop-workflow\.sh/)
   const run = fs.readFileSync(path.join(root, 'scripts/publish-desktop-workflow.sh'), 'utf8')
-  assert.match(run, /remote_tmp="\/tmp\/flowcube-desktop-release\/\$\{tag\}"/, '中转目录路径变了，需同步本守卫与清理逻辑')
-  assert.match(run, /trap\s+cleanup_remote_tmp\s+EXIT/, '必须用 EXIT trap 保证失败路径也清理中转目录')
-  assert.match(run, /rm -rf '\$remote_tmp'/, 'cleanup_remote_tmp 必须真的删除远端中转目录')
-  assert.ok(
-    run.indexOf('trap cleanup_remote_tmp EXIT') < run.indexOf("mkdir -p '$remote_tmp'"),
-    'trap 必须在创建中转目录之前注册，否则创建之后的失败仍会留下残留',
-  )
+  function verifyStaging(source) {
+    const script = source.split('\n').filter(line => !/^\s*#/.test(line)).join('\n')
+    const mkdir = script.indexOf("remote_tmp=$(ssh_remote 'umask 077; mktemp -d /tmp/flowcube-desktop-release.XXXXXXXXXX')")
+    const validate = script.indexOf('[[ "$remote_tmp" =~ ^/tmp/flowcube-desktop-release\\.[a-zA-Z0-9]{10}$ ]] ||')
+    const trap = script.indexOf('trap cleanup_remote_tmp EXIT')
+    const upload = script.search(/^(?:timeout[^\n]*\bscp\b|bash scripts\/transfer-release-asset\.sh)/m)
+    assert.ok(mkdir >= 0 && mkdir < validate && validate < trap && trap < upload,
+      '必须先建私有 mktemp 目录并校验返回路径，注册 EXIT 清理后才能上传')
+    const cleanup = /^cleanup_remote_tmp\(\) \{([\s\S]*?)^\}/m.exec(script)?.[1] ?? ''
+    assert.match(cleanup, /^\s*ssh_remote "rm -rf '\$remote_tmp'"/m, 'EXIT 清理只删除本次远端目录')
+  }
+  verifyStaging(run)
+  assert.throws(() => verifyStaging(run.replace('trap cleanup_remote_tmp EXIT', '')), assert.AssertionError)
+  assert.throws(() => verifyStaging(run.replace('trap cleanup_remote_tmp EXIT', 'bash scripts/transfer-release-asset.sh\ntrap cleanup_remote_tmp EXIT')), assert.AssertionError)
+  assert.throws(() => verifyStaging(run.replace("rm -rf '$remote_tmp'", 'true')), assert.AssertionError)
 })
 
 // 2026-09-22：上传是八片同时开始，不能只放宽整批预算却让每片先在 900 秒被杀。
@@ -688,9 +696,6 @@ test('废弃 downloads 守卫必须有 CI 执行入口（防「脚本写了但�
 // 豁免表双向断言——新出现的未接线脚本会失败，已经接线的旧豁免也会失败，防止表腐烂成"什么都豁免"。
 test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁免并写明理由）', () => {
   const EXEMPTIONS = {
-    'smoke:legacy-receivable-repair': '需已迁移的专用 flowcube_repair20260908_test 库，且必须与采购修复串行执行',
-    'test:legacy-receivable-repair': '同上：专用修复库单测，随 smoke 手工串行执行',
-    'smoke:purchase-repair': '同上：专用修复库且与应收专项串行，生产只执行已授权的定向修复脚本',
     'smoke:pages': 'CUA 页面验收，需要在线前端与测试账号凭据，不属于离线门禁',
     'smoke:reconciliation': '需要在线 baseUrl、SMOKE_USERNAME/PASSWORD 与 playwright，属实机验收',
   }
@@ -700,6 +705,11 @@ test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁�
   const ownedRunner = fs.readFileSync(path.join(root, 'scripts/repair-smoke-ephemeral.sh'), 'utf8')
   const isReached = workflowScriptReachability({ scripts: pkg.scripts, workflow, ownedRunner })
 
+  for (const name of ['smoke:legacy-receivable-repair', 'smoke:purchase-repair']) {
+    assert.ok(isReached(name), name + ' 必须由独占实例串行执行')
+    const missing = ownedRunner.split('\n').filter(line => line.trim() !== 'run_smoke ' + name).join('\n')
+    assert.equal(workflowScriptReachability({ scripts: pkg.scripts, workflow, ownedRunner: missing })(name), false)
+  }
   const testScripts = Object.keys(pkg.scripts).filter(k => /^(smoke|test):/.test(k))
   assert.ok(testScripts.length > 50, `smoke/test 脚本数量异常（${testScripts.length}），检查 package.json 是否被改动`)
 
@@ -718,25 +728,44 @@ test('每个 smoke/test 脚本必须在 CI 里跑得到（未接线须显式豁�
     `这些脚本已经接进 CI，豁免条目必须删除（否则豁免表会腐烂成"什么都豁免"）：${staleExemptions.join(', ')}`)
 })
 
-test('AST 文案与数量覆盖守卫须在已安装 TypeScript 的 job 中执行', () => {
-  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
-  const workflow = yaml.load(fs.readFileSync(path.join(root, '.github/workflows/test.yml'), 'utf8'))
+test('AST 契约扫描器须在同一 job 安装前端 TypeScript 依赖后执行', () => {
+  const workflow = readWorkflow(path.join(root, '.github/workflows/test.yml'))
+  const scannerCommands = new Set([
+    'npm run test:copy-conventions',
+    'npm run test:qty-precision-coverage',
+    'node --test tests/pda-only-client-header.test.js',
+    'npm run test:contract-scanners',
+    'npm run test:route-permission-contract',
+    'npm run test:finance-lock-order',
+    'npm run test:stock-cache-write',
+    'npm run test:sql-identifier',
+    'npm run test:api-route-contract',
+    'npm run test:query-loop',
+    'npm run test:frontend-polling-contract',
+  ])
+  const installsFrontend = command => /^npm (?:--prefix frontend ci|ci --prefix frontend)(?: --ignore-scripts)?$/.test(command)
   function verify(jobs) {
     for (const [name, job] of Object.entries(jobs)) {
       let installed = false
       for (const step of job.steps || []) {
-        const run = String(step.run || '')
-        if (/npm --prefix frontend ci/.test(run)) installed = true
-        if (/npm run test:(copy-conventions|qty-precision-coverage)/.test(run)) {
-          assert.ok(installed, `${name}: AST 守卫前必须安装 frontend 的 TypeScript 依赖`)
+        const commands = (step.run || '').split(/\n|\s+&&\s+/).map(command => command.trim())
+        for (const command of commands) {
+          if (installsFrontend(command) && onEveryPr(step.if) && propagatesFailure(step['continue-on-error'])) installed = true
+          if (scannerCommands.has(command)) assert.ok(installed, `${name} 的 ${command} 前必须安装 frontend 的 TypeScript 依赖`)
         }
       }
     }
   }
   verify(workflow.jobs)
-  const broken = structuredClone(workflow.jobs)
-  for (const job of Object.values(broken)) job.steps = (job.steps || []).filter(step => !/npm --prefix frontend ci/.test(String(step.run || '')))
-  assert.throws(() => verify(broken), /TypeScript/, '反向验证：删安装步骤必须失败')
+  for (const jobName of ['static', 'regression']) {
+    const broken = structuredClone(workflow.jobs[jobName])
+    broken.steps = broken.steps.filter(step => !installsFrontend((step.run || '').trim()))
+    assert.throws(() => verify({ [jobName]: broken }), new RegExp(jobName + '.*TypeScript'))
+  }
+  for (const command of scannerCommands) {
+    const steps = [{ run: command }, { run: 'npm --prefix frontend ci' }]
+    assert.throws(() => verify({ scanner: { steps } }), /TypeScript/, command + ' 先执行必须失败')
+  }
 })
 
 test('QA角色撤权实库反例与空库初始化在独立CI job中实际执行且不得跳过', () => {
@@ -759,5 +788,76 @@ test('QA角色撤权实库反例与空库初始化在独立CI job中实际执行
   const scripts = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).scripts
   for (const file of ['qa-role-migration.smoke.test.js', 'qa-role-concurrency.smoke.test.js', 'qa-new-database.smoke.test.js']) {
     assert.ok(scripts['smoke:qa-role-upgrade']?.includes(`tests/${file}`), `CI必须实际执行${file}`)
+  }
+})
+
+function loadWorkflow(file) {
+  const yaml = require(path.resolve(root, 'frontend/node_modules/js-yaml'))
+  return yaml.load(fs.readFileSync(path.join(root, '.github/workflows', file), 'utf8'))
+}
+
+test('诊断参数经本地校验后逐项传递，checkout 不保留凭据', () => {
+  const { steps } = loadWorkflow('server-diagnostics.yml').jobs.diagnose
+  const checkout = steps.find(s => s.uses?.startsWith('actions/checkout@'))
+  assert.equal(checkout.with?.['persist-credentials'], false)
+  const validation = steps.find(s => s.name === 'Validate diagnostic arguments')
+  const connect = steps.find(s => s.id === 'ssh_trust')
+  assert.ok(validation && steps.indexOf(validation) < steps.indexOf(connect))
+  const collect = steps.find(s => s.name === 'Collect read-only diagnostics')
+  const source = collect.run.replace(/^\s*#.*$/gm, '')
+  function verifyTransport(script) {
+    assert.match(script, /mapfile -t diagnostic_args < "\$RUNNER_TEMP\/diagnostic-arguments"/)
+    assert.match(script, /bash -s -- "\$\{diagnostic_args\[@\]\}" <<'REMOTE'/)
+    assert.doesNotMatch(script, /\$\{\{|\$DU_PATHS/)
+    assert.match(script, /"\$\{du_paths\[@\]\}"; do/)
+  }
+  verifyTransport(source)
+  assert.throws(() => verifyTransport(source.replace('diagnostic_args[@]', 'diagnostic_args[*]')), { code: 'ERR_ASSERTION' })
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-diagnostic-args-'))
+  try {
+    function validate(top, paths, app = '/opt/flowcube') {
+      return spawnSync('bash', ['-c', validation.run], {
+        encoding: 'utf8', timeout: 2000, env: { PATH: process.env.PATH, RUNNER_TEMP: dir, TOP_N: top, DU_PATHS: paths, APP_PATH: app },
+      }).status
+    }
+    for (const top of ['1', '12', '200']) {
+      assert.equal(validate(top, '/var/log   /srv/data-1'), 0)
+      assert.deepEqual(fs.readFileSync(path.join(dir, 'diagnostic-arguments'), 'utf8').trimEnd().split('\n'), [top, '/opt/flowcube', '/var/log', '/srv/data-1'])
+    }
+    assert.equal(validate('12', ''), 0)
+    assert.deepEqual(fs.readFileSync(path.join(dir, 'diagnostic-arguments'), 'utf8').trimEnd().split('\n'), ['12', '/opt/flowcube'])
+    for (const top of ['0', '201', '04', '1.5', 'two', '']) assert.equal(validate(top, ''), 1)
+    for (const paths of ['relative', '/var/../tmp', '/var/log\n/tmp', '/data/a:b']) assert.equal(validate('1', paths), 1)
+    assert.equal(validate('1', '', 'relative'), 1)
+  } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('恢复发布附件仅向 main 的桌面发布环境授写权', () => {
+  const wf = loadWorkflow('recover-release-asset.yml')
+  function verify(job) {
+    assert.equal(job.if, "github.ref == 'refs/heads/main'")
+    assert.equal(job.environment, 'flowcube-release-desktop')
+    assert.equal(job.permissions.contents, 'write')
+    assert.equal(job.permissions.actions, 'read')
+    assert.equal(job.steps.find(s => s.uses?.startsWith('actions/checkout@')).with['persist-credentials'], false)
+  }
+  verify(wf.jobs.recover)
+  assert.notEqual(wf.permissions?.contents, 'write')
+  for (const key of ['if', 'environment']) assert.throws(() => verify({ ...wf.jobs.recover, [key]: undefined }), { code: 'ERR_ASSERTION' })
+})
+
+test('后端镜像固定 root 入口脚本所有者及执行权限', () => {
+  const dockerfile = fs.readFileSync(path.join(root, 'Dockerfile.backend'), 'utf8').replace(/^\s*#.*$/gm, '')
+  function verify(source) {
+    const target = '/usr/local/bin/backend-entrypoint.sh'
+    const instructions = source.split('\n').filter(line => line.includes(target))
+    assert.deepEqual(instructions, [
+      'COPY --chown=root:root --chmod=0755 docker/backend-entrypoint.sh ' + target,
+      'ENTRYPOINT ["' + target + '"]',
+    ])
+  }
+  verify(dockerfile)
+  for (const [from, to] of [['root:root', 'node:node'], ['0755', '0775']]) {
+    assert.throws(() => verify(dockerfile.replace(from, to)), { code: 'ERR_ASSERTION' })
   }
 })

@@ -3,13 +3,13 @@
 // All business writes and unknown transport requests are forbidden.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import Page from './index'
 import apiClient, { setApiClientBaseURL } from '@/api/client'
 import { KeepAliveOutlet } from '@/components/layout/KeepAliveOutlet'
-import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
+import { WorkspaceTabs } from '@/components/layout/WorkspaceTabs'
 import { disposeWorkspaceHistoryGuard } from '@/router/workspaceHistoryGuard'
 import { HOME_TAB, useWorkspaceStore } from '@/store/workspaceStore'
 
@@ -58,9 +58,9 @@ function batch(url: URL, total: number) {
 function failure(status = 503) {
   return new Response(JSON.stringify({ success: false, code: status === 403 ? 'WAREHOUSE_SCOPE_DENIED' : 'SYNTHETIC_READ_FAILURE', message: status === 403 ? '当前列表范围拒绝' : '合成列表读取中断' }), { status, headers: { 'Content-Type': 'application/json' } })
 }
-function Harness({ spec }: { spec: Spec }) {
-  const location = useLocation(), navigate = useNavigate()
-  return <><output data-location>{location.pathname}{location.search}</output><button onClick={() => navigate(getWorkspaceListPath(spec.path.split('?')[0]))}>返回列表</button><KeepAliveOutlet /></>
+function Harness() {
+  const location = useLocation()
+  return <><output data-location>{location.pathname}{location.search}</output><WorkspaceTabs /><KeepAliveOutlet /></>
 }
 function button(label: string, scope: ParentNode = document.body) {
   return [...scope.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent?.trim() === label)
@@ -80,7 +80,7 @@ async function wait(assertion: () => void) {
   await vi.waitFor(async () => { await act(async () => { await new Promise(resolve => setTimeout(resolve, 5)) }); assertion() })
 }
 async function mount(spec: Spec) {
-  await act(async () => root.render(<QueryClientProvider client={query}><MemoryRouter initialEntries={[spec.path]}><Harness spec={spec} /></MemoryRouter></QueryClientProvider>))
+  await act(async () => root.render(<QueryClientProvider client={query}><MemoryRouter initialEntries={[spec.path]}><Harness /></MemoryRouter></QueryClientProvider>))
 }
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -154,24 +154,31 @@ for (const spec of specs) {
   test(`${spec.id}-R07 real retry retains applied query rather than using a new search draft`, async () => {
     respond = () => failure(); await mount(spec); await wait(() => expect(cache(spec)?.state.status).toBe('error'))
     if (spec.id === 'PLAN') {
-      const input = host.querySelector<HTMLInputElement>('input[placeholder="搜索计划编号/名称…"]')!
-      await change(input, 'PLAN-APPLIED'); await click('搜索')
+      await click('查询')
+      const dialog = document.querySelector('[role="dialog"]')!
+      await change(dialog.querySelector('input')!, 'PLAN-APPLIED'); await click('查询', dialog)
       await wait(() => expect(query.getQueryCache().find({ queryKey: [spec.key, 'PLAN-APPLIED'] })?.state.status).toBe('error'))
-      await change(input, 'PLAN-UNAPPLIED')
+      await click('查询')
+      const draft = document.querySelector<HTMLInputElement>('[role="dialog"] input')!
+      await change(draft, 'PLAN-UNAPPLIED')
+      await act(async () => { await query.invalidateQueries({ queryKey: [spec.key] }) })
+      expect(requests.at(-1)?.searchParams.get('keyword')).toBe('PLAN-APPLIED')
+      expect(draft.value).toBe('PLAN-UNAPPLIED')
+      await click('取消', document.querySelector('[role="dialog"]')!)
     }
     expect(!!button('重试')).toBe(true)
     respond = url => batch(url, 1); await click('重试')
     await wait(() => expect(host.textContent?.includes(`${spec.code}1`)).toBe(true))
     const params = Object.fromEntries(requests.at(-1)!.searchParams)
-    if (spec.id === 'PLAN') { expect(params.keyword).toBe('PLAN-APPLIED'); expect(host.querySelector<HTMLInputElement>('input[placeholder="搜索计划编号/名称…"]')?.value).toBe('PLAN-UNAPPLIED') }
+    if (spec.id === 'PLAN') expect(params.keyword).toBe('PLAN-APPLIED')
     else expect(params).toMatchObject({ keyword: 'PR-APPLIED', status: '1', warehouseId: '8', applicantId: '7', startDate: '2026-10-01', endDate: '2026-10-14' })
   })
   test.each([200, 503])(`${spec.id}-R08 an open local dialog draft survives a list read settling with %i`, async status => {
     let release!: (response: Response) => void
     respond = () => new Promise(resolve => { release = resolve }); await mount(spec)
     await wait(() => expect(release).toBeTypeOf('function'))
-    await click(spec.id === 'PLAN' ? '+ 生成计划' : '查询')
-    expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('已有计划和采购草稿会先行抵扣')
+    await click(spec.id === 'PLAN' ? '生成计划' : '查询')
+    if (spec.id === 'PLAN') expect(document.querySelector('.fc-dialog-caption')?.textContent).toContain('已有计划和采购草稿会先行抵扣')
     const selector = spec.id === 'PLAN' ? 'input[placeholder="默认按生成时间"]' : 'input[placeholder="请输入关键字…"]'
     const input = document.querySelector<HTMLInputElement>(`[role="dialog"] ${selector}`)!
     await act(async () => input.focus())
@@ -194,7 +201,8 @@ for (const spec of specs) {
     if (spec.id === 'PLAN') await click('查看', last)
     else await act(async () => last.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
     await wait(() => expect(host.querySelector('[data-location]')?.textContent).toBe(`${spec.path.split('?')[0]}/5000`))
-    await click('返回列表')
+    const detailTab = host.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]')!
+    await act(async () => detailTab.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true })))
     await wait(() => expect(host.querySelector('[data-location]')?.textContent?.split('?')[0]).toBe(spec.path.split('?')[0]))
     expect(Object.fromEntries(new URLSearchParams(host.querySelector('[data-location]')!.textContent!.split('?')[1]))).toEqual(Object.fromEntries(new URLSearchParams(spec.path.split('?')[1])))
     expect(scroll.scrollTop).toBeGreaterThan(230000); expect(host.textContent?.includes(`${spec.code}5000`)).toBe(true)

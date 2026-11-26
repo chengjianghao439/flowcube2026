@@ -5,31 +5,21 @@ const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const Module = require('node:module')
+const { loader } = require('./helpers/offlineModuleLoader')
 const root = path.resolve(__dirname, '..')
 const printDir = path.join(root, 'backend/src/modules/print-jobs')
 const source = file => fs.readFileSync(path.join(root, file), 'utf8').replace(/^\s*\/\/.*$/gm, '')
-function loader(overrides) {
-  const cache = new Map()
-  function load(file) {
-    file = path.resolve(file)
-    if (overrides.has(file)) return overrides.get(file)
-    if (cache.has(file)) return cache.get(file).exports
-    const m = new Module(file, module)
-    m.filename = file; m.paths = Module._nodeModulePaths(path.dirname(file)); cache.set(file, m)
-    const native = m.require.bind(m)
-    m.require = name => name.startsWith('.') ? load(require.resolve(path.resolve(path.dirname(file), name))) : native(name)
-    m._compile(fs.readFileSync(file, 'utf8'), file)
-    return m.exports
-  }
-  return load
-}
 function fixture() {
   const state = { jobs: new Map(), users: new Map([[7, '排队时姓名']]), queries: [], printer: true, renderFails: false, stored: null, nextId: 101 }
   const conn = {
     beginTransaction: async () => {}, commit: async () => {}, rollback: async () => {}, release() {},
     async query(sql, params = []) {
       state.queries.push({ sql, params })
+      if (sql === 'SET TRANSACTION ISOLATION LEVEL READ COMMITTED') return [[]]
+      if (sql === 'SELECT ref_type,ref_id,warehouse_id FROM print_jobs WHERE id=?'
+        || sql === 'SELECT ref_type,ref_id,warehouse_id,status,error_message,printer_id,content FROM print_jobs WHERE id=? FOR UPDATE') {
+        return [[state.jobs.get(Number(params[0]))].filter(Boolean)]
+      }
       if (/INSERT INTO print_jobs/.test(sql)) {
         const columns = sql.match(/INSERT INTO print_jobs\s*\(([^)]+)\)/)[1].split(',').map(v => v.trim())
         const row = { id: state.nextId++, created_at: '2026-10-10 08:00:00', updated_at: '2026-10-10 08:00:00' }

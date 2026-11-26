@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getContainerByBarcodeApi, repackPlasticBoxApi, type PlasticBoxRepackResult } from '@/api/inventory'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { usePendingRequests } from '@/hooks/usePendingRequests'
 import PdaSplitRecoveryPanel from '@/components/pda/PdaSplitRecoveryPanel'
@@ -182,7 +183,7 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
         { boxId, barcode, mode: repackMode, remaining, ...body },
       )
       if (res.kind === 'pending') {
-        err('结果未确认，请点「确认结果」核对原提交，暂勿重复提交')
+        err('结果未确认，请点「确认上次结果」核对原提交，暂勿重复提交')
       }
     } catch (e) {
       err(formatPdaActionError(e, '还原整件未提交成功'))
@@ -259,7 +260,8 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
     || repackAction.phase === 'confirming'
     || Boolean(repackAction.pendingRecord)
 
-  useEffect(() => { onWorkStateChange?.({ hasInput: step !== 'scan', pending: splitAction.blocked || repackLocked }) }, [step, splitAction.blocked, repackLocked, onWorkStateChange])
+  const pending = fixedMode === 'repack' ? repackLocked : fixedMode === 'split' ? splitAction.blocked : splitAction.blocked || repackLocked
+  useEffect(() => { onWorkStateChange?.({ hasInput: step !== 'scan', pending }) }, [step, pending, onWorkStateChange])
   const perNum = Number(perBoxQty)
   const cntNum = Number(boxCount)
   const estTotal = Number.isFinite(perNum) && Number.isInteger(cntNum) && perNum > 0 && cntNum > 0 ? perNum * cntNum : 0
@@ -276,6 +278,9 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
       />
       <PdaFlash flash={contextCurrent ? flash : null} />
       {!canExecute && <p className="px-4 py-2 text-sm text-warning-ink">当前无拆分执行权限，仍可核对本人原拆分结果。</p>}
+      {fixedMode !== 'split' && <PdaCriticalActionNotice {...repackAction}
+        onConfirm={() => void repackAction.confirmPending()} onClear={repackAction.clearPending}
+        onDismissError={repackAction.clearError} />}
       <PdaSplitRecoveryPanel recovery={splitAction} onError={err} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-4">
@@ -356,21 +361,6 @@ export default function PdaSplitPage({ fixedMode, active = true, onBack, onWorkS
                   打印新塑料盒条码
                 </label>
               </>
-            )}
-
-            {(repackAction.phaseMessage || repackAction.lastErrorMessage || repackAction.pendingRecord) && (
-              <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-xs text-warning-ink">
-                {repackAction.phaseMessage || repackAction.lastErrorMessage
-                  || `${repackAction.pendingRecord?.label ?? '还原整件'}结果待确认，请核对原提交后再继续。`}
-                {repackAction.pendingRecord && (
-                  <div className="mt-2">
-                    <Button className="px-3" size="lg" variant="outline" disabled={repackAction.confirming}
-                      onClick={() => { void repackAction.confirmPending() }}>
-                      {repackAction.confirming ? '核对中…' : '确认结果'}
-                    </Button>
-                  </div>
-                )}
-              </div>
             )}
 
             <div className="flex gap-2 pt-2">

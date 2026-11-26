@@ -18,14 +18,16 @@ const { assertQtyPrecisionWith } = require('../../utils/qtyPrecision')  // 商�
  * - reserved 读取 inventory_stock 的 projection 字段
  * - 不应用于关键业务判定
  */
-async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', warehouseId=null, scopeWarehouseIds=null }) {
+async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', warehouseId=null, productIds=null, scopeWarehouseIds=null }) {
   const { pageSize: ps, offset } = normalizePagination({ page, pageSize })
   const like = `%${keyword}%`
   const scope = scopeFilter(scopeWarehouseIds, 'dims.warehouse_id')
   const whFilter = (warehouseId ? 'AND dims.warehouse_id=?' : '') + scope.sql
-  const params = warehouseId
-    ? [like, like, warehouseId, ...scope.params, ps, offset]
-    : [like, like, ...scope.params, ps, offset]
+  const productCondition = productIds ? 'product_id IN (?)' : ''
+  const dimensionFilter = productCondition ? ' WHERE ' + productCondition : ''
+  const containerFilter = productCondition ? ' AND ' + productCondition : ''
+  const filters = [...(productIds ? [productIds, productIds, productIds] : []), like, like,
+    ...(warehouseId ? [warehouseId] : []), ...scope.params]
 
   const [rows] = await pool.query(
     `SELECT COALESCE(s.id, -((dims.product_id * 1000000) + dims.warehouse_id)) AS id,
@@ -34,16 +36,16 @@ async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', war
             p.article_number, p.spec, p.color,
             w.id AS warehouse_id, w.name AS warehouse_name
      FROM (
-       SELECT product_id, warehouse_id FROM inventory_stock
+       SELECT product_id, warehouse_id FROM inventory_stock${dimensionFilter}
        UNION
        SELECT product_id, warehouse_id
        FROM inventory_containers
-       WHERE status = 1 AND deleted_at IS NULL
+       WHERE status = 1 AND deleted_at IS NULL${containerFilter}
      ) dims
      LEFT JOIN (
        SELECT product_id, warehouse_id, SUM(remaining_qty) AS quantity
        FROM inventory_containers
-       WHERE status = 1 AND deleted_at IS NULL
+       WHERE status = 1 AND deleted_at IS NULL${containerFilter}
        GROUP BY product_id, warehouse_id
      ) c ON c.product_id = dims.product_id AND c.warehouse_id = dims.warehouse_id
      LEFT JOIN inventory_stock s ON s.product_id = dims.product_id AND s.warehouse_id = dims.warehouse_id
@@ -52,31 +54,30 @@ async function getStockSnapshotForDisplay({ page=1, pageSize=20, keyword='', war
      WHERE (p.code LIKE ? OR p.name LIKE ?) ${whFilter}
        AND (COALESCE(c.quantity, 0) > 0 OR COALESCE(s.reserved, 0) > 0)
      ORDER BY p.name ASC, p.id ASC, w.id ASC LIMIT ? OFFSET ?`,
-    params,
+    [...filters, ps, offset],
   )
 
-  const cntParams = warehouseId ? [like, like, warehouseId, ...scope.params] : [like, like, ...scope.params]
   const [[{total}]] = await pool.query(
     `SELECT COUNT(*) AS total
      FROM (
-       SELECT product_id, warehouse_id FROM inventory_stock
+       SELECT product_id, warehouse_id FROM inventory_stock${dimensionFilter}
        UNION
        SELECT product_id, warehouse_id
        FROM inventory_containers
-       WHERE status = 1 AND deleted_at IS NULL
+       WHERE status = 1 AND deleted_at IS NULL${containerFilter}
      ) dims
      JOIN product_items p ON dims.product_id=p.id AND p.deleted_at IS NULL
      JOIN inventory_warehouses w ON dims.warehouse_id=w.id AND w.deleted_at IS NULL
      LEFT JOIN (
        SELECT product_id, warehouse_id, SUM(remaining_qty) AS quantity
        FROM inventory_containers
-       WHERE status = 1 AND deleted_at IS NULL
+       WHERE status = 1 AND deleted_at IS NULL${containerFilter}
        GROUP BY product_id, warehouse_id
      ) c ON c.product_id = dims.product_id AND c.warehouse_id = dims.warehouse_id
      LEFT JOIN inventory_stock s ON s.product_id = dims.product_id AND s.warehouse_id = dims.warehouse_id
      WHERE (p.code LIKE ? OR p.name LIKE ?) ${whFilter}
        AND (COALESCE(c.quantity, 0) > 0 OR COALESCE(s.reserved, 0) > 0)`,
-    cntParams,
+    filters,
   )
 
   return {
@@ -1096,7 +1097,7 @@ async function assignContainerLocation(containerId, locationId, scopeWarehouseId
     // 校验库位存在，且必须与容器同仓：跨仓库位会让容器带着「别仓库位」在册，
     // 之后的拣货路由、盘点与追溯都会按这个错误位置取数（静默数据错误）。
     const [[location]] = await conn.query(
-      'SELECT id, code, warehouse_id FROM warehouse_locations WHERE id=? AND deleted_at IS NULL',
+      'SELECT id, code, warehouse_id FROM warehouse_locations WHERE id=? AND deleted_at IS NULL FOR SHARE',
       [locationId],
     )
     if (!location) throw new AppError('库位不存在', 404)

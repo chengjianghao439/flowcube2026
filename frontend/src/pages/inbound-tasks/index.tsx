@@ -1,3 +1,4 @@
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import { isInboundDraftEditable } from './inboundDraftEditable'
 import { useContext } from 'react'
 import { TabPathContext } from '@/components/layout/TabPathContext'
@@ -152,8 +153,8 @@ export default function InboundTasksPage() {
     ...(productId ? { productId: String(productId) } : {}),
     ...(supplierId ? { supplierId: String(supplierId) } : {}),
     ...(warehouseId ? { warehouseId: String(warehouseId) } : {}),
-    ...(startDate ? { startDate } : {}),
-    ...(endDate ? { endDate } : {}),
+    ...(effectiveStartDate ? { startDate: effectiveStartDate } : {}),
+    ...(effectiveEndDate ? { endDate: effectiveEndDate } : {}),
   }
 
   // 查询弹窗初始值
@@ -359,7 +360,7 @@ export default function InboundTasksPage() {
           })
         }
         return (
-          <div className="flex justify-end whitespace-nowrap">
+          <div className="flex justify-start whitespace-nowrap">
             <TableActionsMenu
               primaryLabel="详情"
               onPrimaryClick={() => openDetail(task)}
@@ -393,31 +394,34 @@ export default function InboundTasksPage() {
                 navigate(path)
               }}
             >
-              + 新建收货订单
+              新建收货订单
             </Button>}
           </>
         }
       />
 
-      <OrderStatusFilter label="收货状态分类" value={statusFilter}
-        options={[{value: '', label: '全部订单'}, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({value, label}))]}
-        onChange={status => updateParams({status: status || null, page: 1})} />
-
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip">
+          <OrderStatusFilter label="收货状态分类" value={statusFilter}
+            options={[{ value: '', label: '全部订单' }, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))]}
+            onChange={status => updateParams({ status: status || null, page: 1 })} />
+        </div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={effectiveStartDate} endDate={effectiveEndDate}
+            onClear={() => updateParams({ startDate: null, endDate: null, range: 'all', page: 1 })} />
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
           ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          {(chips.length > 0 || statusFilter || effectiveStartDate || effectiveEndDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
         </div>
-      )}
+      </div>
 
-      {error && <QueryErrorState error={error} onRetry={() => { void refetch() }} compact={!!data && !blocksInboundRead(error)} title={inboundReadTitle(error, data ? '刷新失败，当前显示上次读取的数据' : '收货列表读取失败')} />}
+      {error && <QueryErrorState error={error} onRetry={() => { void refetch() }} title={inboundReadTitle(error, data ? '刷新失败，当前显示上次读取的数据' : '收货列表读取失败')} />}
       {(!error || (!!data && !blocksInboundRead(error))) && <DataTable
         columns={columns}
         data={data?.list ?? []}
@@ -431,7 +435,7 @@ export default function InboundTasksPage() {
       />}
 
       {!error && data?.truncated && <p role="status" className="text-sm text-warning-ink">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，数据未全部加载；请用查询缩小范围。</p>}
-      {!error && data && <ListSummary total={total} unit="单" />}
+      {!error && data && !data.truncated && <ListSummary total={total} unit="单" />}
 
       <InboundTaskQueryDialog
         open={queryOpen}

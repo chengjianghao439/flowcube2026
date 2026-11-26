@@ -56,3 +56,24 @@ test('foreign-tab development auth update invalidates old tab query ownership wi
   )
   expect(module.kitQuerySession()).not.toBe(original)
 })
+
+test.each([true, false])('HTTP 无 randomUUID 时仍可进入并隔离登录身份（有随机字节 %s）', async hasRandomBytes => {
+  const bytes = vi.fn(crypto.getRandomValues.bind(crypto))
+  vi.stubGlobal('crypto', hasRandomBytes ? { getRandomValues: bytes } : undefined)
+  try {
+    const module = await import('./kitRecoveryIdentity')
+    const original = module.kitQuerySession()
+    expect(original).toBeTruthy()
+    useAuthStore.getState().logout()
+    useAuthStore.getState().login('fixture', null, user)
+    expect(module.kitQuerySession()).not.toBe(original)
+    if (hasRandomBytes) expect(bytes).toHaveBeenCalled()
+  } finally { vi.unstubAllGlobals() }
+})
+
+test('另一标签页清空本地存储也使原查询身份失效', async () => {
+  const module = await import('./kitRecoveryIdentity')
+  const original = module.kitQuerySession()
+  window.dispatchEvent(new StorageEvent('storage', { key: null, storageArea: localStorage }))
+  expect(module.kitQuerySession()).not.toBe(original)
+})

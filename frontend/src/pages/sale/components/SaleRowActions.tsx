@@ -27,6 +27,9 @@ export function SaleRowActions({
   const original=useOrdinarySaleOperation(row.id)
   const recoveryPending=!!original.pending || original.storageBlocked
   const writePending=anyPending || recoveryPending || original.busy
+  const isKit = row.commercialModel === 'kit-v1'
+  const reserveOrder = isKit ? onDetail : () => onReserveSale(row.id)
+  const cancelOrder = isKit ? onDetail : () => onCancelSale(row.id)
   const canReserve = can(PERMISSIONS.SALE_ORDER_RESERVE)
   const canUpdate = can(PERMISSIONS.SALE_ORDER_UPDATE)
   const canCancel = can(PERMISSIONS.SALE_ORDER_CANCEL)
@@ -47,11 +50,11 @@ export function SaleRowActions({
         primaryLabel={recoveryPending ? "核对原操作" : canReserve ? "占库" : "详情"}
         primaryVariant="outline"
         primaryDisabled={anyPending}
-        onPrimaryClick={!recoveryPending && canReserve ? () => onReserveSale(row.id) : onDetail}
+        onPrimaryClick={!recoveryPending && canReserve ? reserveOrder : onDetail}
         items={[
           ...(canUpdate ? [{ label: '编辑订单', onClick: onEdit, disabled:writePending }] : []),
           printItem,
-          ...(canCancel ? [{ label: '取消订单', onClick: () => onCancelSale(row.id), afterMenuClose: true, destructive: true, separatorBefore: true, disabled: writePending }] : []),
+          ...(canCancel ? [{ label: isKit ? '查看并取消订单' : '取消订单', onClick: cancelOrder, afterMenuClose: true, destructive: true, separatorBefore: true, disabled: writePending }] : []),
         ]}
       />
     )
@@ -69,7 +72,7 @@ export function SaleRowActions({
           ...(canAdjust ? [adjustAction] : []),
           printItem,
           ...(can(PERMISSIONS.SALE_ORDER_RELEASE) ? [{ label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: writePending }] : []),
-          ...(canCancel ? [{ label: '取消订单', onClick: () => onCancelSale(row.id), afterMenuClose: true, destructive: true, disabled: writePending }] : []),
+          ...(canCancel ? [{ label: isKit ? '查看并取消订单' : '取消订单', onClick: cancelOrder, afterMenuClose: true, destructive: true, disabled: writePending }] : []),
         ]}
       />
     )
@@ -82,14 +85,14 @@ export function SaleRowActions({
         primaryVariant="outline"
         primaryLabel={recoveryPending ? "核对原操作" : canReserve ? "补占" : "详情"}
         primaryDisabled={anyPending}
-        onPrimaryClick={!recoveryPending && canReserve ? () => onReserveSale(row.id) : onDetail}
+        onPrimaryClick={!recoveryPending && canReserve ? reserveOrder : onDetail}
         items={[
           ...(canShip ? [{ label: '核对发货', onClick: onDetail, disabled: writePending }] : []),
           { label: '查看详情', onClick: onDetail },
           ...(canAdjust ? [adjustAction] : []),
           printItem,
           ...(can(PERMISSIONS.SALE_ORDER_RELEASE) ? [{ label: '核对占库', onClick: onDetail, separatorBefore: true, disabled: writePending }] : []),
-          ...(canCancel ? [{ label: '取消订单', onClick: () => onCancelSale(row.id), afterMenuClose: true, destructive: true, disabled: writePending }] : []),
+          ...(canCancel ? [{ label: isKit ? '查看并取消订单' : '取消订单', onClick: cancelOrder, afterMenuClose: true, destructive: true, disabled: writePending }] : []),
         ]}
       />
     )
@@ -112,8 +115,8 @@ export function SaleRowActions({
           ...(canAdjust ? [adjustAction] : []),
           printItem,
           ...(canCancel ? [{
-            label: '取消订单',
-            onClick: () => onCancelSale(row.id),
+            label: isKit ? '查看并取消订单' : '取消订单',
+            onClick: cancelOrder,
             afterMenuClose: true,
             destructive: true, disabled: writePending, separatorBefore: true,
           }] : []),
@@ -140,7 +143,7 @@ export function SaleRowActions({
       primaryVariant="outline"
       items={[
         printItem,
-        ...(canDelete ? [{ label: '删除订单', onClick: () => onAsk('确认删除订单', '删除后订单将无法恢复。', () => onDeleteSale(row.id)), destructive: true, separatorBefore: true, disabled: writePending }] : []),
+        ...(canDelete ? [{ label: isKit ? '查看并删除订单' : '删除订单', onClick: isKit ? onDetail : () => onAsk('确认删除订单', '删除后订单将无法恢复。', () => onDeleteSale(row.id)), destructive: true, separatorBefore: true, disabled: writePending }] : []),
       ]}
     />
   )

@@ -203,33 +203,37 @@ async function createContainer(conn, {
  * 后写的一方直接覆盖先写的——实测 8 只各 10 件的容器上架完，缓存只剩 50（实际 80），
  * 30 件库存凭空消失且无任何报错。两条路都不可接受，唯一正解是统一加锁顺序。
  *
- * 锁定范围取 status IN (ACTIVE, PENDING_PUTAWAY)：既覆盖汇总要读的在库容器，
- * 也覆盖调用方即将转正的那只待上架容器，使后续的单容器 FOR UPDATE 变成同事务重入。
- * 代价是同一「商品+仓库」的上架会串行化——这正是保证汇总正确所必需的，
- * 不同商品或不同仓库之间互不影响。
+ * 每个商品/仓库共用一条 inventory_stock 记录串行化事实层变更。
+ * 多维度释放先取得全部商品的共享策略锁，再依序锁各库存记录。
  */
 async function lockStockDimension(conn, productId, warehouseId) {
-  // Quantity policy locks precede stock/container locks. Batch callers acquire
-  // their product IDs in stable ascending order before entering this helper.
-  await assertQtyPrecision(conn, [{productId,qty:0,label:'数量策略'}])
-  // 串行化点选 inventory_stock 的单行，而不是「该维度的一批容器行」。
-  // 试过后者，仍然死锁：上架会把容器的 status 由 4 改成 1，在 idx_container_hot 里
-  // 相当于从 status=4 段迁到 status=1 段，于是每个事务都在持有一段范围锁的同时
-  // 去请求另一段的插入意向锁——间隙锁彼此兼容、插入意向锁却与间隙锁冲突，照样成环。
-  // 换成单行锁后，等待方手里不持有任何容器锁，构不成环。
-  //
-  // 先做一次 no-op upsert 确保该行存在：若行不存在就直接 FOR UPDATE，
-  // 空结果集上的加锁会退化成间隙锁，两个事务锁住相邻间隙再各自插入，反而制造新死锁。
-  await conn.query(
-    `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved)
-     VALUES (?, ?, 0, 0)
-     ON DUPLICATE KEY UPDATE product_id = product_id`,
-    [productId, warehouseId],
-  )
-  await conn.query(
-    'SELECT quantity FROM inventory_stock WHERE product_id = ? AND warehouse_id = ? FOR UPDATE',
-    [productId, warehouseId],
-  )
+  await lockStockDimensions(conn, [{ product_id: productId, warehouse_id: warehouseId }])
+}
+
+async function lockStockDimensions(conn, dimensions) {
+  // 先锁所有商品策略，再按商品、仓库顺序锁库存。两阶段都使用事务当前读。
+  const ordered = [...dimensions].sort((a, b) => a.product_id - b.product_id || a.warehouse_id - b.warehouse_id)
+  await assertQtyPrecision(conn, ordered.map(d => ({ productId: d.product_id, qty: 0, label: '数量策略' })))
+  for (const { product_id: productId, warehouse_id: warehouseId } of ordered) {
+    // 串行化点选 inventory_stock 的单行，而不是「该维度的一批容器行」。
+    // 试过后者，仍然死锁：上架会把容器的 status 由 4 改成 1，在 idx_container_hot 里
+    // 相当于从 status=4 段迁到 status=1 段，于是每个事务都在持有一段范围锁的同时
+    // 去请求另一段的插入意向锁——间隙锁彼此兼容、插入意向锁却与间隙锁冲突，照样成环。
+    // 换成单行锁后，等待方手里不持有任何容器锁，构不成环。
+    //
+    // 先做一次 no-op upsert 确保该行存在：若行不存在就直接 FOR UPDATE，
+    // 空结果集上的加锁会退化成间隙锁，两个事务锁住相邻间隙再各自插入，反而制造新死锁。
+    await conn.query(
+      `INSERT INTO inventory_stock (product_id, warehouse_id, quantity, reserved)
+       VALUES (?, ?, 0, 0)
+       ON DUPLICATE KEY UPDATE product_id = product_id`,
+      [productId, warehouseId],
+    )
+    await conn.query(
+      'SELECT quantity FROM inventory_stock WHERE product_id = ? AND warehouse_id = ? FOR UPDATE',
+      [productId, warehouseId],
+    )
+  }
 }
 
 /**
@@ -293,7 +297,7 @@ async function deductFromContainers(conn, {
     `SELECT id, barcode, remaining_qty, unit, batch_no, mfg_date, exp_date
      FROM inventory_containers
      WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL
-       AND locked_by_task_id IS NULL
+       AND remaining_qty > 0 AND locked_by_task_id IS NULL
      ORDER BY (exp_date IS NULL) ASC, exp_date ASC, created_at ASC, id ASC
      FOR UPDATE`,
     [productId, warehouseId]
@@ -371,7 +375,8 @@ async function deductFromTaskLockedContainers(conn, {
   const { roundQty } = require('../utils/unitConversion')
   assertQtyScale(qty, '扣减数量')
   await assertQtyPrecision(conn, [{ productId, qty, label: '扣减数量' }])
-  const absQty = roundQty(Math.abs(qty))
+  if (!(Number(qty) > 0)) throw new AppError('扣减数量必须大于零', 400, 'INVALID_DEDUCTION_QTY')
+  const absQty = roundQty(Number(qty))
   const tid = Number(taskId)
   if (!Number.isFinite(tid) || tid <= 0) {
     throw new AppError('deductFromTaskLockedContainers 需要有效的 taskId', 500)
@@ -381,7 +386,7 @@ async function deductFromTaskLockedContainers(conn, {
     `SELECT id, barcode, remaining_qty, unit, batch_no, mfg_date, exp_date
      FROM inventory_containers
      WHERE product_id=? AND warehouse_id=? AND status=1 AND deleted_at IS NULL
-       AND locked_by_task_id = ?
+       AND remaining_qty > 0 AND locked_by_task_id = ?
      ORDER BY (exp_date IS NULL) ASC, exp_date ASC, created_at ASC, id ASC
      FOR UPDATE`,
     [productId, warehouseId, tid],
@@ -1196,19 +1201,21 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
   const cid = Number(containerId)
   const q = roundQty(qty)
   const tid = targetContainerId != null ? Number(targetContainerId) : null
-  if (!Number.isFinite(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
+  if (!Number.isSafeInteger(cid) || cid <= 0) throw new AppError('库存条码无效', 400)
+  if (tid !== null && (!Number.isSafeInteger(tid) || tid <= 0)) throw new AppError('目标塑料盒无效', 400)
   if (!Number.isFinite(q) || q <= 0) throw new AppError('拆分数量须为正数', 400)
   if (tid === cid) throw new AppError('来源与目标不能是同一个塑料盒', 400, 'CONTAINER_SELF_MERGE_FORBIDDEN')
 
   // 加锁顺序（2026-09-18 审计 P1）：本引擎的全局约定是「先 lockStockDimension(商品,仓库) 再锁容器」
   // ——deductFromContainers 的注释与上架/出库/盘点路径都按此顺序。本函数原先直接 FOR UPDATE 容器，
   // 顺序与它们相反，构成 ABBA 死锁面（拆分持容器等汇总锁，上架持汇总锁等容器）。
-  // 维度值来自一次非锁定读：容器所属商品/仓库不会因这一读而改变结论，随后仍以 FOR UPDATE 的读为准。
+  // 非锁定读只用于选锁；随后检查容器当前维度。
   const [[dim]] = await conn.query(
     'SELECT product_id, warehouse_id FROM inventory_containers WHERE id = ? AND deleted_at IS NULL',
     [cid],
   )
-  if (dim) await lockStockDimension(conn, dim.product_id, dim.warehouse_id)
+  if (!dim) throw new AppError('库存条码不存在', 404)
+  await lockStockDimension(conn, dim.product_id, dim.warehouse_id)
 
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
@@ -1220,6 +1227,9 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     [cid],
   )
   if (!row) throw new AppError('库存条码不存在', 404)
+  if (Number(row.product_id) !== Number(dim.product_id) || Number(row.warehouse_id) !== Number(dim.warehouse_id)) {
+    throw new AppError('库存条码所属商品或仓库已变化，请刷新后重试', 409)
+  }
   // 原始精度已在入口校验；再按商品策略拒绝小数拆分。
   await assertQtyPrecision(conn, [{ productId: row.product_id, qty: q, label: '拆分数量' }, { productId: row.product_id, qty: row.remaining_qty, label: '来源条码实存数量' }])
   if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) {
@@ -1267,7 +1277,9 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
       [tid],
     )
     if (!target) throw new AppError('目标塑料盒不存在', 404)
-    if (Number(target.status) !== CONTAINER_STATUS.ACTIVE && Number(target.remaining_qty) !== 0) {
+    const targetStatus = Number(target.status)
+    if (targetStatus !== CONTAINER_STATUS.ACTIVE
+      && !(targetStatus === CONTAINER_STATUS.EMPTY && Number(target.remaining_qty) === 0)) {
       throw new AppError('目标塑料盒状态异常', 400)
     }
     // 目标容器同样不能处于任务锁定中——源容器上面已挡（第 774 行），目标这里原本漏了。
@@ -1282,6 +1294,8 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
     if (Number(target.warehouse_id) !== Number(row.warehouse_id)) {
       throw new AppError('目标塑料盒与来源库存条码不在同一仓库，不可合并', 400)
     }
+
+    await assertQtyPrecision(conn, [{ productId: row.product_id, qty: target.remaining_qty, label: '目标塑料盒实存数量' }])
 
     // 混批放行（批 A · 塑料盒作业流）：**同商品不同批次允许混放**，本范围**不管理保质期**。
     // 放行闸只认「真正的到期事实 exp_date」——`batch_no` / `mfg_date` 不是保质期依据
@@ -1442,9 +1456,14 @@ async function splitContainer(conn, { containerId, qty, remark = null, targetCon
  * @param {number} params.qty
  * @returns {{ containerId: number, barcode: string, qty: number, wholeContainer: boolean }}
  */
-async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty, operatorId = null, operatorName = null }) {
+async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qty, dimension, operatorId = null, operatorName = null }) {
   const { roundQty } = require('../utils/unitConversion')
   assertQtyScale(qty, '拆分归还数量')
+  const dim = dimension ?? (await conn.query(
+    'SELECT product_id, warehouse_id FROM inventory_containers WHERE id = ? AND deleted_at IS NULL', [containerId],
+  ))[0][0]
+  if (!dim) throw new AppError('库存条码不存在', 404)
+  await lockStockDimension(conn, dim.product_id, dim.warehouse_id)
   const [[row]] = await conn.query(
     `SELECT id, barcode, product_id, warehouse_id, location_id, remaining_qty, status,
             locked_by_task_id, batch_no, mfg_date, exp_date, unit, is_mixed_batch
@@ -1454,6 +1473,10 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
     [containerId],
   )
   if (!row) throw new AppError('库存条码不存在', 404)
+  if (Number(row.product_id) !== Number(dim.product_id) || Number(row.warehouse_id) !== Number(dim.warehouse_id)) {
+    throw new AppError('库存条码所属商品或仓库已变化，请刷新后重试', 409)
+  }
+  if (Number(row.status) !== CONTAINER_STATUS.ACTIVE) throw new AppError('仅在库条码可拆分归还', 409)
   await assertQtyPrecision(conn, [{ productId: row.product_id, qty, label: '拆分归还数量' }, {productId: row.product_id, qty: row.remaining_qty, label: '来源条码实存数量'}])
   if (Number(row.locked_by_task_id) !== Number(taskId)) {
     throw new AppError('库存条码未锁定于该任务，无法拆分归还', 409)
@@ -1515,48 +1538,62 @@ async function splitTaskLockedContainerForReturn(conn, { taskId, containerId, qt
 }
 
 /**
- * 在某任务锁定的、指定商品的容器集合里，按 FIFO 拆出合计 qty 的待归还容器清单
- * （改单减量专用，调用方负责把返回的每一项写入 sale_order_adjustment_container_returns）
- *
- * wholeContainer 标记该归还是否吃掉整只容器（整只归还时确认阶段无需再拆）。
- *
- * @param {object} conn
- * @param {object} params
- * @param {number} params.taskId
- * @param {number} params.productId
- * @param {number} params.qty
- * @returns {Array<{ containerId: number, barcode: string, qty: number, wholeContainer: boolean, originalContainerId: number }>}
+ * 单任务改单的 FIFO 归还。按原明细在每只容器上的有效 PICK 分配份额。
+ * 一只容器的全部实拣都退回时，将原条码整只归位，实存数量保持原值。
  */
-async function reserveTaskLockedContainersForReturn(conn, { taskId, productId, qty }) {
+async function reserveTaskLockedContainersForReturn(conn, { taskId, itemId, productId, warehouseId, pickedQty, qty }) {
   const { roundQty } = require('../utils/unitConversion')
   assertQtyScale(qty, '待归还数量')
   await assertQtyPrecision(conn, [{ productId, qty, label: '待归还数量' }])
   let remaining = roundQty(qty)
   if (!(remaining > 0)) return []
+  await lockStockDimension(conn, productId, warehouseId)
   const [containers] = await conn.query(
-    `SELECT id FROM inventory_containers
-     WHERE locked_by_task_id = ? AND product_id = ? AND deleted_at IS NULL AND status = ?
-     ORDER BY id ASC`,
+    `SELECT id, barcode, remaining_qty, warehouse_id FROM inventory_containers
+     WHERE locked_by_task_id=? AND product_id=? AND deleted_at IS NULL AND status=?
+     ORDER BY id FOR UPDATE`,
     [taskId, productId, CONTAINER_STATUS.ACTIVE],
   )
-  const picks = []
+  const [scans] = await conn.query(
+    `SELECT container_id, product_id, qty FROM scan_logs
+     WHERE task_id=? AND item_id=? AND COALESCE(scan_purpose,1)=1 ORDER BY id FOR UPDATE`,
+    [taskId, itemId],
+  )
+  const pickedByContainer = new Map(containers.map(c => [Number(c.id), 0]))
+  let totalPicked = 0
+  for (const scan of scans) {
+    const id = Number(scan.container_id)
+    if (!pickedByContainer.has(id) || Number(scan.product_id) !== Number(productId) || !(Number(scan.qty) > 0)) {
+      throw new AppError('拣货记录与任务锁定条码不一致，无法分配归还数量', 409)
+    }
+    pickedByContainer.set(id, roundQty(pickedByContainer.get(id) + Number(scan.qty)))
+    totalPicked = roundQty(totalPicked + Number(scan.qty))
+  }
+  if (totalPicked !== Number(pickedQty) || remaining > totalPicked) {
+    throw new AppError('任务实拣记录与已拣或待归还数量不一致，请核实拣货记录', 409)
+  }
+  await assertQtyPrecision(conn, containers.flatMap(c => [
+    { productId, qty: c.remaining_qty, label: '来源条码实存数量' },
+    { productId, qty: pickedByContainer.get(Number(c.id)), label: '来源条码实拣数量' },
+  ]))
+  const returns = []
   for (const c of containers) {
-    if (remaining <= 0) break
-    const [[fresh]] = await conn.query(
-      'SELECT barcode, remaining_qty FROM inventory_containers WHERE id = ? FOR UPDATE',
-      [c.id],
-    )
-    const avail = roundQty(fresh.remaining_qty)
-    if (avail <= 0) continue
-    const take = roundQty(Math.min(avail, remaining))
-    const split = await splitTaskLockedContainerForReturn(conn, { taskId, containerId: c.id, qty: take })
-    picks.push({ ...split, originalContainerId: Number(c.id) })
+    const id = Number(c.id)
+    const picked = pickedByContainer.get(id)
+    if (!picked || picked > Number(c.remaining_qty) || Number(c.warehouse_id) !== Number(warehouseId)) {
+      throw new AppError('任务锁定条码与当前仓库或实拣数量不一致', 409)
+    }
+    if (remaining === 0) continue
+    const take = Math.min(picked, remaining)
+    const portion = take === picked
+      ? { containerId: id, barcode: c.barcode, qty: take, wholeContainer: true }
+      : await splitTaskLockedContainerForReturn(conn, {
+        taskId, containerId: id, qty: take, dimension: { product_id: productId, warehouse_id: warehouseId },
+      })
+    returns.push({ ...portion, originalContainerId: id })
     remaining = roundQty(remaining - take)
   }
-  if (remaining > 0) {
-    throw new AppError('任务锁定的库存条码数量不足，无法拆出待归还数量，请核实拣货记录', 409)
-  }
-  return picks
+  return returns
 }
 
 /**
@@ -1587,6 +1624,7 @@ module.exports = {
   createContainer,
   createContainersBatch,
   lockStockDimension,
+  lockStockDimensions,
   promotePendingContainerToActive,
   deductFromContainers,
   deductFromTaskLockedContainers,

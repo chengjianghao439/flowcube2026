@@ -49,6 +49,7 @@ const fileName = `FlowCube-Setup-${version}.exe`
 const versionDir = path.join(DOWNLOAD_ROOT, 'versions', tag)
 const currentDir = path.join(DOWNLOAD_ROOT, 'current')
 const quarantineDir = path.join(DOWNLOAD_ROOT, 'quarantine')
+const quarantineFolders = ['unknown-version', 'duplicated', 'old-structure-backup']
 const targetExe = path.join(versionDir, fileName)
 const targetMetadata = path.join(versionDir, 'metadata.json')
 const latestPath = path.join(DOWNLOAD_ROOT, 'latest.json')
@@ -279,8 +280,35 @@ const latest = {
 }
 assertCanonicalManifestUrl(latest.url)
 
+// 在实际 node 身份与可写挂载上只读预检。缺失目录由最近的现有父目录创建。
+function requireWritableDirectory(dir) {
+  let probe = dir
+  for (;;) {
+    const stat = fs.statSync(probe, { throwIfNoEntry: false })
+    if (stat) {
+      if (!stat.isDirectory()) fail(`发布路径不是目录：${probe}`)
+      try { fs.accessSync(probe, fs.constants.W_OK | fs.constants.X_OK) }
+      catch { fail(`当前发布用户不能写入目录：${probe}`) }
+      return
+    }
+    if (fs.lstatSync(probe, { throwIfNoEntry: false })) fail(`发布目录链接不可用：${probe}`)
+    probe = path.dirname(probe)
+  }
+}
+
 log(`安装包身份：${tag} ${sourceSha} ${sha256}`)
 if (dryRun) {
+  if (args.includes('--check-write-access')) {
+    requireWritableDirectory(DOWNLOAD_ROOT)
+    requireWritableDirectory(currentDir)
+    if (!fs.existsSync(targetExe) || !existing?.sourceSha) requireWritableDirectory(versionDir)
+    if (!fs.existsSync(targetExe)) requireWritableDirectory(path.join(DOWNLOAD_ROOT, '.desktop-staging'))
+    for (const folder of quarantineFolders) {
+      const dir = path.join(quarantineDir, folder)
+      if (!fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory()) requireWritableDirectory(dir)
+    }
+    pruneVersions(true)
+  }
   log('dry-run: 版本身份核对通过')
   process.exit(0)
 }
@@ -326,7 +354,7 @@ if (!fs.existsSync(versionDir)) {
   }
   if (!existing?.sourceSha) writeJsonAtomic(targetMetadata, metadata)
 }
-for (const folder of ['unknown-version', 'duplicated', 'old-structure-backup']) {
+for (const folder of quarantineFolders) {
   fs.mkdirSync(path.join(quarantineDir, folder), { recursive: true })
 }
 if (fileSha256(targetExe) !== sha256) fail('服务器公开包摘要与原构建不一致')
@@ -336,7 +364,7 @@ log(`已发布版本：${version}，latest.json → ${latest.url}`)
 // /versions 保留策略（2026-08-22）：桌面安装包每版 100MB+，磁盘有限。
 // 发布成功后清理历史目录，只保留最近 N 版（默认 5，FLOWCUBE_VERSIONS_KEEP 可覆盖），
 // 本次刚发布的版本永久保留。
-function pruneVersions() {
+function pruneVersions(checkOnly = false) {
   if (manifestOnly || rollback) return
   const keep = Math.max(2, Number(process.env.FLOWCUBE_VERSIONS_KEEP || 5))
   const versionsDir = path.join(DOWNLOAD_ROOT, 'versions')
@@ -362,6 +390,7 @@ function pruneVersions() {
       const oldFile = path.join(versionsDir, name, `FlowCube-Setup-${name.slice(1)}.exe`)
       if (metadata.sourceSha && /^[a-f0-9]{64}$/.test(metadata.sha256 || '') &&
           metadata.version === name.slice(1) && metadata.fileName === path.basename(oldFile)) {
+        if (checkOnly) { requireWritableDirectory(path.dirname(oldFile)); continue }
         fs.unlinkSync(oldFile)
         log(`清理历史安装包并保留版本身份: ${name}`)
       }

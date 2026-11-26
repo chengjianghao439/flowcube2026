@@ -99,7 +99,7 @@ async function setup() {
 // 每图：规则问法 + LLM 意图（mock 模型响应原文，经真实 validateIntent 校验）
 const CASES = [
   { graph: 'A-inventory', ruleText: '缓冲铰链还剩多少', llmText: '那个铰链仓库里还有货吗', intent: { graph: 'A-inventory', productKeyword: '缓冲铰链' } },
-  { graph: 'B-sale-draft', ruleText: '给演示客户甲公司开单：缓冲铰链 10个', llmText: '帮甲公司订 10 个铰链', intent: { graph: 'B-sale-draft', customerKeyword: '演示客户', lines: [{ productKeyword: '缓冲铰链', qty: 10 }] } },
+  { graph: 'B-sale-draft', ruleText: '给演示客户甲公司开单：缓冲铰链 10个', llmText: '演示客户甲公司要订十个缓冲铰链，帮我先把单子建出来', intent: { graph: 'B-sale-draft', customerKeyword: '演示客户', lines: [{ productKeyword: '缓冲铰链', qty: 10 }] } },
   { graph: 'B2-reserve', ruleText: '给 SL20261026005 占库', llmText: '把销售单 SL20261026005 的货先占上', intent: { graph: 'B2-reserve', orderNo: 'SL20261026005' } },
   { graph: 'C-replenishment', ruleText: '补货建议', llmText: '哪些货该补了', intent: { graph: 'C-replenishment' } },
   { graph: 'C-purchase-draft', ruleText: '按补货建议建采购草稿', llmText: '照着补货建议把采购草稿建出来', intent: { graph: 'C-purchase-draft' } },

@@ -7,7 +7,7 @@
  * API 不变：open, title, description, confirmText, cancelText, variant, loading, onConfirm, onCancel
  */
 
-import { useEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AppDialog } from '@/components/shared/AppDialog'
@@ -48,19 +48,17 @@ export function ConfirmDialog({
   onCloseAutoFocus,
 }: ConfirmDialogProps) {
   const native = useNativeConfirmAvailable()
-  const handledRef = useRef(false)
-
-  useEffect(() => {
-    if (!native) return
-    if (!open) {
-      handledRef.current = false
+  const latest = useRef({ onConfirm, onCancel })
+  useLayoutEffect(() => { latest.current = { onConfirm, onCancel } })
+  const nativePrompt = useRef<{ signature: string; answer: Promise<{ response: number }> } | null>(null)
+  useLayoutEffect(() => {
+    if (!native || !open) {
+      nativePrompt.current = null
       return
     }
-    if (handledRef.current) return
-    handledRef.current = true
-    let cancelled = false
-    void window.flowcubeDesktop!
-      .showMessageBox!({
+    const signature = JSON.stringify([title, description, confirmText, cancelText, variant])
+    if (nativePrompt.current?.signature !== signature) {
+      const answer = window.flowcubeDesktop!.showMessageBox!({
         type: variant === 'destructive' ? 'warning' : 'question',
         title,
         message: description,
@@ -69,18 +67,18 @@ export function ConfirmDialog({
         cancelId: 1,
         noLink: true,
       })
-      .then(({ response }) => {
-        if (cancelled) return
-        if (response === 0) onConfirm()
-        else onCancel()
-      })
-      .catch(() => {
-        if (!cancelled) onCancel()
-      })
-    return () => {
-      cancelled = true
+      nativePrompt.current = { signature, answer }
     }
-  }, [open, native, title, description, confirmText, cancelText, variant, onConfirm, onCancel])
+    let active = true
+    void nativePrompt.current.answer.then(({ response }) => {
+      if (!active) return
+      if (response === 0) latest.current.onConfirm()
+      else latest.current.onCancel()
+    }, () => {
+      if (active) latest.current.onCancel()
+    })
+    return () => { active = false }
+  }, [open, native, title, description, confirmText, cancelText, variant])
 
   if (native) {
     return null

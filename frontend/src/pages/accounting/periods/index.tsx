@@ -1,12 +1,15 @@
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { usePermission } from '@/hooks/usePermission'
+import { PERMISSIONS } from '@/lib/permission-codes'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 /**
  * 会计期间 / 期末结转（增强② · 2026-08-09）
  * 期间列表 + 结转状态；结账/反结账/生成结转凭证。
  * 前端不算会计（结账前置校验、结转金额一律以接口为准）。
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Lock, Unlock, RefreshCcw } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
@@ -31,7 +34,11 @@ function fmtPeriod(p: string): string {
 
 export default function AccountingPeriodsPage() {
   const qc = useQueryClient()
-  const { data, isLoading } = useQuery({ queryKey: useCompanyQueryKey(['accounting-periods']), queryFn: getPeriodsApi })
+  const { can } = usePermission()
+  const canManage = can(PERMISSIONS.ACCOUNTING_PERIOD_MANAGE)
+  const { data, isLoading, isError, error, refetch } = useQuery({ queryKey: useCompanyQueryKey(['accounting-periods']), queryFn: getPeriodsApi })
+  const allowed = useRef(false)
+  allowed.current = canManage && !isError && !!data
   const [generating, setGenerating] = useState<AccountingPeriod | null>(null)
   const [closing, setClosing] = useState<AccountingPeriod | null>(null)
 
@@ -45,7 +52,7 @@ export default function AccountingPeriodsPage() {
       setGenerating(null)
       invalidate()
     },
-    onError: (e) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '生成失败'),
+    onError: (e) => toast.error(e instanceof Error && e.message ? e.message : '生成失败'),
   })
 
   const closeMut = useMutation({
@@ -56,7 +63,7 @@ export default function AccountingPeriodsPage() {
   const reopenMut = useMutation({
     mutationFn: (period: string) => reopenPeriodApi(period, { skipGlobalError: true }),
     onSuccess: () => { toast.success('已反结账'); invalidate() },
-    onError: (e) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '反结账失败'),
+    onError: (e) => toast.error(e instanceof Error && e.message ? e.message : '反结账失败'),
   })
 
   function onReopen(row: AccountingPeriod) {
@@ -65,7 +72,7 @@ export default function AccountingPeriodsPage() {
       description: `确认反结账 ${fmtPeriod(row.period)}？已结账期间的凭证将恢复可变动，请确保只在确有调整需要时使用。`,
       variant: 'destructive',
       confirmText: '反结账',
-      onConfirm: () => reopenMut.mutate(row.period),
+      onConfirm: () => { if (allowed.current) reopenMut.mutate(row.period) },
     })
   }
 
@@ -90,25 +97,18 @@ export default function AccountingPeriodsPage() {
     { key: 'closedByName', title: '结账人', width: 100, render: v => (v as string) || '—' },
     { key: 'closedAt', title: '结账时间', width: 160, render: v => v ? formatDisplayDateTime(v) : '—' },
     {
-      key: 'id', title: '操作', width: 240,
-      render: (_, r) => (
-        <div className="flex gap-2">
-          {!r.closed && r.closingStatus !== 'not_required' && (
-            <Button size="sm" variant="outline" onClick={() => setGenerating(r)} title={r.closingStatus === 'current' ? '结转凭证已为最新，重新生成仅更新金额' : '生成/更新本期损益结转凭证'}>
-              <RefreshCcw className="mr-1 h-3.5 w-3.5" />生成结转
-            </Button>
-          )}
-          {!r.closed ? (
-            <Button size="sm" variant="outline" disabled={closeMut.isPending} onClick={() => { closeMut.reset(); setClosing(r) }} title="结账后该期间凭证不可变动">
-              <Lock className="mr-1 h-3.5 w-3.5" />结账
-            </Button>
-          ) : (
-            <Button size="sm" variant="ghost" onClick={() => onReopen(r)}>
-              <Unlock className="mr-1 h-3.5 w-3.5" />反结账
-            </Button>
-          )}
-        </div>
-      ),
+      key: 'id', title: '操作', width: 148,
+      render: (_, row) => {
+        if (!canManage || isError) return null
+        if (row.closed) return <TableActionsMenu primaryLabel="反结账" primaryVariant="outline" rowLabel={fmtPeriod(row.period)} onPrimaryClick={() => onReopen(row)} items={[]} />
+        const openClosing = () => { closeMut.reset(); setClosing(row) }
+        if (row.closingStatus === 'not_required' && (row.yearClosingStatus == null || row.yearClosingStatus === 'not_required')) {
+          return <TableActionsMenu primaryLabel="结账" primaryVariant="outline" rowLabel={fmtPeriod(row.period)} primaryDisabled={closeMut.isPending} onPrimaryClick={openClosing} items={[]} />
+        }
+        return <TableActionsMenu primaryLabel="生成结转" primaryVariant="outline" rowLabel={fmtPeriod(row.period)}
+          onPrimaryClick={() => setGenerating(row)}
+          items={[{ label: '结账', disabled: closeMut.isPending, afterMenuClose: true, onClick: openClosing }]} />
+      },
     },
   ]
 
@@ -116,42 +116,47 @@ export default function AccountingPeriodsPage() {
     <div className="space-y-4">
       <PageHeader
         title="会计期间与结转"
-        description="期间结账后该期间凭证锁定；结账前需先生成损益结转凭证（12 月含年度利润结转）。本系统是正式账，请按月结账。 结账顺序：生成本期业务凭证 → 生成损益结转凭证（状态为「已最新」）→ 结账。期间已结账后再有凭证变动必须先反结账。"
-        actions={<Button variant="outline" onClick={() => downloadExport('/export/accounting-periods').catch(e => toast.error((e as Error).message))}>导出</Button>}
+        description="按月生成结转凭证并结账；已结账期间凭证锁定。"
+        actions={<Button variant="outline" onClick={() => downloadExport('/export/accounting-periods').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>}
       />
 
 
-      <DataTable columns={columns} data={data ?? []} loading={isLoading} rowKey="period" />
-      {data && !isLoading && <ListSummary total={data.length} unit="个" />}
+      {isError ? <div role="alert"><QueryErrorState title="会计期间加载失败" error={error} onRetry={() => void refetch()} /></div> :
+        <DataTable fluid virtualized scrollLabel="会计期间表格" columnStorageKey="acct-periods" columns={columns} data={data ?? []} loading={isLoading} rowKey="period" />}
+      {!isError && data && !isLoading && <ListSummary total={data.length} unit="个" />}
 
       {/* 生成结转确认 */}
       <Dialog open={!!generating} onOpenChange={v => !v && setGenerating(null)}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="fc-form-dialog sm:max-w-xl">
           <DialogHeader description={<>{<>
-            确认 {generating && fmtPeriod(generating.period)} 的损益结转凭证
-            {generating?.closingStatus === 'current' ? '重新生成（结转后又有新发生额时会更新金额）' : '？'} 结转后损益科目清零、差额计入「本年利润」。
+            确认 {generating && fmtPeriod(generating.period)} 的期末结转凭证
+            {generating?.closingStatus === 'current' ? '重新生成（结转后又有新发生额时会更新金额）' : '？'} 按本期损益或年终结转所需金额生成凭证。
           </>}</>}><DialogTitle>生成结转凭证</DialogTitle></DialogHeader>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setGenerating(null)} disabled={genMut.isPending}>取消</Button>
-            <Button onClick={() => generating && genMut.mutate(generating.period)} disabled={genMut.isPending}>{genMut.isPending ? '生成中…' : '生成'}</Button>
+            <Button onClick={() => generating && genMut.mutate(generating.period)} disabled={!canManage || isError || genMut.isPending}>{genMut.isPending ? '生成中…' : '生成'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* 结账确认 */}
       <Dialog open={!!closing} onOpenChange={v => !v && !closeMut.isPending && setClosing(null)}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="fc-form-dialog sm:max-w-xl">
           <DialogHeader description={<>{<>
             确认结账 {closing && fmtPeriod(closing.period)}？结账后该期间凭证锁定，账面视为已确认；如需调整须反结账。
           </>}</>}><DialogTitle>结账</DialogTitle></DialogHeader>
 
-          {closeMut.isError && <p role="alert" className="text-sm text-destructive-ink">
-            {closeMut.error instanceof Error && closeMut.error.message ? closeMut.error.message : '结账失败，请刷新期间状态后重试。'}
-          </p>}
+          {closeMut.isError && (
+            <div className="fc-form-dialog-body">
+              <p role="alert" className="text-sm text-destructive-ink">
+                {closeMut.error instanceof Error && closeMut.error.message ? closeMut.error.message : '结账失败，请刷新期间状态后重试。'}
+              </p>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setClosing(null)} disabled={closeMut.isPending}>取消</Button>
-            <Button onClick={() => closing && closeMut.mutate(closing.period)} disabled={closeMut.isPending}>{closeMut.isPending ? '结账中…' : '确认结账'}</Button>
+            <Button onClick={() => closing && closeMut.mutate(closing.period)} disabled={!canManage || isError || closeMut.isPending}>{closeMut.isPending ? '结账中…' : '确认结账'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -12,8 +12,8 @@ export const retryWaybillApi     = (id: number, config?: Parameters<typeof clien
 export const voidWaybillApi      = (id: number, reason?: string, config?: Parameters<typeof client.post>[2]) => client.post<LogisticsWaybill>(`/logistics/${id}/void`, { reason }, config)
 
 // ─── 运费对账 ─────────────────────────────────────────────────────────────────
-export const getFreightBillsApi   = (params: object)                     => client.get<PaginatedData<FreightBill>>('/logistics/freight/bills', { params })
+export const getFreightBillsApi   = (params: object)                     => client.get<PaginatedData<FreightBill>>('/logistics/freight/bills', { params, skipGlobalError: true })
 export const createFreightBillApi = (data: object, config?: Parameters<typeof client.post>[2]) => client.post<{ id: number }>('/logistics/freight/bills', data, config)
-export const getFreightSettlementsApi = (params: object) => client.get<PaginatedData<FreightSettlement>>('/logistics/freight/settlements', { params })
+export const getFreightSettlementsApi = (params: object) => client.get<PaginatedData<FreightSettlement>>('/logistics/freight/settlements', { params, skipGlobalError: true })
 export const generateFreightSettlementApi = (carrierId: number, billPeriod: string, config?: Parameters<typeof client.post>[2]) =>
   client.post<FreightSettlement>('/logistics/freight/settlements', { carrierId, billPeriod }, config)

@@ -72,22 +72,13 @@ async function createScanLog({
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-
-    // 范围 / 设备仓校验必须放在**幂等 begin 之前**（与 A 的 plastic-boxes.fill 同口径）：
-    // 命中重放时下方会直接 `return` 原回执，若把校验放在 begin 之后，重放就能绕过
-    // 仓库数据权限与「PDA 设备仓 == 任务仓」的核对。
-    const [[scopeRow]] = await conn.query(
-      'SELECT id, warehouse_id FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL',
+    const [[taskRow]] = await conn.query(
+      'SELECT id, warehouse_id, task_type, return_id, status, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
-    if (!scopeRow) throw new AppError('仓库任务不存在', 404)
-    assertInScope(scopeWarehouseIds, scopeRow.warehouse_id, '仓库任务')
-    if (pdaWarehouseId != null && Number(pdaWarehouseId) !== Number(scopeRow.warehouse_id)) {
-      throw new AppError('该 PDA 设备未绑定到任务所属仓库，不能在此仓库作业', 403, 'PDA_WAREHOUSE_MISMATCH')
-    }
-    // 资源绑定用「仓库任务」而不是 scan_logs 自身的 insertId——扫码记录 ID 在 begin 时刻
-    // 还不存在（审计 P2[6] 明确指出），而 taskId 才能唯一标识「这次扫码动作所属单据」。
-    // 下方 completeOperationRequest 必须传同一组 resourceType/resourceId。
+    if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
+
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.pick',
@@ -100,15 +91,6 @@ async function createScanLog({
       return requestState.responseData
     }
 
-    const [[taskRow]] = await conn.query(
-      'SELECT id, warehouse_id, task_type, return_id, status, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [taskId],
-    )
-    if (!taskRow) throw new AppError('仓库任务不存在', 404)
-    // 仓库数据权限（2026-09-18 审计 P1）：拣货扫码会推进任务、锁定容器、累加 picked_qty，
-    // 属于真实库存写操作。此前四条写路径都只有权限码 + pdaOnly + 设备会话，没有范围校验，
-    // 限仓账号可用自己那台 PDA 直接操作别仓任务。与 packages / warehouse-tasks 同口径。
-    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (taskRow.cancel_requested_at) {
       throw new AppError('该任务已因订单取消停止拣货，请勿继续', 409)
     }
@@ -391,15 +373,12 @@ async function createCheckScanLog({
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    // 范围 / PDA 设备仓校验必须**先于**幂等 begin：否则同键重放会绕过越权校验、
-    // 直接把原回执交还给一个越权调用方（批 B1 的 `createScanLog` 已用同一口径修过）。
-    // 无锁读只用于定位归属；随后 `FOR UPDATE` 的正式读取仍在 begin 之后。
-    const [[scopeRow]] = await conn.query(
-      'SELECT warehouse_id FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL',
+    const [[taskRow]] = await conn.query(
+      'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
       [taskId],
     )
-    if (!scopeRow) throw new AppError('仓库任务不存在', 404)
-    assertTaskScope(scopeRow, { scopeWarehouseIds, pdaWarehouseId })
+    if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
 
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
@@ -413,14 +392,6 @@ async function createCheckScanLog({
       return requestState.responseData
     }
 
-    const [[taskRow]] = await conn.query(
-      'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [taskId],
-    )
-    if (!taskRow) throw new AppError('仓库任务不存在', 404)
-    // 正式行锁到手后**再复查一次**范围/设备仓：无锁 peek 只用于在 begin 之前拦下越权
-    //（含重放），不能替代锁后校验——抢锁期间任务归属可能变化，必须用锁定的数据重新判定。
-    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
     if (Number(taskRow.status) !== WT_STATUS.CHECKING) {
       throw new AppError('仅「待复核」任务允许复核扫码', 400)
     }
@@ -561,13 +532,17 @@ async function createCancelReturnScanLog({
 }) {
   const conn = await pool.getConnection()
   try {
+    // 套单归还须先锁销售单，随后锁任务；等待任一行锁后按最新事实检查。
+    await conn.query('SET TRANSACTION ISOLATION LEVEL READ COMMITTED')
     await conn.beginTransaction()
-    const kitOrderId=await require('../sale/sale.commercial-cancellation').lockReturnOrder(conn,taskId)
-    if(kitOrderId){
-      const [[taskScope]]=await conn.query('SELECT id,warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',[taskId])
-      if(!taskScope)throw new AppError('仓库任务不存在',404)
-      assertTaskScope(taskScope,{scopeWarehouseIds,pdaWarehouseId})
-    }
+    const kitOrderId = await require('../sale/sale.commercial-cancellation').lockReturnOrder(conn, taskId)
+    const [[taskRow]] = await conn.query(
+      'SELECT id, task_no, status, warehouse_id, sale_order_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      [taskId],
+    )
+    if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
+
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.cancel-return',
@@ -580,13 +555,6 @@ async function createCancelReturnScanLog({
       return requestState.responseData
     }
 
-    const [[taskRow]] = await conn.query(
-      'SELECT id, task_no, status, warehouse_id, sale_order_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [taskId],
-    )
-    if (!taskRow) throw new AppError('仓库任务不存在', 404)
-    if(kitOrderId)assertTaskScope(taskRow,{scopeWarehouseIds,pdaWarehouseId})
-    else assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (!taskRow.cancel_requested_at) {
       throw new AppError('该任务未处于拣货退回状态，无需归还扫码', 400)
     }
@@ -703,11 +671,18 @@ async function createCancelReturnScanLog({
  * 各自的原库位归还流程，箱子本身没有一个"应该被扫回哪里"的答案。
  */
 async function createCancelReturnBoxScanLog({
-  taskId, packageId, barcode, operatorId, operatorName, requestKey, scopeWarehouseIds = null,
+  taskId, packageId, barcode, operatorId, operatorName, requestKey, scopeWarehouseIds = null, pdaWarehouseId = null,
 }) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    const [[taskRow]] = await conn.query(
+      'SELECT id, task_no, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
+      [taskId],
+    )
+    if (!taskRow) throw new AppError('仓库任务不存在', 404)
+    assertTaskScope(taskRow, { scopeWarehouseIds, pdaWarehouseId })
+
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
       action: 'scan-log.cancel-return-box',
@@ -720,12 +695,6 @@ async function createCancelReturnBoxScanLog({
       return requestState.responseData
     }
 
-    const [[taskRow]] = await conn.query(
-      'SELECT id, task_no, warehouse_id, cancel_requested_at FROM warehouse_tasks WHERE id = ? AND deleted_at IS NULL FOR UPDATE',
-      [taskId],
-    )
-    if (!taskRow) throw new AppError('仓库任务不存在', 404)
-    assertInScope(scopeWarehouseIds, taskRow.warehouse_id, '仓库任务')
     if (!taskRow.cancel_requested_at) {
       throw new AppError('该任务未处于拣货退回状态，无需拆箱确认', 400)
     }

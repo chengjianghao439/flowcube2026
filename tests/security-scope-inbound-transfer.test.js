@@ -182,3 +182,41 @@ test('候选有界浏览稳定分页，精确核实范围过滤，建单锁采�
   await assert.rejects(f.query.findPurchasableItems({ supplierId: 1, purchaseItemIds: '31 OR 1=1' }))
   await assert.rejects(f.query.findPurchasableItems({ supplierId: 1, purchaseItemIds: Array(201).fill('31').join(',') }))
 })
+
+test('采购上架在预读和容器锁内都复核调拨归属', async () => {
+  const normal = { product_id: 3, warehouse_id: 8, inbound_task_id: 21, status: 4, transfer_order_id: null }
+  for (const [changes, visible, code] of [
+    [{ transfer_order_id: 51 }, [8], 'INBOUND_TASK_CONTAINER_IN_TRANSIT'],
+    [{ warehouse_id: 9 }, [8, 9], 'INBOUND_TASK_CONTAINER_MOVED_AWAY'],
+    [{ warehouse_id: 9 }, [8], 'WAREHOUSE_SCOPE_DENIED'],
+  ]) {
+    for (const changedUnderLock of [false, true]) {
+      const touched = []
+      const conn = {
+        async beginTransaction() {}, async rollback() {}, release() {},
+        async query(sql) {
+          if (sql.includes('FROM inventory_containers WHERE id')) return [[changedUnderLock ? normal : { ...normal, ...changes }]]
+          if (sql.includes('FROM product_items')) { touched.push('product'); return [[{ id: 3 }]] }
+          if (sql.includes('FROM inventory_containers c') && sql.includes('FOR UPDATE')) return [[{ ...normal, ...changes }]]
+          throw new Error('操作超过归属检查边界')
+        },
+      }
+      const service = load('modules/inbound-tasks/inbound-tasks.putaway.js', {
+        '../../config/db': { pool: { async getConnection() { return conn } } },
+        '../../utils/warehouseScope': scope,
+        '../../utils/statusTransition': { async lockStatusRow() { return { warehouse_id: 8, status: 2 } } },
+        '../../engine/containerEngine': { CONTAINER_STATUS: statuses, async lockStockDimension() { touched.push('stock') } },
+        './inbound-tasks.helpers': { async assertPurchaseOrdersOpen() {} },
+        '../fulfillment/fulfillment.refresh': {},
+        '../../engine/inventoryEngine': { MOVE_TYPE: {} },
+        './inbound-tasks.status': load('modules/inbound-tasks/inbound-tasks.status.js', {
+          '../print-jobs/print-jobs.status': {}, '../../utils/inboundThresholds': {},
+        }),
+        '../../utils/operationRequest': { async beginResourceOperationRequest() { return { replay: false } } },
+        './inbound-tasks.settle': {},
+      })
+      await assert.rejects(service.putaway(21, { containerId: 11, locationId: 6 }, null, { scopeWarehouseIds: visible }), { code })
+      assert.deepEqual(touched, changedUnderLock ? ['product', 'stock'] : [])
+    }
+  }
+})

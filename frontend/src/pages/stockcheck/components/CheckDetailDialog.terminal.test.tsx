@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { submitCheckApi } from '@/api/stockcheck'
 import apiClient, { setApiClientBaseURL } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 import { useDirtyGuardStore } from '@/store/dirtyGuardStore'
@@ -54,7 +55,7 @@ beforeEach(() => {
   check = structuredClone(initial); readStatus = 200; requests.length = 0; unexpected.length = 0; closed.mockClear(); observed.confirms.clear()
   localStorage.clear(); sessionStorage.clear(); useDirtyGuardStore.setState({ pendingConfirm: null })
   setApiClientBaseURL('http://stockcheck.fixture.invalid/api')
-  useAuthStore.getState().login('synthetic', null, { id: 9, username: 'synthetic', realName: '合成员工', roleId: 2, roleName: '合成角色', permissions: [] })
+  useAuthStore.getState().login('synthetic', null, { id: 9, username: 'synthetic', realName: '合成员工', roleId: 2, roleName: '合成角色', permissions: ['stockcheck.update', 'stockcheck.submit', 'stockcheck.cancel'] })
   apiClient.defaults.adapter = 'fetch'; apiClient.defaults.env = { ...oldEnv, fetch: transport }
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   query = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
@@ -77,9 +78,9 @@ for (const action of [{ open: '提交盘点', confirm: '确认提交', title: '�
     expect(button(action.confirm)).toBeUndefined()
     expect(document.body.textContent).not.toContain(action.title)
     expect(button('保存实盘数')).toBeUndefined()
-    expect(document.querySelectorAll('[role="dialog"] table thead th')).toHaveLength(9)
-    expect(document.querySelectorAll('[role="dialog"] table tbody td')).toHaveLength(9)
-    expect(document.querySelectorAll('[role="dialog"] table thead button[aria-label^="调整"]')).toHaveLength(9)
+    expect(document.querySelectorAll('[role="dialog"] table thead th')).toHaveLength(5)
+    expect(document.querySelectorAll('[role="dialog"] table tbody td')).toHaveLength(5)
+    expect(document.querySelectorAll('[role="dialog"] table thead button[aria-label^="调整"]')).toHaveLength(5)
     expect(requests.filter(item => !item.startsWith('GET '))).toEqual([])
     expect(closed).not.toHaveBeenCalled()
   })
@@ -113,6 +114,10 @@ for (const action of [{ open: '提交盘点', confirm: '确认提交', title: '�
 
 test('正常同ID成功刷新保持合法确认，用户关闭确认不发写请求', async () => {
   await draw(); await wait(() => expect(button('提交盘点')).toBeTruthy())
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const body = dialog.querySelector(':scope > .fc-form-dialog-body')!
+  expect(body.querySelector('.overflow-x-auto table input[aria-label="合成商品实盘数量"]')).toBeTruthy()
+  expect(dialog.querySelector(':scope > .fc-dialog-footer')?.contains(button('提交盘点')!)).toBe(true)
   await click('提交盘点')
   check = { ...check, remark: '合成后台刷新' }; await refresh()
   await wait(() => expect(document.body.textContent).toContain('合成后台刷新'))
@@ -149,4 +154,29 @@ test('切换当前ID或关闭详情清除旧确认，回原单不自动重开', 
   expect(button('确认提交')).toBeUndefined()
   await draw(2)
   expect(button('确认提交')).toBeUndefined()
+})
+
+
+test('正式提交断网后用原 action 和键核对，错单回执保留待核对；同单重试不换键', async () => {
+  const sent: string[] = [], queries: string[] = []
+  let verifiedId = 2
+  apiClient.defaults.adapter = async config => {
+    if (config.method === 'post') {
+      sent.push(String(config.headers.get('X-Request-Key')))
+      expect(config.automaticReplay).toBe(false)
+      throw new Error('合成网络断开')
+    }
+    queries.push(config.url!)
+    expect(config.params.action).toBe('stockcheck.submit.1')
+    return { config, status: 200, statusText: 'OK', headers: {}, data: { success: true, data: {
+      status: 'success', resourceType: 'stockcheck', resourceId: verifiedId,
+    } } }
+  }
+  await expect(submitCheckApi(1)).rejects.toThrow('待核对')
+  verifiedId = 1
+  await expect(submitCheckApi(1)).resolves.toBeNull()
+  expect(sent).toHaveLength(2)
+  expect(sent[0]).toBeTruthy()
+  expect(sent[1]).toBe(sent[0])
+  expect(queries).toEqual(sent.map(key => '/system/request-status/' + key))
 })

@@ -785,6 +785,7 @@ async function syncSaleReturnCompleted(conn, returnId, { taskId, taskNo,ordinary
       returnType: 'sale',
       amount: Number(totalAmount),
       operator: {},
+      paymentContext: commercialReturnContext?.paymentContext,
       expectedTotal:ordinaryReturnContext?ordinaryReturnMoney.priorReceivable(ordinaryReturnContext):null,
     })
   }

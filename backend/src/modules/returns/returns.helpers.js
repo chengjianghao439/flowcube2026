@@ -17,18 +17,7 @@ function calcPaymentStatus(totalAmount, paidAmount) {
   return { balance, status: 1 }
 }
 
-async function adjustPaymentRecordForReturn(conn, {
-  recordType,
-  orderId = null,
-  orderNo = null,
-  returnNo,
-  returnType,
-  amount,
-  operator,
-  expectedTotal = null,
-  purchaseCashProjection = null,
-}) {
-  const returnCents = storedCashCents(amount, '退货实际冲减金额')
+async function lockReturnPaymentRecord(conn, { recordType, orderId, orderNo }) {
   const params = [recordType]
   let where = 'type=?'
   if (orderId) {
@@ -80,6 +69,26 @@ async function adjustPaymentRecordForReturn(conn, {
     || currentMembers.some((id, index) => id !== Number(stmtRows[index].statement_id))) {
     throw new AppError('账款或对账关系已变化，请刷新后核对退货账款', 409, 'RETURN_PAYMENT_CONTEXT_CHANGED')
   }
+
+  return { record, stmtRows }
+}
+
+async function adjustPaymentRecordForReturn(conn, {
+  recordType,
+  orderId = null,
+  orderNo = null,
+  returnNo,
+  returnType,
+  amount,
+  operator,
+  expectedTotal = null,
+  purchaseCashProjection = null,
+  paymentContext = null,
+}) {
+  const returnCents = storedCashCents(amount, '退货实际冲减金额')
+  const locked = paymentContext ?? await lockReturnPaymentRecord(conn, { recordType, orderId, orderNo })
+  if (!locked) return null
+  const { record, stmtRows } = locked
 
   const totalCents = storedCashCents(record.total_amount, '原账款总额')
   const paidCents = storedCashCents(record.paid_amount, '原账款已收付')
@@ -186,4 +195,5 @@ async function assertReturnPaymentHeadroom(conn, { recordType, orderId = null, o
   }
 }
 
-module.exports = { genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom }
+module.exports = {
+  lockReturnPaymentRecord, genNo, adjustPaymentRecordForReturn, assertReturnPaymentHeadroom }

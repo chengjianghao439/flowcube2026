@@ -1,5 +1,7 @@
 const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
+const { cashCents, storedCashCents, cashText } = require('../../utils/cashMoney')
+const { beijingTodayYmd } = require('../../utils/backendTime')
 const AppError = require('../../utils/AppError')
 const { generateDailyCode } = require('../../utils/codeGenerator')
 const { SETTLEMENT_TYPE, buildDueDateSql } = require('../../constants/settlementType')
@@ -96,40 +98,52 @@ async function createFreightBill({ carrierId, trackingNo, waybillId = null, bill
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('承运商不能为空', 400)
   const tn = String(trackingNo || '').trim()
   if (!tn) throw new AppError('快递单号不能为空', 400)
-  const freight = Number(actualFreight)
-  if (!Number.isFinite(freight) || freight < 0) throw new AppError('运费金额非法', 400)
+  const freight = cashCents(actualFreight,{label:'运费'})
+  if (freight < 0n) throw new AppError('运费金额非法', 400)
 
   const explicitId = waybillId == null ? null : Number(waybillId)
   if (explicitId != null && (!Number.isSafeInteger(explicitId) || explicitId <= 0)) throw new AppError('运单无效', 400)
-  let period = billPeriod
-  // 代表号和母子单号都参与匹配。同承运商出现多条候选且未显式指定时留待核对。
-  const [candidates] = await pool.query(
-    `SELECT id FROM logistics_waybills
-      WHERE carrier_id = ? AND status <> 5
-        AND (tracking_no = ? OR JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?)))
-        ${explicitId == null ? '' : 'AND id = ?'}
-      ORDER BY id LIMIT 2`,
-    explicitId == null ? [cid, tn, tn] : [cid, tn, tn, explicitId],
-  )
-  const wid = candidates.length === 1 ? candidates[0].id : null
-  if (explicitId != null && wid == null) {
-    throw new AppError('运单与承运商或快递单号不匹配，或运单已作废', 400, 'FREIGHT_WAYBILL_MISMATCH')
-  }
-  if (!period) {
-    // 账期缺省取当前年月（真实场景由导入文件带；此处兜底）
-    const [[{ p }]] = await pool.query("SELECT DATE_FORMAT(NOW(), '%Y-%m') AS p")
-    period = p
-  }
-  const [r] = await pool.query(
-    `INSERT INTO logistics_freight_bills
-       (carrier_id, waybill_id, tracking_no, bill_period, actual_freight, weight, source)
-     VALUES (?,?,?,?,?,?,?)
-     ON DUPLICATE KEY UPDATE
-       actual_freight = VALUES(actual_freight), weight = VALUES(weight),
-       bill_period = VALUES(bill_period), waybill_id = COALESCE(VALUES(waybill_id), waybill_id)`,
-    [cid, wid, tn, period, freight, weight, source],
-  )
-  return { id: r.insertId || null, billPeriod: period }
+  const period = billPeriod || beijingTodayYmd().slice(0,7)
+  assertBillPeriod(period)
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    // 代表号和母子单号都参与匹配。同承运商出现多条候选且未显式指定时留待核对。
+    const [candidates] = await conn.query(
+      `SELECT id FROM logistics_waybills
+        WHERE carrier_id = ? AND status <> 5
+          AND (tracking_no = ? OR JSON_CONTAINS(tracking_numbers, JSON_QUOTE(?)))
+          ${explicitId == null ? '' : 'AND id = ?'}
+        ORDER BY id LIMIT 2`,
+      explicitId == null ? [cid, tn, tn] : [cid, tn, tn, explicitId],
+    )
+    const wid = candidates.length === 1 ? candidates[0].id : null
+    if (explicitId != null && wid == null) {
+      throw new AppError('运单与承运商或快递单号不匹配，或运单已作废', 400, 'FREIGHT_WAYBILL_MISMATCH')
+    }
+    const [r] = await conn.query(
+      `INSERT INTO logistics_freight_bills
+         (carrier_id, waybill_id, tracking_no, bill_period, actual_freight, weight, source)
+       VALUES (?,?,?,?,?,?,?)
+       ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)`,
+      [cid,wid,tn,period,cashText(freight),weight,source],
+    )
+    const [[bill]] = await conn.query('SELECT * FROM logistics_freight_bills WHERE id=? FOR UPDATE',[r.insertId])
+    if (bill.reconciled || bill.settlement_id != null) {
+      if (storedCashCents(bill.actual_freight,'已核对运费') !== freight || bill.bill_period !== period
+        || (wid != null && Number(bill.waybill_id) !== Number(wid))
+        || ((weight == null) !== (bill.weight == null)) || Number(bill.weight) !== Number(weight)) {
+        throw new AppError('该运费已核对，请复核原汇总单',409,'FREIGHT_BILL_RECONCILED')
+      }
+    } else {
+      await conn.query(
+        'UPDATE logistics_freight_bills SET actual_freight=?,weight=?,bill_period=?,waybill_id=COALESCE(?,waybill_id) WHERE id=?',
+        [cashText(freight),weight,period,wid,bill.id])
+    }
+    await conn.commit()
+    return {id:bill.id,billPeriod:period}
+  } catch (e) { await conn.rollback(); throw e }
+  finally { conn.release() }
 }
 
 // ─── 汇总生成对承运商的应付 ────────────────────────────────────────────────────
@@ -155,6 +169,17 @@ async function listSettlements({ page = 1, pageSize = 20, carrierId = null, bill
   return { list: rows.map(fmtSettlement), pagination: { page, pageSize, total } }
 }
 
+function assertBillPeriod(period) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period)) throw new AppError('账期格式应为 YYYY-MM', 400)
+}
+
+// 未挂单据的运费应付在各账套按 created_at 投影。核实该日期涉及的所有已封存账套。
+async function assertFreightPostingOpen(conn, date) {
+  const period = (date instanceof Date ? beijingTodayYmd(date) : String(date)).slice(0,7).replace('-','')
+  const [[closed]] = await conn.query('SELECT company_id FROM acct_periods WHERE period=? AND status=2 LIMIT 1 FOR SHARE',[period])
+  if (closed) throw new AppError(`账套 ${closed.company_id} 的 ${period} 期间已结账，无法变更该笔运费应付`,409,'FINANCE_PERIOD_CLOSED')
+}
+
 /**
  * 生成/重算某承运商某账期的运费应付。全量重算幂等（按当前所有寄付账单 SUM 覆盖）。
  * @returns 生成的汇总单
@@ -163,11 +188,13 @@ async function generateSettlement({ carrierId, billPeriod }, { createdBy = null 
   const cid = Number(carrierId)
   const period = String(billPeriod || '').trim()
   if (!Number.isFinite(cid) || cid <= 0) throw new AppError('承运商不能为空', 400)
-  if (!/^\d{4}-\d{2}$/.test(period)) throw new AppError('账期格式应为 YYYY-MM', 400)
+  assertBillPeriod(period)
 
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
+    // 先锁住会读取共享应付来源的账套，再锁承运商、成员与应付；期间状态不可在本事务中途改变。
+    await conn.query('SELECT id FROM acct_companies ORDER BY id FOR SHARE')
     const [[carrier]] = await conn.query('SELECT id, name FROM carriers WHERE id = ? AND deleted_at IS NULL FOR UPDATE', [cid])
     if (!carrier) throw new AppError('承运商不存在', 404)
 
@@ -197,7 +224,8 @@ async function generateSettlement({ carrierId, billPeriod }, { createdBy = null 
       [cid, period, settlement?.id ?? null],
     )
     if (!bills.length) throw new AppError('该账期没有已核实的寄付运单，待核对账单暂不生成应付', 400, 'FREIGHT_NO_ELIGIBLE_BILLS')
-    const total = bills.reduce((s, b) => s + Number(b.actual_freight), 0)
+    const totalCents = bills.reduce((sum, bill) => sum + storedCashCents(bill.actual_freight,'原运费账单'), 0n)
+    const total = cashText(totalCents)
     const billIds = bills.map(b => b.id)
 
     // 汇总单头 upsert（uk_carrier_period）。先确保有 id 承接 payment_records.order_id。
@@ -228,27 +256,28 @@ async function generateSettlement({ carrierId, billPeriod }, { createdBy = null 
     // 这里顺手补 6601 就等于替财务把「历史未分类」判成了「运费」——属于被明令禁止的自动回填。
     // 历史行保持 NULL → 勾稽按待处理差异报出，待人工确认后再走补录通道。
     if (paymentRecordId) {
-      const [[old]] = await conn.query('SELECT total_amount FROM payment_records WHERE id = ? FOR UPDATE', [paymentRecordId])
+      const [[old]] = await conn.query('SELECT total_amount,paid_amount,created_at FROM payment_records WHERE id = ? FOR UPDATE', [paymentRecordId])
       if (old) {
-        const changed = Number(old.total_amount) !== total
-        await conn.query(
-          `UPDATE payment_records
-           SET total_amount = ?, balance = GREATEST(0, ? - paid_amount),
-               ${changed ? 'confirm_status = 0,' : ''}
-               status = CASE WHEN paid_amount >= ? THEN 3 WHEN paid_amount > 0 THEN 2 ELSE 1 END
-           WHERE id = ?`,
-          [total, total, total, paymentRecordId],
-        )
+        const paid = storedCashCents(old.paid_amount,'运费应付已付额')
+        if (totalCents < paid) throw new AppError('新汇总金额低于已付运费，请先核对账款',409,'FREIGHT_TOTAL_BELOW_PAID')
+        if (storedCashCents(old.total_amount,'原运费应付') !== totalCents) {
+          await assertFreightPostingOpen(conn, old.created_at)
+          await conn.query(
+            'UPDATE payment_records SET total_amount=?,balance=?,confirm_status=0,status=? WHERE id=?',
+            [total,cashText(totalCents-paid),paid===totalCents ? 3 : paid>0n ? 2 : 1,paymentRecordId])
+        }
       } else {
         paymentRecordId = null // 应付记录被删，重建
       }
     }
-    if (!paymentRecordId) {
+    if (!paymentRecordId && totalCents > 0n) {
+      const createdAt = new Date()
+      await assertFreightPostingOpen(conn,createdAt)
       const [ins] = await conn.query(
         `INSERT INTO payment_records
-           (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, settlement_type, due_date, debit_account_code)
-         VALUES (1, NULL, ?, ?, ?, 0, ?, 1, 0, ?, ${due.expr}, ?)`,
-        [settlement.settlement_no, carrier.name, total, total, SETTLEMENT_TYPE.MONTHLY, ...due.params, FREIGHT_DEBIT_ACCOUNT],
+           (type, order_id, order_no, party_name, total_amount, paid_amount, balance, status, confirm_status, settlement_type, due_date, debit_account_code, created_at)
+         VALUES (1, NULL, ?, ?, ?, 0, ?, 1, 0, ?, ${due.expr}, ?, ?)`,
+        [settlement.settlement_no, carrier.name, total, total, SETTLEMENT_TYPE.MONTHLY, ...due.params, FREIGHT_DEBIT_ACCOUNT, createdAt],
       )
       paymentRecordId = ins.insertId
     }

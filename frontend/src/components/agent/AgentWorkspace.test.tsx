@@ -80,13 +80,7 @@ test('大页面直接展示小满与输入框，无须打开抽屉', async () =>
   expect(host.textContent).toContain('请在业务页面核对大额单据')
   expect(host.textContent).not.toMatch(/大额硬拦|不扩到商务|本地短回|闲聊不留/)
   expect(host.textContent).not.toContain('聊聊极序')
-  expect(getByRole(host, 'button', { name: '销售订单' })).toBeTruthy()
-})
-test('空白页菜单可以打开销售订单', async () => {
-  useWorkspaceStore.setState({ tabs: [HOME_TAB], activeKey: HOME_TAB.key, recentKeys: [HOME_TAB.key] })
-  await render()
-  await click('销售订单')
-  expect(useWorkspaceStore.getState().tabs.some(tab => tab.path === '/sale')).toBe(true)
+  expect(queryByRole(host, 'button', { name: '销售订单' })).toBeNull()
 })
 test('欢迎区停在顶部，已有对话跟随最新消息，新对话回到顶部', async () => {
   const scrollHeight = vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(500)

@@ -27,7 +27,6 @@ COPY --chown=node:node agent/src/ /opt/flowcube-agent/src/
 ENV AGENT_DATA_DIR=/var/lib/flowcube/assistant
 # Fail the image build if the native renderer or bundled Chinese font is missing.
 RUN node scripts/check-label-renderer.cjs
-COPY --chown=node:node docker/backend-entrypoint.sh /usr/local/bin/backend-entrypoint.sh
-RUN chmod +x /usr/local/bin/backend-entrypoint.sh
+COPY --chown=root:root --chmod=0755 docker/backend-entrypoint.sh /usr/local/bin/backend-entrypoint.sh
 EXPOSE 3000
 ENTRYPOINT ["/usr/local/bin/backend-entrypoint.sh"]

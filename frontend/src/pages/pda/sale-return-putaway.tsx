@@ -11,7 +11,7 @@ import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
 import { getReturnTaskByIdApi, getReturnPutawayContainerApi, getReturnPutawayLocationApi, putawayReturnApi } from '@/api/returns'
-import { Button } from '@/components/ui/button'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import { parseBarcode } from '@/utils/barcode'
 
 export default function PdaSaleReturnPutawayPage() {
@@ -88,8 +88,9 @@ export default function PdaSaleReturnPutawayPage() {
         if (!Number.isSafeInteger(location.id) || location.id <= 0 || location.warehouseId !== task.warehouseId || location.status !== 1) {
           throw new Error('库位不可用或不在当前退货任务仓库')
         }
-        const result = await putawayAction.run(requestKey =>
-          putawayReturnApi(taskId, { containerId, locationId: location.id }, requestKey).then(r => r!)
+        const result = await putawayAction.run((requestKey, config) =>
+          putawayReturnApi(taskId, { containerId, locationId: location.id }, requestKey, config).then(r => r!),
+          { taskId, containerId, containerBarcode, locationId: location.id, locationCode: location.code },
         )
         if (generation !== scanGeneration.current) return
         if (result.kind === 'success') ok(`上架成功 → ${location.code}`)
@@ -102,11 +103,15 @@ export default function PdaSaleReturnPutawayPage() {
         setScanning(false)
       }
     }
-  }, [step, containerId, ok, err, putawayAction, taskId, task])
+  }, [step, containerId, containerBarcode, ok, err, putawayAction, taskId, task])
 
-  if (isError) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
-  if (isLoading) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><PdaLoading /></div>
-  if (!task) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">任务不存在</div></div>
+  const recoveryNotice = <PdaCriticalActionNotice {...putawayAction}
+    onConfirm={() => void putawayAction.confirmPending()} onClear={putawayAction.clearPending}
+    onDismissError={putawayAction.clearError} />
+
+  if (isError) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} />{recoveryNotice}<div className="mx-auto w-full max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
+  if (isLoading) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} />{recoveryNotice}<PdaLoading /></div>
+  if (!task) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} />{recoveryNotice}<div className="p-4 text-center text-muted-foreground">任务不存在</div></div>
 
   const totals = (task.items ?? []).reduce((sum, item) => ({
     expected: sum.expected + Number(item.expectedQty),
@@ -122,27 +127,21 @@ export default function PdaSaleReturnPutawayPage() {
   )
   if (task.status === 5) return (
     <div className="flex min-h-screen flex-col bg-background">
-      <PdaHeader title="退货上架" subtitle={task.taskNo} onBack={() => nav('/pda/sale-return')} />
+      <PdaHeader title="退货上架" subtitle={task.taskNo} onBack={() => nav('/pda/sale-return')} />{recoveryNotice}
       <div className="space-y-2 p-4 text-center">
         <p className="font-semibold text-success-ink">退货入仓已完成</p>
         {quantities}
       </div>
     </div>
   )
-  if (task.status !== 4) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">当前任务不在待上架状态，请先核对质检进度与任务状态。</div></div>
+  if (task.status !== 4) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货上架" onBack={() => nav('/pda/sale-return')} />{recoveryNotice}<div className="p-4 text-center text-muted-foreground">当前任务不在待上架状态，请先核对质检进度与任务状态。</div></div>
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      <PdaHeader title="退货上架" subtitle={task.taskNo} onBack={() => nav('/pda/sale-return')} />
+      <PdaHeader title="退货上架" subtitle={task.taskNo} onBack={() => nav('/pda/sale-return')} />{recoveryNotice}
       <PdaFlash flash={flash} />
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-3">
-        {putawayAction.blockedReason && (
-          <div role="status" className="space-y-2 text-sm text-muted-foreground">
-            <p>{putawayAction.phaseMessage || putawayAction.blockedReason}</p>
-            {putawayAction.pendingRecord && <Button className="px-3" size="lg" type="button" variant="outline" disabled={putawayAction.confirming} onClick={() => void putawayAction.confirmPending()}>确认上次结果</Button>}
-          </div>
-        )}
         <PdaCard active={step === 'container'} done={!!containerBarcode}>
           <div className="text-sm text-muted-foreground">步骤 1</div>
           <div className="font-semibold">扫描库存条码</div>

@@ -1,3 +1,4 @@
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { ResizableTable } from '@/components/shared/ResizableTable'
 import { qty as formatQty } from '@/lib/format'
 import { VirtualTableBody, VIRTUAL_TABLE_THRESHOLD } from '@/components/shared/VirtualTableBody'
@@ -329,8 +330,8 @@ export default function InventoryPage() {
       <td className="px-4 py-3 text-xs text-muted-foreground"><CategoryPathDisplay path={row.categoryPath} /></td>
       <td className="px-4 py-3 text-left text-xs text-muted-foreground"><div className="whitespace-normal [overflow-wrap:anywhere] tabular-nums" title={formatDisplayDateTime(row.updatedAt)}>{formatDisplayDateTime(row.updatedAt)}</div></td>
       <td className="px-4 py-3 text-left">
-        <Button size="sm" variant={drawerItem?.id === row.id && drawerOpen ? 'secondary' : 'ghost'}
-          className="h-7 px-2 text-xs" onClick={() => { setDrawerItem(row); setDrawerOpen(true) }}>查看条码</Button>
+        <TableActionsMenu primaryVariant="outline" primaryLabel="查看条码" items={[]}
+          onPrimaryClick={() => { setDrawerItem(row); setDrawerOpen(true) }} />
       </td>
     </tr>
   )
@@ -338,9 +339,8 @@ export default function InventoryPage() {
   return (
     <div className="desktop-inventory-page space-y-4">
       <PageHeader title="库存管理"
-        description="库存总览与出入库记录；采购入库请走「收货订单」上架后计入库存"  actions={<>
+        description="查看库存总览与出入库流水。"  actions={<>
         <div role="group" aria-label="查看与查询库存" className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" onClick={() => tab === 'logs' ? setLogsQueryOpen(true) : setOverviewQueryOpen(true)}>查询</Button>
           <Button variant="outline" onClick={() => downloadExport(
             tab === 'logs' ? '/export/inventory-logs' : '/export/stock',
             tab === 'logs' ? {
@@ -351,6 +351,7 @@ export default function InventoryPage() {
               ...(effectiveLogEndDate ? { endDate: effectiveLogEndDate } : {}),
             } : undefined,
           ).catch(e => toast.error((e as Error).message))}>{tab === 'logs' ? '导出流水 Excel' : '导出当前库存'}</Button>
+          <Button variant="outline" onClick={() => tab === 'logs' ? setLogsQueryOpen(true) : setOverviewQueryOpen(true)}>查询</Button>
           {can(PERMISSIONS.STOCKCHECK_VIEW) && <Button variant="outline" asChild><Link to="/stockcheck">查看盘点</Link></Button>}
         </div>
         {(can(PERMISSIONS.IMPORT_STOCK_EXECUTE) || can(PERMISSIONS.INVENTORY_ADJUST)) &&
@@ -362,30 +363,31 @@ export default function InventoryPage() {
 
 
       {/* 标签切换 */}
-      <div className="desktop-detail-tabs mb-4 flex gap-1 border-b border-border">
-        {(['overview', 'logs'] as Tab[]).map(t => (
-          <button key={t} aria-pressed={tab === t} onClick={() => updateParams({ tab: t })}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === t ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground'}`}>
-            {t === 'overview' ? '库存总览' : '出入库记录'}
-          </button>
-        ))}
-      </div>
-
-      {(tab === 'logs' || chips.length > 0) && (
-        <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
-          {tab === 'logs' && <AppliedDateRange label="流水日期" startDate={effectiveLogStartDate} endDate={effectiveLogEndDate}
-            onClear={() => updateParams({ logStartDate: null, logEndDate: null, logRange: 'all', logPage: 1 })} />}
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
+      <div className="fc-filter-bar fc-filter-bar-underline">
+        <div className="fc-underline-tabs">
+          {(['overview', 'logs'] as Tab[]).map(t => (
+            <button key={t} type="button" aria-pressed={tab === t} onClick={() => updateParams({ tab: t })}
+              className={`min-h-10 border-b-2 px-3 py-2 text-sm transition-colors ${tab === t ? 'border-primary font-semibold text-foreground' : 'border-transparent font-normal text-muted-foreground hover:text-foreground'}`}>
+              {t === 'overview' ? '库存总览' : '出入库记录'}
+            </button>
           ))}
-          {chips.length > 0 && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
         </div>
-      )}
+        {(tab === 'logs' || chips.length > 0) && (
+          <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+            {tab === 'logs' && <AppliedDateRange label="流水日期" startDate={effectiveLogStartDate} endDate={effectiveLogEndDate}
+              onClear={() => updateParams({ logStartDate: null, logEndDate: null, logRange: 'all', logPage: 1 })} />}
+            {chips.map(c => (
+              <span key={c.key} className="fc-query-chip">
+                {c.label}
+                <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            {chips.length > 0 && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+          </div>
+        )}
+      </div>
 
       <KeepAliveSection active={tab === 'overview'} className="space-y-4">
           {overviewError && <QueryErrorState error={overviewError} title="库存数量读取失败" compact onRetry={() => { if (active && tab === 'overview') void retryOverview() }} />}
@@ -425,7 +427,7 @@ export default function InventoryPage() {
       <KeepAliveSection active={tab === 'logs'} className="space-y-4">
           {logReadState === 'failed' ? <QueryErrorState error={logError} title="库存流水读取失败" compact onRetry={() => { if (active && tab === 'logs') void retryLogs() }} />
             : logReadState === 'paused' ? <div className="px-1 py-3 text-sm text-muted-foreground" role="status">网络已暂停，联网后继续读取流水。</div>
-              : <DataTable virtualized columns={logCols} data={logReadState === 'ready' ? logs?.list ?? [] : []} loading={logReadState === 'loading'} emptyText="暂无流水" rowKey="id" scrollLabel="出入库记录表格" />}
+              : <DataTable fluid columnStorageKey="inventory-logs" virtualized columns={logCols} data={logReadState === 'ready' ? logs?.list ?? [] : []} loading={logReadState === 'loading'} emptyText="暂无流水" rowKey="id" scrollLabel="出入库记录表格" />}
 
           {logReadState === 'ready' && (logs?.truncated || logs?.list.length !== logsTotal
             ? <div className="px-1 py-3 text-xs text-warning-ink" role="status">流水未取齐：显示前 {logs?.list.length.toLocaleString()} 条 / 匹配 {logsTotal.toLocaleString()} 条，请缩小筛选范围。</div>
@@ -443,39 +445,41 @@ export default function InventoryPage() {
 
       {/* 出库弹窗 */}
       <Dialog open={opOpen} onOpenChange={v => !v && setOpOpen(false)}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader description={"核对商品、仓库与本次出库数量。"}><DialogTitle>出库</DialogTitle></DialogHeader>
-          <form onSubmit={handleOp} className="space-y-4 py-2">
-            <div className="space-y-2"><Label>商品 *</Label><PickerField value={form.productName} placeholder="点击选择商品…" onOpen={() => setProductFinderOpen(true)} disabled={opFrozen} /></div>
-            <div className="space-y-2">
-              <Label>仓库 *</Label>
-              <WarehouseSelect
-                value={form.warehouseId ? +form.warehouseId : null}
-                onChange={(id, name) => { if (!opFrozen) setForm(f => ({ ...f, warehouseId: id ? String(id) : '', warehouseName: name })) }}
-                placeholder="选择仓库"
-                disabled={opFrozen}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
+          <DialogHeader><DialogTitle>出库</DialogTitle></DialogHeader>
+          <form onSubmit={handleOp} className="flex min-h-0 flex-1 flex-col">
+            <div className="fc-form-dialog-body space-y-4">
+              <div className="space-y-2"><Label>商品 *</Label><PickerField value={form.productName} placeholder="点击选择商品…" onOpen={() => setProductFinderOpen(true)} disabled={opFrozen} /></div>
               <div className="space-y-2">
-                <Label htmlFor={outboundQuantityId}>数量 <span aria-hidden="true" className="text-destructive-ink">*</span></Label>
-                {/* 在此保留用户输入，由字段错误和提交处理使用同一份数量校验。 */}
-                <Input id={outboundQuantityId} required type="number" step={qtyStep(outboundAllowsDecimal)} min="0"
-                  value={form.quantity} disabled={opFrozen} aria-invalid={!!outboundQuantityError}
-                  aria-describedby={`${outboundQuantityId}-hint`}
-                  onChange={e => {
-                    if (opFrozen) return
-                    setOutboundQuantityBadInput(e.target.validity.badInput)
-                    setF('quantity', e.target.value)
-                  }} />
-                <div id={`${outboundQuantityId}-hint`} role="status" className="space-y-1 text-xs">
-                  <p className="text-muted-foreground">{outboundAllowsDecimal ? '请输入大于 0 的数量，最多两位小数。' : '请输入大于 0 的整数。'}</p>
-                  {outboundQuantityError && <p className="text-destructive-ink">{outboundQuantityError}</p>}
-                </div>
+                <Label>仓库 *</Label>
+                <WarehouseSelect
+                  value={form.warehouseId ? +form.warehouseId : null}
+                  onChange={(id, name) => { if (!opFrozen) setForm(f => ({ ...f, warehouseId: id ? String(id) : '', warehouseName: name })) }}
+                  placeholder="选择仓库"
+                  disabled={opFrozen}
+                />
               </div>
-              <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setF('unitPrice', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor={outboundQuantityId}>数量 <span aria-hidden="true" className="text-destructive-ink">*</span></Label>
+                  {/* 在此保留用户输入，由字段错误和提交处理使用同一份数量校验。 */}
+                  <Input id={outboundQuantityId} required type="number" step={qtyStep(outboundAllowsDecimal)} min="0"
+                    value={form.quantity} disabled={opFrozen} aria-invalid={!!outboundQuantityError}
+                    aria-describedby={`${outboundQuantityId}-hint`}
+                    onChange={e => {
+                      if (opFrozen) return
+                      setOutboundQuantityBadInput(e.target.validity.badInput)
+                      setF('quantity', e.target.value)
+                    }} />
+                  <div id={`${outboundQuantityId}-hint`} role="status" className="space-y-1 text-xs">
+                    <p className="text-muted-foreground">{outboundAllowsDecimal ? '请输入大于 0 的数量，最多两位小数。' : '请输入大于 0 的整数。'}</p>
+                    {outboundQuantityError && <p className="text-destructive-ink">{outboundQuantityError}</p>}
+                  </div>
+                </div>
+                <div className="space-y-2"><Label>单价</Label><Input type="number" step="0.01" min="0" value={form.unitPrice} onChange={e => setF('unitPrice', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
+              </div>
+              <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
             </div>
-            <div className="space-y-2"><Label>备注</Label><Input value={form.remark} onChange={e => setF('remark', e.target.value)} disabled={opFrozen} placeholder="选填" /></div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setOpOpen(false)} disabled={isPending}>取消</Button>
               {can(PERMISSIONS.INVENTORY_ADJUST) && <Button type="submit" disabled={outboundDisabled}>{isPending ? '提交中…' : '出库'}</Button>}
@@ -486,35 +490,37 @@ export default function InventoryPage() {
 
       {/* 库存导入弹窗：下载模板 → 填数上传 → 后端逐行建容器 */}
       <Dialog open={importOpen} onOpenChange={v => { setImportOpen(v); if (!v) setImportResult(null) }}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="fc-form-dialog max-w-3xl">
           <DialogHeader description={<>{<>请先下载模板，按照格式填写后上传。模板用于初始化各仓库的商品期初库存。</>}</>}><DialogTitle>批量导入库存</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="space-y-4 py-2">
 
-            <ImportSteps template={
-              <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => downloadExport('/import/stock/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
-            </div>
-            } upload={
-              <div className="space-y-1">
-              <Label>选择文件（.xlsx）</Label>
-              <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) void handleImportStock(f); e.target.value = '' }} />
-              {can(PERMISSIONS.IMPORT_STOCK_EXECUTE) && <Button variant="outline" className="w-full" onClick={() => importFileRef.current?.click()} disabled={importing}>
-                {importing ? '导入中…' : '选择文件并上传'}
-              </Button>}
-            </div>
-            } />
-            {importResult && (
-              <div className="rounded-lg border p-3 text-sm space-y-1">
-                <p className="font-medium">批次 IMP{importResult.batchId}，已完成 {importResult.success}/{importResult.totalRows} 条</p>
-                {importResult.success < importResult.totalRows && <p>重新选择原文件将继续处理未完成的行。</p>}
-                {importResult.errors.length > 0 && (
-                  <div className="max-h-64 overflow-y-auto text-destructive-ink text-sm leading-6 space-y-0.5">
-                    {importResult.errors.slice(0, 20).map((err, i) => <p key={i}>{err}</p>)}
-                  </div>
-                )}
+              <ImportSteps template={
+                <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => downloadExport('/import/stock/template').catch(e => toast.error((e as Error).message))}>下载导入模板</Button>
               </div>
-            )}
+              } upload={
+                <div className="space-y-1">
+                <Label>选择文件（.xlsx）</Label>
+                <input ref={importFileRef} type="file" accept=".xlsx,.xls" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) void handleImportStock(f); e.target.value = '' }} />
+                {can(PERMISSIONS.IMPORT_STOCK_EXECUTE) && <Button variant="outline" className="w-full" onClick={() => importFileRef.current?.click()} disabled={importing}>
+                  {importing ? '导入中…' : '选择文件并上传'}
+                </Button>}
+              </div>
+              } />
+              {importResult && (
+                <div className="rounded-lg border p-3 text-sm space-y-1">
+                  <p className="font-medium">批次 IMP{importResult.batchId}，已完成 {importResult.success}/{importResult.totalRows} 条</p>
+                  {importResult.success < importResult.totalRows && <p>重新选择原文件将继续处理未完成的行。</p>}
+                  {importResult.errors.length > 0 && (
+                    <div className="max-h-64 overflow-y-auto text-destructive-ink text-sm leading-6 space-y-0.5">
+                      {importResult.errors.slice(0, 20).map((err, i) => <p key={i}>{err}</p>)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

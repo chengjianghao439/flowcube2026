@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
@@ -49,7 +50,7 @@ export default function RiskDetails({
         if (!value) onClose()
       }}
     >
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="fc-form-dialog max-w-3xl">
         <DialogHeader description={kind === 'stock'
             ? '按商品和仓库合计实物库存，筛选数量 ≤ 10；不是可承诺库存判断。'
             : '仅列出当前占用额度超过授信限额的客户；展示全部符合条件的结果。'}>
@@ -57,7 +58,7 @@ export default function RiskDetails({
             {kind === 'stock' ? '低库存明细' : '授信超限客户'}
           </DialogTitle>
         </DialogHeader>
-        <div className="max-h-[65vh] overflow-y-auto">
+        <div className="fc-form-dialog-body max-h-[65vh] overflow-y-auto">
           {query.error ? (
             <QueryErrorState
               error={query.error}
@@ -67,9 +68,6 @@ export default function RiskDetails({
             <p className="py-8 text-sm">加载中…</p>
           ) : (
             <>
-              <p className="mb-3 text-xs text-muted-foreground">
-                共 {total} {kind === 'stock' ? '项' : '家'}
-              </p>
               {kind === 'stock'
                 ? stock.data?.list.map((row) => (
                     <div
@@ -140,10 +138,13 @@ export default function RiskDetails({
                   当前没有符合条件的风险项。
                 </p>
               )}
-              <ListSummary total={total} />
             </>
           )}
         </div>
+        <DialogFooter className="sm:justify-between">
+          {query.data && !query.isError && <ListSummary total={total} unit={kind === 'stock' ? '项' : '家'} />}
+          <Button type="button" className="ml-auto" variant="outline" onClick={onClose}>关闭</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

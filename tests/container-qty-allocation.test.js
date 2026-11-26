@@ -80,7 +80,9 @@ for (const functionName of ['deductFromContainers', 'deductFromTaskLockedContain
   })
 }
 
-function returnFixture(quantities) {
+const returnItem = { taskId: 3, itemId: 11, productId: 7, warehouseId: 1 }
+
+function returnFixture(quantities, picks = quantities, allowDecimal = 1) {
   const selects = []
   const rows = quantities.map((qty, index) => ({
     id: index + 1, barcode: `B${index + 1}`, product_id: 7, warehouse_id: 1,
@@ -88,12 +90,19 @@ function returnFixture(quantities) {
   }))
   const conn = {
     async query(sql, params) {
-      if (sql.includes('FROM product_items')) return [[{id:7,name:'小数商品',allow_decimal_qty:1}]]
+      if (sql.includes('FROM product_items')) return [[{id:7,name:'小数商品',allow_decimal_qty:allowDecimal}]]
+      if (sql.includes('INSERT INTO inventory_stock') || sql.includes('SELECT quantity FROM inventory_stock')) return [[]]
+      if (sql.includes('FROM scan_logs')) {
+        assert.match(sql, /task_id=\? AND item_id=\? AND COALESCE\(scan_purpose,1\)=1/)
+        assert.match(sql, /FOR UPDATE/)
+        assert.deepEqual([...params], [3, 11])
+        return [picks.map((qty, index) => ({ container_id: index + 1, product_id: 7, qty }))]
+      }
       // Every requested return in these fixtures is a whole original container.
       // A write here is evidence that floating residue incorrectly split one.
       assert.doesNotMatch(sql, /^\s*(INSERT|UPDATE)/, 'whole-container return must preserve original container identity')
       selects.push(sql)
-      if (sql.includes('SELECT id FROM inventory_containers')) return [rows.map(row => ({ id: row.id }))]
+      if (sql.includes('WHERE locked_by_task_id=?')) return [rows]
       if (sql.includes('FROM inventory_containers WHERE id') || sql.includes('WHERE id = ?')) {
         return [[rows.find(row => row.id === params[0])]]
       }
@@ -104,14 +113,21 @@ function returnFixture(quantities) {
 }
 
 test('return allocation of 0.3 across 0.1/0.2 keeps both original containers whole', async () => {
-  const f = returnFixture([0.1, 0.2])
-  const result = await module_.exports.reserveTaskLockedContainersForReturn(f.conn, { taskId: 3, productId: 7, qty: 0.3 })
+  const f = returnFixture([0.5, 0.2], [0.1, 0.2])
+  const result = await module_.exports.reserveTaskLockedContainersForReturn(f.conn, { ...returnItem, pickedQty: 0.3, qty: 0.3 })
   assert.equal(result.length, 2)
   assert.equal(result[0].containerId, 1)
   assert.equal(result[1].containerId, 2)
   assert.equal(result[0].wholeContainer, true)
   assert.equal(result[1].wholeContainer, true)
   assert.equal(result[1].qty, 0.2)
+})
+test('an integer return cannot unlock two fractional original picks on an integer-only product', async () => {
+  const f = returnFixture([1, 1], [0.5, 0.5], 0)
+  await assert.rejects(
+    module_.exports.reserveTaskLockedContainersForReturn(f.conn, { ...returnItem, pickedQty: 1, qty: 1 }),
+    error => error.code === 'QTY_INTEGER_REQUIRED',
+  )
 })
 test('direct whole-container return accepts legal floating noise without splitting', async () => {
   const f = returnFixture([0.3])
@@ -121,8 +137,8 @@ test('direct whole-container return accepts legal floating noise without splitti
   assert.equal(result.qty, 0.3)
 })
 test('return allocation still rejects genuine insufficiency', async () => {
-  const f = returnFixture([0.1, 0.2])
-  await assert.rejects(() => module_.exports.reserveTaskLockedContainersForReturn(f.conn, { taskId: 3, productId: 7, qty: 0.31 }), error => error.statusCode === 409)
+  const f = returnFixture([0.5, 0.2], [0.1, 0.2])
+  await assert.rejects(() => module_.exports.reserveTaskLockedContainersForReturn(f.conn, { ...returnItem, pickedQty: 0.3, qty: 0.31 }), error => error.statusCode === 409)
   const single = returnFixture([0.3])
   await assert.rejects(() => module_.exports.splitTaskLockedContainerForReturn(single.conn, { taskId: 3, containerId: 1, qty: 0.31 }), error => error.statusCode === 400)
 })

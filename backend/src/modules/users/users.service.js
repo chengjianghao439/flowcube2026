@@ -7,10 +7,16 @@ const { revokeAllFamilies } = require('../auth/sessionFamilies')
 // roleId=1 是超管，跳过全部权限校验（前后端都是）。允许创建/改到超管的唯一入口是
 // 调用方自己就是超管——否则任何一个有 user.create / user.update 权限的普通角色
 // 都能把自己的账号（或同伙的）提到超管，等于绕开整个权限体系。
-async function assertCanAssignRole(operator, targetRoleId, db = pool) {
-  if (targetRoleId === undefined) return
-  const [[role]] = await db.query('SELECT id FROM sys_roles WHERE id=? FOR UPDATE', [targetRoleId])
-  if (!role) throw new AppError('角色不存在，请刷新后重试', 400, 'ROLE_NOT_FOUND')
+async function lockManagementRoles(db, operator, targetRoleIds) {
+  const actorRoleId = Number(operator.roleId)
+  const ids = [...new Set([actorRoleId, ...targetRoleIds.map(Number)])]
+  const [roles] = await db.query('SELECT id FROM sys_roles WHERE id IN (?) ORDER BY id FOR UPDATE', [ids])
+  const present = new Set(roles.map(role => Number(role.id)))
+  if (!present.has(actorRoleId)) throw new AppError('操作人角色不可用，请重新登录', 403, 'PERMISSION_DENIED')
+  if (ids.some(id => !present.has(id))) throw new AppError('角色不存在，请刷新后重试', 400, 'ROLE_NOT_FOUND')
+}
+
+async function assertRoleSubset(operator, targetRoleId, db) {
   if (Number(operator?.roleId) === 1) return
   if (Number(targetRoleId) === 1) throw new AppError('只有超级管理员可以授予管理员角色', 403, 'ROLE_ASSIGN_DENIED')
   const [missing] = await db.query(
@@ -19,6 +25,11 @@ async function assertCanAssignRole(operator, targetRoleId, db = pool) {
     [targetRoleId, Number(operator?.roleId) || 0],
   )
   if (missing.length) throw new AppError('不能授予超出自身权限的角色，请联系超级管理员', 403, 'ROLE_ASSIGN_DENIED')
+}
+
+async function assertCanAssignRole(operator, targetRoleId, db) {
+  await lockManagementRoles(db, operator, [targetRoleId])
+  await assertRoleSubset(operator, targetRoleId, db)
 }
 
 async function listAssignableRoles(operator) {
@@ -160,7 +171,7 @@ async function create({ username, password, realName, roleId, departmentId = nul
 
 // 锁定操作人和目标账号后读取真实角色；顺序一致避免双方互相编辑时 ABBA 死锁。
 // 不能信任请求开始时缓存的 roleId，也不能在行锁之外先查目标再写密码。
-async function withLockedTarget(id, operator, action) {
+async function withLockedTarget(id, operator, permission, action, proposedRoleId) {
   const actorId = Number(operator?.userId)
   if (!Number.isInteger(actorId) || actorId <= 0) throw new AppError('缺少有效操作人', 403, 'USER_OPERATOR_REQUIRED')
   const conn = await pool.getConnection()
@@ -173,17 +184,16 @@ async function withLockedTarget(id, operator, action) {
     if (!actor || actor.deleted_at || !actor.is_active) throw new AppError('操作人账号不可用，请重新登录', 403, 'USER_OPERATOR_INACTIVE')
     const target = rows.find(u => Number(u.id) === Number(id))
     if (!target || target.deleted_at) throw new AppError('用户不存在', 404)
-    if (Number(target.role_id) === 1 && Number(actor.role_id) !== 1) {
-      throw new AppError('只有超级管理员可以修改、重置密码或删除超级管理员账号', 403, 'USER_ADMIN_PROTECTED')
-    }
-    const result = await action(conn, target, { ...operator, roleId: Number(actor.role_id) })
+    const currentActor = { ...operator, roleId: Number(actor.role_id) }
+    const allowedWarehouses = await assertCanManageTarget(conn, target, currentActor, permission, proposedRoleId)
+    const result = await action(conn, target, currentActor, allowedWarehouses)
     await conn.commit()
     return result
   } catch (e) { await conn.rollback(); throw e } finally { conn.release() }
 }
 
 async function update(id, { username, realName, roleId, isActive, departmentId, allowSelfApprove }, operator = null) {
-  return withLockedTarget(id, operator, async (conn, user, actor) => {
+  return withLockedTarget(id, operator, 'user.update', async (conn, user, actor) => {
     const changingUsername = username !== undefined && username !== user.username
     if (changingUsername && Number(actor.roleId) !== 1) {
       throw new AppError('只有超级管理员可以修改登录账号', 403, 'USER_ACCOUNT_RENAME_DENIED')
@@ -199,7 +209,7 @@ async function update(id, { username, realName, roleId, isActive, departmentId, 
     if (changingRole && Number(actor.roleId) !== 1 && Number(actor.userId) === Number(user.id)) {
       throw new AppError('不能修改自己的角色，请联系超级管理员', 403, 'USER_ROLE_SELF_FORBIDDEN')
     }
-    if (changingRole) await assertCanAssignRole(actor, roleId, conn)
+    if (changingRole) await assertRoleSubset(actor, roleId, conn)
     assertCanGrantSelfApprove(actor, allowSelfApprove)
     // roleId 可省略（编辑超管账号时不传）；省略则保持锁定读取的原角色。
     const finalRoleId = roleId !== undefined ? roleId : user.role_id
@@ -221,7 +231,7 @@ async function update(id, { username, realName, roleId, isActive, departmentId, 
       }
       throw error
     }
-  })
+  }, roleId)
 }
 
 async function assertDepartmentExists(departmentId, db = pool) {
@@ -229,42 +239,47 @@ async function assertDepartmentExists(departmentId, db = pool) {
   if (!d) throw new AppError('部门不存在', 400)
 }
 
-// Same subset boundary as role assignment and warehouse delegation; no numeric role hierarchy.
-// Called only after withLockedTarget has read the current actor/target under the user locks.
-async function assertCanResetTarget(conn, target, actor) {
-  if (Number(actor.roleId) === 1) return
-  if (Number(target.role_id) === 1) throw new AppError('只有超级管理员可以重置超级管理员密码', 403, 'USER_ADMIN_PROTECTED')
-  const [roles] = await conn.query('SELECT id FROM sys_roles WHERE id IN (?, ?) ORDER BY id FOR UPDATE', [Number(actor.roleId), Number(target.role_id)])
-  if (!roles.some(r => Number(r.id) === Number(actor.roleId))) throw new AppError('操作人角色不可用，请重新登录', 403, 'PERMISSION_DENIED')
-  const [resetPermission] = await conn.query("SELECT permission FROM sys_role_permissions WHERE role_id=? AND permission='user.reset_password' LIMIT 1", [Number(actor.roleId)])
-  if (!resetPermission.length) throw new AppError('当前账号无重置密码权限', 403, 'PERMISSION_DENIED')
-  await assertCanAssignRole(actor, Number(target.role_id), conn)
+// 用户锁串行化目标角色和双方仓库范围变更；角色权限维护使用相同的角色行锁。
+async function assertCanManageTarget(conn, target, actor, permission, proposedRoleId) {
+  const targetRoleId = Number(target.role_id)
+  const changingRole = proposedRoleId !== undefined && Number(proposedRoleId) !== targetRoleId
+  if (Number(actor.roleId) === 1) {
+    if (changingRole) await lockManagementRoles(conn, actor, [proposedRoleId])
+    return null
+  }
+  if (targetRoleId === 1) throw new AppError('只有超级管理员可以管理超级管理员账号', 403, 'USER_ADMIN_PROTECTED')
+  await lockManagementRoles(conn, actor, changingRole ? [targetRoleId, proposedRoleId] : [targetRoleId])
+  const [granted] = await conn.query('SELECT permission FROM sys_role_permissions WHERE role_id=? AND permission=? LIMIT 1', [actor.roleId, permission])
+  if (!granted.length) throw new AppError('当前角色无此账号管理权限', 403, 'PERMISSION_DENIED')
+  await assertRoleSubset(actor, targetRoleId, conn)
   const [rows] = await conn.query('SELECT user_id,warehouse_id FROM user_warehouse_scope WHERE user_id IN (?, ?) ORDER BY user_id,warehouse_id', [Number(actor.userId), Number(target.id)])
   const allowed = new Set(rows.filter(r => Number(r.user_id) === Number(actor.userId)).map(r => Number(r.warehouse_id)))
-  const requested = rows.filter(r => Number(r.user_id) === Number(target.id)).map(r => Number(r.warehouse_id))
-  if (allowed.size && (!requested.length || requested.some(id => !allowed.has(id)))) {
-    throw new AppError('不能重置超出自身仓库范围的账号密码', 403, 'USER_SCOPE_GRANT_DENIED')
+  const targetWarehouses = rows.filter(r => Number(r.user_id) === Number(target.id)).map(r => Number(r.warehouse_id))
+  if (allowed.size && (!targetWarehouses.length || targetWarehouses.some(id => !allowed.has(id)))) {
+    throw new AppError('不能管理超出自身仓库范围的账号', 403, 'USER_SCOPE_GRANT_DENIED')
   }
+  return allowed
+}
+
+async function assertCanResetTarget(conn, target, actor) {
+  await assertCanManageTarget(conn, target, actor, 'user.reset_password')
 }
 
 async function resetPassword(id, newPassword, operator = null) {
   // 计算哈希在锁外；所有权限判断和写入仍在同一锁定事务内完成。
   const hashed = await bcrypt.hash(newPassword, 10)
-  return withLockedTarget(id, operator, async (conn, target, actor) => {
-    await assertCanResetTarget(conn, target, actor)
-    return conn.query(
+  return withLockedTarget(id, operator, 'user.reset_password', async conn => conn.query(
     `UPDATE sys_users
         SET password = ?,
             token_version = COALESCE(token_version, 0) + 1
       WHERE id = ? AND deleted_at IS NULL`,
     [hashed, id],
-    )
-  })
+  ))
 }
 
 async function softDelete(id, operator = null) {
   if (Number(id) === Number(operator?.userId)) throw new AppError('不能删除自己的账号', 400)
-  return withLockedTarget(id, operator, async conn => conn.query(
+  return withLockedTarget(id, operator, 'user.delete', async conn => conn.query(
     'UPDATE sys_users SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL',
     [id],
   ))
@@ -288,16 +303,12 @@ async function setWarehouseScope(userId, warehouseIds, operator = null) {
   // 这里再补一条自我提权守卫（2026-09-18 审计 P1）：仓库范围是「无行 = 不限仓」的语义，
   // 持 user.update 的限仓用户只要把自己那行清空就变成不限仓，从而在没有任何超管参与的情况下
   // 获得全部仓库的读写（库存、单据、报表、导出），而操作日志里只留一条普通的授权变更记录。
-  return withLockedTarget(userId, operator, async (conn, target, actor) => {
+  return withLockedTarget(userId, operator, 'user.update', async (conn, target, actor, allowed) => {
     if (Number(actor.roleId) !== 1 && Number(target.id) === Number(actor.userId)) {
       throw new AppError('不能修改自己的仓库数据权限，请联系超级管理员', 403, 'USER_SCOPE_SELF_FORBIDDEN')
     }
-    if (Number(actor.roleId) !== 1) {
-      const [scope] = await conn.query('SELECT warehouse_id FROM user_warehouse_scope WHERE user_id=?', [actor.userId])
-      const allowed = new Set(scope.map(row => Number(row.warehouse_id)))
-      if (allowed.size && (!ids.length || ids.some(id => !allowed.has(id)))) {
-        throw new AppError('不能授予超出自身仓库范围的数据权限', 403, 'USER_SCOPE_GRANT_DENIED')
-      }
+    if (allowed?.size && (!ids.length || ids.some(id => !allowed.has(id)))) {
+      throw new AppError('不能授予超出自身仓库范围的数据权限', 403, 'USER_SCOPE_GRANT_DENIED')
     }
     await conn.query('DELETE FROM user_warehouse_scope WHERE user_id = ?', [target.id])
     if (ids.length) await conn.query('INSERT INTO user_warehouse_scope (user_id, warehouse_id) VALUES ?', [ids.map(wid => [target.id, wid])])
@@ -308,4 +319,4 @@ async function setWarehouseScope(userId, warehouseIds, operator = null) {
   })
 }
 
-module.exports = { listAssignableRoles, findAll, listOptions, findById, create, update, resetPassword, softDelete, getWarehouseScope, setWarehouseScope, assertCanResetTarget }
+module.exports = { listAssignableRoles, findAll, listOptions, findById, create, update, resetPassword, softDelete, getWarehouseScope, setWarehouseScope, assertCanManageTarget, assertCanResetTarget }

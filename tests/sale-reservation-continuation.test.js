@@ -39,6 +39,8 @@ function fixture({ status = 3, quantity = 10, reserved = 4, shipped = 4, allowDe
       if (sql.includes('FROM inventory_warehouses')) return [[{ id: 2, name: '合成仓', is_active: 1 }, { id: 3, name: '第二合成仓', is_active: 1 }]]
       if (sql.includes('UPDATE sale_order_items SET warehouse_id')) { item.warehouse_id = params[0]; return [{ affectedRows: 1 }] }
       if (sql.includes('UPDATE sale_order_items SET reserved_qty = reserved_qty +')) { item.reserved_qty += params[0]; return [{ affectedRows: 1 }] }
+      if (sql.includes('UPDATE sale_order_items SET reserved_qty = reserved_qty -')) { item.reserved_qty -= params[0]; return [{ affectedRows: 1 }] }
+      if (sql.includes('SUM(reserved_qty)')) return [[{ remaining: item.reserved_qty }]]
       if (sql.includes('COUNT(*) AS unfilled')) return [[{ unfilled: item.reserved_qty < item.quantity ? 1 : 0 }]]
       if (sql.includes('INSERT INTO sale_order_events')) { events.push(params); return [{ insertId: 11 }] }
       throw new Error(`未建模SQL: ${sql}`)
@@ -61,7 +63,10 @@ function fixture({ status = 3, quantity = 10, reserved = 4, shipped = 4, allowDe
     '../../utils/operationRequest': { beginOperationRequest: async () => { calls.push('key'); return { enabled: true, id: 1, replay, responseData: null } }, completeOperationRequest: async () => { calls.push('receipt'); if (fault) throw new Error('合成回执写失败') } },
     '../../utils/expectedStock': { lockExpectedPurchaseOrders: async () => calls.push('PO-X') },
     '../../engine/containerEngine': { getStockProjection: async () => ({ available: 10 }) },
-    '../../engine/reservationEngine': { reserve: async (current, args) => { assert.equal(current, conn); reserves.push(args) } },
+    '../../engine/reservationEngine': {
+      reserve: async (current, args) => { assert.equal(current, conn); reserves.push(args) },
+      partialReleaseByProduct: async current => { assert.equal(current, conn); calls.push('partial-release') },
+    },
     './sale.contracts': { getNetOrderAmount: (total, discount) => total - discount, saleOperationAction: (action, id) => `sale.${action}:${id}` },
     './sale.edit-baseline': require('../backend/src/modules/sale/sale.edit-baseline'),
     './sale.events': require('../backend/src/modules/sale/sale.events'),
@@ -102,9 +107,9 @@ test('补量只认原需求减累计已占，不能重新占已履行的4', asyn
   assert.equal(f.reserves.length, 0)
   assert.ok(f.calls.includes('rollback'))
 })
-test('同一行重复输入不能绕过未占6的上限', async () => {
+test('同一行重复输入在分配预占前拒绝', async () => {
   const f = fixture()
-  await assert.rejects(f.svc.reserveStock(9, actor, [{ id: 19, qty: 4 }, { id: 19, qty: 4 }], options), /超过未占余量 2/)
+  await assert.rejects(f.svc.reserveStock(9, actor, [{ id: 19, qty: 4 }, { id: 19, qty: 4 }], options), /明细行 19 重复提交/)
   assert.equal(f.reserves.length, 0)
 })
 test('原仓不变：已发后累计预占非零仍禁止补占换仓', async () => {
@@ -186,4 +191,27 @@ test('恢复旧2/6回写会被真实service行为反证发现', async () => {
   const f = fixture({ code: changed })
   await reserve(f)
   assert.notEqual(f.order.status, 3)
+})
+
+
+test('部分释占拒绝同一行重复提交，即使合计未超过已占量', async () => {
+  const f = fixture({ status: 2 })
+  await assert.rejects(f.svc.releaseStock(9, actor, [{ id: 19, qty: 1 }, { id: 19, qty: 1 }]), /重复/)
+  assert.ok(f.calls.includes('rollback'))
+  assert.ok(!f.calls.includes('partial-release'))
+  assert.equal(f.item.reserved_qty, 4)
+  assert.equal(f.events.length, 0)
+})
+
+test('部分释占事件保留本次明细，可按原仓、原单位续占', async () => {
+  const f = fixture({ status: 2 })
+  await f.svc.releaseStock(9, actor, [{ id: 19, qty: 2 }])
+  assert.equal(f.item.reserved_qty, 2)
+  assert.equal(f.events.length, 1)
+  const [orderId, eventType, , , payload] = f.events[0]
+  assert.equal(eventType, 'released')
+  const { releaseBatches, canSupplementRelease } = require('../backend/src/modules/sale/sale.release-batches')
+  assert.deepEqual(JSON.parse(payload).released, [{ itemId: 19, qty: 2, warehouseId: 2, unit: '个' }])
+  const [batch] = await releaseBatches(f.conn, orderId, [{ id: 11, event_type: eventType, payload_json: payload }], [2])
+  assert.ok(canSupplementRelease(batch, [{ id: 19, warehouseId: 2, unit: '个', reserveQty: 2 }]))
 })

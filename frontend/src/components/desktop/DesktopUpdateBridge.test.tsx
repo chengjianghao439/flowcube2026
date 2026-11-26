@@ -53,7 +53,7 @@ test('background download shows progress, can be cancelled and leaves a retry ac
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   expect(document.body.textContent).toContain('20%')
   await click('查看更新')
-  expect(document.querySelector('progress')?.value).toBe(20)
+  expect(document.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('20')
   await click('取消下载')
   expect(cancel).toHaveBeenCalledTimes(1)
   await act(async () => notify({ stage: 'cancelled', ...update }))
@@ -61,6 +61,17 @@ test('background download shows progress, can be cancelled and leaves a retry ac
   await click('重新检查')
   expect(check).toHaveBeenCalledTimes(1)
   expect(restart).not.toHaveBeenCalled()
+})
+
+test('unknown download size stays indeterminate and installing removes the close control', async () => {
+  await act(async () => notify({ stage: 'downloading', ...update }))
+  await click('查看更新')
+  const progress = document.querySelector('[role="progressbar"]')
+  expect(progress).toBeTruthy()
+  expect(progress?.hasAttribute('aria-valuenow')).toBe(false)
+  await act(async () => notify({ stage: 'installing', ...update }))
+  expect(document.querySelector('[role="dialog"] button.absolute')).toBeNull()
+  expect(document.querySelector('.fc-dialog-footer button:disabled')).toBeTruthy()
 })
 
 test('ready update can be deferred and reopened, and installs only after an explicit restart', async () => {

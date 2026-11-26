@@ -28,14 +28,19 @@ function captureBinding() {
   const endpoint = getApiClientBaseURL()
   const endpointRevision = getApiClientBaseRevision()
   const session = getDeviceSession()
-  const sessionRevision = getDeviceSessionRevision()
+  let sessionRevision = getDeviceSessionRevision()
   const currentBinding = () => generation === getDeviceBindingGeneration()
     && loginGeneration === useAuthStore.getState().sessionGeneration
     && endpointRevision === getApiClientBaseRevision() && endpoint === getApiClientBaseURL()
   return {
     session,
-    options: { baseURL: endpoint, skipGlobalError: true, _pdaBindingGeneration: generation, _authSessionGeneration: loginGeneration },
+    options: { baseURL: endpoint, skipGlobalError: true, _pdaBindingGeneration: generation, _authSessionGeneration: loginGeneration, _apiBaseRevision: endpointRevision },
     currentBinding,
+    saveSession(next: PdaDeviceSession) {
+      const persisted = saveDeviceSession(next)
+      sessionRevision = getDeviceSessionRevision()
+      return persisted
+    },
     currentSession: () => currentBinding() && getDeviceSessionRevision() === sessionRevision,
   }
 }
@@ -50,11 +55,24 @@ function fromResponse(data: CreateSessionResponse): PdaDeviceSession {
   }
 }
 
+let exchangeInFlight: { current: () => boolean; promise: Promise<PdaDeviceSession | null> } | null = null
+
 /** 使用当前绑定凭据换票。明确拒绝当前设备凭据时清除绑定，网络错误保留凭据。 */
 export async function ensureDeviceSession(): Promise<PdaDeviceSession | null> {
   const credential = getDeviceCredential()
   if (!credential) return null
+  if (exchangeInFlight?.current()) return exchangeInFlight.promise
   const binding = captureBinding()
+  const flight = { current: binding.currentSession, promise: exchangeDeviceSession(credential, binding) }
+  exchangeInFlight = flight
+  try {
+    return await flight.promise
+  } finally {
+    if (exchangeInFlight === flight) exchangeInFlight = null
+  }
+}
+
+async function exchangeDeviceSession(credential: NonNullable<ReturnType<typeof getDeviceCredential>>, binding: ReturnType<typeof captureBinding>) {
   try {
     const data = await client.post<CreateSessionResponse>(
       '/pda/sessions',
@@ -63,7 +81,7 @@ export async function ensureDeviceSession(): Promise<PdaDeviceSession | null> {
     )
     if (!data?.session_token || !binding.currentSession()) return null
     const session = fromResponse(data)
-    await saveDeviceSession(session)
+    await binding.saveSession(session)
     return binding.currentBinding() && getDeviceSession() === session ? session : null
   } catch (error) {
     if (isCancel(error) || !binding.currentSession()) return null

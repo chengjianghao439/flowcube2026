@@ -6,7 +6,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
+import android.system.Os;
 import android.provider.Settings;
 
 import androidx.core.content.FileProvider;
@@ -18,18 +18,24 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @CapacitorPlugin(name = "PdaAppUpdate")
 public class PdaAppUpdatePlugin extends Plugin {
 
+    private static final long MAX_APK_BYTES = 150L * 1024 * 1024;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     private boolean hasInstallPermission() {
@@ -73,7 +79,6 @@ public class PdaAppUpdatePlugin extends Plugin {
     @PluginMethod
     public void downloadAndInstall(PluginCall call) {
         String rawUrl = call.getString("url");
-        String version = call.getString("version", "latest");
         String expectedSha256 = call.getString("sha256");
         String operationId = call.getString("operationId");
         Integer expectedVersionCode = call.getInt("versionCode");
@@ -86,34 +91,42 @@ public class PdaAppUpdatePlugin extends Plugin {
             return;
         }
 
-        final String downloadUrl = rawUrl.trim();
-        final String safeVersion = version == null ? "latest" : version.trim();
+        if (expectedSha256 == null || !expectedSha256.matches("[0-9a-fA-F]{64}")) {
+            call.reject("更新清单缺少有效的 SHA-256 摘要");
+            return;
+        }
+        final URL downloadUrl;
+        try {
+            downloadUrl = trustedDownloadUrl(rawUrl.trim());
+        } catch (Exception error) {
+            call.reject("更新地址必须来自安装包配置的 HTTPS 服务器");
+            return;
+        }
         call.resolve();
 
         executor.execute(() -> {
+            File partial = null;
             try {
                 if (!hasInstallPermission()) {
                     emitProgress(operationId, "permission_required", 0, "请开启此应用的安装授权");
                     return;
                 }
                 emitProgress(operationId, "starting", 0, "准备下载更新包");
-                File apkFile = downloadApk(downloadUrl, safeVersion, operationId);
-                // APK sha256 校验（2026-08-21 审计 E 修复）：服务端下发哈希，
-                // 下载完成后比对——哈希不匹配说明包被替换（API 基址被指到恶意
-                // 服务器等），拒绝安装
-                if (expectedSha256 != null && !expectedSha256.trim().isEmpty()) {
-                    String actual = sha256Of(apkFile);
-                    if (!expectedSha256.trim().equalsIgnoreCase(actual)) {
-                        emitProgress(operationId, "error", 0, "更新包校验失败（sha256 不匹配），已中止安装");
-                        if (apkFile.exists()) apkFile.delete();
-                        return;
-                    }
+                partial = downloadApk(downloadUrl, operationId);
+                File apkFile = partial;
+                if (!expectedSha256.equalsIgnoreCase(sha256Of(apkFile))) {
+                    throw new Exception("更新包 SHA-256 校验失败");
                 }
                 verifyApkVersion(apkFile, expectedVersionCode);
+                apkFile = new File(partial.getParentFile(), expectedSha256.toLowerCase(Locale.ROOT) + ".apk");
+                Os.rename(partial.getAbsolutePath(), apkFile.getAbsolutePath());
+                partial = null;
                 emitProgress(operationId, "downloaded", 100, "下载完成，准备安装");
                 installApk(apkFile, operationId);
             } catch (Exception e) {
                 emitProgress(operationId, "error", 0, e.getMessage() == null ? "下载失败" : e.getMessage());
+            } finally {
+                if (partial != null) partial.delete();
             }
         });
     }
@@ -134,66 +147,66 @@ public class PdaAppUpdatePlugin extends Plugin {
         return sb.toString();
     }
 
-    private File downloadApk(String downloadUrl, String version, String operationId) throws Exception {
-        HttpURLConnection connection = null;
-        InputStream inputStream = null;
-        FileOutputStream outputStream = null;
+    private URL trustedDownloadUrl(String rawUrl) throws Exception {
+        try (BufferedReader input = new BufferedReader(new InputStreamReader(
+                getContext().getAssets().open("public/native-update-origin.txt"), StandardCharsets.UTF_8))) {
+            return validateUpdateUrl(input.readLine(), rawUrl);
+        }
+    }
+
+    static URL validateUpdateUrl(String origin, String rawUrl) throws Exception {
+        if (origin == null) throw new Exception("未配置更新源");
+        URI trusted = new URI(origin.trim());
+        URI candidate = new URI(rawUrl);
+        if (!"https".equalsIgnoreCase(trusted.getScheme()) || !"https".equalsIgnoreCase(candidate.getScheme())
+                || trusted.getHost() == null || !trusted.getHost().equalsIgnoreCase(candidate.getHost())
+                || trusted.getUserInfo() != null || candidate.getUserInfo() != null || candidate.getFragment() != null
+                || (trusted.getPort() < 0 ? 443 : trusted.getPort()) != (candidate.getPort() < 0 ? 443 : candidate.getPort())) {
+            throw new Exception("更新地址与已配置来源不匹配");
+        }
+        return candidate.toURL();
+    }
+
+    private File downloadApk(URL url, String operationId) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        File partial = null;
+        boolean complete = false;
         try {
-            URL url = new URL(downloadUrl);
-            connection = (HttpURLConnection) url.openConnection();
+            connection.setInstanceFollowRedirects(false);
             connection.setConnectTimeout(15000);
             connection.setReadTimeout(60000);
-            connection.setRequestMethod("GET");
             connection.setUseCaches(false);
-            connection.setRequestProperty("Cache-Control", "no-cache, no-store, must-revalidate");
-            connection.setRequestProperty("Pragma", "no-cache");
-            connection.connect();
+            connection.setRequestProperty("Cache-Control", "no-cache, no-store");
+            connection.setRequestProperty("Accept-Encoding", "identity");
+            if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) throw new Exception("更新服务器未返回完整安装包");
+            long contentLength = connection.getContentLength();
+            if (contentLength <= 0 || contentLength > MAX_APK_BYTES) throw new Exception("更新包长度无效或超出大小限制");
 
-            int responseCode = connection.getResponseCode();
-            if (responseCode < 200 || responseCode >= 300) {
-                throw new Exception("服务器返回异常：" + responseCode);
-            }
-
-            int contentLength = connection.getContentLength();
-            inputStream = connection.getInputStream();
-
-            File parentDir = getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
-            if (parentDir == null) {
-                parentDir = getContext().getCacheDir();
-            }
-            if (parentDir == null || (!parentDir.exists() && !parentDir.mkdirs())) {
-                throw new Exception("无法创建更新目录");
-            }
-
-            File apkFile = new File(parentDir, "JiXu-Flow-PDA-" + sanitizeVersion(version) + ".apk");
-            if (apkFile.exists() && !apkFile.delete()) {
-                throw new Exception("旧更新包无法覆盖，请清理后重试");
-            }
-
-            outputStream = new FileOutputStream(apkFile);
-            byte[] buffer = new byte[8192];
+            File parent = new File(getContext().getCacheDir(), "updates");
+            if (!parent.isDirectory() && !parent.mkdirs()) throw new Exception("无法创建更新目录");
+            partial = File.createTempFile("pda-", ".part", parent);
             long downloaded = 0;
-            int read;
             int lastProgress = -1;
-
-            while ((read = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, read);
-                downloaded += read;
-                if (contentLength > 0) {
-                    int progress = (int) Math.min(100, Math.round((downloaded * 100f) / contentLength));
+            try (InputStream input = connection.getInputStream(); FileOutputStream output = new FileOutputStream(partial)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    downloaded += read;
+                    if (downloaded > MAX_APK_BYTES || downloaded > contentLength) throw new Exception("更新包超出声明长度");
+                    output.write(buffer, 0, read);
+                    int progress = (int) (downloaded * 100 / contentLength);
                     if (progress != lastProgress) {
                         lastProgress = progress;
                         emitProgress(operationId, "downloading", progress, "正在下载更新包");
                     }
                 }
             }
-
-            outputStream.flush();
-            return apkFile;
+            if (downloaded != contentLength) throw new Exception("更新包下载不完整，请重试");
+            complete = true;
+            return partial;
         } finally {
-            if (outputStream != null) outputStream.close();
-            if (inputStream != null) inputStream.close();
-            if (connection != null) connection.disconnect();
+            connection.disconnect();
+            if (!complete && partial != null) partial.delete();
         }
     }
 
@@ -262,8 +275,4 @@ public class PdaAppUpdatePlugin extends Plugin {
         notifyListeners("updateProgress", payload);
     }
 
-    private String sanitizeVersion(String version) {
-        String safe = version == null ? "latest" : version.trim();
-        return safe.isEmpty() ? "latest" : safe.replaceAll("[^0-9A-Za-z._-]", "_");
-    }
 }

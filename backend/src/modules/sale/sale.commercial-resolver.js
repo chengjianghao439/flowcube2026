@@ -98,7 +98,8 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
   }
   const ordinaryIds = fresh.filter(g => g.kind === 'ordinary').map(g => Number(g.productId)), listPrices = new Map()
   if (customer.price_list_id && ordinaryIds.length) {
-    const [prices] = await conn.query('SELECT product_id,sale_price FROM price_list_items WHERE list_id=? AND product_id IN (?)', [customer.price_list_id, ordinaryIds])
+    const [prices] = await conn.query(`SELECT i.product_id,i.sale_price FROM price_list_items i JOIN price_lists l ON l.id=i.list_id
+      WHERE l.id=? AND l.deleted_at IS NULL AND l.is_active=1 AND i.product_id IN (?)${lockSql}`, [customer.price_list_id, ordinaryIds])
     for (const p of prices) listPrices.set(Number(p.product_id), Number(p.sale_price))
   }
   const prepared = fresh.map(g => {
@@ -117,7 +118,7 @@ async function resolve(conn, { customerId, warehouseId, commercialGroups, scopeW
     const reference = listPrices.get(Number(g.productId)) ?? Number(({ A:p.sale_price_a,B:p.sale_price_b,C:p.sale_price_c,D:p.sale_price_d }[String(customer.price_level || 'A').toUpperCase()] ?? p.sale_price_a) || 0)
     const price = g.priceSource === 'manual' ? assertPrice(g.unitPrice) : assertPrice(reference)
     if (formal && !(price > 0)) throw new AppError('正式销售成交价必须大于零', 400, 'SALE_PRICE_REQUIRED')
-    return { ...g, price,product:p,referencePrice:reference,resolvedPriceSource:listPrices.has(Number(g.productId))?'price_list':'price_level',resolvedPriceLevel:customer.price_level||'A',priceListId:customer.price_list_id||null }
+    return { ...g, price,product:p,referencePrice:reference,resolvedPriceSource:listPrices.has(Number(g.productId))?'price_list':'price_level',resolvedPriceLevel:customer.price_level||'A',priceListId:listPrices.has(Number(g.productId)) ? customer.price_list_id : null }
   })
   const ordinary = prepared.filter(g => g.kind === 'ordinary')
   const folded = normalizeFixedSaleItems(ordinary.map(g => ({ ...g, productName: g.product.name, unit: g.product.unit, unitPrice: g.price, allowDecimalQtySnapshot: g.product.allow_decimal_qty == null || Number(g.product.allow_decimal_qty) === 1 ? 1 : 0 })))

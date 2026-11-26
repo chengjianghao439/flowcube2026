@@ -138,6 +138,25 @@ export function intakeSale(text, prior, options) {
   return { customerKeyword, lines: saved };
 }
 
+// 模型只能建议任务图。销售行必须从员工原句解析，数量、单位和行数按原文核对。
+export function groundSaleLines(text, intent) {
+  const parsed = intakeSale(text, null, { keepUnit: true });
+  let lines = parsed.lines;
+  if (!parsed.explicit) {
+    const raw = customerRequestText(text);
+    const customer = customerFromText('B-sale-draft', text);
+    if (!customer || !raw.includes(customer)) return null;
+    const tail = raw.slice(raw.indexOf(customer) + customer.length).trim();
+    const order = /^(?:要订|想订|要买|订购?|买)\s*(.+)$/.exec(tail);
+    if (!order) return null;
+    const details = order[1].replace(/[，,；;]\s*(?:请|帮我|麻烦)?(?:先)?(?:把)?(?:这张|这个)?(?:销售)?(?:单子?|草稿)(?:建出来|建好|开出来|开好)[。！!]*$/, '');
+    lines = listFromText(details, { keepUnit: true });
+  }
+  if (!lines?.length || !Array.isArray(intent.lines) || lines.length !== intent.lines.length) return null;
+  if (lines.some((line, i) => line.qty == null || line.qty !== intent.lines[i]?.qty || line.productKeyword !== intent.lines[i]?.productKeyword)) return null;
+  return { ...intent, lines };
+}
+
 export function saleIntakeReply(customerKeyword, lines, unclearLines) {
   const missing = lines.map((line, i) => ({ ...line, index: i + 1 })).filter(line => line.qty == null);
   if (missing.length) {

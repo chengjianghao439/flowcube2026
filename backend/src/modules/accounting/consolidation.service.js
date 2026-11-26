@@ -1,3 +1,4 @@
+const { categoryBalance, excludeClosingReversals } = require('./accounting.report-basis')
 const { pool } = require('../../config/db')
 const AppError = require('../../utils/AppError')
 const { SOURCE_TYPES, ORDINARY_FUND_SOURCE_BY_BIZ_TYPE, ORDINARY_FUND_SOURCE_TYPES } = require('../../constants/voucherSource')
@@ -103,15 +104,13 @@ async function getConsolidatedBalanceSheet({ groupId, period }) {
     }
   }
 
-  const bal = (r) => round2(r.balanceDir === 1 ? (r.d - r.c) : (r.c - r.d))
   const assets = [], liabilities = [], equity = []
   let assetTotal = 0, liabTotal = 0, equityTotal = 0, revenueSum = 0, expenseSum = 0
   for (const r of byCode.values()) {
-    const b = bal(r)
+    const b = categoryBalance(r)
     if (r.category === 1) {
-      const assetAmount = round2(Number(r.d) - Number(r.c))
-      if (assetAmount) assets.push({ code: r.code, name: r.name, amount: assetAmount })
-      assetTotal += assetAmount
+      if (b) assets.push({ code: r.code, name: r.name, amount: b })
+      assetTotal += b
     }
     else if (r.category === 2) { if (b) liabilities.push({ code: r.code, name: r.name, amount: b }); liabTotal += b }
     else if (r.category === 3) { if (b) equity.push({ code: r.code, name: r.name, amount: b }); equityTotal += b }
@@ -149,7 +148,7 @@ async function getConsolidatedIncomeStatement({ groupId, period }) {
      JOIN acct_vouchers v ON v.id=e.voucher_id AND v.company_id=a.company_id
      ${fundOwnershipJoins}
      WHERE a.is_leaf=1 AND a.category IN (4,5,6) AND a.deleted_at IS NULL
-       AND v.source_type NOT IN (?, ?) AND ${fundBelongsToCompany}
+       AND v.source_type NOT IN (?, ?) AND ${excludeClosingReversals()} AND ${fundBelongsToCompany}
        AND a.company_id IN (${companies.map(() => '?').join(',')})
        AND v.company_id IN (${companies.map(() => '?').join(',')})
      GROUP BY a.id, a.code, a.name, a.category

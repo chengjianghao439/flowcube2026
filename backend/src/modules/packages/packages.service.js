@@ -190,13 +190,10 @@ async function addItem(packageId, { productCode, labelBarcode, qty }, { requestK
 
   const conn = await pool.getConnection()
   try {
-    await conn.beginTransaction()
-
-    // 锁序：**无锁 peek 所属任务 → 锁任务 → 锁箱 → 复查归属**。
-    // 取消流程走的是 task → `UPDATE packages WHERE warehouse_task_id=?`（锁箱行）；
-    // 这里若反过来先锁箱再锁任务，两条链交叉即死锁。受影响路径统一为 task → pkg。
+    // 在事务外定位箱子，锁住所属任务与箱后复核。
     const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
     if (!peek) throw new AppError('箱子不存在', 404)
+    await conn.beginTransaction()
 
     const [[task]] = await conn.query(
       'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
@@ -205,6 +202,16 @@ async function addItem(packageId, { productCode, labelBarcode, qty }, { requestK
     if (!task) throw new AppError('任务不存在', 404)
     // 范围 / PDA 设备仓校验必须**先于**幂等 begin：否则重放会绕过越权校验拿到原回执
     assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
+
+    const [[pkg]] = await conn.query(
+      'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
+      [packageId],
+    )
+    if (!pkg) throw new AppError('箱子不存在', 404)
+    // peek 只用来定锁序，锁到手后必须复查归属
+    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
+      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+    }
 
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
@@ -230,15 +237,6 @@ async function addItem(packageId, { productCode, labelBarcode, qty }, { requestK
       throw new AppError('任务不在待打包状态，禁止装箱', 400)
     }
 
-    const [[pkg]] = await conn.query(
-      'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
-      [packageId],
-    )
-    if (!pkg) throw new AppError('箱子不存在', 404)
-    // peek 只用来定锁序，锁到手后必须复查归属
-    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
-      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
-    }
     if (Number(pkg.status) === 2) throw new AppError('该箱已完成，无法继续添加商品', 400)
     if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无法继续添加商品', 400)
 
@@ -472,12 +470,10 @@ async function addItem(packageId, { productCode, labelBarcode, qty }, { requestK
 async function removeItem(packageId, { itemId, qty }, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
-    await conn.beginTransaction()
-
-    // 锁序与 addItem 统一：先 peek 定所属任务 → 锁任务 → 锁箱 → 复查归属。
-    // 反过来先锁箱会和取消流程的 task → packages 交叉死锁。
+    // 在事务外定位箱子，锁住所属任务与箱后复核。
     const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
     if (!peek) throw new AppError('箱子不存在', 404)
+    await conn.beginTransaction()
 
     const [[task]] = await conn.query(
       'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
@@ -486,6 +482,15 @@ async function removeItem(packageId, { itemId, qty }, { requestKey, userId, scop
     if (!task) throw new AppError('任务不存在', 404)
     // 范围 / PDA 设备仓校验必须**先于**幂等 begin：否则重放会绕过越权校验拿到原回执（同 addItem）
     assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
+
+    const [[pkg]] = await conn.query(
+      'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
+      [packageId],
+    )
+    if (!pkg) throw new AppError('箱子不存在', 404)
+    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
+      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+    }
 
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
@@ -502,14 +507,6 @@ async function removeItem(packageId, { itemId, qty }, { requestKey, userId, scop
       return requestState.responseData
     }
 
-    const [[pkg]] = await conn.query(
-      'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
-      [packageId],
-    )
-    if (!pkg) throw new AppError('箱子不存在', 404)
-    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
-      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
-    }
     if (Number(pkg.status) !== 1) throw new AppError('该箱已完成或已作废，无法移除商品', 400)
     if (task.cancel_requested_at) {
       throw new AppError('该任务正在拣货退回中，禁止继续打包操作', 409)
@@ -571,11 +568,10 @@ async function removeItem(packageId, { itemId, qty }, { requestKey, userId, scop
 async function voidPackage(packageId, { requestKey, userId, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
-    await conn.beginTransaction()
-
-    // 锁序同 addItem/removeItem：peek → 锁任务 → 锁箱 → 复查归属
+    // 在事务外定位箱子，锁住所属任务与箱后复核。
     const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
     if (!peek) throw new AppError('箱子不存在', 404)
+    await conn.beginTransaction()
 
     const [[task]] = await conn.query(
       'SELECT id, status, warehouse_id, cancel_requested_at, adjustment_requested_at FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
@@ -583,6 +579,15 @@ async function voidPackage(packageId, { requestKey, userId, scopeWarehouseIds = 
     )
     if (!task) throw new AppError('任务不存在', 404)
     assertTaskScope(task, { scopeWarehouseIds, pdaWarehouseId })
+
+    const [[pkg]] = await conn.query(
+      'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
+      [packageId],
+    )
+    if (!pkg) throw new AppError('箱子不存在', 404)
+    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
+      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
+    }
 
     const requestState = await beginResourceOperationRequest(conn, {
       requestKey,
@@ -600,14 +605,6 @@ async function voidPackage(packageId, { requestKey, userId, scopeWarehouseIds = 
       return requestState.responseData
     }
 
-    const [[pkg]] = await conn.query(
-      'SELECT id, status, warehouse_task_id FROM packages WHERE id=? FOR UPDATE',
-      [packageId],
-    )
-    if (!pkg) throw new AppError('箱子不存在', 404)
-    if (Number(pkg.warehouse_task_id) !== Number(task.id)) {
-      throw new AppError('箱子所属任务已变化，请刷新后重试', 409, 'PACKAGE_TASK_CHANGED')
-    }
     if (Number(pkg.status) === 3) throw new AppError('该箱已作废，无需重复操作', 400)
     if (Number(pkg.status) === 2) throw new AppError('该箱已完成，无法作废', 400)
     if (task.cancel_requested_at) {
@@ -822,10 +819,10 @@ async function markPackageFinishedWithinTransaction(conn, packageId) {
 async function finishPackage(packageId, { requestKey, userId, createdBy, scopeWarehouseIds = null, pdaWarehouseId = null } = {}) {
   const conn = await pool.getConnection()
   try {
-    await conn.beginTransaction()
-
+    // 在事务外定位箱子，锁住所属任务与箱后复核。
     const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
     if (!peek) throw new AppError('箱子不存在', 404)
+    await conn.beginTransaction()
 
     const [[taskRow]] = await conn.query(
       'SELECT id, status, warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',
@@ -1017,10 +1014,10 @@ async function printPackageLabel(packageId, { requestKey, userId, scopeWarehouse
 
   const conn = await pool.getConnection()
   try {
-    await conn.beginTransaction()
-
+    // 在事务外定位箱子，锁住所属任务与箱后复核。
     const [[peek]] = await conn.query('SELECT warehouse_task_id FROM packages WHERE id=?', [packageId])
     if (!peek) throw new AppError('箱子不存在', 404, 'PACKAGE_NOT_FOUND')
+    await conn.beginTransaction()
 
     const [[taskRow]] = await conn.query(
       'SELECT id, status, warehouse_id FROM warehouse_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE',

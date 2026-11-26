@@ -305,7 +305,6 @@ export default function CategoriesPage() {
         description="维护商品分类层级，商品可绑定四级分类。"
         actions={
           canCreate && <Button onClick={handleAddRoot}>
-            <Plus className="mr-1.5 h-4 w-4" />
             新增一级分类
           </Button>
         }

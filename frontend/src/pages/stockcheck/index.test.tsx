@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { within } from '@testing-library/dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import StockCheckPage from './index'
+import { chooseSelectOption } from '@/test/chooseSelectOption'
 import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 
 const fixture = vi.hoisted(() => ({
@@ -16,7 +17,7 @@ vi.mock('@/hooks/useStockCheck', () => ({
   useCheckList: (params: { keyword: string }) => { fixture.params.push(params); return fixture.query },
   useCreateCheck: () => ({ isPending: false, mutateAsync: fixture.create }),
 }))
-vi.mock('@/hooks/useWarehouses', () => ({ useWarehousesActive: () => ({ data: [] }) }))
+vi.mock('@/hooks/useWarehouses', () => ({ useWarehousesActive: () => ({ data: [{ id: 8, name: '合成仓' }] }) }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: () => fixture.canCreate }) }))
 // Detail business data is synthetic; use the actual portal/focus-return boundary.
 vi.mock('./components/CheckDetailDialog', async () => {
@@ -45,8 +46,14 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 function render(active = true) { act(() => root.render(<SectionVisibilityContext.Provider value={active}><StockCheckPage /></SectionVisibilityContext.Provider>)) }
 function scrollEnd(count = 1000) { act(() => { host.scrollTop = count * 48 - 480; host.dispatchEvent(new Event('scroll')) }) }
+function openQuery() {
+  act(() => within(host).getByRole('button', { name: '查询' }).click())
+}
+function queryScope() {
+  return within(within(document.body).getByRole('dialog', { name: '查询盘点单' }))
+}
 function input(value: string) {
-  const search = host.querySelector('input')!
+  const search = queryScope().getByRole<HTMLInputElement>('textbox', { name: '关键字' })
   act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(search, value); search.dispatchEvent(new Event('input', { bubbles: true })) })
   return search
 }
@@ -65,12 +72,14 @@ test.each([5000, 5001])('截断时显示已读/总匹配%s，不把总数当已�
   expect(host.querySelectorAll('tbody tr:not([aria-hidden])').length).toBeLessThan(50)
 })
 test('读取失败展示原错误和重试，不显示旧列表与成功计数，重试保留搜索草稿', () => {
-  render(); input('未应用草稿')
+  render(); openQuery(); input('未应用草稿')
   fixture.query.error = new Error('合成读取失败'); render()
   expect(host.textContent).toContain('加载失败'); expect(host.textContent).toContain('合成读取失败')
   expect(host.querySelector('tbody')).toBeNull(); expect(host.textContent).not.toContain('共 1,000 单')
-  act(() => Array.from(host.querySelectorAll('button')).find(button => button.textContent === '重试')!.click())
-  expect(fixture.query.refetch).toHaveBeenCalledOnce(); expect(host.querySelector('input')?.value).toBe('未应用草稿')
+  expect(queryScope().getByRole<HTMLInputElement>('textbox', { name: '关键字' }).value).toBe('未应用草稿')
+  act(() => queryScope().getByRole('button', { name: '取消' }).click())
+  act(() => within(host).getByRole('button', { name: '重试' }).click())
+  expect(fixture.query.refetch).toHaveBeenCalledOnce()
   expect(fixture.params.at(-1)?.keyword).toBe('')
 })
 test('加载时不显示旧成功计数，小列表仍完整呈现', () => {
@@ -84,18 +93,25 @@ test('盘点操作列默认给查看/填写按钮留出足够宽度', () => {
   const action = within(host).getByRole('button', { name: '查看/填写' })
   const cell = action.closest('td')!
   const column = [...host.querySelectorAll('col')][cell.cellIndex]
-  expect(Number.parseFloat(column.style.width)).toBeGreaterThanOrEqual(128)
+  const width = Number.parseFloat(column.style.width)
+  const minimumTableWidth = Number.parseFloat(host.querySelector('table')!.style.minWidth)
+  expect(column.style.width.endsWith('%') ? minimumTableWidth * width / 100 : width).toBeGreaterThanOrEqual(128)
 })
 test('搜索条件、未应用草稿和末行详情关闭均不清空或重挂列表', async () => {
-  render(); const search = input('仓A')
+  render(); openQuery(); const search = input('仓A')
   act(() => search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
-  input('未应用草稿'); scrollEnd()
+  scrollEnd()
   const action = Array.from(host.querySelectorAll('button')).filter(button => button.textContent === '查看/填写').at(-1)!
   await act(async () => { action.focus(); action.click() })
   expect(document.body.textContent).toContain('关闭详情1000')
   await act(async () => Array.from(document.querySelectorAll('button')).find(button => button.textContent === '关闭详情1000')!.click())
+  openQuery()
+  expect(queryScope().getByRole<HTMLInputElement>('textbox', { name: '关键字' }).value).toBe('仓A')
+  input('未应用草稿')
   render(false); render(true)
-  expect(host.querySelector('input')?.value).toBe('未应用草稿'); expect(fixture.params.at(-1)?.keyword).toBe('仓A')
+  expect(queryScope().getByRole<HTMLInputElement>('textbox', { name: '关键字' }).value).toBe('未应用草稿')
+  expect(fixture.params.at(-1)?.keyword).toBe('仓A')
+  act(() => queryScope().getByRole('button', { name: '取消' }).click())
   expect(host.scrollTop).toBeGreaterThan(45000); expect(host.textContent).toContain('SC-1000')
 })
 test('焦点行滚远后开启真实模态仍保留来源按钮，关闭回到原按钮', async () => {
@@ -113,7 +129,7 @@ test('聚焦的操作按钮滚出视口仍保留焦点，失焦后不继续挂�
   act(() => action.focus()); scrollEnd()
   expect(document.activeElement).toBe(action); expect(action.isConnected).toBe(true)
   expect(host.textContent).toContain('SC-1000')
-  act(() => host.querySelector('input')!.focus())
+  act(() => within(host).getByRole('button', { name: '查询' }).focus())
   expect(action.isConnected).toBe(false)
 })
 
@@ -136,4 +152,26 @@ test('新建盘点的可读标签和必填仓库入口与原生提交一致', ()
   expect(document.activeElement).toBe(warehouse)
   expect(scope.getByRole('alert').textContent).toBe('请选择仓库')
   expect(fixture.create).not.toHaveBeenCalled()
+})
+
+test('新建盘点的页脚关联正文表单，取消不提交，选仓后只提交一次', async () => {
+  fixture.canCreate = true
+  fixture.create.mockResolvedValue(undefined)
+  render()
+  const trigger = within(host).getByRole('button', { name: '新建盘点' })
+  const open = () => act(() => { trigger.focus(); trigger.click() })
+  const dialog = () => within(document.body).getByRole('dialog', { name: '新建盘点单' })
+  open()
+  const footer = dialog().querySelector<HTMLElement>(':scope > .fc-dialog-footer')!
+  const form = dialog().querySelector<HTMLFormElement>(':scope > form.fc-form-dialog-body')
+  expect(form).toBeTruthy()
+  expect(within(footer).getByRole<HTMLButtonElement>('button', { name: '创建盘点' }).form).toBe(form)
+  act(() => within(footer).getByRole('button', { name: '取消' }).click())
+  expect(fixture.create).not.toHaveBeenCalled()
+  await vi.waitFor(() => expect(document.activeElement).toBe(trigger))
+  open()
+  await chooseSelectOption(within(dialog()).getByRole('combobox', { name: '选择仓库' }), '合成仓')
+  await act(async () => within(dialog()).getByRole('button', { name: '创建盘点' }).click())
+  expect(fixture.create).toHaveBeenCalledExactlyOnceWith({ warehouseId: 8, warehouseName: '合成仓', remark: undefined })
+  expect(within(document.body).queryByRole('dialog')).toBeNull()
 })

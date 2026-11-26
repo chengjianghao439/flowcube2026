@@ -503,7 +503,11 @@ test('占库权限撤销后旧卡失效，仍能用当前来源重查原单', as
   const denied = await h.confirm(preview.task);
   assert.equal(denied.task.state, 'EXPIRED');
   assert.match(denied.reply, /占库权限.*预览.*失效/);
-  const verified = await h.send('卡点解了，接着办', intake.task.id);
+  const previousReads = h.reads.length;
+  const detached = await h.send('卡点解了，接着办', intake.task.id);
+  assert.doesNotMatch(detached.reply, new RegExp(orderNo));
+  assert.equal(h.reads.length, previousReads);
+  const verified = await h.send(request(orderNo));
   checked(h, verified);
   assert.equal(verified.preview, undefined);
   assert.doesNotMatch(verified.reply, /当前账号可说/);

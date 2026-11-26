@@ -127,37 +127,39 @@ export default function UserMenu() {
 
       {/* 我的信息弹窗 */}
       <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
-        <DialogContent className="max-w-2xl" onCloseAutoFocus={restoreMenuFocus}>
-          <DialogHeader description={"核对当前账号的个人与岗位资料。"}><DialogTitle>我的信息</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            {myInfoError && <p role="alert" className="text-sm text-destructive-ink">个人资料加载失败。<button type="button" className="underline" onClick={() => void refetchMyInfo()}>重试</button></p>}
-            <div className="rounded-lg border border-border">
-              <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground">账号信息</div>
-              <dl className="divide-y divide-border/60 text-sm">
-                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">姓名</dt><dd className="font-medium">{profileIdentity.name}</dd></div>
-                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">登录账号</dt><dd className="font-medium">{profileIdentity.account}</dd></div>
-                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">角色</dt><dd className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-muted-foreground" />{profileIdentity.role}</dd></div>
-                <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">部门</dt><dd className="flex items-center gap-1.5"><Building2 className="size-3.5 text-muted-foreground" />{myInfo?.departmentName || '—'}</dd></div>
-              </dl>
-            </div>
-            <div className="rounded-lg border border-border">
-              <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                <Warehouse className="size-3.5" /> 我的仓库权限
+        <DialogContent className="fc-form-dialog max-w-2xl" onCloseAutoFocus={restoreMenuFocus}>
+          <DialogHeader><DialogTitle>我的信息</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="space-y-3 py-2">
+              {myInfoError && <p role="alert" className="text-sm text-destructive-ink">个人资料加载失败。<button type="button" className="underline" onClick={() => void refetchMyInfo()}>重试</button></p>}
+              <div className="rounded-lg border border-border">
+                <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground">账号信息</div>
+                <dl className="divide-y divide-border/60 text-sm">
+                  <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">姓名</dt><dd className="font-medium">{profileIdentity.name}</dd></div>
+                  <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">登录账号</dt><dd className="font-medium">{profileIdentity.account}</dd></div>
+                  <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">角色</dt><dd className="flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-muted-foreground" />{profileIdentity.role}</dd></div>
+                  <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-4 px-4 py-3 [&_dd]:break-words"><dt className="text-muted-foreground">部门</dt><dd className="flex items-center gap-1.5"><Building2 className="size-3.5 text-muted-foreground" />{myInfo?.departmentName || '—'}</dd></div>
+                </dl>
               </div>
-              <div className="px-4 py-2 text-sm">
-                {whError ? (
-                  <p role="alert" className="text-destructive-ink">仓库权限加载失败。<button type="button" className="underline" onClick={() => void refetchMyWarehouses()}>重试</button></p>
-                ) : whLoading ? (
-                  <div className="flex items-center gap-2 text-muted-foreground py-1"><Loader2 className="size-3.5 animate-spin" /> 加载中…</div>
-                ) : isUnrestricted ? (
-                  <p className="text-success-ink font-medium">不限仓库（可访问全部仓库）</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {myWarehouses?.map(w => (
-                      <span key={w.warehouseId} className="rounded-md bg-muted px-2 py-0.5 text-xs">{w.warehouseName}</span>
-                    ))}
-                  </div>
-                )}
+              <div className="rounded-lg border border-border">
+                <div className="border-b border-border bg-muted/30 px-4 py-2 text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                  <Warehouse className="size-3.5" /> 我的仓库权限
+                </div>
+                <div className="px-4 py-2 text-sm">
+                  {whError ? (
+                    <p role="alert" className="text-destructive-ink">仓库权限加载失败。<button type="button" className="underline" onClick={() => void refetchMyWarehouses()}>重试</button></p>
+                  ) : whLoading ? (
+                    <div className="flex items-center gap-2 text-muted-foreground py-1"><Loader2 className="size-3.5 animate-spin" /> 加载中…</div>
+                  ) : isUnrestricted ? (
+                    <p className="text-success-ink font-medium">不限仓库（可访问全部仓库）</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {myWarehouses?.map(w => (
+                        <span key={w.warehouseId} className="rounded-md bg-muted px-2 py-0.5 text-xs">{w.warehouseName}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -169,7 +171,7 @@ export default function UserMenu() {
 
       {/* 浏览器端退出确认（桌面端走原生 messageBox） */}
       <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
-        <DialogContent className="max-w-lg" onCloseAutoFocus={restoreMenuFocus}>
+        <DialogContent className="fc-form-dialog max-w-lg" onCloseAutoFocus={restoreMenuFocus}>
           <DialogHeader description={<>{<>
               确定退出登录吗？未保存的数据可能会丢失。
             </>}</>}>
@@ -195,12 +197,14 @@ export default function UserMenu() {
       </Dialog>
 
       <Dialog open={pwdOpen} onOpenChange={setPwdOpen}>
-        <DialogContent className="max-w-lg" onCloseAutoFocus={restoreMenuFocus}>
-          <DialogHeader description={"填写当前密码与新密码。"}><DialogTitle>修改密码</DialogTitle></DialogHeader>
-          <form onSubmit={handlePwdSubmit} className="space-y-4 py-2">
-            <div className="space-y-1"><Label htmlFor="profile-old-password">当前密码 *</Label><Input id="profile-old-password" type="password" value={oldPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPwd(e.target.value)} required autoComplete="current-password" /></div>
-            <div className="space-y-1"><Label htmlFor="profile-new-password">新密码 *（至少 6 位）</Label><Input id="profile-new-password" type="password" value={newPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPwd(e.target.value)} required minLength={6} autoComplete="new-password" /></div>
-            <div className="space-y-1"><Label htmlFor="profile-confirm-password">确认新密码 *</Label><Input id="profile-confirm-password" type="password" value={confirmPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPwd(e.target.value)} required autoComplete="new-password" /></div>
+        <DialogContent className="fc-form-dialog max-w-lg" onCloseAutoFocus={restoreMenuFocus}>
+          <DialogHeader><DialogTitle>修改密码</DialogTitle></DialogHeader>
+          <form onSubmit={handlePwdSubmit} className="flex min-h-0 flex-col">
+            <div className="fc-form-dialog-body space-y-4">
+              <div className="space-y-1"><Label htmlFor="profile-old-password">当前密码 *</Label><Input id="profile-old-password" type="password" value={oldPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOldPwd(e.target.value)} required autoComplete="current-password" /></div>
+              <div className="space-y-1"><Label htmlFor="profile-new-password">新密码 *（至少 6 位）</Label><Input id="profile-new-password" type="password" value={newPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPwd(e.target.value)} required minLength={6} autoComplete="new-password" /></div>
+              <div className="space-y-1"><Label htmlFor="profile-confirm-password">确认新密码 *</Label><Input id="profile-confirm-password" type="password" value={confirmPwd} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConfirmPwd(e.target.value)} required autoComplete="new-password" /></div>
+            </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setPwdOpen(false)}>取消</Button>
               <Button type="submit" disabled={changePwd.isPending}>{changePwd.isPending ? '提交中…' : '确认修改'}</Button>

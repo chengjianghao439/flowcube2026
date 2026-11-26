@@ -331,7 +331,7 @@ test.each([
   // 只读也覆盖原键持久化前的提交阶段；真实恢复入口挂载且可点击才可核原结果。
   await vi.waitFor(() => expect([...host.querySelectorAll('button')].some(button => visible(button) && button.textContent === '确认上次结果' && !button.disabled)).toBe(true))
   expect(input.readOnly).toBe(true)
-  receipt = () => ({ status: result, data: { allSorted: false, progress: '2/4' }, message: '已确认原结果' })
+  receipt = () => ({ status: result, data: name === '出库' ? {taskId: parcel.warehouseTaskId} : { allSorted: false, progress: '2/4' }, message: '已确认原结果' })
   await act(async () => { [...host.querySelectorAll('button')].find(b => b.textContent === '确认上次结果')!.click() }); await settle()
   if (result === 'success') {
     await vi.waitFor(() => expect(manualInput()).toBeUndefined())

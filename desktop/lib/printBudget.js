@@ -7,11 +7,21 @@ function validatePrintBudget(content, copies = 1) {
   if (copies > 1 && /\^PQ/i.test(content)) throw new Error('模板已设置打印份数，请将任务份数设为 1，或移除模板中的份数指令')
   return { content, copies }
 }
-async function printBoundedBatch(opts, printCopy) {
-  const batch = validatePrintBudget(opts?.content, opts?.copies)
+async function submitBatch(opts, printCopy, batch) {
   for (let i = 0; i < batch.copies; i += 1) {
     try { await printCopy({ printerName: opts.printerName, content: batch.content }) }
     catch (e) { throw new Error(`${e?.message || 'RAW 打印失败'}；已提交 ${i} 份，当前份结果需核对，请人工核对后再补打`) }
   }
 }
+let pendingBatches = 0
+let queue = Promise.resolve()
+async function printBoundedBatch(opts, printCopy) {
+  const batch = validatePrintBudget(opts?.content, opts?.copies)
+  if (pendingBatches >= 8) throw new Error('本机打印队列已满，请稍后重试')
+  pendingBatches++
+  const job = queue.then(() => submitBatch(opts, printCopy, batch))
+  queue = job.catch(() => {})
+  try { await job } finally { pendingBatches-- }
+}
+
 module.exports = { validatePrintBudget, printBoundedBatch, MAX_CONTENT_BYTES, MAX_EXPANDED_BYTES }

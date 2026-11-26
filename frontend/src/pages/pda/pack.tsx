@@ -860,11 +860,24 @@ export default function PdaPackPage() {
   </>
 
   // ── 任务未选 ────────────────────────────────────────────────────────────
-  if (!task && !routeTaskId) return <TaskSelectStep onSelect={t => { setTask(t); setActivePackageId(null) }} />
+  if (!task && !routeTaskId) {
+    if (noticePendingAction) return (
+      <div className="min-h-screen bg-background">
+        <PdaHeader title="打包作业" backLabel="返回工作台" onBack={() => navigate('/pda')} />
+        <div className="mx-auto max-w-md space-y-3 p-4">{recoveryNotice}</div>
+      </div>
+    )
+    return <>{recoveryNotice}<TaskSelectStep onSelect={t => {
+      setTask(t)
+      setActivePackageId(null)
+      navigate(`/pda/pack/${t.id}`)
+    }} /></>
+  }
 
   if (taskId <= 0) {
     return (
       <PdaTaskState
+        notice={recoveryNotice}
         title="缺少打包任务"
         description="未找到打包任务信息，请返回列表重新选择。"
         actionText="选择任务"
@@ -879,6 +892,7 @@ export default function PdaPackPage() {
     return (
       <div className="flex min-h-screen flex-col bg-background">
         <PdaHeader title="打包作业" onBack={goSelectTask} />
+        {recoveryNotice}
         <div className="flex flex-1 items-center justify-center">
           <div className="space-y-3 text-center">
             <PdaLoading className="h-10" />
@@ -894,6 +908,7 @@ export default function PdaPackPage() {
   if (!taskDetail) {
     return (
       <PdaTaskState
+        notice={recoveryNotice}
         title="打包任务不存在"
         description={`未找到任务 #${taskId}，请确认任务是否已被删除或状态已变化。`}
         actionText="选择其他任务"
@@ -910,6 +925,7 @@ export default function PdaPackPage() {
   if (!allDone && taskDetail.status !== WT_STATUS.PACKING && !noticePendingAction) {
     return (
       <PdaTaskState
+        notice={recoveryNotice}
         title="当前任务不能打包"
         description={`任务 ${taskDetail.taskNo} 当前状态为「${taskDetail.statusName}」。打包页只允许处理「待打包」任务，请选择其他待打包任务。`}
         actionText="选择其他任务"
@@ -937,6 +953,7 @@ export default function PdaPackPage() {
       secondaryText="继续打包"
       onSecondary={goSelectTask}
     >
+      {recoveryNotice}
       <PdaNextStep
         enabled={shipTaskId === taskId && taskDetail.id === taskId && !anySubmitBlocked && !onlineBlocked}
         required={[PERMISSIONS.WAREHOUSE_TASK_SHIP]}

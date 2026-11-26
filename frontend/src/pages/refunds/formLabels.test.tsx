@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from 'react'
+import { getByRole } from '@testing-library/dom'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -14,7 +15,7 @@ vi.mock('@/api/finance', async original => ({ ...await original<typeof import('@
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => permission !== PERMISSIONS.FINANCE_ACCOUNT_CREATE || access.createAccount }) }))
 
 test.each([
-  { Component: RefundsPage, action: '+ 新建退款单', labels: ['销售单号 *', '退款金额 *', '退款账户', '退款日期', '备注'] },
+  { Component: RefundsPage, action: '新建退款单', labels: ['销售单号 *', '退款金额 *', '退款账户', '退款日期', '备注'] },
   { Component: FinanceAccountsPage, action: '新建账户', labels: ['账户名称 *', '类型 *', '账号', '开户行', '户名', '期初余额', '备注'] },
   { Component: FinanceAccountsPage, action: '查询', labels: ['关键字', '账户类型', '状态'] },
 ])('$action 每个可见字段标签都关联实际输入控件', async ({ Component, action, labels }) => {
@@ -59,10 +60,10 @@ test('退款单提交时在单号和金额字段下显示错误，聚焦首处�
   const root = createRoot(host), cache = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   try {
     await act(async () => root.render(<QueryClientProvider client={cache}><MemoryRouter><RefundsPage /></MemoryRouter></QueryClientProvider>))
-    const trigger = [...host.querySelectorAll('button')].find(button => button.textContent === '+ 新建退款单')!
+    const trigger = getByRole(host, 'button', { name: '新建退款单' })
     await act(async () => trigger.click())
-    const dialog = document.querySelector('[role="dialog"]')!
-    const submit = [...dialog.querySelectorAll('button')].find(button => button.textContent === '创建退款单')!
+    const dialog = getByRole(document.body, 'dialog', { name: '新建退款单' })
+    const submit = getByRole(dialog, 'button', { name: '创建退款单' })
     await act(async () => submit.click())
     const fields = [...dialog.querySelectorAll<HTMLInputElement>('input[aria-invalid="true"]')]
     expect(fields).toHaveLength(2)

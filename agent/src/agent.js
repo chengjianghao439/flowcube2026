@@ -4,6 +4,7 @@ import { getTool, TASK_PROGRESS_PERMISSIONS } from './tools.js';
 import { validateQty, toCents, diffPreview, amountCents } from './guards.js';
 import { FlowError } from './flow.js';
 import { config } from './config.js';
+import { readStockRows } from './stock-rows.js';
 import { collectList } from './pagination.js';
 import { parseIntentLLM } from './llm.js';
 import { customerFromText, groundCustomerIntent, receiptCustomerFromText } from './customer-source.js';
@@ -33,7 +34,7 @@ import { RETURN_FINANCE, REFUND_EXECUTE, RETURN_READ, REFUND_PERMISSIONS, return
 import { CROSS_PERIOD, BACKFILL_ACTION, crossPeriodRequest, runCrossPeriod, confirmBackfill, recoverBackfill,
   APPROVE_BACKFILL, APPLY_BACKFILL, refreshBackfill, closedRefundReply } from './cross-period.js';
 import { inventoryWords, warehouseOrdinal, inventoryProductCode, productSearchAlternative, branchSearchAlternative } from './inventory-terms.js';
-import { intakeSale, quantityNumber, forwardedSaleFields, saleCorrection, saleIntakeReply } from './sale-conversation.js';
+import { intakeSale, groundSaleLines, quantityNumber, forwardedSaleFields, saleCorrection, saleIntakeReply } from './sale-conversation.js';
 
 // 工具调用统一入口：先验发起人权限（与后端 requirePermission 同码），无权零调用、明确拒绝。
 const run = (tool, client, args, actor) => {
@@ -103,8 +104,7 @@ async function scopeHits(client, actor, hits, type, alternative) {
   if (type === 'product' && allowed && (alternative ? visible.length > 0 : visible.some(approximateHit))) {
     let rows;
     try {
-      const data = await collectList(client, '/api/inventory/stock');
-      rows = data?.list ?? [];
+      rows = await readStockRows(client, visible.filter(hit => alternative || approximateHit(hit)).map(hit => hit.id), { warehouseCount: allowed.length });
     } catch {
       throw Object.assign(new Error('暂时对不上这些相近商品是否在你的仓库范围内，没有列出候选，也不会改查其他仓库。'), { code: 'ENTITY_NOT_FOUND' });
     }
@@ -204,8 +204,7 @@ async function getCustomer(client, id) {
 // 口径：范围内第一个「有本单任一商品库存行」的仓；都没有才回退第一个仓（预览如实报缺口）。
 async function pickSaleWarehouse(client, actor, productIds) {
   const warehouses = await inScopeWarehouses(client, actor);
-  const data = await collectList(client, '/api/inventory/stock');
-  const rows = data?.list ?? [];
+  const rows = await readStockRows(client, productIds, { warehouseCount: warehouses.length });
   for (const w of warehouses) {
     if (rows.some(r => Number(r.warehouseId) === w.id && productIds.includes(Number(r.productId)))) return w.id;
   }
@@ -217,12 +216,6 @@ async function pickSaleWarehouse(client, actor, productIds) {
 async function warehouseName(client, warehouseId) {
   const { list } = await collectList(client, '/api/warehouses');
   return list.find(w => String(w.id) === String(warehouseId))?.name || '';
-}
-
-async function stockRow(client, productId, warehouseId) {
-  const data = await collectList(client, '/api/inventory/stock');
-  const list = data?.list ?? [];
-  return list.find(x => String(x.productId) === String(productId) && String(x.warehouseId) === String(warehouseId)) || null;
 }
 
 function inventoryItem(text, preset, warehousePhrase, warehouses = []) {
@@ -285,10 +278,12 @@ async function graphInventory(store, client, actor, text, presetKeyword, options
   task.transition('DRY_RUNNING');
   const perWarehouse = [];
   try {
+    const stocks = await readStockRows(client, [hit.id], warehouses.length === 1
+      ? { warehouseId: warehouses[0].id } : { warehouseCount: warehouses.length });
     for (const warehouse of warehouses) {
       const wid = Number(warehouse.id);
       const inv = await run('inventory.query_by_product', client, { productId: hit.id, warehouseId: wid }, actor);
-      const stock = await stockRow(client, hit.id, wid);
+      const stock = stocks.find(row => Number(row.warehouseId) === wid);
       perWarehouse.push({
         warehouseId: wid, warehouseName: warehouse.name,
         onHand: inv.onHand,
@@ -340,37 +335,43 @@ async function graphInventory(store, client, actor, text, presetKeyword, options
 // ---------- 图 B：建销售单（到预览为止） ----------
 export async function buildSalePreview(client, { customerHit, lines, warehouseId }, actor) {
   const customer = await getCustomer(client, customerHit.id);
-  const outLines = [];
-  for (const [index, line] of lines.entries()) {
+  const resolved = [];
+  for (const line of lines) {
     const hits = line.productHit ? [line.productHit] : await resolveOne(client, line.productKeyword, 'product', actor);
     if (hits.length !== 1) {
       throw Object.assign(new Error(hits.length === 0
         ? `未找到商品「${line.productKeyword}」`
         : `商品「${line.productKeyword}」命中 ${hits.length} 个，请在原文中写全规格`), { code: 'DISAMBIGUATION' });
     }
-    const product = await client.get(`/api/products/${hits[0].id}`);
-    if (typeof product?.allowDecimalQty !== 'boolean') throw new Error(`无法核对商品「${hits[0].title}」当前数量规则，已停下请到商品页核对`);
+    resolved.push({ line, hit: hits[0] });
+  }
+  const stocks = await readStockRows(client, resolved.map(row => row.hit.id), { warehouseId });
+  const byProduct = new Map(stocks.filter(row => Number(row.warehouseId) === Number(warehouseId)).map(row => [Number(row.productId), row]));
+  const outLines = [];
+  for (const [index, { line, hit }] of resolved.entries()) {
+    const product = await client.get(`/api/products/${hit.id}`);
+    if (typeof product?.allowDecimalQty !== 'boolean') throw new Error(`无法核对商品「${hit.title}」当前数量规则，已停下请到商品页核对`);
     if (line.requestedUnit && product.unit !== line.requestedUnit) {
-      throw Object.assign(new Error(`商品「${product.name || hits[0].title}」当前单位为「${product.unit}」，请按该单位说明数量。`),
+      throw Object.assign(new Error(`商品「${product.name || hit.title}」当前单位为「${product.unit}」，请按该单位说明数量。`),
         { code: 'SALE_UNIT_MISMATCH', index });
     }
-    const err = validateQty(line.qty, { label: `商品「${hits[0].title}」数量`, allowDecimal: product.allowDecimalQty });
+    const err = validateQty(line.qty, { label: `商品「${hit.title}」数量`, allowDecimal: product.allowDecimalQty });
     if (err) throw Object.assign(new Error(err.message), { code: err.code });
-    const price = await client.get(`/api/price-lists/customer-price?customerId=${customer.id}&productId=${hits[0].id}`);
+    const price = await client.get(`/api/price-lists/customer-price?customerId=${customer.id}&productId=${hit.id}`);
     if (!price || price.salePrice == null) {
-      throw Object.assign(new Error(`商品「${hits[0].title}」对该客户无定价，需人工填价，我不编价`), { code: 'NO_PRICE' });
+      throw Object.assign(new Error(`商品「${hit.title}」对该客户无定价，需人工填价，我不编价`), { code: 'NO_PRICE' });
     }
-    const stock = await stockRow(client, hits[0].id, warehouseId);
+    const stock = byProduct.get(Number(hit.id));
     const unitPriceCents = toCents(price.salePrice);
     outLines.push({
-      productId: hits[0].id, productName: product.name || hits[0].title, qty: line.qty, unit: product.unit, allowDecimalQty: product.allowDecimalQty,
+      productId: hit.id, productName: product.name || hit.title, qty: line.qty, unit: product.unit, allowDecimalQty: product.allowDecimalQty,
       unitPrice: Number(price.salePrice), unitPriceCents, priceSource: { level: price.priceLevel, source: price.source },
       available: stock ? Number(stock.available) : 0,
       shortage: Math.max(0, line.qty - (stock ? Number(stock.available) : 0)),
       lineAmountCents: amountCents(price.salePrice, line.qty),
       _stockProduct: stock, // 供组装 payload 时取 code/unit（不进预览展示）
-      _productCode: product.code || hits[0].subtitle || null,
-      _productUnit: product.unit || (hits[0].details || []).find(d => d.label === '单位')?.value || null,
+      _productCode: product.code || hit.subtitle || null,
+      _productUnit: product.unit || (hit.details || []).find(d => d.label === '单位')?.value || null,
     });
   }
   const totalCents = outLines.reduce((s, l) => s + l.lineAmountCents, 0);
@@ -408,7 +409,7 @@ async function graphSaleDraft(store, client, actor, text, preset) {
   const prior = preset?.task?.intent?.intake ? preset.task.intent : null;
   const stockCondition = preset?.stockCondition ?? preset?.task?.intent?.stockCondition;
   const { customerKeyword, lines, unclearLines } = preset?.lines
-    ? preset : intakeSale(text, prior);
+    ? preset : intakeSale(text, prior, { keepUnit: true });
   const task = preset?.task || store.create({ graph: 'B-sale-draft', userText: text, actor });
   if (task.state === 'CREATED') task.transition('DISAMBIGUATING');
   const denied = denyIfMissing(task, actor, SALE_DRAFT_PERMS);
@@ -1164,6 +1165,7 @@ async function graphSaleHandoff(store, client, actor, text, request, context) {
   if (!Object.values(HANDOFF_PERMISSIONS).some(permission => hasPerm(actor, permission))) {
     return { task: null, detachTask: true, reply: '当前账号没有可查询这张单据的交接来源权限。请由有权限的岗位在原页面核对。' };
   }
+  if (context) assertTaskAccess(context, actor, store);
   const no = request.multiple ? undefined : request.no ?? context?.intent?.orderNo;
   if (request.action === 'read' && !request.correction && context?.state === 'DISAMBIGUATING' && context.intent?.checkOnly && no) {
     request = { ...request, action: 'recover', checkOnly: true, otherOperator: context.intent.otherOperator };
@@ -1371,10 +1373,12 @@ async function graphSaleHandoff(store, client, actor, text, request, context) {
   if (!no || request.targetClarification) return { task, reply: request.question ?? (request.multiple
     ? '请先选要交接的那一张销售单，只给出它的完整销售单号。' : HANDOFF_NUMBER_REQUIRED) };
   if (!refresh) task.transition('DRY_RUNNING');
+  const priorSources = task.handoffSources ?? task.result?.sources ?? [];
   task.result = read.result ?? null;
   if (read.result) {
-    task.accessWarehouseIds = read.warehouseIds;
-    task.handoffActionPermissions = read.actionPermissions;
+    task.handoffSources = [...new Set([...priorSources, ...(read.result.sources ?? [])])];
+    task.accessWarehouseIds = [...new Set([...(task.accessWarehouseIds ?? []), ...(read.warehouseIds ?? [])])];
+    task.handoffActionPermissions = [...new Set([...(task.handoffActionPermissions ?? []), ...(read.actionPermissions ?? [])])];
   }
   if (!refresh) task.transition(read.result ? 'DONE' : 'FAILED_FINAL');
   const guide = request.action === 'guide' && read.result
@@ -1464,7 +1468,9 @@ async function reviewCompletedReserve(client, actor, task) {
   const order = await currentReserveOrder(client, task.preview ?? task.result, actor).catch(() => null);
   if (!order) return { task: null, detachTask: true, reply: '原销售单当前无法复核。请稍后核对原任务，勿重新提交。' };
   if (!task.reserveEventId && task.preview && !task.result?.alreadyReserved) {
-    const receipt = await client.requestStatus(task.requestKey, reserveReceiptAction(task.preview)).catch(() => null);
+    let receipt;
+    try { receipt = await client.requestStatus(task.requestKey, reserveReceiptAction(task.preview)); }
+    catch { return { task, reply: '原占库回执暂时无法核对，请稍后核对原任务，勿重新提交。' }; }
     rememberReserveEvent(task, receipt, order);
   }
   return renderReserveResult(task, order, actor);
@@ -1630,7 +1636,12 @@ async function confirmReserve(store, client, task, actor) {
       task.transition('ESCALATED'); store.save(task);
       return { task, reply: '占库已提交，但回查暂未完成。请查询原任务结果，不要重新发起占库。' };
     }
-    const originalReceipt = await client.requestStatus(task.requestKey, reserveReceiptAction(original)).catch(() => null);
+    let originalReceipt;
+    try { originalReceipt = await client.requestStatus(task.requestKey, reserveReceiptAction(original)); }
+    catch {
+      task.transition('ESCALATED'); store.save(task);
+      return { task, reply: '占库已经提交，原请求回执暂时无法核对。请核对原任务，勿重新提交。' };
+    }
     if (original._releaseEventId != null ? !isReserveReceipt(originalReceipt, original) : !reserveMatchesPreview(detail, original)) {
       task.transition('ESCALATED'); store.save(task);
       return { task, reply: original._releaseEventId != null
@@ -2029,7 +2040,12 @@ async function confirmReceiptDraft(store, client, task, actor) {
     if (e instanceof FlowError && e.kind === 'unknown') {
       task.transition('RESULT_UNKNOWN'); store.save(task);
       // 先查回执：同键是否已落库（永不换键重试）
-      const receipt = await client.requestStatus(task.requestKey, 'payment.receipt.create').catch(() => null);
+      let receipt;
+      try { receipt = await client.requestStatus(task.requestKey, 'payment.receipt.create'); }
+      catch {
+        task.transition('ESCALATED'); store.save(task);
+        return { task, reply: '登记收款结果未知，原请求回执暂时无法核对。请核对原操作，不要重复提交。' };
+      }
       const resId = receipt?.resourceId ?? receipt?.data?.resourceId ?? null;
       if (resId) {
         const detail = await receiptTool().detail(client, { receiptId: resId }).catch(() => null);
@@ -3255,10 +3271,9 @@ async function handleReference(store, client, actor, text, ref, opts) {
   for (const id of new Set(ids.filter(Boolean))) {
     const task = store.get(id);
     if (!task || !ownsTask(task, actor) || task.sequenceOwner) return unavailableReference(ref.kind);
-    if (!referenceMatches(task, ref)) continue;
     try { assertTaskAccess(task, actor, store); }
     catch (error) { if (error.status === 403) return unavailableReference(ref.kind); throw error; }
-    matches.push(task);
+    if (referenceMatches(task, ref)) matches.push(task);
   }
   if (matches.length !== 1) return { task: null, detachTask: true, keepReferences: matches.length > 1, reply: referenceQuestion(ref.kind) };
   const [source] = matches;
@@ -3298,7 +3313,23 @@ export async function handleMessage(store, client, actor, text, opts = {}) {
   if (routing.kind === 'blocked' && routing.guarded) return { task: null, reply: routing.reply };
   const startsNewTopic = t !== String(text).trim();
   if (startsNewTopic && opts.choiceId != null) throw Object.assign(new Error('换话题后请在新任务中选择候选'), { status: 400 });
-  const selected = !startsNewTopic && opts.taskId ? store.get(opts.taskId) : null;
+  let selected = !startsNewTopic && opts.taskId ? store.get(opts.taskId) : null;
+  let detached = false;
+  if (selected) {
+    if (!ownsTask(selected, actor)) throw Object.assign(new Error('只能查看或处理本人发起的任务'), { status: 403 });
+    try { assertTaskAccess(selected, actor, store); }
+    catch (error) {
+      if (error.status !== 403 || opts.choiceId != null) throw error;
+      selected = null;
+      detached = true;
+    }
+  }
+  const result = await routeSelectedMessage(store, client, actor, opts, { input, t, routing, startsNewTopic, selected, detached });
+  return detached && result.task === null ? { ...result, detachTask: true } : result;
+}
+
+async function routeSelectedMessage(store, client, actor, opts, { input, t, routing, startsNewTopic, selected, detached }) {
+  const text = input.text;
   const review = selected?.batchReview;
   const taskNo = selected?.intent?.orderNo ?? selected?.intent?.receiptNo ?? selected?.preview?.orderNo ?? selected?.preview?.receiptNo;
   const groupOrderNo = review?.reassignmentGroup ? taskNo?.toUpperCase() : undefined;
@@ -3420,7 +3451,7 @@ export async function handleMessage(store, client, actor, text, opts = {}) {
     }
   }
   if (routing.kind === 'blocked') return { task: null, reply: routing.reply };
-  if (history && (!opts.taskId || history.qualified)) {
+  if (history && (!opts.taskId || detached || history.qualified)) {
     const match = findHistoricalTask(store, actor, history);
     if (match.choices.length === 1 && !match.restricted) return resumeTask(store, client, match.choices[0].id, actor);
     if (isHandoffHistory(history) && history.no && !history.unresolved && !match.choices.length) {
@@ -3430,11 +3461,11 @@ export async function handleMessage(store, client, actor, text, opts = {}) {
   }
   const reference = opts.choiceId == null && !routing.explicitOutside && routing.kind !== 'operational-read' && referenceRequest(t);
   if (reference) {
-    const context = startsNewTopic ? {} : opts;
+    const context = startsNewTopic ? {} : { ...opts, taskId: selected?.id };
     return rememberOutput(store, await handleReference(store, client, actor, t, reference, context));
   }
   const operation = async () => {
-    const out = rememberOutput(store, await handleMessageUnlocked(store, client, actor, text, { ...opts, preferInventoryRule: opts.preferInventoryRule || input.normalized }));
+    const out = rememberOutput(store, await handleMessageUnlocked(store, client, actor, text, { ...opts, taskId: detached ? undefined : opts.taskId, preferInventoryRule: opts.preferInventoryRule || input.normalized }));
     return startsNewTopic && !out.task ? { ...out, detachTask: true } : out;
   };
   if (opts.taskId) return store.exclusive(opts.taskId, operation);
@@ -3701,6 +3732,11 @@ async function handleMessageUnlocked(store, client, actor, text, opts = {}) {
     try {
       const proposed = await parseIntent(t);
       const intent = proposed?.graph === 'D-receipt' ? proposed : groundCustomerIntent(proposed, t);
+      if (intent?.graph === 'B-sale-draft') {
+        const grounded = groundSaleLines(t, intent);
+        if (!grounded) return { task: null, reply: '请按原话逐行说明商品、数量和单位，我需要核对每一行再准备销售草稿。' };
+        return executeIntent(store, client, actor, t, grounded);
+      }
       if (intent && intent.graph !== 'none') return executeIntent(store, client, actor, t, intent);
       if (intent?.graph === 'none' && !routing.graph) return refusal(t);
     } catch { /* 模型异常 → 回退规则，不中断服务 */ }

@@ -441,12 +441,12 @@ async function main() {
 
     // ── 6c. 无可用打印机：真实降级分支 ───────────────────────────────────────
     await check('无可用打印机：业务已提交，打印降级为可补打失败记录（原因非渲染失败）', async () => {
-      // 先取快照，逐原值恢复（不盲设 status=1）
-      const printerSnapshot = await dbQuery(pool, 'SELECT id, status FROM printers')
-      const bindings = await dbQuery(pool, 'SELECT printer_id, print_type, warehouse_id FROM printer_bindings')
-      await dbQuery(pool, 'UPDATE printers SET status=0')
-      await dbQuery(pool, 'DELETE FROM printer_bindings')
+      // 绑定解析和后备解析均只选择启用的设备。夹具只临时停用原有的可用标签机。
+      const active = await dbQuery(pool, 'SELECT id FROM printers WHERE status=1 AND type=1')
+      const ids = active.map(row => row.id)
+      const bindings = await dbQuery(pool, 'SELECT * FROM printer_bindings ORDER BY id')
       try {
+        if (ids.length) await dbQuery(pool, 'UPDATE printers SET status=0 WHERE id IN (?)', [ids])
         const box = await createEmptyBox()
         const src = await makeWholeContainer(30)
         assert.equal((await fillReq(box, src, key('np-fill'))).status, 200)
@@ -469,16 +469,8 @@ async function main() {
           `「无打印机」的原因不应写成「渲染失败」（实际：${jobs[0].error_message}）`,
         )
       } finally {
-        for (const p of printerSnapshot) {
-          await dbQuery(pool, 'UPDATE printers SET status=? WHERE id=?', [p.status, p.id])
-        }
-        if (bindings.length) {
-          await dbQuery(
-            pool,
-            'INSERT INTO printer_bindings (printer_id, print_type, warehouse_id) VALUES ?',
-            [bindings.map((b) => [b.printer_id, b.print_type, b.warehouse_id])],
-          )
-        }
+        if (ids.length) await dbQuery(pool, 'UPDATE printers SET status=1 WHERE id IN (?)', [ids])
+        assert.deepEqual(await dbQuery(pool, 'SELECT * FROM printer_bindings ORDER BY id'), bindings)
       }
     })
 

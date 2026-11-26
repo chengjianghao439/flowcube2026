@@ -131,7 +131,7 @@ test('真实普通详情的部分实发4保留原需求10，补占弹窗只提�
   expect(quantity.value).toBe('6')
   expect(quantity.step).toBe('1')
   expect(dialog()!.querySelector<HTMLButtonElement>('[role="combobox"]')?.disabled).toBe(true)
-  await act(async () => dialogButton('确认占用（1 项）').click()); await settleEditor()
+  await act(async () => dialogButton('确认占用').click()); await settleEditor()
   expect(mocks.reserveSaleApi).toHaveBeenCalledOnce()
   expect(mocks.reserveSaleApi.mock.calls[0].slice(0, 2)).toEqual([12, [{ id: 9, warehouseId: 1, warehouseName: '示例仓库', qty: 6 }]])
   expect(mocks.reserveSaleApi.mock.calls[0][2]).toMatch(/^sale-reserve-/)

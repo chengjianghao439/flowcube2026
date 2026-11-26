@@ -27,6 +27,7 @@ interface TableActionsMenuProps {
   onPrimaryClick: () => void
   primaryVariant?: 'default' | 'outline' | 'destructive'
   primaryDisabled?: boolean
+  menuDisabled?: boolean
   items: TableActionItem[]
   /** 当前行读取不可用或消失时，由页面提供有效的焦点返回位置。 */
   onUnavailableFocus?: () => void
@@ -38,6 +39,7 @@ export default function TableActionsMenu({
   onPrimaryClick,
   primaryVariant = 'default',
   primaryDisabled = false,
+  menuDisabled = primaryDisabled,
   items,
   onUnavailableFocus,
 }: TableActionsMenuProps) {
@@ -48,7 +50,9 @@ export default function TableActionsMenu({
   const menuTrigger = useRef<HTMLButtonElement>(null)
   const focusFirstItem = useRef(false)
   const menuContent = useRef<HTMLDivElement>(null)
-  const afterClose = useRef<(() => void) | null>(null)
+  const afterClose = useRef<{ index: number; label: string; rowLabel?: string } | null>(null)
+  const current = useRef({ items, rowLabel, menuDisabled })
+  current.current = { items, rowLabel, menuDisabled }
   const active = useSectionActive()
   const activeRef = useRef(active)
   activeRef.current = active
@@ -70,8 +74,8 @@ export default function TableActionsMenu({
     }
   }, [hasFocusFallback])
   useEffect(() => {
-    if ((primaryDisabled || !items.length) && ownsFocus.current && activeRef.current) unavailableFocus.current?.()
-  }, [primaryDisabled, items.length])
+    if ((menuDisabled || !items.length) && ownsFocus.current && activeRef.current) unavailableFocus.current?.()
+  }, [menuDisabled, items.length])
   useEffect(() => { if (!active) afterClose.current = null }, [active])
   useEffect(() => {
     if (!items.length) { setMenuOpen(false); afterClose.current = null }
@@ -112,7 +116,7 @@ export default function TableActionsMenu({
       {!menuInitialized ? (
         <button
           type="button"
-          disabled={primaryDisabled}
+          disabled={menuDisabled}
           aria-label={menuLabel}
           aria-haspopup="menu"
           aria-expanded={false}
@@ -122,7 +126,7 @@ export default function TableActionsMenu({
             setMenuOpen(true)
           }}
           onKeyDown={event => {
-            if (!primaryDisabled && event.key === 'ArrowDown') {
+            if (!menuDisabled && event.key === 'ArrowDown') {
               event.preventDefault()
               focusFirstItem.current = true
               setMenuInitialized(true)
@@ -138,7 +142,7 @@ export default function TableActionsMenu({
           <button
             type="button"
             ref={menuTrigger}
-            disabled={primaryDisabled || items.length === 0}
+            disabled={menuDisabled || items.length === 0}
             aria-label={menuLabel}
             className="px-1.5 py-1.5 text-muted-foreground hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
           >
@@ -146,11 +150,14 @@ export default function TableActionsMenu({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent ref={menuContent} align="end" onCloseAutoFocus={event => {
-          const action = afterClose.current
+          const selected = afterClose.current
+          const latest = current.current
+          // 弹窗交接等待菜单关闭；在此期间行、权限或动作顺序都可能变化。
+          const action = selected && selected.rowLabel === latest.rowLabel ? latest.items[selected.index] : undefined
           afterClose.current = null
           if (!activeRef.current) return
-          if (!action) {
-            if ((primaryDisabled || !items.length) && unavailableFocus.current) {
+          if (latest.menuDisabled || !action?.afterMenuClose || action.disabled || action.label !== selected?.label) {
+            if ((menuDisabled || !items.length) && unavailableFocus.current) {
               event.preventDefault()
               unavailableFocus.current()
             }
@@ -159,7 +166,7 @@ export default function TableActionsMenu({
           event.preventDefault()
           // 先回到仍挂载的触发控件，供下一弹窗记住关闭后的焦点归属。
           menuTrigger.current?.focus({ preventScroll: true })
-          action()
+          action.onClick()
         }} onFocus={() => {
           // 首次按键发生在 Radix 挂载之前，补上键盘打开时应聚焦首个可用菜单项的语义。
           if (!focusFirstItem.current) return
@@ -174,7 +181,7 @@ export default function TableActionsMenu({
                 aria-label={rowLabel ? `${item.label} ${rowLabel}` : undefined}
                 className={cn('text-xs', item.destructive && 'text-destructive-ink focus:text-destructive-ink')}
                 onClick={() => {
-                  if (item.afterMenuClose) afterClose.current = item.onClick
+                  if (item.afterMenuClose) afterClose.current = { index, label: item.label, rowLabel }
                   else item.onClick()
                 }}
               >

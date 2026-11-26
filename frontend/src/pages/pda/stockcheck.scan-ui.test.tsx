@@ -5,7 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import PdaStockcheckPage from './stockcheck'
 
-const inventory = vi.hoisted(() => ({ container: vi.fn() }))
+const inventory = vi.hoisted(() => ({ container: vi.fn(), history: [] as Array<Record<string, unknown>> }))
 vi.mock('@/api/inventory', () => ({ getContainerByBarcodeApi: inventory.container }))
 vi.mock('@tanstack/react-query', async (importOriginal) => ({
   ...await importOriginal<typeof import('@tanstack/react-query')>(),
@@ -14,7 +14,7 @@ vi.mock('@tanstack/react-query', async (importOriginal) => ({
       checkNo: 'PD001', warehouseName: '主仓', items: [{
         id: 7, productId: 3, productCode: 'P000003', productName: '测试商品',
         bookQty: 2, unit: '个', bookContainerCount: 1, actualQty: null,
-        scans: [], scannedContainerCount: 0,
+        scans: inventory.history, scannedContainerCount: inventory.history.length,
       }],
     },
     isLoading: false,
@@ -34,6 +34,7 @@ let root: Root
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  inventory.history = []
   inventory.container.mockReset().mockResolvedValue({
     barcode: 'I000007', productId: 3, containerStatus: 'stored', individual: false, remainingQty: 2,
   })
@@ -92,4 +93,15 @@ test('手输盘点条码查找失败时保留输入及纠错焦点，修正后�
   expect(inventory.container).toHaveBeenCalledTimes(2)
   expect(host.textContent).toContain('已扫条码（1）')
   expect(input.isConnected).toBe(false)
+})
+
+test('续扫数量容器按当前账面上限恢复，上次实盘可重新修正', async () => {
+  inventory.history = [{barcode:'B17',individual:false,countedQty:0,containerBookQty:9}]
+  await act(async () => { root.render(<MemoryRouter initialEntries={['/pda/stockcheck/1']}><Routes>
+    <Route path="/pda/stockcheck/:id" element={<PdaStockcheckPage />} /></Routes></MemoryRouter>) })
+  await act(async () => { [...host.querySelectorAll('button')].find(b => b.textContent?.includes('测试商品'))!.click() })
+  const field = host.querySelector<HTMLInputElement>('[aria-label="B17 实盘数量"]')!
+  expect(field.value).toBe('0')
+  expect(field.max).toBe('9')
+  expect(host.textContent).toContain('账面 9')
 })

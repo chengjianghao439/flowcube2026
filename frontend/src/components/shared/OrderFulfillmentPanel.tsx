@@ -1,7 +1,8 @@
+import { Textarea } from '@/components/ui/textarea'
 /** 采购到货安排及收货、调拨事项跟进。 */
 import { explainFulfillmentAction, fulfillmentDocumentPath } from '@/lib/fulfillmentAction'
 import { usePermission } from '@/hooks/usePermission'
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { DatePicker } from './DatePicker'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getFulfillment, runFulfillmentCommand, type FulfillmentType, type FulfillmentCommand, type FulfillmentIssue } from '@/api/fulfillment'
@@ -15,12 +16,14 @@ import DataTable from './DataTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
-const control = 'h-9 rounded-md border border-input bg-background px-3 text-sm'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Label } from '@/components/ui/label'
 const statusNames = { open: '待处理', processing: '处理中', resolved: '已处理' }
 export function OrderFulfillmentPanel({ type, id }: {
   type: Exclude<FulfillmentType, 'sale'>; id: number
 }) {
   const active = useActiveWorkspaceTab()
+  const fieldId = useId()
   const { can } = usePermission()
   const panel = useRef<HTMLDivElement>(null)
   const [locationNote, setLocationNote] = useState('')
@@ -123,12 +126,39 @@ export function OrderFulfillmentPanel({ type, id }: {
         else if (editing) mutation.mutate({ action: 'issue', issueId: editing.id, version: editing.version, operation, ownerId: owner ? Number(owner) : null, result, dueDate: due || null })
       }}>
         <p className="text-sm font-medium">{newIssue ? '添加问题' : editing?.title}</p>
-        {newIssue ? <label className="block text-sm">问题名称<Input required maxLength={100} value={title} onChange={e => setTitle(e.target.value)} /></label> : <label className="block text-sm">如何处理 <select aria-label="如何处理" className={control} value={operation} onChange={e => setOperation(e.target.value as typeof operation)}>
-          {editing?.status === 'resolved' ? <option value="reopen">重新跟进</option> : <><option value="progress">记录进展 / 修改期限</option><option value="assign">更换负责人</option><option value="resolve" disabled={editing?.conditionActive}>标记为已处理{editing?.conditionActive ? '（问题仍存在，暂不能结束）' : ''}</option></>}
-        </select></label>}
-        <div className="flex flex-wrap gap-3">{(newIssue || operation === 'assign') && <label className="text-sm">负责人 <select aria-label="负责人" className={control} value={owner} onChange={e => setOwner(e.target.value)}><option value="">{newIssue ? '默认交给订单负责人' : '待认领'}</option>{data.owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}</select></label>}
-          <label className="text-sm">处理截止日期<DatePicker value={due} onChange={setDue} /></label></div>
-        <label className="block text-sm">{newIssue ? '遇到了什么问题' : '处理进展 / 结果'}<textarea required maxLength={500} className="mt-1 block min-h-20 w-full rounded-md border border-input bg-background p-2" value={result} onChange={e => setResult(e.target.value)} /></label>
+        {newIssue ? <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-title`}>问题名称</Label>
+          <Input id={`${fieldId}-title`} required maxLength={100} value={title} onChange={e => setTitle(e.target.value)} />
+        </div> : <div className="space-y-1.5">
+          <Label htmlFor={`${fieldId}-operation`}>如何处理</Label>
+          <Select value={operation} onValueChange={value => setOperation(value as typeof operation)}>
+            <SelectTrigger id={`${fieldId}-operation`} className="h-9"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {editing?.status === 'resolved' ? <SelectItem value="reopen">重新跟进</SelectItem> : <>
+                <SelectItem value="progress">记录进展 / 修改期限</SelectItem>
+                <SelectItem value="assign">更换负责人</SelectItem>
+                <SelectItem value="resolve" disabled={editing?.conditionActive}>标记为已处理{editing?.conditionActive ? '（问题仍存在，暂不能结束）' : ''}</SelectItem>
+              </>}
+            </SelectContent>
+          </Select>
+        </div>}
+        <div className="grid max-w-xl gap-3 sm:grid-cols-2">
+          {(newIssue || operation === 'assign') && <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-owner`}>负责人</Label>
+            <Select value={owner || '__unassigned__'} onValueChange={value => setOwner(value === '__unassigned__' ? '' : value)}>
+              <SelectTrigger id={`${fieldId}-owner`} className="h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__unassigned__">{newIssue ? '默认交给订单负责人' : '待认领'}</SelectItem>
+                {data.owners.map(o => <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>}
+          <div className="space-y-1.5">
+            <Label htmlFor={`${fieldId}-due`}>处理截止日期</Label>
+            <DatePicker id={`${fieldId}-due`} value={due} onChange={setDue} className="h-9" />
+          </div>
+        </div>
+        <label className="block text-sm">{newIssue ? '遇到了什么问题' : '处理进展 / 结果'}<Textarea required maxLength={500} className="mt-1 block min-h-20" value={result} onChange={e => setResult(e.target.value)} /></label>
         <div className="flex gap-2"><Button type="submit" disabled={mutation.isPending}>保存</Button><Button type="button" variant="ghost" onClick={() => { setNewIssue(false); setEditing(null) }}>取消</Button></div>
       </form>}
     </SectionCard>

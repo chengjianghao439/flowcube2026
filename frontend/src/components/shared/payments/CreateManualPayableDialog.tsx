@@ -197,7 +197,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
   }
 
   return (
-    <AppDialog descriptionInHeader description={<>{<>
+    <AppDialog formDialog descriptionInHeader description={<>{<>
           没有采购单/运费单可挂的应付（零星费用、押金、线下结算的采购）在这里录入。
           创建后不会自动记账：需在「凭证」页点「生成本期凭证」入账。
         </>}</>}
@@ -225,7 +225,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
         </div>
       }
     >
-      <form id={FORM_ID} onSubmit={submit} className="h-full overflow-y-auto p-5">
+      <form id={FORM_ID} onSubmit={submit} className="min-h-full">
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
@@ -251,7 +251,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
                 if (!dueTouched) setDueDate(defaultDueDate(next))
               }}
             >
-              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={String(SETTLE_CASH)}>现结（进「现结供应商账款」页）</SelectItem>
                 <SelectItem value={String(SETTLE_MONTHLY)}>月结（进「月结供应商对账」页）</SelectItem>
@@ -265,7 +265,7 @@ export function CreateManualPayableDialog({ open, onClose }: Props) {
           <div className="space-y-1">
             <Label>借方科目 *</Label>
             <Select value={debitAccountCode} onValueChange={setDebitAccountCode}>
-              <SelectTrigger className="h-10 w-full">
+              <SelectTrigger className="h-9 w-full">
                 <SelectValue placeholder="选择这笔应付计入的费用/资产科目" />
               </SelectTrigger>
               <SelectContent>

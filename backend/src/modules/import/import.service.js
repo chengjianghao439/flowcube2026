@@ -74,30 +74,36 @@ async function importProducts({ fileBuffer }) {
   let skip = 0
   const errors = []
 
-  const toPrice = (v) => {
-    if (v === '' || v === null || v === undefined) return null
-    const n = Number(v)
-    return Number.isFinite(n) ? n : null
+  const toPrice = (value, label, required = false) => {
+    if (value == null || String(value).trim() === '') {
+      if (required) throw new AppError(`${label}为必填`, 400)
+      return null
+    }
+    const price = Number(value)
+    if (!Number.isFinite(price) || (required ? price <= 0 : price < 0)) {
+      throw new AppError(`${label}必须为${required ? '大于零' : '非负'}的有效价格`, 400)
+    }
+    return price
   }
 
   for (let index = 0; index < dataRows.length; index += 1) {
     const [name, unit, spec, color, articleNumber, costPrice, salePriceA, salePriceB, salePriceC, salePriceD] = dataRows[index]
-    if (!name || !unit || !spec || !color || !costPrice) {
+    if (!name || !unit || !spec || !color) {
       errors.push(`第${index + 2}行：名称、单位、型号、颜色、进价为必填`)
       continue
     }
 
     try {
-      const code = await generateMasterCode(pool, 'P', 'product_items')
 
       // 供应商型号：供应商给的型号文本，人工填写、缺省 NULL（2026-09 起不再自动生成货号/补齐6位）
       const finalArticle = String(articleNumber || '').trim() || null
 
-      const cp = toPrice(costPrice)
-      const pa = toPrice(salePriceA)
-      const pb = toPrice(salePriceB)
-      const pc = toPrice(salePriceC)
-      const pd = toPrice(salePriceD)
+      const cp = toPrice(costPrice, '进价', true)
+      const pa = toPrice(salePriceA, '销售价A')
+      const pb = toPrice(salePriceB, '销售价B')
+      const pc = toPrice(salePriceC, '销售价C')
+      const pd = toPrice(salePriceD, '销售价D')
+      const code = await generateMasterCode(pool, 'P', 'product_items')
 
       const cut = (v, max) => {
         const s = String(v || '').trim()
@@ -115,7 +121,7 @@ async function importProducts({ fileBuffer }) {
           cut(spec, 200),
           cut(color, 60),
           finalArticle,
-          cp ?? 0,
+          cp,
           pa ?? 0,
           pa,
           pb,
@@ -513,9 +519,7 @@ async function importPriceListItems({ fileBuffer }) {
   for (const row of merged.values()) listIds.add(String(row[0]).trim())
 
   // 预载价格表与商品（一次查询，避免逐行 N+1；不存在/停用的商品跳过并留痕）
-  const listWhere = [...listIds].length
-    ? listIds
-    : []
+  const listWhere = [...listIds].filter(Boolean)
   const validListIds = new Set()
   if (listWhere.length) {
     const placeholders = listWhere.map(() => '?').join(',')

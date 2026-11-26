@@ -88,7 +88,7 @@ test.each([['/dashboard', '/sale/31?from=dashboard', 'erp'], ['/pda', '/pda/sale
   expect(host.querySelector(`[data-client="${client}"]`)).not.toBeNull()
 })
 
-test.each([['/dashboard', '/pda'], ['/pda', '/dashboard']])('cross-client navigation from %s is restored', async (from, to) => {
+test.each([['/dashboard', '/pda'], ['/pda', '/dashboard'], ['/pda?tab=mine','/dashboard']])('cross-client navigation from %s is restored', async (from, to) => {
   await renderAt(from)
   await navigate(to)
   expect(window.location.hash).toBe(`#${from}`)

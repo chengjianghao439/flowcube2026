@@ -3,6 +3,7 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { money } from '@/lib/format'
 import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -31,6 +32,8 @@ interface Props {
   type: 1 | 2
   /** 隐藏面板自带工具条按钮，交由父级 PageHeader 渲染（与「全部账款」tab 对齐）；筛选标签仍留在面板内 */
   hideToolbar?: boolean
+  /** 父级二级分页栏右侧的筛选插槽；传入 null 表示当前页签未激活 */
+  filterSlot?: HTMLElement | null
 }
 
 /** 父级（PageHeader）驱动面板动作的句柄 */
@@ -48,7 +51,7 @@ export interface StatementPanelHandle {
  * 否则改完明细后已收的钱对不上任何账款。
  */
 export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function StatementPanel(
-  { type, hideToolbar = false }, ref,
+  { type, hideToolbar = false, filterSlot }, ref,
 ) {
   const qc = useQueryClient()
   const active = useActiveWorkspaceTab()
@@ -160,7 +163,9 @@ export const StatementPanel = forwardRef<StatementPanelHandle, Props>(function S
   return (
     <div className="space-y-4">
       {hideToolbar ? (
-        <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
+        filterSlot !== undefined
+          ? (filterSlot ? createPortal(<PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />, filterSlot) : null)
+          : <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />

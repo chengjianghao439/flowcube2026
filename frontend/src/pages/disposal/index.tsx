@@ -1,3 +1,5 @@
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { HandlingSourcesPanel } from './HandlingSourcesPanel'
 import { HandlingIntentDialog } from './HandlingIntentDialog'
 import { ConversionDialog } from './ConversionDialog'
@@ -8,7 +10,9 @@ import { money } from '@/lib/format'
 import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import DataTable from '@/components/shared/DataTable'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -24,7 +28,12 @@ import type { TableColumn } from '@/types'
 import DisposalDetailDialog from './components/DisposalDetailDialog'
 import CreateDisposalDialog from './components/CreateDisposalDialog'
 import DisposalQueryDialog, { type DisposalQueryValues } from './DisposalQueryDialog'
-import { DISPOSAL_STATUS_TONE, DISPOSAL_STATUS_LABEL } from './constants'
+import { DISPOSAL_STATUS_TONE, DISPOSAL_STATUS_OPTIONS } from './constants'
+
+const QUICK_STATUSES = [
+  { value: '', label: '全部处置单' },
+  ...DISPOSAL_STATUS_OPTIONS,
+]
 
 export default function DisposalPage() {
   const [intentVisited, setIntentVisited] = useState(false), [intentOpen, setIntentOpen] = useState(false), [conversionIds, setConversionIds] = useState<number[]>([]), [conversionId, setConversionId] = useState<number | null>(null)
@@ -43,7 +52,7 @@ export default function DisposalPage() {
   const handoff = useApprovalDetailHandoff('/disposals', PERMISSIONS.INVENTORY_DISPOSAL_VIEW, getDisposalDetailApi, createOpen || suggestionOpen || queryOpen || detailId != null)
   const { data: warehouses } = useWarehousesActive()
 
-  const { data, isLoading } = useDisposalList({
+  const { data, isLoading, isError, error, refetch } = useDisposalList({
     page: 1,
     pageSize: 20,
     keyword: keyword || undefined,
@@ -81,10 +90,8 @@ export default function DisposalPage() {
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
-    statusFilter && { key: 'status', label: `状态：${DISPOSAL_STATUS_LABEL[Number(statusFilter)] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
+    statusFilter && !QUICK_STATUSES.some(option => option.value === statusFilter) && { key: 'status', label: `状态：${statusFilter}`, onRemove: () => setStatusFilter('') },
     warehouseFilter && { key: 'warehouse', label: `仓库：${whName || warehouseFilter}`, onRemove: () => { setWarehouseFilter(null); setWarehouseName('') } },
-    startDate && { key: 'startDate', label: `创建起始：${startDate}`, onRemove: () => setStartDate('') },
-    endDate && { key: 'endDate', label: `创建截止：${endDate}`, onRemove: () => setEndDate('') },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<DisposalOrder>[] = [
@@ -104,10 +111,14 @@ export default function DisposalPage() {
       render: (v) => formatDisplayDateTime(v),
     },
     {
-      key: 'id', title: '操作', width: 100,
-      render: (_, row) => (
-        <div className="flex gap-1"><Button size="sm" variant="outline" onClick={() => setDetailId((row as DisposalOrder).id)}>查看/处理</Button>{(row as DisposalOrder).status === 3 && can(PERMISSIONS.INVENTORY_DISPOSAL_APPROVE) && <Button size="sm" variant="outline" onClick={() => { const id = (row as DisposalOrder).id; setConversionIds(ids => ids.includes(id) ? ids : [...ids, id]); setConversionId(id) }}>整单签认</Button>}</div>
-      ),
+      key: 'id', title: '操作', width: 148,
+      render: (_, row) => <TableActionsMenu primaryLabel="查看/处理" rowLabel={row.disposalNo} primaryVariant="outline" onPrimaryClick={() => setDetailId(row.id)}
+        items={row.status === 3 && can(PERMISSIONS.INVENTORY_DISPOSAL_APPROVE) ? [{
+          label: '整单签认', afterMenuClose: true, onClick: () => {
+            setConversionIds(ids => ids.includes(row.id) ? ids : [...ids, row.id])
+            setConversionId(row.id)
+          },
+        }] : []} />,
     },
   ]
 
@@ -115,38 +126,45 @@ export default function DisposalPage() {
     <div className="space-y-4">
       <PageHeader
         title="滞销库存处理"
-        description="促销走正常销售，退供应商走采购退货；新独立单只报废，沿原审批后执行。历史处理单保留追溯，旧已批准单待签认。"
+        description="处理滞销库存报废与历史处置单追溯。"
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/disposals').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/disposals').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" onClick={() => { setSuggestionVisited(true); setSuggestionOpen(true) }}>滞销建议</Button>
+            {can(PERMISSIONS.INVENTORY_DISPOSAL_CREATE) && <Button variant="outline" onClick={() => { setIntentVisited(true); setIntentOpen(true) }}>保存处理意图</Button>}
             {can(PERMISSIONS.INVENTORY_DISPOSAL_CREATE) ? (
-              <Button onClick={() => { setSuggestionVisited(true); setCreateOpen(true) }}>+ 新建报废单</Button>
+              <Button onClick={() => { setSuggestionVisited(true); setCreateOpen(true) }}>新建报废单</Button>
             ) : undefined}
           </>
         }
       />
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip">
+          <OrderStatusFilter label="处置状态分类" value={statusFilter} options={QUICK_STATUSES}
+            onChange={setStatusFilter} />
+        </div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={startDate} endDate={endDate}
+            onClear={() => { setStartDate(''); setEndDate('') }} />
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
           ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          {(chips.length > 0 || statusFilter || startDate || endDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
         </div>
-      )}
+      </div>
 
-      {can(PERMISSIONS.INVENTORY_DISPOSAL_CREATE) && <Button variant="outline" onClick={() => { setIntentVisited(true); setIntentOpen(true) }}>保存处理意图</Button>}
+      {isError ? <QueryErrorState title="处置单读取失败" error={error} onRetry={() => void refetch()} /> :
+        <DataTable fluid virtualized scrollLabel="处置单表格" columnStorageKey="disposal:v1" columns={columns} data={data?.list || []} loading={isLoading} />}
+      {!isError && !isLoading && data && <ListSummary total={total} unit="单" />}
+
       <HandlingSourcesPanel />
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
-      <ListSummary total={total} unit="单" />
-
       <ApprovalHandoffNotice {...handoff} />
       {handoff.data && <DisposalDetailDialog open={handoff.open} onClose={handoff.close} id={handoff.data.id} initialDetail={handoff.data} actionsDisabled={!handoff.ready} />}
       {suggestionVisited && <CreateDisposalDialog open={createOpen || suggestionOpen} mode={createOpen ? 'create' : 'suggestions'} onClose={() => { setCreateOpen(false); setSuggestionOpen(false) }} />}

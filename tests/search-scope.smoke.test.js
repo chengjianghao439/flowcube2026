@@ -119,8 +119,12 @@ async function main() {
     log.assert('通用词搜索不泄漏他仓单号', bothRes.ok && !leakedOther, JSON.stringify(bothTypes).slice(0, 400))
   } finally {
     const summary = log.summary()
-    await ctx.close()
-    process.exit(summary.failed > 0 ? 1 : 0)
+    if (summary.failed > 0) process.exitCode = 1
+    try {
+      await ctx.close()
+    } finally {
+      await require('../backend/src/config/db').pool.end()
+    }
   }
 }
 

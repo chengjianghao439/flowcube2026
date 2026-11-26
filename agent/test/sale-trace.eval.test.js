@@ -157,7 +157,10 @@ test('财务继续办理权限撤回后不重放历史中的办理提示', async
   h.actor.permissions = h.actor.permissions.filter(code => code !== 'payment.execute');
   await assert.rejects(h.taskView(before.task.id), { status: 403 });
   const now = await h.send('接着核对 ' + receiptNo[0], before.task.id);
-  assert.match(now.reply, /本单核销 ¥30.*请由财务在原收款单核对/s);
+  assert.doesNotMatch(now.reply, new RegExp(original));
+  const fresh = await h.send(caseText);
+  const reviewed = await h.send('接着核对 ' + receiptNo[0], fresh.task.id);
+  assert.match(reviewed.reply, /本单核销 ¥30.*请由财务在原收款单核对/s);
   assert.doesNotMatch(now.reply, /当前账号可在原收款单/);
 });
 function trace(h, out) {

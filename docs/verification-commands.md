@@ -2,10 +2,16 @@
 
 从[常用命令与本地环境](#常用命令与本地环境)开始，按改动范围选检查。涉及数据库时，先按[独立测试库](#独立测试库)核对归属和连接。实际可执行命令看[根脚本清单](../package.json)和各端清单，远端接线看 [Tests 工作流](../.github/workflows/test.yml)。带日期或候选版本的实测结论按当时提交和环境解读。
 
+### 出库实扣、预占与容器锁序
+
+`npm run smoke:audit-inventory` 在独立 MySQL 8 核对出库与本单预占不等时的账实守恒、正数输入、空壳流水、目标盒状态和任务归还状态，并在双连接下检查遗漏绑定维度的旧快照。`npm run test:inventory-lock-order` 同时覆盖两条任务归还入口和命令行逐维度校准的事务连接、提交与失败回滚；`npm run test:stock-cache-write` 核对库存缓存写入口。
+
+
 ## 仓库守卫索引
 
 先从改动涉及的规则选命令，再核 `package.json` 和 GitHub Tests 工作流的实际接线。新增守卫须在临时副本中验证相应规则被破坏时会失败。规则入口守卫同时运行回归，覆盖项目覆盖文件、规则链的累计预算、兄弟目录独立计量、现行守卫命令及共享交接指南的仓库内链接。
 
+- 销售交接动作的逐词识别与 4000 字符边界由 `npm run test:agent` 验证。诊断参数、附件恢复分支和环境、镜像入口脚本所有者及模式由 `npm run test:audit-tooling` 内的部署资源守卫验证。用户管理的当前角色和范围子集由 `npm run test:permissions` 验证，正常委派操作另由 `npm run smoke:user-account-management` 通过独立测试库核对。
 - 分布类图表系列数必须有界（`TOP_SERIES_LIMIT = 8` + 其他 N 个）→ `npm run test:chart-series-limit`
 - 只读路径禁止 N+1；无扫码行的明细必须按 0 拒绝（fail-open 风险）→ `npm run test:query-loop`、`npm run test:warehouse-scan-closure`
 - `fail-loud` 错误不得被调用处吞成静默跳过 → `node --test tests/accounting-voucher-mapping.test.js`
@@ -63,6 +69,8 @@
 `npm run test:purchase-requisition-removal` 验证退役权限/状态机、旧审批配置直链拒绝、待办与回执边界；前端 `src/router/purchaseRequisitionRemoval.test.ts` 验证菜单/路由/业务跳转移除。采购规划、共享审批、独立采购与收货沿现有专项回归；真实数据库测试使用当批专属合成实例。日志与实测边界见本轮任务报告，不引用历史通过数字。
 
 ## 小满接入与回归（2026-10-26）
+
+`npm run test:agent` 包含历史任务续办核权、原话商品及单位核对、嵌套引用、两千条以外的库存和回执异常。精确商品列表及分页总数在限仓账号下另由 `npm run smoke:warehouse-scope` 访问实际 API 验证。
 
 `npm run test:agent` 运行 `agent/test/*.test.js`，已接入 Tests CI 的 static job，位于后端依赖安装之后。使用 Node 22、合成模型/Flow 数据及真实回环 HTTP，验证业务图、当前权限与归属、请求边界、仓库筛选、数量政策、账款覆盖范围、候选接续、版本冲突、分页及原任务恢复；人物与交流范围回归区分极序讨论、实际业务请求和禁止的无关话题。正式 Express 包装另验当前认证/权限先于32KiB解析、当前仓库范围、成功信封、固定本机 Flow API、持久恢复与损坏文件保全、Docker 同后端镜像及私有卷配置；不读取本机模型配置或连接数据库。
 
@@ -226,6 +234,8 @@ npm run test:permissions
 `npm run smoke:inbound-progressive-putaway`（`tests/inbound-progressive-putaway.smoke.test.js`）：真实独立测试库、专属新商品/仓库与 OS 随机回环 API 端口。覆盖开放收货100→20/30/50早上架、现货真实销售预占/派发/拣货及撤回拒绝，预计绑定兑现/20实物+80预计守恒，短装已全上架即完成及原回执、关闭前无采购结算凭证规格/关闭后金额与首次应付日期一致，仍有待上架与普通收满兼容，混采购来源/不同价，同采购跨批保留已付和首次账期并扣已执行退货金额，同任务收货/上架/结案真实并发，scope/device及同键范围/数量闸门，阶段与异常独立。已付与已执行退货用于结算重算的既有事实夹具，不把该case称为真实出款/退货实操。测试不全表清理，不借既有库存；server/pool在finally结束，设备会话按本轮ID清理，业务夹具保留供失败取证。
 
 前端 C4 专项：`src/pages/pda/inbound.test.tsx` / `putaway.test.tsx`、`src/hooks/useCloseReceivingInbound.test.tsx`、`src/pages/inbound-tasks/CloseReceivingDialog.test.tsx`。真实组件通过网络边界验证双入口、开放扫码/完成语义、原键/原端点、不自洽回执、撤权后可查询、换账号旧回调与真实弹窗恢复；还验证未知后重试 4xx 保留原键、切换端点的原成功不刷新新服务器、显式错误归属的 failed 回执保持未知。GUI、真机、物理出纸、CI与生产部署各有独立证据边界，自动化专项不能代替它们。
+
+销售占库换仓、分批派发与挂起重放由 `npm run smoke:sale-adjustment` 同时运行真实接口回归。收货提前上架后再调拨、末箱结算由 `npm run smoke:inbound-progressive-putaway` 验证。在途、已移仓和仓库范围的写前检查用 `node --test tests/security-scope-inbound-transfer.test.js` 验证预读与取得容器锁后两次归属检查。
 
 `smoke:sale-adjustment` 会为连续创建的销售任务建立本轮专用分拣格，并在结束时按 ID 清理；分拣完成必须先有已分配的分拣格。套件读取隔离 MySQL 的 `performance_schema.data_lock_waits`，以真实等锁控制单任务和波次完成、重复创建波次的并发顺序。
 
@@ -772,6 +782,8 @@ style-compat用真实共享React组件和原Tailwind3浏览器计算值；不可
 
 样式兼容真实浏览器脚本在初次启动显式设置 Chromium primaryHoverType=2，统一桌面 hover 测试前提（Linux无鼠标的headless默认能力可能不同）。仍通过实际鼠标移动和元素:hover/媒体能力双断言验真，2070项旧引擎golden不变；后段触摸为现代Chromium模拟，不能证明PDA真机。失败复现与CI轮次见 `docs/release-v0.12.0-result.md`。
 
+`npm run test:style-compat` 也在 1024 × 576 的 Chromium 中验证桌面输入、日期和选择器的 36 px 对齐、明细紧凑输入的 32 px 高度，以及长弹窗滚动正文时标题与操作栏保持可达。同一门禁检查标准弹窗的底栏与内边缘齐平、普通弹窗底栏透明，以及单行和多行限字字段的警告文字配色。读取失败与原地重试的回归见 `frontend/src/pages/management-query-errors.test.tsx`。
+
 
 ### R2 库存预占离线回归（2026-10-04）
 
@@ -1294,3 +1306,39 @@ CI五处新库初始化显式使用 `tests/helpers/prepareQaRoleTestDatabase.js`
 PR #99 月结直付与打印绑定续修：`npm run test:accounting` 已包含 `tests/payment-input-precision.test.js` 的月结拒绝/现结成功反例；`npm run smoke:finance` 用真实HTTP和MySQL验证月结200/300拒绝、无付款明细、对账单核销成功，并保留现结直付与幂等。`smoke:audit-20260926` 的期间/补录/撤回收货直付夹具明确选现结；`smoke:product-finance-period` 保留月结快照及供应商后来改现结不改旧快照，通过对账单付款和补录复核资金、往来、凭证及幂等；`smoke:go-live-runtime` 保留月结对账单退款并另验证现结直付原来源。数据库专项只运行在专属测试实例。
 
 `npm --prefix frontend run test:unit -- src/hooks/usePrinterBindings.test.tsx src/router/erpLoginDestination.test.ts src/router/login-landing.test.tsx`：打印读取无权零请求、有权成功、撤权/手动refetch、缓存复用与403无全局红框，连同第1条全部登录反例。`npm run smoke:login-supplier-browser` 同时检查每个登录角色的绑定请求数；HTTP夹具对无权绑定请求真实模拟403，不能统一返回200掩盖回归。新增单测沿既有前端全量单测与 accounting 命令进入CI，不另加工作流或修改检查数量。
+
+### 客户端与 PDA 退货恢复
+
+前端 Tests CI 的 `npm --prefix frontend run test:unit` 自动收录这些回归。定向执行：
+
+```sh
+bash scripts/with-dev-env.sh npm --prefix frontend run test:unit -- src/lib/pdaCriticalState.test.ts src/pages/pda/sale-return-{receive,recovery}.test.tsx src/api/{authRefreshCoordination,client.refresh}.test.ts src/api/client.session.test.tsx src/lib/kitRecoveryIdentity.test.ts src/components/shared/ConfirmDialog.test.tsx
+```
+
+退货回归使用真实页面、关键操作 hook、原键存储和 Axios 客户端，传输层模拟读写与响应丢失，验证多明细逐箱载荷、跨阶段和读失败时查原结果，以及未知或错单结果持续阻断。桌面续期与确认框使用模拟的平台能力和 IPC，系统原生点击、PDA 扫码和标签实际出纸需在设备上验收。
+
+财务、仓库出库与退货的分位回归随 `test:accounting`、`test:sale-commercial-money`、`smoke:accounting-period`、`smoke:audit-2026-09-18` 及 `test:export` 运行。导出边界可用 `TZ=UTC npm run test:export` 和 `TZ=America/Los_Angeles npm run test:export` 核对精确 Excel 序列号。
+
+
+`npm run smoke:backend-business-invariants` 在回环独立 MySQL 库验证导入、客户等级回退、波次拣货量和路线步数、空范围、短发结案、库位归属、核销、采购并发和补打最新来源，并检查扫码、箱操作和波次的锁序。履约采购绑定汇总由 `npm run test:fulfillment` 检查。
+
+
+- 货架活跃唯一性、快照列宽、管理员引导与模板盘点走 `node --test tests/schema-reconcile.smoke.test.js`，使用显式回环测试库。在独立实例按编号重放 302、303 后运行严格 schema 对账。
+- 备份演练、首次 cron 安装和桌面发布暂存使用 `node --test tests/ops-monitor-restore.test.js tests/release-orchestration.test.js tests/deploy-artifact.test.js`。这些测试使用本地替身。
+
+
+`npm run test:audit-client` 覆盖安装包内 HTTPS 源、下载跳转、启动前锁定及摘要核对、桌面窗口与 PDA 分享目录。`npm run test:security-scan-remediation` 覆盖 Windows 模拟打印驱动超时、文件回收与跨批顺序。Android 使用 `:app:testDebugUnitTest` 验证更新地址，`:app:assembleDebug` 核对包内资源；需另行验收 Windows 更新、PDA 真机和实际出纸。
+
+
+### 审计中标记为未接 CI 的入口
+
+`prelaunch-regression` 的矩阵通过 `npm run smoke:${{ matrix.suite }}` 执行财务、范围、HR、调拨、工资、运行时、履约、采购计划、资料导入、分拣格、仓库、波次与产品财务期间。在 CI 清单中查 suite 名即可定位任务。
+
+收货编辑、变更审计、保留期与补打、上线运行时、PDA 审计写入与迁移均由各自的 `*-owned` 作业分配独立实例，再间接运行 `*-runtime`。变更审计作业同时开启回归集。历史采购与应收修复由 `legacy-repair-owned` 运行两套独占库 smoke，`test:legacy-receivable-repair` 在回归作业直接执行。页面与对账跳转需要运行中的 Web、API 和两种角色，其运行器由浏览器夹具与发布门禁覆盖。仓库路径守卫、PDA 请求头与正反夹具使用前端锁文件中的 TypeScript 解析器，`npm run test:contract-scanners` 可在本地复验。
+
+
+### 客户端会话、PDA 作业恢复与 ERP 表单
+
+`npm --prefix frontend run test:unit -- src/api/client.session.test.tsx src/api/pda-session.test.ts src/router/index.test.tsx src/components/layout/WorkspaceTabs.keyboard.test.tsx` 覆盖切服、并发换票、原生票据持久化、令牌轮换、账套与导航。PDA 作业回归使用 `npm --prefix frontend run test:unit -- src/pages/pda src/hooks/useCriticalPdaAction.recovery.test.tsx src/hooks/usePendingRequests.test.tsx`。其中 `src/pages/pda/split.recovery.test.tsx` 覆盖拆分旧记录、两服同号作业与窗口同时占位。以进程内模拟设备事件和原始回执验证待确认作业，真实扫码、打印和出纸另行验收。
+
+`npm --prefix frontend run test:unit -- src/pages/permissions src/pages/stockcheck src/pages/settings/print-templates/editor.test.tsx src/pages/accounting/periods src/pages/logistics src/pages/transfer src/pages/picking-waves src/pages/reports` 验证 ERP 表单、画布、角色操作入口及报表。上述单测均由现有前端 Tests CI 自动发现。隔离 MySQL 下的 `npm run smoke:sale-adjustment` 和 `npm run smoke:accounting-period` 分别核对真实改单回执与重复确认，以及实盘零、容器账面非零的续扫码明细。

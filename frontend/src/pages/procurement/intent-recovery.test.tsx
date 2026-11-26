@@ -70,3 +70,16 @@ test('只读采购计划没有空白选择列，草稿仍保留真实多选', as
     expect(host.querySelector('tbody tr')?.childElementCount).toBe(host.querySelector('thead tr')?.childElementCount)
   } finally { plan.status = 1 }
 })
+
+test('无当前需求的历史计划仍可逐行核对生成数量，未保存的未发销售显示缺值', async () => {
+  await render('/procurement/plans/7', <Plan />)
+  await vi.waitFor(() => expect(btn('需求与覆盖')).toBeTruthy())
+  expect(host.querySelectorAll('thead th')).toHaveLength(10)
+  await act(async () => btn('需求与覆盖').click())
+  const dialog = document.querySelector('[role="dialog"]')!
+  expect(dialog.textContent).toContain('合成商品1 · 合成仓')
+  expect(dialog.textContent).toContain('当前需求暂不可用')
+  expect(dialog.textContent).toContain('生成时建议量10')
+  expect(dialog.textContent).toContain('未发销售—')
+  expect(dialog.textContent).toContain('在途0')
+})

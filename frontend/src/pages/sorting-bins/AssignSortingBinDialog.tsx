@@ -4,6 +4,7 @@ import { getPendingSortingBinTasksApi, assignSortingBinApi } from '@/api/warehou
 import { collectAllRecords } from '@/api/allRecords'
 import { getApiClientBaseURL } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import DataTable from '@/components/shared/DataTable'
 import type { TableColumn } from '@/types'
 import type { PendingSortingBinTask } from '@/api/warehouse-tasks'
@@ -11,7 +12,7 @@ import { useSectionActive } from '@/components/layout/SectionVisibilityContext'
 import { createRequestKey } from '@/lib/requestKey'
 import { toast } from '@/lib/toast'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface Props {
   open: boolean
@@ -79,7 +80,7 @@ export default function AssignSortingBinDialog({ open, onClose, warehouseId, tas
   ]
 
   return <Dialog open={open} onOpenChange={next => { if (!next) onClose() }}>
-    <DialogContent className="max-w-2xl">
+    <DialogContent className="fc-form-dialog max-w-2xl">
       <DialogHeader description={<>
         {query.isFetching && <span role="status">正在加载待分配任务… </span>}
         {pending && !query.isFetching && rows.length === 0 && <span role="status">{taskId ? '已刷新：该任务已不符合补分配条件或不在可访问范围内，请返回订单刷新进度。' : '当前筛选范围内没有待分配任务。'} </span>}
@@ -87,10 +88,13 @@ export default function AssignSortingBinDialog({ open, onClose, warehouseId, tas
         仅列出拣货中或待分拣、尚未占格且无取消或改单挂起的任务。系统从任务所属仓库选择空闲格。
       </>}><DialogTitle>补分配分拣格</DialogTitle></DialogHeader>
 
-      {query.isError && <div role="alert" className="text-sm">读取失败：{query.error.message}<Button variant="outline" size="sm" onClick={() => void query.refetch()}>重试</Button></div>}
-      {taskId && <Button variant="outline" size="sm" disabled={query.isFetching || mutation.isPending} onClick={() => void query.refetch()}>刷新任务</Button>}
-      {pending && rows.length > 0 && <div data-workspace-scroll className="max-h-96 overflow-y-auto rounded-md border"><DataTable columns={columns} data={rows} virtualized preserveFocus /></div>}
-      {pending && !query.isFetching && !taskId && !pending.truncated && <p role="status" className="text-xs text-muted-foreground">共 {total.toLocaleString()} 条待分配任务</p>}
+      <div data-workspace-scroll className="fc-form-dialog-body space-y-4">
+        {query.isError && <div role="alert"><QueryErrorState compact title="待分配任务读取失败" error={query.error} onRetry={() => void query.refetch()} /></div>}
+        {taskId && <Button variant="outline" size="sm" disabled={query.isFetching || mutation.isPending} onClick={() => void query.refetch()}>刷新任务</Button>}
+        {pending && rows.length > 0 && <div className="rounded-md border"><DataTable columns={columns} data={rows} virtualized preserveFocus /></div>}
+        {pending && !query.isFetching && !taskId && !pending.truncated && <p role="status" className="text-xs text-muted-foreground">共 {total.toLocaleString()} 条待分配任务</p>}
+      </div>
+      <DialogFooter><Button type="button" variant="outline" onClick={onClose}>关闭</Button></DialogFooter>
     </DialogContent>
   </Dialog>
 }

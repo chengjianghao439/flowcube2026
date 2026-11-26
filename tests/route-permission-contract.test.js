@@ -9,7 +9,7 @@
  * 逐轮人工审计会一直漏，因此把**可机械判定**的那一半做成 CI 契约：
  *
  *   **所有写路由（POST/PUT/PATCH/DELETE）必须挂 requirePermission**，除非落在下面显式
- *   声明的例外清单里；每个例外都必须写明理由，且可以用 requireFileContains 附加
+ *   声明的例外清单里；每个例外都必须写明理由，且可以用 serviceFile 附加
  *   「该替代守卫确实存在」的校验——豁免不能只靠一句话，否则会悄悄腐烂。
  *
  * 只做「有没有」的机械判定，不试图判断权限码选得对不对——后者需要业务语义，
@@ -28,70 +28,51 @@ const MODULES_DIR = path.join(ROOT, 'backend/src/modules')
 /**
  * 显式例外：允许写路由不挂 requirePermission 中间件的路由文件。
  * - reason：为什么它不需要 requirePermission
- * - requireFileContains：可选的「替代守卫存在性」断言，防止豁免腐烂
+ * - serviceFile：可选的「替代守卫存在性」断言，防止豁免腐烂
  */
 const ALLOWED_WITHOUT_PERMISSION = {
   'auth.routes.js': {
+    routes: ['POST /login', 'POST /refresh', 'POST /logout', 'PUT /change-password', 'PUT /profile'],
     reason: '登录/刷新/登出按设计公开；改密码与改资料是登录者对自己的自助操作，仅需 authMiddleware',
   },
   'app-update.routes.js': {
+    routes: [],
     reason: '桌面/PDA 自动更新清单按设计完全公开（不返回任何业务数据），该文件整体不挂 authMiddleware',
   },
   'pda.routes.js': {
+    routes: ['POST /sessions', 'POST /sessions/renew'],
     reason: '设备绑定/会话按设备凭据（设备码+密钥）鉴权，走 pdaSession 而非用户权限码',
   },
   'system.routes.js': {
+    routes: ['POST /error-report'],
     reason: '幂等回执查询与前端错误上报：挂在 authMiddleware 之后，仅按当前用户读自己的回执/写日志，不含业务数据',
   },
   'fulfillment.routes.js': {
+    routes: ['POST /:type/:id/sync', 'PUT /:type/:id/dates', 'POST /:type/:id/issues', 'PATCH /:type/:id/issues/:issueId'],
     reason: '该模块用服务层 authorize() 同时校验权限码（def.view/def.write）与仓库范围（scopeDocument），不经 requirePermission 中间件',
-    // 用带边界的正则而不是子串：把 authorize 改名成 __disabled_authorize 时子串仍匹配，
-    // 那样豁免就会在守卫已失效的情况下继续放行（本测试第一次就是这么漏掉反向验证的）。
-    requireFileContains: { file: 'backend/src/modules/fulfillment/fulfillment.service.js', needlePattern: /(?<![\w$])authorize\(/ },
+    serviceFile: 'backend/src/modules/fulfillment/fulfillment.service.js',
   },
 }
 
-/** 从 src 处做括号配平，返回这条 router.xxx(...) 调用的完整文本 */
-function readRegistration(source, startIndex) {
-  const open = source.indexOf('(', startIndex)
-  if (open < 0) return null
-  let depth = 0
-  for (let i = open; i < source.length; i++) {
-    const ch = source[i]
-    if (ch === '(') depth++
-    else if (ch === ')') {
-      depth--
-      if (depth === 0) return source.slice(startIndex, i + 1)
-    }
-  }
-  return source.slice(startIndex)
-}
+const { ts, parse, visit, callName, owner, functionName } = require('./helpers/contractSource')
 
-function scanFile(file) {
-  const source = fs.readFileSync(file, 'utf8')
+function registrations(source) {
   const findings = []
-  // 匹配任意 Router 变量名，不是只匹配 `router`：accounting.routes.js 用 9 个别名
-  // Router（accounts/vouchers/ledger/reports/invoices/companies/consolidation/tax/periods），
-  // 原先只认 `router` 时这些文件里的写路由完全不被扫描（2026-09-26 一致性审查 · 任务 5）。
-  // 放宽后仍只匹配 `X.post(` 这种调用形态，且当前所有路由文件的前导标识符都是 Router 实例，
-  // 无误报；万一将来命中非路由对象，方向也是「报出来给人看」而非静默漏检。
-  const re = /[A-Za-z_$][\w$]*\.(post|put|patch|delete)\s*\(/g
-  let m
-  while ((m = re.exec(source)) !== null) {
-    const chunk = readRegistration(source, m.index)
-    if (!chunk) continue
+  const tree = parse(source)
+  visit(tree, node => {
+    const method = callName(node)
+    if (!['post', 'put', 'patch', 'delete'].includes(method) || !ts.isPropertyAccessExpression(node.expression)
+      || !node.arguments.length || !ts.isStringLiteralLike(node.arguments[0])) return
     findings.push({
-      method: m[1].toUpperCase(),
-      line: source.slice(0, m.index).split('\n').length,
-      // requirePermission 与 requireAnyPermission 是同一族的鉴权中间件：都由 middleware/auth.js
-      // 导出、都走 hasPermission 判定 + 同一套拒绝审计，差别只在「单码 / 多码 OR」——不降低
-      // 「必须携带权限码」这一要求。原先只认前者，2026-09-26 新增的 finance-backfills.routes.js
-      // 里唯一那条写路由（cancel 刻意对两档权限 OR 开放，好让没审批权限的出纳也能撤回自己的
-      // 申请）就被误报成「未鉴权」——方向报反了：它鉴权了，只是不肯卡死单码。
-      guarded: /require(?:Any)?Permission\s*\(/.test(chunk),
-      snippet: chunk.replace(/\s+/g, ' ').slice(0, 110),
+      method: method.toUpperCase(),
+      line: 1 + tree.getLineAndCharacterOfPosition(node.getStart()).line,
+      route: node.arguments[0].text,
+      guarded: node.arguments.slice(1, -1).some(arg =>
+        ts.isCallExpression(arg) && ts.isIdentifier(arg.expression)
+        && ['requirePermission', 'requireAnyPermission'].includes(arg.expression.text)),
+      snippet: node.getText().replace(/\s+/g, ' ').slice(0, 110),
     })
-  }
+  })
   return findings
 }
 
@@ -110,12 +91,18 @@ function main() {
   for (const [base, rule] of Object.entries(ALLOWED_WITHOUT_PERMISSION)) {
     assert.ok(rule && rule.reason, `例外 ${base} 必须写明 reason`)
     assert.ok(routeFiles.some(f => path.basename(f) === base), `例外清单里的 ${base} 已不存在，请清理该例外`)
-    if (rule.requireFileContains) {
-      const target = path.join(ROOT, rule.requireFileContains.file)
-      assert.ok(fs.existsSync(target), `例外 ${base} 声明的替代守卫文件不存在：${rule.requireFileContains.file}`)
-      const src = fs.readFileSync(target, 'utf8')
-      assert.ok(rule.requireFileContains.needlePattern.test(src),
-        `例外 ${base} 声明由 ${rule.requireFileContains.file} 的 ${rule.requireFileContains.needlePattern} 兜底，但该守卫已消失——豁免必须重新评估`)
+    if (rule.serviceFile) {
+      const calls = new Map()
+      visit(parse(fs.readFileSync(path.join(ROOT, rule.serviceFile), 'utf8')), node => {
+        const name = callName(node)
+        if (!['authorize', 'transact'].includes(name)) return
+        if (name === 'authorize' && node.arguments[4]?.kind !== ts.SyntaxKind.TrueKeyword) return
+        calls.set(functionName(owner(node)), name)
+      })
+      for (const [fn, gate] of Object.entries({ syncDocument: 'authorize', transact: 'authorize',
+        setDates: 'transact', createIssue: 'transact', changeIssue: 'transact' })) {
+        assert.equal(calls.get(fn), gate, rule.serviceFile + ' ' + fn + ' 缺少写入校验 ' + gate)
+      }
     }
   }
 
@@ -124,11 +111,11 @@ function main() {
   let exempted = 0
   for (const file of routeFiles) {
     const rule = ALLOWED_WITHOUT_PERMISSION[path.basename(file)]
-    for (const f of scanFile(file)) {
+    for (const f of registrations(fs.readFileSync(file, 'utf8'))) {
       total++
       if (f.guarded) continue
       const rel = path.relative(ROOT, file)
-      if (rule) exempted++
+      if (rule?.routes.includes(f.method + ' ' + f.route)) exempted++
       else violations.push(`${rel}:${f.line} ${f.method} → ${f.snippet}`)
     }
   }
@@ -150,4 +137,5 @@ function main() {
   process.exit(violations.length ? 1 : 0)
 }
 
-main()
+module.exports = { registrations }
+if (require.main === module) main()

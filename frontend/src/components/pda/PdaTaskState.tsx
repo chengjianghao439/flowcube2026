@@ -10,12 +10,14 @@ import { TriangleAlert } from 'lucide-react'
 
 export function PdaTaskState({
   title,
+  notice,
   description,
   actionText,
   onAction,
   secondaryText,
   onSecondary,
 }: {
+  notice?: React.ReactNode
   title: string
   description: string
   actionText: string
@@ -26,6 +28,7 @@ export function PdaTaskState({
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <PdaHeader title={title} onBack={onAction} />
+      {notice}
       <div className="flex-1 px-4 py-10">
         <div className="mx-auto max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
           <TriangleAlert className="mx-auto mb-4 h-14 w-14 text-warning-ink" />

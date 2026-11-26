@@ -51,6 +51,10 @@ const requestStatus = async (req, res, next) => {
       await require('../refunds/refund-orders.scope').assertRefundReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, receiptContext)
     }
     await require('./system.split-device').ensureSplitReceiptDevice(req, res, receiptContext.matchedAction)
+    if (String(receiptContext.matchedAction ?? '').startsWith('warehouse.adjustment-')) {
+      await require('../warehouse-tasks/warehouse-tasks.adjust-receipt').assertAdjustmentReceipt(require('../../config/db').pool,
+        data, receiptContext.matchedAction, { scopeWarehouseIds: req.user?.warehouseIds ?? null, pdaWarehouseId: req.pda?.warehouseId ?? null })
+    }
     await require('../inventory/inventory.split-receipt').assertSplitReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, { ...receiptContext, isPda: Boolean(req.pda), pdaWarehouseId: req.pda?.warehouseId ?? null })
     if ([receiptContext.requestedAction, receiptContext.matchedAction].some(action => /^plastic_box\.(fill|repack)(?:\.[1-9]\d*)?$/.test(String(action ?? '')))) {
       await require('../plastic-boxes/plastic-boxes.receipt').assertPlasticBoxReceipt(require('../../config/db').pool, data, req.user?.warehouseIds ?? null, { ...receiptContext, isPda: Boolean(req.pda), pdaWarehouseId: req.pda?.warehouseId ?? null })

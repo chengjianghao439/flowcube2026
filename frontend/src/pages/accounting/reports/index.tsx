@@ -8,10 +8,10 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
  * 简版口径：利润表=主营收入−成本−费用；资产负债表=资产 vs 负债+权益+未分配利润；
  * 现金流量表从资金流水归集。数字与勾稽一律以接口为准，前端只渲染。
  */
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import PageHeader from '@/components/shared/PageHeader'
 import { cn } from '@/lib/utils'
 import { useIncomeStatement, useBalanceSheet, useCashFlow } from '@/hooks/useLedger'
@@ -103,26 +103,26 @@ function BalanceSheetView({ period }: { period: string }) {
 }
 
 export default function ReportsPage() {
+  const periodId = useId()
   const [period, setPeriod] = useState(beijingPeriod())
   const [tab, setTab] = useState<Tab>('income')
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader title="会计报表"
-        description="利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）"  />
+        description="利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）。"  />
 
 
-      <FilterCard className="mb-4">
-        <div className="flex rounded-lg border border-border/70 bg-card p-0.5">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={cn('rounded-md px-3 py-1.5 text-sm transition-colors', tab === t.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <span className="ml-2 text-sm text-muted-foreground">会计期间</span>
-        <Input value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-36 font-mono" />
-        {tab === 'balance' && <Button variant="ghost" size="sm" disabled className="text-xs text-muted-foreground">期末时点</Button>}
+      <FilterCard>
+        <ToggleGroup type="single" aria-label="报表类型" value={tab}
+          onValueChange={value => {
+            const next = TABS.find(item => item.key === value)
+            if (next) setTab(next.key)
+          }}>
+          {TABS.map(item => <ToggleGroupItem key={item.key} value={item.key}>{item.label}</ToggleGroupItem>)}
+        </ToggleGroup>
+        <label htmlFor={periodId} className="ml-2 text-sm text-muted-foreground">会计期间</label>
+        <Input id={periodId} value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-36 font-mono" />
+        {tab === 'balance' && <span className="text-xs text-muted-foreground">期末时点</span>}
       </FilterCard>
 
       <KeepAliveSection active={tab === 'income'}><IncomeView period={period} /></KeepAliveSection>

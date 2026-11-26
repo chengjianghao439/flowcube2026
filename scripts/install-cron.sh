@@ -27,23 +27,28 @@ REPORT_CRON='0 9 * * *'
 SLOWLOG_CRON='0 4 * * *'
 RESTORE_CRON='0 5 * * 1'
 
+# 整份读取、补齐后只安装一次，读取失败时保留用户原表。
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+if ! LC_ALL=C crontab -l > "$tmpdir/table" 2>"$tmpdir/error"; then
+  if ! grep -qi 'no crontab for' "$tmpdir/error"; then cat "$tmpdir/error" >&2; exit 1; fi
+  : > "$tmpdir/table"
+fi
+mkdir -p "$ROOT/backups"
 add_or_keep() {
-  local pattern="$1" cron_line="$2"
-  if crontab -l 2>/dev/null | grep -F "$pattern" | grep -q .; then
-    echo "  ✓ 已存在：$pattern（跳过）"
-  else
-    ( crontab -l 2>/dev/null; echo "$cron_line" ) | crontab -
-    echo "  + 已添加：$cron_line"
-  fi
+  local schedule="$1" script="$2" name="$3" cmd logfile
+  printf -v cmd '%q' "$ROOT/scripts/$script"
+  printf -v logfile '%q' "$ROOT/backups/$name.log"
+  # 兼容既有的直接执行和 bash 执行。注释和其它工程同名脚本不算已安装。
+  if awk -v cmd="$cmd" '$0 !~ /^[[:space:]]*#/ { for(i=6;i<=NF;i++) if($i==cmd){found=1} } END {exit !found}' "$tmpdir/table" ||
+     grep -Fqx "$schedule bash $cmd >> $logfile 2>&1" "$tmpdir/table"; then return; fi
+  echo "$schedule bash $cmd >> $logfile 2>&1" >> "$tmpdir/table"
 }
-
-echo "==> 安装/核对 cron（幂等）..."
-add_or_keep "backup-db.sh"      "$BACKUP_CRON bash $ROOT/scripts/backup-db.sh >> $ROOT/backups/backup.log 2>&1"
-add_or_keep "monitor.sh"        "$MONITOR_CRON /opt/flowcube/scripts/monitor.sh >> /opt/flowcube/backups/monitor.log 2>&1"
-add_or_keep "daily-report.sh"   "$REPORT_CRON /opt/flowcube/scripts/daily-report.sh >> /opt/flowcube/backups/daily-report.log 2>&1"
-add_or_keep "rotate-slowlog.sh" "$SLOWLOG_CRON bash $ROOT/scripts/rotate-slowlog.sh >> $ROOT/backups/rotate-slowlog.log 2>&1"
-add_or_keep "restore-check.sh" "$RESTORE_CRON bash $ROOT/scripts/restore-check.sh >> $ROOT/backups/restore-check.log 2>&1"
-
+add_or_keep "$BACKUP_CRON" backup-db.sh backup
+add_or_keep "$MONITOR_CRON" monitor.sh monitor
+add_or_keep "$REPORT_CRON" daily-report.sh daily-report
+add_or_keep "$SLOWLOG_CRON" rotate-slowlog.sh rotate-slowlog
+add_or_keep "$RESTORE_CRON" restore-check.sh restore-check
+crontab - < "$tmpdir/table"
 echo "==> 当前 crontab："
-crontab -l 2>/dev/null || true
-echo "==> 完成"
+crontab -l

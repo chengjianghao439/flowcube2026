@@ -167,7 +167,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
 
   return (
     <>
-    <AppDialog descriptionInHeader
+    <AppDialog formDialog descriptionInHeader
       description={legacyBalance ? <span className="text-warning-ink">历史余额含不足一分的尾差，请先核对</span> : "核对原账款、资金账户、实际日期与金额。"}
       open={open}
       onOpenChange={v => { if (!v) { onClose(); closePrompt() } }}
@@ -184,7 +184,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
         </div>
       }
     >
-      <form id={FORM_ID} onSubmit={handlePay} className="h-full overflow-y-auto p-5">
+      <form id={FORM_ID} onSubmit={handlePay} className="min-h-full">
         <UncertainSubmitNotice
           visible={guard.uncertain}
           pending={guard.checkMut.isPending}
@@ -212,7 +212,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1 col-span-2"><Label>资金账户 *</Label>
             <Select value={payAccountId} onValueChange={setPayAccountId}>
-              <SelectTrigger className="h-10 w-full"><SelectValue placeholder={`选择${isPayable ? '付款' : '收款'}账户`} /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full"><SelectValue placeholder={`选择${isPayable ? '付款' : '收款'}账户`} /></SelectTrigger>
               <SelectContent>
                 {(activeAccounts || []).map(a => (
                   <SelectItem key={a.id} value={String(a.id)}>{a.name}（{money(a.currentBalance)}）</SelectItem>
@@ -224,7 +224,7 @@ export function RegisterPaymentDialog({ open, onClose, type, record }: Props) {
           <div className="space-y-1"><Label>日期 *</Label><DatePicker value={payDate} onChange={setPayDate} /></div>
           <div className="space-y-1"><Label>方式</Label>
             <Select value={payMethod} onValueChange={setPayMethod}>
-              <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="转账">转账</SelectItem>
                 <SelectItem value="现金">现金</SelectItem>

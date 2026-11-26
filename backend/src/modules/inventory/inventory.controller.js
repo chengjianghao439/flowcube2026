@@ -58,7 +58,16 @@ async function resyncStock(req, res, next) {
 
 async function stock(req, res, next) {
   try {
+    let productIds = null
+    if (req.query.productIds !== undefined) {
+      const tokens = typeof req.query.productIds === 'string' ? req.query.productIds.split(',') : []
+      if (!tokens.length || tokens.length > 100 || !tokens.every(t => /^[1-9]\d*$/.test(t) && Number.isSafeInteger(Number(t)))) {
+        return res.status(400).json({ success: false, message: '商品编号必须为 1 至 100 个正整数', data: null })
+      }
+      productIds = [...new Set(tokens.map(Number))]
+    }
     const result = await svc.getStock({
+      productIds,
       page: +req.query.page||1, pageSize: +req.query.pageSize||20,
       keyword: req.query.keyword||'',
       warehouseId: req.query.warehouseId ? +req.query.warehouseId : null,

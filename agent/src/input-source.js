@@ -2,19 +2,37 @@
 const QUOTES = { '「': '」', '『': '』', '“': '”', '‘': '’', '«': '»', '"': '"' };
 const transfer = /(?:^|[\n，,；;。])\s*(?:【(?:转发|聊天记录)】|(?:转发(?:了)?\s*(?:的)?\s*)?(?:客户(?:发(?:来|了)?(?:的)?\s*(?:微信|消息|语音|聊天记录)|发来(?:的)?|回复|反馈|转述|说|原话|消息|微信|留言|聊天记录)|聊天记录|转发内容|微信转发)|转发)\s*(?:[：:]\s*|(?=[「『“‘«"\n])|$)/;
 const unboundedSpeech = /(?:^|[\n，,；;。])\s*(?:转发\s*)?(?:客户|对方)\s*(?:刚才\s*)?(?:说|回复|发来|发(?:了)?微信(?:说|回复)|留言|原话|转述|反馈)/;
-const ownInstruction = /^[\s，,；;。]*我(?:的要求|这边的要求|本人要求|的指令)\s*[：:]\s*([\s\S]+)$/;
+const ownInstruction = /^[ \t，,；;。]*\r?\n\s*我(?:的要求|这边的要求|本人要求|的指令)\s*[：:]\s*([^\r\n]+)\s*$/;
+const closers = new Set(Object.values(QUOTES));
+
+function closeQuote(text, start) {
+  const stack = [QUOTES[text[start]]];
+  for (let i = start + 1; i < text.length; i++) {
+    const char = text[i];
+    if (char === stack.at(-1)) {
+      stack.pop();
+      if (!stack.length) return i;
+    } else if (Object.hasOwn(QUOTES, char)) stack.push(QUOTES[char]);
+    else if (closers.has(char)) return -1;
+  }
+  return -1;
+}
 
 function separateQuote(text) {
-  const end = QUOTES[text[0]];
-  if (!end) return null;
-  // 同种角引号可嵌套。英文引号遇到换行等额外内容时仍要求明确的后缀。
-  let level = 1;
-  for (let i = 1; i < text.length; i++) {
-    if (text[i] === end) level--;
-    else if (text[i] === text[0]) level++;
-    if (level === 0) return { quoted: text.slice(1, i), after: text.slice(i + 1) };
+  if (!Object.hasOwn(QUOTES, text[0])) return null;
+  const end = closeQuote(text, 0);
+  if (end < 0) return null;
+  const after = text.slice(end + 1);
+  const outer = text[0];
+  if (after.includes(outer) || after.includes(QUOTES[outer])) return null;
+  // 带有未闭合或多余引号的后缀不可用于确定发话者。
+  for (let i = 0; i < after.length; i++) {
+    if (Object.hasOwn(QUOTES, after[i])) {
+      i = closeQuote(after, i);
+      if (i < 0) return null;
+    } else if (closers.has(after[i])) return null;
   }
-  return null;
+  return { quoted: text.slice(1, end), after };
 }
 
 export function forwardedMessage(input) {
@@ -26,8 +44,7 @@ export function forwardedMessage(input) {
     if (!found) return Object.hasOwn(QUOTES, text[0]) || unboundedSpeech.test(text) ? { quoted: null, instruction: null } : null;
     const own = ownInstruction.exec(found.after)?.[1]?.trim();
     if (own) return { quoted: found.quoted, instruction: own };
-    return !found.after.replace(/[。！？!?\s]/g, '') || /^[，,；;。]/.test(found.after.trim())
-      ? { quoted: found.quoted, instruction: null } : null;
+    return { quoted: null, instruction: null };
   }
   const source = text.slice(marker.index + marker[0].length).trimStart();
   const quote = separateQuote(source);

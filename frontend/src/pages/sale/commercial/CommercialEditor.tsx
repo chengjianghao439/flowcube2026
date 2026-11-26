@@ -1,3 +1,4 @@
+import { Textarea } from '@/components/ui/textarea'
 import { SaleEntryTable } from '../form/components/SaleEntryTable'
 import { Plus, Save, Trash2 } from 'lucide-react'
 import { commercialWarehouseName } from './warehouseName'
@@ -544,11 +545,11 @@ export default function CommercialEditor({
           </div>
           {backup.text && (
             <>
-              <textarea
+              <Textarea
                 aria-label="完整草稿备份"
                 readOnly
                 value={backup.text}
-                className="w-full rounded border p-2 text-xs"
+                className="min-h-28 font-mono text-xs"
               />
               <Button variant="outline" onClick={() => backup.acknowledge(backup.text)}>
                 已备份草稿
@@ -613,7 +614,7 @@ export default function CommercialEditor({
           <div className="ml-auto flex flex-wrap items-start justify-end gap-x-6 gap-y-2">
             <div data-entry-field="discount">
               <label className="flex items-center gap-2"><span className="text-muted-foreground">折扣金额</span><Input
-                aria-label="折扣金额" data-entry-input type="number" min="0" step="0.01" value={h.discountAmount}
+                aria-label="折扣金额" disabled={adjust || locked} data-entry-input type="number" min="0" step="0.01" value={h.discountAmount}
                 onChange={(e) => h.setDiscountAmount(e.target.value)} className="h-9 w-28 text-right tabular-nums"
               /></label>
               <OrderFieldError className="mt-1">{visibleIssues.find(issue => issue.target === 'discount')?.message || (showFieldErrors && bodyResult.error === '折扣金额须为非负数' ? bodyResult.error : null)}</OrderFieldError>

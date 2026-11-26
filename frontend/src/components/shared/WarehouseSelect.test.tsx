@@ -10,6 +10,9 @@ afterEach(async () => { await act(async () => root.unmount()); host.remove() })
 test('必选仓库未选择时显示提示，已有值清空后恢复提示', async () => {
   const render = async (value: number | null) => act(async () => root.render(<WarehouseSelect value={value} onChange={() => {}} placeholder="选择仓库" />))
   await render(null); expect(host.querySelector('[role="combobox"]')!.textContent).toContain('选择仓库')
+  const classes = host.querySelector('[role="combobox"]')!.classList
+  expect(classes.contains('h-9')).toBe(true)
+  expect(classes.contains('min-h-10')).toBe(false)
   await render(1); expect(host.querySelector('[role="combobox"]')!.textContent).toContain('北京主仓')
   await render(null); expect(host.querySelector('[role="combobox"]')!.textContent).toContain('选择仓库')
 })

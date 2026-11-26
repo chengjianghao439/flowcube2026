@@ -174,6 +174,9 @@ test('真实system控制器使用实际匹配action/本人userId/当前scope核�
     const f = receiptFixture(), sent = [], controller = load('modules/system/system.controller.js', {
       '../../utils/AppError': AppError,
       '../../utils/response': { successResponse(_res, data) { sent.push(data) } }, '../../utils/operationRequest': { async getScopedOperationRequestStatus(input) { assert.equal(input.userId, 7); input.receiptContext.matchedAction = 'purchase.create.1234567890abcdef'; return successReceipt } },
+      '../warehouse-tasks/warehouse-tasks.adjust-receipt': {
+        assertAdjustmentReceipt() { assert.fail('其他领域的回执无需查询改单明细') },
+      },
       '../packages/packages.receipt-guard': { assertPrintLabelReceiptConsistent() {} }, '../../utils/logger': {},
       '../inbound-tasks/inbound-tasks.create-receipt': { async ensureInboundCreateReceiptView() {}, async assertInboundCreateReceipt() {} },
       '../inbound-tasks/inbound-tasks.edit-receipt': { async ensureInboundEditReceiptView() {}, async assertInboundEditReceipt() {} },

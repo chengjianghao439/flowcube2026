@@ -153,7 +153,12 @@ test('RETURN-PURCHASE-Q06 应用后 URL 和网络保持原合同，返回及清�
   expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: draft.keyword, remark: draft.remark, status: '2', operatorId: '9', warehouseId: '9', startDate: draft.startDate, endDate: draft.endDate, page: '1', pageSize: '200' }); expect(params()).toEqual({ keyword: draft.keyword, remark: draft.remark, status: '2', operatorId: '9', operatorName: draft.operator, warehouseId: '9', warehouseName: draft.warehouse, startDate: draft.startDate, endDate: draft.endDate, page: '1' })
   const original = path(), before = listRequests().length
   await click('切到旁页'); await click('返回原列表'); expect(path()).toBe(original); expect(listRequests()).toHaveLength(before)
-  await click('查询'); await wait(() => expect(fields()).toEqual(draft)); await click('取消', dialog())
+  const statusBar = host.querySelector<HTMLElement>('.desktop-status-filter')!
+  expect(button(draft.status, statusBar).getAttribute('aria-checked')).toBe('true')
+  await click('已执行', statusBar)
+  await wait(() => expect(listRequests().at(-1)?.searchParams.get('status')).toBe('3'))
+  expect(params()).toEqual({ ...Object.fromEntries(new URLSearchParams(original.split('?')[1])), status: '3' })
+  await click('查询'); await wait(() => expect(fields()).toEqual({ ...draft, status: '已执行' })); await click('取消', dialog())
   await click('清空'); await wait(() => expect(params()).toEqual({ range: 'all', page: '1' }))
   expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: '', page: '1', pageSize: '200' })
 })
@@ -309,7 +314,12 @@ test('RETURN-SALE-Q06 应用后 URL 和网络保持原合同，返回及清空�
   expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: draft.keyword, remark: draft.remark, status: '2', operatorId: '9', warehouseId: '9', startDate: draft.startDate, endDate: draft.endDate, page: '1', pageSize: '200' }); expect(params()).toEqual({ keyword: draft.keyword, remark: draft.remark, status: '2', operatorId: '9', operatorName: draft.operator, warehouseId: '9', warehouseName: draft.warehouse, startDate: draft.startDate, endDate: draft.endDate, page: '1' })
   const original = path(), before = listRequests().length
   await click('切到旁页'); await click('返回原列表'); expect(path()).toBe(original); expect(listRequests()).toHaveLength(before)
-  await click('查询'); await wait(() => expect(fields()).toEqual(draft)); await click('取消', dialog())
+  const statusBar = host.querySelector<HTMLElement>('.desktop-status-filter')!
+  expect(button(draft.status, statusBar).getAttribute('aria-checked')).toBe('true')
+  await click('已执行', statusBar)
+  await wait(() => expect(listRequests().at(-1)?.searchParams.get('status')).toBe('3'))
+  expect(params()).toEqual({ ...Object.fromEntries(new URLSearchParams(original.split('?')[1])), status: '3' })
+  await click('查询'); await wait(() => expect(fields()).toEqual({ ...draft, status: '已执行' })); await click('取消', dialog())
   await click('清空'); await wait(() => expect(params()).toEqual({ range: 'all', page: '1' }))
   expect(Object.fromEntries(listRequests().at(-1)!.searchParams)).toEqual({ keyword: '', page: '1', pageSize: '200' })
 })

@@ -198,9 +198,10 @@ test('Unix RAW使用私有目录并在lp失败后清理，旧可预测路径不�
   let observed
   let fileFlags
   const printer = load('desktop/lib/localPrint.js', {
-    fs: { ...fs, writeFileSync: (file, content, options) => { fileFlags = options.flag; return fs.writeFileSync(file, content, options) } },
+    fs: { ...fs, promises: { ...fs.promises, writeFile: (file, content, options) => { fileFlags = options.flag; return fs.promises.writeFile(file, content, options) } } },
     os: { ...os, tmpdir: () => tmp, platform: () => 'linux' },
-    child_process: { execFile: (_cmd, args, cb) => {
+    child_process: { execFile: (_cmd, args, options, cb) => {
+      assert.ok(options.timeout > 0)
       const filename = args.at(-1)
       observed = { filename, dir: path.dirname(filename), fileMode: fs.statSync(filename).mode & 0o777, dirMode: fs.statSync(path.dirname(filename)).mode & 0o777 }
       cb(new Error('controlled lp failure'))
@@ -256,4 +257,43 @@ test('工作站身份随机、凭据按服务器加密保存；安全存储不�
     assert.equal(memoryOnly.getCredential('https://server-b.invalid'), credential)
     assert.deepEqual(fs.readdirSync(dir), before)
   } finally { fs.rmSync(dir, { recursive: true, force: true }) }
+})
+
+test('Windows RAW 异步提交内置脚本，失败也清理专用标签目录', async t => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-raw-stub-'))
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }))
+  let spool
+  const printer = load('desktop/lib/localPrint.js', {
+    os: { ...os, tmpdir: () => tmp, platform: () => 'win32' },
+    child_process: { execFile: (_cmd, args, options, callback) => {
+      spool = args[args.indexOf('-ZplPath') + 1]
+      assert.equal(fs.readFileSync(spool, 'utf8'), '^XA^FDlabel^FS^XZ')
+      assert.equal(fs.statSync(path.dirname(spool)).mode & 0o777, 0o700)
+      assert.equal(fs.statSync(spool).mode & 0o777, 0o600)
+      assert.ok(options.timeout > 0 && options.timeout <= 60_000)
+      assert.equal(options.env.FC_PRINTER_NAME, '离线标签')
+      assert.match(args[args.indexOf('-File') + 1], /lib[/\\]print-zpl-raw\.ps1$/)
+      setImmediate(() => callback(new Error('controlled spool timeout')))
+    } },
+  })
+  await assert.rejects(printer.printZpl({ printerName: '离线标签', content: '^XA^FDlabel^FS^XZ' }), /controlled spool timeout/)
+  assert.ok(spool)
+  assert.equal(fs.existsSync(path.dirname(spool)), false)
+  assert.deepEqual(require('../desktop/package.json').build.asarUnpack, ['lib/print-zpl-raw.ps1'])
+})
+
+test('两个并发 RAW 批次按整批串行，前者失败后后者可继续', async () => {
+  const { printBoundedBatch } = require('../desktop/lib/printBudget')
+  const calls = []
+  let unblock
+  const wait = new Promise(resolve => { unblock = resolve })
+  const first = printBoundedBatch({ content: 'A' }, async () => { calls.push('first'); await wait; throw Error('driver') })
+  const second = printBoundedBatch({ content: 'B' }, async () => calls.push('second'))
+  await new Promise(resolve => setImmediate(resolve))
+  const before = [...calls]
+  unblock()
+  await assert.rejects(first, /driver/)
+  await second
+  assert.deepEqual(before, ['first'])
+  assert.deepEqual(calls, ['first', 'second'])
 })

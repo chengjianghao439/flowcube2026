@@ -155,11 +155,19 @@ test.each(['In', 'Out'] as const)('actual scan %s loses response, then terminal 
 })
 test.each(['In', 'Out'] as const)('server/actor changes %s never send original query to a new owner', async d => {
   await seed(d); await render(d); const original = localStorage.getItem(pendingKey(d)), count = statusCalls().length
-  await act(async () => setApiClientBaseURL('/other-api')); await click('确认上次结果')
+  await act(async () => setApiClientBaseURL('/other-api'))
+  expect(button('确认上次结果')).toBeUndefined()
   expect(statusCalls()).toHaveLength(count); expect(localStorage.getItem(pendingKey(d))).toBe(original)
   await act(async () => useAuthStore.getState().login('other-memory', null, { id: 2, roleId: 1 } as User)); await pause()
   expect(button('确认上次结果')).toBeUndefined(); expect(statusCalls()).toHaveLength(count)
   expect(localStorage.getItem(pendingKey(d))).toBe(original); expect(posts()).toHaveLength(0)
+  await act(async () => {
+    setApiClientBaseURL('/api')
+    useAuthStore.getState().login('original-memory', null, { id: 1, roleId: 1 } as User)
+  })
+  await pause()
+  expect(button('确认上次结果')).toBeDefined()
+  expect(localStorage.getItem(pendingKey(d))).toBe(original)
 })
 test.each(['In', 'Out'] as const)('return %s preserves unrelated pending body, sibling draft and original recovery', async d => {
   await seed(d); await seed('Out', 'other-transfer-key', 'transfer.scanOut.99')

@@ -72,9 +72,7 @@ export default function VoucherQueryDialog({ open, initial, onClose, onApply }: 
             <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">全部状态</SelectItem>
-              <SelectItem value="1">{VOUCHER_STATUS_LABELS[1]}</SelectItem>
-              <SelectItem value="2">{VOUCHER_STATUS_LABELS[2]}</SelectItem>
-              <SelectItem value="3">{VOUCHER_STATUS_LABELS[3]}</SelectItem>
+              {Object.entries(VOUCHER_STATUS_LABELS).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}
             </SelectContent>
           </Select>
         </label>

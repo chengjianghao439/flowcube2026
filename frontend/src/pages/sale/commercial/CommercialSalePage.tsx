@@ -1,3 +1,4 @@
+import { Textarea } from '@/components/ui/textarea'
 import { ReturnSourceButton } from '@/pages/returns/ReturnSourceButton'
 import { ReorderSourceButton } from '../ReorderSourceButton'
 import { useSaleReorderSource } from '@/hooks/useSaleReorderSource'
@@ -301,7 +302,7 @@ export default function CommercialSalePage({
           </Button>
           {backup.text && (
             <>
-              <textarea readOnly aria-label="原单备份" value={backup.text} className="w-full border p-2" />
+              <Textarea readOnly aria-label="原单备份" value={backup.text} className="min-h-28 font-mono text-xs" />
               <Button onClick={() => backup.acknowledge(backup.text)}>已备份草稿</Button>
             </>
           )}

@@ -30,7 +30,8 @@ function PageLoader() {
   )
 }
 
-function isPdaPath(pathname: string) {
+function isPdaPath(path: string) {
+  const pathname = path.split(/[?#]/, 1)[0]
   return pathname === '/pda' || pathname.startsWith('/pda/')
 }
 

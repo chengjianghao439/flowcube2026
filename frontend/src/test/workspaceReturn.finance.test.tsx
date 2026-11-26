@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { ComponentType } from 'react'
+import { act, type ComponentType } from 'react'
 import { beforeEach,afterEach,expect,test,vi } from 'vitest'
 import { retentionHarness } from './workspaceRetention'
 import { clearReadFixtures,readData,lastRead,paged,writeCalls } from './readOnlyApi'
@@ -33,7 +33,7 @@ beforeEach(()=>{
  const ledgerRow={...row,accountId:42,category:'asset',categoryName:'资产',isLeaf:true,openingDebit:0,openingCredit:0,periodDebit:0,periodCredit:0,closingDebit:0,closingCredit:0}
  readData.set('accounting.getTrialBalanceApi',{...paged(ledgerRow),balanced:{period:true,closing:true},totals:{openingDebit:0,openingCredit:0,periodDebit:0,periodCredit:0,closingDebit:0,closingCredit:0}})
  readData.set('accounting.getAccountLedgerApi',{list:[{voucherNo:'SYN42',voucherDate:'2026-09-08',summary:'KEEP明细',debit:0,credit:0,balance:0}],openingBalance:0,closingBalance:0,account:ledgerRow})
- readData.set('assets.listFixedAssetsApi',paged(row));readData.set('logistics.getFreightBillsApi',paged(row));readData.set('logistics.getFreightSettlementsApi',paged({...row,settlementNo:'SYN42',billCount:1,totalActualFreight:1,totalEstFreight:1,totalDiffFreight:0}));readData.set('carriers.getCarriersActiveApi',[])
+ readData.set('assets.listFixedAssetsApi',paged(row));readData.set('logistics.getFreightBillsApi',paged(row));readData.set('logistics.getFreightSettlementsApi',paged({...row,settlementNo:'SYN42',billCount:1,totalActualFreight:1,totalEstFreight:1,totalDiffFreight:0}));readData.set('carriers.getCarriersActiveApi',[{ id: 42, name: '合成承运商', code: 'SYN42' }])
 })
 afterEach(()=>expect(writeCalls).toEqual([]))
 const cases=[
@@ -42,21 +42,62 @@ const cases=[
  {page:'/finance/expenses',api:'finance',op:'getExpenseClaimsApi',dialog:true,input:'单号 / 事由 / 申请人',open:'明细',close:'关闭'},
  {page:'/accounting/vouchers',api:'accounting',op:'getVouchersApi',dialog:true,input:'凭证号 / 单号 / 摘要',open:'查看',close:'关闭'},
  {page:'/accounting/invoices',api:'accounting',op:'getInvoicesApi',dialog:true,input:'发票号 / 单位 / 单号',open:'更多操作',menuAction:'编辑',close:'取消'},
- {page:'/accounting/fixed-assets',api:'assets',op:'listFixedAssetsApi',input:'编号 / 名称 / 类别',enter:true,open:'处置',close:'取消'},
+ {page:'/accounting/fixed-assets',api:'assets',op:'listFixedAssetsApi',dialog:true,input:'编号 / 名称 / 类别',enter:true,open:'处置',close:'取消'},
 ]
 for(const c of cases)test('真实'+c.page+'应用筛选→实际明细/编辑弹窗关闭→切页返回',async()=>{
- await h.render(c.page);if(c.dialog)await h.click('查询');const input=(c.dialog?document:h.host).querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!;await h.input(input,'KEEP');if(c.dialog)await h.click('查询',document.querySelector('[role="dialog"]')!);else if(c.enter)await h.enter(input)
+ await h.render(c.page);if(c.dialog)await h.click('查询');const input=(c.dialog?document:h.host).querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!;await h.input(input,'KEEP');if(c.page==='/finance/accounts'||c.enter)await h.enter(input);else if(c.dialog)await h.click('查询',document.querySelector('[role="dialog"]')!)
  expect(lastRead(c.api,c.op)?.args[0]).toMatchObject({keyword:'KEEP'});const params=lastRead(c.api,c.op)?.args[0];expect(h.activeText()).toContain('SYN42')
  await h.click(c.open);if('menuAction' in c && c.menuAction)await h.click(c.menuAction);const dialog=document.querySelector('[role="dialog"]')!;expect(dialog).not.toBeNull();expect(dialog.textContent).not.toMatch(/加载失败|与这笔流水不符/);await h.click(c.close);expect(document.querySelector('[role="dialog"]')).toBeNull()
  await h.go('/dashboard');await h.go(c.page);expect(lastRead(c.api,c.op)?.args[0]).toEqual(params);expect(h.activeText()).toContain('SYN42')
  if(c.dialog){await h.click('查询');expect(document.querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!.value).toBe('KEEP');await h.click('取消')}else expect(h.host.querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!.value).toBe('KEEP')
 })
-test('实际总账已应用期间→实际明细账→关闭，期间/请求/记录保持',async()=>{
- await h.render('/accounting/ledger');const input=h.host.querySelector<HTMLInputElement>('[placeholder="YYYYMM"]')!;await h.input(input,'202609');expect(lastRead('accounting','getTrialBalanceApi')!.args[0]).toBe('202609');await h.click('查看明细账');expect(document.querySelector('[role="dialog"]')!.textContent).toContain('SYN42');await h.click('关闭');await h.go('/dashboard');await h.go('/accounting/ledger');expect(input.value).toBe('202609');expect(lastRead('accounting','getTrialBalanceApi')!.args[0]).toBe('202609');expect(h.activeText()).toContain('SYN42')
+test('实际总账已应用期间→实际明细账→关闭，期间/请求/记录保持', async () => {
+  await h.render('/accounting/ledger')
+  const input = h.host.querySelector<HTMLInputElement>('[placeholder="YYYYMM"]')!
+  await h.input(input, '202609')
+  expect(lastRead('accounting', 'getTrialBalanceApi')!.args[0]).toBe('202609')
+
+  await h.click('查看明细账')
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  expect(dialog.querySelector('.fc-form-dialog-body')?.textContent).toContain('SYN42')
+  await h.click('关闭', dialog.querySelector('.fc-dialog-footer')!)
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+
+  await h.go('/dashboard')
+  await h.go('/accounting/ledger')
+  expect(input.value).toBe('202609')
+  expect(lastRead('accounting', 'getTrialBalanceApi')!.args[0]).toBe('202609')
+  expect(h.activeText()).toContain('SYN42')
 })
 test('实际补录已应用状态→独立读取真实详情→关闭，筛选和原记录保留',async()=>{
- await h.render('/accounting/backfills');await h.select('全部状态','待审批');expect(lastRead('accounting','getBackfillsApi')!.args[0]).toMatchObject({status:0});const params=lastRead('accounting','getBackfillsApi')!.args[0];await h.click('详情');expect(lastRead('accounting','getBackfillDetailApi')!.args[0]).toBe(42);expect(document.querySelector('[role="dialog"]')!.textContent).toContain('KEEP合成');await h.click('关闭');await h.go('/dashboard');await h.go('/accounting/backfills');expect(h.activeText()).toContain('待审批');expect(lastRead('accounting','getBackfillsApi')!.args[0]).toEqual(params)
+ await h.render('/accounting/backfills');await h.click('待审批');expect(lastRead('accounting','getBackfillsApi')!.args[0]).toMatchObject({status:0});const params=lastRead('accounting','getBackfillsApi')!.args[0];await h.click('详情');expect(lastRead('accounting','getBackfillDetailApi')!.args[0]).toBe(42);expect(document.querySelector('[role="dialog"]')!.textContent).toContain('KEEP合成');await h.click('关闭');await h.go('/dashboard');await h.go('/accounting/backfills');expect(h.activeText()).toContain('待审批');expect(lastRead('accounting','getBackfillsApi')!.args[0]).toEqual(params)
 })
 test('实际运费对账期间→现有录入弹窗取消，账单/汇总期间和原结果保持',async()=>{
- await h.render('/logistics/freight-reconciliation');const input=h.host.querySelector<HTMLInputElement>('[placeholder="2026-07"]')!;await h.input(input,'2026-08');const params=lastRead('logistics','getFreightBillsApi')!.args[0];expect(params).toMatchObject({billPeriod:'2026-08'});await h.click('录入账单');expect(document.querySelector('[role="dialog"]')).not.toBeNull();await h.click('取消');await h.go('/dashboard');await h.go('/logistics/freight-reconciliation');expect(input.value).toBe('2026-08');expect(lastRead('logistics','getFreightBillsApi')!.args[0]).toEqual(params);expect(h.activeText()).toContain('SYN42')
+ await h.render('/logistics/freight-reconciliation');await h.click('查询');const input=document.querySelector<HTMLInputElement>('[placeholder="2026-07"]')!;await h.input(input,'2026-08');await h.enter(input);const params=lastRead('logistics','getFreightBillsApi')!.args[0];expect(params).toMatchObject({billPeriod:'2026-08'});await h.click('录入账单');expect(document.querySelector('[role="dialog"]')).not.toBeNull();await h.click('取消');await h.go('/dashboard');await h.go('/logistics/freight-reconciliation');expect(h.activeText()).toContain('账期：2026-08');expect(lastRead('logistics','getFreightBillsApi')!.args[0]).toEqual(params);expect(h.activeText()).toContain('SYN42')
+})
+
+test('流水查询的倒挂日期同时阻止点击和回车，修正后回车应用草稿', async () => {
+  await h.render('/finance/transactions')
+  const initial = lastRead('finance', 'getAccountTransactionsApi')
+  await h.click('查询')
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const end = dialog.querySelector<HTMLInputElement>('input[id$="-endDate"]')!
+  const keyword = dialog.querySelector<HTMLInputElement>('input[id$="-keyword"]')!
+  async function setEnd(value: string) {
+    await h.input(end, value)
+    await act(async () => end.dispatchEvent(new FocusEvent('focusout', { bubbles: true })))
+  }
+  await setEnd('2000-01-01')
+  expect(end.getAttribute('aria-invalid')).toBe('true')
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('起始日期不能晚于结束日期')
+  const apply = [...dialog.querySelectorAll('button')].find(button => button.textContent === '查询')!
+  expect(apply.disabled).toBe(true)
+  await h.enter(keyword)
+  expect(dialog.isConnected).toBe(true)
+  expect(lastRead('finance', 'getAccountTransactionsApi')).toBe(initial)
+  await setEnd('2099-01-01')
+  await h.input(keyword, '流水筛选')
+  await h.enter(keyword)
+  expect(dialog.isConnected).toBe(false)
+  expect(lastRead('finance', 'getAccountTransactionsApi')?.args[0]).toMatchObject({ keyword: '流水筛选', endDate: '2099-01-01' })
 })

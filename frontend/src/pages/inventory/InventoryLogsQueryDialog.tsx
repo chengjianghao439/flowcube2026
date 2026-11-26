@@ -41,6 +41,9 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o
   const [productOpen, setProductOpen] = useState(false)
   const dateErrorId = useId()
   const dateInvalid = isReversedDateRange(draft.startDate, draft.endDate)
+  const apply = (next: InventoryLogsQueryValues) => {
+    if (!isReversedDateRange(next.startDate, next.endDate)) onApply(next)
+  }
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
@@ -55,7 +58,7 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o
         onClose={onClose}
         onReset={() => setDraft(resetDraft())}
         applyDisabled={dateInvalid}
-        onApply={() => { if (!dateInvalid) onApply(draft) }}
+        onApply={() => apply(draft)}
       >
         <QueryFormLayout>
           <label className="flex flex-col gap-1">
@@ -95,12 +98,14 @@ export default function InventoryLogsQueryDialog({ open, initial, resetValues, o
             <span className="text-xs font-medium text-muted-foreground">日期（起）</span>
             <DatePicker aria-label="日期（起）" value={draft.startDate} max={draft.endDate || undefined}
               aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined}
+              onEnter={v => apply({ ...draft, startDate: v })}
               onChange={v => setDraft(d => ({ ...d, startDate: v }))} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">日期（止）</span>
             <DatePicker aria-label="日期（止）" value={draft.endDate} min={draft.startDate || undefined}
               aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined}
+              onEnter={v => apply({ ...draft, endDate: v })}
               onChange={v => setDraft(d => ({ ...d, endDate: v }))} className="h-9" />
           </label>
           {dateInvalid && <p id={dateErrorId} role="alert" className="col-span-2 text-xs text-destructive-ink">起始日期不能晚于结束日期。</p>}

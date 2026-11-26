@@ -72,3 +72,35 @@ test('sale opt-in captures its opening trigger before an autofocus search input 
     expect(document.activeElement).toBe(trigger)
   } finally { act(() => root.unmount()); host.remove(); trigger.remove() }
 })
+
+test('业务表单的标题与提交按钮位于滚动正文之外，页脚能提交所属表单', () => {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  let submitted = ''
+  try {
+    act(() => root.render(
+      <AppDialog formDialog open onOpenChange={() => {}} dialogId="form-scroll" title="登记付款"
+        footer={<button type="submit" form="payment-form">登记</button>}>
+        <form id="payment-form" onSubmit={event => {
+          event.preventDefault()
+          submitted = String(new FormData(event.currentTarget).get('amount'))
+        }}>
+          <input name="amount" defaultValue="25.50" />
+        </form>
+      </AppDialog>,
+    ))
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+    const body = dialog.querySelector(':scope > .fc-form-dialog-body')!
+    expect(dialog.classList.contains('fc-form-dialog')).toBe(true)
+    expect(body.querySelector('form')).toBeTruthy()
+    expect(body.contains(dialog.querySelector('h2'))).toBe(false)
+    const submit = dialog.querySelector<HTMLButtonElement>('.fc-app-dialog-footer button')!
+    expect(body.contains(submit)).toBe(false)
+    act(() => submit.click())
+    expect(submitted).toBe('25.50')
+  } finally {
+    act(() => root.unmount())
+    host.remove()
+  }
+})

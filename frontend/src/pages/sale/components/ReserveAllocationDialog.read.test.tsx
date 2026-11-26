@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
+import { getByRole } from '@testing-library/dom'
+import { chooseSelectOption } from '@/test/chooseSelectOption'
 import { MemoryRouter } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { createRoot, type Root } from 'react-dom/client'
@@ -83,6 +85,74 @@ afterEach(cleanupFixture)
 
 async function mount() { await act(async () => root.render(<MemoryRouter><QueryClientProvider client={qc}><ReserveAllocationDialog open orderId={7} onClose={vi.fn()} onShortage={vi.fn()} /></QueryClientProvider></MemoryRouter>)) }
 const button = (name: string) => [...document.querySelectorAll<HTMLButtonElement>('button')].find(b => b.textContent?.trim() === name)!
+
+test('首次单行占库仅显示待占、可用及可拣提示，库存构成和占后量展开再看', async () => {
+  const item = {
+    ...preview.items[0], quantity: 46, remainToReserve: 46,
+    warehouses: [{ warehouseId: 1, warehouseName: '合成仓库', available: 45, quantity: 40, reserved: 5, expected: 10, pickableQuantity: 20 }],
+  }
+  client.defaults.adapter = (async config => {
+    validateRead(config)
+    return success(config, { ...preview, items: [item] })
+  }) satisfies AxiosAdapter
+  await mount()
+  await until(() => expect(document.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('45'))
+  expect(document.querySelector('.fc-dialog-caption')).toBeNull()
+  const text = document.body.textContent!
+  for (const redundant of ['商品明细', '订单总量', '已占数量', '待占数量', '本仓最多可占', '占后剩余', '已选 ']) {
+    expect(text).not.toContain(redundant)
+  }
+  expect(text).toContain('可拣 20')
+  expect(text).toContain('本次占用 45 个')
+  expect(button('确认占用').disabled).toBe(false)
+
+  const details = getByRole(document.body, 'button', { name: /查看合成商品库存参考/ })
+  expect(details.textContent).toBe('45 个')
+  await act(async () => details.click())
+  const stock = getByRole(document.body, 'dialog', { name: '合成商品库存参考' })
+  expect([...stock.querySelectorAll('dd')].map(value => value.textContent)).toEqual(['40 个', '5 个', '10 个', '20 个', '0 个'])
+  expect(stock.textContent).toContain('可能无法立即拣货')
+})
+
+test('多行仅显示一次勾选计数，保留已占明细和不同单位合计', async () => {
+  const first = { ...preview.items[0], reservedQty: 1, remainToReserve: 1 }
+  const second = { ...preview.items[0], itemId: 18, productId: 28, productName: '合成箱装', unit: '箱' }
+  client.defaults.adapter = (async config => {
+    validateRead(config)
+    return success(config, { ...preview, items: [first, second] })
+  }) satisfies AxiosAdapter
+  await mount()
+  await until(() => expect(document.querySelector('.fc-dialog-footer')?.textContent).toContain('本次占用 1 个 / 2 箱'))
+  expect(document.body.textContent).toContain('已占 1 / 2')
+  expect(document.querySelector('.fc-dialog-footer')?.textContent).toContain('已选 2/2 项')
+
+  const checkbox = getByRole(document.body, 'checkbox', { name: /选择 合成箱装/ })
+  await act(async () => checkbox.click())
+  const footer = document.querySelector('.fc-dialog-footer')?.textContent
+  expect(footer).toContain('本次占用 1 个')
+  expect(footer).toContain('已选 1/2 项')
+  expect(footer).not.toContain('2 箱')
+})
+
+test.each([
+  { available: 45, allowDecimalQty: false, expectedQty: '45' },
+  { available: 45.75, allowDecimalQty: false, expectedQty: '45' },
+  { available: 45.75, allowDecimalQty: true, expectedQty: '45.75' },
+  { available: 0, allowDecimalQty: false, expectedQty: '0' },
+])('初次打开只建议本仓可合法占用的量 %#', async ({ available, allowDecimalQty, expectedQty }) => {
+  client.defaults.adapter = (async config => {
+    validateRead(config)
+    return success(config, { ...preview, items: preview.items.map(item => ({
+      ...item, quantity: 46, remainToReserve: 46, allowDecimalQty,
+      warehouses: item.warehouses.map(warehouse => ({ ...warehouse, available })),
+    })) })
+  }) satisfies AxiosAdapter
+  await mount()
+  await until(() => expect(document.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe(expectedQty))
+  expect(button('确认占用').disabled).toBe(expectedQty === '0')
+  expect(document.body.textContent?.includes('本仓暂无可占量')).toBe(expectedQty === '0')
+})
+
 function validateRead(config: Parameters<AxiosAdapter>[0]) { expect(config.method).toBe('get'); expect(config.url).toBe('/sale/7/reserve-preview'); reads.push(String(config.url)) }
 function success(config: Parameters<AxiosAdapter>[0], data = preview) { return { status: 200, statusText: 'OK', headers: {}, config, data: { success: true, data } } }
 
@@ -96,7 +166,7 @@ test('预览失败显示真实错误/重试，不冒充空表与0量，不提供
   expect(document.body.textContent?.split('加载商品与库存信息')).toHaveLength(2)
   expect(document.body.textContent).not.toContain('核对商品身份，按明细选择发货仓库和本次占库数量')
   expect(document.body.textContent).not.toContain('加载失败')
-  expect(button('确认占用（0 项）').disabled).toBe(true)
+  expect(button('确认占用').disabled).toBe(true)
   await act(async () => releaseReads())
   await until(() => expect(document.body.textContent).toContain('加载失败'))
   expect(document.body.textContent).toContain('加载失败')
@@ -105,13 +175,13 @@ test('预览失败显示真实错误/重试，不冒充空表与0量，不提供
   expect(document.body.textContent).not.toContain('没有可占用库存的商品明细')
   expect(document.body.textContent).not.toContain('0 行')
   expect(document.querySelector('[role="dialog"] table')).toBeNull()
-  expect(button('确认占用（0 项）').disabled).toBe(true)
+  expect(button('确认占用').disabled).toBe(true)
   fail = false; await act(async () => button('重试').click())
   await until(() => expect(document.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('2'))
   expect(reads).toEqual(['/sale/7/reserve-preview', '/sale/7/reserve-preview'])
   expect(document.body.textContent).not.toContain('加载失败')
   expect(document.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('2')
-  expect(button('确认占用（1 项）').disabled).toBe(false)
+  expect(button('确认占用').disabled).toBe(false)
 })
 
 test('缓存读取失败封住表格，重试成功后保留原数量/仓库选择并按新来源校验', async () => {
@@ -122,8 +192,8 @@ test('缓存读取失败封住表格，重试成功后保留原数量/仓库选�
   await act(async () => {
     const qty = document.querySelector<HTMLInputElement>('input[type="number"]')!
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(qty, '1.25'); qty.dispatchEvent(new Event('input', { bubbles: true }))
-    const warehouse = document.querySelector<HTMLSelectElement>('select')!; warehouse.value = '2'; warehouse.dispatchEvent(new Event('change', { bubbles: true }))
   })
+  await chooseWarehouse('第二仓库')
   await act(async () => reject(new AxiosError('本批刷新失败', 'ERR_NETWORK')))
   await until(() => expect(document.body.textContent).toContain('加载失败'))
   expect(document.body.textContent).toContain('加载失败')
@@ -131,24 +201,23 @@ test('缓存读取失败封住表格，重试成功后保留原数量/仓库选�
   retry = true; await act(async () => button('重试').click())
   await until(() => expect(document.querySelector<HTMLInputElement>('input[type="number"]')?.value).toBe('1.25'))
   expect(document.querySelector<HTMLInputElement>('input[type="number"]')!.value).toBe('1.25')
-  expect(document.querySelector<HTMLSelectElement>('select')!.value).toBe('2')
-  expect(button('确认占用（1 项）').disabled).toBe(true)
-  expect(document.body.textContent).toContain('库存不足')
+  expect(warehouseTrigger().textContent).toContain('第二仓库')
+  expect(button('确认占用').disabled).toBe(true)
+  const field = document.querySelector<HTMLInputElement>('input[type="number"]')!
+  expect(document.getElementById(field.getAttribute('aria-describedby')!)?.textContent).toBe('本仓最多可占 1 个')
 })
 
 test('占库仓库标签关联这一商品行的真实选择控件', async () => {
   client.defaults.adapter = (async config => { validateRead(config); return success(config, { ...preview, credit: { customerId: 1, creditLimit: 100, used: 90, thisOrder: 30, willExceed: true, overAmount: 20 } }) }) satisfies AxiosAdapter
   await mount()
-  await until(() => expect(document.querySelector('select')).not.toBeNull())
+  await until(() => expect(warehouseTrigger().tagName).toBe('BUTTON'))
   const caption = document.querySelector('.fc-dialog-caption')!
   expect(caption.textContent).toContain('额度 ¥100.00，已用 ¥90.00，本单 ¥30.00，超出约 ¥20.00')
   expect(caption.textContent).toContain('超额占库须先取得有效批准；原批准失效时可重新发起')
   expect(caption.querySelector('a')?.getAttribute('href')).toBe('#/credit-overrides')
   expect(document.body.textContent?.split('客户授信将超额')).toHaveLength(2)
   expect(document.body.textContent).not.toContain('核对商品身份，按明细选择发货仓库和本次占库数量')
-  const label = [...document.querySelectorAll('label')].find(label => label.textContent?.includes('选择库存所在仓库'))
-  expect(label).toBeTruthy(); expect(label!.htmlFor).not.toBe('')
-  expect(document.getElementById(label!.htmlFor)).toBe(document.querySelector('select'))
+  expect(warehouseTrigger().getAttribute('aria-label')).toBe('合成商品发货仓库')
 })
 
 test('首次正在读取不展示0量/空分配表', async () => {
@@ -195,3 +264,11 @@ test('占库弹窗卸载时等待真实错误链结算后恢复原会话', async
     try { await cleanup } finally { client.interceptors.response.eject(interceptor) }
   }
 })
+
+function warehouseTrigger() {
+  return getByRole(document.body, 'combobox', { name: '合成商品发货仓库' }) as HTMLButtonElement
+}
+
+async function chooseWarehouse(name: string) {
+  await chooseSelectOption(warehouseTrigger(), name)
+}

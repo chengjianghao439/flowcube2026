@@ -16,14 +16,15 @@ const { buildPutawayContributions, movingAverageCost } = require('./inbound-task
 async function tryFinishTask(conn, taskId) {
   // 调用方持有任务行锁；阶段用当前读，不能沿用等待任务锁前的 RR 快照。
   // 收货开放时不能因当前实收已全上架而结算。
-  const [[taskMeta]] = await conn.query('SELECT status, closed_reason FROM inbound_tasks WHERE id = ? FOR UPDATE', [taskId])
+  const [[taskMeta]] = await conn.query('SELECT status, closed_reason, warehouse_id FROM inbound_tasks WHERE id = ? FOR UPDATE', [taskId])
   if (Number(taskMeta?.status) !== 3) return
   const finishRule = assertStatusAction('inboundTask', 'finish', taskMeta.status)
   // 待上架(4) 容器只要还有一个未处理，任务就不能完结
   const [[{ n }]] = await conn.query(
     `SELECT COUNT(*) AS n FROM inventory_containers
-     WHERE inbound_task_id = ? AND deleted_at IS NULL AND status = ?`,
-    [taskId, CONTAINER_STATUS.PENDING_PUTAWAY],
+     WHERE inbound_task_id = ? AND deleted_at IS NULL AND status = ?
+       AND transfer_order_id IS NULL AND warehouse_id = ?`,
+    [taskId, CONTAINER_STATUS.PENDING_PUTAWAY, taskMeta.warehouse_id],
   )
   if (Number(n) > 0) return
 
@@ -84,6 +85,17 @@ async function tryFinishTask(conn, taskId) {
   await settlePurchaseOnAudit(conn, taskId)
 }
 
+function assertPutawayOwnership(container, taskId, warehouseId, scopeWarehouseIds) {
+  if (Number(container.inbound_task_id) !== Number(taskId)) throw new AppError('库存条码不属于该入库任务', 400)
+  assertInScope(scopeWarehouseIds, container.warehouse_id, '收货容器')
+  if (container.transfer_order_id != null) {
+    throw new AppError('库存条码正在调拨中，无法收货上架', 409, 'INBOUND_TASK_CONTAINER_IN_TRANSIT')
+  }
+  if (Number(container.warehouse_id) !== Number(warehouseId)) {
+    throw new AppError('库存条码已不在该收货订单所属仓库', 409, 'INBOUND_TASK_CONTAINER_MOVED_AWAY')
+  }
+}
+
 async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion, suggestedLocationCode }, operator, { requestKey, pdaWarehouseId, scopeWarehouseIds = null } = {}) {
   const conn = await pool.getConnection()
   try {
@@ -121,14 +133,13 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
     // 上架的最后一步要汇总整个维度刷新 inventory_stock 缓存；若先锁住自己这只容器
     // 再去请求汇总范围锁，两个上架员同时扫同一商品的不同箱就会成环死锁；
     // 而不给汇总加锁则会丢失更新、库存凭空蒸发（详见 containerEngine.lockStockDimension）。
-    // product_id / warehouse_id 是容器的不可变字段，这里无锁预读安全，
-    // 真正的状态与归属校验仍由下面的加锁读负责。
+    // 调拨可能变更仓库。先排除已移交的条码，取得维度锁后再用容器当前读复核。
     const [[cRef]] = await conn.query(
-      'SELECT product_id, warehouse_id, inbound_task_id FROM inventory_containers WHERE id = ? AND deleted_at IS NULL',
+      'SELECT product_id, warehouse_id, inbound_task_id, transfer_order_id FROM inventory_containers WHERE id = ? AND deleted_at IS NULL',
       [containerId],
     )
     if (!cRef) throw new AppError('库存条码不存在', 404)
-    if (Number(cRef.inbound_task_id) !== Number(taskId)) throw new AppError('库存条码不属于该入库任务',400)
+    assertPutawayOwnership(cRef, taskId, taskRow.warehouse_id, scopeWarehouseIds)
     // This path also updates avg_cost: take the product X lock before any
     // policy S/stock/container locks, avoiding concurrent S-to-X upgrades.
     await conn.query('SELECT id FROM product_items WHERE id=? FOR UPDATE',[cRef.product_id])
@@ -142,7 +153,7 @@ async function putaway(taskId, { containerId, locationId, deviatedFromSuggestion
       [containerId],
     )
     if (!c) throw new AppError('库存条码不存在', 404)
-    if (Number(c.inbound_task_id) !== Number(taskId)) throw new AppError('库存条码不属于该入库任务', 400)
+    assertPutawayOwnership(c, taskId, taskRow.warehouse_id, scopeWarehouseIds)
     if (Number(c.status) !== CONTAINER_STATUS.PENDING_PUTAWAY) {
       throw new AppError('库存条码须为待上架状态', 400)
     }

@@ -9,9 +9,6 @@ artifact_sha="${DESKTOP_ARTIFACT_SHA:?}"
 downloads_path="${SERVER_DOWNLOADS_PATH:?}"
 ssh_target="${SERVER_USER:?}@${SERVER_HOST:?}"
 ssh_port="${SERVER_SSH_PORT:?}"
-remote_tmp="/tmp/flowcube-desktop-release/${tag}"
-remote_artifact="${remote_tmp}/$(basename "$artifact")"
-remote_script="${remote_tmp}/release-desktop.js"
 [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$tag" = "v$version" ]]
 [[ "$source_sha" =~ ^[a-f0-9]{40}$ && "$artifact_sha" =~ ^[a-f0-9]{64}$ ]]
 [[ "$(basename "$artifact")" =~ ^[A-Za-z0-9_.-]+\.exe$ ]]
@@ -31,29 +28,34 @@ cleanup_remote_tmp() {
 github_args=(--tag "$tag" --version "$version" --source-sha "$source_sha" --sha256 "$artifact_sha" --file "$artifact")
 node scripts/publish-release-asset.cjs "${github_args[@]}" --check-only 1
 
+remote_tmp=$(ssh_remote 'umask 077; mktemp -d /tmp/flowcube-desktop-release.XXXXXXXXXX')
+[[ "$remote_tmp" =~ ^/tmp/flowcube-desktop-release\.[a-zA-Z0-9]{10}$ ]] || { echo '远端暂存目录无效' >&2; exit 1; }
 trap cleanup_remote_tmp EXIT
-ssh_remote "mkdir -p '$remote_tmp'"
+remote_artifact="$remote_tmp/$(basename "$artifact")"
+remote_script="$remote_tmp/release-desktop.js"
 timeout -k 5 120 scp "${ssh_opts[@]}" -P "$ssh_port" scripts/release-desktop.js "$ssh_target:$remote_script"
 bash scripts/transfer-release-asset.sh "$artifact" "$ssh_target" "$ssh_port" "$remote_artifact"
 
+ssh_remote "chmod 0644 '$remote_script' '$remote_artifact'"
+
 server_publish() {
-  local command downloads_mount=${1-}
-  shift
+  local command
   printf -v command '%q ' flock -w 60 "${downloads_path}/.desktop-publish.lock" \
-    docker run --rm --user 0:0 \
-    --mount "type=bind,source=$downloads_path,target=$downloads_path$downloads_mount" \
-    --mount "type=bind,source=$remote_tmp,target=$remote_tmp,readonly" \
+    docker run --rm --user node:node --entrypoint node \
+    --mount "type=bind,source=$downloads_path,target=$downloads_path" \
+    --mount "type=bind,source=$remote_script,target=/tmp/release-desktop.js,readonly" \
+    --mount "type=bind,source=$remote_artifact,target=/tmp/$(basename "$artifact"),readonly" \
     -e "FLOWCUBE_DOWNLOADS_ROOT=$downloads_path" -e "FLOWCUBE_RELEASE_NOTES_B64=${RELEASE_NOTES_B64:-}" \
-    flowcube-backend node "$remote_script" "$version" \
-    "--artifact=$remote_artifact" "--source-sha=$source_sha" "--sha256=$artifact_sha" "$@"
+    flowcube-backend /tmp/release-desktop.js "$version" \
+    "--artifact=/tmp/$(basename "$artifact")" "--source-sha=$source_sha" "--sha256=$artifact_sha" "$@"
   ssh_remote "$command"
 }
 
-server_publish ',readonly' --dry-run
+server_publish --dry-run --check-write-access
 if [ "${ATTACH_DESKTOP_RELEASE:-false}" = true ]; then
   node scripts/publish-release-asset.cjs "${github_args[@]}" --prepare-only 1
 fi
-server_publish ''
+server_publish
 if [ "${ATTACH_DESKTOP_RELEASE:-false}" = true ]; then
   node scripts/publish-release-asset.cjs "${github_args[@]}" --complete-existing 1 --origin "${ERP_ORIGIN:?}"
 fi

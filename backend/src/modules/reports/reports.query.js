@@ -1,8 +1,10 @@
+const { assertSqlIdentifier } = require('../../utils/sqlIdentifier')
 const { normalizePagination } = require('../../utils/pagination')
 const { pool } = require('../../config/db')
 const { buildDateFilter, buildTimestampDateFilter } = require('./reports.helpers')
 const { SETTLEMENT_SCOPE_COLUMN, isValidSettlementType } = require('../../constants/settlementType')
 const { getInventoryDisplayProjectionSql } = require('../inventory/inventoryProjection')
+const { saleDocumentScopeFilter } = require('../../utils/saleDocumentScope')
 const { scopeFilter } = require('../../utils/warehouseScope')
 const { beijingTodayYmd } = require('../../utils/backendTime')
 const logger = require('../../utils/logger')
@@ -79,7 +81,7 @@ async function fetchPurchaseStatsRows({ startDate, endDate, scopeWarehouseIds = 
 
 async function fetchSaleStatsRows({ startDate, endDate, scopeWarehouseIds = null }) {
   const { sql: dateCond, params: dateParams } = buildTimestampDateFilter('o.created_at', startDate, endDate)
-  const wh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
+  const wh = saleDocumentScopeFilter(scopeWarehouseIds, 'o.id')
 
   const byMonth = await fetchMany(
     `SELECT DATE_FORMAT(o.created_at,'%Y-%m') AS month,
@@ -247,6 +249,9 @@ async function fetchInventoryStatsRows({ startDate, endDate, scopeWarehouseIds =
 
 async function fetchPdaPerformanceRows(scopeWarehouseIds = null) {
   const today = beijingTodayYmd()
+  if (Array.isArray(scopeWarehouseIds) && !scopeWarehouseIds.length) {
+    return { today, todaySummary: { scan_count: 0, pick_qty: 0 }, byOperator: [], daily: [] }
+  }
   // scan_logs 通过 task_id → warehouse_tasks 关联仓库；带 scope 时按任务仓库过滤
   const join = scopeWarehouseIds && Array.isArray(scopeWarehouseIds)
     ? `INNER JOIN warehouse_tasks wt ON wt.id = sl.task_id AND wt.warehouse_id IN (${scopeWarehouseIds.map(() => '?').join(',')})`
@@ -327,19 +332,25 @@ async function fetchWavePerformanceRows({ startDate = null, endDate = null, scop
        pw.operator_name,
        pw.created_at,
        pw.updated_at,
-       COUNT(DISTINCT pwi.product_id) AS sku_count,
-       COALESCE(SUM(pwi.total_qty), 0) AS total_required_qty,
-       COALESCE(SUM(pwi.picked_qty), 0) AS total_picked_qty,
-       COUNT(pwr.id) AS total_steps,
-       SUM(pwr.status = 'completed') AS completed_steps,
-       MAX(pwr.completed_at) AS last_pick_at,
-       TIMESTAMPDIFF(MINUTE, pw.created_at, MAX(pwr.completed_at)) AS duration_minutes
+       COALESCE(items.sku_count, 0) AS sku_count,
+       COALESCE(items.total_required_qty, 0) AS total_required_qty,
+       COALESCE(items.total_picked_qty, 0) AS total_picked_qty,
+       COALESCE(route.total_steps, 0) AS total_steps,
+       COALESCE(route.completed_steps, 0) AS completed_steps,
+       route.last_pick_at,
+       TIMESTAMPDIFF(MINUTE, pw.created_at, route.last_pick_at) AS duration_minutes
      FROM picking_waves pw
-     LEFT JOIN picking_wave_items pwi ON pwi.wave_id = pw.id
-     LEFT JOIN picking_wave_routes pwr ON pwr.wave_id = pw.id
+     LEFT JOIN (
+       SELECT wave_id, COUNT(DISTINCT product_id) AS sku_count,
+              SUM(total_qty) AS total_required_qty, SUM(picked_qty) AS total_picked_qty
+       FROM picking_wave_items GROUP BY wave_id
+     ) items ON items.wave_id=pw.id
+     LEFT JOIN (
+       SELECT wave_id, COUNT(*) AS total_steps, SUM(status='completed') AS completed_steps,
+              MAX(completed_at) AS last_pick_at
+       FROM picking_wave_routes GROUP BY wave_id
+     ) route ON route.wave_id=pw.id
      WHERE pw.status != 5 ${dateCond}${wh.sql}
-     GROUP BY pw.id, pw.wave_no, pw.status, pw.task_count,
-              pw.operator_name, pw.created_at, pw.updated_at
      ORDER BY pw.created_at DESC
      LIMIT 100`,
     [...dateParams, ...wh.params],
@@ -354,9 +365,12 @@ async function fetchWarehouseOpsRows(scopeWarehouseIds = null) {
   const wtWh = scopeFilter(scopeWarehouseIds, 'wt.warehouse_id')
   const itWh = scopeFilter(scopeWarehouseIds, 'it.warehouse_id')
   // 受限用户只看能解析到授权仓任务的日志；无任务归属仅不限仓用户可见。
-  const logJoin = alias => Array.isArray(scopeWarehouseIds)
-    ? `INNER JOIN warehouse_tasks wt ON wt.id = ${alias}.task_id${wtWh.sql}`
-    : ''
+  const logJoin = alias => {
+    assertSqlIdentifier(alias, '仓库作业日志别名')
+    return Array.isArray(scopeWarehouseIds)
+      ? `INNER JOIN warehouse_tasks wt ON wt.id = ${alias}.task_id${wtWh.sql}`
+      : ''
+  }
   const slJoin = logJoin('sl')
   const slParams = wtWh.params
   // 当前出库入口写 shipped_at；旧记录缺失时保留 updated_at 兼容口径。
@@ -462,7 +476,7 @@ async function fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds = null, ba
   const take = Math.min(200, Math.max(1, Math.floor(Number(batchSize) || 5)))
   const offset = Math.max(0, Math.floor(Number(batchPage) || 1) - 1) * take
   const tWh = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
-  const oWh = scopeFilter(scopeWarehouseIds, 'o.warehouse_id')
+  const oWh = saleDocumentScopeFilter(scopeWarehouseIds, 'o.id')
   // print_failure / waiting_putaway 经容器关联收货任务，用任务仓库过滤
   const cWh = scopeFilter(scopeWarehouseIds, 't.warehouse_id')
   return {
@@ -491,10 +505,10 @@ async function fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds = null, ba
     waitingPutawayCount: await fetchOne(
       `SELECT COUNT(*) AS count
        FROM inventory_containers c
-       LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
+       INNER JOIN inbound_tasks t ON t.id = c.inbound_task_id AND c.warehouse_id = t.warehouse_id
        WHERE c.deleted_at IS NULL
          AND c.status = ?
-         AND c.inbound_task_id IS NOT NULL${cWh.sql}`,
+         AND c.transfer_order_id IS NULL${cWh.sql}`,
       [CONTAINER_STATUS.PENDING_PUTAWAY, ...cWh.params],
     ),
     waitingPutawayRows: await fetchMany(
@@ -509,10 +523,10 @@ async function fetchRoleWorkbenchRows({ thresholds, scopeWarehouseIds = null, ba
               CONCAT('库存条码 · ', DATE_FORMAT(c.created_at, '%m-%d %H:%i')) AS hint,
               c.created_at AS createdAt
        FROM inventory_containers c
-       LEFT JOIN inbound_tasks t ON t.id = c.inbound_task_id
+       INNER JOIN inbound_tasks t ON t.id = c.inbound_task_id AND c.warehouse_id = t.warehouse_id
        WHERE c.deleted_at IS NULL
          AND c.status = ?
-         AND c.inbound_task_id IS NOT NULL${cWh.sql}
+         AND c.transfer_order_id IS NULL${cWh.sql}
        ORDER BY COALESCE(c.putaway_deadline_at, c.created_at) ASC,c.id ASC
        LIMIT ${take} OFFSET ${offset}`,
       [CONTAINER_STATUS.PENDING_PUTAWAY, ...cWh.params],

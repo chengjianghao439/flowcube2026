@@ -49,11 +49,12 @@ export function PaymentQueryBar({ query, onChange, labels, clearValue = EMPTY_PA
   }
   if (showDateChip && (query.startDate || query.endDate)) {
     const sameDay = query.startDate && query.startDate === query.endDate
+    const dateRange = query.startDate && query.endDate
+      ? (sameDay ? query.startDate : `${query.startDate} 至 ${query.endDate}`)
+      : query.startDate ? `自 ${query.startDate} 起` : `截至 ${query.endDate}`
     chips.push({
       key: 'date',
-      text: sameDay
-        ? `${labels.dateLabel}：${query.startDate}`
-        : `${labels.dateLabel}：${query.startDate || '…'} ~ ${query.endDate || '…'}`,
+      text: `${labels.dateLabel}：${dateRange}`,
       onClear: drop('startDate', 'endDate'),
     })
   }
@@ -110,6 +111,12 @@ export function PaymentQueryDialog({
   const canFindParty = can(partyType === 1 ? PERMISSIONS.SUPPLIER_VIEW : PERMISSIONS.CUSTOMER_VIEW)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
 
+  function apply() {
+    if (rangeInvalid || dueRangeInvalid) return
+    onApply(v)
+    onClose()
+  }
+
   const set = <K extends keyof PaymentQueryValues>(k: K, val: PaymentQueryValues[K]) =>
     setV(prev => ({ ...prev, [k]: val }))
 
@@ -118,16 +125,23 @@ export function PaymentQueryDialog({
     <QueryDialog open={open} title={title} dialogId={`payment-query-${partyType}`} width={680}
       onClose={onClose} onReset={() => setV(clearValue)} resetLabel={resetLabel}
       applyDisabled={rangeInvalid || dueRangeInvalid}
-      onApply={() => { if (!rangeInvalid && !dueRangeInvalid) { onApply(v); onClose() } }}>
-        <div className="fc-payment-query space-y-4 px-5 py-5">
+      onApply={apply}>
+        <div className="fc-payment-query space-y-4 px-5 py-5" onKeyDown={event => {
+          const input = event.target
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing && input instanceof HTMLInputElement &&
+            event.currentTarget.contains(input) && !input.closest('.fc-date-picker')) {
+            event.preventDefault()
+            apply()
+          }
+        }}>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>{labels.docLabel}</Label>
+              <Label className="text-xs font-medium text-muted-foreground">{labels.docLabel}</Label>
               <Input aria-label={labels.docLabel} value={v.docNo} className="h-9" placeholder={`输入${labels.docLabel}`}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('docNo', e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>{labels.partyLabel}</Label>
+              <Label className="text-xs font-medium text-muted-foreground">{labels.partyLabel}</Label>
               {/* 从往来方档案里选，而非手打——与销售/采购查询弹窗一致，避免同名/错字导致筛不到 */}
               <div className="flex items-center gap-1">
                 <Button type="button" variant="outline" className="h-9 flex-1 justify-start font-normal"
@@ -148,7 +162,7 @@ export function PaymentQueryDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>状态</Label>
+              <Label className="text-xs font-medium text-muted-foreground">状态</Label>
               <Select value={v.status || '__all__'} onValueChange={x => set('status', x === '__all__' ? '' : x)}>
                 <SelectTrigger aria-label="状态" className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
                 <SelectContent>
@@ -162,7 +176,7 @@ export function PaymentQueryDialog({
 
             {showConfirmStatus && (
               <div className="space-y-1">
-                <Label>结算确认</Label>
+                <Label className="text-xs font-medium text-muted-foreground">结算确认</Label>
                 <Select value={v.confirmStatus || '__all__'} onValueChange={x => set('confirmStatus', x === '__all__' ? '' : x)}>
                   <SelectTrigger aria-label="结算确认" className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
                   <SelectContent>
@@ -177,7 +191,7 @@ export function PaymentQueryDialog({
 
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <Label>{labels.dateLabel}</Label>
+              <Label className="text-xs font-medium text-muted-foreground">{labels.dateLabel}</Label>
               <div className="flex gap-1">
                 {(singleDate
                   ? ([['今天', () => { const t = todayYmd(); return { startDate: t, endDate: t } }]] as const)
@@ -212,7 +226,7 @@ export function PaymentQueryDialog({
 
           {showDueDate && (
             <div className="space-y-1">
-              <Label>到期日</Label>
+              <Label className="text-xs font-medium text-muted-foreground">到期日</Label>
               <div className="flex items-center gap-2">
                 <DatePicker aria-label="到期日（起）" aria-invalid={dueRangeInvalid || undefined}
                   aria-describedby={dueRangeInvalid ? dueErrorId : undefined} value={v.dueStart} onChange={x => set('dueStart', x)} max={v.dueEnd || undefined} className="h-9 flex-1" />
@@ -225,7 +239,7 @@ export function PaymentQueryDialog({
           )}
 
           <div className="space-y-1">
-            <Label>{labels.amountLabel}</Label>
+            <Label className="text-xs font-medium text-muted-foreground">{labels.amountLabel}</Label>
             <div className="flex items-center gap-2">
               <Input type="number" min="0" step="0.01" aria-label={`${labels.amountLabel}（最小值）`} placeholder="最小金额" className="h-9 flex-1"
                 value={v.minAmount} onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('minAmount', e.target.value)} />

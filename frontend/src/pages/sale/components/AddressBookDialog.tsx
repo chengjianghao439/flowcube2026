@@ -170,7 +170,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
   if (readOwner) { try { assertKitReadOwner(readOwner) } catch { ownerCurrent = false } }
 
   return (
-    <AppDialog descriptionInHeader description={"选择当前客户的常用收货地址。"}
+    <AppDialog formDialog descriptionInHeader description={"选择当前客户的常用收货地址。"}
       open={open && guardAllowed}
       onOpenChange={value => { if (mayInteract()) onOpenChange(value) }}
       dialogId="customer-address-book"
@@ -180,7 +180,7 @@ export default function AddressBookDialog({ open, onOpenChange, customerId, cust
       minWidth={360}
       minHeight={460}
     >
-      {!ownerCurrent ? <p role="alert" className="p-4">读取来源已变化，请回原来源选择或维护地址。</p> : <div className="flex h-full flex-col gap-3 overflow-hidden px-5 py-4">
+      {!ownerCurrent ? <p role="alert">读取来源已变化，请回原来源选择或维护地址。</p> : <div className="flex h-full flex-col gap-3 overflow-hidden">
         {/* 顶部：仅在已有地址时显示计数与新增入口；空状态用居中 CTA，避免重复 */}
         {addresses.length > 0 && (
           <div className="flex shrink-0 items-center justify-between">

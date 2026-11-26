@@ -40,7 +40,7 @@ test('编辑货架清空可选文本时显式提交空串，以清除服务端�
     })
   }
   await act(async () => host.querySelector<HTMLButtonElement>('#save')!.click())
-  expect(mocks.update).toHaveBeenCalledWith(7, { zone: '', name: '', remark: '', code: 'A01', maxLevels: 5, maxPositions: 10, status: 1 })
+  expect(mocks.update).toHaveBeenCalledWith(7, { zone: '', name: '', remark: '', code: 'A01', maxLevels: 5, maxPositions: 10, status: 1 }, { skipGlobalError: true })
 })
 
 test('货架列表提供可到达的编辑操作并回填当前行', async () => {

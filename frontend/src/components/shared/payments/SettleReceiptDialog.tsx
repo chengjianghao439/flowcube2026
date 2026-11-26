@@ -274,7 +274,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
 
   return (
     <>
-      <AppDialog descriptionInHeader
+      <AppDialog formDialog descriptionInHeader
         description={isContinue && totalUnits == null ? <span className="text-warning-ink">原余额 ¥{String(receipt?.balance)}，含不足一分的尾差，请先核对</span> : "核对收付款信息并选择本次核销账款。"}
         open={open}
         onOpenChange={v => { if (!v) { onClose(); closePrompt() } }}
@@ -309,7 +309,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
           </div>
         }
       >
-        <div ref={bodyRef} tabIndex={-1} className="flex h-full flex-col gap-4 overflow-y-auto p-5 focus:outline-none">
+        <div ref={bodyRef} tabIndex={-1} className="flex min-h-full flex-col gap-4 focus:outline-none">
           <UncertainSubmitNotice
             visible={guard.uncertain}
             pending={guard.checkMut.isPending}
@@ -365,7 +365,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
               <div className="space-y-1">
                 <Label>方式</Label>
                 <Select value={method} onValueChange={setMethod}>
-                  <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {['转账', '现金', '支票', '网银', '其他'].map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                   </SelectContent>
@@ -374,7 +374,7 @@ export function SettleReceiptDialog({ open, onClose, type, settlementTypes, rece
               <div className="space-y-1">
                 <Label>{isPayableType(type) ? '付款账户' : '收款账户'} *</Label>
                 <Select value={accountId} onValueChange={setAccountId} disabled={accountsQuery.isError || !accounts.length}>
-                  <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择账户" /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-full"><SelectValue placeholder="请选择账户" /></SelectTrigger>
                   <SelectContent>
                     {accounts.map(a => (
                       <SelectItem key={a.id} value={String(a.id)}>

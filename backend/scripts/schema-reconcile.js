@@ -112,7 +112,8 @@ async function main() {
   // ── ② 索引级对账：活跃主数据与操作回执唯一键 ──────────────────────────────
   const [indexRows] = await conn.query(
     `SELECT TABLE_NAME AS tbl, INDEX_NAME AS idx, NON_UNIQUE AS nonUnique,
-            GROUP_CONCAT(IF(SUB_PART IS NULL, COLUMN_NAME, CONCAT(COLUMN_NAME, '(', SUB_PART, ')')) ORDER BY SEQ_IN_INDEX) AS cols
+            GROUP_CONCAT(CASE WHEN COLUMN_NAME IS NULL THEN '<expression>' WHEN SUB_PART IS NULL THEN COLUMN_NAME
+                              ELSE CONCAT(COLUMN_NAME, '(', SUB_PART, ')') END ORDER BY SEQ_IN_INDEX) AS cols
        FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA = DATABASE()
       GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE`,
@@ -122,6 +123,7 @@ async function main() {
     { unique: Number(r.nonUnique) === 0, columns: String(r.cols || '').split(',') },
   ]))
   const requiredUniques = [...REQUIRED_ACTIVE_UNIQUES]
+  if (executedSet.has('302_rack_active_code.sql')) requiredUniques.push({ table: 'warehouse_racks', index: 'uk_rack_code', columns: ['warehouse_id','code','active_unique_guard'] })
   if (executedSet.has('064_create_operation_requests.sql')) requiredUniques.push(OPERATION_REQUEST_IDENTITY)
   if (executedSet.has('298_stock_import_receipts.sql')) {
     requiredUniques.push(

@@ -49,10 +49,28 @@ function fixture(balances, total, existingEntries = []) {
   }]))
   const receipt = { id: 91, receipt_no: 'RC-TAIL', type: 2, party_name: 'synthetic party', amount: total, settled_amount: '0.0000', payment_date: '2026-10-14' }
   const entries = []
-  let settled
+  let settled, directIds, lockedIds, membershipChecked = false
   const conn = { query: async (sql, args) => {
-    if (sql.startsWith('SELECT DISTINCT statement_id')) return [[]]
-    if (sql.startsWith('SELECT * FROM payment_records')) return [[{ ...records.get(args[0]) }]]
+    if (sql.startsWith('SELECT DISTINCT statement_id')) {
+      directIds = Array.from(args[0])
+      assert.ok(directIds.every(id => records.has(id)))
+      return [[]]
+    }
+    if (sql === 'SELECT id FROM payment_records FORCE INDEX (PRIMARY) WHERE id IN (?) ORDER BY id FOR UPDATE') {
+      lockedIds = Array.from(args[0])
+      assert.deepEqual(lockedIds, [...new Set(directIds)].sort((a, b) => a - b))
+      return [lockedIds.map(id => ({ id }))]
+    }
+    if (sql === 'SELECT statement_id FROM reconciliation_statement_items WHERE record_id IN (?) ORDER BY record_id FOR SHARE') {
+      assert.ok(lockedIds)
+      assert.deepEqual(Array.from(args[0]), directIds)
+      membershipChecked = true
+      return [[]]
+    }
+    if (sql.startsWith('SELECT * FROM payment_records')) {
+      assert.ok(membershipChecked && lockedIds.includes(args[0]))
+      return [[{ ...records.get(args[0]) }]]
+    }
     if (sql.startsWith('SELECT id, record_id, statement_id, amount FROM payment_entries')) {
       assert.equal(args[0], receipt.id)
       assert.match(sql, /ORDER BY id FOR SHARE$/)
@@ -82,7 +100,7 @@ for (const amount of ['12.3400', '0.0100', '9999999999.9900']) {
 }
 test('actual allocation sums original .1/.2/.01 exact cent values to .31', async () => {
   const balances=['0.1000','0.2000','0.0100'],f=fixture(balances,'0.3100')
-  const result=await service().applyAllocations(f.conn,f.receipt,balances.map((b,i)=>({recordId:i+1,amount:Number(b)})),{})
+  const result=await service().applyAllocations(f.conn,f.receipt,balances.map((b,i)=>({recordId:i+1,amount:Number(b)})).reverse(),{})
   assert.equal(result.allocatedTotal,.31);assert.equal(result.receiptBalance,0)
   assert.equal(f.entries.reduce((sum,e)=>sum+money.moneyUnits(e[3]),0n),3100n)
 })

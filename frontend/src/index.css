@@ -339,6 +339,13 @@
   --pda-padding-bottom: max(env(safe-area-inset-bottom), 12px);
 }
 
+/* PDA 保留原选择器的触控高度和多行文字空间，也覆盖移到 body 的弹层。 */
+body:has(:where(.pda-root,#pda-username)) .fc-select-trigger {
+  height: auto;
+  min-height: 2.5rem;
+  padding-block: .5rem;
+}
+
 /* 页面自己的 min-h-screen 要扣除外层安全边距，否则空页面也会多滚动一截。 */
 .pda-root .min-h-screen {
   min-height: calc(100vh - var(--pda-padding-top) - var(--pda-padding-bottom));

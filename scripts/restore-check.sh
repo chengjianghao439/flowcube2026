@@ -68,12 +68,10 @@ MIN_TABLES="${MIN_TABLES:-}"
 # 文件数与其脱节，必须按迁移声明的建表数推导。
 MIGRATION_DIR="$SCRIPT_DIR/../backend/src/database"
 MIGRATION_DIR="$(cd "$MIGRATION_DIR" 2>/dev/null && pwd || true)"
-DERIVED_MIN_TABLES=0
+DERIVED_MIN_TABLES=80
 if [ -n "$MIGRATION_DIR" ] && ls "$MIGRATION_DIR"/*.sql >/dev/null 2>&1; then
   DERIVED_MIN_TABLES=$(
-    created=$(grep -h '^CREATE TABLE' "$MIGRATION_DIR"/*.sql | wc -l | tr -d ' ')
-    dropped=$(grep -h '^DROP TABLE' "$MIGRATION_DIR"/*.sql | wc -l | tr -d ' ')
-    echo $(( created - dropped - 2 ))
+    awk '/^CREATE TABLE/{created++} /^DROP TABLE/{dropped++} END{print (created-dropped>2 ? created-dropped-2 : 80)}' "$MIGRATION_DIR"/*.sql
   )
 fi
 MIN_TABLES="${MIN_TABLES:-$DERIVED_MIN_TABLES}"
@@ -106,6 +104,7 @@ fail() {
   exit 1
 }
 
+trap 'fail "恢复演练在第 ${LINENO} 行失败（退出码 $?）"' ERR
 FILE="${1:-}"
 AUTO_LATEST=0
 if [ -z "$FILE" ]; then
@@ -148,19 +147,28 @@ volume_owner() {
   docker volume inspect --format "$VOLUME_TAG" "$RESTORE_VOLUME"
 }
 cleanup() {
+  local rc=$? cleanup_error=0
+  trap - EXIT ERR
   if [ "$OWNED_VOLUME" = 1 ]; then
     if [[ "${CONTAINER_ID:-}" =~ ^[a-f0-9]{64}$ ]]; then
       DOCKER_COMMAND_TIMEOUT=5 docker rm -f -v "$CONTAINER_ID" >/dev/null 2>&1 \
-        || echo "[WARN] 临时恢复容器清理失败，请检查 $CONTAINER_ID" >&2
+        || { echo "[WARN] 临时恢复容器清理失败，请检查 $CONTAINER_ID" >&2; cleanup_error=1; }
     fi
     if [ "$(DOCKER_COMMAND_TIMEOUT=5 volume_owner 2>/dev/null)" = "$OWNED_TAG" ]; then
       DOCKER_COMMAND_TIMEOUT=5 docker volume rm "$RESTORE_VOLUME" >/dev/null 2>&1 \
-        || echo "[WARN] 临时恢复数据卷清理失败，请检查 $RESTORE_VOLUME" >&2
+        || { echo "[WARN] 临时恢复数据卷清理失败，请检查 $RESTORE_VOLUME" >&2; cleanup_error=1; }
     else
       echo "[WARN] 临时恢复数据卷归属无法确认，保留 $RESTORE_VOLUME" >&2
+      cleanup_error=1
     fi
   fi
-  if [ -n "${IMPORT_LOG:-}" ]; then rm -f "$IMPORT_LOG"; fi
+  if [ -n "${IMPORT_LOG:-}" ]; then rm -f "$IMPORT_LOG" || cleanup_error=1; fi
+  if [ "$cleanup_error" = 1 ] && [ "$rc" = 0 ]; then fail "恢复演练资源清理失败"; fi
+  if [ "$rc" != 0 ]; then exit "$rc"; fi
+  if [ "$AUTO_LATEST" = 1 ]; then
+    node "$SCRIPT_DIR/lib/ops-alerts.js" restore "$BACKUP_DIR/.restore-check.status.json" passed || fail "无法保存恢复演练结果"
+  fi
+  echo "[$(ts)] [OK] 备份恢复演练通过：$(basename "$FILE") 可完整导入（${TABLES} 张表）"
 }
 trap cleanup EXIT
 trap 'exit 124' TERM
@@ -241,7 +249,8 @@ TABLES=$(docker exec "$CONTAINER_ID" \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$RESTORE_DB'" 2>/dev/null | tr -d ' ')
 
 echo "[$(ts)] [INFO] 恢复后表数：${TABLES}（阈值 ${MIN_TABLES}）"
-if [ "${TABLES:-0}" -lt "$MIN_TABLES" ]; then
+[[ "$TABLES" =~ ^[0-9]+$ ]] || fail "无法读取恢复数据库表数"
+if [ "$TABLES" -lt "$MIN_TABLES" ]; then
   fail "恢复后表数不足（${TABLES} < ${MIN_TABLES}），备份疑似不完整"
 fi
 
@@ -249,18 +258,12 @@ fi
 # 关键表是业务主链路的核心表，任何一张是空表都说明备份不完整或导入有问题。
 echo "[$(ts)] [INFO] 关键表行数抽查（阈值 ≥${MIN_ROWS} 行）："
 for t in sys_users product_items sale_orders purchase_orders inventory_containers; do
-  ROWS=$(docker exec "$CONTAINER" \
+  ROWS=$(docker exec "$CONTAINER_ID" \
     mysql -uroot -prestore_check_pw -N -e \
     "SELECT COUNT(*) FROM \`$RESTORE_DB\`.\`$t\`" 2>/dev/null | tr -d ' ')
-  ROWS=${ROWS:-0}
+  [[ "$ROWS" =~ ^[0-9]+$ ]] || fail "无法读取关键表 $t 行数"
   echo "    $t: ${ROWS} 行"
   if [ "${ROWS:-0}" -lt "$MIN_ROWS" ]; then
     fail "关键表 $t 行数为 0（阈值 ${MIN_ROWS}），备份疑似不完整"
   fi
 done
-
-if [ "$AUTO_LATEST" = 1 ]; then
-  node "$SCRIPT_DIR/lib/ops-alerts.js" restore "$BACKUP_DIR/.restore-check.status.json" passed \
-    || echo '!! 无法保存自动恢复演练结果' >&2
-fi
-echo "[$(ts)] [OK] 备份恢复演练通过：$(basename "$FILE") 可完整导入（${TABLES} 张表）"

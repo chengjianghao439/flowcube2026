@@ -29,13 +29,24 @@ async function readContainerReprintSources(conn, ids) {
 async function lockContainerReprintSource(conn, id, scopeWarehouseIds, options) {
   const [[peek]] = await conn.query('SELECT inbound_task_id FROM inventory_containers WHERE id=? AND deleted_at IS NULL', [id])
   if (!peek) throw new AppError('条码来源不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
+  let head = null
   if (peek.inbound_task_id != null) {
-    const [[head]] = await conn.query('SELECT id FROM inbound_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE', [peek.inbound_task_id])
+    ;[[head]] = await conn.query('SELECT id,warehouse_id FROM inbound_tasks WHERE id=? AND deleted_at IS NULL FOR UPDATE', [peek.inbound_task_id])
     if (!head) throw new AppError('收货来源不存在', 404, 'PRINT_BARCODE_RECORD_NOT_FOUND')
   }
   const [[row]] = await conn.query('SELECT * FROM inventory_containers WHERE id=? AND deleted_at IS NULL FOR UPDATE', [id])
   if (!row || row.inbound_task_id !== peek.inbound_task_id) throw invalid()
-  const [current] = await readContainerReprintSources(conn, [id])
-  return assertContainerReprintSource(current, scopeWarehouseIds, options)
+  let sourceItemCount = 0
+  if (head) {
+    const [items] = await conn.query(
+      `SELECT id FROM inbound_task_items WHERE task_id=? AND product_id=?
+        AND (? IS NULL OR id=?) ORDER BY id FOR SHARE`,
+      [head.id, row.product_id, row.inbound_task_item_id, row.inbound_task_item_id],
+    )
+    sourceItemCount = items.length
+  }
+  return assertContainerReprintSource({
+    ...row, source_task_id: head?.id, source_warehouse_id: head?.warehouse_id, source_item_count: sourceItemCount,
+  }, scopeWarehouseIds, options)
 }
 module.exports = { assertContainerReprintSource, lockContainerReprintSource, readContainerReprintSources, identity }

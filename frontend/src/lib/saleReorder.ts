@@ -15,7 +15,7 @@ let epoch = 0
 const listeners = new Set<() => void>()
 function changed() { epoch++; listeners.forEach(fn => fn()) }
 subscribeApiClientBaseURL(changed)
-const actorKey = () => { const a = useAuthStore.getState(); return JSON.stringify([a.token, a.sessionGeneration, a.user?.id, a.user?.roleId, a.user?.permissions]) }
+const actorKey = () => { const a = useAuthStore.getState(); return JSON.stringify([!!a.token, a.sessionGeneration, a.user?.id, a.user?.roleId, a.user?.permissions]) }
 let lastActor = actorKey()
 useAuthStore.subscribe(() => { const next = actorKey(); if (next !== lastActor) { lastActor = next; changed() } })
 export const reorderEpoch = () => epoch

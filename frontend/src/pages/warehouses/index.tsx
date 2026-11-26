@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone } from '@/lib/statusTone'
 import { getWarehousesApi, createWarehouseApi, updateWarehouseApi, deleteWarehouseApi } from '@/api/warehouses'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { WAREHOUSE_TYPES, type Warehouse } from '@/types/warehouses'
@@ -21,7 +21,7 @@ export default function WarehousesPage() {
   // 2026-09-17 验收修复（G-10）：只读角色不显示"新增仓库"
   const { can } = usePermission()
   const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const page = 1
   const [form, setForm] = useState(defaultForm)
 
@@ -84,17 +84,14 @@ export default function WarehousesPage() {
       formWidthClass="sm:max-w-2xl"
       canSubmit={() => !!form.name}
       onOpen={handleOpen}
+      headerActions={<Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>}
       renderToolbar={
-        <FilterCard>
-          <Input aria-label="搜索仓库编码或名称" placeholder="搜索编码或名称" value={search}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-            onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') { setKeyword(search) } }}
-            className="h-9 w-60" />
-          <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
-          {keyword && (
-            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
-          )}
-        </FilterCard>
+        <>
+          <KeywordQueryChips keyword={keyword} onClear={() => setKeyword('')} />
+          <KeywordQueryDialog open={queryOpen} dialogId="warehouses-query" title="查询仓库"
+            label="仓库编码或名称" placeholder="搜索编码或名称" initial={keyword}
+            onClose={() => setQueryOpen(false)} onApply={setKeyword} />
+        </>
       }
       renderForm={(editing) => {
         const isEdit = !!editing

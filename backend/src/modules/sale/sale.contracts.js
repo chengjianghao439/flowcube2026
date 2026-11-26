@@ -144,7 +144,8 @@ function scansForSaleItem(scans, tasks, item) {
 }
 
 function selectDispatchRows(allRows, { items = null, itemIds = null } = {}) {
-  let rows = [...allRows]
+  const availableQty = row => Math.max(0, Math.min(Number(row.quantity), Number(row.reserved_qty)) - Number(row.dispatched_qty))
+  let rows = allRows.filter(row => availableQty(row) > 0)
   if (Array.isArray(items) && items.length) {
     const requestedById = new Map()
     for (const item of items) {
@@ -156,7 +157,7 @@ function selectDispatchRows(allRows, { items = null, itemIds = null } = {}) {
     if (rows.length !== requestedById.size) throw new AppError('部分明细不存在或不可发货，请刷新订单后重试', 409)
     if (!rows.length) throw new AppError('选中的明细行均已发货，无可发货项', 400)
     return rows.map(row => {
-      const available = Number(row.reserved_qty) - Number(row.dispatched_qty)
+      const available = availableQty(row)
       const qty = requestedById.get(Number(row.id))
       if (!(qty > 0) || qty > available + 1e-6) {
         throw new AppError(`商品「${row.product_name}」本次发货量不能超过已占未发量 ${available}`, 400)
@@ -172,7 +173,7 @@ function selectDispatchRows(allRows, { items = null, itemIds = null } = {}) {
   }
   return rows.map(row => ({
     ...row,
-    requested_ship_qty: Number(row.reserved_qty) - Number(row.dispatched_qty),
+    requested_ship_qty: availableQty(row),
   }))
 }
 

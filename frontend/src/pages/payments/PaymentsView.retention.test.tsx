@@ -58,10 +58,10 @@ for(const [monthly,type] of [[false,1],[false,2],[true,2]] as const) test(`${mon
   const receiptLabel=`${type===1?'付款':'收款'}核销`
   const assertCurrent=(label:string)=>{
     if(monthly)return
-    const nav=host.querySelector(`nav[aria-label="现结${type===1?'供应商':'客户'}账款登记方式"]`)!
+    const nav=host.querySelector(`[role="tablist"][aria-label="现结${type===1?'供应商':'客户'}账款登记方式"]`)!
     expect(nav).toBeTruthy()
-    expect(nav.querySelectorAll('[aria-current="true"]')).toHaveLength(1)
-    expect(nav.querySelector('[aria-current="true"]')?.textContent).toBe(label)
+    expect(nav.querySelectorAll('[role="tab"][aria-selected="true"]')).toHaveLength(1)
+    expect(nav.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(label)
   }
   await render(monthly,'initial',type)
   assertCurrent('按单登记')

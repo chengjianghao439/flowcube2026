@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import ReserveAllocationDialog from './ReserveAllocationDialog'
 import ReleaseAllocationDialog from './ReleaseAllocationDialog'
 import ShipSelectDialog from './ShipSelectDialog'
+import StockShortageDialog from './StockShortageDialog'
 import type { ReservePreview, SaleOrder } from '@/types/sale'
 
 const fixture = vi.hoisted(() => ({ reserve: vi.fn(), release: vi.fn(), ship: vi.fn(), preview: undefined as unknown }))
@@ -39,7 +40,7 @@ function ShipHost({ close }: { close: () => void }) {
   return <ShipSelectDialog open order={order} onClose={close} loading={loading} onConfirm={items => { setLoading(true); fixture.ship(items).then(() => setLoading(false), () => setLoading(false)) }} />
 }
 const samples = [
-  { name: '占库', action: '确认占用（1 项）', pending: '占用中…', submit: () => fixture.reserve, render: (close: () => void) => <ReserveAllocationDialog open orderId={7} onClose={close} onShortage={vi.fn()} /> },
+  { name: '占库', action: '确认占用', pending: '占用中…', submit: () => fixture.reserve, render: (close: () => void) => <ReserveAllocationDialog open orderId={7} onClose={close} onShortage={vi.fn()} /> },
   { name: '释放', action: '释放选中 1 项', pending: '释放中…', submit: () => fixture.release, render: (close: () => void) => <ReleaseAllocationDialog open orderId={7} items={[item]} onClose={close} /> },
   { name: '出库', action: '确认发起出库', pending: '发起中…', submit: () => fixture.ship, render: (close: () => void) => <ShipHost close={close} /> },
 ]
@@ -48,7 +49,14 @@ test.each(samples)('$name 在同一帧重复点击只发一次，pending 禁止�
   let reject!: (e: Error) => void
   sample.submit().mockImplementation(() => new Promise((_resolve, fail) => { reject = fail }))
   const close = vi.fn(); await mount(sample.render(close)); await type('1.25')
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const body = dialog.querySelector(':scope > .fc-form-dialog-body')!
+  const footer = dialog.querySelector(':scope > .fc-dialog-footer')!
+  expect(body.querySelectorAll('.overflow-y-auto, .overflow-auto')).toHaveLength(0)
+  expect(!!body.querySelector('.overflow-x-auto table')?.contains(quantity())).toBe(true)
   const confirm = button(sample.action)
+  expect(footer.contains(confirm)).toBe(true)
+  expect(footer.contains(button('取消'))).toBe(true)
   // 先于 React Query / 父组件渲染 pending 的两次实际点击。
   await act(async () => { confirm.click(); confirm.click() })
   expect(sample.submit()).toHaveBeenCalledTimes(1)
@@ -74,7 +82,7 @@ test.each(samples)('$name 在同一帧重复点击只发一次，pending 禁止�
 })
 
 test.each(samples)('$name 数量无效提示与实际两位小数合同一致', async sample => {
-  await mount(sample.render(vi.fn())); await type(sample.name === '占库' ? '3' : '0')
+  await mount(sample.render(vi.fn())); await type(sample.name === '占库' ? '0.001' : '0')
   expect(document.body.textContent).toMatch(/最多(?:保留)?\s*(?:两|2)\s*位小数/)
   expect(document.body.textContent).not.toMatch(/四位|4\s*位小数/)
 })
@@ -119,4 +127,18 @@ test('普通销售出库选择部分明细时表头显示半选', async () => {
   await act(async () => all.click())
   expect(all.checked).toBe(true)
   expect(all.indeterminate).toBe(false)
+})
+
+test('缺货明细在正文滚动，页脚关闭返回原占库流程', async () => {
+  const close = vi.fn()
+  const shortages = Array.from({ length: 60 }, (_, id) => ({ productId: id + 1, productName: `缺货商品 ${id + 1}`, required: 5, available: 2 }))
+  await mount(<StockShortageDialog open shortages={shortages} onClose={close} />)
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const body = dialog.querySelector(':scope > .fc-form-dialog-body')!
+  expect(body.querySelectorAll('tbody tr')).toHaveLength(60)
+  expect(body.querySelectorAll('.overflow-auto, .overflow-y-auto')).toHaveLength(0)
+  const closeButton = button('关闭，调整数量')
+  expect(dialog.querySelector(':scope > .fc-dialog-footer')?.contains(closeButton)).toBe(true)
+  await act(async () => closeButton.click())
+  expect(close).toHaveBeenCalledOnce()
 })

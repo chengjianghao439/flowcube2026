@@ -33,32 +33,34 @@ export default function WarehouseScopeDialog({ open, onClose, userId, userName }
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next && !save.isPending) onClose() }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="fc-form-dialog max-w-3xl">
         <DialogHeader description={<>
           {(isLoading || warehousesLoading) && <span role="status">加载中… </span>}
           不勾选任何仓库 = 不限仓（默认）。勾选后该用户只能查看/操作所选仓库的数据（超级管理员始终不限仓）。
         </>}><DialogTitle>仓库数据权限{userName ? ` — ${userName}` : ''}</DialogTitle></DialogHeader>
 
-        {scopeError && <p role="alert" className="text-sm text-destructive-ink">当前仓库权限加载失败。<button type="button" className="underline" onClick={() => void refetchScope()}>重试</button></p>}
-        {warehousesError && <p role="alert" className="text-sm text-destructive-ink">仓库列表加载失败。<button type="button" className="underline" onClick={() => void refetchWarehouses()}>重试</button></p>}
-        <div className="grid max-h-[420px] grid-cols-1 gap-3 overflow-y-auto sm:grid-cols-2">
-          {list.map((w: { id: number; name: string; code?: string }) => (
-            <label key={w.id} className="flex items-start gap-3 rounded-md border px-4 py-3 text-sm hover:bg-muted/50">
-              <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-primary" checked={selected.has(w.id)} disabled={!ready || save.isPending}
-                onChange={e => {
-                  setSelected(prev => {
-                    const next = new Set(prev)
-                    if (e.target.checked) next.add(w.id); else next.delete(w.id)
-                    return next
-                  })
-                }} />
-              <span className="min-w-0 flex-1 break-words leading-6">{w.name}</span>
-              {w.code && <span className="text-xs text-muted-foreground">{w.code}</span>}
-            </label>
-          ))}
+        <div className="fc-form-dialog-body space-y-4">
+          {scopeError && <p role="alert" className="text-sm text-destructive-ink">当前仓库权限加载失败。<button type="button" className="underline" onClick={() => void refetchScope()}>重试</button></p>}
+          {warehousesError && <p role="alert" className="text-sm text-destructive-ink">仓库列表加载失败。<button type="button" className="underline" onClick={() => void refetchWarehouses()}>重试</button></p>}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {list.map((w: { id: number; name: string; code?: string }) => (
+              <label key={w.id} className="flex items-start gap-3 rounded-md border px-4 py-3 text-sm hover:bg-muted/50">
+                <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-primary" checked={selected.has(w.id)} disabled={!ready || save.isPending}
+                  onChange={e => {
+                    setSelected(prev => {
+                      const next = new Set(prev)
+                      if (e.target.checked) next.add(w.id); else next.delete(w.id)
+                      return next
+                    })
+                  }} />
+                <span className="min-w-0 flex-1 break-words leading-6">{w.name}</span>
+                {w.code && <span className="text-xs text-muted-foreground">{w.code}</span>}
+              </label>
+            ))}
+          </div>
+          {ready && <p className="text-sm text-muted-foreground">已选择 {selected.size} 个仓库{selected.size === 0 ? ' · 当前为不限仓' : ''}</p>}
+          {save.error && <p role="alert" className="text-sm text-destructive-ink">{save.error.message}</p>}
         </div>
-        {ready && <p className="text-sm text-muted-foreground">已选择 {selected.size} 个仓库{selected.size === 0 ? ' · 当前为不限仓' : ''}</p>}
-        {save.error && <p role="alert" className="text-sm text-destructive-ink">{save.error.message}</p>}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={save.isPending}>取消</Button>
           <Button disabled={save.isPending || !ready} onClick={() => save.mutate([...selected], {

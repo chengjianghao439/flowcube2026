@@ -37,6 +37,7 @@ import {
 import { TabPathContext } from './TabPathContext'
 import { useCompanyStore } from '@/store/companyStore'
 import { SectionVisibilityContext } from './SectionVisibilityContext'
+import { PageHeaderContext } from '@/components/shared/PageHeaderContext'
 import TabErrorBoundary from '@/components/shared/TabErrorBoundary'
 
 // ── 加载占位 ──────────────────────────────────────────────────────────────────
@@ -86,8 +87,11 @@ function TabPanel({ tabKey, path, title, isActive }: TabPanelProps) {
               <div key={isAccounting ? companyId : 'shared'} className={isConversation ? 'h-full min-h-0' : undefined}>
                 <TabErrorBoundary tabName={title} resetKey={normalizePath(path)}>
                   <Suspense fallback={<PageLoader />}>
-                    {isAccounting && <p className="mb-3 text-xs text-muted-foreground">当前账套：{companyName || (companyId === 1 ? '主账套' : `账套 ${companyId}`)}</p>}
-                    <Comp />
+                    <PageHeaderContext.Provider value={isAccounting ? {
+                      parentTitle: `当前账套：${companyName || (companyId === 1 ? '主账套' : `账套 ${companyId}`)}`,
+                    } : null}>
+                      <Comp />
+                    </PageHeaderContext.Provider>
                   </Suspense>
                 </TabErrorBoundary>
               </div>

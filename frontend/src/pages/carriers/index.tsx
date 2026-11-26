@@ -17,7 +17,7 @@ import { CARRIER_TYPE_OPTIONS, CARRIER_TYPE_LABELS, WAYBILL_PLATFORM_ALL, WAYBIL
 import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 import { Button } from '@/components/ui/button'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 
@@ -46,7 +46,7 @@ export default function CarriersPage() {
   const { can } = usePermission()
   const navigate = useNavigate()
   const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const page = 1
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
 
@@ -100,23 +100,18 @@ export default function CarriersPage() {
       formWidthClass="max-w-3xl"
       headerActions={<>
         {can(PERMISSIONS.CARRIER_UPDATE) && <Button variant="outline" onClick={() => navigate('/carrier-accounts')}>绑定快递账号</Button>}
-        <Button variant="outline" onClick={() => downloadExport('/export/carriers').catch(e => toast.error((e as Error).message))}>导出</Button>
+        <Button variant="outline" onClick={() => downloadExport('/export/carriers').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
+        <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
       </>}
       onOpen={handleOpen}
       canSubmit={() => !!form.name}
       renderToolbar={
-        <FilterCard>
-          <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[180px]">
-              <Input aria-label="搜索承运商名称或编号" placeholder="搜索承运商名称或编号" value={search}
-                onChange={e => setSearch(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
-              />
-            </div>
-            <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
-            <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>
-          </div>
-        </FilterCard>
+        <>
+          <KeywordQueryChips keyword={keyword} onClear={() => setKeyword('')} />
+          <KeywordQueryDialog open={queryOpen} dialogId="carriers-query" title="查询承运商"
+            label="承运商名称或编号" placeholder="搜索承运商名称或编号" initial={keyword}
+            onClose={() => setQueryOpen(false)} onApply={setKeyword} />
+        </>
       }
       renderForm={(editing, _open, locked) => (
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 py-2">
@@ -165,7 +160,7 @@ export default function CarriersPage() {
             <div className="flex items-center justify-between">
               <Label>电子面单取号</Label>
               <Select disabled={locked} value={form.waybillEnabled ? '1' : '0'} onValueChange={v => !locked && set('waybillEnabled', v === '1')}>
-                <SelectTrigger aria-label="电子面单取号状态" className="h-8 w-28"><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="电子面单取号状态" className="h-9 w-28"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="0">未开通</SelectItem>
                   <SelectItem value="1">已开通</SelectItem>

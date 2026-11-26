@@ -83,7 +83,7 @@ export function DesktopUpdateBridge() {
           setOpen(true)
         }}><Download aria-hidden="true" />桌面更新</Button>
       ) : (
-        <aside aria-label="桌面更新提醒" className="fixed inset-x-4 bottom-4 z-40 flex flex-wrap items-center gap-2 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg sm:left-auto sm:right-5 sm:w-[29rem] sm:gap-x-3 sm:px-4">
+        <aside aria-label="桌面更新提醒" className="fixed inset-x-4 bottom-4 z-40 flex flex-wrap items-center gap-2 rounded-[var(--desktop-radius-popover,14px)] border bg-popover p-3 text-popover-foreground shadow-[var(--desktop-shadow-lg,var(--shadow-popover))] sm:left-auto sm:right-5 sm:w-[29rem] sm:gap-x-3 sm:px-4">
           <Download aria-hidden="true" className="size-4 shrink-0 text-primary" />
           <div className="min-w-28 flex-1">
             <p className="text-sm font-medium">{UPDATE_LABELS[stage]}</p>
@@ -99,23 +99,27 @@ export function DesktopUpdateBridge() {
         </aside>
       ))}
       <Dialog open={open} onOpenChange={value => { if (!locked) setOpen(value) }}>
-        <DialogContent className={locked ? '[&>button:last-child]:hidden' : undefined}>
+        <DialogContent hideClose={locked} className="fc-form-dialog fc-update-dialog">
           <DialogHeader description={current ? `当前版本 v${current}${version && version !== current && stage !== 'current' ? ` · 更新版本 v${version}` : ''}` : '检查此客户端的可用更新'}>
             <DialogTitle>桌面更新</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2">
+          <div className="fc-form-dialog-body space-y-2">
             <p role="status" className="text-sm font-medium">{UPDATE_LABELS[stage]}</p>
             {message && <p className="text-sm text-muted-foreground">{message}</p>}
             {downloading && (
               <div className="flex items-center gap-3">
-                <progress aria-label="下载进度" max={100} value={percent} className="h-2 w-full accent-primary" />
+                <div role="progressbar" aria-label="下载进度" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}
+                  className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className={percent == null ? 'h-full w-1/3 rounded-full bg-primary motion-safe:animate-pulse' : 'h-full rounded-full bg-primary'}
+                    style={percent == null ? undefined : { width: `${percent}%` }} />
+                </div>
                 <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{progressLabel(update)}</span>
               </div>
             )}
+            {notes?.trim() && stage !== 'current' && (
+              <div className="whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-sm leading-6">{notes.trim()}</div>
+            )}
           </div>
-          {notes?.trim() && stage !== 'current' && (
-            <div className="max-h-60 overflow-y-auto whitespace-pre-wrap break-words rounded-md border bg-muted/20 p-3 text-sm leading-6">{notes.trim()}</div>
-          )}
           <DialogFooter>
             <Button type="button" variant="outline" disabled={locked} onClick={() => setOpen(false)}>{showNotice ? '稍后' : '关闭'}</Button>
             {downloading && (

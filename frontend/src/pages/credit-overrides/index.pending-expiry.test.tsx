@@ -6,6 +6,7 @@ import {QueryClient,QueryClientProvider} from '@tanstack/react-query'
 import {afterEach,beforeEach,expect,test,vi} from 'vitest'
 import api,{getApiClientBaseURL,setApiClientBaseURL} from '@/api/client'
 import {useAuthStore} from '@/store/authStore'
+import { chooseCreditAction, openCreditActions } from './rowMenu.test-utils'
 import Page from './index'
 
 const rights=vi.hoisted(()=>({apply:true}))
@@ -39,24 +40,26 @@ afterEach(async()=>{
 })
 async function flush(){await act(async()=>{await new Promise(r=>setTimeout(r,15))})}
 async function mount(path='/credit-overrides'){await act(async()=>root.render(<MemoryRouter initialEntries={[path]}><QueryClientProvider client={qc}><Page/></QueryClientProvider></MemoryRouter>));await vi.waitFor(async()=>{await flush();expect(host.textContent).toContain('CO-PENDING-EXPIRED')})}
-async function click(label:string){const b=[...document.querySelectorAll<HTMLButtonElement>('button')].find(x=>x.textContent?.trim()===label);expect(b,label).toBeTruthy();await act(async()=>b!.click());await flush()}
+async function click(label:string){const b=[...document.querySelectorAll<HTMLButtonElement>('button')].find(x=>x.textContent?.trim()===label || x.getAttribute('aria-label') === label);expect(b,label).toBeTruthy();await act(async()=>b!.click());await flush()}
 test.each(['/credit-overrides','/credit-overrides?detailId=1'])('过期待审列表和原单详情都显示过期原因，不能提供审批按钮：%s',async path=>{
  await mount(path);expect(host.textContent).toContain(reason)
  if(!path.includes('detailId'))await click('详情 / 记录')
  await vi.waitFor(async()=>{await flush();expect(document.querySelector('[role="dialog"]')?.textContent).toContain(reason)})
  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('已过期')
- expect([...document.querySelectorAll('button')].some(b=>['批准','驳回'].includes(b.textContent?.trim()||''))).toBe(false);expect(writes).toEqual([])
+ await click('关闭')
+ const actions = (await openCreditActions()).map(item => item.textContent?.trim())
+ expect(actions).not.toContain('批准'); expect(actions).not.toContain('驳回'); expect(writes).toEqual([])
 })
 test('过期待审直接重申绑定当前订单并保留历史；创建后仍须用户提交',async()=>{
- await mount();await click('重新申请');expect(document.querySelector('[role="dialog"]')?.textContent).toContain('SO-PENDING-EXPIRED')
+ await mount();await chooseCreditAction('重新申请');expect(document.querySelector('[role="dialog"]')?.textContent).toContain('SO-PENDING-EXPIRED')
  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('22.00')
  const field=document.querySelector<HTMLTextAreaElement>('#credit-reason')!
  await act(async()=>{Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value')!.set!.call(field,'新的过期待审申请原因');field.dispatchEvent(new Event('input',{bubbles:true}))})
  await click('创建申请');await vi.waitFor(async()=>{await flush();expect(host.textContent).toContain('CO-REAPPLIED')})
  expect(writes).toEqual([{path:'/api/credit-overrides',body:{saleOrderId:11,reason:'新的过期待审申请原因'}}])
- expect([...host.querySelectorAll('button')].some(b=>b.textContent?.trim()==='提交')).toBe(true)
+ expect((await openCreditActions()).some(b => b.textContent?.trim() === '提交')).toBe(true)
 })
 test('没有申请权仍能看到过期原因，但不能通过页面重新申请',async()=>{
  rights.apply=false;await mount();expect(host.textContent).toContain(reason)
- expect([...host.querySelectorAll('button')].some(b=>b.textContent?.trim()==='重新申请')).toBe(false);expect(writes).toEqual([])
+ expect((await openCreditActions()).some(b => b.textContent?.trim() === '重新申请')).toBe(false);expect(writes).toEqual([])
 })

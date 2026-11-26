@@ -272,15 +272,15 @@ export default function SalePage() {
       />
 
       {cancel.recovery?.storageBlocked && <SaleCancelRecoveryNotice recovery={cancel.recovery} onConfirmed={()=>{setCancelOrder(null);setCancelReason('')}} />}
-      <div className="sample-status-strip"><OrderStatusFilter label="销售状态分类" value={statusFilter}
-        options={QUICK_STATUSES}
-        onChange={status => updateParams({status: status || null, page: 1})} /></div>
-
-        <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip"><OrderStatusFilter label="销售状态分类" value={statusFilter}
+          options={QUICK_STATUSES}
+          onChange={status => updateParams({status: status || null, page: 1})} /></div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
           <AppliedDateRange label="创建日期" startDate={effectiveStartDate} endDate={effectiveEndDate}
             onClear={() => updateParams({ startDate: null, endDate: null, range: 'all', page: 1 })} />
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
@@ -289,6 +289,7 @@ export default function SalePage() {
           ))}
           {chips.length > 0 && <Button size="sm" variant="ghost" onClick={clearOtherFilters}>清空其他条件</Button>}
         </div>
+      </div>
 
       <section className="min-w-0" aria-label="销售订单列表">
       {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} /> : <DataTable virtualized

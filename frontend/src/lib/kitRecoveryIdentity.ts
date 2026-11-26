@@ -1,9 +1,18 @@
+import { createRequestKey } from './requestKey'
 import { useAuthStore } from '@/store/authStore'
 
 const SESSION_KEY = 'flowcube-kit-query-session-v1'
 type Identity = { version: 1; sessionId: string; userId: number }
 let identity: Identity | null = null
-const nonce = () => crypto.randomUUID()
+function nonce() {
+  const crypto = globalThis.crypto
+  if (crypto?.randomUUID) return crypto.randomUUID()
+  if (crypto?.getRandomValues) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16))
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+  }
+  return createRequestKey('kit')
+}
 function readIdentity(): Identity | null {
   try {
     const value = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null')
@@ -45,7 +54,7 @@ useAuthStore.subscribe((next, previous) => {
 // Conservatively invalidate only query identity; never read or persist tokens.
 if (typeof window !== 'undefined')
   window.addEventListener('storage', (event) => {
-    if (event.key === 'flowcube-auth-v3' && event.storageArea === localStorage)
+    if ((event.key === 'flowcube-auth-v3' || event.key === null) && event.storageArea === localStorage)
       rotate(
         useAuthStore.getState().token
           ? useAuthStore.getState().user?.id

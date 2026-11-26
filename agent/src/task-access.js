@@ -94,12 +94,12 @@ export function assertTaskAccess(task, actor, store) {
     return task;
   }
   if (task.graph === SALE_HANDOFF_GRAPH) {
-    const sources = task.result?.sources;
+    const sources = task.handoffSources ?? task.result?.sources;
     const permissions = sources?.length ? sources.map(source => HANDOFF_PERMISSIONS[source]) : [];
     if (permissions.length ? permissions.some(permission => !permission || !hasPerm(actor, permission))
       : !Object.values(HANDOFF_PERMISSIONS).some(permission => hasPerm(actor, permission))) throw fail('小满无法显示该交接记录：当前查看权限已变化');
     if ((task.handoffActionPermissions ?? []).some(permission => !hasPerm(actor, permission))) throw fail('交接中的办理权限已变化，请重新核对原单');
-    if (sources?.some(source => source !== 'finance') && Array.isArray(actor.warehouseIds)
+    if ((task.accessWarehouseIds?.length || sources?.some(source => source !== 'finance')) && Array.isArray(actor.warehouseIds)
       && (!task.accessWarehouseIds?.length || task.accessWarehouseIds.some(id => !actor.warehouseIds.map(Number).includes(Number(id))))) {
       throw fail('小满无法显示该交接记录：当前仓库范围已变化');
     }

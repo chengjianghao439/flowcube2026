@@ -2,7 +2,7 @@ const { pdaSessionOptional } = require('../../middleware/pdaSession')
 const { isSplitAction } = require('../inventory/inventory.split-receipt')
 const { isPlasticBoxAction } = require('../plastic-boxes/plastic-boxes.receipt')
 const optional = pdaSessionOptional()
-const needsDevice = action => isSplitAction(action) || isPlasticBoxAction(action)
+const needsDevice = action => isSplitAction(action) || isPlasticBoxAction(action) || String(action ?? '').startsWith('warehouse.adjustment-')
 // 只对明确的库存拆分/塑料盒领域查询核设备；宽前缀由controller匹配后补核。
 function splitReceiptDevice(req, res, next) {
   if (!needsDevice(req.query.action)) return next()

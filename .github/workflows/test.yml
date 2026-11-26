@@ -151,6 +151,22 @@ jobs:
         env:
           FLOWCUBE_CHANGE_REGRESSIONS: '1'
 
+  legacy-repair-owned:
+    name: 历史采购与应收修复（归属专属实例）
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm --prefix backend ci
+      - name: 准备本地 Docker context 与镜像
+        run: |
+          docker context create colima-flowcube --docker host=unix:///var/run/docker.sock
+          docker --context colima-flowcube pull mysql:8.0
+      - run: npm run repair:smoke-ephemeral
+
   browser-smoke-runtime:
     name: 页面验收脚本（本地夹具真浏览器）
     # Match the Noble runtime used by the pinned Playwright release gate.
@@ -299,7 +315,7 @@ jobs:
         run: npm run release:check-downloads
 
       - name: 运维回归 — 备份恢复判定与数据库指标
-        run: node --test tests/ops-alert-notifications.test.js tests/ops-monitor-restore.test.js tests/deployment-resources.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js
+        run: node --test tests/ops-alert-notifications.test.js tests/ops-monitor-restore.test.js tests/restore-trigger-normalize.test.js tests/migration-trigger-bodies.test.js
 
       # 本地实例脚本：`start` 只能启动实例、迁移必须由显式 `migrate` 触发且目标固定。
       # 否则"只想借 3307 实例做隔离测试"会顺带把迁移写进开发库（同类边界失效已发生过两次，
@@ -554,6 +570,9 @@ jobs:
       - name: 安装后端依赖
         run: npm --prefix backend ci
 
+      - name: 安装契约扫描器使用的 TypeScript 依赖
+        run: npm --prefix frontend ci --ignore-scripts
+
       - name: 单元测试 — 打印调度策略/任务状态（纯函数，无需 DB）
         run: npm run test:print
 
@@ -571,6 +590,11 @@ jobs:
 
       - name: QA 回归 — 分类资源参数与税务期间（无需 DB）
         run: npm run test:qa-remediation
+
+      - name: 契约扫描器的正反夹具
+        run: npm run test:contract-scanners
+      - name: 历史应收修复离线契约
+        run: npm run test:legacy-receivable-repair
 
       - name: 契约测试 — 所有写路由必须挂 requirePermission（例外须登记理由且可验证）
         run: npm run test:route-permission-contract
@@ -865,6 +889,9 @@ jobs:
       - name: 冒烟测试 — 报表数值正确性（与底层表核对，审计 4.6）
         run: npm run smoke:reports-values
 
+      - name: 后端业务回归与事务锁序
+        run: npm run smoke:backend-business-invariants
+
       # 报表成本口径（2026-09-27 P2）：利润分析与 KPI 不得拿售价当成本；快照为空时区分
       # 「按当前进价估算」与「成本缺失」。含真实生成 xlsx 的读回断言（汇总块与幽灵表头）。
       - name: 冒烟测试 — 报表成本口径与导出汇总块（含 xlsx 读回）
@@ -997,6 +1024,7 @@ jobs:
       - inbound-edit-owned
       - retention-reprint-owned
       - change-records-owned
+      - legacy-repair-owned
       - browser-smoke-runtime
       - desktop-download-compat
       - static

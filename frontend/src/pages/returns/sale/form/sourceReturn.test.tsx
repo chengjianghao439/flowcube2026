@@ -268,11 +268,9 @@ test.each(['foreign', 'stale', 'owner'] as const)(
         await new Promise((r) => setTimeout(r, 10))
       })
       expect(sessionStorage.getItem(factsKey)).toBe(original)
-      expect(
-        [...host.querySelectorAll('button')].find(
-          (b) => b.textContent === '确认（派发到 PDA）'
-        )!.disabled
-      ).toBe(true)
+      const confirmButton = [...host.querySelectorAll('button')].find(button => button.textContent === '确认（派发到 PDA）')
+      if (scenario === 'owner') expect(confirmButton).toBeUndefined()
+      else expect(confirmButton?.disabled).toBe(true)
       expect(mocks.confirm).toHaveBeenCalledTimes(1)
     })
   }

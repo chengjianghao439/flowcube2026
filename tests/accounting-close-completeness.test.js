@@ -49,7 +49,7 @@ function connection(f) {
       if (/FROM acct_companies/.test(sql)) { f.events.push('company-X'); return [[{ id: params[0] }]] }
       if (/FROM acct_periods/.test(sql)) return [[]]
       if (/SELECT a.code, a.name, a.category/.test(sql)) return [f.pl]
-      if (/SELECT id, source_hash, status FROM acct_vouchers/.test(sql)) return [[].concat(f.closing || [])]
+      if (/SELECT v.id, v.source_hash, v.status FROM acct_vouchers root/.test(sql)) return [[].concat(f.closing || [])]
       if (/FROM acct_voucher_entries e JOIN acct_vouchers v/.test(sql)) {
         return [f.entries.filter(e => f.headers.some(h => h.id === e.voucher_id && h.company_id === params[0]))]
       }
@@ -215,7 +215,7 @@ function periodService(f, engine) {
   return compile(path.join(base, 'accounting.period.service.js'), {
     '../../config/db': { pool: { getConnection: async () => conn } }, '../../utils/AppError': AppError,
     '../../utils/logger': { info() {} }, '../../utils/backendTime': { beijingTodayYmd: () => date },
-    './voucher-engine': facade, '../../constants/voucherSource': source, './accounting.period-lock': lock,
+    './accounting.report-basis': require('../backend/src/modules/accounting/accounting.report-basis'), './voucher-engine': facade, '../../constants/voucherSource': source, './accounting.period-lock': lock,
     './accounting.period-completeness': { assertPeriodComplete }, './voucher-supplier-refunds': { assertPeriodCurrent: async () => f.events.push('RF-proof') },
   }, code => process.env.B6_ACCOUNTING_MUTANT === 'FIN01' ? code.replace("    await require('./accounting.period-completeness').assertPeriodComplete(conn, p, companyId, engine)\n", '')
     : process.env.B6_ACCOUNTING_MUTANT === 'FIN03' ? code.replace('  // 净利润为零仍须结平非零损益科目；仅省略没有金额的 4103 差额腿。', '  else return null') : code)

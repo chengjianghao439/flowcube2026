@@ -1,4 +1,4 @@
-import PageHeader from '@/components/shared/PageHeader'
+import { ActionBar } from '@/components/shared/ActionBar'
 import { Button } from '@/components/ui/button'
 import { useContext, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -16,10 +16,25 @@ function Draft({ id, path }: { id: number; path: string }) {
   const identity = buildWorkspaceTabRegistrationFromPath(path).key
   const write = useDisposalHandlingOperation(identity, source.active && open, () => source.isCurrent() && mayHandle(P.INVENTORY_DISPOSAL_VIEW, P.INVENTORY_DISPOSAL_CREATE))
   function close() { if (!source.isCurrent()) return; setOpen(false) }
-  return <div className="space-y-4"><PageHeader title="来源报废草稿"
-        description="保留本来源输入，报废草稿重新提交原审批。"  />
-
-      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => { if (source.isCurrent()) setOpen(true) }}>继续填写草稿</Button><Button variant="outline" onClick={() => { if (source.isCurrent() && !write.blocked) { useWorkspaceStore.getState().removeTab(identity); navigate('/disposals') } }}>关闭来源草稿</Button></div>{source.error && <p role="alert">{source.error}</p>}<CreateDisposalDialog open={open} onClose={close} handling={{ source, write, operationUuid, requestKey, identity }} /></div>
+  return (
+    <div className="desktop-document-form flex flex-col gap-3">
+      <ActionBar
+        title="来源报废草稿"
+        description="保留本来源输入，报废草稿重新提交原审批。"
+        rightActions={<>
+          <Button variant="outline" disabled={write.blocked} onClick={() => {
+            if (source.isCurrent() && !write.blocked) {
+              useWorkspaceStore.getState().removeTab(identity)
+              navigate('/disposals')
+            }
+          }}>关闭来源草稿</Button>
+          <Button onClick={() => { if (source.isCurrent()) setOpen(true) }}>继续填写草稿</Button>
+        </>}
+      />
+      {source.error && <p role="alert">{source.error}</p>}
+      <CreateDisposalDialog open={open} onClose={close} handling={{ source, write, operationUuid, requestKey, identity }} />
+    </div>
+  )
 }
 export default function HandlingScrapPage() {
   const tab = useContext(TabPathContext), location = useLocation(), path = tab || location.pathname + location.search, id = readHandlingSourceId(path)

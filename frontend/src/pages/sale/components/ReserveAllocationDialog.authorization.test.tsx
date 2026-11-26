@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-// Real dialog, WarehouseSelect, hooks and API client; closed synthetic HTTP.
+// Real dialog, warehouse choices, hooks and API client; closed synthetic HTTP.
 import { act } from 'react'
+import { getByRole } from '@testing-library/dom'
+import { chooseSelectOption } from '@/test/chooseSelectOption'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -61,9 +63,9 @@ test('真实预览权限错误仍显示并封住写入，不能静默吞掉403',
  expect(button.disabled).toBe(true);expect(calls).toEqual([{method:'GET',path:'/api/sale/7/reserve-preview'}])
 })
 test('申请人只从本单预览选择仓库并正常提交，仍不请求目录或审批接口',async()=>{
- await mount();await vi.waitFor(async()=>{await flush();expect(document.querySelector('select')).toBeTruthy()})
- await act(async()=>{const select=document.querySelector<HTMLSelectElement>('select')!;select.value='2';select.dispatchEvent(new Event('change',{bubbles:true}))})
- const button=[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()==='确认占用（1 项）')!
+ await mount();await vi.waitFor(async()=>{await flush();expect(warehouseTrigger().tagName).toBe('BUTTON')})
+ await chooseWarehouse('合成第二仓')
+ const button=[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()==='确认占用')!
  expect(button.disabled).toBe(false);await act(async()=>button.click())
  await vi.waitFor(()=>expect(calls.filter(c=>c.method==='POST'),JSON.stringify(toasts.error.mock.calls)).toHaveLength(1))
  await vi.waitFor(()=>expect(toasts.success).toHaveBeenCalledWith('库存已占用'))
@@ -72,11 +74,22 @@ test('申请人只从本单预览选择仓库并正常提交，仍不请求目�
  expect(toasts.error).not.toHaveBeenCalled()
 })
 test('已有预占仍锁定原仓，程序变更事件也不能把补占请求换到另一仓',async()=>{
- partial=true;await mount();await vi.waitFor(async()=>{await flush();expect(document.querySelector('select')).toBeTruthy()})
- const select=document.querySelector<HTMLSelectElement>('[role="combobox"]')!;expect(select.disabled).toBe(true)
- await act(async()=>{select.value='2';select.dispatchEvent(new Event('change',{bubbles:true}))})
- const button=[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()==='确认占用（1 项）')!
+ partial=true;await mount();await vi.waitFor(async()=>{await flush();expect(warehouseTrigger().tagName).toBe('BUTTON')})
+ expect(document.body.textContent).toContain('已占 1 / 2')
+ expect(document.body.textContent).toContain('已有预占，释放后可换仓')
+ const trigger=warehouseTrigger();expect(trigger.disabled).toBe(true)
+ await act(async()=>trigger.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true})))
+ expect(document.querySelector('[role="listbox"]')).toBeNull()
+ const button=[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent?.trim()==='确认占用')!
  expect(button.disabled).toBe(false);await act(async()=>button.click());await vi.waitFor(()=>expect(toasts.success).toHaveBeenCalledWith('库存已占用'))
  expect(calls.find(c=>c.method==='POST')).toEqual({method:'POST',path:'/api/sale/7/reserve',body:{items:[{id:17,warehouseId:1,warehouseName:'合成仓库',qty:1}]}})
  expect(calls.filter(c=>c.method==='GET').every(c=>c.path==='/api/sale/7/reserve-preview')).toBe(true)
 })
+
+function warehouseTrigger() {
+  return getByRole(document.body, 'combobox', { name: '合成商品发货仓库' }) as HTMLButtonElement
+}
+
+async function chooseWarehouse(name: string) {
+  await chooseSelectOption(warehouseTrigger(), name)
+}

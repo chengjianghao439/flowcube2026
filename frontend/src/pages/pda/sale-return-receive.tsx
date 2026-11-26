@@ -6,28 +6,32 @@ import PdaHeader from '@/components/pda/PdaHeader'
 import PdaCard from '@/components/pda/PdaCard'
 import PdaBottomBar from '@/components/pda/PdaBottomBar'
 import PdaScanner from '@/components/pda/PdaScanner'
+import PdaCriticalActionNotice from '@/components/pda/PdaCriticalActionNotice'
 import PdaFlash from '@/components/pda/PdaFlash'
 import { PdaLoading, PdaQueryError } from '@/components/pda/PdaEmptyState'
 import { usePdaFeedback } from '@/hooks/usePdaFeedback'
 import { useCriticalPdaAction } from '@/hooks/useCriticalPdaAction'
-import { getReturnTaskByIdApi, receiveReturnApi, checkReturnApi, type ReturnTaskActionResult } from '@/api/returns'
+import { getReturnTaskByIdApi, receiveReturnApi, checkReturnApi, type ReturnTaskActionResult, type ReturnTaskItem } from '@/api/returns'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { parseBarcode } from '@/utils/barcode'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
-import { qtyStep } from '@/lib/qtyStep'
+import { qtyStep, roundQuantity } from '@/lib/qtyStep'
 
 export default function PdaSaleReturnReceivePage() {
   const { id } = useParams<{ id: string }>()
-  const taskId = Number(id)
+  return <SaleReturnReceive key={id} taskId={Number(id)} />
+}
+
+function SaleReturnReceive({ taskId }: { taskId: number }) {
   const nav = useNavigate()
   const { flash, ok, err } = usePdaFeedback()
-  const [selectedProduct, setSelectedProduct] = useState<{ id: number; code: string; name: string; unit: string; remaining: number } | null>(null)
+  const [productId, setProductId] = useState<number | null>(null)
   // 「只能整数」的商品把收货/质检数量框的 step 切成 1（迁移 254）
-  const allowDecimalOf = useProductQtyPolicies([selectedProduct?.id])
+  const allowDecimalOf = useProductQtyPolicies([productId])
   const [boxes, setBoxes] = useState<number[]>([0])
   const [rejectedQty, setRejectedQty] = useState(0)
-  const [step, setStep] = useState<'select' | 'qty' | 'check'>('select')
+  const [draftPhase, setDraftPhase] = useState<'qty' | 'check' | null>(null)
   const [labelReceipt, setLabelReceipt] = useState<Partial<ReturnTaskActionResult> | null>(null)
 
   const { data: task, isLoading, isError, refetch } = useQuery({
@@ -40,70 +44,52 @@ export default function PdaSaleReturnReceivePage() {
   const groupedItems = (task?.items || []).reduce((acc, item) => {
     const key = item.productId
     if (!acc[key]) acc[key] = { ...item, totalExpected: 0, totalReceived: 0, totalChecked: 0 }
-    acc[key].totalExpected += item.expectedQty
-    acc[key].totalReceived += item.receivedQty
-    acc[key].totalChecked += item.checkedQty
+    acc[key].totalExpected = roundQuantity(acc[key].totalExpected + item.expectedQty)
+    acc[key].totalReceived = roundQuantity(acc[key].totalReceived + item.receivedQty)
+    acc[key].totalChecked = roundQuantity(acc[key].totalChecked + item.checkedQty)
     return acc
   }, {} as Record<number, ReturnTaskItem & { totalExpected: number; totalReceived: number; totalChecked: number }>)
 
   const productList = Object.values(groupedItems)
 
-  /**
-   * 断网兜底：提交发出去了但没收到响应时，回来查这个商品的实收/质检量有没有涨到
-   * 「提交前 + 本次」的水平，据此判断上一次到底成没成，而不是让员工凭感觉决定要不要重扫。
-   *
-   * 判定刻意保守：只有**明确达到**期望值才算成功，差一点都返回 effective:false 保持待确认。
-   * 同一 requestKey 由后端回执保证幂等；结果未确认前不能生成新键重新提交，
-   * 否则会另建批次。确认状态时仍保持保守，不能把「其实没成」说成成功。
-   */
-  const resolveByQty = (field: 'totalReceived' | 'totalChecked', label: string) =>
-    async ({ record }: { record: { metadata?: Record<string, unknown> } }) => {
-      const productId = Number(record.metadata?.productId ?? 0)
-      const expected = Number(record.metadata?.expectedQty ?? NaN)
-      if (!productId || !Number.isFinite(expected)) return { effective: false as const }
-      const latest = await getReturnTaskByIdApi(taskId)
-      const rows = (latest?.items || []).filter(item => item.productId === productId)
-      if (!rows.length) return { effective: false as const }
-      const actual = rows.reduce((sum, item) => sum + Number(field === 'totalReceived' ? item.receivedQty : item.checkedQty), 0)
-      if (actual < expected) return { effective: false as const }
-      return {
-        effective: true as const,
-        data: {},
-        message: `${label}已成功，该商品累计 ${actual}。`,
-      }
-    }
-
+  const selectedProduct = productId == null ? undefined : groupedItems[productId]
+  const taskPhase = task?.status === 1 || task?.status === 2 ? 'qty' : task?.status === 3 ? 'check' : null
+  const step = taskPhase && taskPhase === draftPhase && selectedProduct ? taskPhase : 'select'
+  const remaining = selectedProduct ? roundQuantity(selectedProduct.totalExpected - selectedProduct.totalReceived) : 0
+  const onConfirmed = useCallback((receipt: Partial<ReturnTaskActionResult>) => {
+    setLabelReceipt(receipt)
+    void refetch()
+    setProductId(null)
+    setBoxes([0])
+    setRejectedQty(0)
+    setDraftPhase(null)
+  }, [refetch])
   const receiveAction = useCriticalPdaAction<Partial<ReturnTaskActionResult>>({
     action: `return.receive.${taskId}`,
     requestAction: 'return.receive',
     label: `退货收货 ${task?.taskNo || ''}`,
-    onConfirmed: (receipt) => {
-      setLabelReceipt(receipt)
-      void refetch()
-      setSelectedProduct(null)
-      setBoxes([0])
-      setStep('select')
-    },
-    resolveServerState: resolveByQty('totalReceived', '退货收货'),
+    onConfirmed,
   })
 
   const checkAction = useCriticalPdaAction<Partial<ReturnTaskActionResult>>({
     action: `return.check.${taskId}`,
     requestAction: 'return.check',
     label: `退货质检 ${task?.taskNo || ''}`,
-    onConfirmed: (receipt) => {
-      setLabelReceipt(receipt)
-      void refetch()
-      setSelectedProduct(null)
-      setRejectedQty(0)
-      setStep('select')
-    },
-    resolveServerState: resolveByQty('totalChecked', '退货质检'),
+    onConfirmed,
   })
 
+  const actions = [receiveAction, checkAction]
+  const locked = actions.some(action => action.submitBlocked || action.phase !== 'idle')
+  const selectProduct = useCallback((id: number) => {
+    if (locked || !taskPhase) return
+    setProductId(id)
+    setBoxes([0])
+    setRejectedQty(0)
+    setDraftPhase(taskPhase)
+  }, [locked, taskPhase])
   const handleScan = useCallback((raw: string) => {
     const trimmed = raw.trim()
-    if (!trimmed) return
+    if (!trimmed || locked || !taskPhase) return
     const parsed = parseBarcode(trimmed)
     // 现场标签上印的通常是商品编码（SKU0001），而 ERP 早已不再维护商品条码
     //（见 docs/pda-receive-remove-scan-2026-09-14.md）。此前这里只接受 P<id>/PRD<id>，
@@ -118,52 +104,61 @@ export default function PdaSaleReturnReceivePage() {
       return
     }
     ok(`${product.productName} ${product.productCode}`)
-    setSelectedProduct({
-      id: product.productId,
-      code: product.productCode,
-      name: product.productName,
-      unit: product.unit,
-      remaining: product.totalExpected - product.totalReceived,
-    })
-    setBoxes([0])
-    setRejectedQty(0)
-    setStep(task?.status === 3 ? 'check' : 'qty')
-  }, [productList, err, ok, task?.status])
+    selectProduct(product.productId)
+  }, [productList, err, ok, locked, selectProduct, taskPhase])
 
-  // Guard states
-  if (isError) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md p-4"><PdaQueryError onRetry={() => { void refetch() }} /></div></div>
-  if (isLoading) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><PdaLoading /></div>
-  if (!task) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">任务不存在</div></div>
-  if (!task.submittedAt) return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货收货" onBack={() => nav('/pda/sale-return')} /><div className="p-4 text-center text-muted-foreground">请先在 ERP 提交退货单</div></div>
-  if (task.status >= 4) {
-    return <div className="flex min-h-screen flex-col bg-background"><PdaHeader title="退货质检" onBack={() => nav('/pda/sale-return')} /><div className="mx-auto w-full max-w-md space-y-3 p-4"><p className="text-center text-muted-foreground">{task.status === 4 ? '质检完成，请贴好对应标签后进入上架' : '退货任务已结束'}</p><ReturnLabelReceiptView receipt={labelReceipt} />{task.status === 4 && <Button size="lg" className="px-3 w-full" onClick={() => nav(`/pda/sale-return/${taskId}/putaway`)}>前往退货上架</Button>}</div></div>
-  }
+  const notices = actions.map((action, index) => {
+    // 非当前阶段也可能有待核对的收货或质检记录。
+    const currentPhase = index === 0 ? 'qty' : 'check'
+    if (taskPhase !== currentPhase && !action.pendingRecord && !action.lastErrorMessage && action.phase === 'idle') return null
+    return <PdaCriticalActionNotice key={index} {...action}
+      onConfirm={() => void action.confirmPending()} onClear={action.clearPending} onDismissError={action.clearError} />
+  })
 
-  const totalQty = boxes.reduce((s, v) => s + (Number(v) || 0), 0)
+  let statusContent
+  if (isError) statusContent = <PdaQueryError onRetry={() => { void refetch() }} />
+  else if (isLoading) statusContent = <PdaLoading />
+  else if (!task) statusContent = <p>任务不存在</p>
+  else if (!task.submittedAt) statusContent = <p>请先在 ERP 提交退货单</p>
+  else if (!taskPhase) statusContent = <>
+    <p>{task.status === 4 ? '质检完成，请贴好对应标签后进入上架' : '退货任务已结束'}</p>
+    {task.status === 4 && <Button size="lg" className="px-3 w-full" disabled={actions.some(action => !!action.pendingRecord)} onClick={() => nav(`/pda/sale-return/${taskId}/putaway`)}>前往退货上架</Button>}
+  </>
+  if (statusContent || !task) return (
+    <div className="flex min-h-screen flex-col bg-background">
+      <PdaHeader title={task && task.status >= 3 ? '退货质检' : '退货收货'} onBack={() => nav('/pda/sale-return')} />
+      <div className="mx-auto w-full max-w-md space-y-3 p-4">
+        {notices}
+        {statusContent}
+        <ReturnLabelReceiptView receipt={labelReceipt} />
+      </div>
+    </div>
+  )
 
-  // 提交退货收货
+  const totalQty = roundQuantity(boxes.reduce((sum, qty) => sum + qty, 0))
+
+  const canReceive = boxes.every(qty => Number.isFinite(qty) && qty > 0) && totalQty <= remaining
+  const canCheck = selectedProduct && boxes[0] >= 0 && rejectedQty >= 0 && boxes[0] + rejectedQty > 0 &&
+    roundQuantity(boxes[0] + rejectedQty) <= roundQuantity(selectedProduct.totalReceived - selectedProduct.totalChecked)
+
   async function doReceive() {
-    if (!selectedProduct) return
+    if (!selectedProduct || step !== 'qty' || locked || !canReceive) return
+    const body = { productId: selectedProduct.productId, packages: boxes.map(qty => ({ qty })) }
     try {
       await receiveAction.run(
-        requestKey => receiveReturnApi(taskId, { productId: selectedProduct.id, packages: [{ qty: totalQty }] }, requestKey),
-        {
-          productId: selectedProduct.id,
-          expectedQty: (productList.find(p => p.productId === selectedProduct.id)?.totalReceived ?? 0) + totalQty,
-        },
+        (requestKey, config) => receiveReturnApi(taskId, body, requestKey, config),
+        { taskId, productName: selectedProduct.productName, requestBody: body },
       )
     } catch (error) { err(error instanceof Error ? error.message : '退货收货失败，请重试') }
   }
 
   async function doCheck() {
-    if (!selectedProduct) return
+    if (!selectedProduct || step !== 'check' || locked || !canCheck) return
+    const body = { productId: selectedProduct.productId, passedQty: boxes[0], rejectedQty }
     try {
       await checkAction.run(
-        requestKey => checkReturnApi(taskId, { productId: selectedProduct.id, passedQty: Number(boxes[0]) || 0, rejectedQty }, requestKey),
-        {
-          productId: selectedProduct.id,
-          expectedQty: (productList.find(p => p.productId === selectedProduct.id)?.totalChecked ?? 0) + (Number(boxes[0]) || 0) + rejectedQty,
-        },
+        (requestKey, config) => checkReturnApi(taskId, body, requestKey, config),
+        { taskId, productName: selectedProduct.productName, requestBody: body },
       )
     } catch (error) { err(error instanceof Error ? error.message : '退货质检失败，请重试') }
   }
@@ -175,14 +170,10 @@ export default function PdaSaleReturnReceivePage() {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 max-w-md mx-auto w-full space-y-3">
         <ReturnLabelReceiptView receipt={labelReceipt} />
+        {notices}
         {/* 产品列表 */}
         {step === 'select' && productList.map(p => (
-          <PdaCard key={p.productId} className="w-full" active={p.totalExpected > p.totalReceived} onClick={() => {
-            setSelectedProduct({ id: p.productId, code: p.productCode, name: p.productName, unit: p.unit, remaining: p.totalExpected - p.totalReceived })
-            setBoxes([0])
-            setRejectedQty(0)
-            setStep(task.status === 3 ? 'check' : 'qty')
-          }}>
+          <PdaCard key={p.productId} className="w-full" active={p.totalExpected > p.totalReceived} onClick={locked ? undefined : () => selectProduct(p.productId)}>
             <div className="flex justify-between items-center">
               <div className="min-w-0 flex-1 text-left">
                 <PdaProductIdentity code={p.productCode} name={p.productName} view="overview" />
@@ -202,22 +193,23 @@ export default function PdaSaleReturnReceivePage() {
         {/* 数量录入 */}
         {step === 'qty' && selectedProduct && (
           <PdaCard>
-            <div className="mb-3"><PdaProductIdentity code={selectedProduct.code} name={selectedProduct.name} view="detail" /></div>
-            <div className="text-sm text-muted-foreground mb-3">可收数量：{selectedProduct.remaining} {selectedProduct.unit}</div>
+            <div className="mb-3"><PdaProductIdentity code={selectedProduct.productCode} name={selectedProduct.productName} view="detail" /></div>
+            <div className="text-sm text-muted-foreground mb-3">可收数量：{remaining} {selectedProduct.unit}</div>
             {boxes.map((qty, i) => (
               <div key={i} className="flex items-center gap-2 mb-2">
                 <span className="text-sm w-10">箱{i + 1}</span>
-                <Input aria-label={`箱${i + 1}数量`} data-scanner-manual="true" quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={qty || ''} className="min-h-11 text-lg"
+                <Input aria-label={`箱${i + 1}数量`} data-scanner-manual="true" disabled={locked} quantity type="number" min={0} step={qtyStep(allowDecimalOf(productId))} value={qty || ''} className="min-h-11 text-lg"
                   onChange={e => {
                     const next = [...boxes]
                     next[i] = Number(e.target.value) || 0
                     setBoxes(next)
                   }}
                 />
-                {i === boxes.length - 1 ? (
-                  <Button className="px-3" variant="outline" size="lg" aria-label="添加一箱" onClick={() => setBoxes([...boxes, 0])}>+</Button>
-                ) : (
-                  <Button className="px-3" variant="outline" size="lg" aria-label={`删除箱${i + 1}`} onClick={() => setBoxes(boxes.filter((_, j) => j !== i))}>-</Button>
+                {i === boxes.length - 1 && (
+                  <Button className="px-3" variant="outline" size="lg" disabled={locked} aria-label="添加一箱" onClick={() => setBoxes([...boxes, 0])}>+</Button>
+                )}
+                {boxes.length > 1 && (
+                  <Button className="px-3" variant="outline" size="lg" disabled={locked} aria-label={`删除箱${i + 1}`} onClick={() => setBoxes(boxes.filter((_, j) => j !== i))}>-</Button>
                 )}
               </div>
             ))}
@@ -228,17 +220,17 @@ export default function PdaSaleReturnReceivePage() {
         {/* 质检确认 */}
         {step === 'check' && selectedProduct && (
           <PdaCard>
-            <div className="mb-3"><PdaProductIdentity code={selectedProduct.code} name={selectedProduct.name} view="detail" /></div>
-            <div className="text-sm text-muted-foreground mb-3">已收货：{selectedProduct.remaining + (task?.items?.reduce((s, i) => i.productId === selectedProduct.id ? s + i.receivedQty : s, 0) || 0)} {selectedProduct.unit}</div>
+            <div className="mb-3"><PdaProductIdentity code={selectedProduct.productCode} name={selectedProduct.productName} view="detail" /></div>
+            <div className="text-sm text-muted-foreground mb-3">已收货：{selectedProduct.totalReceived} {selectedProduct.unit}</div>
             <div className="mb-3">
               <span className="text-sm">质检通过数量：</span>
-              <Input aria-label="质检通过数量" data-scanner-manual="true" quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={boxes[0] || ''} className="min-h-11 text-lg mt-1"
+              <Input aria-label="质检通过数量" data-scanner-manual="true" disabled={locked} quantity type="number" min={0} step={qtyStep(allowDecimalOf(productId))} value={boxes[0] || ''} className="min-h-11 text-lg mt-1"
                 onChange={e => setBoxes([Number(e.target.value) || 0])}
               />
             </div>
             <div className="mb-1">
               <span className="text-sm text-destructive-ink">不合格数量：</span>
-              <Input aria-label="不合格数量" data-scanner-manual="true" quantity type="number" min={0} step={qtyStep(allowDecimalOf(selectedProduct?.id))} value={rejectedQty || ''} className="min-h-11 text-lg mt-1"
+              <Input aria-label="不合格数量" data-scanner-manual="true" disabled={locked} quantity type="number" min={0} step={qtyStep(allowDecimalOf(productId))} value={rejectedQty || ''} className="min-h-11 text-lg mt-1"
                 onChange={e => setRejectedQty(Number(e.target.value) || 0)}
               />
             </div>
@@ -248,17 +240,17 @@ export default function PdaSaleReturnReceivePage() {
 
       <PdaBottomBar>
         {step === 'select' && (
-          <PdaScanner onScan={handleScan} placeholder="扫描商品条码…" />
+          <PdaScanner onScan={handleScan} disabled={locked} placeholder="扫描商品条码…" />
         )}
         {step === 'qty' && selectedProduct && totalQty > 0 && (
-          <Button size="lg" className="px-3 w-full h-12 text-lg" disabled={receiveAction.phase !== 'idle'}
+          <Button size="lg" className="px-3 w-full h-12 text-lg" disabled={locked || !canReceive}
             onClick={() => void doReceive()}
           >
             {`确认收货 ${totalQty} ${selectedProduct.unit}`}
           </Button>
         )}
         {step === 'check' && selectedProduct && (Number(boxes[0]) > 0 || rejectedQty > 0) && (
-          <Button size="lg" className="px-3 w-full h-12 text-lg" disabled={checkAction.phase !== 'idle'}
+          <Button size="lg" className="px-3 w-full h-12 text-lg" disabled={locked || !canCheck}
             onClick={() => void doCheck()}
           >
             确认质检：合格 {Number(boxes[0]) || 0}{rejectedQty > 0 ? `，不合格 ${rejectedQty}` : ''} {selectedProduct.unit}
@@ -291,10 +283,4 @@ function ReturnLabelReceiptView({ receipt }: { receipt: Partial<ReturnTaskAction
       </ul>
     </section>
   )
-}
-
-// Helper type
-interface ReturnTaskItem {
-  id: number; productId: number; productCode: string; productName: string; unit: string
-  expectedQty: number; receivedQty: number; checkedQty: number; rejectedQty: number; putawayQty: number
 }

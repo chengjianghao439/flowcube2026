@@ -1,66 +1,1249 @@
-.xiaoman-page{height:100%;min-height:0;display:flex;flex-direction:column;color:hsl(var(--foreground))}
-.xiaoman-page .desktop-page-heading{margin-bottom:16px}
-.xiaoman-connection{display:inline-flex;align-items:center;gap:6px;color:#595f6a;font-size:11px;font-weight:500}
-.xiaoman-connection i{width:6px;height:6px;border-radius:50%;background:#949ba5}.xiaoman-connection.is-online i{background:#23805b}
-.xiaoman-identity{font-size:12px;color:hsl(var(--muted-foreground));margin:0}
-.xiaoman-workspace{display:grid;grid-template-columns:248px minmax(0,1fr);flex:1;min-height:0;overflow:hidden;border:1px solid hsl(var(--border));border-radius:12px;background:#fff}
-.xiaoman-sidebar{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid hsl(var(--border));background:#fafbfc;padding:16px 12px 10px}
-.xiaoman-new{display:flex;align-items:center;justify-content:center;gap:8px;min-height:38px;background:#fff;border:1px solid hsl(var(--border));border-radius:7px;font-size:13px;font-weight:600;color:hsl(var(--primary))}
-.xiaoman-history-heading{display:flex;align-items:center;justify-content:space-between;margin:22px 8px 8px}
-.xiaoman-history-heading h2{margin:0;font-size:12px;font-weight:500;color:#626976}.xiaoman-history-heading button{padding:5px;border-radius:4px;color:#626976}
-.xiaoman-history{flex:1;overflow-y:auto;min-height:0;padding:0 2px}
-.xiaoman-history-item{display:block;width:100%;text-align:left;border:1px solid transparent;border-radius:7px;padding:10px;margin:4px 0;color:#424852;min-width:0}
-.xiaoman-history-item:hover{background:#f0f2f5}.xiaoman-history-item.is-selected{background:#edf2fc;border-color:#cddbf4;color:#173f8c}
-.xiaoman-history-title{display:block;font-size:12px;line-height:1.65;overflow-wrap:anywhere}
-.xiaoman-history-meta{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;justify-content:space-between;margin-top:6px;font-size:10px;color:#606976}.xiaoman-history-meta time{font-variant-numeric:tabular-nums}
-.xiaoman-sidebar-hint,.xiaoman-history-error{font-size:12px;line-height:1.8;color:#626976;padding:8px}.xiaoman-history-error button{color:hsl(var(--primary));margin-top:6px;text-decoration:underline}
-.xiaoman-history-foot{font-size:10px;line-height:1.6;color:#626976;margin:12px 6px 2px;border-top:1px solid hsl(var(--border));padding-top:12px}
-.xiaoman-conversation{display:flex;flex-direction:column;min-width:0;min-height:0;background:#fff}.xiaoman-thread{overflow-y:auto;flex:1;min-height:0;overscroll-behavior:contain}
-.xiaoman-thread-content{width:100%;max-width:900px;margin:0 auto;padding:28px 34px}.xiaoman-welcome{max-width:660px;margin:clamp(8px,5vh,64px) auto 22px}
-.xiaoman-mark{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:#eaf0fc;color:hsl(var(--primary));font-size:22px;font-weight:600;margin-bottom:22px}
-.xiaoman-welcome h2{font-size:23px;line-height:1.5;font-weight:600;letter-spacing:-.02em;margin:0 0 9px;text-wrap:balance}
-.xiaoman-scope{margin:0 0 8px}.xiaoman-scope summary{width:fit-content;cursor:pointer;font-size:13px;color:hsl(var(--muted-foreground))}.xiaoman-scope h3{margin:14px 0 4px;font-size:13px;font-weight:600;color:#293346}.xiaoman-scope p{margin:0 0 8px;font-size:13px;line-height:1.8;color:#626976}
-.xiaoman-guides{display:flex;flex-wrap:wrap;gap:4px 14px;margin:14px 0 8px}
-.xiaoman-guide{display:inline-flex;align-items:center;padding:1px 0;border:0;background:transparent;color:hsl(var(--primary));font-size:13px;line-height:1.8;text-decoration:underline;text-underline-offset:2px}
-.xiaoman-prompts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.xiaoman-prompts button{display:flex;text-align:left;align-items:flex-start;gap:11px;padding:15px 14px;border:1px solid hsl(var(--border));border-radius:8px;background:#fff;min-width:0}
-.xiaoman-prompts button:hover{border-color:#a8bde7;background:#f9fbff}.xiaoman-prompts button>svg{color:hsl(var(--primary));margin-top:2px;flex:none}.xiaoman-prompts strong{display:block;font-size:13px;font-weight:600;color:#293346}.xiaoman-prompts small{display:block;font-size:11px;color:#626976;margin-top:5px;line-height:1.6}
-.xiaoman-message{display:flex;align-items:flex-start;gap:12px;margin-bottom:23px;font-size:13px;line-height:1.9}.xiaoman-message-text{max-width:72ch;white-space:pre-wrap;overflow-wrap:anywhere}
-.xiaoman-message-text p{margin:0 0 12px}.xiaoman-message-text p:last-child{margin-bottom:0}.xiaoman-message-text strong{font-weight:600}.xiaoman-message-text ol,.xiaoman-message-text ul{margin:7px 0 14px;padding-left:21px}.xiaoman-message-text ol{list-style:decimal}.xiaoman-message-text ul{list-style:disc}.xiaoman-message-text li+li{margin-top:5px}
-.xiaoman-avatar{display:grid;place-items:center;flex:none;width:27px;height:27px;line-height:1;border-radius:8px;background:#eaf0fc;color:hsl(var(--primary));font-size:13px;font-weight:600;margin-top:1px}
-.xiaoman-message.is-user{justify-content:flex-end;margin-top:8px}.xiaoman-message.is-user .xiaoman-message-text{background:#f1f3f7;border-radius:10px 10px 3px 10px;padding:9px 14px;max-width:85%}
-.xiaoman-current{margin-left:39px}.xiaoman-preview{border:1px solid #cbd6eb;border-radius:9px;margin:8px 0 18px;overflow:hidden;background:#fff}
-.xiaoman-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 17px;background:#f7f9fd;border-bottom:1px solid #e0e6f0}.xiaoman-preview-heading h2{font-size:13px;font-weight:600;margin:0}
-.xiaoman-state{display:inline-flex;align-items:center;gap:4px;color:#3d567d;background:#eaf0fb;padding:3px 7px;border-radius:4px;font-size:10px;white-space:nowrap}.xiaoman-state.is-done{color:#246445;background:#eaf5ef}
-.xiaoman-preview-body{padding:12px 17px}.xiaoman-facts{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px 20px;font-size:12px;line-height:1.7;margin:0 0 10px}.xiaoman-facts:empty{display:none}
-.xiaoman-facts dt{color:#626976}.xiaoman-facts dd{margin:0;text-align:right;overflow-wrap:anywhere}.xiaoman-facts .xiaoman-amount{font-size:17px;font-weight:600;color:#1f2d44}
-.xiaoman-product{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:12px 0;border-top:1px solid #edf0f5;font-size:12px}.xiaoman-product strong{font-weight:500}.xiaoman-quantity{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}.xiaoman-line-detail{display:block;margin-top:5px;font-size:11px;color:#626976}
-.xiaoman-total{display:flex;justify-content:space-between;align-items:center;padding-top:13px;margin-top:3px;border-top:1px solid #dfe5ee;font-size:12px}.xiaoman-total strong{font-size:17px;font-variant-numeric:tabular-nums}
-.xiaoman-preview-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:13px 17px;background:#fafbfe;border-top:1px solid #e4e9f1}.xiaoman-preview-actions>span{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#626976;line-height:1.6}
-.xiaoman-primary{background:hsl(var(--primary));color:#fff;font-size:12px;font-weight:500;border:1px solid hsl(var(--primary));border-radius:6px;padding:8px 17px;min-height:34px}
-.xiaoman-notice,.xiaoman-preview-expired{background:#fff9eb;color:#87550a;font-size:11px;line-height:1.8;padding:9px 12px;border-radius:5px;margin:8px 0}.xiaoman-preview-expired{margin:0;border-radius:0;padding:12px 17px}
-.xiaoman-candidates,.xiaoman-accounts{border:0;margin:12px 0;padding:0;display:flex;flex-direction:column;gap:7px}.xiaoman-candidates legend,.xiaoman-accounts legend{font-size:12px;font-weight:500;margin-bottom:9px}
-.xiaoman-candidates button,.xiaoman-accounts button{border:1px solid #d8e0ec;border-radius:6px;background:#fff;padding:10px 12px;text-align:left;font-size:12px;color:#263b5c;line-height:1.7}.xiaoman-candidates button:hover,.xiaoman-accounts button:hover{background:#f5f8fd;border-color:#a8bde7}
-.xiaoman-candidates button>span{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px}.xiaoman-candidates strong{font-weight:500}.xiaoman-candidates small{font-size:11px;color:#626976}
-.xiaoman-allocations>div{padding:10px 0;border-top:1px solid #edf0f5;font-size:12px}.xiaoman-allocations strong{font-weight:500}.xiaoman-allocations>div>div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;color:#626976}.xiaoman-allocations b{font-weight:500;color:#293346}.xiaoman-purchase-group h3{font-size:11px;font-weight:500;color:#626976;margin:12px 0 4px}
-.xiaoman-result-links{display:flex;flex-wrap:wrap;gap:8px 18px;margin:10px 0 18px}.xiaoman-result-links button{display:inline-flex;align-items:center;gap:4px;color:hsl(var(--primary));font-size:12px;padding:4px 0}
-.xiaoman-change{font-variant-numeric:tabular-nums;font-weight:600;color:#293346;white-space:nowrap}
-.xiaoman-source-link{color:hsl(var(--primary));text-underline-offset:4px}.xiaoman-source-link:hover,.xiaoman-source-link:focus-visible{text-decoration:underline}
-.xiaoman-recovery{padding:12px 0;margin:4px 0 12px;font-size:12px;line-height:1.8}.xiaoman-recovery p{margin:0 0 10px;color:#87550a}.xiaoman-working{display:flex;align-items:center;gap:8px;margin:18px 0 2px 39px;color:#626976;font-size:12px}
-.xiaoman-composer{flex:none;width:100%;max-width:900px;margin:0 auto;padding:10px 34px 13px;background:#fff}.xiaoman-input-box{display:flex;align-items:flex-end;gap:12px;min-height:88px;border:1px solid #c9d1df;border-radius:9px;padding:10px 11px 10px 15px;box-shadow:0 2px 7px rgb(20 34 61 / 3%)}.xiaoman-input-box:focus-within{border-color:#6d8ecb;box-shadow:0 0 0 2px rgb(0 45 158 / 7%)}
-.xiaoman-input-box textarea{display:block;min-width:0;flex:1;resize:none;max-height:128px;outline:0;border:0;background:transparent;font:inherit;font-size:13px;line-height:1.8;color:#293346;padding:1px 0}.xiaoman-input-box textarea::placeholder{color:#626976;opacity:1}
-.xiaoman-send{display:grid;place-items:center;flex:none;width:33px;height:33px;border-radius:6px;background:hsl(var(--primary));color:#fff}.xiaoman-input-hint{font-size:10px;color:#626976;text-align:right;line-height:1.5;margin:7px 2px 0}.xiaoman-error{font-size:12px;line-height:1.8;color:#a52d22;margin:0 0 9px}
-.xiaoman-page button{cursor:pointer}.xiaoman-page button:disabled{cursor:default;opacity:.5}.xiaoman-page button:focus-visible{outline:2px solid hsl(var(--primary));outline-offset:3px}
-@media(max-width:1024px){.xiaoman-workspace{grid-template-columns:210px minmax(0,1fr)}.xiaoman-thread-content{padding:24px}.xiaoman-composer{padding:10px 24px 12px}.xiaoman-identity{font-size:11px}}
-@media(max-width:760px){.xiaoman-workspace{display:flex;flex-direction:column;min-height:420px}.xiaoman-sidebar{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;padding:10px;border-right:0;border-bottom:1px solid hsl(var(--border));flex:none;max-height:115px}.xiaoman-new{padding:0 10px;grid-row:1 / 3}.xiaoman-history-heading{margin:0 3px}.xiaoman-history{display:flex;gap:6px;overflow-x:auto;overflow-y:hidden}.xiaoman-history-item{width:170px;flex:none;margin:0;padding:5px 9px}.xiaoman-history-title{font-size:11px}.xiaoman-history-meta{font-size:9px;margin-top:2px}.xiaoman-history-meta time,.xiaoman-history-foot{display:none}.xiaoman-sidebar-hint{padding:2px;font-size:11px}.xiaoman-thread-content{padding:20px 16px}.xiaoman-composer{padding:8px 16px 10px}.xiaoman-current{margin-left:0}.xiaoman-message{gap:9px}.xiaoman-welcome{margin:12px auto}.xiaoman-welcome h2{font-size:20px}.xiaoman-scope p{font-size:12px}.xiaoman-prompts{gap:8px}.xiaoman-prompts button{padding:12px 10px;gap:8px}.xiaoman-prompts small{font-size:10px}.xiaoman-identity{max-width:100%;overflow-wrap:anywhere}.xiaoman-working{margin-left:0}.xiaoman-history-error{padding:0;font-size:10px}}
-@media (min-width:761px) and (max-height:760px) {
-  .xiaoman-page .desktop-page-heading { margin-bottom:10px; }
-  .xiaoman-thread-content { padding-block:12px; }
-  .xiaoman-welcome { margin-block:0 12px; }
-  .xiaoman-mark { width:32px; height:32px; margin-bottom:8px; }
-  .xiaoman-welcome h2 { font-size:20px; margin-bottom:4px; }
-  .xiaoman-scope h3 { margin-top:8px; }
-  .xiaoman-guides { margin:8px 0 4px; }
-  .xiaoman-prompts { gap:6px 8px; }
-  .xiaoman-prompts button { padding:7px 10px; }
-  .xiaoman-input-box { min-height:70px; }
+/* ==========================================================================
+   小满工作区 (AgentWorkspace)
+   保留原有双栏布局与页头结构，基于桌面端语义 Token 统一细节、对齐与层次。
+   ========================================================================== */
+
+.xiaoman-page {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  color: hsl(var(--foreground));
+}
+
+/* ── 左侧栏底部状态与权限范围 ── */
+.xiaoman-sidebar-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 10px 4px 0;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.xiaoman-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  color: hsl(var(--muted-foreground));
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.xiaoman-connection i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: hsl(var(--muted-foreground) / 0.55);
+  flex: none;
+}
+
+.xiaoman-connection.is-online {
+  color: hsl(var(--success-ink));
+}
+
+.xiaoman-connection.is-online i {
+  background: hsl(var(--success));
+  box-shadow: 0 0 0 2px hsl(var(--success) / 0.16);
+}
+
+.xiaoman-identity {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: hsl(var(--muted-foreground));
+  min-width: 0;
+}
+
+.xiaoman-identity span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.xiaoman-identity svg {
+  color: hsl(var(--primary));
+  flex: none;
+}
+
+/* ── 主工作区卡片（左记录栏 + 右对话区） ── */
+.xiaoman-workspace {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--desktop-radius, 12px);
+  background: hsl(var(--card));
+  box-shadow: var(--desktop-shadow, 0 1px 2px rgb(15 23 42 / 0.04));
+}
+
+/* ── 左侧最近记录栏 ── */
+.xiaoman-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid hsl(var(--border));
+  background: hsl(var(--surface-subtle));
+  padding: 14px 12px 12px;
+}
+
+.xiaoman-new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 12px;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-button, 8px);
+  font-size: 13px;
+  font-weight: 600;
+  color: hsl(var(--primary));
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.03);
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.xiaoman-new:hover:not(:disabled) {
+  border-color: hsl(var(--primary) / 0.35);
+  background: hsl(var(--blue-10));
+  box-shadow: 0 1px 3px hsl(var(--primary) / 0.08);
+}
+
+.xiaoman-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 4px 8px 6px;
+}
+
+.xiaoman-history-heading h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  letter-spacing: 0.01em;
+}
+
+.xiaoman-history-heading button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.xiaoman-history-heading button:hover:not(:disabled) {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+.xiaoman-history {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0 2px;
+}
+
+.xiaoman-sidebar-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 2px;
+  padding: 12px 11px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card) / 0.6);
+  color: hsl(var(--muted-foreground));
+}
+
+.xiaoman-sidebar-empty svg {
+  flex: none;
+  margin-top: 3px;
+  opacity: 0.7;
+}
+
+.xiaoman-sidebar-empty p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.xiaoman-history-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  padding: 9px 10px;
+  margin: 3px 0;
+  color: hsl(var(--foreground));
+  min-width: 0;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.xiaoman-history-item:hover:not(:disabled) {
+  background: hsl(var(--card));
+  border-color: hsl(var(--border) / 0.7);
+}
+
+.xiaoman-history-item.is-selected {
+  background: hsl(var(--blue-10));
+  border-color: hsl(var(--primary) / 0.28);
+  color: hsl(var(--primary));
+}
+
+.xiaoman-history-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.xiaoman-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: hsl(var(--muted-foreground));
+}
+
+.xiaoman-history-meta time {
+  font-variant-numeric: tabular-nums;
+}
+
+.xiaoman-sidebar-hint,
+.xiaoman-history-error {
+  font-size: 12px;
+  line-height: 1.75;
+  color: hsl(var(--muted-foreground));
+  padding: 8px 6px;
+  margin: 0;
+}
+
+.xiaoman-history-error {
+  border: 1px solid hsl(var(--destructive) / 0.25);
+  border-radius: 8px;
+  background: hsl(var(--destructive) / 0.05);
+  color: hsl(var(--destructive-ink));
+  padding: 10px 11px;
+  margin: 4px 2px;
+}
+
+.xiaoman-history-error p {
+  margin: 0;
+}
+
+.xiaoman-history-error button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: hsl(var(--primary));
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.xiaoman-history-foot {
+  font-size: 11px;
+  line-height: 1.5;
+  color: hsl(var(--muted-foreground));
+  margin: 10px 4px 0;
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 10px;
+}
+
+/* ── 右侧对话主舞台 ── */
+.xiaoman-conversation {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: hsl(var(--card));
+}
+
+.xiaoman-thread {
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+
+/* 与底部输入框严格对齐 760px 内容宽度 (828 - 34*2) */
+.xiaoman-thread-content {
+  width: 100%;
+  max-width: 828px;
+  margin: 0 auto;
+  padding: 32px 34px 24px;
+}
+
+.xiaoman-thread-content.is-empty {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 欢迎页（保留原纵向结构，舒展留白与对齐升级） ── */
+.xiaoman-welcome {
+  width: 100%;
+  margin: auto 0;
+  padding: 12px 0 36px;
+}
+
+.xiaoman-welcome-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+
+.xiaoman-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  border: 1px solid hsl(var(--primary) / 0.16);
+  background: linear-gradient(145deg, hsl(var(--blue-10)), hsl(var(--primary) / 0.14));
+  color: hsl(var(--primary));
+  font-size: 21px;
+  font-weight: 700;
+  margin-bottom: 18px;
+  box-shadow: 0 2px 8px hsl(var(--primary) / 0.08);
+}
+
+.xiaoman-welcome h2 {
+  font-size: 24px;
+  line-height: 1.38;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+  margin: 0;
+  text-wrap: balance;
+}
+
+.xiaoman-unfinished-banner {
+  margin: 0 0 20px;
+  padding: 11px 14px;
+  border: 1px solid hsl(var(--warning) / 0.32);
+  border-radius: 9px;
+  background: hsl(var(--warning) / 0.08);
+  color: hsl(var(--warning-ink));
+  font-size: 12.5px;
+  line-height: 1.65;
+}
+
+/* 2×2 场景快捷卡 */
+.xiaoman-prompts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.xiaoman-prompts button {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  text-align: left;
+  padding: 18px 20px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  background: hsl(var(--card));
+  min-width: 0;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.xiaoman-prompts button:hover:not(:disabled) {
+  border-color: hsl(var(--primary) / 0.38);
+  background: hsl(var(--blue-10) / 0.52);
+  box-shadow: 0 4px 14px hsl(var(--primary) / 0.07);
+  transform: translateY(-1px);
+}
+
+.xiaoman-prompt-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: hsl(var(--blue-10));
+  color: hsl(var(--primary));
+  flex: none;
+  transition: background-color 150ms ease;
+}
+
+.xiaoman-prompts button:hover:not(:disabled) .xiaoman-prompt-icon {
+  background: hsl(var(--primary) / 0.14);
+}
+
+.xiaoman-prompt-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.xiaoman-prompts strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: hsl(var(--foreground));
+}
+
+.xiaoman-prompts small {
+  display: block;
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 6px;
+  line-height: 1.55;
+}
+
+.xiaoman-prompt-arrow {
+  flex: none;
+  margin-top: 3px;
+  color: hsl(var(--muted-foreground));
+  opacity: 0;
+  transform: translate(-2px, 2px);
+  transition: opacity 150ms ease, transform 150ms ease, color 150ms ease;
+}
+
+.xiaoman-prompts button:hover:not(:disabled) .xiaoman-prompt-arrow,
+.xiaoman-prompts button:focus-visible .xiaoman-prompt-arrow {
+  opacity: 1;
+  transform: translate(0, 0);
+  color: hsl(var(--primary));
+}
+
+/* 对话消息内嵌页面跳转链接（MessageText） */
+.xiaoman-guide {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--primary));
+  font: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.xiaoman-guide:hover:not(:disabled) {
+  color: hsl(var(--primary-hover, var(--primary)));
+}
+
+/* 使用说明折叠面板 */
+.xiaoman-scope {
+  margin: 24px 0 0;
+}
+
+.xiaoman-scope summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 8px 4px 4px;
+  margin-left: -4px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.xiaoman-scope summary::-webkit-details-marker {
+  display: none;
+}
+
+.xiaoman-scope summary:hover {
+  background: hsl(var(--surface-subtle));
+  color: hsl(var(--foreground));
+}
+
+.xiaoman-scope summary svg {
+  transition: transform 160ms ease;
+}
+
+.xiaoman-scope[open] summary svg {
+  transform: rotate(90deg);
+}
+
+.xiaoman-scope-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 20px;
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  background: hsl(var(--surface-subtle));
+}
+
+.xiaoman-scope-col {
+  min-width: 0;
+}
+
+.xiaoman-scope h3 {
+  margin: 0 0 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+}
+
+.xiaoman-scope p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── 对话消息流 ── */
+.xiaoman-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 22px;
+  font-size: 13px;
+  line-height: 1.85;
+}
+
+.xiaoman-message-text {
+  max-width: 72ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.xiaoman-message-text p {
+  margin: 0 0 11px;
+}
+
+.xiaoman-message-text p:last-child {
+  margin-bottom: 0;
+}
+
+.xiaoman-message-text strong {
+  font-weight: 600;
+}
+
+.xiaoman-message-text ol,
+.xiaoman-message-text ul {
+  margin: 7px 0 13px;
+  padding-left: 20px;
+}
+
+.xiaoman-message-text ol {
+  list-style: decimal;
+}
+
+.xiaoman-message-text ul {
+  list-style: disc;
+}
+
+.xiaoman-message-text li + li {
+  margin-top: 5px;
+}
+
+.xiaoman-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  line-height: 1;
+  border-radius: 8px;
+  border: 1px solid hsl(var(--primary) / 0.16);
+  background: hsl(var(--blue-10));
+  color: hsl(var(--primary));
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.xiaoman-message.is-user {
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.xiaoman-message.is-user .xiaoman-message-text {
+  background: hsl(var(--surface-subtle));
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: 12px 12px 4px 12px;
+  padding: 9px 14px;
+  max-width: 82%;
+}
+
+/* ── 任务预览与候选项 ── */
+.xiaoman-current {
+  margin-left: 40px;
+}
+
+.xiaoman-preview {
+  border: 1px solid hsl(var(--primary) / 0.24);
+  border-radius: 10px;
+  margin: 8px 0 18px;
+  overflow: hidden;
+  background: hsl(var(--card));
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.04);
+}
+
+.xiaoman-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: hsl(var(--surface-subtle));
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.xiaoman-preview-heading h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+  color: hsl(var(--foreground));
+}
+
+.xiaoman-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: hsl(var(--primary));
+  background: hsl(var(--blue-10));
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.xiaoman-state.is-done {
+  color: hsl(var(--success-ink));
+  background: hsl(var(--success) / 0.12);
+}
+
+.xiaoman-preview-body {
+  padding: 13px 16px;
+}
+
+.xiaoman-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 7px 20px;
+  font-size: 12px;
+  line-height: 1.7;
+  margin: 0 0 10px;
+}
+
+.xiaoman-facts:empty {
+  display: none;
+}
+
+.xiaoman-facts dt {
+  color: hsl(var(--muted-foreground));
+}
+
+.xiaoman-facts dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.xiaoman-facts .xiaoman-amount {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--foreground));
+}
+
+.xiaoman-product {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 11px 0;
+  border-top: 1px solid hsl(var(--border) / 0.7);
+  font-size: 12px;
+}
+
+.xiaoman-product strong {
+  font-weight: 500;
+}
+
+.xiaoman-quantity {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.xiaoman-line-detail {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+
+.xiaoman-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  margin-top: 4px;
+  border-top: 1px solid hsl(var(--border));
+  font-size: 12px;
+}
+
+.xiaoman-total strong {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.xiaoman-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: hsl(var(--surface-subtle));
+  border-top: 1px solid hsl(var(--border));
+}
+
+.xiaoman-preview-actions > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.6;
+}
+
+.xiaoman-primary {
+  background: hsl(var(--primary-action, var(--primary)));
+  color: hsl(var(--primary-foreground));
+  font-size: 12.5px;
+  font-weight: 500;
+  border: 1px solid hsl(var(--primary-action, var(--primary)));
+  border-radius: var(--radius-button, 8px);
+  padding: 7px 16px;
+  min-height: 34px;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.xiaoman-primary:hover:not(:disabled) {
+  background: hsl(var(--primary-hover, var(--primary)));
+  border-color: hsl(var(--primary-hover, var(--primary)));
+}
+
+.xiaoman-notice,
+.xiaoman-preview-expired {
+  background: hsl(var(--warning) / 0.1);
+  color: hsl(var(--warning-ink));
+  font-size: 11.5px;
+  line-height: 1.75;
+  padding: 9px 12px;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+
+.xiaoman-preview-expired {
+  margin: 0;
+  border-radius: 0;
+  padding: 12px 16px;
+}
+
+.xiaoman-candidates,
+.xiaoman-accounts {
+  border: 0;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.xiaoman-candidates legend,
+.xiaoman-accounts legend {
+  font-size: 12px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  margin-bottom: 8px;
+}
+
+.xiaoman-candidates button,
+.xiaoman-accounts button {
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--card));
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12px;
+  color: hsl(var(--foreground));
+  line-height: 1.65;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.xiaoman-candidates button:hover:not(:disabled),
+.xiaoman-accounts button:hover:not(:disabled) {
+  background: hsl(var(--blue-10) / 0.55);
+  border-color: hsl(var(--primary) / 0.35);
+}
+
+.xiaoman-candidates button > span {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.xiaoman-candidates strong {
+  font-weight: 500;
+}
+
+.xiaoman-candidates small {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+
+.xiaoman-allocations > div {
+  padding: 10px 0;
+  border-top: 1px solid hsl(var(--border) / 0.7);
+  font-size: 12px;
+}
+
+.xiaoman-allocations strong {
+  font-weight: 500;
+}
+
+.xiaoman-allocations > div > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+
+.xiaoman-allocations b {
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+
+.xiaoman-purchase-group h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  margin: 12px 0 4px;
+}
+
+.xiaoman-result-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 10px 0 18px;
+}
+
+.xiaoman-result-links button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: hsl(var(--primary));
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 0;
+}
+
+.xiaoman-result-links button:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.xiaoman-change {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+}
+
+.xiaoman-source-link {
+  color: hsl(var(--primary));
+  text-underline-offset: 4px;
+}
+
+.xiaoman-source-link:hover,
+.xiaoman-source-link:focus-visible {
+  text-decoration: underline;
+}
+
+.xiaoman-recovery {
+  padding: 12px 0;
+  margin: 4px 0 12px;
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.xiaoman-recovery p {
+  margin: 0 0 10px;
+  color: hsl(var(--warning-ink));
+}
+
+.xiaoman-working {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 2px 40px;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+
+/* ── 底部固定输入栏（与欢迎区 720px 同宽对齐） ── */
+.xiaoman-composer {
+  flex: none;
+  width: 100%;
+  background: hsl(var(--card));
+}
+
+.xiaoman-composer.is-active {
+  border-top: 1px solid hsl(var(--border) / 0.7);
+}
+
+.xiaoman-composer-inner {
+  width: 100%;
+  max-width: 828px;
+  margin: 0 auto;
+  padding: 10px 34px 16px;
+}
+
+.xiaoman-input-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-height: 82px;
+  border: 1px solid hsl(var(--input, var(--border)));
+  border-radius: 12px;
+  background: hsl(var(--card));
+  padding: 10px 10px 10px 15px;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 0.04);
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.xiaoman-input-box:hover {
+  border-color: hsl(var(--primary) / 0.35);
+}
+
+.xiaoman-input-box:focus-within {
+  border-color: hsl(var(--primary) / 0.65);
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.14);
+}
+
+/* 配合 .fc-composite-input 彻底消除全局 textarea 双层边框 */
+.xiaoman-input-box textarea {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  resize: none;
+  max-height: 132px;
+  min-height: 50px;
+  outline: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: hsl(var(--foreground));
+  padding: 2px 0;
+}
+
+.xiaoman-input-box textarea:focus,
+.xiaoman-input-box textarea:focus-visible {
+  outline: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.xiaoman-input-box textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+  opacity: 0.85;
+}
+
+.xiaoman-send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: hsl(var(--primary-action, var(--primary)));
+  color: hsl(var(--primary-foreground));
+  transition: background-color 140ms ease, opacity 140ms ease, transform 120ms ease;
+}
+
+.xiaoman-send:hover:not(:disabled) {
+  background: hsl(var(--primary-hover, var(--primary)));
+}
+
+.xiaoman-send:disabled {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  opacity: 0.7;
+}
+
+.xiaoman-input-hint {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  text-align: right;
+  line-height: 1.5;
+  margin: 7px 2px 0;
+}
+
+.xiaoman-error {
+  font-size: 12px;
+  line-height: 1.7;
+  color: hsl(var(--destructive-ink));
+  background: hsl(var(--destructive) / 0.06);
+  border: 1px solid hsl(var(--destructive) / 0.22);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 0 0 10px;
+}
+
+/* ── 交互与键盘聚焦规范 ── */
+.xiaoman-page button {
+  cursor: pointer;
+}
+
+.xiaoman-page button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.xiaoman-page button:focus-visible,
+.xiaoman-scope summary:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+/* ── 响应式适配 ── */
+@media (max-width: 1080px) {
+  .xiaoman-workspace {
+    grid-template-columns: 216px minmax(0, 1fr);
+  }
+
+  .xiaoman-thread-content {
+    padding: 22px 24px 16px;
+  }
+
+  .xiaoman-composer-inner {
+    padding: 10px 24px 12px;
+  }
+}
+
+@media (max-width: 760px) {
+  .xiaoman-workspace {
+    display: flex;
+    flex-direction: column;
+    min-height: 420px;
+  }
+
+  .xiaoman-sidebar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px;
+    border-right: 0;
+    border-bottom: 1px solid hsl(var(--border));
+    flex: none;
+    max-height: 116px;
+  }
+
+  .xiaoman-new {
+    width: auto;
+    padding: 0 12px;
+    grid-row: 1 / 3;
+  }
+
+  .xiaoman-history-heading {
+    margin: 0 2px;
+  }
+
+  .xiaoman-history {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .xiaoman-sidebar-empty {
+    margin: 0;
+    padding: 6px 10px;
+    align-items: center;
+  }
+
+  .xiaoman-sidebar-empty svg {
+    margin-top: 0;
+  }
+
+  .xiaoman-history-item {
+    width: 170px;
+    flex: none;
+    margin: 0;
+    padding: 6px 9px;
+  }
+
+  .xiaoman-history-title {
+    font-size: 11.5px;
+  }
+
+  .xiaoman-history-meta {
+    font-size: 10px;
+    margin-top: 2px;
+  }
+
+  .xiaoman-history-meta time,
+  .xiaoman-history-foot,
+  .xiaoman-sidebar-footer {
+    display: none;
+  }
+
+  .xiaoman-thread-content {
+    padding: 18px 16px 14px;
+  }
+
+  .xiaoman-composer-inner {
+    padding: 8px 16px 10px;
+  }
+
+  .xiaoman-current,
+  .xiaoman-working {
+    margin-left: 0;
+  }
+
+  .xiaoman-message {
+    gap: 9px;
+  }
+
+  .xiaoman-welcome {
+    padding: 4px 0 12px;
+  }
+
+  .xiaoman-welcome h2 {
+    font-size: 19px;
+  }
+
+  .xiaoman-prompts {
+    gap: 8px;
+  }
+
+  .xiaoman-prompts button {
+    padding: 11px 10px;
+    gap: 9px;
+  }
+
+  .xiaoman-scope-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .xiaoman-identity {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ── 极矮桌面视口保护 (如 1024x576) ── */
+@media (min-width: 761px) and (max-height: 600px) {
+  .xiaoman-thread-content {
+    padding-top: 16px;
+    padding-bottom: 12px;
+  }
+
+  .xiaoman-welcome {
+    padding: 4px 0 14px;
+  }
+
+  .xiaoman-welcome-head {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .xiaoman-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 17px;
+    margin-bottom: 0;
+  }
+
+  .xiaoman-welcome h2 {
+    font-size: 20px;
+  }
+
+  .xiaoman-prompts {
+    gap: 12px;
+  }
+
+  .xiaoman-prompts button {
+    padding: 13px 15px;
+    gap: 12px;
+  }
+
+  .xiaoman-prompt-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .xiaoman-scope {
+    margin-top: 16px;
+  }
+
+  .xiaoman-input-box {
+    min-height: 70px;
+    padding: 9px 10px 9px 14px;
+  }
+
+  .xiaoman-input-box textarea {
+    min-height: 44px;
+  }
+
+  .xiaoman-composer-inner {
+    padding-top: 8px;
+    padding-bottom: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xiaoman-page *,
+  .xiaoman-page *::before,
+  .xiaoman-page *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

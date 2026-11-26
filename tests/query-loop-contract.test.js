@@ -33,6 +33,12 @@ const SRC = path.join(ROOT, 'backend/src')
 
 /** 白名单：`文件相对路径::循环头（trim 后）` → 理由。必须被命中。 */
 const ALLOWLIST = new Map([
+  ['backend/src/engine/containerEngine.js::for (let offset = 0; offset < dimensions.length; offset += 500) {',
+    '每次读一批 500 个独立维度'],
+  ['backend/src/modules/search/search.service.js::const pages = await Promise.all(entities.map(async (ent) => {',
+    '按固定 ENTITIES 登记表及可见分类查询，每类仅一条查询，与命中行数无关'],
+  ['backend/src/modules/stockcheck/stockcheck.cycle.js::for (const wh of warehouses) {',
+    '每仓独立重算 ABC、创建盘点任务并记录失败，允许其余仓库继续调度'],
   ['backend/src/modules/customers/customers.service.js::for (const sql of checks) {',
     '固定的多条引用校验 SQL（每条查一张表），不是按行遍历'],
   ['backend/src/modules/products/products.service.js::for (const [, sql] of checks) {',
@@ -49,22 +55,15 @@ const ALLOWLIST = new Map([
     '设备码/密钥撞号重试，命中即退出，不是按行遍历'],
   ['backend/src/modules/printers/printers.service.js::while (true) {',
     '同上：取号撞号重试'],
-  ['backend/src/modules/import/import.service.js::for (let index = 0; index < dataRows.length; index += 1) {',
-    '逐行导入：每行都要独立校验+建档，属批量写入路径而非只读列表'],
-  ['backend/src/modules/import/import.service.js::for (const { row, rowNumber } of dataRows) {',
-    '主数据写入逐行检查已提交的名称与编码，使同一文件内的重复项保留原行级错误'],
   ['backend/src/modules/inventory/inventory.service.js::for (const [sourceType, ids] of byType) {',
     '按维度分组后每组一次查询——这正是 N+1 的修法本身'],
-  ['backend/src/modules/document-activity/document-activity.service.js::for (const [type, idSet] of byType) {',
-    '仅按关联任务类型分组；每组以 IN (?) 批量读取，不随任务行数逐条查询'],
   ['backend/src/modules/document-activity/document-activity.service.js::for (let start = 0; start < ids.length; start += 100) {',
     '每次最多 100 个任务 ID 的有界批次，单次批量查询而非逐任务查询'],
 ])
 
 /** 判定一个函数上下文窗口是否包含写操作或行锁。 */
-const WRITE_RE = /\b(INSERT\s+INTO|UPDATE\s+[\w`.]+\s+SET|DELETE\s+FROM|REPLACE\s+INTO|FOR\s+UPDATE)\b/i
-const LOOP_RE = /^\s*(for\s*\(|for\s+await|\.map\(\s*async|\.forEach\(\s*async|while\s*\()/
-const QUERY_RE = /await\s+[\w.]*\.(query|execute)\s*\(/
+const WRITE_RE = /^\s*(?:INSERT|UPDATE|DELETE|REPLACE)\b|\bFOR\s+UPDATE\b/i
+const { ts, parse, visit, literals, callName } = require('./helpers/contractSource')
 
 function collectFiles(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -77,29 +76,33 @@ function collectFiles(dir, out = []) {
 
 /** 返回 [{ line, loopText }]，即"只读路径上的逐行查询"位置。 */
 function findReadOnlyLoopQueries(source) {
+  if (!/\.(?:query|execute)\s*\(/.test(source)) return []
+  const tree = parse(source)
   const lines = source.split('\n')
-  const hits = []
-  for (let i = 0; i < lines.length; i++) {
-    if (!LOOP_RE.test(lines[i])) continue
-    const indent = lines[i].match(/^\s*/)[0].length
-
-    let queries = 0
-    for (let j = i + 1; j < lines.length; j++) {
-      const line = lines[j]
-      if (!line.trim()) continue
-      const ind = line.match(/^\s*/)[0].length
-      if (ind <= indent && j > i + 1) break
-      if (QUERY_RE.test(line)) queries++
+  const hits = new Map()
+  const writes = new Set()
+  const callbacks = new Set(['map', 'forEach', 'flatMap'])
+  visit(tree, node => {
+    if (!['query', 'execute'].includes(callName(node))) return
+    const sql = node.arguments[0] && literals(node.arguments[0])
+    let loop
+    let scope = tree
+    for (let parent = node.parent; parent; parent = parent.parent) {
+      if (ts.isIterationStatement(parent, true)) loop ??= parent
+      if (ts.isFunctionLike(parent)) {
+        if (callbacks.has(callName(parent.parent))) loop ??= parent.parent
+        scope = parent
+        break
+      }
     }
-    if (!queries) continue
-
-    // 上下文窗口：循环前 80 行到循环后 20 行
-    const window = lines.slice(Math.max(0, i - 80), i + 20).join('\n')
-    if (WRITE_RE.test(window)) continue
-
-    hits.push({ line: i + 1, loopText: lines[i].trim() })
-  }
-  return hits
+    if (sql && WRITE_RE.test(sql)) writes.add(scope)
+    if (loop) {
+      const { line } = tree.getLineAndCharacterOfPosition(loop.getStart())
+      hits.set(loop, { line: line + 1, loopText: lines[line].trim(), scope })
+    }
+  })
+  return [...hits.values()].filter(hit => !writes.has(hit.scope))
+    .map(({ line, loopText }) => ({ line, loopText }))
 }
 
 function main() {

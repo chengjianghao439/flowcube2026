@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { within } from '@testing-library/dom'
+import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
@@ -309,10 +311,17 @@ test('改价申请根据审批实例区分草稿和待审批，避免显示错�
   ]
   api.get.mockImplementation((url: string) => Promise.resolve(url === '/price-change' ? { list: rows, pagination: { total: 2 } } : {}))
   await render('/price-change', PricePage)
-  const [draft, pending] = [...host.querySelectorAll('tbody tr')]
-  expect(draft.textContent).toContain('草稿')
-  expect([...draft.querySelectorAll('button')].map(b => b.textContent)).toContain('提交')
-  expect([...draft.querySelectorAll('button')].map(b => b.textContent)).not.toContain('通过')
-  expect(pending.textContent).toContain('待审批')
-  expect([...pending.querySelectorAll('button')].map(b => b.textContent)).not.toContain('提交')
+  const user = userEvent.setup()
+  for (const [requestNo, statusName, actions] of [
+    ['PCR-草稿', '草稿', ['提交', '取消']],
+    ['PCR-已提交', '待审批', ['通过', '驳回', '取消']],
+  ] as const) {
+    const row = within(host).getByRole('cell', { name: requestNo }).closest('tr')!
+    expect(within(row).getByRole('cell', { name: statusName })).toBeTruthy()
+    const trigger = within(row).getByRole('button', { name: `更多操作 ${requestNo}` })
+    await act(async () => user.click(trigger))
+    const menu = within(document.body).getByRole('menu')
+    expect(within(menu).getAllByRole('menuitem').map(item => item.textContent)).toEqual(actions)
+    await act(async () => user.keyboard('{Escape}'))
+  }
 })

@@ -1,3 +1,5 @@
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
+import { RETURN_STATUS_OPTIONS } from './constants'
 import { useWorkspaceSearchParams, useWorkspacePath } from '@/hooks/useWorkspaceSearchParams'
 import { money } from '@/lib/format'
 import { returnNet } from './sale/form/returnSourcePresentation'
@@ -34,10 +36,14 @@ import type { TableColumn } from '@/types'
 type RowType = PurchaseReturn | SaleReturn
 type ReturnType = 'purchase' | 'sale'
 
-const STATUS_LABELS: Record<string, string> = { '1': '草稿', '2': '已确认', '3': '已执行', '4': '已取消' }
 
 /** 默认筛选的天数窗口（最近一周，含今天），口径与销售/采购/收货/调拨一致 */
 const DEFAULT_RANGE_DAYS = 7
+
+const QUICK_STATUSES = [
+  { value: '', label: '全部退货单' },
+  ...RETURN_STATUS_OPTIONS,
+]
 
 export default function ReturnsPage() {
   const { can } = usePermission()
@@ -242,7 +248,7 @@ export default function ReturnsPage() {
     keyword && { key: 'keyword', label: `单号：${keyword}`, onRemove: () => updateParams({ keyword: null, page: 1 }) },
     remark && { key: 'remark', label: `备注：${remark}`, onRemove: () => updateParams({ remark: null, page: 1 }) },
     operatorId && { key: 'operator', label: `经办人：${operatorName || operatorId}`, onRemove: () => updateParams({ operatorId: null, operatorName: null, page: 1 }) },
-    statusFilter && { key: 'status', label: `状态：${STATUS_LABELS[statusFilter] ?? statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
+    statusFilter && !QUICK_STATUSES.some(option => option.value === statusFilter) && { key: 'status', label: `状态：${statusFilter}`, onRemove: () => updateParams({ status: null, page: 1 }) },
     partyId && { key: 'party', label: `${partyLabel}：${partyName || partyId}`, onRemove: () => updateParams({ partyId: null, partyName: null, page: 1 }) },
     warehouseId && { key: 'warehouse', label: `仓库：${warehouseName || warehouseId}`, onRemove: () => updateParams({ warehouseId: null, warehouseName: null, page: 1 }) },
     productId && { key: 'product', label: `商品：${productName || productId}`, onRemove: () => updateParams({ productId: null, productCode: null, productName: null, page: 1 }) },
@@ -303,7 +309,7 @@ export default function ReturnsPage() {
   ]
 
   const title = type === 'purchase' ? '采购退货' : '销售退货'
-  const description = type === 'purchase' ? '退回供应商，出库减少库存' : '查看退货单、收货与质检进度；上架完成后更新库存和应收。'
+  const description = type === 'purchase' ? '退回供应商，出库减少库存。' : '查看退货单、收货与质检进度；上架完成后更新库存和应收。'
   if (!canView || (error instanceof ApiClientError && error.status === 403)) {
     return (
       <div className="space-y-4">
@@ -325,28 +331,33 @@ export default function ReturnsPage() {
               导出 Excel
             </Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            {can(PERMISSIONS.RETURN_ORDER_CREATE) && <Button onClick={goToNew}>+ 新建{type === 'purchase' ? '采购' : '销售'}退货单</Button>}
+            {can(PERMISSIONS.RETURN_ORDER_CREATE) && <Button onClick={goToNew}>新建{type === 'purchase' ? '采购' : '销售'}退货单</Button>}
           </>
         }
       />
 
-
-      <div className="flex flex-wrap items-center gap-2">
-        <AppliedDateRange label="创建日期" startDate={effectiveStartDate} endDate={effectiveEndDate} onClear={clearDateRange} />
-        {chips.map(c => (
-          <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-            {c.label}
-            <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
-        {(chips.length > 0 || effectiveStartDate || effectiveEndDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip">
+          <OrderStatusFilter label={type === 'purchase' ? '采购退货状态分类' : '销售退货状态分类'} value={statusFilter} options={QUICK_STATUSES}
+            onChange={status => updateParams({ status: status || null, page: 1 })} />
+        </div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={effectiveStartDate} endDate={effectiveEndDate} onClear={clearDateRange} />
+          {chips.map(c => (
+            <span key={c.key} className="fc-query-chip">
+              {c.label}
+              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {(chips.length > 0 || statusFilter || effectiveStartDate || effectiveEndDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+        </div>
       </div>
 
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : (
-        <DataTable columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail}
-          emptyText={chips.length || effectiveStartDate || effectiveEndDate ? '没有符合条件的退货单' : '暂无退货单'} />
+        <DataTable fluid virtualized scrollLabel={type === 'purchase' ? '采购退货单表格' : '销售退货单表格'} columnStorageKey={`returns:${type}:v1`} columns={columns} data={(data?.list || []) as RowType[]} loading={isLoading} onRowDoubleClick={goToDetail}
+          emptyText={chips.length || statusFilter || effectiveStartDate || effectiveEndDate ? '没有符合条件的退货单' : '暂无退货单'} />
       )}
 
       {!isError && !isLoading && data && <ListSummary total={total} unit="单" />}

@@ -212,6 +212,7 @@ for (const scenario of ['https', 'fallback', 'fallback-failed', 'bad-checksum', 
     put('timeout', 'shift 3; exec "$@"\n')
     put('node', `if [[ "$1" == scripts/deploy-artifact-url.js ]]; then printf '%s\\n' 'https://fixture/?sig=private-signed-url'; else exec ${JSON.stringify(process.execPath)} "$@"; fi\n`)
     put('ssh', `printf '%s\\n' "$*" >> "$EVENT_LOG"
+if [[ "$*" == *"mktemp /tmp/flowcube-asset-receiver."* ]]; then echo /tmp/flowcube-asset-receiver.Abc123def0; exit 0; fi
 if [[ "$*" == *python3* ]]; then
  IFS= read -r signed; [[ "$signed" == *private-signed-url ]] || exit 8
  if [[ "$SCENARIO" == https || "$SCENARIO" == apk || "$SCENARIO" == unreadable-exe ]]; then
@@ -242,6 +243,10 @@ exit 0\n`)
       })
       const expectedStatus = { 'fallback-failed': 23, 'bad-checksum': 1, 'unreadable-exe': 24 }[scenario] ?? 0
       assert.equal(r.status, expectedStatus, r.stdout + r.stderr)
+      if (scenario === 'https') {
+        const receiver = fs.readFileSync(path.join(dir, 'events'), 'utf8').split('\n').find(line => line.includes('python3'))
+        assert.match(receiver, /fixture\.exe 123 1\s*$/, '桌面接收器绑定当前运行和重跑次数')
+      }
       if (['https', 'fallback'].includes(scenario)) {
         assert.equal(fs.statSync(staged).mode & 0o777, 0o644, '只将已核验的 EXE 设为发布进程可读')
         assert.equal(fs.readFileSync(staged, 'utf8'), 'fixture-package')

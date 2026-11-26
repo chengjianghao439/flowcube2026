@@ -1,12 +1,13 @@
 import { ReportTable } from '@/components/shared/ReportTable'
 import { ReportMeter } from '@/components/shared/ReportMeter'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { CHART_TONES } from '@/components/dashboard/chartTheme'
 import { amount } from '@/lib/format'
 import { ContentTabs } from '@/components/shared/ContentTabs'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { confirmAction } from '@/lib/confirm'
-import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
+import { ProductIdentitySummary } from '@/components/shared/ProductIdentitySummary'
 import { useContext, useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
@@ -46,7 +47,7 @@ export default function AbcClassPage() {
   const active = useActiveWorkspaceTab()
   const { can } = usePermission()
   const canManage = can(PERMISSIONS.STOCKCHECK_ABC_MANAGE)
-  const { data: warehouses } = useWarehousesActive()
+  const warehouses = useWarehousesActive()
   const qc = useQueryClient()
   const [tab, setTab] = useState<'abc' | 'rules' | 'coverage'>('abc')
   // 0 = 全局默认（仅规则页有意义）；>0 = 具体仓库
@@ -150,7 +151,7 @@ export default function AbcClassPage() {
 
   const abcColumns: TableColumn<AbcClassRow>[] = [
     { key: 'abcClass', title: '类别', width: 130, render: (_, r) => <SoftStatusLabel label={`${r.abcClass} 类`} tone={ABC_TONE[r.abcClass] ?? 'info'} /> },
-    ...productIdentityColumns(),
+    { key: 'productId', title: '商品', width: 248, render: (_, row) => <ProductIdentitySummary product={row} /> },
     { key: 'metricValue', title: metricType === 'stock_value' ? '库存占用金额' : '出库消耗金额', width: 150, align: 'right', render: (v) => <span className="tabular-nums">{amount(Number(v))}</span> },
     { key: 'cumulativePct', title: '累计占比', width: 110, align: 'right', render: (v) => <span className="tabular-nums">{(Number(v) * 100).toFixed(2)}%</span> },
     { key: 'windowDays', title: '统计天数', width: 80, align: 'right', render: (v) => <span className="tabular-nums">{Number(v)} 天</span> },
@@ -171,7 +172,7 @@ export default function AbcClassPage() {
       <SelectTrigger aria-label="当前仓库" className="h-9 w-52"><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="0">{tab === 'rules' ? '全局默认（所有仓库）' : '请选择仓库'}</SelectItem>
-        {warehouses?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
+        {warehouses.data?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}
       </SelectContent>
     </Select>
   )
@@ -181,14 +182,18 @@ export default function AbcClassPage() {
       <PageHeader
         title="分档与盘点规则"
         description={tab === 'rules' ? rulesEditing && canEditRules
-          ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）' : '编辑全局默认规则（适用于未单独设置的所有仓库）')
+          ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）。' : '编辑全局默认规则（适用于未单独设置的所有仓库）。')
           : (warehouseId > 0 ? '查看本仓覆盖规则。' : canEditRules ? '查看全局默认规则；点「编辑规则」后可修改。' : '全局默认只读；仅不限仓管理账号可修改。')
           : '各仓按所选金额从高到低排列，累计占比不超过 80% 为 A，超过 80% 且不超过 95% 为 B，其余为 C。单一商品占比 100% 时归 C 档。'}
-        actions={<Button variant="outline" onClick={() => downloadExport('/export/abc').catch(e => toast.error((e as Error).message))}>导出</Button>}
+        actions={<Button variant="outline" onClick={() => downloadExport('/export/abc').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>}
       />
 
 
-      <ContentTabs label="商品分档与盘点规则" value={tab} onValueChange={setTab} tabs={[
+      {warehouses.isError && <div role="alert"><QueryErrorState
+        title={warehouses.data ? '仓库选项刷新失败，当前显示上次读取的仓库' : '仓库选项加载失败'}
+        error={warehouses.error} onRetry={() => void warehouses.refetch()} compact
+      /></div>}
+      <ContentTabs variant="underline" label="商品分档与盘点规则" value={tab} onValueChange={setTab} tabs={[
         { value: 'abc', label: '商品分档结果', content: <div className="space-y-4">
           <FilterCard>
             {warehouseSelect}
@@ -209,9 +214,11 @@ export default function AbcClassPage() {
               {recompute.isPending ? '重算中…' : '重算本仓分档'}
             </Button>
           </FilterCard>
-          {warehouseId <= 0
-            ? <EmptyState variant="empty-folder" title="先选择仓库" description="商品分档按仓划分，选择仓库后查看该仓结果。" className="rounded-xl border border-border bg-card" />
-            : <DataTable columns={abcColumns} data={abcQ.data ?? []} loading={abcQ.isLoading} />}
+          {warehouseId <= 0 && warehouses.isLoading && <p role="status" className="text-sm text-muted-foreground">正在加载仓库选项…</p>}
+          {warehouseId <= 0 && warehouses.data && <EmptyState variant="empty-folder" title="先选择仓库" description="商品分档按仓划分，选择仓库后查看该仓结果。" className="rounded-lg border border-border bg-card" />}
+          {warehouseId > 0 && (abcQ.isError
+            ? <div role="alert"><QueryErrorState title="商品分档结果加载失败" error={abcQ.error} onRetry={() => void abcQ.refetch()} compact /></div>
+            : <DataTable columns={abcColumns} data={abcQ.data ?? []} loading={abcQ.isLoading} />)}
         </div> },
         { value: 'rules', label: '分批盘点规则', content: <div className="space-y-4">
           <FilterCard>
@@ -220,7 +227,12 @@ export default function AbcClassPage() {
             {rulesEditing && canEditRules && <EditModeBadge />}
             <UnsavedBadge show={hasUnsavedRules} />
           </FilterCard>
-          <div className="overflow-x-auto rounded-lg border border-border">
+          {rulesQ.isError && <div role="alert"><QueryErrorState
+            title={rulesQ.data ? '分批盘点规则刷新失败，当前保留上次读取的规则与本地修改' : '分批盘点规则加载失败'}
+            error={rulesQ.error} onRetry={() => void rulesQ.refetch()} compact
+          /></div>}
+          {rulesQ.isLoading && <p role="status" className="text-sm text-muted-foreground">正在加载分批盘点规则…</p>}
+          {rulesQ.data && <div className="overflow-x-auto rounded-lg border border-border">
             <ReportTable className="w-full text-sm">
               <thead className="text-muted-foreground">
                 <tr>
@@ -257,9 +269,9 @@ export default function AbcClassPage() {
                 ))}
               </tbody>
             </ReportTable>
-          </div>
+          </div>}
           <div className="flex justify-end">
-            {canEditRules && (rulesEditing ? (
+            {rulesQ.data && canEditRules && (rulesEditing ? (
               <>
                 <Button variant="outline" disabled={saveRules.isPending} onClick={cancelRuleEdit}>取消编辑</Button>
                 <Button className="ml-2" disabled={saveRules.isPending || !draft.length} onClick={() => saveRules.mutate({ warehouseId, rules: draft.map(r => ({ ...r })) })}>
@@ -276,7 +288,9 @@ export default function AbcClassPage() {
             {warehouseSelect}
             <span className="text-sm text-muted-foreground">按「距上次盘点的天数超过该档位的周期」判定到期；按期盘点率 = 已按期盘 / 应盘。</span>
           </FilterCard>
-          <DataTable columns={coverageColumns} data={coverageRows} loading={coverageQ.isLoading} rowKey="rowKey" emptyText="暂无按期盘点数据（先运行一次分档重算）" />
+          {coverageQ.isError
+            ? <div role="alert"><QueryErrorState title="按期盘点率加载失败" error={coverageQ.error} onRetry={() => void coverageQ.refetch()} compact /></div>
+            : <DataTable columns={coverageColumns} data={coverageRows} loading={coverageQ.isLoading} rowKey="rowKey" emptyText="暂无按期盘点数据（先运行一次分档重算）" />}
         </div> },
       ]} />
     </div>

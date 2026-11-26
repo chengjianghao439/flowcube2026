@@ -339,10 +339,12 @@ export default function PurchasePage() {
             </Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button
-              variant={overdueOnly ? 'default' : 'outline'}
+              variant="outline"
+              aria-pressed={overdueOnly}
+              className="aria-pressed:border-primary/40 aria-pressed:bg-primary/10 aria-pressed:text-primary"
               onClick={() => setOverdueOnly(v => !v)}
-            >{overdueOnly ? '✕ 仅看逾期未到' : '逾期未到'}</Button>
-            {canCreate && <Button onClick={goToNew}>+ 新建采购单</Button>}
+            >{overdueOnly ? '仅看逾期未到' : '逾期未到'}</Button>
+            {canCreate && <Button onClick={goToNew}>新建采购单</Button>}
           </>
         }
       />
@@ -356,16 +358,16 @@ export default function PurchasePage() {
         </div>
       </div>}
 
-      <OrderStatusFilter label="采购状态分类" value={statusFilter}
-        options={[{value: '', label: '全部订单'}, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({value, label}))]}
-        onChange={status => updateParams({status: status || null, page: 1})} />
-
-      <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
+      <div className="fc-filter-bar">
+        <OrderStatusFilter label="采购状态分类" value={statusFilter}
+          options={[{value: '', label: '全部订单'}, ...Object.entries(STATUS_LABELS).map(([value, label]) => ({value, label}))]}
+          onChange={status => updateParams({status: status || null, page: 1})} />
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
           <AppliedDateRange label="创建日期" startDate={overdueOnly ? undefined : effectiveStartDate}
             endDate={overdueOnly ? undefined : effectiveEndDate}
             onClear={() => updateParams({ startDate: null, endDate: null, range: 'all', page: 1 })} />
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
@@ -373,6 +375,7 @@ export default function PurchasePage() {
             </span>
           ))}
           {chips.length > 0 && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+        </div>
       </div>
 
       {isError && data && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-warning/30 px-3 py-2 text-sm"><span>刷新失败，当前显示上次读取的数据。</span><Button size="sm" variant="outline" onClick={() => void refetch()}>重试</Button></div>}
@@ -419,9 +422,9 @@ export default function PurchasePage() {
 
       {/* 驳回弹窗（审计 4.7）：审批人驳回待审批采购单 */}
       <Dialog open={!!rejectTarget} onOpenChange={(v) => !v && setRejectTarget(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader description={"填写驳回原因，供采购人员调整。"}><DialogTitle>驳回采购单 {rejectTarget?.orderNo}</DialogTitle></DialogHeader>
-          <div className="space-y-2">
+        <DialogContent className="fc-form-dialog sm:max-w-md">
+          <DialogHeader><DialogTitle>驳回采购单 {rejectTarget?.orderNo}</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-2">
             <Label>驳回原因 *</Label>
             <Input
               value={rejectReason}

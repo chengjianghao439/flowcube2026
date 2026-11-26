@@ -1,3 +1,5 @@
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { FilterCard } from '@/components/shared/FilterCard'
 import { useState } from 'react'
 import { Search, Package, History, Layers } from 'lucide-react'
@@ -31,7 +33,7 @@ function ContainerBlock({ data }: { data: Awaited<ReturnType<typeof getContainer
           </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold">{Number(data.remainingQty)}</div>
+          <div className="text-2xl font-bold tabular-nums">{Number(data.remainingQty)}</div>
           <div className="text-sm text-muted-foreground">{data.unit} / 当前库存</div>
         </div>
       </div>
@@ -54,7 +56,7 @@ function ContainerBlock({ data }: { data: Awaited<ReturnType<typeof getContainer
           <span>{data.locationCode || (data.locationId != null ? `#${data.locationId}` : '未上架')}</span>
         </div>
         {data.lockedByTaskNo && (
-          <div className="flex items-center gap-2 text-amber-700">
+          <div className="flex items-center gap-2 text-warning-ink">
             <span className="text-muted-foreground">拣货锁定：</span>
             <span>{data.lockedByTaskNo}</span>
           </div>
@@ -76,14 +78,14 @@ function LogRow({ item }: { item: ContainerLogItem }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           {item.moveTypeName && (
-            <span className="rounded bg-muted px-1.5 py-0.5 text-xs">{item.moveTypeName}</span>
+            <SoftStatusLabel label={item.moveTypeName} tone="info" />
           )}
           {item.refNo && <span className="text-xs text-muted-foreground">单据 {item.refNo}</span>}
         </div>
         {item.remark && <div className="mt-1 text-sm text-muted-foreground">{item.remark}</div>}
       </div>
       <div className="text-right">
-        <div className={`font-medium ${item.qty < 0 ? 'text-destructive-ink' : ''}`}>
+        <div className={`font-medium tabular-nums ${item.qty < 0 ? 'text-destructive-ink' : ''}`}>
           {item.qty > 0 ? '+' : ''}{Number(item.qty)}
         </div>
         <div className="text-xs text-muted-foreground">{formatDisplayDateTime(item.createdAt)}</div>
@@ -96,12 +98,12 @@ function LogRow({ item }: { item: ContainerLogItem }) {
 export default function TracePage() {
   const [barcode, setBarcode] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<{ code: string; cause: unknown } | null>(null)
   const [container, setContainer] = useState<Awaited<ReturnType<typeof getContainerByBarcodeApi>> | null>(null)
   const [logs, setLogs] = useState<ContainerLogItem[]>([])
 
-  async function handleTrace() {
-    const code = barcode.trim()
+  async function handleTrace(code = barcode.trim()) {
+    if (loading) return
     if (!code) {
       toast.warning('请输入库存条码或塑料盒条码')
       return
@@ -118,8 +120,7 @@ export default function TracePage() {
       const l = await getContainerLogsApi(c.containerId)
       setLogs(l)
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { message?: string } }; message?: string }
-      setError(err?.response?.data?.message || err?.message || '查询失败')
+      setError({ code, cause: e })
     } finally {
       setLoading(false)
     }
@@ -133,30 +134,36 @@ export default function TracePage() {
       />
 
       <FilterCard>
-        <Input
-          placeholder="输入库存条码（如 I000001）或塑料盒条码"
-          value={barcode}
-          onChange={(e) => setBarcode(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
-          className="w-[420px] font-mono" aria-label="库存或塑料盒条码"
-        />
-        <Button onClick={handleTrace} disabled={loading}>
+        <div className="w-full max-w-[420px]">
+          <Input
+            placeholder="输入库存条码（如 I000001）或塑料盒条码"
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleTrace()}
+            className="w-full font-mono" aria-label="库存或塑料盒条码"
+          />
+        </div>
+        <Button onClick={() => void handleTrace()} disabled={loading}>
           <Search className="mr-2 h-4 w-4" />
           {loading ? '查询中...' : '查询'}
         </Button>
       </FilterCard>
 
       {error && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-destructive-ink">
-          {error}
-        </div>
+        <QueryErrorState
+          error={error.cause}
+          title={container ? '条码流水读取失败' : '条码查询失败'}
+          onRetry={() => void handleTrace(error.code)}
+          compact
+        />
       )}
 
       {container && (
         <div className="space-y-4">
           <ContainerBlock data={container} />
 
-          <div className="rounded-lg border bg-card">
+          {loading && <p role="status" className="text-sm text-muted-foreground">正在加载条码流水…</p>}
+          {!loading && !error && <div className="rounded-lg border bg-card">
             <div className="flex items-center gap-2 border-b px-4 py-2">
               <History className="h-4 w-4 text-muted-foreground" />
               <h3 className="text-sm font-medium">条码流水（{logs.length} 条）</h3>
@@ -170,7 +177,7 @@ export default function TracePage() {
                 ))}
               </div>
             )}
-          </div>
+          </div>}
         </div>
       )}
 

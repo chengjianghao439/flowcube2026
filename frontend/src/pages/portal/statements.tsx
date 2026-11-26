@@ -5,7 +5,10 @@ import { FileText } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { QueryDialog } from '@/components/shared/QueryDialog'
+import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
+import { QueryChips } from '@/components/shared/QueryChips'
+import { EmptyState } from '@/components/shared/EmptyState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
 import { PickerField } from '@/components/shared/PickerField'
@@ -16,9 +19,12 @@ import { formatDisplayDate, formatDisplayDateTime } from '@/lib/dateTime'
 import type { TableColumn } from '@/types'
 
 const PAGE_SIZE = 20
+type StatementCustomer = { id: number; name: string }
 
 export default function PortalStatementsPage() {
-  const [customer, setCustomer] = useState<{ id: number; name: string } | null>(null)
+  const [customer, setCustomer] = useState<StatementCustomer | null>(null)
+  const [draftCustomer, setDraftCustomer] = useState<StatementCustomer | null>(null)
+  const [queryOpen, setQueryOpen] = useState(false)
   const [finderOpen, setFinderOpen] = useState(false)
 
   const { data, isLoading, isError, error, refetch } = useQuery({
@@ -50,46 +56,37 @@ export default function PortalStatementsPage() {
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="desktop-record-page space-y-4">
       <PageHeader
         title="客户对账单查询"
-        description="选择客户后查看每期对账单：金额、已结算与未结算金额。本页仅供查看。"
+        description="按客户查看各期对账单与结算情况。"
+        actions={<Button variant="outline" onClick={() => { setDraftCustomer(customer); setQueryOpen(true) }}>查询</Button>}
       />
 
+      <QueryChips chips={customer ? [{ key: 'customer', text: `客户：${customer.name}`, onClear: () => setCustomer(null) }] : []}
+        onClearAll={() => setCustomer(null)} />
+      <QueryDialog open={queryOpen} dialogId="portal-statements-query" title="查询客户对账单"
+        resetLabel="清空" onReset={() => setDraftCustomer(null)} onClose={() => setQueryOpen(false)}
+        onApply={() => { setCustomer(draftCustomer); setQueryOpen(false) }}>
+        <QueryFormLayout>
+          <PickerField className="h-9" label="对账客户" value={draftCustomer?.name ?? ''} placeholder="选择要查看的客户"
+            onOpen={() => setFinderOpen(true)} onClear={() => setDraftCustomer(null)} />
+        </QueryFormLayout>
+      </QueryDialog>
+      <CustomerFinder open={finderOpen} onClose={() => setFinderOpen(false)}
+        onConfirm={result => setDraftCustomer({ id: result.id, name: result.name })} />
 
-      <FilterCard>
-        <span className="text-sm font-medium">对账客户</span>
-        <div className="w-80"><PickerField value={customer?.name ?? ''} placeholder="选择要查看的客户" onOpen={() => setFinderOpen(true)} /></div>
-        {customer && (
-          <Button variant="ghost" size="sm" onClick={() => { setCustomer(null); }}>清空</Button>
-        )}
-      </FilterCard>
-
-      {customer && (isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="对账单加载失败" compact /> : <DataTable
-        columns={columns}
+      {customer && (isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="对账单加载失败" /> : <DataTable
+        columns={columns} fluid virtualized scrollLabel="客户对账单表格" columnStorageKey="portal-statements:v1"
         data={data?.list ?? []}
         loading={isLoading}
         emptyText="该客户暂无对账单"
       />)}
 
-      {customer && (
-        <ListSummary total={total} unit="张" />
-      )}
+      {customer && data && !isLoading && !isError && <ListSummary total={total} unit="张" />}
 
-      <CustomerFinder
-        open={finderOpen}
-        onClose={() => setFinderOpen(false)}
-        onConfirm={(r) => { setCustomer({ id: r.id, name: r.name }); }}
-      />
-
-      {!customer && (
-        <div className="flex flex-col items-center gap-3 rounded-lg border bg-card py-20 text-muted-foreground">
-          <FileText className="h-8 w-8 opacity-40" />
-          <h2 className="font-medium text-foreground">先选择一位客户</h2>
-          <p className="text-sm">查看该客户每期对账单的金额、已结算与未结算金额。</p>
-          <Button variant="outline" onClick={() => setFinderOpen(true)}>选择客户</Button>
-        </div>
-      )}
+      {!customer && <EmptyState icon={<FileText className="h-8 w-8" />} title="先选择一位客户"
+        description="点击右上角「查询」选择客户，查看每期对账单的金额、已结算与未结算金额。" />}
     </div>
   )
 }

@@ -24,27 +24,60 @@ beforeEach(()=>{
  readData.set('warehouses.getWarehousesActiveApi',[{id:42,name:'合成仓',isActive:true}]);readData.set('sorting-bins.getSortingBinsApi',[row])
 })
 afterEach(()=>expect(writeCalls).toEqual([]))
-for(const item of [{api:'suppliers',operation:'getSuppliersApi',dialogQuery:false,menu:false},{api:'carriers',operation:'getCarriersApi',dialogQuery:false,menu:false},{api:'warehouses',operation:'getWarehousesApi',dialogQuery:false,menu:false},{api:'locations',operation:'getLocationsApi',dialogQuery:true,menu:true},{api:'racks',operation:'getRacksApi',dialogQuery:true,menu:true},{api:'sorting-bins',operation:'getSortingBinsApi',dialogQuery:true,menu:false}])test('真实/'+item.api+'与BaseCrud编辑关闭保留已应用筛选、请求与结果',async()=>{
- await h.render('/'+item.api)
- if(item.dialogQuery){await h.click('查询');const input=document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!;await h.input(input,'KEEP');await h.enter(input)}
- else {const input=h.host.querySelector<HTMLInputElement>('input[aria-label^="搜索"]')!;await h.input(input,'KEEP');await h.enter(input)}
- expect(lastRead(item.api,item.operation)?.args[0]).toMatchObject({keyword:'KEEP'});const params=lastRead(item.api,item.operation)?.args[0]
- expect(h.activeText()).toContain('SYN42')
- if(item.menu)await h.click('更多操作');await h.click('编辑');expect(document.querySelector('[role="dialog"]')).not.toBeNull();await h.click('取消');expect(document.querySelector('[role="dialog"]')).toBeNull()
- await h.go('/dashboard');await h.go('/'+item.api)
- expect(lastRead(item.api,item.operation)?.args[0]).toEqual(params);expect(h.activeText()).toContain('SYN42')
- if(item.dialogQuery){await h.click('查询');expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!.value).toBe('KEEP');await h.click('取消')}
- else expect(h.host.querySelector<HTMLInputElement>('input[aria-label^="搜索"]')!.value).toBe('KEEP')
+const masterDataLists = [
+  { api: 'suppliers', operation: 'getSuppliersApi', placeholder: '搜索编码或名称' },
+  { api: 'carriers', operation: 'getCarriersApi', placeholder: '搜索承运商名称或编号' },
+  { api: 'warehouses', operation: 'getWarehousesApi', placeholder: '搜索编码或名称' },
+  { api: 'locations', operation: 'getLocationsApi', placeholder: '请输入关键字…', menu: true },
+  { api: 'racks', operation: 'getRacksApi', placeholder: '请输入关键字…', menu: true },
+  { api: 'sorting-bins', operation: 'getSortingBinsApi', placeholder: '请输入关键字…' },
+]
+for (const item of masterDataLists) test('真实/' + item.api + '与BaseCrud编辑关闭保留已应用筛选、请求与结果', async () => {
+  await h.render('/' + item.api)
+  const field = () => document.querySelector<HTMLInputElement>(`[role="dialog"] input[placeholder="${item.placeholder}"]`)!
+  await h.click('查询')
+  await h.input(field(), 'KEEP')
+  await h.enter(field())
+  const params = lastRead(item.api, item.operation)?.args[0]
+  expect(params).toMatchObject({ keyword: 'KEEP' })
+  expect(h.activeText()).toContain('SYN42')
+
+  if (item.menu) await h.click('更多操作')
+  await h.click('编辑')
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+  await h.click('取消')
+  expect(document.querySelector('[role="dialog"]')).toBeNull()
+  await h.go('/dashboard')
+  await h.go('/' + item.api)
+  expect(lastRead(item.api, item.operation)?.args[0]).toEqual(params)
+  expect(h.activeText()).toContain('SYN42')
+  await h.click('查询')
+  expect(field().value).toBe('KEEP')
+  await h.click('取消')
+})
+
+test('仓库页头导航切换库位后，两个工作区各自保留当前视图', async () => {
+  await h.render('/warehouses')
+  const nav = () => [...h.host.querySelectorAll('nav[aria-label="仓库结构视图"]')].find(h.visible)!
+  expect(nav().closest('.desktop-page-heading')?.querySelector('h1')?.textContent).toBe('仓库管理')
+  expect(nav().querySelector('[aria-current="page"]')?.textContent).toBe('仓库')
+  const locations = nav().querySelector<HTMLAnchorElement>('a[href="/locations"]')!
+  await act(async () => locations.click())
+  await h.settle()
+  expect(h.current()).toBe('/locations')
+  expect(nav().querySelector('[aria-current="page"]')?.textContent).toBe('库位')
+  await h.go('/warehouses')
+  expect(nav().querySelector('[aria-current="page"]')?.textContent).toBe('仓库')
 })
 
 
 test('仓库结构在页头下显示当前视图链接，切换时保留独立工作区和库位筛选', async () => {
  await h.render('/locations')
  const active = () => [...h.host.querySelectorAll<HTMLElement>('[data-workspace-scroll]')].find(h.visible)!
- const heading = getByRole(active(), 'heading', { name: '仓库结构' })
+ const heading = getByRole(active(), 'heading', { name: '库位管理' })
  const nav = getByRole(active(), 'navigation', { name: '仓库结构视图' })
  expect(heading.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
- expect(getByRole(nav, 'link', { name: '库位管理' }).getAttribute('aria-current')).toBe('page')
+ expect(getByRole(nav, 'link', { name: '库位' }).getAttribute('aria-current')).toBe('page')
  await h.click('查询')
  const input = document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!
  await h.input(input, 'KEEP')
@@ -53,10 +86,10 @@ test('仓库结构在页头下显示当前视图链接，切换时保留独立�
    await act(async () => getByRole(getByRole(active(), 'navigation', { name: '仓库结构视图' }), 'link', { name }).click())
    await h.settle()
  }
- await follow('货架管理')
+ await follow('货架')
  expect(h.current()).toBe('/racks')
  expect(getByRole(active(), 'button', { name: '新建货架' })).toBeTruthy()
- await follow('库位管理')
+ await follow('库位')
  expect(h.current()).toBe('/locations')
  expect(lastRead('locations','getLocationsApi')?.args[0]).toMatchObject({keyword:'KEEP'})
  await h.closeActive()
@@ -72,7 +105,7 @@ test('普通分拣格导航不会再次进入旧订单分配交接', async () =>
  ] }))
  await h.render('/locations')
  const nav = getByRole(h.host, 'navigation', { name: '仓库结构视图' })
- const link = getByRole(nav, 'link', { name: '分拣格管理' })
+ const link = getByRole(nav, 'link', { name: '分拣格' })
  expect(link.getAttribute('href')).toBe('/sorting-bins')
  await act(async () => link.click())
  await h.settle()

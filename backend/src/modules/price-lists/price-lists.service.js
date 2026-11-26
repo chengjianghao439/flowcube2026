@@ -32,7 +32,8 @@ const findCustomerPrice = async (customerId, productId) => {
   // 客户绑定了价格表（price_lists 落地，2026-08-22）：优先查价格表明细，未覆盖再回退等级价
   if (cust?.price_list_id) {
     const [[item]] = await pool.query(
-      'SELECT sale_price FROM price_list_items WHERE list_id=? AND product_id=?',
+      `SELECT i.sale_price FROM price_list_items i JOIN price_lists l ON l.id=i.list_id
+        WHERE l.id=? AND i.product_id=? AND l.deleted_at IS NULL AND l.is_active=1`,
       [cust.price_list_id, productId],
     )
     if (item && item.sale_price != null) {

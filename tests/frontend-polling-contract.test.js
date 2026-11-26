@@ -19,6 +19,7 @@
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
+const { ts, parse, visit } = require('./helpers/contractSource')
 
 const ROOT = path.resolve(__dirname, '..')
 const SRC = path.join(ROOT, 'frontend/src')
@@ -62,7 +63,49 @@ function stripComments(src) {
     .replace(/\/\/[^\n]*/g, (m) => ' '.repeat(m.length))
 }
 
+// 只跟踪回调可能返回的间隔和同文件数字默认值。条件中的状态码不参与间隔判断。
+function pollingIntervals(source, file) {
+  const root = parse(source, file)
+  const constants = new Map()
+  const properties = []
+  visit(root, node => {
+    if ((ts.isVariableDeclaration(node) || ts.isBindingElement(node) || ts.isParameter(node))
+        && ts.isIdentifier(node.name) && node.initializer && ts.isNumericLiteral(node.initializer)) {
+      constants.set(node.name.text, Number(node.initializer.text))
+    }
+    if (!ts.isPropertyAssignment(node)) return
+    const call = node.parent.parent
+    const reportOptions = ts.isCallExpression(call) && call.expression.getText() === 'usePollingReport'
+    if (node.name.text === 'refetchInterval' || (reportOptions && node.name.text === 'intervalMs')) properties.push(node)
+  })
+
+  function values(node) {
+    if (ts.isNumericLiteral(node)) return [Number(node.text)]
+    if (ts.isIdentifier(node)) return constants.has(node.text) ? [constants.get(node.text)] : []
+    if (ts.isParenthesizedExpression(node) || ts.isAsExpression(node)) return values(node.expression)
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return values(node.body)
+    if (ts.isConditionalExpression(node)) return [...values(node.whenTrue), ...values(node.whenFalse)]
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) return values(node.right)
+    if (ts.isBlock(node)) {
+      const returned = []
+      visit(node, child => {
+        if (ts.isFunctionLike(child)) return false
+        if (ts.isReturnStatement(child) && child.expression) returned.push(...values(child.expression))
+      })
+      return returned
+    }
+    if (ts.isCallExpression(node)) return node.arguments.flatMap(values)
+    if (ts.isBinaryExpression(node)) return [...values(node.left), ...values(node.right)]
+    return []
+  }
+  return properties.map(property => ({
+    nums: values(property.initializer), expr: property.initializer.getText(), index: property.getStart(),
+  }))
+}
+
 function main() {
+  const sample = 'const slow = 15_000; function report({ intervalMs = 6_000 }) { useQuery({ refetchInterval: q => q.status === 403 ? intervalMs : slow }); usePollingReport({ intervalMs: 3_000 }) }'
+  assert.deepEqual(pollingIntervals(sample, 'example.ts').map(point => point.nums), [[6000, 15000], [3000]])
   const files = walk(SRC)
   assert.ok(files.length > 100, `前端源码文件数异常（${files.length}），目录结构可能变了`)
 
@@ -86,29 +129,17 @@ function main() {
 
   for (const f of files) {
     const rel = path.relative(ROOT, f)
-    const source = stripComments(fs.readFileSync(f, 'utf8'))
+    const rawSource = fs.readFileSync(f, 'utf8')
+    if (!/refetchInterval|usePollingReport/.test(rawSource)) continue
+    const source = stripComments(rawSource)
 
     // 1) 轮询间隔下限
-    const intervalRe = /refetchInterval\s*:\s*([^,\n]+)/g
-    let m
-    while ((m = intervalRe.exec(source)) !== null) {
-      const expr = m[1]
-      const nums = (expr.match(/\d[\d_]*/g) || []).map(s => Number(s.replace(/_/g, '')))
-      // 表达式用具名常量时（如 `isActiveTab ? AUTO_REFRESH_MS : false`），字面量扫描看不到数字，
-      // `!nums.length` 就 continue，于是**这个轮询点静默脱离守卫**——2026-09-19 把「条码打印查询」
-      // 的 15000 提成常量时踩到：polled 从 28 掉回 27，而输出仍是 PASS。这里回溯同文件的常量定义
-      // 把值捞回来，保证覆盖不因「提取常量」这种无害重构而消失（反向验证：把该常量改成 3000 必须失败）。
-      if (!nums.length) {
-        for (const ident of expr.match(/[A-Za-z_][A-Za-z0-9_]*/g) || []) {
-          const dm = source.match(new RegExp(`(?:const|let|var)\\s+${ident}\\s*=\\s*(\\d[\\d_]*)`))
-          if (dm) nums.push(Number(dm[1].replace(/_/g, '')))
-        }
-      }
+    for (const { nums, expr, index } of pollingIntervals(rawSource, f)) {
       if (!nums.length) continue
       polled++
       const min = Math.min(...nums.filter(n => n > 0))
       if (min < MIN_INTERVAL_MS) {
-        problems.push(`${rel}:${lineOf(source, m.index)} 轮询间隔 ${min}ms 小于 ${MIN_INTERVAL_MS}ms（${expr.trim()}）`)
+        problems.push(`${rel}:${lineOf(rawSource, index)} 轮询间隔 ${min}ms 小于 ${MIN_INTERVAL_MS}ms（${expr.trim()}）`)
       }
     }
 

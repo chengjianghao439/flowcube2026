@@ -8,6 +8,8 @@ import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import ListSummary from '@/components/shared/ListSummary'
 import DataTable from '@/components/shared/DataTable'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -99,10 +101,14 @@ export default function ConsolidationPage() {
       key: 'id',
       title: '操作',
       width: 140,
-      render: (_, r) => (
-        <Button size="sm" disabled={createMutation.isPending} variant={companyId === r.id ? 'default' : 'outline'} onClick={() => { if (companyId === r.id) return; useDirtyGuardStore.getState().showConfirm('切换账套将关闭会计页面中的未保存编辑，确定切换吗？', () => { try { setCompany(r.id, r.name) } catch (error) { toast.error((error as Error).message) } }) }}>
-          {companyId === r.id ? '当前账套' : '切换'}
-        </Button>
+      render: (_, r) => companyId === r.id ? <SoftStatusLabel label="当前账套" tone="active" /> : (
+        <TableActionsMenu primaryVariant="outline" primaryLabel="切换" rowLabel={r.name}
+          primaryDisabled={createMutation.isPending} items={[]} onPrimaryClick={() => {
+            if (companyId === r.id) return
+            useDirtyGuardStore.getState().showConfirm('切换账套将关闭会计页面中的未保存编辑，确定切换吗？', () => {
+              try { setCompany(r.id, r.name) } catch (error) { toast.error((error as Error).message) }
+            })
+          }} />
       ),
     },
   ]
@@ -111,10 +117,10 @@ export default function ConsolidationPage() {
     <div className="space-y-4">
       <PageHeader
         title="合并报表与账套"
-        description="多账套管理：选择集团账套查看合并资产负债表与利润表（Σ子账套）。切换账套后会计各页随之过滤。"
+        description="管理账套并查看集团合并报表。"
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/companies').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/companies').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button disabled={createMutation.isPending} onClick={() => setCreateOpen(true)}>新建账套</Button>
           </>
         }
@@ -123,13 +129,16 @@ export default function ConsolidationPage() {
 
       {/* 账套列表 */}
       {companiesQuery.isError && !companiesQuery.isFetching
-        ? <div role="alert" className="card-base"><QueryErrorState error={companiesQuery.error} onRetry={() => void companiesQuery.refetch()} title="账套列表加载失败" compact /></div>
-        : <DataTable columns={companyColumns} data={companyList} rowKey="id" loading={companiesQuery.isLoading || companiesQuery.isFetching} emptyText="暂无账套" />}
+        ? <div role="alert" className="card-base"><QueryErrorState error={companiesQuery.error} onRetry={() => void companiesQuery.refetch()} title="账套列表加载失败" /></div>
+        : <DataTable fluid virtualized scrollLabel="账套表格" columnStorageKey="acct-consolidation-companies" columns={companyColumns} data={companyList} rowKey="id" loading={companiesQuery.isLoading || companiesQuery.isFetching} emptyText="暂无账套" />}
+
+      {companiesQuery.isSuccess && !companiesQuery.isFetching && <ListSummary total={companiesQuery.data.pagination?.total ?? companyList.length} unit="个" />}
 
       {/* 合并报表 */}
-      <FilterCard className="mb-4">
-        <div className="text-sm font-medium">合并期间</div>
-        <Input aria-label="合并期间" value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-32 text-center" />
+      <FilterCard>
+        <label className="flex items-center gap-2 text-sm font-medium">合并期间
+          <Input aria-label="合并期间" value={period} onChange={e => setPeriod(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="YYYYMM" className="h-9 w-32 text-center" />
+        </label>
         <div className="text-sm text-muted-foreground">
           {group ? `合并根：${group.name}` : '选择集团账套后可查看合并报表'}
         </div>
@@ -172,9 +181,9 @@ export default function ConsolidationPage() {
       )}
 
       <Dialog open={createOpen} onOpenChange={open => { if (!createInFlight.current) setCreateOpen(open) }}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="fc-form-dialog sm:max-w-xl">
           <DialogHeader description={<>{<>填写账套编码和名称，创建期间请等待操作完成。</>} {<>新账套会自动复制主账套的预置会计科目；后续可在会计科目页维护其独立科目。</>}</>}><DialogTitle>新建账套</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="fc-form-dialog-body grid grid-cols-2 gap-4">
             <label className="space-y-2 text-sm">
               <span className="block">账套编码 <span aria-hidden="true" className="text-destructive-ink">*</span></span>
               <Input required disabled={createMutation.isPending} placeholder="如 SUB5" value={newCode} onChange={e => setNewCode(e.target.value)} />

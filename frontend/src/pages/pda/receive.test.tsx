@@ -227,6 +227,8 @@ test('收货回执分别说明无可用打印机与打印准备失败，收货�
 
 test('一个商品收完后自动切到下一个未收完的商品', async () => {
   await mountPage()
+  await act(async () => { buttonByText('批次/效期').click() })
+  await act(async () => { setInputValue(host.querySelector<HTMLInputElement>('[aria-label="批次号"]')!, 'LOT-A') })
   // 第一个商品（169）本次整单收完
   const first = host.querySelector<HTMLInputElement>('input[type="number"]')!
   await act(async () => { setInputValue(first, '12') })
@@ -243,6 +245,8 @@ test('一个商品收完后自动切到下一个未收完的商品', async () =>
 
   expect(api.receive).toHaveBeenCalledTimes(2)
   expect(api.receive.mock.calls[1][1].productId).toBe(162)
+  expect(api.receive.mock.calls[0][1].batchNo).toBe('LOT-A')
+  expect(api.receive.mock.calls[1][1].batchNo).toBeUndefined()
 })
 
 test('部分收货（已有待上架容器）仍能继续收剩下的商品', async () => {

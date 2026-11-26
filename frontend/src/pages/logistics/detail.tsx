@@ -1,4 +1,3 @@
-import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { DirectShipmentDialog } from './DirectShipmentDialog'
 import { shippingProductLabel } from '@/lib/shippingProducts'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
@@ -18,7 +17,8 @@ import { buildWorkspaceTabRegistration } from '@/router/workspaceRouteMeta'
 import { resolveRouteTitle } from '@/router/routeDefinitions'
 import type { LogisticsWaybill } from '@/types/logistics'
 import { confirmAction } from '@/lib/confirm'
-import PageHeader from '@/components/shared/PageHeader'
+import { ActionBar } from '@/components/shared/ActionBar'
+import { OrderFact, OrderFacts } from '@/components/shared/OrderFacts'
 import { SectionCard } from '@/components/shared/SectionCard'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -30,15 +30,6 @@ import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { getWaybillDetailApi, setWaybillTrackingApi, retryWaybillApi, voidWaybillApi } from '@/api/logistics'
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0 flex flex-col gap-1.5">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="break-words text-sm text-foreground">{children ?? '—'}</span>
-    </div>
-  )
-}
 
 export default function LogisticsDetailPage() {
   // 多标签 keep-alive 下页面路径来自 TabPathContext（/* catch-all，useParams 取不到 id）
@@ -92,7 +83,7 @@ export default function LogisticsDetailPage() {
       return setWaybillTrackingApi(trackTarget.id, trackingInput.trim(), { skipGlobalError: true })
     },
     onSuccess: () => { toast.success('已录入快递单号'); invalidate(); setTrackTarget(null); setTrackingInput('') },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '录入失败'),
+    onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '录入失败'),
   })
   const retryMut = useMutation({
     mutationFn: (id: number) => {
@@ -100,7 +91,7 @@ export default function LogisticsDetailPage() {
       return retryWaybillApi(id, { skipGlobalError: true })
     },
     onSuccess: () => { toast.success('已提交处理；已发送的平台订单仅查询原单'); invalidate() },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
+    onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '操作失败'),
   })
   const voidMut = useMutation({
     mutationFn: (id: number) => {
@@ -108,7 +99,7 @@ export default function LogisticsDetailPage() {
       return voidWaybillApi(id, undefined, { skipGlobalError: true })
     },
     onSuccess: () => { toast.success('运单本地记录已作废'); invalidate() },
-    onError: (e: unknown) => toast.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? '操作失败'),
+    onError: (e: unknown) => toast.error(e instanceof Error && e.message ? e.message : '操作失败'),
   })
 
   const direct = wb && ['sf', 'deppon'].includes(wb.platformCode || '')
@@ -129,56 +120,58 @@ export default function LogisticsDetailPage() {
     : '待取号或取号失败时，请手工录入快递单号后核对面单。'
 
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <div className="desktop-document-detail flex flex-col gap-3">
+      <ActionBar
         title={wb ? `运单 ${wb.waybillNo}` : '运单详情'}
         description={readReady ? nextStep : <span role="status">{!validId ? '运单标识无效，无法读取。' : query.isPaused ? '网络已暂停，恢复后重新读取原运单。' : isError ? '最新状态待核对，旧记录暂不提供操作；已打开的草稿保留。' : query.isFetching ? '正在重新读取原运单，旧记录暂不提供操作。' : '原运单尚未核实，暂不提供操作。'}</span>}
-        status={wb ? <SoftStatusLabel label={wb.statusLabel} tone={wb.statusTone} /> : undefined}
-        actions={
-          <div className="flex items-center gap-2">
-            {canManage && canEditShipment && <Button variant="outline" onClick={() => setShipmentTarget(wb!)}>补充寄件资料</Button>}
-            {canManage && canRecord && <Button variant="outline" onClick={() => { setTrackingInput(wb?.trackingNo ?? ''); setTrackTarget(wb!) }}>手工录入快递单号</Button>}
-            {canManage && canRetry && <Button variant="outline" onClick={() => retryMut.mutate(wb!.id)} disabled={retryMut.isPending}>{wb?.submittedToPlatform || wb?.status === 6 ? '查询原单' : '重试取号'}</Button>}
-            {canManage && canVoid && <Button variant="outline" className="text-destructive-ink" onClick={() => confirmAction({
-              title: '作废运单本地记录', description: `确认作废运单 ${wb?.waybillNo} 的本地记录？此操作不代表快递官方订单已取消。`, variant: 'destructive', confirmText: '确认作废',
-              onConfirm: () => voidMut.mutate(wb!.id),
-            })}>作废</Button>}
-            <Button variant="outline" onClick={() => nav(getWorkspaceListPath('/logistics'))}>返回列表</Button>
-          </div>
-        }
+        subtitle={wb ? <SoftStatusLabel label={wb.statusLabel} tone={wb.statusTone} /> : undefined}
+        rightActions={canManage && <>
+          {canVoid && (
+            <div role="group" aria-label="运单作废操作" className="flex items-center gap-2 border-r border-border pr-2 last:border-r-0 last:pr-0">
+              <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5" onClick={() => confirmAction({
+                title: '作废运单本地记录', description: `确认作废运单 ${wb?.waybillNo} 的本地记录？此操作不代表快递官方订单已取消。`, variant: 'destructive', confirmText: '确认作废',
+                onConfirm: () => voidMut.mutate(wb!.id),
+              })}>作废</Button>
+            </div>
+          )}
+          {canEditShipment && <Button variant={canRetry ? 'outline' : 'default'} onClick={() => setShipmentTarget(wb!)}>补充寄件资料</Button>}
+          {canRecord && <Button variant={canRetry ? 'outline' : 'default'} onClick={() => { setTrackingInput(wb?.trackingNo ?? ''); setTrackTarget(wb!) }}>手工录入快递单号</Button>}
+          {canRetry && <Button onClick={() => retryMut.mutate(wb!.id)} disabled={retryMut.isPending}>{wb?.submittedToPlatform || wb?.status === 6 ? '查询原单' : '重试取号'}</Button>}
+        </>}
       />
 
       {isError && validId && isActiveTab && <QueryErrorState error={error} onRetry={() => { if (validId && isActiveTab) void refetch() }} title="运单加载失败" compact />}
-      {readReady && <div className="rounded-md border border-border bg-muted/30 p-3 text-sm space-y-2 empty:hidden">
-        {canOperate && can(PERMISSIONS.PRINT_JOB_VIEW) && <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query', '?category=logistics')}>查看物流标签记录</Button>}
-        {canOperate && can(PERMISSIONS.PRINT_JOB_VIEW) && <p className="text-xs text-muted-foreground">进入物流类别查询，需按记录核对；此入口不定位本运单的原打印任务。</p>}
-      </div>}
-
       <OrderDetailSections type="logistics" id={wb?.id || 0}>
       <div className="space-y-4">
         <SectionCard title="运单信息" compact>
-          <div className="grid grid-cols-3 gap-x-6 gap-y-5">
-            <Field label="快递单号">{wb?.trackingNo ? <span className="text-doc-code">{wb.trackingNo}</span> : '—'}</Field>
-            <Field label="承运商">{wb?.carrierName}</Field>
-            <Field label="对接平台">{wb?.platformCode ?? '未对接'}</Field>
-            <Field label="预估运费">{wb?.estFreight != null ? Number(wb.estFreight).toFixed(2) : '—'}</Field>
-            <Field label="运费方式">{wb?.freightTypeLabel}</Field>
-            <Field label="面单数据">{wb?.printDataRef === 'official_platform' ? '请通过快递官方打印面单' : wb?.printDataRef ?? '—'}</Field>
-            <Field label="销售单">{canOperate && safeSaleId && can(PERMISSIONS.SALE_ORDER_VIEW) ? <Button size="sm" variant="link" className="h-auto justify-start p-0 text-doc-code" onClick={() => openPath(`/sale/${saleOrderId}`)}>{wb?.saleOrderNo || `销售单 #${saleOrderId}`}</Button> : wb?.saleOrderNo}</Field>
-            <Field label="包裹条码">{wb?.shipment?.packages.map(p => p.barcode || p.id).join('、') || wb?.packageBarcode}</Field>
-            <Field label="仓库">{wb?.warehouseName}</Field>
-            {direct && <Field label="实际打包件数">{wb?.shipment?.packages.length ?? '—'}</Field>}
-            {direct && <Field label="发货产品">{shippingProductLabel(wb?.platformCode, wb?.shipment?.productCode)}</Field>}
-            {direct && <Field label="重量">由快递员称重确认</Field>}
-            {!!wb?.trackingNumbers?.length && <div className="col-span-3"><Field label="本批全部快递单号">{wb.trackingNumbers.join('、')}</Field></div>}
-            <Field label="创建时间">{wb ? formatDisplayDateTime(wb.createdAt) : '—'}</Field>
-          </div>
-          <div className="mt-4 border-t border-border pt-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Field label="收件人">{wb?.receiverName}</Field>
-              <Field label="收件电话">{wb?.receiverPhone}</Field>
-              <div className="sm:col-span-2"><Field label="收件地址">{wb?.receiverAddress}</Field></div>
+          <OrderFacts>
+            <OrderFact label="快递单号">{wb?.trackingNo ? <span className="text-doc-code">{wb.trackingNo}</span> : '—'}</OrderFact>
+            <OrderFact label="承运商">{wb?.carrierName ?? '—'}</OrderFact>
+            <OrderFact label="对接平台">{wb?.platformCode ?? '未对接'}</OrderFact>
+            <OrderFact label="预估运费">{wb?.estFreight != null ? Number(wb.estFreight).toFixed(2) : '—'}</OrderFact>
+            <OrderFact label="运费方式">{wb?.freightTypeLabel ?? '—'}</OrderFact>
+            <OrderFact label="面单数据">{wb?.printDataRef === 'official_platform' ? '请通过快递官方打印面单' : wb?.printDataRef ?? '—'}</OrderFact>
+            <OrderFact label="销售单">{canOperate && safeSaleId && can(PERMISSIONS.SALE_ORDER_VIEW) ? <Button size="sm" variant="link" className="h-auto justify-start p-0 text-doc-code" onClick={() => openPath(`/sale/${saleOrderId}`)}>{wb?.saleOrderNo || `销售单 #${saleOrderId}`}</Button> : wb?.saleOrderNo ?? '—'}</OrderFact>
+            <OrderFact label="包裹条码">{wb?.shipment?.packages.map(p => p.barcode || p.id).join('、') || wb?.packageBarcode || '—'}</OrderFact>
+            <OrderFact label="仓库">{wb?.warehouseName ?? '—'}</OrderFact>
+            {direct && <OrderFact label="实际打包件数">{wb?.shipment?.packages.length ?? '—'}</OrderFact>}
+            {direct && <OrderFact label="发货产品">{shippingProductLabel(wb?.platformCode, wb?.shipment?.productCode)}</OrderFact>}
+            {direct && <OrderFact label="重量">由快递员称重确认</OrderFact>}
+            {!!wb?.trackingNumbers?.length && <OrderFact label="本批全部快递单号" className="col-span-full">{wb.trackingNumbers.join('、')}</OrderFact>}
+            <OrderFact label="创建时间">{wb ? formatDisplayDateTime(wb.createdAt) : '—'}</OrderFact>
+          </OrderFacts>
+          {canOperate && can(PERMISSIONS.PRINT_JOB_VIEW) && (
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-3">
+              <Button size="sm" variant="outline" onClick={() => openPath('/settings/barcode-print-query', '?category=logistics')}>查看物流标签记录</Button>
+              <p className="text-xs text-muted-foreground">进入物流类别查询，需按记录核对；此入口不定位本运单的原打印任务。</p>
             </div>
+          )}
+          <div className="mt-4 border-t border-border pt-4">
+            <OrderFacts>
+              <OrderFact label="收件人">{wb?.receiverName ?? '—'}</OrderFact>
+              <OrderFact label="收件电话">{wb?.receiverPhone ?? '—'}</OrderFact>
+              <OrderFact label="收件地址" className="col-span-full">{wb?.receiverAddress ?? '—'}</OrderFact>
+            </OrderFacts>
           </div>
           {wb && [4, 6].includes(wb.status) && wb.errorMessage && (
             <div className="mt-4 rounded-md border border-danger/20 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -192,9 +185,9 @@ export default function LogisticsDetailPage() {
 
       {shipmentTarget && <DirectShipmentDialog waybill={shipmentTarget} submitDisabled={!canManage || !canEditShipment || shipmentTarget.id !== waybillId} onClose={() => setShipmentTarget(null)} onSaved={invalidate} />}
       <Dialog open={!!trackTarget} onOpenChange={v => { if (!v) { setTrackTarget(null); setTrackingInput('') } }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="fc-form-dialog max-w-lg">
           <DialogHeader description={<>{<>保留原运单草稿，核实最新状态后保存。</>} {<>运单 {trackTarget?.waybillNo}｜{trackTarget?.carrierName ?? '未指定承运商'}</>}</>}><DialogTitle>录入快递单号</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-3">
+          <div className="fc-form-dialog-body space-y-4 py-3">
 
             {(!canRecord || trackTarget?.id !== waybillId) && <p className="text-sm text-muted-foreground" role="status">原运单最新状态待核对，已输入的单号保留，暂不能保存。</p>}
             <div>

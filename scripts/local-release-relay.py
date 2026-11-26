@@ -53,7 +53,7 @@ def artifact_spec(kind, run, version):
         return ('flowcube-pda-apk', 'FlowCubePDA-' + version + '.apk', '/tmp/flowcube-pda-' + run_id + '-' + attempt + '.apk')
     if kind == 'desktop':
         entry = 'Jixu-Flow-Setup-' + version + '.exe'
-        return ('FlowCube-Desktop-Setup', entry, '/tmp/flowcube-desktop-release/v' + version + '/' + entry)
+        return ('FlowCube-Desktop-Setup', entry, '.flowcube-release-relay/desktop-' + run_id + '-' + attempt + '-' + entry)
     raise ValueError('Invalid artifact kind')
 
 
@@ -316,9 +316,16 @@ class Relay:
         _, entry, remote = artifact_spec(kind, run, self.version)
         if self.current_run(run, kind) is None:
             return 'direct'
-        self.owned.add(remote)
         quoted = shlex.quote(remote)
-        self.ssh('mkdir -p ' + shlex.quote(str(pathlib.PurePosixPath(remote).parent)) + ' && touch ' + quoted + '.relay.pending')
+        directory = shlex.quote(str(pathlib.PurePosixPath(remote).parent))
+        if kind == 'desktop':
+            # SSH and SFTP relative paths resolve in the publishing account's home.
+            prepare = ('umask 077; mkdir -p -m 700 ' + directory + ' && test ! -L ' + directory
+                       + ' && test "$(stat -c %u:%a -- ' + directory + ')" = "$(id -u):700"')
+        else:
+            prepare = 'mkdir -p ' + directory
+        self.ssh(prepare + ' && touch ' + quoted + '.relay.pending')
+        self.owned.add(remote)
         started = time.monotonic()
         print('relay: downloading ' + kind + ' run=' + str(run['id']) + ' attempt=' + str(run['run_attempt']) + ' bytes=' + str(artifact['size_in_bytes']), flush=True)
         with tempfile.TemporaryDirectory(prefix=kind + '-', dir=str(self.root)) as local:
@@ -377,7 +384,8 @@ class Relay:
                 except (RuntimeError, ValueError, OSError, subprocess.SubprocessError):
                     failures[kind] = failures.get(kind, 0) + 1
                     # Release the pending marker so the receiver can use its existing fallback.
-                    self.ssh('rm -f -- ' + shlex.quote(remote) + '.relay.pending')
+                    if remote in self.owned:
+                        self.ssh('rm -f -- ' + shlex.quote(remote) + '.relay.pending')
                     if failures[kind] >= 3:
                         raise RuntimeError('Relay exhausted retries: ' + kind)
                     print('relay: retrying ' + kind + '; attempt ' + str(failures[kind]), flush=True)

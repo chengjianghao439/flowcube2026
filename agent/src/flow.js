@@ -23,7 +23,7 @@ export class FlowClient {
     let res, payload, invalidBody = false;
     try {
       res = await fetch(this.baseUrl + path, {
-        method,
+        method, redirect: 'error',
         headers: {
           'Content-Type': 'application/json',
           ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
@@ -43,7 +43,8 @@ export class FlowClient {
       throw new FlowError('unknown', { message: `网络异常（${e.name}），结果未知` });
     } finally { clearTimeout(timer); }
 
-    if (res.status >= 500 || (method !== 'GET' && (res.status === 408 || (res.ok && res.status !== 204 && invalidBody)))) {
+    if (res.status >= 500 || res.status === 408 || res.status === 429 || (res.ok && res.status !== 204 &&
+        (invalidBody || !payload || typeof payload !== 'object' || (!Object.hasOwn(payload, 'data') && payload.success !== false)))) {
       throw new FlowError('unknown', { status: res.status, message: payload?.message || `服务异常 ${res.status}，结果未知` });
     }
     if (res.status === 401 || res.status === 403) {
@@ -65,12 +66,10 @@ export class FlowClient {
   // 断网后查回执：GET /api/system/request-status/:key
   async requestStatus(requestKey, action) {
     if (!action) throw new Error('查询原请求回执必须指定领域 action');
-    try {
-      const receipt = await this.get(`/api/system/request-status/${encodeURIComponent(requestKey)}?action=${encodeURIComponent(action)}`);
-      return receipt?.status === 'success' ? receipt : null;
-    } catch (e) {
-      if (e.kind === 'business') return null; // 无回执记录
-      throw e;
-    }
+    const receipt = await this.get(`/api/system/request-status/${encodeURIComponent(requestKey)}?action=${encodeURIComponent(action)}`);
+    if (receipt?.status === 'success') return receipt;
+    if (receipt?.status === 'not_found') return null;
+    if (receipt?.status === 'failed') throw new FlowError('business', { status: 409, message: receipt.message || '原请求失败，请核对原操作' });
+    throw new FlowError('unknown', { message: receipt?.status === 'pending' ? '原请求仍在处理，请稍后核对' : '回执格式无法核对' });
   }
 }

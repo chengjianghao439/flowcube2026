@@ -1,13 +1,15 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react'
+import { currentApiEndpoint } from '@/lib/apiEndpoint'
 import { ApiClientError } from '@/api/client'
 import { splitContainerApi, type SplitContainerBody, type SplitContainerResult } from '@/api/inventory'
 import { getOperationRequestStatusApi } from '@/api/operation-requests'
 import { useAuthStore } from '@/store/authStore'
 import { hasPermission } from '@/lib/permissions'
 import { PERMISSIONS } from '@/lib/permission-codes'
-import { claimSplitRecovery, noticeSplitRecovery, ownsStoredSplit, reloadSplitRecovery, removeSplitRecovery, splitEndpoint, splitRecoverySnapshot, splitRecoveryStorageKey, splitRetryPayload, splitServerEpoch, splitOwnerEpoch, subscribeSplitRecovery, validatedSplitResult, type SplitRecoveryRecord } from '@/lib/pdaSplitRecovery'
+import { claimSplitRecovery, noticeSplitRecovery, ownsStoredSplit, reloadSplitRecovery, removeSplitRecovery, splitEndpoint, splitRecoverySnapshot, splitRecoveryStorageKey, splitRequestStoragePrefix, splitRetryPayload, splitServerEpoch, splitOwnerEpoch, subscribeSplitRecovery, validatedSplitResult, type SplitRecoveryRecord } from '@/lib/pdaSplitRecovery'
 
 const flights = new Set<string>()
+const flightKey = (record: SplitRecoveryRecord) => JSON.stringify([record.accountId, record.endpoint, record.requestKey])
 const permissionIdentity = () => { const u = useAuthStore.getState().user; return JSON.stringify([u?.roleId, [...(u?.permissions ?? [])].sort()]) }
 export function usePdaSplitRecovery({ active = true, onConfirmed }: { active?: boolean; onConfirmed?: (result: SplitContainerResult, recovered: boolean) => void }) {
   const accountId = useAuthStore(s => s.user?.id ?? null)
@@ -19,9 +21,9 @@ export function usePdaSplitRecovery({ active = true, onConfirmed }: { active?: b
   const opts = useRef({ active, onConfirmed }); opts.current = { active, onConfirmed }
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
-  useEffect(() => { if (accountId != null) reloadSplitRecovery(accountId) }, [accountId, generation])
+  useEffect(() => { if (accountId != null) reloadSplitRecovery(accountId) }, [accountId, generation, epoch])
   useEffect(() => {
-    const read = (e: StorageEvent) => { if (accountId != null && (e.key == null || e.key === splitRecoveryStorageKey(accountId))) reloadSplitRecovery(accountId) }
+    const read = (e: StorageEvent) => { if (accountId != null && (e.key == null || e.key === splitRecoveryStorageKey(accountId) || e.key.startsWith(splitRequestStoragePrefix(accountId, currentApiEndpoint())))) reloadSplitRecovery(accountId) }
     window.addEventListener('storage', read); return () => window.removeEventListener('storage', read)
   }, [accountId])
   const visibility = useRef({ active, epoch: 0 })
@@ -38,7 +40,7 @@ export function usePdaSplitRecovery({ active = true, onConfirmed }: { active?: b
       && useAuthStore.getState().sessionGeneration === a.sessionGeneration && splitServerEpoch() === server && permissionIdentity() === permission && splitEndpoint() === record.endpoint && ownsStoredSplit(record)
       && splitOwnerEpoch() === owner && visibility.current.epoch === visible
     const config = { baseURL: record.endpoint, _erpApiFallbackTried: true, _authSessionGeneration: a.sessionGeneration, skipGlobalError: true, headers: { 'X-Client': 'pda' } }
-    return { current, config, flight: `${record.accountId}:${record.requestKey}`, context }
+    return { current, config, flight: flightKey(record), context }
   }
   const start = (record: SplitRecoveryRecord) => {
     const c = capture(record)
@@ -93,7 +95,7 @@ export function usePdaSplitRecovery({ active = true, onConfirmed }: { active?: b
   }
   const canRetry = (record: SplitRecoveryRecord) => {
     const n = snapshot.notices[record.requestKey]
-    return active && executable() && splitEndpoint() === record.endpoint && !!splitRetryPayload(record) && !flights.has(`${record.accountId}:${record.requestKey}`)
+    return active && executable() && splitEndpoint() === record.endpoint && !!splitRetryPayload(record) && !flights.has(flightKey(record))
       && n?.context === context && typeof n.notFoundAt === 'number' && Date.now() - n.notFoundAt < 60000
   }
   const retry = (record: SplitRecoveryRecord) => {

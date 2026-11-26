@@ -17,20 +17,21 @@ async function main() {
   }
 
   const passwordHash = await bcrypt.hash(password, 10)
-  await pool.query(
+  const [result] = await pool.query(
     `UPDATE sys_users
-        SET password = ?, real_name = ?, role_id = 1, role_name = '管理员', is_active = 1, deleted_at = NULL
-      WHERE username = ?`,
+        SET password = ?, real_name = ?, role_id = 1, role_name = '管理员', is_active = 1
+      WHERE username = ? AND deleted_at IS NULL`,
     [passwordHash, realName, username],
   )
 
+  if (result.affectedRows !== 1) throw new Error('管理员账号不存在或已删除')
   console.log(`管理员账号 ${username} 已初始化，请妥善保管凭据。`)
 }
 
 main()
   .catch((error) => {
     console.error(error.message || error)
-    process.exit(1)
+    process.exitCode = 1
   })
   .finally(async () => {
     try {

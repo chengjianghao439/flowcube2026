@@ -1,8 +1,11 @@
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import ListSummary from '@/components/shared/ListSummary'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { money } from '@/lib/format'
 import { useState, useRef, forwardRef, useImperativeHandle } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import DataTable from '@/components/shared/DataTable'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -36,6 +39,8 @@ interface Props {
    * 只影响按钮位置；筛选标签仍留在面板内。父级通过 ref 触发这三个动作。
    */
   hideToolbar?: boolean
+  /** 父级二级分页栏右侧的筛选插槽；传入 null 表示当前页签未激活 */
+  filterSlot?: HTMLElement | null
 }
 
 /** 父级（PageHeader）驱动面板动作的句柄：把工具条按钮挪出去后，用它触发面板内部的查询/登记/导出 */
@@ -52,7 +57,7 @@ export interface ReceiptPanelHandle {
  * 但新建核销时可选的账款会按 settlementTypes 限定在本页范围内。
  */
 export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function ReceiptPanel(
-  { type, settlementTypes, target = 'record', hideToolbar = false }, ref,
+  { type, settlementTypes, target = 'record', hideToolbar = false, filterSlot }, ref,
 ) {
   const active = useActiveWorkspaceTab()
   const { can } = usePermission()
@@ -120,7 +125,7 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
       // 与「按单登记」tab 一致：主按钮 + 下拉次操作（有余额→继续核销为主、明细进下拉；已核销完→只有明细）
       return canExecute && r.balance > 0 ? (
         <TableActionsMenu
-          primaryLabel="继续核销"
+          primaryVariant="outline" primaryLabel="继续核销"
           onPrimaryClick={() => { setContinueTarget(r); setFormOpen(true) }}
           items={[{ label: '明细', afterMenuClose: true, onClick: () => setDetailId(r.id) }]}
         />
@@ -132,20 +137,33 @@ export const ReceiptPanel = forwardRef<ReceiptPanelHandle, Props>(function Recei
 
   return (
     <div className="space-y-4">
-      {hideToolbar ? (
-        <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
+      {hideToolbar && filterSlot !== undefined ? (
+        filterSlot ? createPortal(
+          <>
+            <AppliedDateRange label={queryLabels.dateLabel} startDate={query.startDate} endDate={query.endDate}
+              onClear={() => setQuery(current => ({ ...current, startDate: '', endDate: '' }))} />
+            <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} showDateChip={false} />
+          </>,
+          filterSlot,
+        ) : null
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} />
-          <div className="ml-auto flex gap-2">
-            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          <AppliedDateRange label={queryLabels.dateLabel} startDate={query.startDate} endDate={query.endDate}
+            onClear={() => setQuery(current => ({ ...current, startDate: '', endDate: '' }))} />
+          <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} showDateChip={false} />
+          {!hideToolbar && <div className="ml-auto flex gap-2">
             <Button variant="outline" onClick={handleExport}>导出 Excel</Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canExecute && <Button onClick={() => { setContinueTarget(null); setFormOpen(true) }}>登记{actionLabel}</Button>}
-          </div>
+          </div>}
         </div>
       )}
 
-      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />}
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : (
+        <DataTable fluid virtualized scrollLabel={`${actionLabel}核销表格`} columnStorageKey={`receipts-${type}-${target}`}
+          columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+      )}
+      {!isError && !isLoading && data && <ListSummary total={data.pagination?.total ?? data.list.length} unit="笔" />}
 
       <PaymentQueryDialog
         title={`查询${actionLabel}单`}

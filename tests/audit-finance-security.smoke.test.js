@@ -173,6 +173,7 @@ async function main() {
     // 前面红灯用例可能改动了账号，仅本夹具恢复其活跃状态。
     await pool.query('UPDATE sys_users SET deleted_at=NULL,is_active=1,role_id=1 WHERE id=?', [admin.userId])
     await users.resetPassword(admin.userId, 'Test-only-self-2026!', admin)
+    await pool.query("INSERT IGNORE INTO sys_role_permissions(role_id,permission) VALUES(?,'user.update')", [operatorRoleId])
     await users.update(normal.userId, { realName: '正常编辑', roleId: 3, isActive: true }, operator)
   })
   await check('F07 并发晋升目标角色时重置等待角色事务后拒绝', async () => {

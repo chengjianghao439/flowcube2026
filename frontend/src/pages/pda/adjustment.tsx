@@ -13,7 +13,6 @@ import {PencilLine, CircleCheck, Loader2} from 'lucide-react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  getAdjustmentDetailApi,
   confirmAdjustmentPackageVoidApi, confirmAdjustmentContainerReturnApi,
   type AdjustmentPackageVoid, type AdjustmentContainerReturn,
 } from '@/api/warehouse-tasks'
@@ -76,7 +75,6 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
   const qc = useQueryClient()
   const [step, setStep] = useState<Step>('scan')
   const [target, setTarget] = useState<AdjustmentContainerReturn | null>(null)
-  const [voidTarget, setVoidTarget] = useState<AdjustmentPackageVoid | null>(null)
   const [scanning, setScanning] = useState(false)
   const { flash, ok, err, warn } = usePdaFeedback()
 
@@ -88,47 +86,38 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
   const returnAction = useCriticalPdaAction<{ finalized: boolean }>({
     action: `warehouse.adjustment-return.${adjustmentId}`,
     label: '改单归还扫码',
+    retryExecutor: (record, key, config) => {
+      const body = record.metadata?.requestBody as {returnId?: number; locationId?: number; adjustmentId?: number} | undefined
+      if (body?.adjustmentId !== adjustmentId || !body.returnId || body.returnId !== record.metadata?.returnId || !body.locationId) throw Error('原归还位置不完整，请只查询原结果')
+      return confirmAdjustmentContainerReturnApi(body.returnId, body.locationId, key, config)
+    },
     onConfirmed: async () => {
       await qc.invalidateQueries({ queryKey: ['pda-adjustment-detail', adjustmentId] })
       await qc.invalidateQueries({ queryKey: ['pda-adjustments-pending'] })
-    },
-    resolveServerState: async () => {
-      const latest = await getAdjustmentDetailApi(adjustmentId).catch(() => null)
-      if (!latest) return { effective: false }
-      const stillPending = latest.items.some(i => i.containerReturns.some(r => r.id === target?.id && r.status === 1))
-      if (!stillPending) {
-        return { effective: true, data: { finalized: !latest.items.some(i => i.containerReturns.some(r => r.status === 1) || i.packageVoids.some(v => v.status === 1)) }, message: '归还已生效，条码已不在待归还清单中。' }
-      }
-      return { effective: false }
     },
   })
 
   const voidAction = useCriticalPdaAction<{ finalized: boolean }>({
     action: `warehouse.adjustment-void.${adjustmentId}`,
     label: '改单拆箱确认',
+    retryExecutor: (record, key, config) => {
+      const body = record.metadata?.requestBody as {voidId?: number; adjustmentId?: number} | undefined
+      if (body?.adjustmentId !== adjustmentId || !body.voidId || body.voidId !== record.metadata?.voidId) throw Error('原拆箱明细不完整，请只查询原结果')
+      return confirmAdjustmentPackageVoidApi(body.voidId, key, config)
+    },
     onConfirmed: async () => {
       await qc.invalidateQueries({ queryKey: ['pda-adjustment-detail', adjustmentId] })
       await qc.invalidateQueries({ queryKey: ['pda-adjustments-pending'] })
-    },
-    resolveServerState: async () => {
-      const latest = await getAdjustmentDetailApi(adjustmentId).catch(() => null)
-      if (!latest) return { effective: false }
-      const stillPending = latest.items.some(i => i.packageVoids.some(v => v.id === voidTarget?.id && v.status === 1))
-      if (!stillPending) {
-        return { effective: true, data: { finalized: !latest.items.some(i => i.containerReturns.some(r => r.status === 1) || i.packageVoids.some(v => v.status === 1)) }, message: '拆箱确认已生效，箱子已不在待处理清单中。' }
-      }
-      return { effective: false }
     },
   })
 
   async function handleVoidScan(found: AdjustmentPackageVoid) {
     if (voidAction.submitBlocked) { err(voidAction.blockedReason || '当前不可提交'); return }
-    setVoidTarget(found)
     setScanning(true)
     try {
       const submitted = await voidAction.run(
-        (requestKey) => confirmAdjustmentPackageVoidApi(found.id, requestKey),
-        { voidId: found.id },
+        (requestKey, config) => confirmAdjustmentPackageVoidApi(found.id, requestKey, config),
+        { voidId: found.id, requestBody: { adjustmentId, voidId: found.id } },
       )
       if (submitted.kind === 'pending') {
         warn('网络中断，拆箱确认结果待确认。请先确认结果，再决定是否重扫。')
@@ -146,7 +135,6 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
       err(formatPdaErrorMessage((error as { message?: string })?.message, '拆箱确认失败，请重试'))
     } finally {
       setScanning(false)
-      setVoidTarget(null)
     }
   }
 
@@ -174,8 +162,8 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
       const loc = await getLocationByCodeApi(code)
       if (!loc) { err('库位不对，请重扫'); return }
       const submitted = await returnAction.run(
-        (requestKey) => confirmAdjustmentContainerReturnApi(target.id, loc.id, requestKey),
-        { returnId: target.id },
+        (requestKey, config) => confirmAdjustmentContainerReturnApi(target.id, loc.id, requestKey, config),
+        { returnId: target.id, requestBody: { adjustmentId, returnId: target.id, locationId: loc.id } },
       )
       if (submitted.kind === 'pending') {
         warn('网络中断，归还结果待确认。请先确认结果，再决定是否重扫。')
@@ -203,10 +191,55 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
     handleScan(code)
   }
 
+  const recoveryNotice = (
+    <>
+      <PdaCriticalActionNotice
+        blockedReason={returnAction.blockedReason}
+        pendingRecord={returnAction.pendingRecord}
+        confirming={returnAction.confirming}
+        phase={returnAction.phase}
+        phaseMessage={returnAction.phaseMessage}
+        lastErrorMessage={returnAction.lastErrorMessage}
+        onConfirm={() => {
+          void returnAction.confirmPending().then((status) => {
+            if (!status) return
+            if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
+            if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '归还状态还未确认，请稍后再查'))
+            if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次归还记录；请先刷新确认是否已落账，再决定是否重扫'))
+            if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '归还失败，请刷新后重试'))
+          })
+        }}
+        onRetry={returnAction.canRetry ? () => { void returnAction.retryPending().catch(e => err(e.message)) } : undefined}
+          onClear={() => returnAction.clearPending()}
+        onDismissError={() => returnAction.clearError()}
+      />
+      <PdaCriticalActionNotice
+        blockedReason={voidAction.blockedReason}
+        pendingRecord={voidAction.pendingRecord}
+        confirming={voidAction.confirming}
+        phase={voidAction.phase}
+        phaseMessage={voidAction.phaseMessage}
+        lastErrorMessage={voidAction.lastErrorMessage}
+        onConfirm={() => {
+          void voidAction.confirmPending().then((status) => {
+            if (!status) return
+            if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
+            if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '拆箱确认状态还未确认，请稍后再查'))
+            if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次拆箱确认记录；请先刷新确认是否已落账，再决定是否重扫'))
+            if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '拆箱确认失败，请刷新后重试'))
+          })
+        }}
+        onRetry={voidAction.canRetry ? () => { void voidAction.retryPending().catch(e => err(e.message)) } : undefined}
+          onClear={() => voidAction.clearPending()}
+        onDismissError={() => voidAction.clearError()}
+      />
+    </>
+  )
+
   if (isError || (!isLoading && !detail)) {
     return <div className="min-h-screen bg-background">
       <PdaHeader title="改单确认" onBack={() => navigate('/pda/adjustments')} />
-      <div className="max-w-md mx-auto px-4 pt-6"><PdaQueryError onRetry={() => { void refetch() }} /></div>
+      <div className="max-w-md mx-auto px-4 pt-6">{recoveryNotice}<PdaQueryError onRetry={() => { void refetch() }} /></div>
     </div>
   }
 
@@ -214,6 +247,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
     return (
       <div className="min-h-screen bg-background">
         <PdaHeader title="改单确认" onBack={() => navigate('/pda/adjustments')} />
+        {recoveryNotice}
         <PdaLoading className="h-40 mt-8" />
       </div>
     )
@@ -233,44 +267,7 @@ function AdjustmentDetailPage({ adjustmentId }: { adjustmentId: number }) {
         ])}>
           <ul className="space-y-1">{detail.items.map(i => <li key={i.id} className="whitespace-normal break-words">{i.productCode} {i.productName} · 原应发 {i.oldRequiredQty.toFixed(2)} → 本次应发 {i.newRequiredQty.toFixed(2)}</li>)}</ul>
         </PdaHandoffSummary>
-        <PdaCriticalActionNotice
-          blockedReason={returnAction.blockedReason}
-          pendingRecord={returnAction.pendingRecord}
-          confirming={returnAction.confirming}
-          phase={returnAction.phase}
-          phaseMessage={returnAction.phaseMessage}
-          lastErrorMessage={returnAction.lastErrorMessage}
-          onConfirm={() => {
-            void returnAction.confirmPending().then((status) => {
-              if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
-              if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '归还状态还未确认，请稍后再查'))
-              if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次归还记录；请先刷新确认是否已落账，再决定是否重扫'))
-              if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '归还失败，请刷新后重试'))
-            })
-          }}
-          onClear={() => returnAction.clearPending()}
-          onDismissError={() => returnAction.clearError()}
-        />
-        <PdaCriticalActionNotice
-          blockedReason={voidAction.blockedReason}
-          pendingRecord={voidAction.pendingRecord}
-          confirming={voidAction.confirming}
-          phase={voidAction.phase}
-          phaseMessage={voidAction.phaseMessage}
-          lastErrorMessage={voidAction.lastErrorMessage}
-          onConfirm={() => {
-            void voidAction.confirmPending().then((status) => {
-              if (!status) return
-              if (status.status === 'pending') warn(formatPdaErrorMessage(status.message, '系统还未确认结果，请稍后再查'))
-              if (status.status === 'state_unconfirmed') warn(formatPdaErrorMessage(status.message, '拆箱确认状态还未确认，请稍后再查'))
-              if (status.status === 'not_found') warn(formatPdaErrorMessage(status.message, '未找到上次拆箱确认记录；请先刷新确认是否已落账，再决定是否重扫'))
-              if (status.status === 'failed') err(formatPdaErrorMessage(status.message, '拆箱确认失败，请刷新后重试'))
-            })
-          }}
-          onClear={() => voidAction.clearPending()}
-          onDismissError={() => voidAction.clearError()}
-        />
+        {recoveryNotice}
 
         <div className={`rounded-2xl border-2 px-4 py-3 text-center transition-all motion-reduce:transition-none ${
           scanning ? 'border-warning/30 bg-warning/10' :

@@ -21,7 +21,10 @@ export function useRoles() {
 export function useRolePermissions(roleId: number) {
   return useQuery({
     queryKey: [ROLE_PERMS_QUERY_KEY, roleId],
-    queryFn: () => client.get<string[]>(`/roles/${roleId}/permissions`).then(r => r || []),
+    queryFn: () => client.get<string[]>(`/roles/${roleId}/permissions`).then(rows => {
+      if (!Array.isArray(rows) || !rows.every(code => typeof code === 'string')) throw new Error('角色权限数据不完整，请重试')
+      return rows
+    }),
     enabled: !!roleId,
   })
 }
