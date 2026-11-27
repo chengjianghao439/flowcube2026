@@ -15,11 +15,16 @@ const { findByIdWithExecutor } = require('./print-jobs.query')
 const { beginReprintIntent, completeReprintIntent } = require('./print-jobs.reprint-intent')
 const { getDispatchHintForJob } = require('./print-jobs.dispatch')
 
-async function resolveLabelPrinterId(warehouseId) {
+async function resolveLabelPrinterId(warehouseId, scopeWarehouseIds = null) {
   const wh = Number(warehouseId)
   const scoped = Number.isFinite(wh) && wh > 0
-  const scopeSql = scoped ? ' AND (warehouse_id IS NULL OR warehouse_id = ?)' : ''
-  const scopeParams = scoped ? [wh] : []
+  let scopeSql = scoped ? ' AND (warehouse_id IS NULL OR warehouse_id = ?)' : ''
+  let scopeParams = scoped ? [wh] : []
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (!scopeWarehouseIds.length) return null
+    scopeSql += ' AND warehouse_id IN (?)'
+    scopeParams = [...scopeParams, scopeWarehouseIds]
+  }
   const code = (process.env.INBOUND_LABEL_PRINTER_CODE || process.env.PDA_LABEL_PRINTER_CODE || '').trim()
   if (code) {
     const [[byCode]] = await pool.query(
@@ -45,23 +50,30 @@ async function resolveLabelPrinterId(warehouseId) {
  * 纸从 B 仓出来。以发起请求的客户端为准最符合直觉，且不需要操作员做任何选择。
  * 同一客户端接多台标签机时，优先取配置了该用途绑定的那台。
  */
-async function resolveClientPreferredPrinterId(clientId, printType) {
+async function resolveClientPreferredPrinterId(clientId, printType, scopeWarehouseIds = null) {
   const cid = String(clientId || '').trim()
   if (!cid) return null
+  let whSql = ''
+  const whParams = []
+  if (Array.isArray(scopeWarehouseIds)) {
+    if (!scopeWarehouseIds.length) return null
+    whSql = ' AND p.warehouse_id IN (?)'
+    whParams.push(scopeWarehouseIds)
+  }
   const [[bound]] = await pool.query(
     `SELECT p.id
      FROM printers p
      INNER JOIN printer_bindings b ON b.printer_id = p.id AND b.print_type = ?
-     WHERE p.client_id = ? AND p.status = 1 AND p.type = 1
+     WHERE p.client_id = ? AND p.status = 1 AND p.type = 1${whSql}
      ORDER BY p.id ASC LIMIT 1`,
-    [printType, cid],
+    [printType, cid, ...whParams],
   )
   if (bound?.id) return Number(bound.id)
   const [[any]] = await pool.query(
-    `SELECT id FROM printers
-     WHERE client_id = ? AND status = 1 AND type = 1
-     ORDER BY id ASC LIMIT 1`,
-    [cid],
+    `SELECT p.id FROM printers p
+     WHERE p.client_id = ? AND p.status = 1 AND p.type = 1${whSql}
+     ORDER BY p.id ASC LIMIT 1`,
+    [cid, ...whParams],
   )
   return any?.id != null ? Number(any.id) : null
 }
@@ -72,9 +84,13 @@ async function resolveLabelPrinter({
   requireBinding = false,
   allowBindingFallback = true,
   preferClientId = null,
+  scopeWarehouseIds = null,
 }) {
+  if (Array.isArray(scopeWarehouseIds) && !scopeWarehouseIds.length) {
+    return { printerId: null, dispatchReason: null }
+  }
   if (preferClientId) {
-    const byClient = await resolveClientPreferredPrinterId(preferClientId, jobType)
+    const byClient = await resolveClientPreferredPrinterId(preferClientId, jobType, scopeWarehouseIds)
     if (byClient) return { printerId: byClient, dispatchReason: 'client_local' }
   }
   const wh = warehouseId != null ? Number(warehouseId) : null
@@ -87,8 +103,15 @@ async function resolveLabelPrinter({
   })
   let printerId = resolved.printerId
   let dispatchReason = resolved.dispatchReason || 'fallback'
+  if (printerId && Array.isArray(scopeWarehouseIds)) {
+    const [[printerRow]] = await pool.query('SELECT warehouse_id FROM printers WHERE id = ?', [printerId])
+    if (!printerRow || printerRow.warehouse_id == null || !scopeWarehouseIds.map(Number).includes(Number(printerRow.warehouse_id))) {
+      printerId = null
+      dispatchReason = null
+    }
+  }
   if (!printerId && !requireBinding) {
-    printerId = await resolveLabelPrinterId(wh)
+    printerId = await resolveLabelPrinterId(wh, scopeWarehouseIds)
     dispatchReason = 'fallback'
   }
   return { printerId, dispatchReason }
@@ -569,12 +592,26 @@ async function enqueueProductLabelJob(payload) {
   const row = source?.row
   if (!row) return null
 
-  // 商品无仓库归属：优先派给发起请求的那台桌面客户端的打印机，避免跨仓库出纸
+  const scopeWarehouseIds = payload?.scopeWarehouseIds ?? null
+  const scopedSingleWh = Array.isArray(scopeWarehouseIds) && scopeWarehouseIds.length === 1
+    ? Number(scopeWarehouseIds[0])
+    : null
+  // 商品无仓库归属：优先派给发起请求的那台桌面客户端的打印机，避免跨仓库出纸；
+  // 限仓账号额外限制在自身仓库范围内解析，防止跨仓出纸或落入不可见的全局队列。
   const { printerId, dispatchReason } = await resolveLabelPrinter({
+    warehouseId: scopedSingleWh,
     jobType: 'product_label',
     preferClientId: payload?.preferClientId ?? null,
+    scopeWarehouseIds,
   })
   if (!printerId) return null
+
+  let resolvedWarehouseId = null
+  if (Array.isArray(scopeWarehouseIds)) {
+    const [[printerRow]] = await pool.query('SELECT warehouse_id FROM printers WHERE id = ?', [printerId])
+    assertBoundWarehouseInScope(scopeWarehouseIds, printerRow?.warehouse_id ?? null, '打印机')
+    resolvedWarehouseId = printerRow?.warehouse_id != null ? Number(printerRow.warehouse_id) : null
+  }
 
   const vars = source.vars
   const label = await buildLabelBody({
@@ -586,7 +623,8 @@ async function enqueueProductLabelJob(payload) {
   const job = await create({
     printerId,
     dispatchReason,
-    warehouseId: null,
+    warehouseId: resolvedWarehouseId,
+    scopeWarehouseIds,
     jobType: 'product_label',
     title: `商品标签 ${row.code}`,
     contentType: label.contentType,

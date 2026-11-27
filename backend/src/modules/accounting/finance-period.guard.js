@@ -402,16 +402,43 @@ async function replayExistingApplication(conn, { companyId, bizType, requestKey,
  * 返回结构刻意与 recordBackfillApplication 的返回值同形（都带 id/applicationNo/reused），
  * 让调用方两条路径共用同一段响应代码。
  */
-async function findApplicationByRequestKey(conn, { companyId = 1, bizType, requestKey }) {
+async function findApplicationByRequestKey(conn, {
+  companyId = 1, bizType, bizId = null, requestKey,
+  fingerprintPayload, requestSnapshot,
+}) {
   if (!requestKey) return null
   const [[row]] = await conn.query(
-    `SELECT id, status, executed_at, period, business_date, ${APPLICATION_NO_SQL} AS application_no
+    `SELECT id, status, executed_at, request_snapshot, payload_fingerprint, period, business_date,
+            ${APPLICATION_NO_SQL} AS application_no
        FROM finance_period_backfills
       WHERE company_id = ? AND biz_type = ? AND request_key = ?
       ORDER BY id LIMIT 1`,
     [companyId, bizType, requestKey],
   )
   if (!row) return null
+  // 与 replayExistingApplication 保持同一载荷不可变校验：即便原期间已反结账，
+  // 同键复用在不同业务内容上也不得静默返回旧申请单。
+  if (fingerprintPayload !== undefined) {
+    const fingerprint = creationFingerprint({ bizType, bizId, payload: fingerprintPayload ?? null })
+    if (String(row.payload_fingerprint || '') !== String(fingerprint || '')) {
+      throw new AppError(
+        '这个请求键已经用在另一笔内容不同的补录申请上了。'
+        + '请用新的请求键重新提交本次业务，以免两笔业务混成一张单。',
+        409,
+        'FINANCE_BACKFILL_REQUEST_KEY_REUSED',
+      )
+    }
+  }
+  if (requestSnapshot !== undefined) {
+    if (stableStringify(parseSnapshot(row.request_snapshot)) !== stableStringify(requestSnapshot ?? null)) {
+      throw new AppError(
+        '这个请求键对应的补录申请内容与本次提交不一致。'
+        + '为避免把两笔不同的业务当成同一笔，请先到「跨期补录审批」页查看那张申请单。',
+        409,
+        'FINANCE_BACKFILL_SNAPSHOT_MISMATCH',
+      )
+    }
+  }
   // 作废单上的键仍在唯一索引里，同一次操作的重放会读回它——不能当成「已提交待审批」返回，
   // 那会让出纳等一张永远不会执行的单子（同 replayExistingApplication 的处理）。
   if (Number(row.status) === STATUS.VOIDED) {
@@ -467,7 +494,9 @@ async function tryRecordBackfillApplication({
   // 中途被反结账了。此时同一次操作的超时重放若只按期间判断（现在开放了）就会直接走
   // 业务写入——钱当场付掉，而那张待审批的申请单还在，批准后**再付一次**。
   // 请求键是这笔操作的永久身份，重放就必须停在「原单」上，与期间后来开没开无关。
-  const existing = await findApplicationByRequestKey(pool, { companyId, bizType, requestKey })
+  const existing = await findApplicationByRequestKey(pool, {
+    companyId, bizType, bizId, requestKey, fingerprintPayload, requestSnapshot,
+  })
   if (existing) return existing
 
   const period = periodOfDate(ymd)

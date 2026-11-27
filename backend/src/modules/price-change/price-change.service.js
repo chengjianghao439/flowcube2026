@@ -68,13 +68,16 @@ async function findAll({ page = 1, pageSize = 20, keyword = '', status = null, p
   return { list: rows.map(fmt), pagination: { page, pageSize: ps, total: Number(total) } }
 }
 
-async function findById(id) {
+async function findById(id, viewer = null) {
   const [[row]] = await pool.query(
     `SELECT pcr.*, p.article_number, p.spec, p.color
        FROM price_change_requests pcr
        JOIN product_items p ON p.id = pcr.product_id
       WHERE pcr.id = ?`, [Number(id)])
   if (!row) throw new AppError('改价申请不存在', 404)
+  if (viewer && !viewer.isAdmin && !viewer.canApprove && row.applicant_id != null && Number(row.applicant_id) !== Number(viewer.userId)) {
+    throw new AppError('无权查看他人的改价申请', 403, 'PRICE_CHANGE_ACCESS_DENIED')
+  }
   return fmt(row)
 }
 
@@ -117,7 +120,10 @@ async function submit(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, request_no, product_id, new_price, status', entityName: '改价申请', deletedAt: false })
+    const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, request_no, product_id, new_price, status, applicant_id', entityName: '改价申请', deletedAt: false })
+    if (operator && !operator.isAdmin && Number(operator.roleId) !== 1 && row.applicant_id != null && Number(row.applicant_id) !== Number(operator.userId)) {
+      throw new AppError('仅申请人本人或管理员可提交该改价申请', 403, 'PRICE_CHANGE_OWNER_REQUIRED')
+    }
     assertStatusAction('priceChangeRequest', 'submit', row.status)
     const inst = await approvalEngine.startApproval(conn, {
       bizType: 'product_price',
@@ -245,7 +251,10 @@ async function cancel(id, operator) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status', entityName: '改价申请', deletedAt: false })
+    const row = await lockStatusRow(conn, { table: 'price_change_requests', id, columns: 'id, status, applicant_id', entityName: '改价申请', deletedAt: false })
+    if (operator && !operator.isAdmin && Number(operator.roleId) !== 1 && row.applicant_id != null && Number(row.applicant_id) !== Number(operator.userId)) {
+      throw new AppError('仅申请人本人或管理员可取消该改价申请', 403, 'PRICE_CHANGE_OWNER_REQUIRED')
+    }
     const rule = assertStatusAction('priceChangeRequest', 'cancel', row.status)
     const active = await approvalEngine.getActiveInstanceByBiz(conn, { bizType: 'product_price', bizId: Number(id) })
     if (active) {

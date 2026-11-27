@@ -49,6 +49,11 @@ async function createForSaleOrder({ saleOrderId, saleOrderNo, customerId, custom
       }
     }
   } catch (binErr) {
+    // 事务已被数据库中止（死锁/锁超时/断连）时禁止吞错续跑，避免后续语句落入 autocommit 破坏原子性
+    const txAbortedCodes = new Set(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT', 'PROTOCOL_CONNECTION_LOST', 'ECONNRESET', 'ETIMEDOUT'])
+    if (txAbortedCodes.has(binErr?.code) || binErr?.errno === 1213 || binErr?.errno === 1205) {
+      throw binErr
+    }
     // 分拣格分配失败：尝试释放可能已占用的格，确保不产生孤立锁
     logSideEffectFailure('分拣格自动分配失败，任务继续创建但进入待人工分配降级状态', binErr, {
       taskId,

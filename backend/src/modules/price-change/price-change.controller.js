@@ -21,7 +21,9 @@ const list = async (req, res, next) => {
 
 const detail = async (req, res, next) => {
   try {
-    return successResponse(res, await svc.findById(+req.params.id), '查询成功')
+    const isAdmin = Number(req.user?.roleId) === 1
+    const canApprove = isAdmin || (Array.isArray(req.user?.permissions) && req.user.permissions.includes('product.price.approve'))
+    return successResponse(res, await svc.findById(+req.params.id, { userId: req.user?.userId ?? null, isAdmin, canApprove }), '查询成功')
   } catch (e) { next(e) }
 }
 
@@ -34,7 +36,8 @@ const create = async (req, res, next) => {
 
 const submit = async (req, res, next) => {
   try {
-    const result = await svc.submit(+req.params.id, getOperatorFromRequest(req))
+    const operator = { ...getOperatorFromRequest(req), isAdmin: Number(req.user?.roleId) === 1 }
+    const result = await svc.submit(+req.params.id, operator)
     return successResponse(res, result, '已提交审批')
   } catch (e) { next(e) }
 }
@@ -60,7 +63,8 @@ const reject = async (req, res, next) => {
 
 const cancel = async (req, res, next) => {
   try {
-    const result = await svc.cancel(+req.params.id, getOperatorFromRequest(req))
+    const operator = { ...getOperatorFromRequest(req), isAdmin: Number(req.user?.roleId) === 1 }
+    const result = await svc.cancel(+req.params.id, operator)
     return successResponse(res, result, '已取消')
   } catch (e) { next(e) }
 }

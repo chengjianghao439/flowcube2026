@@ -411,3 +411,22 @@ test('首次安装 cron 保留已有条目，重复安装不会追加，五条�
   assert.equal(install().status, 0)
   assert.equal(fs.readFileSync(stored,'utf8'), rows+'# retained\n')
 })
+
+test('rotate-slowlog.sh 拒绝非法路径与非数字阈值，且安全传递位置参数', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'flowcube-slowlog-'))
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }))
+  const badPath = spawnSync('bash', [path.join(root, 'scripts/rotate-slowlog.sh')], {
+    encoding: 'utf8',
+    env: { ...process.env, SLOWLOG: '/var/log/a;touch /tmp/pwned' },
+  })
+  assert.equal(badPath.status, 1)
+  assert.match(badPath.stderr, /invalid SLOWLOG/)
+  const badMin = spawnSync('bash', [path.join(root, 'scripts/rotate-slowlog.sh')], {
+    encoding: 'utf8',
+    env: { ...process.env, SLOWLOG: '/var/lib/mysql/slow.log', MIN_BYTES: '10;id' },
+  })
+  assert.equal(badMin.status, 1)
+  assert.match(badMin.stderr, /invalid MIN_BYTES/)
+  const src = fs.readFileSync(path.join(root, 'scripts/rotate-slowlog.sh'), 'utf8')
+  assert.match(src, /sh -c '\[ -f "\$1" \] && wc -c < "\$1" \|\| echo 0' _ "\$SLOWLOG"/)
+})

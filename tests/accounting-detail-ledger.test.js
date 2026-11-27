@@ -9,12 +9,13 @@ function load(relative, overrides = {}, mutate = s => s) {
   return module.exports
 }
 const plain = value => JSON.parse(JSON.stringify(value))
-function accounting() {
+function accounting({ parentHasEntry = false } = {}) {
   const records = new Map([[1,{id:1,company_id:1,code:'1001',name:'主账套',category:1,level:1,is_leaf:1}], [2,{id:2,company_id:2,code:'1001',name:'第二账套',category:1,level:1,is_leaf:1}]])
   const calls = [], transactions = []
   const query = async (origin,sql,p=[]) => {
     calls.push({origin,sql,p})
     if (sql.includes('SELECT id, code, name')) { const r=records.get(p[1]);return [[r?.company_id===p[0]?r:undefined].filter(Boolean)] }
+    if (sql.includes('FROM acct_voucher_entries e')) return [parentHasEntry ? [{ id: 99 }] : []]
     if (sql.startsWith('UPDATE acct_accounts SET is_leaf')) return [{affectedRows:1}]
     if (/INSERT INTO acct_accounts/.test(sql)) { records.set(3,{id:3,company_id:p[0],code:p[1],name:p[2],category:p[3],parent_id:p[5],level:p[6],is_leaf:1,is_preset:0});return [{insertId:3}] }
     if (sql.includes('AS childCount')) return [[{childCount:0}]]
@@ -45,6 +46,14 @@ test('FIN14 internal create/remove retain caller transaction connection and exac
   assert.ok(calls.every(x=>x.origin==='transaction'))
   assert.deepEqual(plain(calls.filter(x=>x.sql.includes('SELECT id, code, name')).map(x=>x.p)),[[2,2],[2,3]])
   assert.deepEqual(transactions,['begin','commit','release','begin','commit','release'])
+})
+test('FIN14 create rejects turning a parent account with voucher entries into summary account', async()=>{
+  const {service,transactions}=accounting({ parentHasEntry: true })
+  await assert.rejects(
+    service.create({code:'1001.1',name:'子科目',category:1,parentId:2,companyId:2},1),
+    { statusCode: 409, code: 'ACCT_PARENT_HAS_ENTRIES' },
+  )
+  assert.deepEqual(transactions,['begin','rollback','release'])
 })
 test('FIN15 actual supplier ledger labels refund while retaining direction, balance, identifiers and payment label', async()=>{
   const service=load('modules/payments/party-ledger.service.js',{},s=>process.env.B10_FIN_MUTANT==='supplier_label'?s.replace("  SUPPLIER_REFUND_IN: '供应商退款',",''):s)
