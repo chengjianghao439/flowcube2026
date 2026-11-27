@@ -420,13 +420,14 @@ test('rotate-slowlog.sh 拒绝非法路径与非数字阈值，且安全传递�
     env: { ...process.env, SLOWLOG: '/var/log/a;touch /tmp/pwned' },
   })
   assert.equal(badPath.status, 1)
-  assert.match(badPath.stderr, /invalid SLOWLOG/)
+  assert.match(badPath.stderr, /SLOWLOG 路径格式不合法/)
   const badMin = spawnSync('bash', [path.join(root, 'scripts/rotate-slowlog.sh')], {
     encoding: 'utf8',
     env: { ...process.env, SLOWLOG: '/var/lib/mysql/slow.log', MIN_BYTES: '10;id' },
   })
   assert.equal(badMin.status, 1)
-  assert.match(badMin.stderr, /invalid MIN_BYTES/)
+  assert.match(badMin.stderr, /MIN_BYTES 必须为非负整数/)
   const src = fs.readFileSync(path.join(root, 'scripts/rotate-slowlog.sh'), 'utf8')
-  assert.match(src, /sh -c '\[ -f "\$1" \] && wc -c < "\$1" \|\| echo 0' _ "\$SLOWLOG"/)
+  assert.match(src, /sh -c 'wc -c < "\$1" 2>\/dev\/null \|\| echo 0' _ "\$SLOWLOG"/)
+  assert.match(src, /sh -c 'cp "\$1" "\$1\.prev" 2>\/dev\/null && : > "\$1"' _ "\$SLOWLOG"/)
 })
