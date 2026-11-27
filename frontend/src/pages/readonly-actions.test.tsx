@@ -342,7 +342,13 @@ test('打印机查看不授予别名保存、状态切换或用途绑定', async
   expect(queryByRole(host, 'button', { name: '绑定用途' })).toBeNull()
   await act(async () => authorize([P.PRINT_PRINTER_MANAGE]))
   expect(getByRole(host, 'button', { name: '保存' })).toBeTruthy()
-  expect(getByRole(host, 'button', { name: '绑定用途' })).toBeTruthy()
+  await click('绑定用途', host)
+  const binding = getByRole(document.body, 'dialog', { name: '绑定业务用途' })
+  expect(binding.querySelector(':scope > .fc-form-dialog-body [aria-pressed]')).toBeTruthy()
+  const footer = binding.querySelector<HTMLElement>(':scope > .fc-dialog-footer')!
+  expect(getByRole(footer, 'button', { name: '关闭' }).classList.contains('fc-button')).toBe(true)
+  await click('关闭', footer)
+  expect(queryByRole(document.body, 'dialog', { name: '绑定业务用途' })).toBeNull()
   await act(async () => authorize())
   expect(queryByRole(host, 'button', { name: '保存' })).toBeNull()
   expect(writes).toEqual([])
@@ -352,12 +358,15 @@ test('打印机关联本机等待设备读取期间撤权，不发送更新请�
   let release!: (value: string) => void
   vi.spyOn(apiConfig, 'getEffectiveApiOrigin').mockReturnValue('https://synthetic.invalid')
   vi.stubGlobal('flowcubeDesktop', {
+    isDesktop: true,
     getPrintClientCredential: () => new Promise<string>(resolve => { release = resolve }),
     getClientInfo: async () => ({ clientId: 'synthetic-client', hostname: '合成设备' }),
     getSystemPrinters: async () => [{ name: printer.name }],
   })
   authorize([P.PRINT_PRINTER_MANAGE]); await draw(<PrintersPage />, '/settings/printers')
-  await click('关联本机'); expect(release).toBeTypeOf('function')
+  await menu()
+  await act(async () => { await userEvent.click(getByRole(document.body, 'menuitem', { name: '关联本机' })) })
+  expect(release).toBeTypeOf('function')
   await act(async () => authorize())
   await act(async () => { release('synthetic-only'); await new Promise(resolve => setTimeout(resolve, 5)) })
   expect(writes).toEqual([])

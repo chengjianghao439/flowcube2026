@@ -6,18 +6,18 @@
  * TabPathContext。激活 tab 必须读 TabPathContext（本标签自己的路径）而非 useLocation
  * （全局路径）——否则隐藏标签在全局切走时会被重渲染成别的子页（keepAlive 串扰）。
  * 点 tab = addTab + navigate 到对应路由，打开/激活对应工作区标签。
- * 参照先例：returns/index.tsx（一组件多路由）、stockcheck/abc.tsx（页内 tab 栏样式）。
+ * 页头视图导航与 MergedPage 共用，各子页保留自己的标题和操作。
  */
 
 import { useContext } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import type { PermissionRequirement } from '@/lib/permissions'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { PATH_TITLES } from '@/router/routeRegistry'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import { Button } from '@/components/ui/button'
+import { PageHeaderContext } from '@/components/shared/PageHeaderContext'
+import { PageViewNavigation } from '@/components/shared/PageViewNavigation'
 import WarehousesPage from '@/pages/warehouses'
 import LocationsPage from '@/pages/locations'
 import RacksPage from '@/pages/racks'
@@ -63,41 +63,23 @@ export default function WarehouseStructurePage() {
 
   const { can } = usePermission()
   const addTab = useWorkspaceStore((s) => s.addTab)
-  const navigate = useNavigate()
 
   const visibleTabs = TAB_KEYS.filter((key) => can(TAB_PERM[key]))
 
-  const switchTab = (key: TabKey) => {
-    const path = KEY_TO_PATH[key]
-    addTab({ key: path, title: PATH_TITLES[path] ?? path, path })
-    navigate(path)
-  }
-
-  // 只剩一个可见 tab 时隐藏 tab 栏直渲染（与 TopNav 单链收敛一致）
-  const showTabBar = visibleTabs.length > 1
+  const navigation = visibleTabs.length > 1 && (
+    <PageViewNavigation label="仓库结构视图" activePath={KEY_TO_PATH[activeKey]}
+      views={visibleTabs.map(key => ({ path: KEY_TO_PATH[key], label: LABEL[key] }))}
+      onSelect={path => addTab({ key: path, title: PATH_TITLES[path] ?? path, path })}
+    />
+  )
 
   return (
-    <div className="space-y-4">
-      {showTabBar && (
-        <div className="flex gap-2">
-          {visibleTabs.map((key) => (
-            <Button
-              key={key}
-              size="sm"
-              variant={activeKey === key ? 'default' : 'outline'}
-              onClick={() => switchTab(key)}
-            >
-              {LABEL[key]}
-            </Button>
-          ))}
-        </div>
-      )}
-
+    <PageHeaderContext.Provider value={{ navigation }}>
       {/* 条件渲染只挂本标签匹配的子页；隐藏标签不执行其他子页的 query */}
       {activeKey === 'warehouses' && <WarehousesPage />}
       {activeKey === 'locations' && <LocationsPage />}
       {activeKey === 'racks' && <RacksPage />}
       {activeKey === 'sorting-bins' && <SortingBinsPage />}
-    </div>
+    </PageHeaderContext.Provider>
   )
 }

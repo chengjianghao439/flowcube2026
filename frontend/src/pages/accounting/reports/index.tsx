@@ -108,7 +108,7 @@ export default function ReportsPage() {
   return (
     <div>
       <PageHeader title="会计报表"
-        description="利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）"  />
+        description="利润表 / 资产负债表 / 现金流量表（简版，取数以凭证与资金流水为准）。"  />
 
 
       <FilterCard className="mb-4">

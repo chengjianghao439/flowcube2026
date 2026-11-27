@@ -76,7 +76,7 @@ test('read-only users can see real dynamic settings without edit or logo-upload 
     expect(view.host.textContent).toContain('原企业')
     expect(queryByRole(view.host, 'button', { name: '编辑' })).toBeNull()
     expect(view.host.querySelector('input')).toBeNull()
-    expect(view.host.querySelector('.desktop-page-description')?.textContent).toBe('当前账号无修改权限')
+    expect(view.host.querySelector('.desktop-page-description')?.textContent).toBe('当前账号无修改权限。')
     expect(view.host.textContent?.match(/当前账号无修改权限/g)).toHaveLength(1)
   } finally { view.close() }
 })

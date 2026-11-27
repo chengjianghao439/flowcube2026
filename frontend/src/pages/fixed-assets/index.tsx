@@ -1,3 +1,4 @@
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { useCompanyQueryKey } from '@/hooks/useCompanyQueryKey'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { money } from '@/lib/format'
@@ -7,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryDialog, KeywordQueryChips } from '@/components/shared/KeywordQueryDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -107,7 +108,7 @@ function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: 
   return (
     <Dialog open onOpenChange={v => !v && onClose()}>
       <DialogContent className="fc-form-dialog sm:max-w-2xl">
-        <DialogHeader description={"核对资产净值、处置方式与日期。"}><DialogTitle>处置资产 · {asset.assetName}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>处置资产 · {asset.assetName}</DialogTitle></DialogHeader>
         <div className="fc-form-dialog-body space-y-3 py-2">
           <div className="rounded-md bg-muted/60 px-3 py-2 text-sm">
             账面净值 <span className="font-semibold">{money(asset.netBookValue)}</span>（累计折旧 {money(asset.accumDepr)}）
@@ -147,7 +148,7 @@ function DisposeDialog({ asset, onClose }: { asset: FixedAsset | null; onClose: 
 
 export default function FixedAssetsPage() {
   const qc = useQueryClient()
-  const [keyword, setKeyword] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [applied, setApplied] = useState<{ keyword: string }>({ keyword: '' })
   const [createOpen, setCreateOpen] = useState(false)
   const [disposeTarget, setDisposeTarget] = useState<FixedAsset | null>(null)
@@ -187,7 +188,7 @@ export default function FixedAssetsPage() {
       title: '操作',
       width: 110,
       render: (_, r) => (r.status === 1 || r.status === 2) ? (
-        <Button size="sm" variant="outline" onClick={() => setDisposeTarget(r)}>处置</Button>
+        <TableActionsMenu primaryVariant="outline" primaryLabel="处置" onPrimaryClick={() => setDisposeTarget(r)} items={[]} />
       ) : <span className="text-xs text-muted-foreground">—</span>,
     },
   ]
@@ -196,10 +197,11 @@ export default function FixedAssetsPage() {
     <div className="space-y-4">
       <PageHeader
         title="固定资产"
-        description="固定资产卡片、按月计提折旧（直线法）、处置/报废。折旧凭证自动生成并进入总账。"
+        description="管理固定资产卡片、月度折旧与处置。"
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => downloadExport('/export/fixed-assets').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/fixed-assets', applied.keyword ? { keyword: applied.keyword } : undefined).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
+            <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             <Button variant="outline" disabled={deprPending} onClick={() => runDepr(beijingPeriod())}>{deprPending ? '计提中…' : '计提本月折旧'}</Button>
             <Button onClick={() => setCreateOpen(true)}>新增资产</Button>
           </div>
@@ -207,18 +209,16 @@ export default function FixedAssetsPage() {
       />
 
 
-      <FilterCard>
-        <Input placeholder="编号 / 名称 / 类别" value={keyword} onChange={e => setKeyword(e.target.value)} onKeyDown={e => e.key === 'Enter' && setApplied({ keyword })} className="w-56" />
-        <Button size="sm" variant="outline" onClick={() => setApplied({ keyword })}>搜索</Button>
-        <div className="ml-auto text-sm text-muted-foreground">共 <span className="font-semibold text-foreground">{total}</span> 项</div>
-      </FilterCard>
+      <KeywordQueryDialog open={queryOpen} dialogId="fixed-assets-query" title="查询固定资产" initial={applied.keyword} label="关键字" placeholder="编号 / 名称 / 类别"
+        onClose={() => setQueryOpen(false)} onApply={keyword => setApplied({ keyword })} />
+      <KeywordQueryChips keyword={applied.keyword} onClear={() => setApplied({ keyword: '' })} />
 
       {isError && !data ? (
-        <QueryErrorState error={error} onRetry={() => void refetch()} title="加载失败" compact />
+        <QueryErrorState error={error} onRetry={() => void refetch()} title="加载失败" />
       ) : (
-        <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyText="暂无固定资产卡片" />
+        <DataTable fluid columnStorageKey="fixed-assets" scrollLabel="固定资产表格" virtualized columns={columns} data={list} loading={isLoading} rowKey="id" emptyText="暂无固定资产卡片" />
       )}
-      {total > 0 && <ListSummary total={total} />}
+      {data && !isError && !isLoading && <ListSummary total={total} />}
 
       <CreateDialog open={createOpen} onClose={() => setCreateOpen(false)} onSaved={() => refetch()} />
       <DisposeDialog asset={disposeTarget} onClose={() => setDisposeTarget(null)} />

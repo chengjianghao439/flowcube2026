@@ -83,6 +83,9 @@ export interface AppDialogProps {
    */
   resizable?: boolean
 
+  /** 使用桌面业务表单的固定头尾和滚动正文。 */
+  formDialog?: boolean
+
   /** 少量字段的固定弹窗按内容收紧；可调整尺寸的窗口保留原尺寸与记忆。 */
   sizeToContent?: boolean
   /** 确认类正文说明，沿Radix Description关联给弹窗。 */
@@ -135,6 +138,7 @@ export function AppDialog({
   minHeight     = 400,
   resizable     = true,
   sizeToContent = false,
+  formDialog = false,
   description,
   descriptionInHeader = false,
   onOpenAutoFocus,
@@ -200,6 +204,7 @@ export function AppDialog({
           {...focusReturn}
           className={cn(
             'fc-app-dialog fixed z-50 flex flex-col rounded-lg border bg-background shadow-xl',
+            formDialog && 'fc-form-dialog',
             'focus:outline-none',
             // 进入/退出动画
             'data-[state=open]:animate-in   data-[state=open]:fade-in-0   data-[state=open]:zoom-in-95',
@@ -236,7 +241,12 @@ export function AppDialog({
           </div>
 
           {/* ── Body（固定尺寸保留原滚动协议，内容尺寸模式由此承载滚动） ── */}
-          <div className={cn('fc-app-dialog-body min-h-0', contentSized ? 'flex-[0_1_auto] overflow-y-auto' : 'flex-1 overflow-hidden')}>
+          <div className={cn(
+            'fc-app-dialog-body min-h-0',
+            contentSized ? 'flex-[0_1_auto]' : 'flex-1',
+            formDialog || contentSized ? 'overflow-y-auto' : 'overflow-hidden',
+            formDialog && 'fc-form-dialog-body px-5 py-4',
+          )}>
             {!descriptionInHeader && description && <DialogPrimitive.Description className="fc-app-dialog-description whitespace-pre-wrap break-words px-5 py-5 text-sm leading-6 text-muted-foreground">{description}</DialogPrimitive.Description>}
             {children}
           </div>

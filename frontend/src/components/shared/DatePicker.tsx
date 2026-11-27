@@ -32,6 +32,7 @@ interface DatePickerProps {
   /** 受控值，格式 yyyy-MM-dd；空字符串表示未选择 */
   value: string
   onChange: (value: string) => void
+  onEnter?: (value: string) => void
   /** 可选范围下限（yyyy-MM-dd），超出禁用 */
   min?: string
   /** 可选范围上限（yyyy-MM-dd），超出禁用 */
@@ -42,7 +43,7 @@ interface DatePickerProps {
 }
 
 /** 统一日期选择控件：可直接输入 yyyy-MM-dd，也可点击日历图标弹出选择——跨度大时打字比翻页快 */
-export function DatePicker({ id, 'aria-label': ariaLabel, 'aria-invalid': invalid, 'aria-describedby': describedBy, value, onChange, min, max, placeholder = 'yyyy-mm-dd', className, disabled }: DatePickerProps) {
+export function DatePicker({ id, 'aria-label': ariaLabel, 'aria-invalid': invalid, 'aria-describedby': describedBy, value, onChange, onEnter, min, max, placeholder = 'yyyy-mm-dd', className, disabled }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const skipFocusOpen = React.useRef(false)
@@ -82,7 +83,16 @@ export function DatePicker({ id, 'aria-label': ariaLabel, 'aria-invalid': invali
             disabled={disabled}
             onChange={e => setText(e.target.value)}
             onBlur={commitText}
-            onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
+            onKeyDown={e => {
+              if (e.key !== 'Enter' || e.nativeEvent.isComposing) return
+              const typed = text.trim()
+              const parsed = parseTyped(typed)
+              e.currentTarget.blur()
+              if (onEnter && (!typed || parsed)) {
+                e.preventDefault()
+                onEnter(parsed ? format(parsed, DATE_FMT) : '')
+              }
+            }}
             onFocus={() => { if (skipFocusOpen.current) { skipFocusOpen.current = false; return }; setOpen(true) }}
             className={cn(
               'h-10 w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',

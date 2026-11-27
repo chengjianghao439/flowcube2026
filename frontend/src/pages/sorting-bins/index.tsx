@@ -60,7 +60,7 @@ function BatchDialog({ open, onClose, onSuccess }: { open: boolean; onClose: () 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="fc-form-dialog max-w-2xl">
-        <DialogHeader description={"选择仓库并填写分拣格编号范围。"}><DialogTitle>批量创建分拣格</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>批量创建分拣格</DialogTitle></DialogHeader>
         <div className="fc-form-dialog-body space-y-4">
           <div>
             <Label htmlFor="sorting-batch-warehouse">仓库</Label>
@@ -108,7 +108,7 @@ export default function SortingBinsPage() {
     setHandoffOpen(active && latest !== null && latest !== 'invalid')
   }, [path, active])
   return <>
-    {canView ? <SortingBinsManagementPage notice={handoffNotice} /> : <div className="space-y-3">
+    {canView ? <SortingBinsManagementPage notice={handoffNotice} /> : <div className="space-y-4">
       <PageHeader title="分拣格管理" description={handoffNotice ?? '查看任务交接并补分配分拣格。'} />
       {canAssign && <Button variant="outline" onClick={() => setNormalOpen(true)}>补分配分拣格</Button>}
       {canAssign && <AssignSortingBinDialog open={normalOpen} onClose={() => setNormalOpen(false)} />}
@@ -221,7 +221,7 @@ function SortingBinsManagementPage({ notice }: { notice?: ReactNode }) {
         canSubmit={(editing) => editing ? true : !!form.code && !!form.warehouseId}
         headerActions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/sorting-bins').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/sorting-bins').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {can(PERMISSIONS.WAREHOUSE_TASK_ASSIGN) && <Button variant="outline" onClick={() => setAssignOpen(true)}>补分配分拣格</Button>}
             {can(PERMISSIONS.SORTING_BIN_MANAGE) && <Button variant="outline" onClick={() => setBatchOpen(true)}>批量创建</Button>}
@@ -231,7 +231,7 @@ function SortingBinsManagementPage({ notice }: { notice?: ReactNode }) {
           chips.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
               {chips.map(c => (
-                <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                <span key={c.key} className="fc-query-chip">
                   {c.label}
                   <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                     <X className="h-3 w-3" />
@@ -254,10 +254,12 @@ function SortingBinsManagementPage({ notice }: { notice?: ReactNode }) {
               ]}
             />
           ) : (
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => helpers.openEdit(row)}>编辑</Button>
-              <Button size="sm" variant="destructive" onClick={() => helpers.openDelete(row)}>删除</Button>
-            </div>
+            <TableActionsMenu
+              primaryLabel="编辑"
+              primaryVariant="outline"
+              onPrimaryClick={() => helpers.openEdit(row)}
+              items={[{ label: '删除', destructive: true, onClick: () => helpers.openDelete(row) }]}
+            />
           )
         )}
         renderForm={(editing, _open, locked) => editing ? (

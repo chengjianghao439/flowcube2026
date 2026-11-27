@@ -103,9 +103,14 @@ export default function CarrierAccountsPage() {
       toast.success('承运商账号已新增')
     } finally { busy.current = false; setSaving(false) }
   }
-  return <div className="desktop-management-page desktop-carrier-accounts">
+  return <div className="desktop-management-page desktop-carrier-accounts space-y-4">
     <PageHeader title="快递账号绑定"
-        description="维护快递月结账号与发货服务。"  actions={<>{canCreate && <Button disabled={saving} onClick={() => select('new')}>新增承运商账号</Button>}<Button variant="outline" disabled={saving || dirty || creating} onClick={() => navigate('/carriers')}>承运商管理</Button></>} />
+        description="维护快递月结账号与发货服务。"
+      actions={<>
+        <Button variant="outline" disabled={saving || dirty || creating} onClick={() => navigate('/carriers')}>承运商管理</Button>
+        {canCreate && <Button disabled={saving} onClick={() => select('new')}>新增承运商账号</Button>}
+      </>}
+    />
     <div className="desktop-split-workbench">
       <aside aria-label="快递账号列表" className="desktop-split-sidebar">
         <div className="desktop-split-search">

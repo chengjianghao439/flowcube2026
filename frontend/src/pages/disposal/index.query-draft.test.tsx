@@ -180,3 +180,19 @@ test('DISPOSAL-Q09 页面打开关闭独立详情不清已应用本地筛选', a
   await click('关闭详情', dialog()); expect(path()).toBe('/disposals'); expect(listRequests()).toHaveLength(before)
   await click('查询'); await wait(() => expect(fields()).toEqual(draft))
 })
+
+test('倒置日期拒绝查询及回车，修正为单边后沿用其他条件', async () => {
+  await ready(); await openQuery()
+  const before = listRequests().length
+  await type(keyword(), 'SYN-DATE')
+  await date(dates()[1], '2026-10-15')
+  await date(dates()[0], '2026-10-16')
+  expect(button('查询', dialog()).disabled).toBe(true)
+  expect(dialog().querySelector('[role="alert"]')?.textContent).toContain('起始日期不能晚于结束日期')
+  await act(async () => keyword().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(listRequests()).toHaveLength(before)
+  await date(dates()[1], ''); await click('查询', dialog())
+  await wait(() => expect(listRequests().at(-1)?.searchParams.get('startDate')).toBe('2026-10-16'))
+  expect(listRequests().at(-1)?.searchParams.has('endDate')).toBe(false)
+  expect(listRequests().at(-1)?.searchParams.get('keyword')).toBe('SYN-DATE')
+})

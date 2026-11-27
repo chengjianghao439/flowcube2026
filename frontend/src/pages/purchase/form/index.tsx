@@ -561,6 +561,7 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
     return <QueryErrorState error={error} title="采购单加载失败" description="请重试读取采购单" onRetry={() => { void refetch() }} />
   }
 
+  const showApproval = order.status === 5 && canApprove
   const canConfirm = order.status === 1 && can(PERMISSIONS.PURCHASE_ORDER_CONFIRM)
   const hasActiveInboundTask = (order.inboundTasks ?? []).some(t => t.status !== 5)
   const canWithdrawConfirm = (order.status === 2 || order.status === 5) && !hasActiveInboundTask && can(PERMISSIONS.PURCHASE_ORDER_CONFIRM)
@@ -587,21 +588,26 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
         subtitle={<StatusBadge type="purchase" status={order.status} />}
         rightActions={
           <>
+            {(canCancel || showApproval) && (
+              <div role="group" aria-label="采购撤销与驳回操作" className="flex items-center gap-2 border-r border-border pr-2">
+                {canCancel && (
+                  <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
+                    onClick={() => ask('取消采购单', '取消后此采购单将无法恢复，请确认操作。', 'destructive', () => {
+                      setConfirmState(s => ({ ...s, open: false }))
+                      cancelMutate.mutate(order.id)
+                    })}>
+                    取消
+                  </Button>
+                )}
+                {showApproval && (
+                  <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
+                    onClick={() => setRejectOpen(true)}>
+                    驳回
+                  </Button>
+                )}
+              </div>
+            )}
             <ReturnSourceButton kind="purchase" sourceId={order.id} sourceNo={order.orderNo} />
-            {canCancel && (
-              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
-                onClick={() => ask('取消采购单', '取消后此采购单将无法恢复，请确认操作。', 'destructive', () => {
-                  setConfirmState(s => ({ ...s, open: false }))
-                  cancelMutate.mutate(order.id)
-                })}>
-                取消
-              </Button>
-            )}
-            {order.status === 1 && canEdit && (
-              <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>
-                编辑
-              </Button>
-            )}
             {canWithdrawConfirm && (
               <Button variant="outline" disabled={isPending}
                 onClick={() => ask('撤回确认', '撤回后采购单将恢复为草稿状态，可重新编辑后再次提交。', 'default', () => {
@@ -611,24 +617,22 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                 撤回确认
               </Button>
             )}
-            {/* 待审批单：审批通过/驳回（审计 4.7） */}
-            {order.status === 5 && canApprove && (
-              <>
-                <Button variant="outline" disabled={isPending}
-                  onClick={() => ask('审批通过', '通过后该采购单可创建收货订单。', 'default', () => {
-                    setConfirmState(s => ({ ...s, open: false }))
-                    approveMutate.mutate(order.id)
-                  }, '通过')}>
-                  审批通过
-                </Button>
-                <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
-                  onClick={() => setRejectOpen(true)}>
-                  驳回
-                </Button>
-              </>
+            {order.status === 1 && canEdit && (
+              <Button variant={canConfirm ? 'outline' : 'default'} disabled={isPending} onClick={() => setEditing(true)}>
+                编辑
+              </Button>
+            )}
+            {showApproval && (
+              <Button disabled={isPending}
+                onClick={() => ask('审批通过', '通过后该采购单可创建收货订单。', 'default', () => {
+                  setConfirmState(s => ({ ...s, open: false }))
+                  approveMutate.mutate(order.id)
+                }, '通过')}>
+                审批通过
+              </Button>
             )}
             {canConfirm && (
-              <Button variant="outline" disabled={isPending}
+              <Button disabled={isPending}
                 onClick={() => ask('提交采购单', '提交后采购单将进入待收货阶段，后续由收货入库单承接到货。', 'default', () => {
                   setConfirmState(s => ({ ...s, open: false }))
                   confirmMutate.mutate(order.id)
@@ -636,7 +640,6 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
                 提交
               </Button>
             )}
-
           </>
         }
       />
@@ -748,9 +751,9 @@ function DetailView({ purchaseId, closeTab, tabPath }: { purchaseId: number; clo
 
       {/* 审批驳回弹窗（审计 4.7） */}
       <Dialog open={rejectOpen} onOpenChange={(v) => !v && setRejectOpen(false)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader description={"填写驳回原因，供采购人员调整。"}><DialogTitle>驳回采购单 {order.orderNo}</DialogTitle></DialogHeader>
-          <div className="space-y-2">
+        <DialogContent className="fc-form-dialog sm:max-w-md">
+          <DialogHeader><DialogTitle>驳回采购单 {order.orderNo}</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-2">
             <Label>驳回原因 *</Label>
             <Input
               value={rejectReason}

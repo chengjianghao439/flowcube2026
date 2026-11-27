@@ -10,9 +10,10 @@ it('紧凑商品区保留添加动作和明细，移除常驻功能说明', () =
   expect(html).not.toContain('数量、单价按 Enter 前进')
 })
 
-it('未启用紧凑模式的商品区保持既有说明', () => {
+it('标准商品区同样移除常驻快捷键教学提示', () => {
   const html = renderToStaticMarkup(<SaleOrderItemsSection hasItems onAdd={() => {}}><p>既有明细</p></SaleOrderItemsSection>)
-  expect(html).toContain('数量、单价按 Enter 前进')
+  expect(html).toContain('既有明细')
+  expect(html).not.toContain('数量、单价按 Enter 前进')
 })
 
 

@@ -30,6 +30,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { OrderFact, OrderFacts } from '@/components/shared/OrderFacts'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { CustomerFinder, ProductFinder } from '@/components/finder'
@@ -436,12 +437,13 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
       <SectionCard
         title="退货明细"
         compact
+        noPadding
         actions={!boundSource ? (
           <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">+ 添加商品</Button>
         ) : undefined}
       >
         {items.length === 0 ? (
-          <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
             {boundSource ? (
               <>
                 <p className="text-sm text-muted-foreground">{noReturnableSourceItems
@@ -453,7 +455,7 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
           </div>
         ) : (
           <>
-          <div className="overflow-x-auto">
+          <div role="region" tabIndex={0} aria-label="销售退货商品明细" className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
             <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 80, align: 'right' }, { key: 'unitPrice', title: isOrdinaryNet ? '原单价参考 (¥)' : '单价 (¥)', width: 96, align: 'right' }, { key: 'amount', title: isOrdinaryNet ? '净冲减金额' : '金额', width: 112, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="sale-return-entry-items" minWidth={900}>
               <tbody>
                 {items.map(item => (
@@ -525,12 +527,9 @@ function FormView({ tabPath, tabKey }: { tabPath: string; tabKey: string }) {
               </tbody>
             </ResizableTable>
           </div>
-          <div className="desktop-entry-summary flex items-center justify-between border-t border-border pt-4">
-            <p className="text-muted-body">退货明细：{items.length} 行</p>
-            <div className="text-right">
-              <p className="text-helper">{isOrdinaryNet ? '净冲减金额' : '合计金额'}</p>
-              <p className="text-2xl font-semibold text-foreground">{isKit ? '本次以保存后估算为准' : isOrdinaryNet ? '提交后核定' : money(total)}</p>
-            </div>
+          <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+            <span className="mr-auto tabular-nums">退货明细：{items.length} 行</span>
+            <strong className="tabular-nums"><span className="mr-2 font-normal">{isOrdinaryNet ? '净冲减金额' : '合计金额'}</span>{isKit ? '本次以保存后估算为准' : isOrdinaryNet ? '提交后核定' : money(total)}</strong>
           </div>
           </>
         )}
@@ -758,9 +757,11 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         rightActions={
           <>
             {(ret.status === 1 || ret.status === 2) && (
-              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending || facts.blocked} onClick={() => setCancelOpen(true)}>
-                <X className="h-4 w-4 mr-1" />取消
-              </Button>
+              <div role="group" aria-label="退货撤销操作" className="flex items-center gap-2 border-r border-border pr-2">
+                <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending || facts.blocked} onClick={() => setCancelOpen(true)}>
+                  <X className="h-4 w-4 mr-1" />取消
+                </Button>
+              </div>
             )}
             {ret.status === 1 && (
               <Button disabled={pending || facts.blocked} onClick={() => setConfirmOpen(true)}>确认（派发到 PDA）</Button>
@@ -781,30 +782,19 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
 
       <OrderDetailSections type="sale-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
       {ret.reverseTask && <ReverseTaskCard reverse={ret.reverseTask} />}
-      <SectionCard title="基础信息" compact>
-        <dl className="desktop-document-facts grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
-          {[
-            ['客户', ret.customerName],
-            ['仓库', ret.warehouseName],
-            ['关联销售单', ret.saleOrderNo || '—'],
-            ['经办人', ret.operatorName],
-            ['创建时间', formatDisplayDateTime(ret.createdAt)],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <dt className="mb-0.5 text-helper">{label}</dt>
-              <dd className="font-medium">{value}</dd>
-            </div>
-          ))}
-          {ret.remark && (
-            <div className="desktop-field-wide col-span-3">
-              <dt className="mb-0.5 text-helper">备注</dt>
-              <dd>{ret.remark}</dd>
-            </div>
-          )}
-        </dl>
+      <SectionCard title="基础信息" compact contentClassName="p-3">
+        <OrderFacts>
+          <OrderFact label="客户">{ret.customerName}</OrderFact>
+          <OrderFact label="仓库">{ret.warehouseName}</OrderFact>
+          <OrderFact label="关联销售单">{ret.saleOrderNo || '—'}</OrderFact>
+          <OrderFact label="经办人">{ret.operatorName}</OrderFact>
+          <OrderFact label="创建时间">{formatDisplayDateTime(ret.createdAt)}</OrderFact>
+          {ret.remark && <OrderFact label="备注" className="sm:col-span-2">{ret.remark}</OrderFact>}
+        </OrderFacts>
       </SectionCard>
 
-      <SectionCard title="退货明细" compact>
+      <SectionCard title="退货明细" compact noPadding
+        contentClassName="[&>.desktop-table]:!rounded-none [&>.desktop-table]:!border-0 [&>.desktop-table]:!shadow-none">
         <DataTable
           columns={[
             ...productIdentityColumns({ compact: true }),
@@ -822,16 +812,14 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
           ] satisfies TableColumn<ReturnItem>[]}
           data={ret.items ?? []}
           rowKey="id"
+          scrollLabel="销售退货商品明细"
           emptyText="暂无退货明细"
         />
-        <div className="desktop-entry-summary mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-muted-body">共 {ret.items?.length ?? 0} 行退货明细</p>
-          <div className="text-right">
-            <p className="text-helper">{isKit ? (ret.status === 3 ? '本单实际净冲减' : ret.status === 4 ? '原估算（已取消，不作为冲减）' : '本单预计最多冲减') : isOrdinaryNet ? netLabel : '合计金额'}</p>
-            <p className="text-2xl font-semibold text-foreground">{isKit || isOrdinaryNet ? `¥${returnNet(ret.totalAmount, ret)}` : money(Number(ret.totalAmount))}</p>
-          </div>
+        <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+          <span className="mr-auto tabular-nums">共 {ret.items?.length ?? 0} 行退货明细</span>
+          <strong className="tabular-nums"><span className="mr-2 font-normal">{isKit ? (ret.status === 3 ? '本单实际净冲减' : ret.status === 4 ? '原估算（已取消，不作为冲减）' : '本单预计最多冲减') : isOrdinaryNet ? netLabel : '合计金额'}</span>{isKit || isOrdinaryNet ? `¥${returnNet(ret.totalAmount, ret)}` : money(Number(ret.totalAmount))}</strong>
+          {isKit && <p className="w-full text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为系统按实际合格入仓结果确定的净冲减，金额以分计；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由系统确定。'} 原分摊毛预算、实际净冲减与会计凭证金额按各自业务依据核定；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
         </div>
-        {isKit && <p className="mt-3 text-xs text-muted-foreground">{ret.status === 3 ? '本单已完成，金额为系统按实际合格入仓结果确定的净冲减，金额以分计；来源累计金额不是本单金额。' : '保存后为预计最多冲减；已确认、待收货或质检未完成均不代表已退款，合格入仓完成后由系统确定。'} 原分摊毛预算、实际净冲减与会计凭证金额按各自业务依据核定；净冲减为零仍可能有退库成本。资金退款需走原退款出款流程。</p>}
       </SectionCard>
 
       </OrderDetailSections>

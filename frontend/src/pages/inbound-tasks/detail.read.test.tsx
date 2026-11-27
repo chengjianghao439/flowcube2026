@@ -22,7 +22,7 @@ async function setup() {
  const draw = () => act(async () => root.render(<MemoryRouter><TabPathContext.Provider value="/inbound-tasks/21"><Page /></TabPathContext.Provider></MemoryRouter>))
  cleanup = async () => { await act(async () => root.unmount()); host.remove() }; await draw(); return { host, draw }
 }
-test.each([[403, '无权查看'], [404, '不存在或已删除'], [503, '读取失败']])('详情%s结束加载并提供重试/返回；恢复可读', async (status, title) => {
+test.each([[403, '无权查看'], [404, '不存在或已删除'], [503, '读取失败']])('详情%s结束加载并提供重试；恢复可读', async (status, title) => {
  fixture.error = { status, response: { data: { message: '受控错误' } } }; const ui = await setup()
  expect(ui.host.textContent).toContain(title); expect(ui.host.textContent).not.toContain('加载中')
  expect([...ui.host.querySelectorAll('button')].some(button => button.textContent === '重试')).toBe(true)

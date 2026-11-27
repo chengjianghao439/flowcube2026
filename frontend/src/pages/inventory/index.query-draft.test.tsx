@@ -236,3 +236,31 @@ test('库存流水单边日期在列表可见，清除只改变日期而保留�
   expect(latestLogs()?.get('warehouseId')).toBe('8')
   expect(host.textContent).toContain('未限日期')
 })
+
+test.each([
+  { label: '日期（起）', invalid: '2026-10-18', corrected: '2026-10-3', start: '2026-10-03', end: '2026-10-14' },
+  { label: '日期（止）', invalid: '2026-09-30', corrected: '2026-10-9', start: '2026-10-01', end: '2026-10-09' },
+])('库存流水在 $label 输入框直接回车：倒置不发请求，修正后即按最新日期查询', async ({ label, invalid, corrected, start, end }) => {
+  const logs = () => requests.filter(url => url.pathname === '/api/inventory/logs')
+  await draw(0, '?tab=logs&logType=2&logWarehouseId=8&logStartDate=2026-10-01&logEndDate=2026-10-14')
+  await wait(() => expect(logs()).toHaveLength(1))
+  await click('查询')
+  const input = dialog().querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!
+  async function enterDate(value: string) {
+    await act(async () => input.focus())
+    await type(input, value)
+    await act(async () => { input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })) })
+  }
+  const original = path()
+  await enterDate(invalid)
+  expect(logs()).toHaveLength(1)
+  expect(path()).toBe(original)
+  expect(input.getAttribute('aria-invalid')).toBe('true')
+  expect(dialog().querySelector('[role="alert"]')?.textContent).toContain('起始日期不能晚于结束日期')
+  expect(button('查询', dialog()).disabled).toBe(true)
+  await enterDate(corrected)
+  await wait(() => expect(logs()).toHaveLength(2))
+  expect(Object.fromEntries(logs()[1].searchParams)).toMatchObject({ type: '2', warehouseId: '8', startDate: start, endDate: end })
+  expect(params()).toMatchObject({ logType: '2', logWarehouseId: '8', logStartDate: start, logEndDate: end })
+  expect(document.querySelector('.fc-app-dialog-header')).toBeNull()
+})

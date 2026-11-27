@@ -38,6 +38,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { OrderFact, OrderFacts } from '@/components/shared/OrderFacts'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { SupplierFinder, ProductFinder } from '@/components/finder'
@@ -438,12 +439,13 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
       <SectionCard
         title="退货明细"
         compact
+        noPadding
         actions={!boundSource && !handling ? (
           <Button type="button" size="sm" variant="outline" onClick={addItem} className="gap-1.5">+ 添加商品</Button>
         ) : undefined}
       >
         {items.length === 0 ? (
-          <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
             {boundSource ? (
               <>
                 <p className="text-sm text-muted-foreground">{noReturnableSourceItems ? '原采购单暂无剩余可退数量。' : '请先选择本次退货的原采购行。'}</p>
@@ -453,7 +455,7 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
           </div>
         ) : (
           <>
-          <div className="overflow-x-auto">
+          <div role="region" tabIndex={0} aria-label="采购退货商品明细" className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
             <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 80, align: 'right' }, { key: 'unitPrice', title: '单价 (¥)', width: 96, align: 'right' }, { key: 'amount', title: '金额', width: 112, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="purchase-return-entry-items" minWidth={900}>
               <tbody>
                 {items.map((item, index) => (
@@ -523,12 +525,9 @@ function FormView({ tabPath, tabKey, handling }: { tabPath: string; tabKey: stri
               </tbody>
             </ResizableTable>
           </div>
-          <div className="desktop-entry-summary flex items-center justify-between border-t border-border pt-4">
-            <p className="text-muted-body">商品明细：{items.length} 行</p>
-            <div className="text-right">
-              <p className="text-helper">合计金额</p>
-              <p className="text-2xl font-semibold text-foreground">{money(total)}</p>
-            </div>
+          <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+            <span className="mr-auto tabular-nums">商品明细：{items.length} 行</span>
+            <strong className="tabular-nums"><span className="mr-2 font-normal">合计金额</span>{money(total)}</strong>
           </div>
           </>
         )}
@@ -676,18 +675,15 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
         subtitle={<StatusBadge type="returns" status={ret.status} />}
         rightActions={
           <>
-            {ret.status === 1 && (
-              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending} onClick={() => setCancelOpen(true)}>
-                <X className="h-4 w-4 mr-1" />取消
-              </Button>
+            {(ret.status === 1 || ret.status === 2) && (
+              <div role="group" aria-label="退货撤销操作" className="flex items-center gap-2 border-r border-border pr-2">
+                <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending} onClick={() => setCancelOpen(true)}>
+                  <X className="h-4 w-4 mr-1" />取消
+                </Button>
+              </div>
             )}
             {ret.status === 1 && (
               <Button disabled={pending} onClick={() => setConfirmOpen(true)}>确认（派发到 PDA）</Button>
-            )}
-            {ret.status === 2 && (
-              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={pending} onClick={() => setCancelOpen(true)}>
-                <X className="h-4 w-4 mr-1" />取消
-              </Button>
             )}
           </>
         }
@@ -699,32 +695,23 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
       </section>}
       <section className="space-y-2"><p>供应商退款与实物退货分别办理。原账款已付形成负余额时，从本采购退货草稿核对准确原付款分配，先登记真实回款，再继续实物退货。</p>{ret.status===1 && ret.purchaseOrderId && <SupplierRefundSourceButton purchaseReturnId={ret.id} disabled={detailQuery.isFetching||detailQuery.isError||detailQuery.isPaused}/>}</section>
       <OrderDetailSections type="purchase-return" id={ret.id} progress={ret.task ? <TaskProgressCard task={ret.task} /> : undefined}>
-      <SectionCard title="基础信息" compact>
-        <dl className="desktop-document-facts grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
-          {([
-            ['供应商', ret.supplierName],
-            ['仓库', ret.warehouseName],
-            ['关联采购单', ret.purchaseOrderId && ret.purchaseOrderNo
+      <SectionCard title="基础信息" compact contentClassName="p-3">
+        <OrderFacts>
+          <OrderFact label="供应商">{ret.supplierName}</OrderFact>
+          <OrderFact label="仓库">{ret.warehouseName}</OrderFact>
+          <OrderFact label="关联采购单">
+            {ret.purchaseOrderId && ret.purchaseOrderNo
               ? <ReturnToSourceOrder kind="purchase" sourceId={ret.purchaseOrderId} sourceNo={ret.purchaseOrderNo} showNumber />
-              : ret.purchaseOrderNo || '—'],
-            ['经办人', ret.operatorName],
-            ['创建时间', formatDisplayDateTime(ret.createdAt)],
-          ] as const).map(([label, value]) => (
-            <div key={label}>
-              <dt className="mb-0.5 text-helper">{label}</dt>
-              <dd className="font-medium">{value}</dd>
-            </div>
-          ))}
-          {ret.remark && (
-            <div className="desktop-field-wide col-span-3">
-              <dt className="mb-0.5 text-helper">备注</dt>
-              <dd>{ret.remark}</dd>
-            </div>
-          )}
-        </dl>
+              : ret.purchaseOrderNo || '—'}
+          </OrderFact>
+          <OrderFact label="经办人">{ret.operatorName}</OrderFact>
+          <OrderFact label="创建时间">{formatDisplayDateTime(ret.createdAt)}</OrderFact>
+          {ret.remark && <OrderFact label="备注" className="sm:col-span-2">{ret.remark}</OrderFact>}
+        </OrderFacts>
       </SectionCard>
 
-      <SectionCard title="退货明细" compact>
+      <SectionCard title="退货明细" compact noPadding
+        contentClassName="[&>.desktop-table]:!rounded-none [&>.desktop-table]:!border-0 [&>.desktop-table]:!shadow-none">
         <DataTable
           columns={[
             ...productIdentityColumns({ compact: true }),
@@ -739,14 +726,12 @@ function DetailView({ returnId }: { returnId: number; closeTab: () => void; tabP
           ] satisfies TableColumn<ReturnItem>[]}
           data={ret.items ?? []}
           rowKey="id"
+          scrollLabel="采购退货商品明细"
           emptyText="暂无退货明细"
         />
-        <div className="desktop-entry-summary mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-muted-body">共 {ret.items?.length ?? 0} 行退货明细</p>
-          <div className="text-right">
-            <p className="text-helper">合计金额</p>
-            <p className="text-2xl font-semibold text-foreground">{money(Number(ret.totalAmount))}</p>
-          </div>
+        <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+          <span className="mr-auto tabular-nums">共 {ret.items?.length ?? 0} 行退货明细</span>
+          <strong className="tabular-nums"><span className="mr-2 font-normal">合计金额</span>{money(Number(ret.totalAmount))}</strong>
         </div>
       </SectionCard>
 

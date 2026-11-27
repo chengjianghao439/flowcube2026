@@ -12,7 +12,7 @@ import { PERMISSIONS as P } from '@/lib/permission-codes'
 import { qty } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { createRequestKey } from '@/lib/requestKey'
 import type { HandlingSource, HandlingLink } from '@/types/disposal-handling'
@@ -35,7 +35,13 @@ function ReleaseDialog({ source, link, open, available, onClose }: { source: Han
     const result = await write.submit({ kind: 'release', draftIdentity: identity, sourceId: source.id, linkId: link.linkId, intentUuid: source.intentUuid, operationUuid, requestKey, action: `disposal.handling.link.release.${link.linkId}`, path: `/disposals/handling-sources/${source.id}/links/${link.linkId}/release`, body })
     if (result && write.canApply(result)) onClose()
   }
-  return <Dialog open={open && active && handlingOwnerCurrent(owner) && mayHandle(P.INVENTORY_DISPOSAL_VIEW)} onOpenChange={v => { if (!v && own()) onClose() }}><DialogContent><DialogHeader description={<>{<>只解除已终结目标的未执行量。服务器核对全历史出库和实物归还，不会取消目标或修改库存。</>}</>}><DialogTitle>核对并解除</DialogTitle></DialogHeader><label>核对说明<Input aria-label="解除说明" maxLength={500} value={reason} disabled={!current() || write.blocked} onChange={e => { if (current() && !write.blocked) setReason(e.target.value) }} /></label><HandlingOperationPanel write={write} /><Button disabled={!current() || write.blocked || !reason.trim() || link.state !== 'ACTIVE'} onClick={() => void release()}>确认核对解除</Button><Button variant="outline" onClick={() => { if (own()) onClose() }}>关闭并保留说明</Button></DialogContent></Dialog>
+  return <Dialog open={open && active && handlingOwnerCurrent(owner) && mayHandle(P.INVENTORY_DISPOSAL_VIEW)} onOpenChange={v => { if (!v && own()) onClose() }}><DialogContent className="fc-form-dialog"><DialogHeader description={<>{<>只解除已终结目标的未执行量。服务器核对全历史出库和实物归还，不会取消目标或修改库存。</>}</>}><DialogTitle>核对并解除</DialogTitle></DialogHeader><div className="fc-form-dialog-body space-y-4">
+    <label>核对说明<Input aria-label="解除说明" maxLength={500} value={reason} disabled={!current() || write.blocked} onChange={e => { if (current() && !write.blocked) setReason(e.target.value) }} /></label><HandlingOperationPanel write={write} />
+  </div>
+    <DialogFooter>
+    <Button variant="outline" onClick={() => { if (own()) onClose() }}>关闭并保留说明</Button>
+    <Button disabled={!current() || write.blocked || !reason.trim() || link.state !== 'ACTIVE'} onClick={() => void release()}>确认核对解除</Button>
+  </DialogFooter></DialogContent></Dialog>
 }
 export function HandlingSourcesPanel() {
   useSyncExternalStore(subscribeHandling, handlingRevision)

@@ -18,7 +18,7 @@ import { PERMISSIONS } from '@/lib/permission-codes'
 import { useCriticalOperationRecovery, isRecoveryEndpointCurrent, recoveryRequestConfig } from '@/hooks/useCriticalOperationRecovery'
 import { ownsRecovery, ownsStoredRecovery, type RepackBody, type RepackRecoveryRecord } from '@/lib/criticalOperationRecovery'
 import { useAuthStore } from '@/store/authStore'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { Button } from '@/components/ui/button'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import type { TableColumn } from '@/types'
@@ -38,7 +38,7 @@ import {
 
 export default function PlasticBoxesPage() {
   const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const page = 1
   const [detailTarget, setDetailTarget] = useState<PlasticBox | null>(null)
   const detailSelectionGeneration = useRef(0)
@@ -145,7 +145,7 @@ export default function PlasticBoxesPage() {
       <BaseCrudPage<PlasticBox>
         title="塑料盒管理"
       description="核对塑料盒条码、商品与占用状态。"
-        notice="管理塑料盒（B 条码），每个塑料盒固定存放一个商品，用于零散出货"
+        notice="管理塑料盒（B 条码），每个塑料盒固定存放一个商品，用于零散出货。"
         canCreate={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
       canEdit={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
       canDelete={can(PERMISSIONS.INVENTORY_CONTAINER_SPLIT)}
@@ -156,26 +156,21 @@ export default function PlasticBoxesPage() {
         deleteApi={(id) => deletePlasticBoxApi(id, { skipGlobalError: true })}
         deleteMessage="确认删除该塑料盒？"
         createLabel="新建塑料盒"
-        headerActions={
-          <Button variant="outline" onClick={() => downloadExport('/export/plastic-boxes').catch(e => toast.error((e as Error).message))}>导出</Button>
-        }
+        headerActions={<>
+          <Button variant="outline" onClick={() => downloadExport('/export/plastic-boxes').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+        </>}
         saveSuccessMessage={() => '塑料盒已创建'}
         formWidthClass="max-w-md"
         onOpen={() => { setProduct(null); setWarehouse(null); setProductFinderOpen(false) }}
         canSubmit={() => !!product && !!warehouse}
         renderToolbar={
-          <FilterCard>
-            <Input
-              aria-label="搜索塑料盒条码或商品"
-              placeholder="搜索条码 / 商品…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="h-9 w-56"
-              onKeyDown={e => { if (e.key === 'Enter') { setKeyword(search) } }}
-            />
-            <Button size="sm" variant="outline" onClick={() => { setKeyword(search) }}>搜索</Button>
-            {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>重置</Button>}
-          </FilterCard>
+          <>
+            <KeywordQueryChips keyword={keyword} onClear={() => setKeyword('')} />
+            <KeywordQueryDialog open={queryOpen} dialogId="plastic-boxes-query" title="查询塑料盒"
+              label="塑料盒条码或商品" placeholder="搜索条码 / 商品…" initial={keyword}
+              onClose={() => setQueryOpen(false)} onApply={setKeyword} />
+          </>
         }
         renderActions={(row, helpers) => (
           <TableActionsMenu
@@ -276,11 +271,11 @@ function DetailDialog({
 
   return (
     <Dialog open={!!box} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="fc-order-activity max-w-5xl">
-        <DialogHeader description={"核对塑料盒当前余量、来源与流水。"}>
+      <DialogContent className="fc-form-dialog fc-order-activity max-w-5xl">
+        <DialogHeader>
           <DialogTitle>塑料盒详情 · {box?.barcode}</DialogTitle>
         </DialogHeader>
-        <div className="fc-order-activity-body min-h-0 min-w-0 space-y-4 overflow-y-auto pt-4">
+        <div className="fc-form-dialog-body fc-order-activity-body min-h-0 min-w-0 space-y-4 overflow-y-auto pt-4">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm text-muted-foreground">
               {box?.productName ? `绑定商品：${box.productName} (${box.productCode})` : '未绑定商品'}
@@ -421,9 +416,9 @@ function RepackDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="fc-form-dialog max-w-md">
         <DialogHeader description={<>盒内余量 {remaining}，将按填写数量生成独立整件码，余量留在盒内。</>}><DialogTitle>还原整件 · {box.barcode}</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+        <div className="fc-form-dialog-body space-y-3">
           {recoveryNotice}
 
           <div className="flex gap-2">

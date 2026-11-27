@@ -148,7 +148,7 @@ export default function RacksPage() {
       <BaseCrudPage<Rack>
         title="货架管理"
       description="维护货架位置、条码与标签。"
-        notice={localPrintEnv === 'ok' ? '货架唯一条码（H）与标签打印' : localPrintEnv === 'browser' ? '浏览器可提交打印任务。如需使用本机标签打印机，请打开极序 Flow 桌面客户端。' : '本机打印暂不可用。请退出后重新打开极序 Flow；若仍无法打印，请联系管理员。'}
+        notice={localPrintEnv === 'ok' ? '货架唯一条码（H）与标签打印。' : localPrintEnv === 'browser' ? '浏览器可提交打印任务。如需使用本机标签打印机，请打开极序 Flow 桌面客户端。' : '本机打印暂不可用。请退出后重新打开极序 Flow；若仍无法打印，请联系管理员。'}
         canCreate={can(PERMISSIONS.RACK_CREATE)}
       canEdit={can(PERMISSIONS.RACK_UPDATE)}
       canDelete={can(PERMISSIONS.RACK_DELETE)}
@@ -173,7 +173,7 @@ export default function RacksPage() {
         canSubmit={(editing) => !!form.code && (!!editing || !!form.warehouseId)}
         headerActions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/racks').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/racks').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
@@ -182,7 +182,7 @@ export default function RacksPage() {
             {chips.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 {chips.map(c => (
-                  <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                  <span key={c.key} className="fc-query-chip">
                     {c.label}
                     <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                       <X className="h-3 w-3" />

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
+import { QueryChips } from '@/components/shared/QueryChips'
+import BackfillQueryDialog from './BackfillQueryDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
@@ -48,6 +50,8 @@ import {
  *
  * 可见范围由后端决定（持审批权限看全部，否则只看自己提交的），本页不再二次过滤。
  */
+const STATUS_FILTERS = [{ value: '', label: '全部补录申请' }, ...BACKFILL_STATUS_OPTIONS.map(({ value, label }) => ({ value: String(value), label }))]
+
 type BackfillTarget = BackfillApplication & { refundContext?: SupplierRefundBackfillContext }
 
 /** 状态 → 展示。已批准要分「还没记账成功」与「已记账」两种，否则审批人看不出卡在哪 */
@@ -307,9 +311,9 @@ function RemarkDialog({
   const invalid = required && text.trim().length < 2
   return (
     <Dialog open={open && visible} onOpenChange={v => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="fc-form-dialog sm:max-w-xl">
         <DialogHeader description={<>{description}</>}><DialogTitle>{title}</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-1">
+        <div className="fc-form-dialog-body space-y-3">
 
           <div className="space-y-1.5">
             <Label>{label}{required ? ' *' : '（选填）'}</Label>
@@ -367,6 +371,7 @@ export default function BackfillsPage() {
 
   const [status, setStatus] = useState<number | ''>('')
   const [bizType, setBizType] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const query = useMemo(() => ({ status, bizType }), [status, bizType])
   const { data, isLoading, isFetching, isError, error, refetch } = useAllBackfills(query, captureRefundRead, active)
   const list = (data?.list ?? []).filter(row => row.bizType !== 'supplier_refund' || !!row.refundContext?.current())
@@ -460,36 +465,32 @@ export default function BackfillsPage() {
         ? <span className="font-mono">{r.postingPeriod}</span>
         : <span className="text-muted-foreground">—</span>
     ) },
-    { key: 'actions', title: '操作', width: 230, render: (_v, r) => (
-      <div className="flex flex-wrap items-center gap-1">
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setDetailRow(freezeTarget(r))}>详情</Button>
-        {/* 待审批：审批人看到批准/驳回。没有审批权限的人只能看见自己提交的单子
-            （后端按权限限定可见范围），所以「非审批人 + 待审批」必然是自己的单——撤回。 */}
-        {r.status === 0 && canApprove && (
-          <>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-success-ink" onClick={() => setApproveTarget(freezeTarget(r))}>批准</Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive-ink" onClick={() => setRejectTarget(freezeTarget(r))}>驳回</Button>
-          </>
-        )}
-        {r.status === 0 && !canApprove && (
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive-ink" onClick={() => setCancelTarget(freezeTarget(r))}>撤回</Button>
-        )}
-        {/* 已批准但业务没写进去：可重试，或作废后重新申请 */}
-        {r.pendingExecution && canApprove && (
-          <>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setExecuteTarget(freezeTarget(r))}>重试记账</Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive-ink" onClick={() => setCancelTarget(freezeTarget(r))}>作废</Button>
-          </>
-        )}
-        {r.voucherPending && canApprove && (
-          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-warning-ink" onClick={() => setRegenTarget(freezeTarget(r))}>重试生成凭证</Button>
-        )}
-      </div>
-    ) },
+    { key: 'actions', title: '操作', width: 144, render: (_v, r) => {
+      const items: TableActionItem[] = []
+      if (r.status === 0 && canApprove) {
+        items.push(
+          { label: '批准', afterMenuClose: true, onClick: () => setApproveTarget(freezeTarget(r)) },
+          { label: '驳回', destructive: true, afterMenuClose: true, onClick: () => setRejectTarget(freezeTarget(r)) },
+        )
+      }
+      if (r.status === 0 && !canApprove) {
+        items.push({ label: '撤回', destructive: true, afterMenuClose: true, onClick: () => setCancelTarget(freezeTarget(r)) })
+      }
+      if (r.pendingExecution && canApprove) {
+        items.push(
+          { label: '重试记账', afterMenuClose: true, onClick: () => setExecuteTarget(freezeTarget(r)) },
+          { label: '作废', destructive: true, afterMenuClose: true, onClick: () => setCancelTarget(freezeTarget(r)) },
+        )
+      }
+      if (r.voucherPending && canApprove) {
+        items.push({ label: '重试生成凭证', afterMenuClose: true, onClick: () => setRegenTarget(freezeTarget(r)) })
+      }
+      return <TableActionsMenu primaryVariant="outline" primaryLabel="详情" onPrimaryClick={() => setDetailRow(freezeTarget(r))} items={items} />
+    } },
   ]
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="跨期补录审批"
         description={<>
@@ -497,13 +498,12 @@ export default function BackfillsPage() {
           {[approveTarget,rejectTarget,cancelTarget,executeTarget,regenTarget,detailRow].some(t=>t?.bizType==='supplier_refund'&&!targetCurrent(t)) && <span role="alert">原供应商退款上下文已变化，原输入保留，动作暂停。 </span>}
           {refundWriteError && refundPageCurrent() && <span role="alert">{refundWriteError} </span>}
           {!isError && !isLoading && data?.truncated && <span role="status">已加载 {list.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条，请缩小查询范围。 </span>}
-          已结账期间被拦下的付款/核销/退款在这里申请与审批：申请只留单不动账，批准后才真正记账，调整凭证落在补录当期
+          已结账期间被拦下的付款/核销/退款在这里申请与审批：申请只留单不动账，批准后才真正记账，调整凭证落在补录当期。
         </>}
-        actions={
-          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
-            <RefreshCw className={`mr-1.5 h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />刷新
-          </Button>
-        }
+        actions={<>
+          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>刷新</Button>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+        </>}
       />
 
 
@@ -515,84 +515,86 @@ export default function BackfillsPage() {
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Select value={status === '' ? 'all' : String(status)} onValueChange={v => setStatus(v === 'all' ? '' : Number(v))}>
-          <SelectTrigger className="h-9 w-36"><SelectValue placeholder="状态" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部状态</SelectItem>
-            {BACKFILL_STATUS_OPTIONS.map(o => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={bizType || 'all'} onValueChange={v => setBizType(v === 'all' ? '' : v)}>
-          <SelectTrigger className="h-9 w-40"><SelectValue placeholder="业务类型" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">全部业务</SelectItem>
-            {BACKFILL_BIZ_TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip"><OrderStatusFilter label="补录状态分类" value={String(status)} options={STATUS_FILTERS}
+          onChange={value => setStatus(value === '' ? '' : Number(value))} /></div>
+        <div className="fc-filter-bar-filters">
+          <QueryChips chips={bizType ? [{
+            key: 'bizType', text: `业务类型：${BACKFILL_BIZ_TYPE_OPTIONS.find(option => option.value === bizType)?.label ?? bizType}`,
+            onClear: () => setBizType(''),
+          }] : []} onClearAll={() => { setBizType(''); setStatus('') }} />
+        </div>
       </div>
 
+      {queryOpen && <BackfillQueryDialog open={active} initial={query} onClose={() => setQueryOpen(false)}
+        onApply={value => { setStatus(value.status); setBizType(value.bizType); setQueryOpen(false) }} />}
+
       {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : (
-        <DataTable virtualized preserveFocus retainFocusedRow={!!(detailRow || approveTarget || rejectTarget || cancelTarget || executeTarget || regenTarget)} columns={columns} data={list} loading={isLoading} emptyText="暂无补录申请" columnStorageKey="acct-backfills" />
+        <DataTable fluid virtualized scrollLabel="跨期补录审批表格" preserveFocus retainFocusedRow={!!(detailRow || approveTarget || rejectTarget || cancelTarget || executeTarget || regenTarget)} columns={columns} data={list} loading={isLoading} emptyText="暂无补录申请" columnStorageKey="acct-backfills" />
       )}
 
       {!isError && !isLoading && data && !data.truncated && <ListSummary total={total} />}
 
       {/* ── 详情：审批人要据此核对原单号、金额、原因，以及原请求快照里钱怎么走 ── */}
       <Dialog open={targetOpen(detailRow)} onOpenChange={v => { if (!v) clearTarget('detail', detailRow, setDetailRow) }}>
-        <DialogContent className="sm:max-w-2xl">
-          <DialogHeader description={"核对补录来源、审批状态与处理结果。"}>
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
+          <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               补录申请 {targetNo(detailRow)}
               {detailRow && targetCurrent(detailRow) && <SoftStatusLabel label={statusOf(detailRow).label} tone={statusOf(detailRow).tone} />}
             </DialogTitle>
           </DialogHeader>
-          {detailLoading && !detail && (
-            <div className="py-6 text-center text-sm text-muted-foreground">加载详情…</div>
-          )}
-          {detail && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <Field label="业务类型" value={detail.bizTypeName} />
-                <Field label="业务单号" value={detail.bizNo || '—'} mono />
-                <Field label="补录金额" value={backfillMoney(detail)} />
-                <Field label="业务期间" value={`${detail.period}（业务日期 ${formatDisplayDate(detail.businessDate)}）`} />
-                <Field label="申请人" value={`${detail.applicantName || '—'}（${formatDisplayDateTime(detail.createdAt)}）`} />
-                <Field label="凭证落期" value={detail.postingPeriod || '—'} mono />
-                <div className="col-span-2"><Field label="申请原因" value={detail.reason} /></div>
-                <Field label="审批人" value={detail.approverName ? `${detail.approverName}（${formatDisplayDateTime(detail.approvedAt)}）` : '—'} />
-                <Field label="执行时间" value={detail.executedAt ? formatDisplayDateTime(detail.executedAt) : '—'} />
-                {detail.approveRemark && <div className="col-span-2"><Field label="审批备注" value={detail.approveRemark} /></div>}
-                {detail.voidReason && <div className="col-span-2"><Field label="作废/撤回原因" value={`${detail.voidReason}${detail.voidedByName ? `（${detail.voidedByName}）` : ''}`} /></div>}
-              </div>
+          <div className="fc-form-dialog-body space-y-4">
+            {detailLoading && !detail && (
+              <div className="py-6 text-center text-sm text-muted-foreground">加载详情…</div>
+            )}
+            {detail && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <Field label="业务类型" value={detail.bizTypeName} />
+                  <Field label="业务单号" value={detail.bizNo || '—'} mono />
+                  <Field label="补录金额" value={backfillMoney(detail)} />
+                  <Field label="业务期间" value={`${detail.period}（业务日期 ${formatDisplayDate(detail.businessDate)}）`} />
+                  <Field label="申请人" value={`${detail.applicantName || '—'}（${formatDisplayDateTime(detail.createdAt)}）`} />
+                  <Field label="凭证落期" value={detail.postingPeriod || '—'} mono />
+                  <div className="col-span-2"><Field label="申请原因" value={detail.reason} /></div>
+                  <Field label="审批人" value={detail.approverName ? `${detail.approverName}（${formatDisplayDateTime(detail.approvedAt)}）` : '—'} />
+                  <Field label="执行时间" value={detail.executedAt ? formatDisplayDateTime(detail.executedAt) : '—'} />
+                  {detail.approveRemark && <div className="col-span-2"><Field label="审批备注" value={detail.approveRemark} /></div>}
+                  {detail.voidReason && <div className="col-span-2"><Field label="作废/撤回原因" value={`${detail.voidReason}${detail.voidedByName ? `（${detail.voidedByName}）` : ''}`} /></div>}
+                </div>
 
-              {/* 批准是按这份快照原样重放一次业务，所以审批人必须先看见钱怎么走 */}
-              <div>
-                <div className="mb-1.5 text-xs font-medium text-muted-foreground">
-                  申请时的原请求（批准即按它记账）
+                {/* 批准是按这份快照原样重放一次业务，所以审批人必须先看见钱怎么走 */}
+                <div>
+                  <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+                    申请时的原请求（批准即按它记账）
+                  </div>
+                  <SnapshotFields raw={detail.requestSnapshot} accountName={accountName} warehouseName={warehouseName} />
                 </div>
-                <SnapshotFields raw={detail.requestSnapshot} accountName={accountName} warehouseName={warehouseName} />
-              </div>
 
-              {detail.voucherPending && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive-ink">
-                  这笔业务已经记账，但调整凭证没生成成功{detail.voucherGenerateError ? `：${detail.voucherGenerateError}` : ''}。
-                  请关闭本窗口后在列表里点「重试生成凭证」——账上还差这一张。
-                </div>
-              )}
-              {detail.voucherNotRequired && (
-                <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
-                  {detail.bizType === 'supplier_refund' ? `${zeroProof}；真实现金回款事实已保留。` : '本类补录（核销）不产生会计凭证：凭证在收付款单登记时就已生成，这里不再重复。'}
-                </div>
-              )}
-              {detail.pendingExecution && (
-                <div className="rounded-md border border-warning/40 bg-warning/5 p-2 text-xs text-warning-ink">
-                  这张单已批准，但业务没能执行成功（常见原因：业务单据已被改动或作废）。
-                  可回列表重试记账；若业务本身已做不了，请作废它再按新情况重新申请。
-                </div>
-              )}
-            </div>
-          )}
+                {detail.voucherPending && (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/5 p-2 text-xs text-destructive-ink">
+                    这笔业务已经记账，但调整凭证没生成成功{detail.voucherGenerateError ? `：${detail.voucherGenerateError}` : ''}。
+                    请关闭本窗口后在列表里点「重试生成凭证」——账上还差这一张。
+                  </div>
+                )}
+                {detail.voucherNotRequired && (
+                  <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
+                    {detail.bizType === 'supplier_refund' ? `${zeroProof}；真实现金回款事实已保留。` : '本类补录（核销）不产生会计凭证：凭证在收付款单登记时就已生成，这里不再重复。'}
+                  </div>
+                )}
+                {detail.pendingExecution && (
+                  <div className="rounded-md border border-warning/40 bg-warning/5 p-2 text-xs text-warning-ink">
+                    这张单已批准，但业务没能执行成功（常见原因：业务单据已被改动或作废）。
+                    可回列表重试记账；若业务本身已做不了，请作废它再按新情况重新申请。
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => clearTarget('detail', detailRow, setDetailRow)}>关闭</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -57,6 +57,19 @@ function actualAdapter(options:{page2?:boolean;history?:boolean;scrap?:boolean;n
  }
 }
 async function click(label:string){const b=[...document.querySelectorAll('button')].find(b=>b.textContent?.trim()===label);expect(b,label).toBeTruthy();await act(async()=>b!.click());await act(async()=>{await new Promise(r=>setTimeout(r,10))})}
+async function openConversion() {
+  const row = [...document.querySelectorAll('tbody tr')].find(node => node.textContent?.includes('DP19'))
+  const trigger = row?.querySelector<HTMLButtonElement>('button[aria-label="更多操作"]')
+  expect(trigger).toBeTruthy()
+  await act(async () => trigger!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
+  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(node => node.textContent === '整单签认')
+  expect(item).toBeTruthy()
+  await act(async () => item!.click())
+  await vi.waitFor(async () => {
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+    expect(document.querySelector('input[aria-label="签认说明"]')).toBeTruthy()
+  })
+}
 async function input(el:HTMLInputElement,value:string){await act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value')!.set!.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}))})}
 async function leaf(Leaf:typeof Page,path:string,run:(host:HTMLElement)=>Promise<void>){const host=document.createElement('div');document.body.append(host);const root=createRoot(host),qc=new QueryClient({defaultOptions:{queries:{retry:false}}});try{await act(async()=>root.render(<MemoryRouter initialEntries={[path]}><QueryClientProvider client={qc}><TabPathContext.Provider value={path}><Leaf/></TabPathContext.Provider></QueryClientProvider></MemoryRouter>));await act(async()=>{await new Promise(r=>setTimeout(r,15))});await run(host)}finally{await act(async()=>root.unmount());qc.clear();host.remove()}}
 test.each(['sourceNo=', 'sourceType=', 'sourceNo=&sourceNo=', 'sourceType=&sourceType='])('registered来源报废保留混用%s并由真实页拒绝', async extra => {
@@ -93,7 +106,7 @@ test('实际意图商品Finder+员工基本量保存完整body，不把库存参
 test('完整mixed旧单签认展示所有历史行与批准；漂移保原preview/fingerprint、不执行报废',async()=>{
  posts.length=0;actualAdapter({history:true,signError:true})
  await page('/disposals',async()=>{
-  await click('整单签认');expect(document.body.textContent).toContain('历史商品1');expect(document.body.textContent).toContain('历史商品2');expect(document.body.textContent).toContain('历史商品3');expect(document.body.textContent).toContain('历史批准人');expect(document.body.textContent).toContain('3.1234')
+  await openConversion();expect(document.body.textContent).toContain('历史商品1');expect(document.body.textContent).toContain('历史商品2');expect(document.body.textContent).toContain('历史商品3');expect(document.body.textContent).toContain('历史批准人');expect(document.body.textContent).toContain('3.1234')
   await input(document.querySelector<HTMLInputElement>('input[aria-label="签认说明"]')!,'全旧行核对');await click('确认整单签认')
   expect(posts).toHaveLength(1);expect(posts[0].path).toBe('/disposals/19/sign-conversion');expect(posts[0].body).toMatchObject({reason:'全旧行核对',snapshotFingerprint:'a'.repeat(64)})
   expect(document.body.textContent).toContain('历史商品3');expect(posts.some(p=>p.path.includes('/dispose'))).toBe(false)
@@ -121,7 +134,7 @@ test.each(['pure-scrap','executed'])('完整预览%s已不符合旧签认资格�
     ? { ...snapshot, head: { ...snapshot.head, status: 4 } }
     : { ...snapshot, items: snapshot.items.map(row => ({ ...row, dispose_type: 3 })) } })
   await page('/disposals', async () => {
-    await click('整单签认')
+    await openConversion()
     await input(document.querySelector<HTMLInputElement>('[aria-label="签认说明"]')!, '已核对原单')
     const confirm = [...document.querySelectorAll('button')].find(b => b.textContent === '确认整单签认')!
     expect(confirm.disabled).toBe(true)

@@ -32,11 +32,12 @@ import {
 } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import DataTable from '@/components/shared/DataTable'
 import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import ListSummary from '@/components/shared/ListSummary'
 import PageHeader from '@/components/shared/PageHeader'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { EditModeBadge } from '@/components/shared/EditModeBadge'
 import { toast } from '@/lib/toast'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -55,13 +56,14 @@ const DEVICE_SCOPE_HELP = '选择仓库后，设备仅限本仓作业。设备�
 export default function PdaDevicesPage() {
   const qc = useQueryClient(), inputId = useId()
   const [keyword, setKeyword] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState<{ deviceName: string; warehouseId: string }>({ deviceName: '', warehouseId: NO_WAREHOUSE })
   const [secretView, setSecretView] = useState<PdaDeviceWithSecret | null>(null)
   const [editing, setEditing] = useState<PdaDevice | null>(null)
   const [resetTarget, setResetTarget] = useState<PdaDevice | null>(null)
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['pda-devices', keyword],
     queryFn: () => listPdaDevicesApi({ page: 1, pageSize: 20, keyword }),
   })
@@ -138,30 +140,30 @@ export default function PdaDevicesPage() {
   ]
 
   return (
-    <div className="space-y-4">
+    <div className="desktop-record-page space-y-4">
       <PageHeader
         title="PDA 设备"
         description="登记设备并指定作业范围。停用设备或重置密钥会让设备立即退出登录。"
-        actions={<Button onClick={() => setCreateOpen(true)}>登记新设备</Button>}
+        actions={<>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          <Button onClick={() => setCreateOpen(true)}>登记新设备</Button>
+        </>}
       />
-      <FilterCard>
-          <Input
-            className="h-9 w-64"
-            aria-label="搜索设备名称或设备码"
-            placeholder="搜索设备名称或设备码"
-            value={keyword}
-            onChange={e => { setKeyword(e.target.value); }}
-          />
-      </FilterCard>
+      <KeywordQueryChips keyword={keyword} onClear={() => setKeyword('')} />
+      <KeywordQueryDialog open={queryOpen} dialogId="pda-devices-query" title="查询 PDA 设备"
+        label="设备名称或设备码" placeholder="搜索设备名称或设备码" initial={keyword}
+        onClose={() => setQueryOpen(false)} onApply={setKeyword} />
       <section className="min-w-0" aria-label="PDA设备列表">
-        <DataTable
+        {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} title="设备列表加载失败" /> : <DataTable
           columns={columns}
           data={data?.list ?? []}
           loading={isLoading}
           rowKey="id"
           fluid
+          virtualized
+          scrollLabel="PDA 设备表格"
           columnStorageKey="pda-devices:v1"
-        />
+        />}
       </section>
 
       {!isError && !isLoading && data && (
@@ -170,14 +172,14 @@ export default function PdaDevicesPage() {
 
       {/* 登记新设备 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{<>
               登记后会生成设备码与密钥，密钥只显示一次，请立刻拿 PDA 扫码绑定。
             </>}</>}>
             <DialogTitle>登记新 PDA 设备</DialogTitle>
 
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="fc-form-dialog-body space-y-3">
             <div>
               <Label htmlFor={`${inputId}-create-deviceName`} className="mb-1 block">设备名称</Label>
               <Input
@@ -217,39 +219,41 @@ export default function PdaDevicesPage() {
 
       {/* 密钥与绑定二维码：仅此一次 */}
       <Dialog open={!!secretView} onOpenChange={open => { if (!open) setSecretView(null) }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{<>
               密钥仅显示一次，关闭后不可再查看；如遗失，需重置密钥后重新绑定。
             </>}</>}>
             <DialogTitle>用 PDA 扫这个码完成绑定</DialogTitle>
 
           </DialogHeader>
-          {secretView && (
-            <div className="space-y-3">
-              <div className="flex justify-center rounded-xl bg-white p-4">
-                <QRCodeSVG value={buildBindingPayload(secretView)} size={200} />
+          <div className="fc-form-dialog-body space-y-4">
+            {secretView && (
+              <div className="space-y-3">
+                <div className="flex justify-center rounded-xl bg-white p-4">
+                  <QRCodeSVG value={buildBindingPayload(secretView)} size={200} />
+                </div>
+                <div className="space-y-1 rounded-xl bg-muted/50 p-3 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">设备名称</span>
+                    <span>{secretView.deviceName}</span>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">设备码</span>
+                    <span className="font-mono">{secretView.deviceCode}</span>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">密钥（扫码失败时可手动输入）</div>
+                    <div className="mt-1 break-all rounded-lg bg-background p-2 font-mono text-xs">{secretView.deviceSecret}</div>
+                  </div>
+                </div>
+                {typeof secretView.revokedSessions === 'number' && secretView.revokedSessions > 0 && (
+                  <p className="text-xs text-destructive-ink">
+                    已退出该设备原有的 {secretView.revokedSessions} 个登录，这台机器需要重新绑定才能继续作业。
+                  </p>
+                )}
               </div>
-              <div className="space-y-1 rounded-xl bg-muted/50 p-3 text-sm">
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">设备名称</span>
-                  <span>{secretView.deviceName}</span>
-                </div>
-                <div className="flex justify-between gap-2">
-                  <span className="text-muted-foreground">设备码</span>
-                  <span className="font-mono">{secretView.deviceCode}</span>
-                </div>
-                <div>
-                  <div className="text-muted-foreground">密钥（扫码失败时可手动输入）</div>
-                  <div className="mt-1 break-all rounded-lg bg-background p-2 font-mono text-xs">{secretView.deviceSecret}</div>
-                </div>
-              </div>
-              {typeof secretView.revokedSessions === 'number' && secretView.revokedSessions > 0 && (
-                <p className="text-xs text-destructive-ink">
-                  已退出该设备原有的 {secretView.revokedSessions} 个登录，这台机器需要重新绑定才能继续作业。
-                </p>
-              )}
-            </div>
-          )}
+            )}
+          </div>
           <DialogFooter>
             <Button onClick={() => setSecretView(null)}>我已完成绑定</Button>
           </DialogFooter>
@@ -258,7 +262,7 @@ export default function PdaDevicesPage() {
 
       {/* 编辑 */}
       <Dialog open={!!editing} onOpenChange={open => { if (!open) setEditing(null) }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{editing && (<>
                 正在编辑：<span className="font-medium text-foreground">{editing.deviceName || editing.deviceCode}</span>
               </>)} {<>{<>改绑仓库会让这台设备退出登录，需要重新登录。</>}</>}</>}>
@@ -269,34 +273,36 @@ export default function PdaDevicesPage() {
 
 
           </DialogHeader>
-          {editing && (
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor={`${inputId}-edit-deviceName`} className="mb-1 block">设备名称</Label>
-                <Input
-                  id={`${inputId}-edit-deviceName`}
-                  value={editing.deviceName ?? ''}
-                  onChange={e => setEditing(d => d && ({ ...d, deviceName: e.target.value }))}
-                />
+          <div className="fc-form-dialog-body space-y-4">
+            {editing && (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor={`${inputId}-edit-deviceName`} className="mb-1 block">设备名称</Label>
+                  <Input
+                    id={`${inputId}-edit-deviceName`}
+                    value={editing.deviceName ?? ''}
+                    onChange={e => setEditing(d => d && ({ ...d, deviceName: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor={`${inputId}-edit-warehouseId`} className="mb-1 block">所属仓库</Label>
+                  <Select
+                    value={editing.warehouseId == null ? NO_WAREHOUSE : String(editing.warehouseId)}
+                    onValueChange={v => setEditing(d => d && ({ ...d, warehouseId: v === NO_WAREHOUSE ? null : Number(v) }))}
+                  >
+                    <SelectTrigger id={`${inputId}-edit-warehouseId`} aria-describedby={`${inputId}-edit-warehouse-help`}><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_WAREHOUSE}>{UNRESTRICTED_DEVICE_LABEL}</SelectItem>
+                      {(warehouses ?? []).map(w => (
+                        <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p id={`${inputId}-edit-warehouse-help`} className="mt-1 text-xs text-muted-foreground">{DEVICE_SCOPE_HELP}</p>
+                </div>
               </div>
-              <div>
-                <Label htmlFor={`${inputId}-edit-warehouseId`} className="mb-1 block">所属仓库</Label>
-                <Select
-                  value={editing.warehouseId == null ? NO_WAREHOUSE : String(editing.warehouseId)}
-                  onValueChange={v => setEditing(d => d && ({ ...d, warehouseId: v === NO_WAREHOUSE ? null : Number(v) }))}
-                >
-                  <SelectTrigger id={`${inputId}-edit-warehouseId`} aria-describedby={`${inputId}-edit-warehouse-help`}><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_WAREHOUSE}>{UNRESTRICTED_DEVICE_LABEL}</SelectItem>
-                    {(warehouses ?? []).map(w => (
-                      <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p id={`${inputId}-edit-warehouse-help`} className="mt-1 text-xs text-muted-foreground">{DEVICE_SCOPE_HELP}</p>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>取消</Button>
             <Button

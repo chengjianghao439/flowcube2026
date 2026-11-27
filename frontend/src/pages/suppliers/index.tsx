@@ -19,7 +19,7 @@ import type { TableColumn } from '@/types'
 import BaseCrudPage from '@/components/shared/BaseCrudPage'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/ui/button'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { downloadExport } from '@/lib/exportDownload'
 import { toast } from '@/lib/toast'
 import { payloadClient as client } from '@/api/client'
@@ -36,7 +36,8 @@ const empty = {
 export default function SuppliersPage() {
   const { can } = usePermission()
   const ledger = usePartyLedger(1)
-  const [keyword, setKeyword] = useState(''); const [search, setSearch] = useState('')
+  const [keyword, setKeyword] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const page = 1
   const [form, setForm] = useState(empty)
   const set = (k:string, v:string|boolean) => setForm(f=>({...f,[k]:v}))
@@ -121,8 +122,9 @@ export default function SuppliersPage() {
       createLabel="新增供应商"
       headerActions={
         <>
-          <Button variant="outline" onClick={() => downloadExport('/export/suppliers').catch(e => toast.error((e as Error).message))}>导出</Button>
+          <Button variant="outline" onClick={() => downloadExport('/export/suppliers').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
           {can(PERMISSIONS.SUPPLIER_CREATE) && <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>}
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
         </>
       }
       saveSuccessMessage={(editing) => editing ? '供应商已保存' : '供应商已创建'}
@@ -157,11 +159,10 @@ export default function SuppliersPage() {
               )}
             </div>
           )}
-          <FilterCard>
-            <Input aria-label="搜索供应商编码或名称" placeholder="搜索编码或名称" value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') setKeyword(search.trim()) }} className="h-9 w-60" />
-            <Button size="sm" variant="outline" onClick={() => setKeyword(search.trim())}>搜索</Button>
-            {(keyword || search) && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword('') }}>清除搜索</Button>}
-          </FilterCard>
+          <KeywordQueryChips keyword={keyword} onClear={() => setKeyword('')} />
+          <KeywordQueryDialog open={queryOpen} dialogId="suppliers-query" title="查询供应商"
+            label="供应商编码或名称" placeholder="搜索编码或名称" initial={keyword}
+            onClose={() => setQueryOpen(false)} onApply={value => setKeyword(value.trim())} />
         </>
       }
       renderForm={(editing, _open, locked) => {

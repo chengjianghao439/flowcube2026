@@ -34,34 +34,36 @@ export default function ResetPasswordDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="fc-form-dialog sm:max-w-lg">
         <DialogHeader description={<>
             正在重置账号 <span className="font-medium text-foreground">{username}</span> 的密码
           </>}>
           <DialogTitle>重置密码</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
 
 
-          <div className="space-y-2">
-            <Label htmlFor="new-password">新密码</Label>
-            <Input
-              id="new-password"
-              type="password"
-              value={newPassword}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
-              placeholder="至少 6 位"
-              autoComplete="new-password"
-              disabled={isPending}
-            />
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-password">新密码</Label>
+              <Input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewPassword(e.target.value)}
+                placeholder="至少 6 位"
+                autoComplete="new-password"
+                disabled={isPending}
+              />
+            </div>
+
+            {error && (
+              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive-ink">
+                {error.message}
+              </p>
+            )}
           </div>
-
-          {error && (
-            <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive-ink">
-              {error.message}
-            </p>
-          )}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>

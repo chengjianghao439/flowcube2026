@@ -1,6 +1,6 @@
 import { Suspense, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Pencil, Save, X, RotateCcw, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles,
+  Pencil, X, GripVertical, Plus, Minus, LayoutGrid, Check, Sparkles,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/shared/IconButton'
@@ -138,31 +138,31 @@ export default function DashboardPage() {
 
   // ── 渲染 ──────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader title="仪表盘"
         description={layoutMode === 'preview' ? '预览当前权限下的全部卡片，可以调整布局。保存后应用，取消返回原布局。'
-          : editing ? '拖拽调整卡片顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存' : '查看待办、经营指标与个人工具。'}
+          : editing ? '拖拽调整卡片顺序 · 调整宽度 · 隐藏或添加卡片，完成后保存。' : '查看待办、经营指标与个人工具。'}
         status={layoutMode === 'preview' ? <EditModeBadge label="布局预览" /> : editing ? <EditModeBadge /> : undefined}
         actions={<div className="flex flex-wrap items-center gap-2">
           {!editing ? (
             <>
-              <Button variant="outline" size="sm" onClick={showAll}><LayoutGrid className="h-3.5 w-3.5" /> 预览全部卡片</Button>
-              <Button variant="outline" size="sm" onClick={startEdit}><Pencil className="h-3.5 w-3.5" /> 编辑仪表盘</Button>
+              <Button variant="outline" onClick={showAll}>预览全部卡片</Button>
+              <Button variant="outline" onClick={startEdit}>编辑仪表盘</Button>
             </>
           ) : (
             <>
-              <Button variant="outline" size="sm" onClick={() => setLibOpen(v => !v)}>
-                <LayoutGrid className="h-3.5 w-3.5" /> 组件库
+              <Button variant="outline" onClick={() => setLibOpen(v => !v)}>
+                组件库
                 {addable.length > 0 && <span className="ml-1 rounded-full bg-primary/10 px-1.5 text-xs text-primary">{addable.length}</span>}
               </Button>
-              <Button variant="outline" size="sm" onClick={resetDefault}>
-                <RotateCcw className="h-3.5 w-3.5" /> 载入推荐
+              <Button variant="outline" onClick={resetDefault}>
+                载入推荐
               </Button>
-              <Button variant="outline" size="sm" onClick={cancelEdit}>
-                <X className="h-3.5 w-3.5" /> 取消
+              <Button variant="outline" onClick={cancelEdit}>
+                取消
               </Button>
-              <Button size="sm" onClick={() => void save()} disabled={saveMut.isPending}>
-                <Save className="h-3.5 w-3.5" /> {saveMut.isPending ? '保存中…' : '保存'}
+              <Button onClick={() => void save()} disabled={saveMut.isPending}>
+                {saveMut.isPending ? '保存中…' : '保存'}
               </Button>
             </>
           )}

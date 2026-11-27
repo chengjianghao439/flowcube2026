@@ -1,3 +1,4 @@
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
 import { useApprovalReadScope } from '@/hooks/useApprovalReadScope'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
@@ -7,14 +8,14 @@ import { unitPrice } from '@/lib/format'
 import { invalidateAfterPriceChange } from '@/hooks/useProducts'
 import { OrderActivityDialog } from '@/components/shared/OrderActivityDialog'
 import { productIdentityColumns } from '@/components/shared/productIdentityColumns'
-import { Plus } from 'lucide-react'
 import { useContext, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordStatusFilters } from '@/components/shared/KeywordStatusFilters'
+import { EMPTY_KEYWORD_STATUS } from '@/components/shared/keywordStatusFilterDefaults'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
@@ -81,6 +82,14 @@ interface ApproveResult {
 
 const readPriceChange = (id: number) => payloadClient.get<PriceChangeRequest>(`/price-change/${id}`)
 
+const STATUS_OPTIONS = [
+  { value: '', label: '全部申请' },
+  { value: '1', label: '草稿 / 待审批' },
+  { value: '2', label: '已通过' },
+  { value: '3', label: '已驳回' },
+  { value: '4', label: '已取消' },
+]
+
 export default function PriceChangePage() {
   const qc = useQueryClient()
   const invalidate = useInvalidate()
@@ -88,8 +97,9 @@ export default function PriceChangePage() {
   const location = useLocation()
   const [ownPath, ownSearch = ''] = (tabPath || `${location.pathname}${location.search}`).split('?')
   const searchParams = new URLSearchParams(ownSearch)
-  const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState(EMPTY_KEYWORD_STATUS)
+  const [queryOpen, setQueryOpen] = useState(false)
+  const { keyword, status } = filters
   const [createOpen, setCreateOpen] = useState(false)
   const [product, setProduct] = useState<{ id: number; code: string; name: string } | null>(null)
   const [productFinderOpen, setProductFinderOpen] = useState(false)
@@ -156,9 +166,9 @@ export default function PriceChangePage() {
   }, [preselectProductId, product, canPreselectProduct, scope.key])
 
   const PAGE_SIZE = 20
-  const { data, isLoading } = useQuery({
-    queryKey: ['price-change', { page: 1, keyword }],
-    queryFn: () => payloadClient.get<PriceChangeListResult>('/price-change', { params: { page: 1, pageSize: PAGE_SIZE, keyword } }),
+  const { data, isLoading, isError, error, refetch } = useQuery({
+    queryKey: ['price-change', { page: 1, keyword, ...(status && { status: Number(status) }) }],
+    queryFn: () => payloadClient.get<PriceChangeListResult>('/price-change', { params: { page: 1, pageSize: PAGE_SIZE, keyword, ...(status && { status: Number(status) }) } }),
   })
   const total = data?.pagination?.total ?? 0
   const list: PriceChangeRequest[] = data?.list ?? []
@@ -230,36 +240,31 @@ export default function PriceChangePage() {
     { key: 'applicantName', title: '申请人', width: 100 },
     { key: 'createdAt', title: '申请时间', width: 160, render: v => formatDisplayDateTime(v) },
     { key: 'id', title: '操作', width: 200, render: (_, row) => (
-      <div className="flex gap-1">
-        <OrderActivityDialog onOpenChange={setManualDetailOpen} type="price" id={row.id} title={row.requestNo} fields={[
+      <OrderActivityDialog onOpenChange={setManualDetailOpen} type="price" id={row.id} title={row.requestNo} fields={[
           ['商品', row.productName], ['价格类型', priceTypeLabel(row.priceType)], ['原价格', row.oldPrice], ['申请价格', row.newPrice], ['状态', row.statusName], ['申请人', row.applicantName], ['申请原因', row.reason],
-        ]} />
-        {row.status === 1 && (
-          <>
-            {canUpdate && row.approvalId === null && <Button size="sm" variant="outline" onClick={() => submitMut.mutate(row.id)} disabled={submitMut.isPending}>提交</Button>}
-            {canApprove && row.approvalId != null && <Button size="sm" onClick={() => approveMut.mutate(row.id)} disabled={approveMut.isPending}>通过</Button>}
-            {canApprove && row.approvalId != null && <Button size="sm" variant="outline" className="text-destructive-ink" onClick={() => { setRejectTarget(row); setRejectReason('') }}>驳回</Button>}
-            {canUpdate && <Button size="sm" variant="ghost" onClick={() => setCancelTarget(row)}>取消</Button>}
-          </>
-        )}
-      </div>
+        ]} menuItems={row.status === 1 ? [
+          ...(canUpdate && row.approvalId === null ? [{ label: '提交', disabled: submitMut.isPending, onClick: () => submitMut.mutate(row.id) }] : []),
+          ...(canApprove && row.approvalId != null ? [
+            { label: '通过', disabled: approveMut.isPending, onClick: () => approveMut.mutate(row.id) },
+            { label: '驳回', afterMenuClose: true, destructive: true, onClick: () => { setRejectTarget(row); setRejectReason('') } },
+          ] : []),
+          ...(canUpdate ? [{ label: '取消', afterMenuClose: true, onClick: () => setCancelTarget(row) }] : []),
+        ] : []} />
     )},
   ]
 
   return (
     <div className="space-y-4">
       <PageHeader title="商品改价申请"
-        description="改价走审批流，审批通过后自动生效并留变更历史"  actions={
-        canUpdate && <Button onClick={() => setCreateOpen(true)}><Plus className="mr-1.5 h-4 w-4" aria-hidden />申请改价</Button>
-      } />
+        description="改价走审批流，审批通过后自动生效并留变更历史。"  actions={<>
+        <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+        {canUpdate && <Button onClick={() => setCreateOpen(true)}>申请改价</Button>}
+      </>} />
 
-      <FilterCard>
-        <Input aria-label="搜索改价单号或商品" placeholder="搜索单号/商品…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-64" onKeyDown={(e) => { if (e.key === 'Enter') { setKeyword(search); } }} />
-        <Button size="sm" variant="outline" onClick={() => { setKeyword(search); }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={() => { setSearch(''); setKeyword(''); }}>重置</Button>}
-      </FilterCard>
-      <DataTable columns={columns} data={list} loading={isLoading} />
-      <ListSummary total={total} unit="单" />
+      <KeywordStatusFilters title="改价申请" dialogId="price-change-query" placeholder="搜索单号/商品…"
+        options={STATUS_OPTIONS} value={filters} onChange={setFilters} open={queryOpen} onClose={() => setQueryOpen(false)} />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable fluid columnStorageKey="price-change" scrollLabel="改价申请表格" virtualized preserveFocus retainFocusedRow={manualDetailOpen} columns={columns} data={list} loading={isLoading} />}
+      {data && !isLoading && !isError && <ListSummary total={total} unit="单" />}
 
       <ApprovalHandoffNotice {...handoff} />
       {handoff.data && <OrderActivityDialog type="price" id={handoff.data.id} title={handoff.data.requestNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
@@ -268,7 +273,7 @@ export default function PriceChangePage() {
       {/* 新建改价申请 */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="fc-form-dialog max-w-2xl">
-          <DialogHeader description={"选择商品并填写目标价格与原因。"}><DialogTitle>申请改价</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>申请改价</DialogTitle></DialogHeader>
           <div className="fc-form-dialog-body space-y-4">
             <div>
               <p className="mb-1 text-sm font-medium">商品</p>

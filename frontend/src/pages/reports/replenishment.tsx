@@ -89,7 +89,9 @@ export default function ReplenishmentPage() {
         <span className="tabular-nums font-semibold text-primary">{fmtQty(v)}<span className="ml-1 text-xs font-normal text-muted-foreground">{r.unit}</span></span>
       ) },
     { key: 'earliestDemandDate', title: '交期核对', width: 180, render: (_, r) => <ProcurementArrivalStatus supply={r} /> },
-    { key: 'id', title: '操作', width: 240, render: (_, r) => <div className="flex gap-2"><ProcurementSupplyDetails supply={r} mode="replenishment" />{canAdjustInventory && Math.round(r.suggestReorderPoint) !== Math.round(r.reorderPoint) && <Button size="sm" variant="outline" onClick={() => adoptReorder({ row: r })}>采纳补货点</Button>}</div> },
+    { key: 'id', title: '操作', width: 240, render: (_, r) => <ProcurementSupplyDetails supply={r} mode="replenishment"
+      menuItems={canAdjustInventory && Math.round(r.suggestReorderPoint) !== Math.round(r.reorderPoint)
+        ? [{ label: '采纳补货点', onClick: () => adoptReorder({ row: r }) }] : []} /> },
   ]
 
   // 查询弹窗初始值
@@ -130,7 +132,7 @@ export default function ReplenishmentPage() {
     <div className="space-y-4">
       <PageHeader
         title="补货建议"
-        description="按未发销售、实物与预计采购计算缺口；已有计划和采购草稿分别覆盖。起订与整包装规则决定最终采购量。"
+        description="按在库、未发销售与在途采购测算补货建议。"
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -144,7 +146,7 @@ export default function ReplenishmentPage() {
       {chips.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
@@ -163,10 +165,9 @@ export default function ReplenishmentPage() {
           onRetry={() => void refetch()}
           title="补货建议加载失败"
           description="补货建议数据暂时无法加载，请点击重试或稍后再试"
-          compact
         />
       ) : (
-        <DataTable
+        <DataTable fluid columnStorageKey="replenishment" scrollLabel="补货建议表格" virtualized
           columns={columns}
           data={list}
           loading={isLoading}

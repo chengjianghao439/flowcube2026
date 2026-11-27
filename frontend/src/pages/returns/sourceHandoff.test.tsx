@@ -91,12 +91,37 @@ test.each(['sale', 'purchase', 'transfer'])('%s 取消新增选品不改明细�
     expect(host.querySelectorAll('input[placeholder="数量"]')).toHaveLength(1)
     expect(quantity()?.value).toBe('1')
     expect(useDirtyGuardStore.getState().isTabDirty(route)).toBe(true)
+    const table = quantity()!.closest('table')!
+    expect(table.closest('.desktop-section-body')?.querySelector('.desktop-order-total')?.textContent).toContain('1')
     await change(quantity()!, '3')
     await click(host, '手工商品')
     await click(host, '取消选品')
     expect(host.querySelectorAll('input[placeholder="数量"]')).toHaveLength(1)
     expect(quantity()?.value).toBe('3')
     expect(host.textContent).toContain('手工商品')
+  })
+})
+
+test.each(['sale', 'purchase', 'transfer'])('%s 详情以基础信息和单层明细卡显示原单汇总', async kind => {
+  mocks.detail.mockResolvedValue({
+    id: 10, orderNo: 'TO10', returnNo: 'R10', status: 1, createdAt: '2026-10-01',
+    customerName: '原客户', supplierName: '原供应商', warehouseName: '仓一', fromWarehouseName: '仓一',
+    toWarehouseName: '仓二', operatorName: '原经办人', remark: '整单备注', totalAmount: 8,
+    items: [{ ...line, id: 30, amount: 8 }],
+  })
+  const route = kind === 'transfer' ? '/transfer/10' : `/returns/${kind}/10`
+  await page(kind, route, async host => {
+    const facts = host.querySelector('.desktop-order-facts')
+    expect(facts?.textContent).toContain('原经办人')
+    expect(facts?.textContent).toContain('整单备注')
+    const table = host.querySelector('.desktop-section-body > .desktop-table')!
+    expect(table.textContent).toContain('停用历史商品')
+    expect(table.nextElementSibling?.classList.contains('desktop-order-total')).toBe(true)
+    expect(table.nextElementSibling?.textContent).toContain(kind === 'transfer' ? '共 1 种商品' : '共 1 行退货明细')
+    if (kind !== 'transfer') expect(table.nextElementSibling?.textContent).toContain('¥8.00')
+    const actions = host.querySelector('.desktop-action-buttons')!
+    expect(actions.firstElementChild?.getAttribute('role')).toBe('group')
+    expect(actions.lastElementChild?.classList.contains('bg-primary')).toBe(true)
   })
 })
 

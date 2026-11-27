@@ -21,7 +21,7 @@ export function QueryChips({ chips, onClearAll }: { chips: QueryChip[]; onClearA
       {chips.map(c => (
         <span
           key={c.key}
-          className="inline-flex items-center gap-1 rounded-sm border border-primary/20 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+          className="fc-query-chip"
         >
           {c.text}
           <button type="button" onClick={c.onClear} className="hover:opacity-70" aria-label={`移除「${c.text}」`}>
@@ -29,7 +29,7 @@ export function QueryChips({ chips, onClearAll }: { chips: QueryChip[]; onClearA
           </button>
         </span>
       ))}
-      <Button size="sm" variant="ghost" onClick={onClearAll}>重置</Button>
+      <Button size="sm" variant="ghost" onClick={onClearAll}>清空</Button>
     </div>
   )
 }

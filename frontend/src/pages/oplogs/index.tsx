@@ -1,9 +1,11 @@
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import { useWorkspaceSearchParams } from '@/hooks/useWorkspaceSearchParams'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import DataTable from '@/components/shared/DataTable'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import ListSummary from '@/components/shared/ListSummary'
@@ -137,8 +139,6 @@ export default function OpLogsPage() {
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
     module && { key: 'module', label: `模块：${OPERATION_LOG_MODULE_OPTIONS.find(o => o.value === module)?.label ?? module}`, onRemove: () => updateParams({ module: null }) },
-    startDate && { key: 'startDate', label: `日期从：${startDate}`, onRemove: () => updateParams({ startDate: null }) },
-    endDate && { key: 'endDate', label: `日期至：${endDate}`, onRemove: () => updateParams({ endDate: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<OpLog>[] = [
@@ -175,9 +175,7 @@ export default function OpLogsPage() {
       title: '操作',
       width: 100,
       render: (_, row) => (
-        <Button size="sm" variant="outline" onClick={() => setDetailId(row.id)}>
-          详情
-        </Button>
+        <TableActionsMenu primaryLabel="详情" primaryVariant="outline" onPrimaryClick={() => setDetailId(row.id)} items={[]} />
       ),
     },
   ]
@@ -187,26 +185,26 @@ export default function OpLogsPage() {
       <PageHeader title="操作日志"
         description={!isError && !isLoading && data?.truncated ? <span role="status">已加载 {data.list.length.toLocaleString()} 条，匹配 {total.toLocaleString()} 条，请缩小查询范围。</span> : '按操作人、时间与单据追踪变更。'}  actions={
         <>
-          <Button variant="outline" onClick={() => downloadExport('/export/oplogs', exportParams).catch(e => toast.error((e as Error).message))}>导出</Button>
+          <Button variant="outline" onClick={() => downloadExport('/export/oplogs', exportParams).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
           <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-          {can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="outline" size="sm" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5 hover:text-destructive-ink" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined}
+          {can(PERMISSIONS.AUDIT_LOG_CLEAR) ? <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5 hover:text-destructive-ink" onClick={() => setClearConfirm(true)}>清理旧日志</Button> : undefined}
         </>
       } />
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
+        <AppliedDateRange label="操作日期" startDate={effectiveStartDate} endDate={effectiveEndDate}
+          onClear={() => updateParams({ startDate: null, endDate: null, range: 'all' })} />
+        {chips.map(c => (
+          <span key={c.key} className="fc-query-chip">
+            {c.label}
+            <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {(chips.length > 0 || effectiveStartDate || effectiveEndDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
+      </div>
       {isError ? <QueryErrorState error={error} onRetry={() => { void refetch() }} /> : <>
-        <DataTable virtualized preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list || []} loading={isLoading} />
+        <DataTable fluid virtualized scrollLabel="操作日志表格" columnStorageKey="oplogs:v1" preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list || []} loading={isLoading} />
 
         {!isLoading && data && !data.truncated && <ListSummary total={total} unit="条" />}
       </>}
@@ -221,7 +219,7 @@ export default function OpLogsPage() {
       />
       <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetailId(null) }}>
         <DialogContent className="fc-audit-detail max-w-4xl max-h-[90vh]">
-          <DialogHeader description={"查看本次操作的完整记录与上下文。"} className="fc-audit-detail-header">
+          <DialogHeader className="fc-audit-detail-header">
             <DialogTitle>操作日志详情</DialogTitle>
           </DialogHeader>
           {detail && (

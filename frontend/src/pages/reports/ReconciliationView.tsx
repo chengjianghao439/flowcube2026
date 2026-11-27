@@ -89,6 +89,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   // 汇总对账 / 核销 tab 的动作按钮挪到本页 PageHeader（与「全部账款」tab 对齐），通过 ref 驱动面板
   const statementRef = useRef<StatementPanelHandle>(null)
   const receiptRef = useRef<ReceiptPanelHandle>(null)
+  const [filterSlot, setFilterSlot] = useState<HTMLDivElement | null>(null)
   const queryLabels = {
     docLabel: '关联单号',
     partyLabel: copy.party,
@@ -202,7 +203,7 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
   ]
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title={copy.title}
         description={effectiveTab === 'receipts'
@@ -212,55 +213,62 @@ export default function ReconciliationView({ type }: { type: StatementType }) {
           <div className="flex flex-wrap gap-2">
             {/* 每个 tab 的动作按钮都落在右上角 PageHeader，跨 tab 位置一致 */}
             {effectiveTab === 'statements' && (<>
-              <Button variant="outline" onClick={() => statementRef.current?.openQuery()}>查询</Button>
               <Button variant="outline" onClick={() => statementRef.current?.exportExcel()}>导出汇总</Button>
+              <Button variant="outline" onClick={() => statementRef.current?.openQuery()}>查询</Button>
               {canExecutePayments && <Button onClick={() => statementRef.current?.openCreate()}>新建对账单</Button>}
             </>)}
             {effectiveTab === 'receipts' && (<>
-              <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
               <Button variant="outline" onClick={() => receiptRef.current?.exportExcel()}>导出 Excel</Button>
+              <Button variant="outline" onClick={() => receiptRef.current?.openQuery()}>查询</Button>
               {canExecutePayments && <Button onClick={() => receiptRef.current?.openRegister()}>登记{type === 1 ? '付款' : '收款'}</Button>}
             </>)}
             {effectiveTab === 'records' && (<>
-              <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
               <Button
                 variant="outline"
                 onClick={() => downloadExport('/export/reconciliation', exportParams).catch(e => toast.error((e as Error).message))}
               >
                 导出 Excel
               </Button>
+              <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             </>)}
           </div>
         )}
       />
 
 
-      <div className="flex gap-1 border-b border-border">
-        {([
-          { key: 'statements' as const, label: '汇总对账' },
-          { key: 'receipts' as const, label: `${type === 1 ? '付款' : '收款'}${canExecutePayments ? '核销' : '流水'}` },
-          { key: 'records' as const, label: '全部账款' },
-        ]).filter(item => item.key === 'records' || canViewPayments).map(item => (
-          <button
-            key={item.key}
-            type="button"
-            aria-current={effectiveTab === item.key ? 'true' : undefined}
-            onClick={() => setTab(item.key)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${effectiveTab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {item.label}
-          </button>
-        ))}
+      <div className="fc-filter-bar">
+        <div className="fc-segmented-control w-fit" role="group" aria-label={`${copy.title}明细视图`}>
+          {([
+            { key: 'statements' as const, label: '汇总对账' },
+            { key: 'receipts' as const, label: `${type === 1 ? '付款' : '收款'}${canExecutePayments ? '核销' : '流水'}` },
+            { key: 'records' as const, label: '全部账款' },
+          ]).filter(item => item.key === 'records' || canViewPayments).map(item => (
+            <button
+              key={item.key}
+              type="button"
+              aria-current={effectiveTab === item.key ? 'true' : undefined}
+              aria-pressed={effectiveTab === item.key}
+              onClick={() => setTab(item.key)}
+              className="fc-segmented-option"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div ref={setFilterSlot} className="fc-filter-bar-filters" aria-label="已应用筛选">
+          {effectiveTab === 'records' && (
+            <>
+              <AppliedDateRange label="创建日期" startDate={query.startDate} endDate={query.endDate} onClear={clearDates} />
+              <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} showDateChip={false} />
+            </>
+          )}
+        </div>
       </div>
 
-      <KeepAliveSection active={canViewPayments && effectiveTab === 'statements'}><StatementPanel ref={statementRef} type={type} hideToolbar /></KeepAliveSection>
-      <KeepAliveSection active={canViewPayments && effectiveTab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar /></KeepAliveSection>
+      <KeepAliveSection active={canViewPayments && effectiveTab === 'statements'}><StatementPanel ref={statementRef} type={type} hideToolbar filterSlot={effectiveTab === 'statements' ? filterSlot : null} /></KeepAliveSection>
+      <KeepAliveSection active={canViewPayments && effectiveTab === 'receipts'}><ReceiptPanel ref={receiptRef} type={type} settlementTypes={MONTHLY_SCOPE} target="statement" hideToolbar filterSlot={effectiveTab === 'receipts' ? filterSlot : null} /></KeepAliveSection>
 
       <KeepAliveSection active={effectiveTab === 'records'} className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <AppliedDateRange label="创建日期" startDate={query.startDate} endDate={query.endDate} onClear={clearDates} />
-        <PaymentQueryBar query={query} onChange={setQuery} labels={queryLabels} showDateChip={false} />
-      </div>
 
       <PaymentQueryDialog
         title={`查询${copy.title}`}

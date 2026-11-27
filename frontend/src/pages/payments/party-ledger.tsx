@@ -7,7 +7,10 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { SummaryStrip } from '@/components/shared/SummaryStrip'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { ListQueryDialog } from '@/components/shared/ListQueryDialog'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { isReversedDateRange } from '@/lib/dateRange'
+import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -50,23 +53,25 @@ function SourceDetails({ row, type, onClose }: { row: PartyLedgerRow; type: 1 | 
       : { receipt: null, entries: await getEntriesApi(row.recordId!) },
   })
   const canNavigate = !query.isFetching && !query.isPaused && !query.isError && !!query.data?.receipt && query.data.receipt.id === row.receiptId && query.data.receipt.type === type
-  return <Dialog open onOpenChange={v => !v && onClose()}><DialogContent className="max-w-4xl">
-    <DialogHeader description={"核对本次收付款的登记与核销记录。"}><DialogTitle>收付款明细 · {row.documentNo}</DialogTitle></DialogHeader>
-    {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} compact /> : query.isPending ? <p>正在加载明细…</p> : <div className="max-h-[65vh] space-y-4 overflow-auto">
-      {query.data?.receipt && <>
-        <p>{query.data.receipt.partyName} · 汇款 {money(query.data.receipt.amount)} · 已核销 {money(query.data.receipt.settledAmount)} · 未核销 {money(query.data.receipt.balance)}</p>
-        <p className="text-xs text-muted-foreground">已核销和未核销是这笔款的分配，不能当作单位全部欠款。</p>
-        <DataTable columns={[
-          { key: 'orderNo', title: '核销单号', width: 180, render: (_, settlement: ReceiptSettlement) => <FinanceOrderLink {...settlement} enabled={canNavigate && settlement.type === type} onNavigate={onClose} /> },
-          { key: 'amount', title: '核销金额', width: 120, align: 'right', render: v => money(Number(v)) },
-        ]} data={query.data.receipt.settlements} rowKey="entryId" emptyText="尚未核销，款项保留为预收或预付。" />
+  return <Dialog open onOpenChange={v => !v && onClose()}><DialogContent className="fc-form-dialog max-w-4xl">
+    <DialogHeader><DialogTitle>收付款明细 · {row.documentNo}</DialogTitle></DialogHeader>
+    <div className="fc-form-dialog-body space-y-4">
+      {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} compact /> : query.isPending ? <p>正在加载明细…</p> : <>
+        {query.data?.receipt && <>
+          <p>{query.data.receipt.partyName} · 汇款 {money(query.data.receipt.amount)} · 已核销 {money(query.data.receipt.settledAmount)} · 未核销 {money(query.data.receipt.balance)}</p>
+          <p className="text-xs text-muted-foreground">已核销和未核销是这笔款的分配，不能当作单位全部欠款。</p>
+          <DataTable columns={[
+            { key: 'orderNo', title: '核销单号', width: 180, render: (_, settlement: ReceiptSettlement) => <FinanceOrderLink {...settlement} enabled={canNavigate && settlement.type === type} onNavigate={onClose} /> },
+            { key: 'amount', title: '核销金额', width: 120, align: 'right', render: v => money(Number(v)) },
+          ]} data={query.data.receipt.settlements} rowKey="entryId" emptyText="尚未核销，款项保留为预收或预付。" />
+        </>}
+        {query.data?.entries && <DataTable columns={[
+          { key: 'paymentDate', title: '收付款日期', width: 120, render: value => formatDisplayDate(value) },
+          { key: 'amount', title: '登记金额', width: 120, align: 'right', render: v => money(Number(v)) },
+          { key: 'remark', title: '备注', expandableText: true, width: 240 },
+        ]} data={query.data.entries} emptyText="该账款尚无收付款记录。" />}
       </>}
-      {query.data?.entries && <DataTable columns={[
-        { key: 'paymentDate', title: '收付款日期', width: 120, render: value => formatDisplayDate(value) },
-        { key: 'amount', title: '登记金额', width: 120, align: 'right', render: v => money(Number(v)) },
-        { key: 'remark', title: '备注', expandableText: true, width: 240 },
-      ]} data={query.data.entries} emptyText="该账款尚无收付款记录。" />}
-    </div>}
+    </div>
   </DialogContent></Dialog>
 }
 export default function PartyLedgerPage() {
@@ -76,8 +81,8 @@ export default function PartyLedgerPage() {
   const [, , , side, id] = tabPath.split('?')[0].split('/')
   const type = side === 'customer' ? 2 : 1
   const partyId = Number(id)
-  const [draft, setDraft] = useState({ startDate: '', endDate: '' })
-  const [range, setRange] = useState(draft)
+  const [queryOpen, setQueryOpen] = useState(false)
+  const [range, setRange] = useState({ startDate: '', endDate: '' })
   const [source, setSource] = useState<PartyLedgerRow | null>(null)
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
@@ -109,18 +114,26 @@ export default function PartyLedgerPage() {
   return <div className="space-y-4">
     <PageHeader title={`${type === 2 ? '客户' : '供应商'}往来明细${data ? ` · ${data.party.name}` : ''}`}
         description="覆盖全部结算方式，按记账时间查看往来余额的每次变化。核销不重复计入收付款。"  actions={<>
-      <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>刷新</Button>
       <Button variant="outline" disabled={!data || query.isFetching || query.isError} onClick={() => data && exportLedger(data)}>导出 CSV</Button>
+      <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+      <Button variant="outline" disabled={query.isFetching} onClick={() => void query.refetch()}>刷新</Button>
     </>} />
 
-    <FilterCard>
-      <Label htmlFor={`${dateControlId}-start`}>记账日期</Label>
-      <DatePicker id={`${dateControlId}-start`} value={draft.startDate} onChange={startDate => setDraft(v => ({ ...v, startDate }))} max={draft.endDate || undefined} />
-      <Label htmlFor={`${dateControlId}-end`}>至</Label>
-      <DatePicker id={`${dateControlId}-end`} value={draft.endDate} onChange={endDate => setDraft(v => ({ ...v, endDate }))} min={draft.startDate || undefined} />
-      <Button variant="outline" onClick={() => setRange({ ...draft })}>查询</Button>
-      <Button variant="ghost" onClick={() => { setDraft({ startDate: '', endDate: '' }); setRange({ startDate: '', endDate: '' }) }}>全部日期</Button>
-    </FilterCard>
+    <AppliedDateRange label="记账日期" {...range} onClear={() => setRange({ startDate: '', endDate: '' })} />
+    <ListQueryDialog open={queryOpen} dialogId="party-ledger-query" title="查询往来明细" initial={range}
+      empty={{ startDate: '', endDate: '' }} onClose={() => setQueryOpen(false)} onApply={setRange}
+      validate={v => isReversedDateRange(v.startDate, v.endDate) ? '记账日期的起始日期不能晚于结束日期。' : undefined}>
+      {(draft, setDraft) => <>
+        <div className="space-y-1">
+          <Label htmlFor={`${dateControlId}-start`} className="text-xs font-medium text-muted-foreground">记账日期（起）</Label>
+          <DatePicker id={`${dateControlId}-start`} value={draft.startDate} onChange={startDate => setDraft(v => ({ ...v, startDate }))} max={draft.endDate || undefined} />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`${dateControlId}-end`} className="text-xs font-medium text-muted-foreground">记账日期（止）</Label>
+          <DatePicker id={`${dateControlId}-end`} value={draft.endDate} onChange={endDate => setDraft(v => ({ ...v, endDate }))} min={draft.startDate || undefined} />
+        </div>
+      </>}
+    </ListQueryDialog>
     {query.isError ? <QueryErrorState error={query.error} onRetry={() => void query.refetch()} /> : <>
       {data && <>
         <SummaryStrip items={[
@@ -136,8 +149,8 @@ export default function PartyLedgerPage() {
           {data.unassignedCount > 0 && <p className="text-warning-ink">系统另有 {data.unassignedCount} 条{type === 2 ? '应收' : '应付'}记录尚无明确单位归属，未分配到本明细，请在原账款中核查。</p>}
         </div>
       </>}
-      <DataTable columns={columns} data={data?.list ?? []} loading={query.isPending} emptyText="所选期间暂无往来记录，可切换全部日期查看。" />
-      {data && <p className="text-sm text-muted-foreground">共 {data.list.length} 笔 · 现结与月结合并展示</p>}
+      <DataTable fluid columnStorageKey="party-ledger" scrollLabel="往来明细表格" virtualized columns={columns} data={data?.list ?? []} loading={query.isPending} emptyText="所选期间暂无往来记录，可切换全部日期查看。" />
+      {data && <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><ListSummary total={data.list.length} unit="笔" />现结与月结合并展示</div>}
     </>}
     {source && active && <SourceDetails row={source} type={type} onClose={() => setSource(null)} />}
   </div>

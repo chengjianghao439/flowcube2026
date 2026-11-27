@@ -143,7 +143,7 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
   return (
     <>
     <Dialog open={open} onOpenChange={v => { if (!v) draft.requestClose() }}>
-      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="flex max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl">
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
         <DialogHeader description={<>{<>
             {isEdit && editUser
               ? <>正在编辑账号 <span className="font-medium text-foreground">{editUser.username}</span>。{isOperatorSuperAdmin ? '修改账号后，下次登录需使用新账号。' : '只有超级管理员可以修改登录账号。'}原密码无法查看，可在用户列表中重置。</>
@@ -158,8 +158,8 @@ export default function UserFormDialog({ open, onClose, editUser }: UserFormDial
 
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-col overflow-hidden">
-          <div className="grid min-h-0 grid-cols-1 gap-x-5 gap-y-4 overflow-y-auto px-6 py-4 sm:grid-cols-2">
+        <form onSubmit={handleSubmit} noValidate className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="fc-form-dialog-body grid min-h-0 grid-cols-1 gap-x-5 gap-y-4 overflow-y-auto  py-4 sm:grid-cols-2">
           <h3 className="border-b pb-2 text-sm font-semibold sm:col-span-2">账号信息</h3>
           <div className="space-y-2">
             <Label htmlFor="form-username">账号 <span className="text-destructive-ink">*</span></Label>

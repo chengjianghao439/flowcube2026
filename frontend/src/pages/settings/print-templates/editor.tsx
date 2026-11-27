@@ -27,7 +27,7 @@ import {
   AlignHorizontalJustifyStart, AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd,
   AlignVerticalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd,
   AlignHorizontalSpaceAround, AlignVerticalSpaceAround,
-  ChevronUp, ChevronDown, ArrowLeft,
+  ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { getLogoApi } from '@/api/settings'
 
@@ -764,7 +764,7 @@ function PropertiesPanel({ el, multiCount, isLabel, canvasW, canvasH, onChange, 
                 value={el.barcodeSymbology ?? 'code128'}
                 onValueChange={v => onChange(el.id, { barcodeSymbology: v as 'code128' | 'ean13' })}
               >
-                <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-7 py-1 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="code128">Code 128（通用）</SelectItem>
                   <SelectItem value="ean13">EAN-13（13 位数字）</SelectItem>
@@ -1901,8 +1901,7 @@ export default function PrintTemplateEditor() {
         description={`${preview ? '画布下方显示真实纸张尺寸，保存后打印以预览为准。' : '从左侧拖入字段，点选后拖动、缩放或在右侧修改属性；工具栏可放大画布，Delete 删除。画布下方显示真实纸张尺寸（毫米），保存后打印以预览为准。'}${isZplLabelType(type) ? '打印时按毫米坐标生成 ZPL。' : ''}`}
         actions={
           // 评审次要项：保存后（尤其新建跳转）给返回列表出口
-          <Button type="button" size="sm" variant="outline" onClick={() => navigate(getWorkspaceListPath('/settings/print-templates'))}>
-            <ArrowLeft className="mr-1 size-4" />
+          <Button type="button" variant="outline" onClick={() => navigate(getWorkspaceListPath('/settings/print-templates'))}>
             返回列表
           </Button>
         }

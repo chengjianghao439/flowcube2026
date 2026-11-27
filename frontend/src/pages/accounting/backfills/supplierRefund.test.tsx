@@ -51,9 +51,26 @@ finally {
     qc.clear();
     host.remove();
 } }
-async function click(text: string) { const b = Array.from(document.querySelectorAll('button')).find(b => b.textContent === text); expect(b).toBeTruthy(); await act(async () => { b!.click(); }); await act(async () => { await new Promise(r => setTimeout(r, 20)); }); if (text === '详情')
-    for (let i = 0; i < 20 && document.body.textContent?.includes('加载详情…'); i++)
-        await act(async () => { await new Promise(r => setTimeout(r, 10)); }); }
+async function click(text: string) {
+    const target = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === text);
+    if (!target && ['批准', '重试记账', '重试生成凭证'].includes(text)) {
+        const more = document.querySelector<HTMLElement>('tbody button[aria-label="更多操作"]');
+        expect(more).toBeTruthy();
+        await act(async () => more!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+        const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(node => node.textContent === text);
+        expect(item).toBeTruthy();
+        await act(async () => item!.click());
+    } else {
+        expect(target).toBeTruthy();
+        await act(async () => target!.click());
+    }
+    await act(async () => { await new Promise(r => setTimeout(r, 20)); });
+    if (text === '详情') {
+        for (let i = 0; i < 20 && document.body.textContent?.includes('加载详情…'); i++) {
+            await act(async () => { await new Promise(r => setTimeout(r, 10)); });
+        }
+    }
+}
 test('供应商退款零分proof准确显示，不套核销不涉及凭证；actual detail原frozen金额/真实日期', async () => { await mount(async () => { expect(document.body.textContent).toContain('0.0049'); expect(document.body.textContent).toContain('零分投影已核对/无需分位凭证'); expect(document.body.textContent).not.toContain('不涉及凭证'); await click('详情'); expect(document.body.textContent).toContain('真实银行回款日'); expect(document.body.textContent).toContain('2026-09-30'); expect(document.body.textContent).toContain('原收入账户');expect(document.body.textContent).toContain('PR11');expect(document.body.textContent).toContain('PO10');expect(document.body.textContent).toContain('原付款分配 21');expect(document.body.textContent).toContain('2.00 个');expect(document.body.textContent).toContain('3.0000');expect(document.body.textContent).not.toContain('original-create-key');expect(document.body.textContent).not.toContain('fixture-hash'); expect(document.body.textContent).not.toContain('本类补录（核销）'); }); });
 test('新kind重核零分success提示不报凭证已生成，失败仍列待生成；旧核销文案保持', async () => { zero = false; const success = vi.spyOn(toast, 'success'); await mount(async () => { expect(document.body.textContent).toContain('凭证待生成'); await click('重试生成凭证'); await click('确认生成'); expect(success).toHaveBeenCalledWith('零分投影已核对/无需分位凭证'); }); kind = 'receipt_settle'; zero = true; await mount(async () => { expect(document.body.textContent).toContain('不涉及凭证'); await click('详情'); expect(document.body.textContent).toContain('本类补录（核销）不产生会计凭证'); }); });
 test('actual getBackfillsApi保page2/50及filters原样，禁止取齐层重置到首页', async () => {

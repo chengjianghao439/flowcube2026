@@ -1,3 +1,5 @@
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import PageHeader from '@/components/shared/PageHeader'
 import { Check, Monitor } from 'lucide-react'
 import { payloadClient as apiClient } from '@/api/client'
@@ -81,7 +83,7 @@ interface BindDialogProps {
 function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDialogProps) {
   return (
     <Dialog open onOpenChange={open => { if (!open) onClose() }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="fc-form-dialog sm:max-w-2xl">
         <DialogHeader description={<>{<>
           {printer.name} <span className="text-doc-code">({printer.code})</span>
         </>} {<>
@@ -89,7 +91,7 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
         </>}</>}><DialogTitle>绑定业务用途</DialogTitle></DialogHeader>
 
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="fc-form-dialog-body grid grid-cols-2 gap-3">
           {BIND_TYPES.map(t => {
             const isBound = bindings[t.key]?.printer_code === printer.code
             const currentCode = bindings[t.key]?.printer_code
@@ -115,14 +117,9 @@ function BindDialog({ printer, bindings, onToggleBind, busy, onClose }: BindDial
             )
           })}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={busy}
-          className="mt-4 w-full text-muted-body hover:text-foreground disabled:opacity-60"
-        >
-          关闭
-        </button>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>关闭</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -156,7 +153,7 @@ export default function PrintersPage() {
   const canUseSystemPrinters =
     isDesktop && typeof window.flowcubeDesktop?.getSystemPrinters === 'function'
 
-  const { data: printers = [], isLoading, isSuccess, refetch: refetchPrinters } = usePrinters()
+  const { data: printers = [], isLoading, isSuccess, refetch: refetchPrinters, isError, error } = usePrinters()
   useEffect(() => {
     if (!canUseSystemPrinters || !canManagePrinters) return
     let active = true
@@ -424,14 +421,17 @@ export default function PrintersPage() {
       key: 'bindings', title: '绑定', width: 160,
       render: (_, p) => (
         <div>
-          {canManagePrinters && <Button size="sm" variant="outline" onClick={() => setBindTarget(p)}>绑定用途</Button>}
           {getBoundLabels(p.code) && <div className="mt-1 text-xs text-blue-700">{getBoundLabels(p.code)}</div>}
         </div>
       ),
     },
     {
       key: 'id', title: '操作', width: 100,
-      render: (_, p) => <div className="space-y-2">{canManagePrinters && canUseSystemPrinters && <Button size="sm" variant="outline" disabled={registering} onClick={() => { void associateWithThisDesktop(p) }}>关联本机</Button>}{canManagePrinters && <Button size="sm" variant="destructive" onClick={() => setDeleteTarget(p)}>删除</Button>}</div>,
+      render: (_, p) => canManagePrinters ? <TableActionsMenu primaryVariant="outline" primaryLabel="绑定用途"
+        onPrimaryClick={() => setBindTarget(p)} items={[
+          ...(canUseSystemPrinters ? [{ label: '关联本机', disabled: registering, onClick: () => { void associateWithThisDesktop(p) } }] : []),
+          { label: '删除', destructive: true, afterMenuClose: true, onClick: () => setDeleteTarget(p) },
+        ]} /> : null,
     },
   ]
 
@@ -458,14 +458,14 @@ export default function PrintersPage() {
       ) : null}
 
       <Dialog open={showAddDialog && canManagePrinters} onOpenChange={setShowAddDialog}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{<>
               仅可选择当前操作系统中已安装的打印机（与「设置 → 打印机」列表一致）。浏览器中无法枚举本机设备，请使用桌面客户端。
             </>}</>}>
             <DialogTitle>从本机添加打印机</DialogTitle>
 
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="fc-form-dialog-body space-y-4">
             {listLoading && <p className="text-muted-body">正在加载本机打印机…</p>}
             {listError && <p className="text-sm text-destructive-ink">{listError}</p>}
             {!listLoading && !listError && systemList.length > 0 && (
@@ -512,7 +512,7 @@ export default function PrintersPage() {
               <p className="text-muted-body">暂无数据，请点击刷新重试。</p>
             )}
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={() => void loadSystemPrinters()} disabled={listLoading}>
               刷新列表
             </Button>
@@ -532,7 +532,7 @@ export default function PrintersPage() {
         </DialogContent>
       </Dialog>
 
-      <DataTable columns={cols} data={printers} loading={isLoading} rowKey="id" emptyText="暂无打印机" />
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetchPrinters()} /> : <DataTable fluid columnStorageKey="settings-printers" scrollLabel="打印机表格" virtualized columns={cols} data={printers} loading={isLoading} rowKey="id" emptyText="暂无打印机" />}
       {isSuccess && <ListSummary total={printers.length} unit="台" />}
 
       {bindTarget && canManagePrinters && (

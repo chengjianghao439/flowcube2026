@@ -14,6 +14,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
+import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
@@ -60,7 +62,7 @@ function defaultExpenseQuery(): ExpQuery {
   const today = todayYmd()
   return { keyword: '', status: '', startDate: today, endDate: today, minAmount: '', maxAmount: '' }
 }
-const STATUS_NAME: Record<string, string> = Object.fromEntries(STATUS_OPTIONS.map(([v, l]) => [v, l]))
+const EXPENSE_STATUS_FILTERS = [{ value: '', label: '全部报销单' }, ...STATUS_OPTIONS.map(([value, label]) => ({ value, label }))]
 
 /** 费用报销查询弹窗：关键字 + 状态 + 创建日期区间 + 金额区间（比原来平铺的一格搜索框多了日期/金额） */
 function ExpensesQueryDialog({ open, initial, onClose, onApply }: {
@@ -168,7 +170,7 @@ export default function ExpenseClaimsPage() {
 
   const PAGE_SIZE = 20
   const appliedFilters = Object.fromEntries<string>(Object.entries(query).filter(([, value]) => value !== ''))
-  const { data, isLoading } = useVisibleQuery({
+  const { data, isLoading, isError, error, refetch } = useVisibleQuery({
     queryKey: ['expense-claims', scope.key, query],
     queryFn: () => getExpenseClaimsApi({
       page: 1,
@@ -184,7 +186,6 @@ export default function ExpenseClaimsPage() {
   const queryChips: QueryChip[] = []
   const dropQ = (...ks: (keyof ExpQuery)[]) => () => { setQuery(q => ks.reduce((a, k) => ({ ...a, [k]: '' }), { ...q })); }
   if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
-  if (query.status) queryChips.push({ key: 'status', text: `状态：${STATUS_NAME[query.status] ?? query.status}`, onClear: dropQ('status') })
   if (query.minAmount || query.maxAmount) queryChips.push({ key: 'amt', text: `金额：${query.minAmount || '0'} ~ ${query.maxAmount || '不限'}`, onClear: dropQ('minAmount', 'maxAmount') })
   const { data: categories } = useQuery({
     queryKey: ['expense-categories', 'active'],
@@ -409,10 +410,10 @@ export default function ExpenseClaimsPage() {
     <div className="space-y-4">
       <PageHeader
         title="费用报销"
-        description="登记日常经营费用，审批通过后从资金账户付款。付款会自动记入账户流水。"
+        description="登记费用报销、审批与付款记录。"
         actions={(
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => downloadExport('/export/expense-claims', appliedFilters).catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/expense-claims', appliedFilters).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canCreate && <Button onClick={openCreate} disabled={loadingEdit}>新建报销单</Button>}
           </div>
@@ -420,22 +421,27 @@ export default function ExpenseClaimsPage() {
       />
 
 
-      {summary && <SummaryStrip items={[{ label: '报销总额', value: money(summary.totalAmount) }, { label: '待审批', value: money(summary.pendingAmount), tone: 'text-warning-ink' }, { label: '已付款', value: money(summary.paidAmount), tone: 'text-success-ink' }]} />}
+      {summary && !isError && <SummaryStrip items={[{ label: '报销总额', value: money(summary.totalAmount) }, { label: '待审批', value: money(summary.pendingAmount), tone: 'text-warning-ink' }, { label: '已付款', value: money(summary.paidAmount), tone: 'text-success-ink' }]} />}
 
-      <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
-        <AppliedDateRange label="创建日期" startDate={query.startDate} endDate={query.endDate} onClear={dropQ('startDate', 'endDate')} />
-        <QueryChips chips={queryChips} onClearAll={() => setQuery(defaultExpenseQuery())} />
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip"><OrderStatusFilter label="报销状态分类" value={query.status}
+          options={EXPENSE_STATUS_FILTERS} onChange={status => setQuery(current => ({ ...current, status }))} /></div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={query.startDate} endDate={query.endDate} onClear={dropQ('startDate', 'endDate')} />
+          <QueryChips chips={queryChips} onClearAll={() => setQuery(defaultExpenseQuery())} />
+        </div>
       </div>
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" scrollLabel="费用报销表格" />
+      {isError ? <QueryErrorState title="费用报销加载失败" error={error} onRetry={() => void refetch()} /> :
+        <DataTable fluid virtualized columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" scrollLabel="费用报销表格" columnStorageKey="finance-expenses" />}
 
-      <ListSummary total={total} unit="张" />
+      {!isError && !isLoading && data && <ListSummary total={total} unit="张" />}
 
       <ExpensesQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={(q) => { setQuery(q); }} />
 
       {/* 新建 / 编辑 */}
       <Dialog open={active && formOpen} onOpenChange={v => !v && draft.requestClose()}>
-        <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="max-w-5xl">
+        <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog max-w-5xl">
           {/* 编辑态与默认（新建）态一眼可分 */}
           <DialogHeader description={editingId ? <>
                 正在编辑：<span className="font-medium text-foreground">{editingNo || `#${editingId}`}{title ? ` · ${title}` : ''}</span>
@@ -446,55 +452,57 @@ export default function ExpenseClaimsPage() {
             </DialogTitle>
 
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-x-5 gap-y-4">
-            <div className="space-y-1">
-              <Label htmlFor="expense-draft-title">事由</Label>
-              <Input id="expense-draft-title" value={title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} placeholder="如：7月差旅与办公" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="expense-draft-remark">备注</Label>
-              <Input id="expense-draft-remark" value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-border">
-            <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
-              <span className="text-sm font-medium">费用明细</span>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-muted-foreground">合计 <span className="tabular-nums font-medium text-foreground">{money(totalAmount)}</span></span>
-                <Button size="sm" variant="outline" onClick={() => setItems(p => [...p, emptyItem()])}>添加一行</Button>
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+              <div className="space-y-1">
+                <Label htmlFor="expense-draft-title">事由</Label>
+                <Input id="expense-draft-title" value={title} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)} placeholder="如：7月差旅与办公" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="expense-draft-remark">备注</Label>
+                <Input id="expense-draft-remark" value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRemark(e.target.value)} />
               </div>
             </div>
-            <div className="max-h-72 space-y-2 overflow-y-auto p-3">
-              {items.map((it, idx) => (
-                <div key={idx} className="grid grid-cols-12 items-center gap-2">
-                  <Select value={it.categoryId} onValueChange={v => setItems(p => p.map((x, i) => i === idx ? { ...x, categoryId: v } : x))}>
-                    <SelectTrigger className="col-span-3 h-9"><SelectValue placeholder="费用类别" /></SelectTrigger>
-                    <SelectContent>
-                      {(categories ?? []).map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number" min="0.01" step="0.01" placeholder="金额" aria-label={`第 ${idx + 1} 行金额`} className="col-span-2 h-9 text-right"
-                    value={it.amount}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setItems(p => p.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x))}
-                  />
-                  <div className="col-span-3">
-                    <DatePicker value={it.happenedAt} className="h-9"
-                      onChange={v => setItems(p => p.map((x, i) => i === idx ? { ...x, happenedAt: v } : x))} />
-                  </div>
-                  <Input
-                    placeholder="说明" className="col-span-3 h-9"
-                    value={it.description}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setItems(p => p.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))}
-                  />
-                  <Button size="sm" variant="ghost" className="col-span-1"
-                    disabled={items.length === 1}
-                    onClick={() => setItems(p => p.filter((_, i) => i !== idx))}>
-                    删除
-                  </Button>
+
+            <div className="rounded-lg border border-border">
+              <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
+                <span className="text-sm font-medium">费用明细</span>
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-muted-foreground">合计 <span className="tabular-nums font-medium text-foreground">{money(totalAmount)}</span></span>
+                  <Button size="sm" variant="outline" onClick={() => setItems(p => [...p, emptyItem()])}>添加一行</Button>
                 </div>
-              ))}
+              </div>
+              <div className="space-y-2 p-3">
+                {items.map((it, idx) => (
+                  <div key={idx} className="grid grid-cols-12 items-center gap-2">
+                    <Select value={it.categoryId} onValueChange={v => setItems(p => p.map((x, i) => i === idx ? { ...x, categoryId: v } : x))}>
+                      <SelectTrigger className="col-span-3 h-9"><SelectValue placeholder="费用类别" /></SelectTrigger>
+                      <SelectContent>
+                        {(categories ?? []).map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number" min="0.01" step="0.01" placeholder="金额" aria-label={`第 ${idx + 1} 行金额`} className="col-span-2 h-9 text-right"
+                      value={it.amount}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setItems(p => p.map((x, i) => i === idx ? { ...x, amount: e.target.value } : x))}
+                    />
+                    <div className="col-span-3">
+                      <DatePicker value={it.happenedAt} className="h-9"
+                        onChange={v => setItems(p => p.map((x, i) => i === idx ? { ...x, happenedAt: v } : x))} />
+                    </div>
+                    <Input
+                      placeholder="说明" className="col-span-3 h-9"
+                      value={it.description}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setItems(p => p.map((x, i) => i === idx ? { ...x, description: e.target.value } : x))}
+                    />
+                    <Button size="sm" variant="ghost" className="col-span-1"
+                      disabled={items.length === 1}
+                      onClick={() => setItems(p => p.filter((_, i) => i !== idx))}>
+                      删除
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -513,45 +521,47 @@ export default function ExpenseClaimsPage() {
       <ApprovalHandoffNotice {...handoff} />
       {/* 明细 */}
       <Dialog open={shownDetailId != null} onOpenChange={v => !v && !approveMut.isPending && closeDetail()}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="fc-form-dialog max-w-3xl">
           <DialogHeader description={detail?.status === 5 ? <>
             {detail.rejectReason && <span className="text-destructive-ink">驳回原因：{detail.rejectReason} </span>}
             申请人如需继续报销，请补齐资料后新建报销单。
           </> : '核对报销明细、审批与付款进度。'}><DialogTitle>报销单 — <span className="text-doc-code-strong">{detail?.claimNo}</span></DialogTitle></DialogHeader>
-          <OrderDetailSections type="expense" id={shownDetailId || 0}>
+          <div className="fc-form-dialog-body space-y-4">
+            <OrderDetailSections type="expense" id={shownDetailId || 0}>
 
-          {detail && (
-            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span>{detail.applicantName}</span>
-              <SoftStatusLabel label={detail.statusName} tone={detail.statusTone as StatusTone} />
-              <span>· 合计 <span className="font-medium text-foreground">{money(detail.totalAmount)}</span></span>
-              {detail.approvedByName && <span>· 审批 {detail.approvedByName}</span>}
-              {detail.paidAccountName && <span>· 付款账户 {detail.paidAccountName}</span>}
-            </div>
-          )}
-          <div className="max-h-80 overflow-y-auto rounded-md border">
-            <ReportTable className="w-full text-sm">
-              <thead className="text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-1.5 text-left">类别</th>
-                  <th className="px-2 py-1.5 text-left">发生日期</th>
-                  <th className="px-2 py-1.5 text-left">说明</th>
-                  <th className="px-2 py-1.5 text-right">金额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detail?.items?.map((i, idx) => (
-                  <tr key={idx} className="border-t">
-                    <td className="px-2 py-1.5">{i.categoryName}</td>
-                    <td className="px-2 py-1.5">{formatDisplayDate(String(i.happenedAt))}</td>
-                    <td className="px-2 py-1.5 text-muted-foreground">{i.description || '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums">{money(i.amount)}</td>
+            {detail && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span>{detail.applicantName}</span>
+                <SoftStatusLabel label={detail.statusName} tone={detail.statusTone as StatusTone} />
+                <span>· 合计 <span className="font-medium text-foreground">{money(detail.totalAmount)}</span></span>
+                {detail.approvedByName && <span>· 审批 {detail.approvedByName}</span>}
+                {detail.paidAccountName && <span>· 付款账户 {detail.paidAccountName}</span>}
+              </div>
+            )}
+            <div className="overflow-x-auto rounded-md border">
+              <ReportTable className="w-full text-sm">
+                <thead className="text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left">类别</th>
+                    <th className="px-2 py-1.5 text-left">发生日期</th>
+                    <th className="px-2 py-1.5 text-left">说明</th>
+                    <th className="px-2 py-1.5 text-right">金额</th>
                   </tr>
-                ))}
-              </tbody>
-            </ReportTable>
+                </thead>
+                <tbody>
+                  {detail?.items?.map((i, idx) => (
+                    <tr key={idx} className="border-t">
+                      <td className="px-2 py-1.5">{i.categoryName}</td>
+                      <td className="px-2 py-1.5">{formatDisplayDate(String(i.happenedAt))}</td>
+                      <td className="px-2 py-1.5 text-muted-foreground">{i.description || '—'}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{money(i.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </ReportTable>
+            </div>
+            </OrderDetailSections>
           </div>
-          </OrderDetailSections>
           <DialogFooter>
             <Button variant="outline" onClick={closeDetail} disabled={approveMut.isPending}>关闭</Button>
             {canApproveDetail && detail && <>
@@ -566,16 +576,16 @@ export default function ExpenseClaimsPage() {
 
       {/* 付款 */}
       <Dialog open={!!payTarget && canPay} onOpenChange={v => !v && setPayTarget(null)}>
-        <DialogContent>
+        <DialogContent className="fc-form-dialog">
           <DialogHeader description={<>{<>
             将从所选账户支出 <span className="font-semibold text-foreground">{payTarget ? money(payTarget.totalAmount) : ''}</span>，
             并写入该账户流水。付款后单据不可再改。
           </>}</>}><DialogTitle>报销付款 — {payTarget?.claimNo}</DialogTitle></DialogHeader>
 
-          <div className="space-y-1">
+          <div className="fc-form-dialog-body space-y-1">
             <Label>付款账户 *</Label>
             <Select value={payAccount} onValueChange={setPayAccount}>
-              <SelectTrigger className="h-10"><SelectValue placeholder="请选择账户" /></SelectTrigger>
+              <SelectTrigger className="h-9"><SelectValue placeholder="请选择账户" /></SelectTrigger>
               <SelectContent>
                 {(accounts ?? []).map(a => (
                   <SelectItem key={a.id} value={String(a.id)}>{a.name}（余额 {money(a.currentBalance)}）</SelectItem>
@@ -630,9 +640,9 @@ export default function ExpenseClaimsPage() {
 
       {/* 驳回 */}
       <Dialog open={!!rejectTarget && canApprove && rejectScope.current === scope.key} onOpenChange={v => !v && !rejectMut.isPending && setRejectTarget(null)}>
-        <DialogContent>
+        <DialogContent className="fc-form-dialog">
           <DialogHeader description="填写驳回原因。申请人补齐资料后需新建报销单。"><DialogTitle>驳回报销单 — {rejectTarget?.claimNo}</DialogTitle></DialogHeader>
-          <div className="space-y-1">
+          <div className="fc-form-dialog-body space-y-1">
             <Label>驳回原因 *</Label>
             <textarea aria-label="驳回原因" className="min-h-28 w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" value={rejectReason} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRejectReason(e.target.value)}
               placeholder="如：缺少发票，请补齐资料后新建报销单" />

@@ -9,7 +9,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import { DateRangeQueryBar } from '@/components/shared/DateRangeQueryBar'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getMonthDateRange, getRelativeDateRange } from '@/lib/dateRange'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { ReportQueryFeedback } from './ReportQueryFeedback'
@@ -106,7 +106,7 @@ export default function ProfitAnalysisPage() {
     { key: 'totalAmount', title: '销售额', width: 110, align: 'right', render: v => <span className="font-medium">{money(Number(v))}</span> },
     { key: 'costAmount', title: '成本', width: 150, align: 'right', render: costCell },
     { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive-ink' : 'text-success-ink'}`}>{money(Number(v))}</span> },
-    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
+    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <SoftStatusLabel label={`${Number(v).toFixed(1)}%`} tone="draft" /> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '销售单详情')}>打开原单</Button> },
   ]
 
@@ -117,7 +117,7 @@ export default function ProfitAnalysisPage() {
     { key: 'revenueAmount', title: '销售额', width: 110, align: 'right', render: v => <span>{money(Number(v))}</span> },
     { key: 'costAmount', title: '成本', width: 150, align: 'right', render: costCell },
     { key: 'grossProfit', title: '毛利', width: 110, align: 'right', render: v => <span className={`font-semibold ${Number(v) < 0 ? 'text-destructive-ink' : 'text-success-ink'}`}>{money(Number(v))}</span> },
-    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <Badge variant="outline">{Number(v).toFixed(1)}%</Badge> },
+    { key: 'marginRate', title: '毛利率', width: 100, align: 'right', render: v => <SoftStatusLabel label={`${Number(v).toFixed(1)}%`} tone="draft" /> },
     { key: 'path', title: '操作', width: 120, render: v => <Button size="sm" variant="outline" onClick={() => openPath(String(v), '商品管理')}>查看商品</Button> },
   ]
 
@@ -143,7 +143,7 @@ export default function ProfitAnalysisPage() {
     <div className="space-y-5">
       <PageHeader
         title="利润 / 库存分析"
-        description="日期仅筛选已完成销售单的开单时间。销售净额扣除整单折扣，商品净额按明细金额比例分摊；毛利为净额减成本估算。库存与滞销为当前授权仓库数据，不随日期变化。"
+        description="查看销售毛利、商品毛利与库存金额分析。"
         actions={(
           <div className="flex flex-wrap gap-2">
             <Button variant="outline"
@@ -190,7 +190,7 @@ export default function ProfitAnalysisPage() {
 
       <ReportQueryFeedback title="利润 / 库存分析" hasData={!!data} isError={isError} isFetching={isFetching} error={error} onRetry={() => void refetch()} />
 
-      <div className="flex flex-wrap gap-1 border-b border-border">
+      <div className="fc-segmented-control w-fit" role="group" aria-label="利润与库存分析">
         {([
           { key: 'sale' as const, label: '销售毛利' },
           { key: 'product' as const, label: '商品毛利' },
@@ -202,7 +202,7 @@ export default function ProfitAnalysisPage() {
             type="button"
             onClick={() => setTab(item.key)}
             aria-pressed={tab === item.key}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === item.key ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+            className="fc-segmented-option"
           >
             {item.label}
           </button>

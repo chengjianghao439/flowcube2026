@@ -5,15 +5,18 @@ import { money } from '@/lib/format'
 import { useState, useEffect, useRef, useSyncExternalStore, useId } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { isReversedDateRange } from '@/lib/dateRange'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { toast } from '@/lib/toast'
 import { downloadExport } from '@/lib/exportDownload'
@@ -57,69 +60,71 @@ function TransactionsQueryDialog({ open, initial, accounts, onClose, onApply }: 
   const [v, setV] = useState<TxQuery>(initial)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
   const set = (patch: Partial<TxQuery>) => setV(p => ({ ...p, ...patch }))
+  const dateInvalid = isReversedDateRange(v.startDate, v.endDate)
+  const dateErrorId = `${inputId}-date-error`
+  function apply() {
+    if (dateInvalid) return
+    onApply(v)
+    onClose()
+  }
   return (
-    <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader description={"设置资金流水的筛选条件。"}><DialogTitle>查询资金流水</DialogTitle></DialogHeader>
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor={`${inputId}-accountId`}>资金账户</Label>
-              <Select value={v.accountId || '__all__'} onValueChange={x => set({ accountId: x === '__all__' ? '' : x })}>
-                <SelectTrigger id={`${inputId}-accountId`} className="h-9"><SelectValue placeholder="全部账户" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部账户</SelectItem>
-                  {accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${inputId}-keyword`}>关键字</Label>
-              <Input id={`${inputId}-keyword`} className="h-9" placeholder="关联单号 / 往来单位" value={v.keyword}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ keyword: e.target.value })} />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor={`${inputId}-bizType`}>业务类型</Label>
-              <Select value={v.bizType || '__all__'} onValueChange={x => set({ bizType: x === '__all__' ? '' : x })}>
-                <SelectTrigger id={`${inputId}-bizType`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部</SelectItem>
-                  {BIZ_TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${inputId}-direction`}>收支方向</Label>
-              <Select value={v.direction || '__all__'} onValueChange={x => set({ direction: x === '__all__' ? '' : x })}>
-                <SelectTrigger id={`${inputId}-direction`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部</SelectItem>
-                  <SelectItem value="1">收入</SelectItem>
-                  <SelectItem value="2">支出</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+    <QueryDialog open={open} dialogId="finance-transactions-query" title="查询资金流水" width={680}
+      onClose={onClose} resetLabel="清空" onReset={() => setV({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' })} onApply={apply} applyDisabled={dateInvalid}>
+      <div className="grid gap-3 px-5 py-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor={`${inputId}-accountId`}>资金账户</Label>
+            <Select value={v.accountId || '__all__'} onValueChange={x => set({ accountId: x === '__all__' ? '' : x })}>
+              <SelectTrigger id={`${inputId}-accountId`} className="h-9"><SelectValue placeholder="全部账户" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部账户</SelectItem>
+                {accounts.map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1">
-            <div className="text-sm font-medium">发生日期</div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor={`${inputId}-startDate`} className="sr-only">发生日期（起）</Label>
-              <DatePicker id={`${inputId}-startDate`} value={v.startDate} onChange={x => set({ startDate: x })} max={v.endDate || undefined} className="h-9 flex-1" />
-              <span className="text-muted-foreground">至</span>
-              <Label htmlFor={`${inputId}-endDate`} className="sr-only">发生日期（止）</Label>
-              <DatePicker id={`${inputId}-endDate`} value={v.endDate} onChange={x => set({ endDate: x })} min={v.startDate || undefined} className="h-9 flex-1" />
-            </div>
+            <Label htmlFor={`${inputId}-keyword`}>关键字</Label>
+            <Input id={`${inputId}-keyword`} className="h-9" placeholder="关联单号 / 往来单位" value={v.keyword}
+              onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) apply() }}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => set({ keyword: e.target.value })} />
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setV({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' })}>清空</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label htmlFor={`${inputId}-bizType`}>业务类型</Label>
+            <Select value={v.bizType || '__all__'} onValueChange={x => set({ bizType: x === '__all__' ? '' : x })}>
+              <SelectTrigger id={`${inputId}-bizType`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部</SelectItem>
+                {BIZ_TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={`${inputId}-direction`}>收支方向</Label>
+            <Select value={v.direction || '__all__'} onValueChange={x => set({ direction: x === '__all__' ? '' : x })}>
+              <SelectTrigger id={`${inputId}-direction`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部</SelectItem>
+                <SelectItem value="1">收入</SelectItem>
+                <SelectItem value="2">支出</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="space-y-1">
+          <div className="text-sm font-medium">发生日期</div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor={`${inputId}-startDate`} className="sr-only">发生日期（起）</Label>
+            <DatePicker id={`${inputId}-startDate`} value={v.startDate} onChange={x => set({ startDate: x })} max={v.endDate || undefined} aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined} className="h-9 flex-1" />
+            <span className="text-muted-foreground">至</span>
+            <Label htmlFor={`${inputId}-endDate`} className="sr-only">发生日期（止）</Label>
+            <DatePicker id={`${inputId}-endDate`} value={v.endDate} onChange={x => set({ endDate: x })} min={v.startDate || undefined} aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined} className="h-9 flex-1" />
+          </div>
+        </div>
+        {dateInvalid && <p id={dateErrorId} role="alert" className="text-xs text-destructive-ink">发生日期的起始日期不能晚于结束日期。</p>}
+      </div>
+    </QueryDialog>
   )
 }
 
@@ -180,7 +185,6 @@ export default function FinanceTransactionsPage() {
   if (query.accountId) queryChips.push({ key: 'acc', text: `账户：${accountName ?? query.accountId}`, onClear: dropQ('accountId') })
   if (query.bizType) queryChips.push({ key: 'biz', text: `类型：${BIZ_TYPE_NAME[query.bizType] ?? query.bizType}`, onClear: dropQ('bizType') })
   if (query.direction) queryChips.push({ key: 'dir', text: `方向：${DIRECTION_NAME[query.direction] ?? query.direction}`, onClear: dropQ('direction') })
-  if (query.startDate || query.endDate) queryChips.push({ key: 'date', text: `发生日期：${query.startDate || '…'} ~ ${query.endDate || '…'}`, onClear: dropQ('startDate', 'endDate') })
   if (query.keyword) queryChips.push({ key: 'kw', text: `搜索：${query.keyword}`, onClear: dropQ('keyword') })
 
   const columns: TableColumn<AccountTransaction>[] = [
@@ -218,7 +222,7 @@ export default function FinanceTransactionsPage() {
     <div className="space-y-4">
       <PageHeader
         title="资金流水"
-        description="所有资金账户的收支明细。账户余额以流水为准；如需对平账实差异，请到账户管理页做「余额调整」。"
+        description="查看所有资金账户的收支明细。"
         actions={(
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => downloadExport('/export/finance-transactions', {
@@ -228,7 +232,7 @@ export default function FinanceTransactionsPage() {
               ...(query.startDate ? { startDate: query.startDate } : {}),
               ...(query.endDate ? { endDate: query.endDate } : {}),
               ...(query.keyword ? { keyword: query.keyword } : {}),
-            }).catch(e => toast.error((e as Error).message))}>导出</Button>
+            }).catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </div>
         )}
@@ -237,23 +241,29 @@ export default function FinanceTransactionsPage() {
 
       {summary && !isError && <SummaryStrip items={[{ label: '期间收入', value: cashLabel(summary.inAmount), tone: 'text-success-ink' }, { label: '期间支出', value: cashLabel(summary.outAmount), tone: 'text-destructive-ink' }, { label: '净额', value: cashLabel(netAmount), tone: netAmount < 0 ? 'text-destructive-ink' : 'text-foreground' }]} />}
 
-      <QueryChips chips={queryChips} onClearAll={() => { setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' }); }} />
+      <div className="flex flex-wrap items-center gap-2" aria-label="已应用筛选">
+        <AppliedDateRange label="发生日期" startDate={query.startDate} endDate={query.endDate} onClear={dropQ('startDate', 'endDate')} />
+        <QueryChips chips={queryChips} onClearAll={() => setQuery({ ...EMPTY_TX_QUERY, startDate: '', endDate: '' })} />
+      </div>
 
-      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />}
+      {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable fluid virtualized scrollLabel="资金流水表格" columnStorageKey="finance-transactions" columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />}
 
       {!isError && !isLoading && data && <ListSummary total={total} unit="笔" />}
 
       <Dialog open={traceCurrent} onOpenChange={open=>{if(!open&&traceCurrent)setTrace(null)}}>
-        <DialogContent><DialogHeader description={"核对供应商、退款金额与收款信息。"}><DialogTitle>供应商退款</DialogTitle></DialogHeader>
-          {traceQuery.isError ? <QueryErrorState compact error={traceQuery.error} onRetry={() => void traceQuery.refetch()} /> : <>
-          {traceQuery.isLoading && <p>正在加载原退款单…</p>}
-          {traceCurrent && traceQuery.data && !traceData && <p>原退款单与这笔流水不符，请人工核对。</p>}
-          {traceCurrent && traceData && <div className="space-y-2 text-sm">
-            <p>{traceData!.refund_no} / {formatDisplayDate(traceData!.refund_date)}</p>
-            <p className="tabular-nums">回款 {refundCashLabel(traceData!.amount)}</p>
-            <p>{traceData!.voucher_generate_error || (typeof traceData!.voucher_id==='number'&&Number.isSafeInteger(traceData!.voucher_id)&&traceData!.voucher_id>0?'凭证已生成':'凭证待核对')}</p>
-          </div>}
-          </>}
+        <DialogContent className="fc-form-dialog"><DialogHeader><DialogTitle>供应商退款</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-4">
+            {traceQuery.isError ? <QueryErrorState compact error={traceQuery.error} onRetry={() => void traceQuery.refetch()} /> : <>
+            {traceQuery.isLoading && <p>正在加载原退款单…</p>}
+            {traceCurrent && traceQuery.data && !traceData && <p>原退款单与这笔流水不符，请人工核对。</p>}
+            {traceCurrent && traceData && <div className="space-y-2 text-sm">
+              <p>{traceData!.refund_no} / {formatDisplayDate(traceData!.refund_date)}</p>
+              <p className="tabular-nums">回款 {refundCashLabel(traceData!.amount)}</p>
+              <p>{traceData!.voucher_generate_error || (typeof traceData!.voucher_id==='number'&&Number.isSafeInteger(traceData!.voucher_id)&&traceData!.voucher_id>0?'凭证已生成':'凭证待核对')}</p>
+            </div>}
+            </>}
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => { if (traceCurrent) setTrace(null) }}>返回列表</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       <TransactionsQueryDialog

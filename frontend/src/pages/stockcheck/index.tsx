@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { useId, useState } from 'react'
 import { usePermission } from '@/hooks/usePermission'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { toast } from '@/lib/toast'
@@ -6,7 +7,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordStatusFilters } from '@/components/shared/KeywordStatusFilters'
+import { EMPTY_KEYWORD_STATUS } from '@/components/shared/keywordStatusFilterDefaults'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,11 +26,20 @@ import type { TableColumn } from '@/types'
 
 const STATUS_TONE: Record<number, StatusTone> = { 1:'active', 2:'success', 3:'danger' }
 
+const STATUS_OPTIONS = [
+  { value: '', label: '全部盘点单' },
+  { value: '1', label: '进行中' },
+  { value: '2', label: '已完成' },
+  { value: '3', label: '已取消' },
+]
+
 export default function StockCheckPage() {
   // 2026-09-17 验收修复（G-10）：新建盘点按钮按权限渲染
   const { can } = usePermission()
-  const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState(EMPTY_KEYWORD_STATUS)
+  const [queryOpen, setQueryOpen] = useState(false)
+  const { keyword, status } = filters
+  const createFormId = useId()
   const [createOpen, setCreateOpen] = useState(false)
   const [detailId, setDetailId] = useState<number|null>(null)
   const [whId, setWhId] = useState('')
@@ -37,7 +48,7 @@ export default function StockCheckPage() {
   const [abcClass, setAbcClass] = useState<'A'|'B'|'C'>('A')
   const [createLocked, setCreateLocked] = useState(false)
 
-  const { data, isLoading, error, refetch } = useCheckList({ page: 1, pageSize: 20, keyword })
+  const { data, isLoading, error, refetch } = useCheckList({ page: 1, pageSize: 20, keyword, ...(status && { status: Number(status) }) })
   const total = data?.pagination?.total ?? 0
   const { data: warehouses } = useWarehousesActive()
   const create = useCreateCheck()
@@ -50,7 +61,7 @@ export default function StockCheckPage() {
     { key:'operatorName', title:'经办人', width:100 },
     { key:'createdAt', title:'创建时间', width:160, render:(v)=>formatDisplayDateTime(v) },
     { key:'id', title:'操作', width:100, render:(_,row)=>(
-      <Button size="sm" variant="outline" onClick={()=>setDetailId((row as StockCheck).id)}>查看/填写</Button>
+      <TableActionsMenu primaryVariant="outline" primaryLabel="查看/填写" onPrimaryClick={() => setDetailId(row.id)} items={[]} />
     )}
   ]
 
@@ -77,25 +88,25 @@ export default function StockCheckPage() {
   return (
     <div className="space-y-4">
       <PageHeader title="库存盘点"
-        description={!error && !isLoading && data?.truncated ? <><span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</span> 创建盘点单并填写实盘数量，提交后自动调整库存</> : '创建盘点单并填写实盘数量，提交后自动调整库存'}  actions={can(PERMISSIONS.STOCKCHECK_CREATE) ? <Button onClick={()=>setCreateOpen(true)}>+ 新建盘点</Button> : undefined} />
+        description={!error && !isLoading && data?.truncated ? <><span role="status">已读取 {data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 单，请缩小查询范围。</span> 创建盘点单并填写实盘数量，提交后自动调整库存。</> : '创建盘点单并填写实盘数量，提交后自动调整库存。'}  actions={<>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          {can(PERMISSIONS.STOCKCHECK_CREATE) ? <Button onClick={()=>setCreateOpen(true)}>新建盘点</Button> : undefined}
+        </>} />
 
-      <FilterCard>
-        <Input placeholder="搜索单号/仓库…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-56" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); } }} />
-        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); }}>重置</Button>}
-      </FilterCard>
+      <KeywordStatusFilters title="盘点单" dialogId="stockcheck-query" placeholder="搜索单号/仓库…"
+        options={STATUS_OPTIONS} value={filters} onChange={setFilters} open={queryOpen} onClose={() => setQueryOpen(false)} />
       {error ? <QueryErrorState error={error} onRetry={()=>void refetch()} />
-        : <DataTable virtualized preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list||[]} loading={isLoading} />}
+        : <DataTable fluid columnStorageKey="stockcheck" scrollLabel="库存盘点表格" virtualized preserveFocus retainFocusedRow={detailId !== null} columns={columns} data={data?.list||[]} loading={isLoading} />}
       {!error && !isLoading && data && !data.truncated && <ListSummary total={total} unit="单" />}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="fc-form-dialog sm:max-w-2xl">
           <DialogHeader description={<>{checkType==='2'?'分批盘点：只拉该档位到期未盘的商品（不停机）':'全盘：拉该仓库所有有库存的商品'}作为盘点明细</>}><DialogTitle>新建盘点单</DialogTitle></DialogHeader>
-          <form onSubmit={handleCreate} className="space-y-4 py-2">
+          <form id={createFormId} onSubmit={handleCreate} className="fc-form-dialog-body space-y-4">
             <div className="space-y-1">
               <Label>选择仓库 *</Label>
               <Select value={whId || '__none__'} onValueChange={v => setWhId(v === '__none__' ? '' : v)}>
-                <SelectTrigger className="h-10 w-full">
+                <SelectTrigger className="h-9 w-full">
                   <SelectValue placeholder="请选择" />
                 </SelectTrigger>
                 <SelectContent>
@@ -109,7 +120,7 @@ export default function StockCheckPage() {
             <div className="space-y-1">
               <Label>盘点方式</Label>
               <Select value={checkType} onValueChange={v => setCheckType(v as '1'|'2')}>
-                <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">全盘（盘全仓所有有货商品）</SelectItem>
                   <SelectItem value="2">分批盘点（按档位，不停机）</SelectItem>
@@ -126,7 +137,7 @@ export default function StockCheckPage() {
                   }}>重算本仓分档</Button>
                 </div>
                 <Select value={abcClass} onValueChange={v => setAbcClass(v as 'A'|'B'|'C')}>
-                  <SelectTrigger className="h-10 w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="A">A 类（高周转，盘点更频繁）</SelectItem>
                     <SelectItem value="B">B 类（中周转）</SelectItem>
@@ -140,11 +151,11 @@ export default function StockCheckPage() {
               <Label>备注</Label>
               <Input value={remark} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRemark(e.target.value)} />
             </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={()=>setCreateOpen(false)} disabled={create.isPending || createLocked}>取消</Button>
-              <Button type="submit" disabled={create.isPending || createLocked}>{create.isPending || createLocked?'创建中…':'创建盘点'}</Button>
-            </DialogFooter>
           </form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={()=>setCreateOpen(false)} disabled={create.isPending || createLocked}>取消</Button>
+            <Button type="submit" form={createFormId} disabled={create.isPending || createLocked}>{create.isPending || createLocked?'创建中…':'创建盘点'}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

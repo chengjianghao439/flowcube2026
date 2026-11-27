@@ -50,11 +50,11 @@ function DuplicateRoleDialog({ role, onClose }: { role: Role | null; onClose: ()
 
   return (
     <Dialog open={!!role} onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="fc-form-dialog sm:max-w-md">
         <DialogHeader description={<>{<>复制会连同该角色的全部权限一起带入新角色，之后可在本页单独调整。</>}</>}>
           <DialogTitle>复制角色</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
+        <div className="fc-form-dialog-body space-y-3">
           <div>
             <Label>源角色</Label>
             <Input value={role?.name ?? ''} disabled className="mt-1 bg-muted/50" />
@@ -102,11 +102,11 @@ function CreateRoleDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader description={"填写角色编码、名称与备注。"}>
+      <DialogContent className="fc-form-dialog sm:max-w-md">
+        <DialogHeader>
           <DialogTitle>新增角色</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3 py-2">
+        <div className="fc-form-dialog-body space-y-3">
           <div>
             <Label>角色编码 *</Label>
             <Input value={code} onChange={e => setCode(e.target.value)} placeholder="如 warehouse_manager" maxLength={50} />
@@ -200,7 +200,7 @@ export default function PermissionsPage() {
     <div className="space-y-6">
       <PageHeader
         title="权限管理"
-        description="提示：修改权限后，用户需要重新登录才能生效。管理员（admin）角色权限固定，不可修改；系统内置角色不可删除。"
+        description="配置角色权限；修改后需重新登录生效。"
         status={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /><span className="text-sm text-muted-foreground">{roleList.find(r => r.id === selectedRole)?.name ?? ''}</span></> : undefined}
         actions={isSuperAdmin ? (
           editing ? (

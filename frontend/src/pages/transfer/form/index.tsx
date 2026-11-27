@@ -17,7 +17,7 @@ import { productIdentityColumns } from '@/components/shared/productIdentityColum
 import { useContext, useRef, useState, useMemo } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Plus, Save, PackageOpen } from 'lucide-react'
+import { Loader2, Plus, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { EditModeBadge, UnsavedBadge } from '@/components/shared/EditModeBadge'
 import { Input } from '@/components/ui/input'
@@ -31,6 +31,7 @@ import { ActionBar } from '@/components/shared/ActionBar'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
 import { SectionCard } from '@/components/shared/SectionCard'
+import { OrderFact, OrderFacts } from '@/components/shared/OrderFacts'
 import { ProductFinder } from '@/components/finder'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
 import { formatDisplayDateTime } from '@/lib/dateTime'
@@ -298,6 +299,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
       <SectionCard
         title="调拨明细"
         compact
+        noPadding
         actions={
           <Button type="button" size="sm" variant="outline" disabled={saving} onClick={addItem} className="gap-1.5">
             <Plus className="h-4 w-4" />添加商品
@@ -305,13 +307,12 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
         }
       >
         {items.length === 0 ? (
-          <div className="desktop-entry-empty flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border py-12 text-center">
-            <PackageOpen className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">还没有调拨明细，点击上方&ldquo;添加商品&rdquo;开始录入</p>
+          <div className="flex min-h-32 flex-col items-center justify-center gap-2 px-4 py-6 text-center">
+            <p className="text-sm text-muted-foreground">暂无调拨明细</p>
           </div>
         ) : (
           <>
-          <div className="overflow-x-auto">
+          <div role="region" tabIndex={0} aria-label="调拨商品明细" className="overflow-x-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring">
             <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '调拨数量', width: 96, align: 'right' }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="transfer-entry-items" minWidth={760}>
               <tbody>
                 {items.map(item => (
@@ -364,8 +365,9 @@ function FormView({ closeTab, tabPath, editOrder, onSaved }: {
             </ResizableTable>
           </div>
 
-          <div className="desktop-entry-summary flex items-center justify-between border-t border-border pt-4">
-            <p className="text-muted-body">商品种数：{items.length} 种　合计数量：{totalQuantity}</p>
+          <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+            <span className="mr-auto tabular-nums">商品种数：{items.length} 种</span>
+            <strong className="tabular-nums"><span className="mr-2 font-normal">合计数量</span>{totalQuantity}</strong>
           </div>
           </>
         )}
@@ -446,12 +448,14 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
         rightActions={
           <>
             {canCancel && (
-              <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
-                onClick={() => ask('取消调拨单', '取消后此调拨单将无法恢复，请确认操作。', 'destructive', () => {
-                  setConfirmState(s => ({ ...s, open: false })); cancelMutate.mutate()
-                })}>
-                取消
-              </Button>
+              <div role="group" aria-label="调拨撤销操作" className="flex items-center gap-2 border-r border-border pr-2">
+                <Button variant="outline" className="border-destructive/30 text-destructive-ink hover:bg-destructive/5" disabled={isPending}
+                  onClick={() => ask('取消调拨单', '取消后此调拨单将无法恢复，请确认操作。', 'destructive', () => {
+                    setConfirmState(s => ({ ...s, open: false })); cancelMutate.mutate()
+                  })}>
+                  取消
+                </Button>
+              </div>
             )}
             {order.status === 1 && (
               <Button variant="outline" disabled={isPending} onClick={() => setEditing(true)}>编辑</Button>
@@ -469,29 +473,18 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
       />
 
       <OrderDetailSections type="transfer" id={order.id}>
-      <SectionCard title="基础信息" compact>
-        <dl className="desktop-document-facts grid grid-cols-3 gap-x-6 gap-y-3 text-sm">
-          {[
-            ['调出仓库',   order.fromWarehouseName],
-            ['调入仓库', order.toWarehouseName],
-            ['经办人',   order.operatorName],
-            ['创建时间', formatDisplayDateTime(order.createdAt)],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <dt className="mb-0.5 text-helper">{label}</dt>
-              <dd className="font-medium">{value}</dd>
-            </div>
-          ))}
-          {order.remark && (
-            <div className="desktop-field-wide col-span-3">
-              <dt className="mb-0.5 text-helper">备注</dt>
-              <dd>{order.remark}</dd>
-            </div>
-          )}
-        </dl>
+      <SectionCard title="基础信息" compact contentClassName="p-3">
+        <OrderFacts>
+          <OrderFact label="调出仓库">{order.fromWarehouseName}</OrderFact>
+          <OrderFact label="调入仓库">{order.toWarehouseName}</OrderFact>
+          <OrderFact label="经办人">{order.operatorName}</OrderFact>
+          <OrderFact label="创建时间">{formatDisplayDateTime(order.createdAt)}</OrderFact>
+          {order.remark && <OrderFact label="备注" className="sm:col-span-2">{order.remark}</OrderFact>}
+        </OrderFacts>
       </SectionCard>
 
-      <SectionCard title="调拨明细" compact>
+      <SectionCard title="调拨明细" compact noPadding
+        contentClassName="[&>.desktop-table]:!rounded-none [&>.desktop-table]:!border-0 [&>.desktop-table]:!shadow-none">
         <DataTable
           columns={[
             ...productIdentityColumns({ compact: true }),
@@ -504,11 +497,12 @@ function DetailView({ transferId, closeTab, tabPath }: { transferId: number; clo
           ] satisfies TableColumn<TransferItem>[]}
           data={order.items ?? []}
           rowKey="id"
+          scrollLabel="调拨商品明细"
           emptyText="暂无调拨明细"
         />
 
-        <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
-          <p className="text-muted-body">共 {order.items?.length ?? 0} 种商品</p>
+        <div className="desktop-order-total flex flex-wrap items-center justify-end gap-x-6 gap-y-2 border-t px-4 py-3 text-sm">
+          <span className="mr-auto tabular-nums">共 {order.items?.length ?? 0} 种商品</span>
         </div>
       </SectionCard>
 

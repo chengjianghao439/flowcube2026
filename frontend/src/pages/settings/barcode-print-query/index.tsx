@@ -4,7 +4,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useContext, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { X, Search, PackageOpen, PackageCheck, Truck } from 'lucide-react'
+import { X, PackageOpen, PackageCheck, Truck } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { AppDialog } from '@/components/shared/AppDialog'
 import PageHeader from '@/components/shared/PageHeader'
@@ -12,7 +12,6 @@ import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { getBarcodePrintRecordsApi, reprintBarcodeRecordApi } from '@/api/print-jobs'
 import { printQueueFeedback, triggerPrintPoll } from '@/lib/printQueue'
@@ -288,7 +287,7 @@ export default function BarcodePrintQueryPage() {
           <div className="space-y-1">
             {jobStatusBadge(row.latestJob)}
             {row.latestJob?.requestPurpose === 'reprint' && (
-              <div><Badge variant="outline" className="text-xs font-normal" data-print-purpose="reprint">补打</Badge></div>
+              <div data-print-purpose="reprint"><SoftStatusLabel label="补打" tone="info" /></div>
             )}
           </div>
         ),
@@ -406,42 +405,32 @@ export default function BarcodePrintQueryPage() {
     <div className="fc-print-query-page space-y-4" style={{ overflowAnchor: 'none' }}>
       <PageHeader
         title="条码打印查询"
-        description={`${recovery ? '按库存条码、商品或收货单号查询。仅恢复有有效收货单及明细的现存条码；不新建库存。请先核对现场标签。' : currentCategory?.hint ?? ''} 业务完成与条码业务状态不代表已出纸；最近打印任务单独展示。客户端成功回报后仍需现场核对纸张，失败或超时先核对工作站、打印机和纸张。`}
+        description={`${recovery ? '仅恢复有有效收货单及明细的现存条码；不新建库存。' : ''}业务完成与条码业务状态不代表已出纸。`}
+        actions={<>
+          {category === 'inbound' && <Button variant="outline" onClick={() => { setRecovery(v => !v); setStatus('__all__') }}>{recovery ? '返回打印历史' : '恢复收货标签'}</Button>}
+          <Button ref={queryTrigger} variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+        </>}
       />
 
-      <section className="fc-list-workbench min-w-0 rounded-xl border border-border bg-card" aria-label="条码打印记录">
-        <div className="fc-list-toolbar">
-          <div className="fc-segmented-control" role="group" aria-label="条码类别">
-            {CATEGORY_OPTIONS.map(item => (
-              <button
-                key={item.value}
-                type="button"
-                aria-pressed={category === item.value}
-                title={item.hint}
-                onClick={() => { setCategory(item.value); setRecovery(false) }}
-                className="fc-segmented-option"
-              >
-                {item.value === 'inbound' ? <PackageOpen className="h-4 w-4 shrink-0" aria-hidden /> : item.value === 'outbound' ? <PackageCheck className="h-4 w-4 shrink-0" aria-hidden /> : <Truck className="h-4 w-4 shrink-0" aria-hidden />}
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="fc-list-toolbar-actions">
-            {category === 'inbound' && <Button variant="ghost" onClick={() => { setRecovery(v => !v); setStatus('__all__') }}>{recovery ? '返回打印历史' : '恢复收货标签'}</Button>}
-            <Button ref={queryTrigger} variant="outline" onClick={() => setQueryOpen(true)}><Search className="mr-1.5 h-4 w-4" aria-hidden />查询</Button>
-          </div>
+      <div className="fc-filter-bar fc-filter-bar-underline">
+        <div className="fc-underline-tabs" role="group" aria-label="条码类别">
+          {CATEGORY_OPTIONS.map(item => (
+            <button
+              key={item.value}
+              type="button"
+              aria-pressed={category === item.value}
+              title={item.hint}
+              onClick={() => { setCategory(item.value); setRecovery(false) }}
+            >
+              {item.value === 'inbound' ? <PackageOpen className="h-4 w-4 shrink-0" aria-hidden /> : item.value === 'outbound' ? <PackageCheck className="h-4 w-4 shrink-0" aria-hidden /> : <Truck className="h-4 w-4 shrink-0" aria-hidden />}
+              <span>{item.label}</span>
+            </button>
+          ))}
         </div>
-        {(initialInboundTaskId || initialInboundTaskItemId) && category === 'inbound' && <div className="fc-list-query-context">
-          <p className="font-medium">
-            当前按收货订单筛选
-            {initialInboundTaskId ? ` #${initialInboundTaskId}` : ''}
-            {initialInboundTaskItemId ? ` / 明细 #${initialInboundTaskItemId}` : ''}
-          </p>
-        </div>}
         {chips.length > 0 && (
-          <div className="fc-list-filter-chips flex flex-wrap items-center gap-2">
+          <div className="fc-filter-bar-filters">
             {chips.map(c => (
-              <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+              <span key={c.key} className="fc-query-chip">
                 {c.label}
                 <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                   <X className="h-3 w-3" />
@@ -451,158 +440,168 @@ export default function BarcodePrintQueryPage() {
             <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
           </div>
         )}
+      </div>
 
-        {!canOperate && !awaitingRecoveryQuery && <div className="fc-list-read-state space-y-2 text-sm" role={query.isError ? 'alert' : 'status'}>
-          <p>{query.isError ? '打印记录读取失败，无法核对最新状态；旧记录暂不提供操作。' : query.isPaused ? '网络已暂停，等待恢复后重新读取打印记录。' : query.isFetching ? hasInboundHandoff ? '正在重新读取原收货单的打印记录…' : '正在重新读取打印记录，旧记录待核对，暂不提供操作。' : '最新打印记录尚待核对，暂不提供操作。'}</p>
-          {query.isError && <Button variant="outline" onClick={() => void query.refetch()}>重新读取打印记录</Button>}
-        </div>}
-        {inboundContext && (
-          <div className="fc-print-context space-y-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">当前正在处理收货打印任务</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  收货订单 <span className="text-doc-code">{inboundContext.taskNo}</span> 的库存条码都在这里追踪。先绑定缺失的打印机，再处理失败 / 超时的打印任务，再回到收货详情继续上架。
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {canViewInbound && <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openPath(`/inbound-tasks/${inboundContext.taskId}?focus=print-batches`, `收货订单 ${inboundContext.taskNo}`)}
-                >
-                  返回收货详情
-                </Button>}
-              </div>
+      {(initialInboundTaskId || initialInboundTaskItemId) && category === 'inbound' && <div className="fc-list-query-context">
+        <p className="font-medium">
+          当前按收货订单筛选
+          {initialInboundTaskId ? ` #${initialInboundTaskId}` : ''}
+          {initialInboundTaskItemId ? ` / 明细 #${initialInboundTaskItemId}` : ''}
+        </p>
+      </div>}
+
+      {!canOperate && !awaitingRecoveryQuery && <div className="fc-list-read-state space-y-2 text-sm" role={query.isError ? 'alert' : 'status'}>
+        <p>{query.isError ? '打印记录读取失败，无法核对最新状态；旧记录暂不提供操作。' : query.isPaused ? '网络已暂停，等待恢复后重新读取打印记录。' : query.isFetching ? hasInboundHandoff ? '正在重新读取原收货单的打印记录…' : '正在重新读取打印记录，旧记录待核对，暂不提供操作。' : '最新打印记录尚待核对，暂不提供操作。'}</p>
+        {query.isError && <Button variant="outline" onClick={() => void query.refetch()}>重新读取打印记录</Button>}
+      </div>}
+      {inboundContext && (
+        <div className="fc-print-context space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">当前正在处理收货打印任务</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                收货订单 <span className="text-doc-code">{inboundContext.taskNo}</span> 的库存条码都在这里追踪。先绑定缺失的打印机，再处理失败 / 超时的打印任务，再回到收货详情继续上架。
+              </p>
             </div>
-            <div className="fc-print-context-counts grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
-              <div className="min-w-0">
-                <p className="text-helper">未配置打印机</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.unassignedCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">打印失败</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.failedCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">超时待确认</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.timeoutCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">仍在排队 / 打印中</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.printingCount}</p>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {canViewInbound && <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openPath(`/inbound-tasks/${inboundContext.taskId}?focus=print-batches`, `收货订单 ${inboundContext.taskNo}`)}
+              >
+                返回收货详情
+              </Button>}
             </div>
           </div>
-        )}
-
-        {outboundContext && (
-          <div className="fc-print-context space-y-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">当前正在处理出库打印任务</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  批次 <span className="text-doc-code">{outboundContext.waveNo}</span> 的出库箱贴都在这里追踪。先绑定缺失的打印机，再处理失败 / 超时的打印任务，再回到批次详情继续拣货与分拣。
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {canViewWave && <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openPath(`/picking-waves?waveId=${outboundContext.waveId}&focus=print-closure`, `批次 ${outboundContext.waveNo}`)}
-                >
-                  返回批次详情
-                </Button>}
-              </div>
+          <div className="fc-print-context-counts grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
+            <div className="min-w-0">
+              <p className="text-helper">未配置打印机</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.unassignedCount}</p>
             </div>
-            <div className="fc-print-context-counts grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
-              <div className="min-w-0">
-                <p className="text-helper">未配置打印机</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.unassignedCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">打印失败</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.failedCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">超时待确认</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.timeoutCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">仍在排队 / 打印中</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.printingCount}</p>
-              </div>
+            <div className="min-w-0">
+              <p className="text-helper">打印失败</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.failedCount}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-helper">超时待确认</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.timeoutCount}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-helper">仍在排队 / 打印中</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{inboundContext.printingCount}</p>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {logisticsContext && (
-          <div className="fc-print-context space-y-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-foreground">当前正在处理物流标签打印任务</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  这里展示物流类别记录，需逐条核对原业务。先核对工作站、打印机和纸张，再处理失败 / 超时；取号与业务完成均不代表标签已出纸。
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {canViewReport && <Button size="sm" variant="ghost" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
-                  打开异常工作台
-                </Button>}
-              </div>
+      {outboundContext && (
+        <div className="fc-print-context space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">当前正在处理出库打印任务</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                批次 <span className="text-doc-code">{outboundContext.waveNo}</span> 的出库箱贴都在这里追踪。先绑定缺失的打印机，再处理失败 / 超时的打印任务，再回到批次详情继续拣货与分拣。
+              </p>
             </div>
-            <div className="fc-print-context-counts grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
-              <div className="min-w-0">
-                <p className="text-helper">未配置打印机</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.unassignedCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">打印失败</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.failedCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">超时待确认</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.timeoutCount}</p>
-              </div>
-              <div className="min-w-0">
-                <p className="text-helper">仍在排队 / 打印中</p>
-                <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.printingCount}</p>
-              </div>
+            <div className="flex flex-wrap gap-2">
+              {canViewWave && <Button
+                size="sm"
+                variant="outline"
+                onClick={() => openPath(`/picking-waves?waveId=${outboundContext.waveId}&focus=print-closure`, `批次 ${outboundContext.waveNo}`)}
+              >
+                返回批次详情
+              </Button>}
             </div>
-            {logisticsContext.latestBizNo ? (
-              <p className="text-xs text-muted-foreground">最近物流编码：<span className="text-doc-code">{logisticsContext.latestBizNo}</span></p>
-            ) : null}
           </div>
-        )}
+          <div className="fc-print-context-counts grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
+            <div className="min-w-0">
+              <p className="text-helper">未配置打印机</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.unassignedCount}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-helper">打印失败</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.failedCount}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-helper">超时待确认</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.timeoutCount}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-helper">仍在排队 / 打印中</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{outboundContext.printingCount}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
-        {storedIntents.length > 0 && <div className="fc-list-read-state text-sm" role="status">
-          <p>存在已保留的补打意图。“核对原补打”查询或恢复原结果，不静默另建任务。未知或过期结果须核对原任务及现场纸张；确需增加一份时，请在该行操作菜单明确选择“另补一份”。</p>
-          {storedIntents.filter(info => info.phase === 'pending').map(info => <div key={info.resource} className="mt-2 flex flex-wrap items-center gap-2">
-            <span>原条码记录 #{info.resource.split(':').at(-1)}：{info.expired ? '原意图已过期，结果仍未知，禁止按旧意图重建。' : '原结果尚未确认。'}</span>
-            {'payload' in info && <Button size="sm" variant="outline" disabled={!canOperate || !canReprint || reprinting} onClick={() => {
-              const payload = info.payload as { category: BarcodePrintCategory; recordId: number; recovery?: boolean }
-              reprint({ row: { category: payload.category, recordId: payload.recordId, canRecover: payload.recovery === true } as BarcodePrintRecord, queryOnly: true })
-            }}>查询原结果</Button>}
-          </div>)}
-          {!rows.length && <p className="mt-2">历史记录缺失时，选择“恢复收货标签”并按实物条码查询有效来源。原意图在此保留，查询失败不会另建任务。</p>}
-        </div>}
-        <ConfirmDialog
-          open={!!confirm}
-          onCloseAutoFocus={event => {
-            event.preventDefault()
-            if (!activeTabRef.current) return
-            const target = confirmTrigger.current
-            confirmTrigger.current = null
-            if (target?.isConnected && !target.matches(':disabled') && target.getClientRects().length) target.focus({ preventScroll: true })
-            else queryTrigger.current?.focus({ preventScroll: true })
-          }}
-          title={confirm?.another ? '明确另补一份' : '恢复收货标签'}
-          description={`${confirm?.row.barcode ?? ''}：${confirm?.another ? '原补打可能已经入队或出纸。此操作明确创建另一份标签，请先核对原任务和现场纸张。' : '历史打印记录已缺失，将根据有效收货来源恢复此库存条码的标签。请确认现场确需标签。'}`}
-          confirmText={confirm?.another ? '确认另补一份' : '确认恢复标签'}
-          loading={reprinting}
-          onCancel={() => setConfirm(null)}
-          onConfirm={() => { if (confirm) reprint({ row: confirm.row, another: confirm.another, expectedKey: confirm.key, expectedOwner: confirm.owner }, { onSuccess: () => setConfirm(null) }) }}
-        />
+      {logisticsContext && (
+        <div className="fc-print-context space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">当前正在处理物流标签打印任务</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                这里展示物流类别记录，需逐条核对原业务。先核对工作站、打印机和纸张，再处理失败 / 超时；取号与业务完成均不代表标签已出纸。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {canViewReport && <Button size="sm" variant="ghost" onClick={() => openPath('/reports/exception-workbench', '异常工作台')}>
+                打开异常工作台
+              </Button>}
+            </div>
+          </div>
+          <div className="fc-print-context-counts grid grid-cols-2 gap-x-6 gap-y-3 md:grid-cols-4">
+            <div className="min-w-0">
+              <p className="text-helper">未配置打印机</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.unassignedCount}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-helper">打印失败</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.failedCount}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-helper">超时待确认</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.timeoutCount}</p>
+            </div>
+            <div className="min-w-0">
+              <p className="text-helper">仍在排队 / 打印中</p>
+              <p className="mt-1 text-xl font-semibold tabular-nums text-foreground">{logisticsContext.printingCount}</p>
+            </div>
+          </div>
+          {logisticsContext.latestBizNo ? (
+            <p className="text-xs text-muted-foreground">最近物流编码：<span className="text-doc-code">{logisticsContext.latestBizNo}</span></p>
+          ) : null}
+        </div>
+      )}
+
+      {storedIntents.length > 0 && <div className="fc-list-read-state text-sm" role="status">
+        <p>存在已保留的补打意图。“核对原补打”查询或恢复原结果，不静默另建任务。未知或过期结果须核对原任务及现场纸张；确需增加一份时，请在该行操作菜单明确选择“另补一份”。</p>
+        {storedIntents.filter(info => info.phase === 'pending').map(info => <div key={info.resource} className="mt-2 flex flex-wrap items-center gap-2">
+          <span>原条码记录 #{info.resource.split(':').at(-1)}：{info.expired ? '原意图已过期，结果仍未知，禁止按旧意图重建。' : '原结果尚未确认。'}</span>
+          {'payload' in info && <Button size="sm" variant="outline" disabled={!canOperate || !canReprint || reprinting} onClick={() => {
+            const payload = info.payload as { category: BarcodePrintCategory; recordId: number; recovery?: boolean }
+            reprint({ row: { category: payload.category, recordId: payload.recordId, canRecover: payload.recovery === true } as BarcodePrintRecord, queryOnly: true })
+          }}>查询原结果</Button>}
+        </div>)}
+        {!rows.length && <p className="mt-2">历史记录缺失时，选择“恢复收货标签”并按实物条码查询有效来源。原意图在此保留，查询失败不会另建任务。</p>}
+      </div>}
+      <ConfirmDialog
+        open={!!confirm}
+        onCloseAutoFocus={event => {
+          event.preventDefault()
+          if (!activeTabRef.current) return
+          const target = confirmTrigger.current
+          confirmTrigger.current = null
+          if (target?.isConnected && !target.matches(':disabled') && target.getClientRects().length) target.focus({ preventScroll: true })
+          else queryTrigger.current?.focus({ preventScroll: true })
+        }}
+        title={confirm?.another ? '明确另补一份' : '恢复收货标签'}
+        description={`${confirm?.row.barcode ?? ''}：${confirm?.another ? '原补打可能已经入队或出纸。此操作明确创建另一份标签，请先核对原任务和现场纸张。' : '历史打印记录已缺失，将根据有效收货来源恢复此库存条码的标签。请确认现场确需标签。'}`}
+        confirmText={confirm?.another ? '确认另补一份' : '确认恢复标签'}
+        loading={reprinting}
+        onCancel={() => setConfirm(null)}
+        onConfirm={() => { if (confirm) reprint({ row: confirm.row, another: confirm.another, expectedKey: confirm.key, expectedOwner: confirm.owner }, { onSuccess: () => setConfirm(null) }) }}
+      />
+      <section aria-label="条码打印记录" className="min-w-0">
         <DataTable
           virtualized
           preserveFocus

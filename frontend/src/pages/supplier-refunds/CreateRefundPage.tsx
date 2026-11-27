@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { TabPathContext } from '@/components/layout/TabPathContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import PageHeader from '@/components/shared/PageHeader';
+import { ActionBar } from '@/components/shared/ActionBar';
 import DataTable from '@/components/shared/DataTable';
 import { Label } from '@/components/ui/label';
 import { QueryErrorState } from '@/components/shared/QueryErrorState';
@@ -62,9 +62,10 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
     const displaySource = source.data || (frozenDisplay ? submitted.source : undefined);
     const displayAmount = frozenDisplay ? submitted.amount : amount;
     const displayAccounts = frozenDisplay ? [submitted.account] : accounts.data;
-    return <div className="space-y-4">
-      <PageHeader title="供应商退款"
-        description={scope.error || !accountRight || (source.data && !sourceCashReady) ? <>{scope.error && <span role="alert">{scope.error} </span>}{!accountRight && <span role="alert">选择收入账户需要账户查看权限，请联系管理人员核对授权。 </span>}{source.data && !sourceCashReady && <span role="alert">历史来源金额含不足一分的尾差，请先核对；原值保留，不会自动凑整退款。</span>}</> : '退款草稿来自准确采购退货，确认仅冻结退款；实际收款另行登记。'}  />
+    return <div className="desktop-document-form flex flex-col gap-3">
+      <ActionBar title="供应商退款"
+        rightActions={write.result ? <Button onClick={openCreated}>查看已创建退款单</Button> : <Button disabled={!ready || write.busy} onClick={() => void save()}>{write.busy ? '保存中…' : '保存退款草稿'}</Button>}
+        description={scope.error || !accountRight || (source.data && !sourceCashReady) ? <>{scope.error && <span role="alert">{scope.error}。 </span>}{!accountRight && <span role="alert">选择收入账户需要账户查看权限，请联系管理人员核对授权。 </span>}{source.data && !sourceCashReady && <span role="alert">历史来源金额含不足一分的尾差，请先核对；原值保留，不会自动凑整退款。</span>}</> : '退款草稿来自准确采购退货，确认仅冻结退款；实际收款另行登记。'}  />
 
       {(source.isError || accounts.isError) && <QueryErrorState compact error={source.error || accounts.error} title="退款来源核对失败" description="准确来源或收入账户读取失败，原输入保留，写动作暂停。" onRetry={() => { source.retry(); accounts.retry(); }} />}
       {displaySource && <section aria-label="准确退款来源" className="space-y-3">
@@ -100,10 +101,10 @@ function CreateRefundDraft({ purchaseReturnId, identity }: {
         </section>
         <div className="max-w-3xl space-y-1.5"><Label htmlFor={`${fieldId}-remark`}>退款事由</Label><Input id={`${fieldId}-remark`} aria-label="退款事由" value={remark} maxLength={500} onChange={e => { if (scope.current()) setRemark(e.target.value); }} /></div>
         {error && <p role="alert" className="text-sm text-destructive-ink">{error}</p>}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-sm">{frozenDisplay ? '原请求退款合计' : '本次退款合计'} <span className="ml-2 text-base font-semibold tabular-nums">{refundCashLabel(displayAmount)}</span></p><Button disabled={!ready || write.busy} onClick={() => void save()}>{write.busy ? '保存中…' : '保存退款草稿'}</Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4"><p className="text-sm">{frozenDisplay ? '原请求退款合计' : '本次退款合计'} <span className="ml-2 text-base font-semibold tabular-nums">{refundCashLabel(displayAmount)}</span></p></div>
       </fieldset>
       <RefundRecoveryPanel write={write} />
-      {write.result && <section className="space-y-2"><p role="status">退款单 {write.result.refundNo} 已创建，尚未实际收款。</p><Button onClick={openCreated}>查看已创建退款单</Button></section>}
+      {write.result && <p role="status">退款单 {write.result.refundNo} 已创建，尚未实际收款。</p>}
     </div>;
 
 }
@@ -111,6 +112,6 @@ export default function SupplierRefundCreatePage() {
     const tab = useContext(TabPathContext), location = useLocation(), path = tab || location.pathname + location.search, params = new URLSearchParams(path.split('?')[1] || ''), values = params.getAll('purchaseReturnId');
     const id = values.length === 1 && /^[1-9]\d*$/.test(values[0]) && Number.isSafeInteger(Number(values[0])) ? Number(values[0]) : null;
     if (path.split('?')[0] !== '/supplier-refunds/new' || !id)
-        return <div className="space-y-4"><PageHeader title="供应商退款" description={<span role="alert">退款来源定位无效或缺少完整原单查看权限，请从准确采购退货草稿打开；原输入保留。</span>} /></div>;
+        return <div className="desktop-document-form flex flex-col gap-3"><ActionBar title="供应商退款" description={<span role="alert">退款来源定位无效或缺少完整原单查看权限，请从准确采购退货草稿打开；原输入保留。</span>} /></div>;
     return <CreateRefundDraft key={buildWorkspaceTabRegistrationFromPath(path).key} purchaseReturnId={id} identity={buildWorkspaceTabRegistrationFromPath(path).key}/>;
 }

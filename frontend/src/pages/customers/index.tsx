@@ -9,9 +9,8 @@ import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { activeTone, type StatusTone } from '@/lib/statusTone'
 import { SETTLEMENT_TYPE, SETTLEMENT_TYPE_TONE } from '@/generated/status'
@@ -39,7 +38,7 @@ export default function CustomersPage() {
   const ledger = usePartyLedger(2)
   const qc = useQueryClient()
   const [keyword, setKeyword] = useState('')
-  const [search, setSearch] = useState('')
+  const [queryOpen, setQueryOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [bindOpen, setBindOpen] = useState(false)
@@ -120,16 +119,16 @@ export default function CustomersPage() {
       <PageHeader title="客户管理"
         description="维护客户资料、结算与授信。"  actions={
         <>
-          <Button variant="outline" onClick={() => downloadExport('/export/customers').catch(e => toast.error((e as Error).message))}>导出</Button>
+          <Button variant="outline" onClick={() => downloadExport('/export/customers').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
           {can(PERMISSIONS.CUSTOMER_CREATE) && <Button variant="outline" onClick={() => setImportOpen(v => !v)}>批量导入</Button>}
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           {can(PERMISSIONS.CUSTOMER_CREATE) && <Button onClick={()=>{ setEditing(null); setDialogOpen(true) }}>新增客户</Button>}
         </>
       } />
-      <FilterCard>
-        <Input aria-label="搜索客户编码或名称" placeholder="搜索客户编码或名称" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setSearch(e.target.value)} className="h-9 w-80" onKeyDown={(e: React.KeyboardEvent)=>{ if(e.key==='Enter'){ setKeyword(search); } }} />
-        <Button size="sm" variant="outline" onClick={()=>{ setKeyword(search); }}>搜索</Button>
-        {keyword && <Button size="sm" variant="ghost" onClick={()=>{ setSearch(''); setKeyword(''); }}>重置</Button>}
-      </FilterCard>
+      <KeywordQueryChips keyword={keyword} onClear={() => setKeyword('')} />
+      <KeywordQueryDialog open={queryOpen} dialogId="customers-query" title="查询客户"
+        label="客户编码或名称" placeholder="搜索客户编码或名称" initial={keyword}
+        onClose={() => setQueryOpen(false)} onApply={setKeyword} />
 
       {importOpen && (
         <div className="rounded-lg border border-border bg-card p-4 space-y-3">
@@ -157,10 +156,9 @@ export default function CustomersPage() {
         </div>
       )}
       <section aria-label="客户列表">
-        {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list||[]} loading={isFetching} />}
-        {!isError && !isFetching && data && <footer className="px-1 py-3">
-          <ListSummary total={total} unit="位" />
-        </footer>}
+        {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : <DataTable columns={columns} data={data?.list || []} loading={isFetching}
+          fluid virtualized scrollLabel="客户表格" columnStorageKey="customers:v1" />}
+        {!isError && !isFetching && data && <ListSummary total={total} unit="位" />}
       </section>
       <CustomerFormDialog open={dialogOpen && (editing ? canUpdate : can(PERMISSIONS.CUSTOMER_CREATE))} onClose={()=>setDialogOpen(false)} customer={editing} />
       <ConfirmDialog
@@ -175,13 +173,13 @@ export default function CustomersPage() {
 
       {/* 绑定价格等级弹窗 */}
       <Dialog open={bindOpen && canBindPrice} onOpenChange={setBindOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="fc-form-dialog max-w-lg">
           <DialogHeader description={<>{<>选择客户默认价格等级，下销售单时会自动带入对应的 A / B / C / D 价格。</>}</>}><DialogTitle>绑定价格等级</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="fc-form-dialog-body space-y-4">
             <RecordIdentity title={bindCustomer?.name} code={bindCustomer?.code} />
 
             <Select value={selectedPriceLevel} onValueChange={v => setSelectedPriceLevel(v as 'A' | 'B' | 'C' | 'D')}>
-              <SelectTrigger aria-label="客户默认价格等级" className="h-10 w-full">
+              <SelectTrigger aria-label="客户默认价格等级" className="h-9 w-full">
                 <SelectValue placeholder="选择价格等级" />
               </SelectTrigger>
               <SelectContent>

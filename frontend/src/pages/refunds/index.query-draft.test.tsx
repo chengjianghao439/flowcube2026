@@ -184,3 +184,18 @@ test('查询应用当前草稿并重读，重开沿最新应用值及本页原UR
   await click('查询')
   assertDraft()
 })
+
+test('倒置日期拒绝查询及回车，清除一端可保留关键字查询', async () => {
+  await seedApplied()
+  await click('查询')
+  const before = listRequests().length
+  await date(0, '2026-10-16')
+  expect(dialog().querySelector('[role="alert"]')?.textContent).toContain('起始日期不能晚于结束日期')
+  await click('查询', dialog())
+  await act(async () => keyword().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(listRequests()).toHaveLength(before)
+  await date(1, '')
+  await click('查询', dialog())
+  expect(lastParams()).toMatchObject({ keyword: 'APPLIED', startDate: '2026-10-16' })
+  expect(lastParams()).not.toHaveProperty('endDate')
+})

@@ -31,11 +31,13 @@ function ReservationDialog({ item, canRead, owner, server, generation, onClose }
   const [draft, setDraft] = useState('')
   const [keyword, setKeyword] = useState('')
   return <Dialog open={active} onOpenChange={next => { if (!next) onClose() }}>
-    <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+    <DialogContent className="fc-form-dialog max-w-5xl max-h-[90vh]">
       <DialogHeader description={!canRead ? '没有查看库存的权限' : !item ? '库存商品或仓库信息无效' : '核对预占来源、订单与仓库分布。'}><DialogTitle>库存预占明细</DialogTitle></DialogHeader>
-      {active && canRead && item && <ReservationSnapshotRead renderSummary={summary => <QuantitySummary summary={summary} />}
-        item={item} owner={owner} server={server} generation={generation} draft={draft} onDraftChange={setDraft}
-        keyword={keyword} onApplyKeyword={() => setKeyword(draft.trim())} />}
+      <div className="fc-form-dialog-body space-y-4">
+        {active && canRead && item && <ReservationSnapshotRead renderSummary={summary => <QuantitySummary summary={summary} />}
+          item={item} owner={owner} server={server} generation={generation} draft={draft} onDraftChange={setDraft}
+          keyword={keyword} onApplyKeyword={() => setKeyword(draft.trim())} />}
+      </div>
       <DialogFooter><Button variant="outline" onClick={onClose}>关闭</Button></DialogFooter>
     </DialogContent>
   </Dialog>

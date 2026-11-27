@@ -123,7 +123,7 @@ test.each(['statements', 'receipts'] as const)('撤回查看权停止%s读与浮
   await click('取消', document.querySelector('[role="dialog"]')!)
   const finalRead = calls.filter(call => call.url === `/payments/${kind}`).at(-1)
   expect(finalRead?.params[kind === 'statements' ? 'statementNo' : 'receiptNo']).toBe('FILTER-kept')
-  expect(host.querySelector('button.border-primary')?.textContent).toBe(kind === 'statements' ? '汇总对账' : '收款核销')
+  expect(host.querySelector('button[aria-current="true"]')?.textContent).toBe(kind === 'statements' ? '汇总对账' : '收款核销')
 })
 
 test('CONFIRM-only 不提供无法读取的结算确认入口或请求 protected detail', async () => {

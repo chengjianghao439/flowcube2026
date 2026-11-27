@@ -119,7 +119,7 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose, onCreated
   return (
     <>
     <Dialog open={open} onOpenChange={value => { if (!value) draft.requestClose() }}>
-      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="sm:max-w-2xl">
+      <DialogContent ref={draft.contentRef} onFocusCapture={draft.rememberFocus} className="fc-form-dialog sm:max-w-2xl">
         <DialogHeader description={mode === 'edit' && editCat ? <>
               正在编辑：<span className="font-medium text-foreground">{editCat.code ? `${editCat.code} · ` : ''}{editCat.name}</span>
             </> : ("填写分类名称、上级与排序。")}>
@@ -134,54 +134,56 @@ function CategoryFormDialog({ open, mode, parentCat, editCat, onClose, onCreated
 
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-1">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="category-name">分类名称 *</Label>
-              <Input
-                id="category-name" value={form.name ?? ''}
-                onChange={e => set('name', e.target.value)}
-                placeholder="请输入分类名称"
-                disabled={isPending}
-              />
-            </div>
-            {mode === 'edit' && editCat?.code && (
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="category-code">分类编码</Label>
-                <Input id="category-code" value={editCat.code} disabled className="bg-muted/50 font-mono text-sm" />
+                <Label htmlFor="category-name">分类名称 *</Label>
+                <Input
+                  id="category-name" value={form.name ?? ''}
+                  onChange={e => set('name', e.target.value)}
+                  placeholder="请输入分类名称"
+                  disabled={isPending}
+                />
               </div>
-            )}
+              {mode === 'edit' && editCat?.code && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="category-code">分类编码</Label>
+                  <Input id="category-code" value={editCat.code} disabled className="bg-muted/50 font-mono text-sm" />
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="category-sortOrder">排序</Label>
+                <Input
+                  type="number"
+                  id="category-sortOrder" value={form.sortOrder ?? 0}
+                  onChange={e => set('sortOrder', e.target.value)}
+                  placeholder="数字越小越靠前"
+                  disabled={isPending}
+                />
+              </div>
+              {mode === 'edit' && (
+                <div className="flex items-end gap-2 pb-0.5">
+                  <input
+                    type="checkbox"
+                    id="cat-status"
+                    checked={!!form.status}
+                    onChange={e => set('status', e.target.checked)}
+                    className="accent-primary"
+                  />
+                  <Label htmlFor="cat-status" className="cursor-pointer">启用</Label>
+                </div>
+              )}
+            </div>
             <div className="space-y-1.5">
-              <Label htmlFor="category-sortOrder">排序</Label>
+              <Label htmlFor="category-remark">备注</Label>
               <Input
-                type="number"
-                id="category-sortOrder" value={form.sortOrder ?? 0}
-                onChange={e => set('sortOrder', e.target.value)}
-                placeholder="数字越小越靠前"
+                id="category-remark" value={form.remark ?? ''}
+                onChange={e => set('remark', e.target.value)}
+                placeholder="选填"
                 disabled={isPending}
               />
             </div>
-            {mode === 'edit' && (
-              <div className="flex items-end gap-2 pb-0.5">
-                <input
-                  type="checkbox"
-                  id="cat-status"
-                  checked={!!form.status}
-                  onChange={e => set('status', e.target.checked)}
-                  className="accent-primary"
-                />
-                <Label htmlFor="cat-status" className="cursor-pointer">启用</Label>
-              </div>
-            )}
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="category-remark">备注</Label>
-            <Input
-              id="category-remark" value={form.remark ?? ''}
-              onChange={e => set('remark', e.target.value)}
-              placeholder="选填"
-              disabled={isPending}
-            />
           </div>
 
           <DialogFooter>
@@ -398,20 +400,19 @@ export default function CategoriesPage() {
     nodes.reduce((s, n) => s + 1 + flatCount(n.children ?? []), 0)
   const totalCount = flatCount(tree)
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="商品分类"
         description="维护商品分类层级与归属。"
         actions={
           can(PERMISSIONS.CATEGORY_CREATE) && <Button onClick={handleAddRoot}>
-            <Plus className="mr-1.5 h-4 w-4" />
             新增一级分类
           </Button>
         }
       />
 
       {/* 图例说明 */}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
         <span>支持 4 级分类，共 {totalCount} 个</span>
         {[1, 2, 3, 4].map(l => (
           <span key={l} className="flex items-center gap-1">

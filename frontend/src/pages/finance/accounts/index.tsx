@@ -6,7 +6,9 @@ import { useId, useState, useEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
+import ListSummary from '@/components/shared/ListSummary'
 import TableActionsMenu from '@/components/shared/TableActionsMenu'
+import { QueryDialog } from '@/components/shared/QueryDialog'
 import { QueryChips, type QueryChip } from '@/components/shared/QueryChips'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { Button } from '@/components/ui/button'
@@ -49,47 +51,45 @@ function AccountsQueryDialog({ open, initial, onClose, onApply }: {
   const fieldId = useId()
   const [v, setV] = useState<AcctQuery>(initial)
   useEffect(() => { if (open) setV(initial) }, [open, initial])
+  function apply() {
+    onApply(v)
+    onClose()
+  }
   return (
-    <Dialog open={open} onOpenChange={x => !x && onClose()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader description={"设置资金账户的筛选条件。"}><DialogTitle>查询资金账户</DialogTitle></DialogHeader>
-        <div className="space-y-3">
+    <QueryDialog open={open} dialogId="finance-accounts-query" title="查询资金账户" width={520}
+      onClose={onClose} resetLabel="清空" onReset={() => setV(EMPTY_ACCT_QUERY)} onApply={apply}>
+      <div className="grid gap-3 px-5 py-4">
+        <div className="space-y-1">
+          <Label htmlFor={`${fieldId}-keyword`}>关键字</Label>
+          <Input id={`${fieldId}-keyword`} className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
+            onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) apply() }}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV(p => ({ ...p, keyword: e.target.value }))} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <Label htmlFor={`${fieldId}-keyword`}>关键字</Label>
-            <Input id={`${fieldId}-keyword`} className="h-9" placeholder="编码 / 名称 / 账号" value={v.keyword}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setV(p => ({ ...p, keyword: e.target.value }))} />
+            <Label htmlFor={`${fieldId}-type`}>账户类型</Label>
+            <Select value={v.type || '__all__'} onValueChange={x => setV(p => ({ ...p, type: x === '__all__' ? '' : x }))}>
+              <SelectTrigger id={`${fieldId}-type`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部</SelectItem>
+                {TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-type`}>账户类型</Label>
-              <Select value={v.type || '__all__'} onValueChange={x => setV(p => ({ ...p, type: x === '__all__' ? '' : x }))}>
-                <SelectTrigger id={`${fieldId}-type`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部</SelectItem>
-                  {TYPE_OPTIONS.map(([val, l]) => <SelectItem key={val} value={val}>{l}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-active`}>状态</Label>
-              <Select value={v.isActive || '__all__'} onValueChange={x => setV(p => ({ ...p, isActive: x === '__all__' ? '' : x }))}>
-                <SelectTrigger id={`${fieldId}-active`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">全部</SelectItem>
-                  <SelectItem value="1">启用</SelectItem>
-                  <SelectItem value="0">停用</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1">
+            <Label htmlFor={`${fieldId}-active`}>状态</Label>
+            <Select value={v.isActive || '__all__'} onValueChange={x => setV(p => ({ ...p, isActive: x === '__all__' ? '' : x }))}>
+              <SelectTrigger id={`${fieldId}-active`} className="h-9"><SelectValue placeholder="全部" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">全部</SelectItem>
+                <SelectItem value="1">启用</SelectItem>
+                <SelectItem value="0">停用</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => setV(EMPTY_ACCT_QUERY)}>清空</Button>
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button onClick={() => { onApply(v); onClose() }}>查询</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </QueryDialog>
   )
 }
 
@@ -112,7 +112,7 @@ export default function FinanceAccountsPage() {
   const [adjustRemark, setAdjustRemark] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<FinanceAccount | null>(null)
 
-  const { data, isLoading } = useVisibleQuery({
+  const { data, isLoading, isError, error, refetch } = useVisibleQuery({
     queryKey: ['finance-accounts', query],
     queryFn: () => getAccountsApi({
       keyword: query.keyword || undefined,
@@ -226,7 +226,7 @@ export default function FinanceAccountsPage() {
         description="余额由流水实时汇总，不可直接修改。"
         actions={(
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => downloadExport('/export/finance-accounts').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/finance-accounts').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canCreate && <Button onClick={openCreate}>新建账户</Button>}
           </div>
@@ -234,7 +234,7 @@ export default function FinanceAccountsPage() {
       />
 
 
-      {summary && (
+      {!isError && summary && (
         <div className="rounded-lg border border-border bg-card px-4 py-3">
           <span className="text-sm text-muted-foreground">资金合计（{summary.accountCount} 个账户）</span>
           <span className="ml-3 tabular-nums text-2xl font-bold text-foreground">{money(summary.totalBalance)}</span>
@@ -243,13 +243,15 @@ export default function FinanceAccountsPage() {
 
       <QueryChips chips={queryChips} onClearAll={() => setQuery(EMPTY_ACCT_QUERY)} />
 
-      <DataTable columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />
+      {isError ? <QueryErrorState title="资金账户加载失败" error={error} onRetry={() => void refetch()} /> :
+        <DataTable fluid virtualized scrollLabel="资金账户表格" columnStorageKey="finance-accounts" columns={columns} data={data?.list || []} loading={isLoading} rowKey="id" />}
+      {!isError && !isLoading && data && <ListSummary total={data.summary?.accountCount ?? data.list.length} unit="个" />}
 
       <AccountsQueryDialog open={queryOpen} initial={query} onClose={() => setQueryOpen(false)} onApply={setQuery} />
 
       {/* 新建 / 编辑 */}
       <Dialog open={formOpen && (editing ? canUpdate : canCreate)} onOpenChange={v => !v && setFormOpen(false)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="fc-form-dialog max-w-2xl">
           {/* 编辑态与默认（新建）态一眼可分 */}
           <DialogHeader description={editing ? <>
                 正在编辑：<span className="font-medium text-foreground">{editing.code ? `${editing.code} · ` : ''}{editing.name}</span>
@@ -260,7 +262,7 @@ export default function FinanceAccountsPage() {
             </DialogTitle>
 
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="fc-form-dialog-body grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label htmlFor={`${fieldId}-name`}>账户名称 *</Label>
               <Input id={`${fieldId}-name`} value={form.name} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, name: e.target.value }))} placeholder="如：工商银行基本户" />
@@ -268,7 +270,7 @@ export default function FinanceAccountsPage() {
             <div className="space-y-1">
               <Label htmlFor={`${fieldId}-type`}>类型 *</Label>
               <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
-                <SelectTrigger id={`${fieldId}-type`} className="h-10"><SelectValue /></SelectTrigger>
+                <SelectTrigger id={`${fieldId}-type`} className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {TYPE_OPTIONS.map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                 </SelectContent>
@@ -315,92 +317,96 @@ export default function FinanceAccountsPage() {
 
       {/* 账户流水 */}
       <Dialog open={!!txAccount} onOpenChange={v => !v && setTxAccount(null)}>
-        <DialogContent className="max-w-4xl">
-          <DialogHeader description="核对该账户全部日期的收支与余额。"><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
-          {txAccount && (
-            <div className="text-sm text-muted-foreground">
-              当前余额 <span className="font-semibold text-foreground">{money(txAccount.currentBalance)}</span>
-              {transactions && <>
-                {' '}· 累计收入 <span className="text-success-ink">{money(transactions.summary.inAmount)}</span>
-                {' '}· 累计支出 <span className="text-destructive-ink">{money(transactions.summary.outAmount)}</span>
-              </>}
-            </div>
-          )}
-          {transactionsQuery.isError ? (
-            <QueryErrorState error={transactionsQuery.error} onRetry={() => void transactionsQuery.refetch()} title="账户流水加载失败" compact />
-          ) : transactionsQuery.isLoading ? (
-            <p role="status" className="text-sm text-muted-foreground">正在加载账户流水…</p>
-          ) : transactions && <div className="max-h-96 overflow-y-auto rounded-md border">
-            <ReportTable className="w-full text-sm">
-              <thead className="sticky top-0 text-xs text-muted-foreground">
-                <tr>
-                  <th className="w-28 whitespace-nowrap px-2 py-1.5 text-left">日期</th>
-                  <th className="px-2 py-1.5 text-left">类型</th>
-                  <th className="px-2 py-1.5 text-left">关联单号</th>
-                  <th className="px-2 py-1.5 text-left">往来方</th>
-                  <th className="px-2 py-1.5 text-right">收入</th>
-                  <th className="px-2 py-1.5 text-right">支出</th>
-                  <th className="px-2 py-1.5 text-right">余额</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions?.list.map(t => (
-                  <tr key={t.id} className="border-t">
-                    <td className="whitespace-nowrap px-2 py-1.5 tabular-nums">{formatDisplayDate(t.happenedAt)}</td>
-                    <td className="px-2 py-1.5"><SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} /></td>
-                    <td className="px-2 py-1.5 text-doc-code-muted">{t.bizNo || '—'}</td>
-                    <td className="px-2 py-1.5">{t.partyName || '—'}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-success-ink">{t.direction === 1 ? money(t.amount) : ''}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums text-destructive-ink">{t.direction === 2 ? money(t.amount) : ''}</td>
-                    <td className="px-2 py-1.5 text-right tabular-nums font-medium">{money(t.balanceAfter)}</td>
+        <DialogContent className="fc-form-dialog max-w-4xl">
+          <DialogHeader><DialogTitle>账户流水 — {txAccount?.name}</DialogTitle></DialogHeader>
+          <div className="fc-form-dialog-body space-y-4">
+            {txAccount && (
+              <div className="text-sm text-muted-foreground">
+                当前余额 <span className="font-semibold text-foreground">{money(txAccount.currentBalance)}</span>
+                {transactions && <>
+                  {' '}· 累计收入 <span className="text-success-ink">{money(transactions.summary.inAmount)}</span>
+                  {' '}· 累计支出 <span className="text-destructive-ink">{money(transactions.summary.outAmount)}</span>
+                </>}
+              </div>
+            )}
+            {transactionsQuery.isError ? (
+              <QueryErrorState error={transactionsQuery.error} onRetry={() => void transactionsQuery.refetch()} title="账户流水加载失败" compact />
+            ) : transactionsQuery.isLoading ? (
+              <p role="status" className="text-sm text-muted-foreground">正在加载账户流水…</p>
+            ) : transactions && <div className="rounded-md border">
+              <ReportTable className="w-full text-sm">
+                <thead className="sticky top-0 text-xs text-muted-foreground">
+                  <tr>
+                    <th className="w-28 whitespace-nowrap px-2 py-1.5 text-left">日期</th>
+                    <th className="px-2 py-1.5 text-left">类型</th>
+                    <th className="px-2 py-1.5 text-left">关联单号</th>
+                    <th className="px-2 py-1.5 text-left">往来方</th>
+                    <th className="px-2 py-1.5 text-right">收入</th>
+                    <th className="px-2 py-1.5 text-right">支出</th>
+                    <th className="px-2 py-1.5 text-right">余额</th>
                   </tr>
-                ))}
-                {transactions && !transactions.list.length && (
-                  <tr><td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">该账户还没有流水</td></tr>
-                )}
-              </tbody>
-            </ReportTable>
-          </div>}
-          {transactions && transactions.pagination.total > transactions.list.length && (
-            <p className="text-xs text-muted-foreground">
-              明细显示最近 {transactions.list.length} 条，共 {transactions.pagination.total} 条。累计金额覆盖全部日期。
-            </p>
-          )}
+                </thead>
+                <tbody>
+                  {transactions?.list.map(t => (
+                    <tr key={t.id} className="border-t">
+                      <td className="whitespace-nowrap px-2 py-1.5 tabular-nums">{formatDisplayDate(t.happenedAt)}</td>
+                      <td className="px-2 py-1.5"><SoftStatusLabel label={t.bizTypeName} tone={t.bizType === 4 ? 'warning' : 'info'} /></td>
+                      <td className="px-2 py-1.5 text-doc-code-muted">{t.bizNo || '—'}</td>
+                      <td className="px-2 py-1.5">{t.partyName || '—'}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-success-ink">{t.direction === 1 ? money(t.amount) : ''}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-destructive-ink">{t.direction === 2 ? money(t.amount) : ''}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-medium">{money(t.balanceAfter)}</td>
+                    </tr>
+                  ))}
+                  {transactions && !transactions.list.length && (
+                    <tr><td colSpan={7} className="px-2 py-6 text-center text-muted-foreground">该账户还没有流水</td></tr>
+                  )}
+                </tbody>
+              </ReportTable>
+            </div>}
+            {transactions && transactions.pagination.total > transactions.list.length && (
+              <p className="text-xs text-muted-foreground">
+                明细显示最近 {transactions.list.length} 条，共 {transactions.pagination.total} 条。累计金额覆盖全部日期。
+              </p>
+            )}
+          </div>
           <DialogFooter><Button variant="outline" onClick={() => setTxAccount(null)}>关闭</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* 余额调整：不直接改余额，补一笔差额流水留痕 */}
       <Dialog open={!!adjustTarget} onOpenChange={v => !v && setAdjustTarget(null)}>
-        <DialogContent>
+        <DialogContent className="fc-form-dialog">
           <DialogHeader description={<>{<>
             账实不符时用它对平。系统会按差额补一笔「余额调整」流水，不会直接改写余额，调整过程可追溯。
           </>}</>}><DialogTitle>余额调整 — {adjustTarget?.name}</DialogTitle></DialogHeader>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-current`}>当前余额</Label>
-              <Input id={`${fieldId}-current`} value={adjustTarget ? money(adjustTarget.currentBalance) : ''} disabled className="bg-muted/50" />
+          <div className="fc-form-dialog-body space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor={`${fieldId}-current`}>当前余额</Label>
+                <Input id={`${fieldId}-current`} value={adjustTarget ? money(adjustTarget.currentBalance) : ''} disabled className="bg-muted/50" />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor={`${fieldId}-adjusted`}>调整后余额 *</Label>
+                <Input id={`${fieldId}-adjusted`} type="number" step="0.01" value={adjustBalance}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustBalance(e.target.value)} />
+              </div>
+              <div className="space-y-1 col-span-2">
+                <Label htmlFor={`${fieldId}-reason`}>调整原因</Label>
+                <Input id={`${fieldId}-reason`} value={adjustRemark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustRemark(e.target.value)} placeholder="如：与银行流水核对差异" />
+              </div>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor={`${fieldId}-adjusted`}>调整后余额 *</Label>
-              <Input id={`${fieldId}-adjusted`} type="number" step="0.01" value={adjustBalance}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustBalance(e.target.value)} />
-            </div>
-            <div className="space-y-1 col-span-2">
-              <Label htmlFor={`${fieldId}-reason`}>调整原因</Label>
-              <Input id={`${fieldId}-reason`} value={adjustRemark} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAdjustRemark(e.target.value)} placeholder="如：与银行流水核对差异" />
-            </div>
+            {adjustTarget && adjustBalance !== '' && (
+              <p className="text-sm">
+                将产生差额流水：
+                <span className={`ml-1 font-semibold tabular-nums ${Number(adjustBalance) >= adjustTarget.currentBalance ? 'text-success-ink' : 'text-destructive-ink'}`}>
+                  {Number(adjustBalance) >= adjustTarget.currentBalance ? '+' : '-'}
+                  {money(Math.abs(Number(adjustBalance) - adjustTarget.currentBalance))}
+                </span>
+              </p>
+            )}
           </div>
-          {adjustTarget && adjustBalance !== '' && (
-            <p className="text-sm">
-              将产生差额流水：
-              <span className={`ml-1 font-semibold tabular-nums ${Number(adjustBalance) >= adjustTarget.currentBalance ? 'text-success-ink' : 'text-destructive-ink'}`}>
-                {Number(adjustBalance) >= adjustTarget.currentBalance ? '+' : '-'}
-                {money(Math.abs(Number(adjustBalance) - adjustTarget.currentBalance))}
-              </span>
-            </p>
-          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setAdjustTarget(null)}>取消</Button>
             <Button disabled={adjustBalance === '' || adjustMut.isPending} onClick={() => adjustMut.mutate()}>

@@ -63,7 +63,9 @@ test('department table displays its saved manager and creation time', async () =
 
 test('department search has a readable name without exposing modification actions to a read-only user', async () => {
   await render()
-  expect(host.querySelector('input[aria-label="搜索部门名称"]')).not.toBeNull()
+  await click([...host.querySelectorAll('button')].find(button => button.textContent === '查询') ?? null)
+  const field = document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="搜索部门名称"]')
+  expect(field?.labels?.[0].textContent).toContain('部门名称')
   expect([...host.querySelectorAll('button')].some(button => button.textContent === '新增部门')).toBe(false)
   expect(mocks.create).not.toHaveBeenCalled()
 })
@@ -108,12 +110,14 @@ test('expand control exposes state and search results show full paths', async ()
   await click(expand)
   expect(document.querySelectorAll('tbody tr')).toHaveLength(1)
   expect(expand?.getAttribute('aria-expanded')).toBe('false')
-  const input = document.querySelector('input[placeholder="搜索部门名称"]') as HTMLInputElement
+  await click([...host.querySelectorAll('button')].find(button => button.textContent === '查询') ?? null)
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const input = dialog.querySelector<HTMLInputElement>('input[placeholder="搜索部门名称"]')!
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, '华东')
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  await click([...document.querySelectorAll('button')].find(button => button.textContent === '搜索') ?? null)
+  await click([...dialog.querySelectorAll('button')].find(button => button.textContent === '查询') ?? null)
   expect(document.body.textContent).toContain('采购部 / 华东采购')
   expect(document.querySelector('button[aria-label="搜索时子部门已展开"]')?.getAttribute('aria-expanded')).toBe('true')
   expect(document.querySelector('tbody tr:first-child td:first-child')?.textContent?.match(/采购部/g)).toHaveLength(1)

@@ -1,3 +1,5 @@
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
 import { ReportTable } from '@/components/shared/ReportTable'
 import { useApprovalDetailHandoff } from '@/hooks/useApprovalDetailHandoff'
 import { ApprovalHandoffNotice } from '@/components/shared/ApprovalHandoffNotice'
@@ -14,6 +16,7 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import { useSearchParams } from 'react-router-dom'
 import { X } from 'lucide-react'
 import PageHeader from '@/components/shared/PageHeader'
+import TableActionsMenu, { type TableActionItem } from '@/components/shared/TableActionsMenu'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { Button } from '@/components/ui/button'
@@ -35,7 +38,7 @@ import { downloadExport } from '@/lib/exportDownload'
 import { formatDisplayDateTime } from '@/lib/dateTime'
 import { readStringParam, upsertSearchParams } from '@/lib/urlSearchParams'
 import CreditOverrideQueryDialog, { type CreditOverrideQueryValues } from './CreditOverrideQueryDialog'
-import { CREDIT_OVERRIDE_STATUS_LABEL } from './constants'
+import { CREDIT_OVERRIDE_STATUS_OPTIONS } from './constants'
 import type { CreditOverride } from '@/types/credit-override'
 import type { TableColumn } from '@/types'
 
@@ -156,6 +159,20 @@ function CreateDialog({ open, onClose, source, onCreated }: { open: boolean; onC
   )
 }
 
+function detailFields(row: CreditOverride): [string, string | number | null | undefined][] {
+  return [
+    ['销售单', row.saleOrderNo], ['客户', row.customerName],
+    ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)],
+    ['状态', row.statusName], ['申请效力', row.requestInvalidReason || row.approvalInvalidReason || (row.approvalValidity === 'valid' ? '当前有效' : null)],
+    ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
+  ]
+}
+
+const QUICK_STATUSES = [
+  { value: '', label: '全部申请' },
+  ...CREDIT_OVERRIDE_STATUS_OPTIONS.map(([value, label]) => ({ value, label })),
+]
+
 export default function CreditOverridesPage() {
   const { can } = usePermission()
   const canApply = can(PERMISSIONS.SALE_CREDIT_OVERRIDE_APPLY)
@@ -177,8 +194,7 @@ export default function CreditOverridesPage() {
 
   const [createOpen, setCreateOpen] = useState(false)
   const [reapplySource, setReapplySource] = useState<CreditOverride | null>(null)
-  const [manualDetailOpen, setManualDetailOpen] = useState(false)
-  const handoff = useApprovalDetailHandoff('/credit-overrides', PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW, getCreditOverrideApi, createOpen || queryOpen || !!rejectTarget || !!approveTarget || manualDetailOpen)
+  const [manualDetailId, setManualDetailId] = useState<number | null>(null)
 
   const { data, isLoading, isError, error, refetch } = useCreditOverrides({
     page: 1,
@@ -194,6 +210,11 @@ export default function CreditOverridesPage() {
   const { mutate: reject, isPending: rejecting } = useRejectCreditOverride()
 
   const list = useMemo(() => data?.list ?? [], [data])
+  const manualDetail = !isError && manualDetailId !== null ? list.find(row => row.id === manualDetailId) : undefined
+  useEffect(() => {
+    if (manualDetailId !== null && !manualDetail) setManualDetailId(null)
+  }, [manualDetailId, manualDetail])
+  const handoff = useApprovalDetailHandoff('/credit-overrides', PERMISSIONS.SALE_CREDIT_OVERRIDE_VIEW, getCreditOverrideApi, createOpen || queryOpen || !!rejectTarget || !!approveTarget || !!manualDetail)
   const total = data?.pagination.total ?? 0
 
   function updateParams(updates: Record<string, string | number | null | undefined>) {
@@ -220,9 +241,7 @@ export default function CreditOverridesPage() {
   // 当前生效筛选摘要（可逐项移除）
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => updateParams({ keyword: null }) },
-    status && { key: 'status', label: `状态：${CREDIT_OVERRIDE_STATUS_LABEL[status] ?? status}`, onRemove: () => updateParams({ status: null }) },
-    startDate && { key: 'startDate', label: `创建日期从：${startDate}`, onRemove: () => updateParams({ startDate: null }) },
-    endDate && { key: 'endDate', label: `创建日期至：${endDate}`, onRemove: () => updateParams({ endDate: null }) },
+    status && !QUICK_STATUSES.some(option => option.value === status) && { key: 'status', label: `状态：${status}`, onRemove: () => updateParams({ status: null }) },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<CreditOverride>[] = [
@@ -249,19 +268,32 @@ export default function CreditOverridesPage() {
     {
       key: 'id',
       title: '操作',
-      width: 200,
+      width: 150,
       render: (_, row) => {
-        const els: React.ReactNode[] = [<OrderActivityDialog onOpenChange={setManualDetailOpen} key="detail" type="credit" id={row.id} title={row.overrideNo} fields={[
-          ['销售单', row.saleOrderNo], ['客户', row.customerName], ['本单净额', money(row.thisAmount)], ['授信额度', money(row.creditLimit)], ['超额金额', money(row.overAmount)], ['状态', row.statusName], ['申请效力', row.requestInvalidReason || row.approvalInvalidReason || (row.approvalValidity==='valid'?'当前有效':null)], ['申请人', row.applicantName], ['申请原因', row.reason], ['驳回原因', row.rejectReason],
-        ]} />]
-        if (canApply && row.canReapply) els.push(<Button key="reapply" size="sm" variant="outline" onClick={()=>{setReapplySource(row);setCreateOpen(true)}}>重新申请</Button>)
-        if (row.status === 1 && row.canManage) els.push(<Button key="submit" size="sm" variant="outline" onClick={() => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) })}>提交</Button>)
-        if (row.status === 2 && row.canApprove && row.currentTaskId && canApprove) els.push(<Button key="ap" size="sm" variant="outline" onClick={() => {setApproveTarget(row);setApproveReason('')}}>批准</Button>)
-        if (row.status === 2 && row.canApprove && row.currentTaskId && canApprove) els.push(<Button key="rj" size="sm" variant="ghost" className="text-destructive-ink" onClick={() => {
-          setRejectTarget(row); setRejectReason('')
-        }}>驳回</Button>)
-        if (row.canManage && [1,2,3,4].includes(row.status)) els.push(<Button key="cx" size="sm" variant="ghost" onClick={() => confirmAction({ title: '取消申请', description: '确定取消这张放行申请吗？', onConfirm: () => cancel(row.id, { onSuccess: () => toast.success('已取消'), onError: (e: Error) => toast.error(e.message) }) })}>取消</Button>)
-        return <div className="flex gap-1">{els}</div>
+        const items: TableActionItem[] = []
+        if (canApply && row.canReapply) items.push({
+          label: '重新申请', afterMenuClose: true,
+          onClick: () => { setReapplySource(row); setCreateOpen(true) },
+        })
+        if (row.status === 1 && row.canManage) items.push({
+          label: '提交',
+          onClick: () => submit(row.id, { onSuccess: () => toast.success('已提交审批'), onError: (e: Error) => toast.error(e.message) }),
+        })
+        if (row.status === 2 && row.canApprove && row.currentTaskId && canApprove) {
+          items.push(
+            { label: '批准', afterMenuClose: true, onClick: () => { setApproveTarget(row); setApproveReason('') } },
+            { label: '驳回', destructive: true, afterMenuClose: true, onClick: () => { setRejectTarget(row); setRejectReason('') } },
+          )
+        }
+        if (row.canManage && [1, 2, 3, 4].includes(row.status)) items.push({
+          label: '取消', destructive: true, afterMenuClose: true,
+          onClick: () => confirmAction({
+            title: '取消申请', description: '确定取消这张放行申请吗？',
+            onConfirm: () => cancel(row.id, { onSuccess: () => toast.success('已取消'), onError: (e: Error) => toast.error(e.message) }),
+          }),
+        })
+        return <TableActionsMenu primaryLabel="详情 / 记录" primaryVariant="outline"
+          onPrimaryClick={() => setManualDetailId(row.id)} items={items} />
       },
     },
   ]
@@ -270,39 +302,42 @@ export default function CreditOverridesPage() {
     <div className="space-y-4">
       <PageHeader
         title="超额放行申请"
-        description="金额为申请时的授信额度"
+        description="金额为申请时的授信额度。"
         actions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/credit-overrides').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/credit-overrides').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
             {canApply ? <Button onClick={() => {setReapplySource(null);setCreateOpen(true)}}>发起申请</Button> : undefined}
           </>
         }
       />
 
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip">
+          <OrderStatusFilter label="超额放行状态分类" value={status} options={QUICK_STATUSES}
+            onChange={status => updateParams({ status: status || null })} />
+        </div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={startDate} endDate={endDate}
+            onClear={() => updateParams({ startDate: null, endDate: null })} />
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
           ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          {(chips.length > 0 || status || startDate || endDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
         </div>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-        <p>共 <span className="font-medium tabular-nums text-foreground">{total.toLocaleString()}</span> 条申请 · {status ? CREDIT_OVERRIDE_STATUS_LABEL[status] ?? status : '全部状态'}</p>
       </div>
-      {isError && !data ? (
-        <QueryErrorState error={error} onRetry={() => void refetch()} title="加载失败" compact />
+
+      {isError ? (
+        <QueryErrorState error={error} onRetry={() => void refetch()} title="超额放行申请读取失败" />
       ) : (
-        <DataTable columns={columns} data={list} loading={isLoading} rowKey="id" emptyText="暂无超额放行申请" />
+        <DataTable fluid virtualized scrollLabel="超额放行申请表格" columnStorageKey="credit-overrides:v1" columns={columns} data={list} loading={isLoading} rowKey="id" emptyText="暂无超额放行申请" />
       )}
-      {total > 0 && <ListSummary total={total} />}
+      {!isError && !isLoading && data && <ListSummary total={total} />}
 
       <Dialog open={!!approveTarget} onOpenChange={open => {if (!open && !approving) setApproveTarget(null)}}>
         <DialogContent className="fc-form-dialog max-w-lg"><DialogHeader description={<>{<>核对当前申请后审批；自行审批必须填写原因。</>}</>}><DialogTitle>{approveTarget?.isSelfApproval ? '自行审批' : '批准当前节点'}</DialogTitle></DialogHeader>
@@ -317,10 +352,11 @@ export default function CreditOverridesPage() {
           }}>确认批准</Button></DialogFooter>
         </DialogContent>
       </Dialog>
+      {manualDetail && <OrderActivityDialog type="credit" id={manualDetail.id} title={manualDetail.overrideNo} open hideTrigger
+        onOpenChange={open => { if (!open) setManualDetailId(null) }} fields={detailFields(manualDetail)} />}
       <ApprovalHandoffNotice {...handoff} />
-      {handoff.data && <OrderActivityDialog type="credit" id={handoff.data.id} title={handoff.data.overrideNo} open={handoff.open} hideTrigger onOpenChange={open => { if (!open) handoff.close() }} fields={[
-        ['销售单', handoff.data.saleOrderNo], ['客户', handoff.data.customerName], ['本单净额', money(handoff.data.thisAmount)], ['授信额度', money(handoff.data.creditLimit)], ['超额金额', money(handoff.data.overAmount)], ['状态', handoff.data.statusName], ['申请效力', handoff.data.requestInvalidReason || handoff.data.approvalInvalidReason || (handoff.data.approvalValidity==='valid'?'当前有效':null)], ['申请人', handoff.data.applicantName], ['申请原因', handoff.data.reason], ['驳回原因', handoff.data.rejectReason],
-      ]} />}
+      {handoff.data && <OrderActivityDialog type="credit" id={handoff.data.id} title={handoff.data.overrideNo} open={handoff.open} hideTrigger
+        onOpenChange={open => { if (!open) handoff.close() }} fields={detailFields(handoff.data)} />}
       <Dialog open={!!rejectTarget} onOpenChange={open => { if (!open && !rejecting) setRejectTarget(null) }}>
         <DialogContent className="fc-form-dialog max-w-lg">
           <DialogHeader description={<>{<>说明驳回原因，便于申请人调整销售安排。</>}</>}><DialogTitle>驳回超额放行申请</DialogTitle></DialogHeader>

@@ -1,9 +1,13 @@
+import { AppliedDateRange } from '@/components/shared/AppliedDateRange'
+import { OrderStatusFilter } from '@/components/shared/OrderStatusFilter'
+import { REFUND_STATUS_OPTIONS } from './constants'
 import { money } from '@/lib/format'
 import { useId, useMemo, useState } from 'react'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 import PageHeader from '@/components/shared/PageHeader'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
@@ -33,8 +37,12 @@ const STATUS_TONE: Record<number, StatusTone> = {
   4: 'danger',   // 已取消
 }
 
+const QUICK_STATUSES = [
+  { value: '', label: '全部退款单' },
+  ...REFUND_STATUS_OPTIONS,
+]
+
 export default function RefundsPage() {
-  const STATUS_NAME: Record<number, string> = { 1: '草稿', 2: '已确认', 3: '已完成', 4: '已取消' }
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -68,8 +76,7 @@ export default function RefundsPage() {
 
   const chips = [
     keyword && { key: 'keyword', label: `关键字：${keyword}`, onRemove: () => setKeyword('') },
-    statusFilter && { key: 'status', label: `状态：${STATUS_NAME[Number(statusFilter)] ?? statusFilter}`, onRemove: () => setStatusFilter('') },
-    (startDate || endDate) && { key: 'date', label: `日期：${startDate || '…'} ~ ${endDate || '…'}`, onRemove: () => { setStartDate(''); setEndDate('') } },
+    statusFilter && !QUICK_STATUSES.some(option => option.value === statusFilter) && { key: 'status', label: `状态：${statusFilter}`, onRemove: () => setStatusFilter('') },
   ].filter(Boolean) as { key: string; label: string; onRemove: () => void }[]
 
   const columns: TableColumn<RefundOrder>[] = [
@@ -91,7 +98,7 @@ export default function RefundsPage() {
     {
       key: 'id', title: '操作', width: 100,
       render: (_, row) => (
-        <Button size="sm" variant="outline" onClick={() => setDetailId((row as RefundOrder).id)}>查看/处理</Button>
+        <TableActionsMenu primaryLabel="查看/处理" primaryVariant="outline" onPrimaryClick={() => setDetailId(row.id)} items={[]} />
       ),
     },
   ]
@@ -100,32 +107,37 @@ export default function RefundsPage() {
     <div className="space-y-4">
       <PageHeader
         title="退货退款单"
-        description="已收款的销售退货需先完成退款，否则无法继续退货；退款从资金账户出账并冲减已收金额"
+        description="办理已收款销售退货的退款登记与出账。"
         actions={
           <>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
-            {canCreate ? <Button onClick={() => setCreateOpen(true)}>+ 新建退款单</Button> : undefined}
+            {canCreate ? <Button onClick={() => setCreateOpen(true)}>新建退款单</Button> : undefined}
           </>
         }
       />
 
-
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="fc-filter-bar">
+        <div className="sample-status-strip">
+          <OrderStatusFilter label="退款状态分类" value={statusFilter} options={QUICK_STATUSES}
+            onChange={setStatusFilter} />
+        </div>
+        <div className="fc-filter-bar-filters" aria-label="已应用筛选">
+          <AppliedDateRange label="创建日期" startDate={startDate} endDate={endDate}
+            onClear={() => { setStartDate(''); setEndDate('') }} />
           {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            <span key={c.key} className="fc-query-chip">
               {c.label}
               <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                 <X className="h-3 w-3" />
               </button>
             </span>
           ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          {(chips.length > 0 || statusFilter || startDate || endDate) && <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>}
         </div>
-      )}
+      </div>
 
       {isError ? <QueryErrorState error={error} onRetry={() => void refetch()} /> : (
-        <DataTable columns={columns} data={data?.list || []} loading={isLoading} />
+        <DataTable fluid virtualized scrollLabel="退款单表格" columnStorageKey="refunds:v1" columns={columns} data={data?.list || []} loading={isLoading} />
       )}
       {!isError && !isLoading && data && <ListSummary total={total} unit="单" />}
 
@@ -184,9 +196,9 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) { reset(); onClose() } }}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="fc-form-dialog sm:max-w-2xl">
         <DialogHeader description="系统按单号反查该销售单已收金额，退款不能超过已收金额"><DialogTitle>新建退款单</DialogTitle></DialogHeader>
-        <div className="space-y-4 py-2">
+        <div className="fc-form-dialog-body space-y-4">
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-sale`}>销售单号 *</Label>
             <Input id={`${fieldId}-sale`} value={saleOrderNo} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSaleOrderNo(e.target.value)} placeholder="输入销售单号" className="font-mono" />
@@ -198,7 +210,7 @@ function CreateRefundDialog({ open, onClose }: { open: boolean; onClose: () => v
           <div className="space-y-1">
             <Label htmlFor={`${fieldId}-account`}>退款账户</Label>
             <Select value={accountId || '__none__'} onValueChange={(v) => setAccountId(v === '__none__' ? '' : v)}>
-              <SelectTrigger id={`${fieldId}-account`} className="h-10 w-full"><SelectValue placeholder="请选择（不选则不记资金账户）" /></SelectTrigger>
+              <SelectTrigger id={`${fieldId}-account`} className="h-9 w-full"><SelectValue placeholder="请选择（不选则不记资金账户）" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none__">请选择</SelectItem>
                 {(accounts || []).map(a => <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>)}

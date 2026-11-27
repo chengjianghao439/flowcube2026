@@ -148,7 +148,7 @@ export default function CreateDisposalDialog({ open, onClose, mode = 'create', h
             <div className="space-y-1">
               <Label>选择仓库 *</Label>
               <Select value={whId || '__none__'} onValueChange={v => { if (!current()) return; if (rows.length) { toast.warning('已有圈选，先主动移除或清空圈选后再换仓；原数量保留'); return }; setWhId(v === '__none__' ? '' : v) }}>
-                <SelectTrigger className="h-10 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
+                <SelectTrigger className="h-9 w-full"><SelectValue placeholder="请选择" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">请选择</SelectItem>
                   {warehouses?.map(w => <SelectItem key={w.id} value={String(w.id)}>{w.name}</SelectItem>)}

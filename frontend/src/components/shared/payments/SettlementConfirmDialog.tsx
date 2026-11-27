@@ -44,7 +44,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
   })
 
   return (
-    <AppDialog descriptionInHeader description={<>{<>
+    <AppDialog formDialog descriptionInHeader description={<>{<>
           该应付由收货上架自动结算生成。请核对以下明细（实际上架量 × 采购单价）后确认；确认后才可登记付款。
           若结算金额后续被重算改变（补收货/退货/撤回收货），会自动打回待确认。
         </>}</>}
@@ -65,7 +65,7 @@ export function SettlementConfirmDialog({ open, onClose, record }: Props) {
         </div>
       }
     >
-      <div className="flex h-full flex-col gap-3 p-5">
+      <div className="flex h-full flex-col gap-3">
 
         {isError && <div role="alert" className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive-ink">
           <span>结算明细加载失败：{error instanceof Error ? error.message : '请检查网络后重试'}</span>

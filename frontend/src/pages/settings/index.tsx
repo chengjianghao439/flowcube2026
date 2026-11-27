@@ -117,7 +117,7 @@ export default function SettingsPage() {
     <div className="desktop-page-sample settings-page-sample space-y-5">
       <PageHeader
         title="系统设置"
-        description={!canUpdate ? <>当前账号无修改权限{isDirty && '。有未保存的更改，关闭标签前请先保存。'}</> : isDirty ? '有未保存的更改，关闭标签前请先保存。' : editing ? '正在编辑全局配置，保存后立即生效并回到查看状态。' : '维护企业资料与业务参数。'}
+        description={!canUpdate ? <>当前账号无修改权限。{isDirty && '有未保存的更改，关闭标签前请先保存。'}</> : isDirty ? '有未保存的更改，关闭标签前请先保存。' : editing ? '正在编辑全局配置，保存后立即生效并回到查看状态。' : '维护企业资料与业务参数。'}
         status={editing ? <><EditModeBadge /><UnsavedBadge show={isDirty} /></> : undefined}
         actions={canUpdate ? (
           editing ? (
@@ -168,8 +168,6 @@ export default function SettingsPage() {
                   {upload.isPending ? (<><Loader2 className="size-4 animate-spin" />上传中…</>) : (<><Upload className="size-4" />{logo?.url ? '更换 Logo' : '上传 Logo'}</>)}
                 </Button>
               </div>
-            ) : canUpdate ? (
-              <p className="text-sm text-muted-foreground">点右上角「编辑」后可上传/更换 Logo。</p>
             ) : null}
           </div>
         </div>

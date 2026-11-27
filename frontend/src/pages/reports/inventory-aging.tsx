@@ -92,7 +92,7 @@ export default function InventoryAgingPage() {
     <div className="space-y-4">
       <PageHeader
         title="存放时长与滞销"
-        description={`存放时长自入库本仓起算（调拨、拆分会重置）。库存金额按平均成本、成本参考价、销售参考价的顺序估算。从未出库的库存纳入滞销，有出库记录时按本仓最近出库是否超过 ${staleDays} 天判断。`}
+        description={`库龄自入库本仓起算，超 ${staleDays} 天或从未出库的库存纳入滞销。`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
@@ -101,20 +101,6 @@ export default function InventoryAgingPage() {
         }
       />
 
-
-      {chips.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.map(c => (
-            <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-              {c.label}
-              <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
-        </div>
-      )}
 
       <ReportQueryFeedback title="存放明细" hasData={!!agingQ.data} isError={agingQ.isError} isFetching={agingQ.isFetching} error={agingQ.error} onRetry={() => void agingQ.refetch()} />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -127,11 +113,26 @@ export default function InventoryAgingPage() {
         ))}
       </div>
 
-      <div className="flex gap-1 border-b border-border">
-        {([{ k: 'aging', l: '存放明细' }, { k: 'expiry', l: '效期预警' }] as const).map(t => (
-          <button key={t.k} type="button" onClick={() => setTab(t.k)}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${tab === t.k ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'}`}>{t.l}</button>
-        ))}
+      <div className="fc-filter-bar fc-filter-bar-underline">
+        <div className="fc-underline-tabs">
+          {([{ k: 'aging', l: '存放明细' }, { k: 'expiry', l: '效期预警' }] as const).map(t => (
+            <button key={t.k} type="button" aria-pressed={tab === t.k} onClick={() => setTab(t.k)}
+              className={`min-h-10 border-b-2 px-3 py-2 text-sm transition-colors ${tab === t.k ? 'border-primary font-semibold text-foreground' : 'border-transparent font-normal text-muted-foreground hover:text-foreground'}`}>{t.l}</button>
+          ))}
+        </div>
+        {chips.length > 0 && (
+          <div className="fc-filter-bar-filters">
+            {chips.map(c => (
+              <span key={c.key} className="fc-query-chip">
+                {c.label}
+                <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            <Button size="sm" variant="ghost" onClick={clearAll}>清空</Button>
+          </div>
+        )}
       </div>
 
       <KeepAliveSection active={tab === 'aging' && (!agingQ.isError || !!agingQ.data)}>

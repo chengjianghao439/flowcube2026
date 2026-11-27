@@ -63,7 +63,10 @@ test('已创建原回执仍呈现提交的两位现金金额和原分配，不�
   await fill('真实银行回款日','2026-10-01');await fill('收入账户','42');await fill('原付款分配21退款金额','0.01');await click('保存退款草稿')
   expect(document.body.textContent).toContain('RF61');expect(document.body.textContent).toContain('¥0.01')
   expect((document.querySelector('[aria-label="原付款分配21退款金额"]') as HTMLInputElement)?.value).toBe('0.01')
-  expect(buttons('保存退款草稿').every(b=>b.disabled)).toBe(true)
+  expect(buttons('保存退款草稿')).toHaveLength(0)
+  const action = m.host.querySelector<HTMLButtonElement>('.desktop-action-bar .desktop-action-buttons button')
+  expect(action?.textContent).toBe('查看已创建退款单')
+  expect(action?.disabled).toBe(false)
  }finally{await m.close()}
 })
 test.each([1, 2, 3, 4])('状态%d准确detail动作，state3不撤销，确认只RF1与真实confirmAllowed', async (value) => { status = value; const m = await mount('/supplier-refunds?detailId=61'); try {

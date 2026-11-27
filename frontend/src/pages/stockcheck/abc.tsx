@@ -181,14 +181,14 @@ export default function AbcClassPage() {
       <PageHeader
         title="分档与盘点规则"
         description={tab === 'rules' ? rulesEditing && canEditRules
-          ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）' : '编辑全局默认规则（适用于未单独设置的所有仓库）')
+          ? (warehouseId > 0 ? '编辑本仓覆盖规则（不填则继承全局默认）。' : '编辑全局默认规则（适用于未单独设置的所有仓库）。')
           : (warehouseId > 0 ? '查看本仓覆盖规则。' : canEditRules ? '查看全局默认规则；点「编辑规则」后可修改。' : '全局默认只读；仅不限仓管理账号可修改。')
           : '各仓按所选金额从高到低排列，累计占比不超过 80% 为 A，超过 80% 且不超过 95% 为 B，其余为 C。单一商品占比 100% 时归 C 档。'}
-        actions={<Button variant="outline" onClick={() => downloadExport('/export/abc').catch(e => toast.error((e as Error).message))}>导出</Button>}
+        actions={<Button variant="outline" onClick={() => downloadExport('/export/abc').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>}
       />
 
 
-      <ContentTabs label="商品分档与盘点规则" value={tab} onValueChange={setTab} tabs={[
+      <ContentTabs variant="underline" label="商品分档与盘点规则" value={tab} onValueChange={setTab} tabs={[
         { value: 'abc', label: '商品分档结果', content: <div className="space-y-4">
           <FilterCard>
             {warehouseSelect}

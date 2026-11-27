@@ -98,7 +98,7 @@ test('页头只有一处小字，有业务提示时替代用途说明，无提�
   </QueryClientProvider>
   await act(async () => root.render(render('货架唯一条码（H）与标签打印')))
   expect(host.querySelectorAll('.desktop-page-description')).toHaveLength(1)
-  expect(host.querySelector('.desktop-page-description')?.textContent).toBe('货架唯一条码（H）与标签打印')
+  expect(host.querySelector('.desktop-page-description')?.textContent).toBe('货架唯一条码（H）与标签打印。')
   expect(host.textContent).not.toContain('维护货架资料与位置。')
   expect(host.querySelector('.desktop-page-business-notice')).toBeNull()
   await act(async () => root.render(render()))

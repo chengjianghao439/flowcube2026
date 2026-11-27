@@ -41,6 +41,7 @@
  * ```
  */
 
+import { PageDescription } from './PageDescription'
 import { cn } from '@/lib/utils'
 
 export interface ActionBarProps {
@@ -88,12 +89,12 @@ export function ActionBar({
             <div className="flex items-center">{subtitle}</div>
           )}
         </div>
-        <p className="desktop-page-description mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+        <PageDescription>{description}</PageDescription>
       </div>
 
-      {/* 右侧：操作按钮 —— 统一压到 sm 尺寸，详情/表单页顶栏比列表页工具栏更紧凑 */}
+      {/* 顶栏的单个操作与分组操作都保持 36px。 */}
       {rightActions && (
-        <div className="desktop-action-buttons flex flex-wrap items-center gap-2 [&>button]:h-9 [&>button]:px-3">{rightActions}</div>
+        <div className="desktop-action-buttons flex flex-wrap items-center gap-2 [&_.fc-button]:h-9 [&_.fc-button]:px-3">{rightActions}</div>
       )}
     </div>
   )

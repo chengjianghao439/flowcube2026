@@ -141,7 +141,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
-      <DialogContent aria-busy={reserve.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="flex max-h-[88vh] w-[min(96vw,1180px)] max-w-none flex-col gap-0 overflow-hidden p-0">
+      <DialogContent aria-busy={reserve.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="fc-form-dialog max-h-[88vh] w-[min(96vw,1180px)] max-w-none">
         <DialogHeader description={<>
           {!readUnavailable && credit?.willExceed && <span className="text-warning-ink">
             客户授信将超额：额度 {money(credit.creditLimit)}，已用 {money(credit.used)}，本单 {money(credit.thisOrder)}，超出约 {money(credit.overAmount)}。
@@ -150,7 +150,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
           </span>}
           {isLoading && <span role="status">加载商品与库存信息…</span>}
           {!isLoading && !(!readUnavailable && credit?.willExceed) && '核对商品身份，按明细选择发货仓库和本次占库数量'}
-        </>} className="border-b border-border px-5 py-4 pr-12">
+        </>}>
           <DialogTitle className="flex items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary"><Boxes className="h-5 w-5" /></span>
             <span>
@@ -160,22 +160,22 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
           </DialogTitle>
         </DialogHeader>
 
-        <OrdinarySaleRecoveryNotice recovery={reserve.recovery} onConfirmed={onClose} />
-        <div className="grid grid-cols-2 border-b border-border bg-muted/20 sm:grid-cols-4">
-          {[
-            ['商品明细', readUnavailable ? '—' : `${items.length} 行`],
-            ['订单总量', readUnavailable ? '—' : String(orderQty)],
-            ['已占数量', readUnavailable ? '—' : String(reservedQty)],
-            ['待占数量', readUnavailable ? '—' : String(remainingQty)],
-          ].map(([label, value]) => (
-            <div key={label} className="border-r border-border px-5 py-2.5 last:border-r-0">
-              <div className="text-[11px] text-muted-foreground">{label}</div>
-              <div className="mt-0.5 text-sm font-semibold tabular-nums">{value}</div>
-            </div>
-          ))}
-        </div>
+        <div className="fc-form-dialog-body space-y-4">
+          <OrdinarySaleRecoveryNotice recovery={reserve.recovery} onConfirmed={onClose} />
+          <div className="grid grid-cols-2 border-b border-border bg-muted/20 sm:grid-cols-4">
+            {[
+              ['商品明细', readUnavailable ? '—' : `${items.length} 行`],
+              ['订单总量', readUnavailable ? '—' : String(orderQty)],
+              ['已占数量', readUnavailable ? '—' : String(reservedQty)],
+              ['待占数量', readUnavailable ? '—' : String(remainingQty)],
+            ].map(([label, value]) => (
+              <div key={label} className="border-r border-border px-5 py-2.5 last:border-r-0">
+                <div className="text-[11px] text-muted-foreground">{label}</div>
+                <div className="mt-0.5 text-sm font-semibold tabular-nums">{value}</div>
+              </div>
+            ))}
+          </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {isError && <QueryErrorState error={error} onRetry={() => { void refetch() }} description="没能加载占库预览，请重试后核对商品和仓库" />}
 
           {!readUnavailable && (
@@ -259,7 +259,7 @@ export default function ReserveAllocationDialog({ open, orderId, onClose, onShor
           )}
         </div>
 
-        <DialogFooter className="border-t border-border bg-muted/20 px-5 py-3.5 sm:items-center sm:justify-between">
+        <DialogFooter>
           <div className="mr-auto text-sm">
             {readUnavailable ? (
               <span className="text-muted-foreground">{isError ? '占库预览读取失败，请重试后确认' : '正在加载占库预览…'}</span>

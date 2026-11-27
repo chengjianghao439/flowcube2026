@@ -3,7 +3,6 @@ import { assertKitReadOwner } from '@/hooks/useKits'
 import { toast } from '@/lib/toast'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useWarehousesActive } from '@/hooks/useWarehouses'
-import { cn } from '@/lib/utils'
 
 interface WarehouseSelectProps {
   readOwner?: KitReadOwner
@@ -55,7 +54,7 @@ export function WarehouseSelect({
         }}
         disabled={disabled || (!warehouses?.length && (loadFailed || loading))}
       >
-        <SelectTrigger id={id} className={cn('h-10 w-full', className)}>
+        <SelectTrigger id={id} className={className}>
           <SelectValue placeholder={prompt} />
         </SelectTrigger>
         <SelectContent>

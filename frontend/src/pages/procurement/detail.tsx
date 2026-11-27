@@ -2,7 +2,6 @@ import { ReportTable } from '@/components/shared/ReportTable'
 import { useActiveWorkspaceTab } from '@/hooks/useActiveWorkspaceTab'
 import { useProcurementIntentRecovery, type PlanConverted } from '@/hooks/useProcurementIntentRecovery'
 import ProcurementIntentRecoveryNotice from '@/components/shared/ProcurementIntentRecoveryNotice'
-import { getWorkspaceListPath } from '@/lib/workspaceListNavigation'
 import { qty as num } from '@/lib/format'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qtyStep } from '@/lib/qtyStep'
@@ -17,7 +16,7 @@ import { useState, useContext, useId, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useIsMutating, useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TabPathContext } from '@/components/layout/TabPathContext'
-import PageHeader from '@/components/shared/PageHeader'
+import { ActionBar } from '@/components/shared/ActionBar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -93,18 +92,30 @@ export default function ProcurementPlanDetailPage() {
   if (!plan) return <div className="p-8 text-center text-muted-foreground">采购计划不存在</div>
 
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <div className="desktop-document-detail flex flex-col gap-3">
+      <ActionBar
         title={`采购计划 ${plan.code}`}
         description={`预测窗口 ${plan.forecastWindow ?? ''} 天 · 覆盖周期 ${plan.horizonDays ?? ''} 天 · 默认提前期 ${plan.defaultLeadTime ?? ''} 天 · 共 ${plan.itemCount ?? ''} 行。需求与覆盖读取于 ${dataUpdatedAt ? formatDisplayDateTime(new Date(dataUpdatedAt).toISOString()) : '—'}；转换时仍会重新核对。`}
-        status={<SoftStatusLabel label={plan.statusName} tone={PLAN_TONE[plan.status] ?? 'draft'} />}
-        actions={<div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '刷新中…' : '刷新需求'}</Button>
-          <Button variant="outline" size="sm" onClick={() => navigate(getWorkspaceListPath('/procurement'))}>返回列表</Button>
+        subtitle={<SoftStatusLabel label={plan.statusName} tone={PLAN_TONE[plan.status] ?? 'draft'} />}
+        rightActions={<>
           {editable && (
-            <Button variant="outline" size="sm" onClick={() => confirmAction({ title: '作废该采购计划？', description: '已转出的采购单不受影响，仅把计划头置为作废。', variant: 'destructive', onConfirm: () => cancelPlan.mutate() })} disabled={cancelPlan.isPending || conversion.blocked}>作废</Button>
+            <div role="group" aria-label="采购计划作废操作" className="flex items-center gap-2 border-r border-border pr-2">
+              <Button variant="outline" className="text-destructive-ink border-destructive/30 hover:bg-destructive/5"
+                disabled={cancelPlan.isPending || conversion.blocked}
+                onClick={() => confirmAction({ title: '作废该采购计划？', description: '已转出的采购单不受影响，仅把计划头置为作废。', variant: 'destructive', onConfirm: () => cancelPlan.mutate() })}>
+                作废
+              </Button>
+            </div>
           )}
-        </div>}
+          <Button variant="outline" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '刷新中…' : '刷新需求'}</Button>
+          {editable && canConvert && (
+            <Button disabled={conversionDisabled} onClick={() => {
+              if (!conversionDisabled) convert.mutate(selectedItems.map(item => item.id))
+            }}>
+              {convert.isPending ? '正在生成采购草稿…' : `生成采购草稿（${selectedItems.length} 行）`}
+            </Button>
+          )}
+        </>}
       />
 
       <ProcurementIntentRecoveryNotice recovery={conversion} onConfirmed={answer=>{if(!answer.queryOnly)setSelected(new Set());void invalidate();void qc.invalidateQueries({queryKey:['procurement-plans']});toast.success('原计划转采购已确认')}} />
@@ -185,7 +196,7 @@ export default function ProcurementPlanDetailPage() {
                               aria-label={`${it.productName} ${it.warehouseName}供应商`}
                               aria-describedby={supplierMissing ? `${supplierValueId} ${supplierErrorId}` : supplierValueId}
                               aria-invalid={supplierMissing || undefined}
-                              className="h-8"
+                              className="h-9"
                             ><SelectValue id={supplierValueId}>{supplierLabel}</SelectValue></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="0">待选供应商</SelectItem>
@@ -216,18 +227,11 @@ export default function ProcurementPlanDetailPage() {
       </div>
 
       {editable && canConvert && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-xs text-muted-foreground">
-            <p>按供应商与仓库分组生成采购单草稿。转换时重新核对最新供给和包装规则；数量过期时先调整或忽略，切换供应商时按其包装规则重新调整数量。</p>
-            <div role="status">
-              {savingItems ? '正在保存明细…' : missingSupplierCount > 0 && <p className="mt-1 text-destructive-ink">已选明细中有 {missingSupplierCount} 行缺少供应商。请选择供应商或取消勾选该行。</p>}
-            </div>
+        <div className="text-xs text-muted-foreground">
+          <p>按供应商与仓库分组生成采购单草稿。转换时重新核对最新供给和包装规则；数量过期时先调整或忽略，切换供应商时按其包装规则重新调整数量。</p>
+          <div role="status">
+            {savingItems ? '正在保存明细…' : missingSupplierCount > 0 && <p className="mt-1 text-destructive-ink">已选明细中有 {missingSupplierCount} 行缺少供应商。请选择供应商或取消勾选该行。</p>}
           </div>
-          <Button disabled={conversionDisabled} onClick={() => {
-            if (!conversionDisabled) convert.mutate(selectedItems.map(item => item.id))
-          }}>
-            {convert.isPending ? '正在生成采购草稿…' : `生成采购草稿（${selectedItems.length} 行）`}
-          </Button>
         </div>
       )}
       </OrderDetailSections>

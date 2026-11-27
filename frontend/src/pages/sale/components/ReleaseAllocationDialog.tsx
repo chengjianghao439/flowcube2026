@@ -82,75 +82,77 @@ export default function ReleaseAllocationDialog({ open, orderId, items, onClose 
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) requestClose() }}>
-      <DialogContent aria-busy={release.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="flex max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl flex-col gap-4 p-4 sm:p-6">
+      <DialogContent aria-busy={release.isPending} onEscapeKeyDown={e => { if (submitting.current || frozen) e.preventDefault() }} className="fc-form-dialog max-h-[90dvh] w-[calc(100%-2rem)] max-w-4xl">
         <DialogHeader description={<>{<>
           选择需要释放的商品并填写数量。未勾选的明细继续保留占库。
         </>}</>}><DialogTitle>取消占库</DialogTitle></DialogHeader>
 
 
-        <OrdinarySaleRecoveryNotice recovery={release.recovery} onConfirmed={onClose} />
-        <div className="min-h-0 overflow-auto rounded-lg border border-border">
-          <ReportTable className="w-full min-w-[1560px] text-sm">
-            <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
-              <tr>
-                <th className="w-10 px-3 py-2">
-                  <input
-                    type="checkbox"
-                    checked={reservedItems.length > 0 && reservedItems.every(i => rows[i.id]?.checked)}
-                    disabled={frozen}
-                    onChange={e => { if (!submitting.current && !frozen) setRows(Object.fromEntries(reservedItems.map(i => [i.id, { checked: e.target.checked, qty: i.reservedQty ?? 0 }]))) }}
-                    aria-label="全选"
-                  />
-                </th>
-                <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
-                <th className="w-28 px-2 py-2 text-left">仓库</th>
-                <th className="w-24 px-2 py-2 text-right">已占数量</th>
-                <th className="w-28 px-2 py-2 text-right">释放数量</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reservedItems.map(item => {
-                const st = rows[item.id] ?? { checked: false, qty: item.reservedQty ?? 0 }
-                return (
-                  <tr key={item.id} className="border-t transition-colors hover:bg-muted/20">
-                    <td className="px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={!!st.checked}
-                        disabled={frozen}
-                        onChange={e => setRow(item.id, { checked: e.target.checked })}
-                        aria-label={`选择 ${item.productName}`}
-                      />
-                    </td>
-                    <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
-                    <td className="px-2 py-2 text-muted-foreground">{item.warehouseName || '—'}</td>
-                    <td className="px-2 py-2 text-right tabular-nums">{item.reservedQty} {item.unit}</td>
-                    <td className="px-2 py-2">
-                      <Input quantity
-                        type="number"
-                        step={qtyStep(item.allowDecimalQty !== false)}
-                        aria-label={`${item.productName}释放数量`}
-                        aria-invalid={st.checked && !isAllocationQtyValid(st.qty, item.reservedQty ?? 0, item.allowDecimalQty !== false)}
-                        min={0}
-                        max={item.reservedQty ?? 0}
-                        value={st.qty ?? 0}
-                        disabled={frozen || !st.checked}
-                        onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
-                        className={cn('h-9 text-sm tabular-nums', !isAllocationQtyValid(st.qty, item.reservedQty ?? 0, item.allowDecimalQty !== false) && st.checked && 'border-destructive')}
-                      />
-                    </td>
-                  </tr>
-                )
-              })}
-              {!reservedItems.length && (
-                <tr><td colSpan={10} className="px-2 py-6 text-center text-muted-foreground">没有已占库存的明细</td></tr>
-              )}
-            </tbody>
-          </ReportTable>
-        </div>
+        <div className="fc-form-dialog-body space-y-4">
+          <OrdinarySaleRecoveryNotice recovery={release.recovery} onConfirmed={onClose} />
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <ReportTable className="w-full min-w-[1560px] text-sm">
+              <thead data-selection-column className="sticky top-0 data-table-header text-xs text-muted-foreground">
+                <tr>
+                  <th className="w-10 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={reservedItems.length > 0 && reservedItems.every(i => rows[i.id]?.checked)}
+                      disabled={frozen}
+                      onChange={e => { if (!submitting.current && !frozen) setRows(Object.fromEntries(reservedItems.map(i => [i.id, { checked: e.target.checked, qty: i.reservedQty ?? 0 }]))) }}
+                      aria-label="全选"
+                    />
+                  </th>
+                  <ProductIdentityHeaders /><th className="min-w-20 px-3 py-3 text-left">单位</th>
+                  <th className="w-28 px-2 py-2 text-left">仓库</th>
+                  <th className="w-24 px-2 py-2 text-right">已占数量</th>
+                  <th className="w-28 px-2 py-2 text-right">释放数量</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reservedItems.map(item => {
+                  const st = rows[item.id] ?? { checked: false, qty: item.reservedQty ?? 0 }
+                  return (
+                    <tr key={item.id} className="border-t transition-colors hover:bg-muted/20">
+                      <td className="px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={!!st.checked}
+                          disabled={frozen}
+                          onChange={e => setRow(item.id, { checked: e.target.checked })}
+                          aria-label={`选择 ${item.productName}`}
+                        />
+                      </td>
+                      <ProductIdentityCells product={item} /><td className="px-3 py-3">{item.unit || '—'}</td>
+                      <td className="px-2 py-2 text-muted-foreground">{item.warehouseName || '—'}</td>
+                      <td className="px-2 py-2 text-right tabular-nums">{item.reservedQty} {item.unit}</td>
+                      <td className="px-2 py-2">
+                        <Input quantity
+                          type="number"
+                          step={qtyStep(item.allowDecimalQty !== false)}
+                          aria-label={`${item.productName}释放数量`}
+                          aria-invalid={st.checked && !isAllocationQtyValid(st.qty, item.reservedQty ?? 0, item.allowDecimalQty !== false)}
+                          min={0}
+                          max={item.reservedQty ?? 0}
+                          value={st.qty ?? 0}
+                          disabled={frozen || !st.checked}
+                          onChange={e => setRow(item.id, { qty: Number(e.target.value) })}
+                          className={cn('h-9 text-sm tabular-nums', !isAllocationQtyValid(st.qty, item.reservedQty ?? 0, item.allowDecimalQty !== false) && st.checked && 'border-destructive')}
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+                {!reservedItems.length && (
+                  <tr><td colSpan={10} className="px-2 py-6 text-center text-muted-foreground">没有已占库存的明细</td></tr>
+                )}
+              </tbody>
+            </ReportTable>
+          </div>
 
-        {invalid.length > 0 && <p role="alert" className="text-sm text-destructive-ink">释放数量须大于 0、不超过已占数量，最多保留 2 位小数。</p>}
-        <DialogFooter className="gap-2 border-t pt-4 sm:space-x-0">
+          {invalid.length > 0 && <p role="alert" className="text-sm text-destructive-ink">释放数量须大于 0、不超过已占数量，最多保留 2 位小数。</p>}
+        </div>
+        <DialogFooter>
           <Button variant="outline" onClick={releaseAll} disabled={frozen}>选中全部已占数量</Button>
           <Button variant="outline" disabled={release.isPending} onClick={requestClose}>取消</Button>
           <Button disabled={frozen || !selected.length || invalid.length > 0} onClick={() => handleConfirm(true)}>

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useContext, useEffect, useState, type ComponentType, type LazyExoticComponent } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { TabPathContext } from '@/components/layout/TabPathContext'
+import { PageViewNavigation } from './PageViewNavigation'
 import { PageHeaderContext } from './PageHeaderContext'
 import { getMergedPageGroup, type MergedPageGroup } from '@/router/mergedPageGroups'
 import { usePermission } from '@/hooks/usePermission'
@@ -41,16 +42,8 @@ function MergedPageViews({ group, ownPath }: { group: MergedPageGroup; ownPath: 
 
   const paths = { ...savedPaths, ...visited, ...(allowed ? { [pathname]: ownPath } : {}) }
   const navigation = (
-    <nav aria-label={`${group.title}视图`} className="mb-4 flex flex-wrap gap-x-5 gap-y-1 border-b border-border">
-      {visibleViews.map(view => (
-        <Link
-          key={view.path}
-          to={paths[view.path] ?? view.path}
-          aria-current={pathname === view.path ? 'page' : undefined}
-          className={`border-b-2 px-2.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${pathname === view.path ? 'border-primary bg-primary/5 font-semibold text-primary' : 'border-transparent font-medium text-muted-foreground hover:text-foreground'}`}
-        >{view.label}</Link>
-      ))}
-    </nav>
+    <PageViewNavigation label={`${group.title}视图`} activePath={pathname}
+      views={visibleViews.map(view => ({ ...view, to: paths[view.path] }))} />
   )
 
   return <>

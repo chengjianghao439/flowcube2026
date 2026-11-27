@@ -4,12 +4,12 @@ import { TabPathContext } from '@/components/layout/TabPathContext'
 import PageHeader from '@/components/shared/PageHeader'
 import DataTable from '@/components/shared/DataTable'
 import ListSummary from '@/components/shared/ListSummary'
-import { FilterCard } from '@/components/shared/FilterCard'
+import { KeywordQueryChips, KeywordQueryDialog } from '@/components/shared/KeywordQueryDialog'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import { AppDialog } from '@/components/shared/AppDialog'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import TableActionsMenu from '@/components/shared/TableActionsMenu'
 import { assertKitReadOwner, readKitOwned, useKitBackup, useKits, useKitWrite } from '@/hooks/useKits'
 import { usePermission } from '@/hooks/usePermission'
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
@@ -30,6 +30,7 @@ export default function KitsPage() {
   const tabPath = useContext(TabPathContext), [locationParams] = useSearchParams(), navigate = useNavigate()
   const params = tabPath ? new URLSearchParams(tabPath.split('?')[1] || '') : locationParams
   const keyword = params.get('keyword') ?? ''
+  const [queryOpen, setQueryOpen] = useState(false)
   const [editor, setEditor] = useState<number | 'new' | null>(null), [deleting, setDeleting] = useState<KitDefinition | null>(null)
   const query = useKits({ page: 1, pageSize: 100, keyword })
   const total = query.data?.pagination.total ?? 0
@@ -55,18 +56,23 @@ export default function KitsPage() {
     { key: 'revision', title: '资料修订', width: 100 },
     { key: 'components', title: '组件数', width: 90, render: (_, row) => row.version?.components.length ?? '—' },
     { key: 'isActive', title: '状态', width: 90, render: (_, row) => <SoftStatusLabel label={row.isActive ? '启用' : '停用'} tone={activeTone(row.isActive)} /> },
-    { key: 'actions', title: '操作', width: 160, render: (_, row) => <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setEditor(row.id)}>{canUpdate ? '维护' : '查看'}</Button>{canDelete && <Button size="sm" variant="ghost" onClick={() => setDeleting(row)}>删除</Button>}</div> },
+    { key: 'actions', title: '操作', width: 160, render: (_, row) => (
+      <TableActionsMenu primaryLabel={canUpdate ? '维护' : '查看'} primaryVariant="outline" onPrimaryClick={() => setEditor(row.id)}
+        items={canDelete ? [{ label: '删除', destructive: true, afterMenuClose: true, onClick: () => setDeleting(row) }] : []} />
+    ) },
   ], [canUpdate, canDelete])
-  return <div>
+  return <div className="desktop-record-page space-y-4">
     <PageHeader title="成套配件"
-        description={!query.isError && !query.isLoading && query.data?.truncated ? <><span role="status">已读取 {query.data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 条，请缩小查询范围。</span> 已保存的销售单保留原成交资料，库存按真实组件管理。</> : '已保存的销售单保留原成交资料，库存按真实组件管理。'}  actions={canCreate ? <Button onClick={() => setEditor('new')}>新增配件</Button> : undefined} />
+        description={!query.isError && !query.isLoading && query.data?.truncated ? <><span role="status">已读取 {query.data.list.length.toLocaleString()} / 总匹配 {total.toLocaleString()} 条，请缩小查询范围。</span> 已保存的销售单保留原成交资料，库存按真实组件管理。</> : '已保存的销售单保留原成交资料，库存按真实组件管理。'}  actions={<>
+          <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
+          {canCreate && <Button onClick={() => setEditor('new')}>新增配件</Button>}
+        </>} />
 
-    <FilterCard className="mb-4">
-    <form key={keyword} className="flex w-full max-w-xl gap-2" onSubmit={event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('keyword'); updateKeyword(String(value ?? '').trim()) }}>
-      <Input name="keyword" aria-label="搜索成套配件" defaultValue={keyword} maxLength={100} autoComplete="off" placeholder="按编码、名称、型号、颜色或供应商型号搜索" /><Button variant="outline" type="submit">查询</Button>{keyword && <Button variant="ghost" type="button" onClick={() => updateKeyword('')}>清空</Button>}
-    </form>
-    </FilterCard>
-    {query.isError ? <QueryErrorState error={query.error} title="成套配件加载失败" onRetry={() => void query.refetch()} /> : <KitsTable columns={columns} data={query.data?.list ?? EMPTY_KITS} loading={query.isLoading} emptyText="暂无成套配件；有维护权限的员工可添加固定商品组成。" columnStorageKey="kits-v2" virtualized preserveFocus retainFocusedRow={editor != null || !!deleting} />}
+    <KeywordQueryChips keyword={keyword} onClear={() => updateKeyword('')} />
+    <KeywordQueryDialog open={queryOpen} dialogId="kits-query" title="查询成套配件"
+      label="关键词" placeholder="按编码、名称、型号、颜色或供应商型号搜索" maxLength={100} initial={keyword}
+      onClose={() => setQueryOpen(false)} onApply={value => updateKeyword(value.trim())} />
+    {query.isError ? <QueryErrorState error={query.error} title="成套配件加载失败" onRetry={() => void query.refetch()} /> : <KitsTable columns={columns} data={query.data?.list ?? EMPTY_KITS} loading={query.isLoading} emptyText="暂无成套配件；有维护权限的员工可添加固定商品组成。" columnStorageKey="kits-v2" fluid scrollLabel="成套配件表格" virtualized preserveFocus retainFocusedRow={editor != null || !!deleting} />}
     {!query.isError && !query.isLoading && query.data && !query.data.truncated && <ListSummary total={total} />}
     {editor != null && <KitEditor key={editor} id={editor} source={query.readOwner} onClose={() => setEditor(null)} />}
     {deleting && <DeleteKitDialog initial={deleting} readOwner={query.readOwner} onClose={() => setDeleting(null)} />}
@@ -95,8 +101,8 @@ function DeleteKitDialog({ initial, readOwner, onClose }: { initial: KitDefiniti
     } catch (caught) { if (mounted.current) setError(caught instanceof Error ? caught.message : '重读失败，原资料仍保留') }
     finally { if (mounted.current) setReloading(false) }
   }
-  return <AppDialog descriptionInHeader description={<>{<>确认删除「{target.name}」（{target.code}）？资料修订 {target.revision}。</>} {<>删除后不能再用于新选择；已保存订单的组成、金额和历史版本仍保留。</>}</>} open dialogId="kit-delete" title="删除成套配件" defaultWidth={620} defaultHeight={380} minHeight={320} onOpenChange={open => { if (!open && !locked) onClose() }}
+  return <AppDialog formDialog descriptionInHeader description={<>{<>确认删除「{target.name}」（{target.code}）？资料修订 {target.revision}。</>} {<>删除后不能再用于新选择；已保存订单的组成、金额和历史版本仍保留。</>}</>} open dialogId="kit-delete" title="删除成套配件" defaultWidth={620} defaultHeight={380} minHeight={320} onOpenChange={open => { if (!open && !locked) onClose() }}
     footer={<div className="flex flex-wrap justify-end gap-2"><Button variant="outline" disabled={locked} onClick={onClose}>取消</Button>{can(PERMISSIONS.PRODUCT_DELETE) && <Button variant="destructive" disabled={write.busy || reloading || !!target.deletedAt} onClick={() => { setError(''); void (write.pendingRecord ? write.retry() : write.submit({ kind: 'delete', id: target.id, data: { revision: target.revision } })).then(accept) }}>{write.pendingRecord ? '按原请求重试' : '确认删除'}</Button>}</div>}>
-    <div className="space-y-4 overflow-auto p-5">{(error || backup.error || write.error) && <p role="alert" className="text-sm text-destructive-ink">{error || (backup.error && (backup.text ? '复制失败，原资料仍保留；请重试复制后再重读。' : backup.error)) || write.error}</p>}{write.conflict && !write.pendingRecord && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void copy()}>复制原资料</Button><Button variant="outline" disabled={!backup.copied || locked} onClick={() => void reload()}>重读待删资料</Button></div>}</div>
+    <div className="space-y-4">{(error || backup.error || write.error) && <p role="alert" className="text-sm text-destructive-ink">{error || (backup.error && (backup.text ? '复制失败，原资料仍保留；请重试复制后再重读。' : backup.error)) || write.error}</p>}{write.conflict && !write.pendingRecord && <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void copy()}>复制原资料</Button><Button variant="outline" disabled={!backup.copied || locked} onClick={() => void reload()}>重读待删资料</Button></div>}</div>
   </AppDialog>
 }

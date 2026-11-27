@@ -139,8 +139,17 @@ test.each([5000, 5001])('%i匹配最多读取5000，真实collector标记与页�
   expect(requests.every(r => Number(r.url.searchParams.get('pageSize')) === 200)).toBe(true)
   expect(data()?.truncated).toBe(count === 5001)
   const text = host.textContent!.replace(/[,\s]/g, '')
-  if (count === 5001) { expect(text).toContain('已加载5000'); expect(text).toContain('匹配5001'); expect(text).toContain('缩小查询范围') }
-  else { expect(text).toContain('共5000'); expect(text).not.toContain('缩小查询范围') }
+  if (count === 5001) {
+    expect(text).toContain('已加载5000'); expect(text).toContain('共5001'); expect(text).toContain('状态筛选仅覆盖已加载记录')
+    await click('已收退款')
+    expect(host.textContent).toContain('已加载记录中有 0 单符合所选状态')
+    expect(host.textContent).not.toContain('共 0 单')
+  } else {
+    expect(text).toContain('共5000')
+    await click('已收退款')
+    expect(host.textContent).toContain('共 0 单')
+  }
+  expect(requests).toHaveLength(25)
 })
 
 test.each(['failure', 'drift'])('第二批%s拒绝残缺成功、旧计数与行入口，重试从原首批开始', async kind => {

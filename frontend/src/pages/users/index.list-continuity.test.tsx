@@ -37,6 +37,12 @@ async function wait(assertion: () => void) { await vi.waitFor(async () => { awai
 async function mount(active = true) { await act(async () => root.render(<QueryClientProvider client={query}><SectionVisibilityContext.Provider value={active}><div data-workspace-scroll style={{ height: 480, overflow: 'auto', display: active ? undefined : 'none' }}><UsersPage /></div></SectionVisibilityContext.Provider></QueryClientProvider>)) }
 const button = (name: string, scope: ParentNode = document.body) => [...scope.querySelectorAll<HTMLButtonElement>('button,[role="menuitem"]')].find(b => b.textContent?.trim() === name || b.getAttribute('aria-label') === name)!
 async function click(name: string, scope: ParentNode = document.body) { const b = button(name, scope); expect(b).toBeTruthy(); expect(!!b.disabled).toBe(false); await act(async () => b.click()) }
+async function openQuery() {
+  await click('查询', host)
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const input = dialog.querySelector<HTMLInputElement>('input[placeholder="搜索账号或姓名"]')!
+  return { dialog, input }
+}
 async function change(input: HTMLInputElement, value: string) { await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) }) }
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -73,20 +79,36 @@ test('第二批读取失败拒绝部分用户，可沿原条件重试', async ()
 })
 test('缓存403不展示旧用户或成功计数，未应用搜索草稿保留', async () => {
   respond = url => batch(url, 1); await mount(); await wait(() => expect(cache()?.state.status).toBe('success'))
-  const input = host.querySelector<HTMLInputElement>('[placeholder="搜索账号或姓名"]')!; await change(input, '尚未应用')
+  const { dialog, input } = await openQuery()
+  await change(input, '尚未应用')
   respond = () => failure(403); await act(async () => { await query.invalidateQueries({ queryKey: ['users'] }) }); await wait(() => expect(cache()?.state.status).toBe('error'))
   expect(host.textContent).not.toMatch(/USER-SYN-|共 1 个/); expect(input.value).toBe('尚未应用')
+  await click('取消', dialog)
   respond = url => batch(url, 1); await click('重试'); await wait(() => expect(cache()?.state.status).toBe('success'))
   for (const url of requests) expect(url.searchParams.get('keyword')).toBe('')
 })
-test('搜索和开发账号筛选沿原权限及参数，保留待输入草稿', async () => {
+test('搜索和开发账号草稿只在查询后生效，逐项清除保留其他条件', async () => {
   respond = url => batch(url, 201); await mount(); await wait(() => expect(cache()?.state.status).toBe('success'))
-  const input = host.querySelector<HTMLInputElement>('[placeholder="搜索账号或姓名"]')!; await change(input, 'APPLIED'); await click('搜索'); await wait(() => expect(cache()?.state.status).toBe('success'))
-  expect(requests.slice(-2).every(url => url.searchParams.get('keyword') === 'APPLIED')).toBe(true)
-  await change(input, '尚未应用')
-  await act(async () => host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click()); await wait(() => expect(cache()?.state.status).toBe('success'))
+  const { input, dialog } = await openQuery()
+  await change(input, 'APPLIED')
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click())
+  expect(requests.at(-1)?.searchParams.get('hideDevelopment')).toBe('1')
+  expect(requests.at(-1)?.searchParams.get('keyword')).toBe('')
+  await click('查询', dialog)
+  await wait(() => expect(cache()?.state.status).toBe('success'))
   expect(requests.slice(-2).every(url => url.searchParams.get('hideDevelopment') === '0' && url.searchParams.get('keyword') === 'APPLIED')).toBe(true)
-  expect(input.value).toBe('尚未应用')
+
+  const next = await openQuery()
+  expect(next.input.value).toBe('APPLIED')
+  expect(next.dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(true)
+  await click('清空', next.dialog)
+  expect(next.input.value).toBe('')
+  expect(next.dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false)
+  await click('取消', next.dialog)
+  expect(host.textContent).toContain('关键词：APPLIED')
+  await click('移除「显示开发账号」', host)
+  await wait(() => expect(cache()?.state.status).toBe('success'))
+  expect(requests.slice(-2).every(url => url.searchParams.get('hideDevelopment') === '1' && url.searchParams.get('keyword') === 'APPLIED')).toBe(true)
 })
 test('加载中不宣称成功零条', async () => {
   let release!: (value: Response) => void; respond = () => new Promise(resolve => { release = resolve }); await mount()

@@ -51,6 +51,5 @@ export function FulfillmentTodos({ summary = false }: { summary?: boolean }) {
     <DataTable virtualized columns={columns} data={query.data?.list || []} rowKey="id" loading={query.isPending} />
   </SectionCard>
     <ListSummary total={query.data?.pagination.total || 0} unit="项" />
-    <p className="mt-1 text-xs text-muted-foreground">状态和单据类型会为当前账号记住。事项按原单查看权限及仓库范围显示；自动阻塞解除后保留处理结果和操作记录。</p>
   </section>
 }

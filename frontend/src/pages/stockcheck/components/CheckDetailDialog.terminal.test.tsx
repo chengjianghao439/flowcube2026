@@ -113,6 +113,10 @@ for (const action of [{ open: '提交盘点', confirm: '确认提交', title: '�
 
 test('正常同ID成功刷新保持合法确认，用户关闭确认不发写请求', async () => {
   await draw(); await wait(() => expect(button('提交盘点')).toBeTruthy())
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const body = dialog.querySelector(':scope > .fc-form-dialog-body')!
+  expect(body.querySelector('.overflow-x-auto table input[aria-label="合成商品实盘数量"]')).toBeTruthy()
+  expect(dialog.querySelector(':scope > .fc-dialog-footer')?.contains(button('提交盘点')!)).toBe(true)
   await click('提交盘点')
   check = { ...check, remark: '合成后台刷新' }; await refresh()
   await wait(() => expect(document.body.textContent).toContain('合成后台刷新'))

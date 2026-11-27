@@ -83,13 +83,16 @@ const actualRows = () => host.querySelectorAll('tbody tr:not([aria-hidden])')
 function findRow(id: number) { return [...actualRows()].find(node => node.textContent?.includes(code(id)))! }
 function detailTrigger(id: number) { return button(spec.backfill ? '详情' : code(id), findRow(id))! }
 async function chooseBizType(label: string) {
-  const trigger = host.querySelectorAll<HTMLElement>('[role="combobox"]')[1]
+  await click('查询')
+  const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+  const trigger = dialog.querySelector<HTMLElement>('[role="combobox"][aria-label="业务类型"]')!
   await act(async () => trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
   await flush()
   const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(node => node.textContent === label)!
   expect(option).toBeTruthy()
   await act(async () => option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
   await flush()
+  await click('查询', dialog)
 }
 
 beforeEach(() => {
@@ -194,7 +197,7 @@ if (spec.backfill) test('业务筛选沿原值传每批，详情关闭与刷新�
   expect(requests.map(r => r.url.searchParams.get('bizType'))).toEqual(['supplier_refund', 'supplier_refund'])
   const trigger = detailTrigger(1); await act(async () => { trigger.focus(); trigger.click() }); await flush()
   const modal = document.querySelector<HTMLElement>('[role="dialog"]')!; await click('关闭', modal)
-  expect(host.querySelectorAll('[role="combobox"]')[1].textContent).toContain('供应商退款')
+  expect(host.querySelector('.fc-query-chip')?.textContent).toContain('业务类型：供应商退款')
   await click('刷新'); await loaded()
   expect(requests.every(r => r.url.searchParams.get('bizType') === 'supplier_refund')).toBe(true)
 })

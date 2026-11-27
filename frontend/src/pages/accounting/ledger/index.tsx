@@ -9,7 +9,8 @@ import { ReportTable } from '@/components/shared/ReportTable'
 import { useState } from 'react'
 import { Scale, FileText } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import PageHeader from '@/components/shared/PageHeader'
 import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { cn } from '@/lib/utils'
@@ -25,44 +26,47 @@ function LedgerDialog({ accountId, code, name, period, onClose }: { accountId: n
   const { data, isLoading } = useAccountLedger(accountId, period)
   return (
     <Dialog open={!!accountId} onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="sm:max-w-5xl">
+      <DialogContent className="fc-form-dialog sm:max-w-5xl">
         <DialogHeader description={isLoading || !data ? <span role="status">加载中…</span> : '核对科目逐笔发生额与余额。'}><DialogTitle>明细账 · {code} {name} <span className="text-sm font-normal text-muted-foreground">（{period}）</span></DialogTitle></DialogHeader>
-        {isLoading || !data ? null : (
-          <div className="max-h-[60vh] overflow-auto rounded-lg border border-border/60">
-            <ReportTable className="w-full text-sm">
-              <thead className="sticky top-0 text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">日期</th>
-                  <th className="px-3 py-2 text-left font-medium">凭证号</th>
-                  <th className="px-3 py-2 text-left font-medium">摘要</th>
-                  <th className="px-3 py-2 text-right font-medium">借方</th>
-                  <th className="px-3 py-2 text-right font-medium">贷方</th>
-                  <th className="px-3 py-2 text-right font-medium">余额</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-t border-border/40 bg-muted/20">
-                  <td className="px-3 py-2 text-muted-foreground" colSpan={5}>期初余额</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{m(data.openingBalance)}</td>
-                </tr>
-                {data.list.map((e, i) => (
-                  <tr key={i} className="border-t border-border/40">
-                    <td className="px-3 py-2 whitespace-nowrap">{formatDisplayDate(e.voucherDate, '')}</td>
-                    <td className="px-3 py-2 font-mono text-doc-code-muted">{e.voucherNo}</td>
-                    <td className="px-3 py-2">{e.summary || '—'}{e.auxName ? <span className="text-muted-foreground"> · {e.auxName}</span> : ''}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{cell(e.debit)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{cell(e.credit)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{m(e.balance)}</td>
+        <div className="fc-form-dialog-body">
+          {isLoading || !data ? null : (
+            <div className="rounded-lg border border-border/60">
+              <ReportTable className="w-full text-sm">
+                <thead className="sticky top-0 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">日期</th>
+                    <th className="px-3 py-2 text-left font-medium">凭证号</th>
+                    <th className="px-3 py-2 text-left font-medium">摘要</th>
+                    <th className="px-3 py-2 text-right font-medium">借方</th>
+                    <th className="px-3 py-2 text-right font-medium">贷方</th>
+                    <th className="px-3 py-2 text-right font-medium">余额</th>
                   </tr>
-                ))}
-                <tr className="border-t-2 border-border bg-muted/30 font-medium">
-                  <td className="px-3 py-2" colSpan={5}>期末余额</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{m(data.closingBalance)}</td>
-                </tr>
-              </tbody>
-            </ReportTable>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  <tr className="border-t border-border/40 bg-muted/20">
+                    <td className="px-3 py-2 text-muted-foreground" colSpan={5}>期初余额</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{m(data.openingBalance)}</td>
+                  </tr>
+                  {data.list.map((e, i) => (
+                    <tr key={i} className="border-t border-border/40">
+                      <td className="px-3 py-2 whitespace-nowrap">{formatDisplayDate(e.voucherDate, '')}</td>
+                      <td className="px-3 py-2 font-mono text-doc-code-muted">{e.voucherNo}</td>
+                      <td className="px-3 py-2">{e.summary || '—'}{e.auxName ? <span className="text-muted-foreground"> · {e.auxName}</span> : ''}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{cell(e.debit)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{cell(e.credit)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{m(e.balance)}</td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-border bg-muted/30 font-medium">
+                    <td className="px-3 py-2" colSpan={5}>期末余额</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{m(data.closingBalance)}</td>
+                  </tr>
+                </tbody>
+              </ReportTable>
+            </div>
+          )}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={onClose}>关闭</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   )
@@ -78,7 +82,7 @@ export default function LedgerPage() {
   return (
     <div>
       <PageHeader title="总账与试算平衡"
-        description="查看科目期初、本期发生与期末余额；借贷发生额和期末余额应各自平衡"  />
+        description="核对科目期初、本期发生与期末余额。"  />
 
 
       <FilterCard className="mb-4">

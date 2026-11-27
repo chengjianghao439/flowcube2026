@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '@/components/shared/PageHeader'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { SoftStatusLabel } from '@/components/shared/StatusBadge'
 import { useWorkspaceStore } from '@/store/workspaceStore'
 import { QueryErrorState } from '@/components/shared/QueryErrorState'
 import type { WorkbenchCard } from '@/api/reports'
@@ -38,7 +38,7 @@ function SectionList({ cards, onOpen }: { cards: WorkbenchCard[]; onOpen: (path:
               <p className="mt-0.5 text-xs text-muted-foreground">{card.description}</p>
             </div>
             <div className="flex shrink-0 items-center gap-3">
-              <Badge variant="outline" className="rounded-full border-border/60 bg-background px-2">{card.count}</Badge>
+              <SoftStatusLabel label={String(card.count)} tone="draft" />
               <Button size="sm" variant="outline" onClick={() => onOpen(card.path, card.title)}>{card.actionLabel}</Button>
             </div>
           </div>
@@ -56,7 +56,7 @@ function SectionList({ cards, onOpen }: { cards: WorkbenchCard[]; onOpen: (path:
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="min-w-0 whitespace-normal [overflow-wrap:anywhere] text-sm font-medium text-foreground">{item.title}</p>
-                        {item.badge && <Badge variant="outline" className="h-5 rounded-full px-2 text-xs">{item.badge}</Badge>}
+                        {item.badge && <SoftStatusLabel label={item.badge} tone="info" />}
                       </div>
                       {item.subtitle && <p className="mt-0.5 break-words text-xs leading-5 text-muted-foreground">{item.subtitle}</p>}
                     </div>
@@ -81,7 +81,7 @@ function ReminderBlock({ items, onOpen }: { items: NotificationItem[]; onOpen: (
           <h2 className="text-card-title">财务与系统提醒</h2>
           <p className="text-muted-body">财务与系统级事项汇总，业务待办见上方岗位分组。</p>
         </div>
-        <Badge variant="outline">{items.length} 项</Badge>
+        <SoftStatusLabel label={`${items.length} 项`} tone="draft" />
       </div>
       <div className="space-y-2">
         {items.length === 0 ? (
@@ -104,9 +104,7 @@ function ReminderBlock({ items, onOpen }: { items: NotificationItem[]; onOpen: (
                     <p className="mt-1 text-xs opacity-80">{getNotificationCategoryLabel(item.category)}提醒</p>
                   </div>
                 </div>
-                <Badge variant="outline" className="shrink-0 border-current/20 bg-background">
-                  P{item.priority ?? 9}
-                </Badge>
+                <SoftStatusLabel label={`P${item.priority ?? 9}`} tone="info" />
               </div>
             </button>
           ))

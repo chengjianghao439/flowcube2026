@@ -117,7 +117,7 @@ export default function KpiPage() {
                 {options.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '正在刷新…' : '立即刷新'}</Button>
+            <Button variant="outline" disabled={isFetching} onClick={() => void refetch()}>{isFetching ? '正在刷新…' : '立即刷新'}</Button>
           </div>
         }
       />

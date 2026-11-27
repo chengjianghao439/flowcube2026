@@ -42,8 +42,8 @@ export default function KitEditor({ id, source, onClose }: { id: number | 'new';
   }, [loaded, query.data, query.isFetchedAfterMount, query.isFetching, query.isError, readOwner])
   if (id === 'new') return <KitEditorContent readOwner={readOwner} onClose={onClose} />
   if (!loaded) {
-    return <AppDialog descriptionInHeader description={"核对成套配件的最新资料。"} open dialogId="kit-editor" title="成套配件" onOpenChange={v => { if (!v) onClose() }}>
-      <div className="p-5">{(query.isError || sourceError) ? <QueryErrorState error={sourceError || query.error} onRetry={() => void query.refetch()} title="资料读取失败" /> : <p role="status">正在加载最新资料…</p>}</div>
+    return <AppDialog formDialog descriptionInHeader description={"核对成套配件的最新资料。"} open dialogId="kit-editor" title="成套配件" onOpenChange={v => { if (!v) onClose() }}>
+      <div>{(query.isError || sourceError) ? <QueryErrorState error={sourceError || query.error} onRetry={() => void query.refetch()} title="资料读取失败" /> : <p role="status">正在加载最新资料…</p>}</div>
     </AppDialog>
   }
   // 初次最新读取后初始化独立草稿。后台列表失效不替换已打开的编辑基线。
@@ -152,10 +152,10 @@ function KitEditorContent({ initial, readOwner, onClose }: { initial?: KitDefini
   const changed = compositionChanged(draft, baseline)
   const originalVersion = baseline?.version
   return <>
-    <AppDialog descriptionInHeader description={!writable ? baseline?.deletedAt ? '资料已删除，保留版本供核对。' : '当前账号可查看资料；维护需要对应的商品新增或修改权限。' : '核对套内商品、每套量与分摊设置。'} open dialogId="kit-editor" title={<span className="flex flex-wrap items-center gap-2">{baseline ? `${writable ? '维护' : '查看'}成套配件 · ${baseline.code}` : '新增成套配件'}{baseline && writable && <EditModeBadge />}<UnsavedBadge show={dirty} /></span>}
+    <AppDialog formDialog descriptionInHeader description={!writable ? baseline?.deletedAt ? '资料已删除，保留版本供核对。' : '当前账号可查看资料；维护需要对应的商品新增或修改权限。' : '核对套内商品、每套量与分摊设置。'} open dialogId="kit-editor" title={<span className="flex flex-wrap items-center gap-2">{baseline ? `${writable ? '维护' : '查看'}成套配件 · ${baseline.code}` : '新增成套配件'}{baseline && writable && <EditModeBadge />}<UnsavedBadge show={dirty} /></span>}
       defaultWidth={1100} defaultHeight={740} minWidth={650} minHeight={500} onOpenChange={v => { if (!v) close() }}
       footer={<div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><Button variant="outline" onClick={() => void copyDraft()}>复制草稿内容</Button>{write.conflict && !reloaded && <Button variant="outline" disabled={!backup.copied || locked} onClick={() => void reload()}>重载最新资料</Button>}</div><div className="flex gap-2"><Button variant="outline" disabled={locked} onClick={close}>关闭</Button>{writable && (write.pendingRecord ? <Button disabled={write.busy} onClick={() => void write.retry().then(accept)}>按原请求重试</Button> : <Button disabled={locked || (baseline != null && !dirty)} onClick={() => void save()}>{write.busy ? '正在保存…' : baseline ? '保存修改' : '创建配件'}</Button>)}</div></div>}>
-      <div className="h-full space-y-5 overflow-y-auto p-5">
+      <div className="space-y-5">
         <div aria-live="polite">{success && <p className="rounded-md border bg-primary/5 p-3 text-sm">{success}</p>}{(localError || backup.error || (!reloaded && write.error) || readSourceError) && <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive-ink">{localError || backup.error || write.error || readSourceError}{write.conflict && !reloaded && ' 本次输入已保留。先复制草稿内容，再显式重载核对。'}</p>}</div>
         {backup.text && <div className="space-y-2"><textarea aria-label="完整草稿内容" readOnly value={backup.text} className="h-36 w-full rounded-md border bg-background p-2 font-mono text-xs" /><Button variant="outline" onClick={() => backup.acknowledge(backup.text)}>已备份草稿</Button></div>}
         {originalVersion && <dl className="flex flex-wrap gap-x-6 gap-y-2 border-b pb-3 text-xs text-muted-foreground"><div>当前版本 {originalVersion.versionNo}</div><div>资料修订 {baseline!.revision}</div><div>版本创建时间：{formatDisplayDateTime(originalVersion.createdAt)}</div><div>参考采样：{originalVersion.referenceSnapshotAt ? formatDisplayDateTime(originalVersion.referenceSnapshotAt) : '采样时间未单独保存'}</div></dl>}

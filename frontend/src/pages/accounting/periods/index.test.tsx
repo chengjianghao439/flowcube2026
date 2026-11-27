@@ -32,8 +32,12 @@ test('结账失败在确认弹窗内保留接口给出的原因和下一步', as
     await vi.waitFor(() => expect(button('结账', host)).toBeDefined())
     await act(async () => button('结账', host).click())
     const dialog = document.querySelector('[role="dialog"]')!
-    await act(async () => button('确认结账', dialog).click())
+    expect(dialog.querySelector('.fc-form-dialog-body')).toBeNull()
+    const footer = dialog.querySelector('.fc-dialog-footer')!
+    await act(async () => button('确认结账', footer).click())
     await vi.waitFor(() => expect(dialog.querySelector('[role="alert"]')?.textContent).toBe(reason))
+    expect(dialog.querySelector('.fc-form-dialog-body [role="alert"]')?.textContent).toBe(reason)
+    expect(dialog.querySelector('.fc-form-dialog-body')?.nextElementSibling).toBe(footer)
     expect(closePeriodApi).toHaveBeenCalledOnce()
     expect(host.textContent).toContain('未结账')
   } finally {

@@ -1,5 +1,5 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProductFinder } from '@/components/finder'
@@ -36,16 +36,20 @@ export function HandlingIntentDialog({ open, onClose }: { open: boolean; onClose
     if (!current() || !write.result || write.pending) return
     setProduct(null); setWarehouseId(''); setQuantity(''); setIntentUuid(crypto.randomUUID()); setOperationUuid(crypto.randomUUID()); setRequestKey(createRequestKey('handling-intent'))
   }
-  return <><Dialog open={open && active && handlingOwnerCurrent(owner) && mayHandle(P.INVENTORY_DISPOSAL_VIEW)} onOpenChange={next => { if (!next && current()) onClose() }}><DialogContent><DialogHeader description={<>{<>仅保存要处理的基本量，不预占或承诺现货；正常目标仍重新核对库存与原审批。</>}</>}><DialogTitle>保存处理意图</DialogTitle></DialogHeader>
+  return <><Dialog open={open && active && handlingOwnerCurrent(owner) && mayHandle(P.INVENTORY_DISPOSAL_VIEW)} onOpenChange={next => { if (!next && current()) onClose() }}><DialogContent className="fc-form-dialog"><DialogHeader description={<>{<>仅保存要处理的基本量，不预占或承诺现货；正常目标仍重新核对库存与原审批。</>}</>}><DialogTitle>保存处理意图</DialogTitle></DialogHeader>
 
-    <Button disabled={!editable() || !mayHandle(P.PRODUCT_VIEW)} onClick={() => { if (editable()) { setFinderVisited(true); setFinder(true) } }}>{product ? `${product.code} ${product.name}` : '选择意图商品'}</Button>
-    <label>处理仓库<select aria-label="处理仓库" value={warehouseId} disabled={!editable()} onChange={e => { if (editable()) setWarehouseId(e.target.value) }}><option value="">请选择</option>{warehouses.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
-    <label>处理方式<select aria-label="处理方式" value={type} disabled={!editable()} onChange={e => { if (editable()) setType(Number(e.target.value) as 1 | 2 | 3) }}><option value={1}>正常销售</option><option value={2}>采购退货</option><option value={3}>重新报废</option></select></label>
-    <label>意图基本量<Input quantity aria-label="意图基本量" value={quantity} disabled={!editable()} onChange={e => { if (editable()) setQuantity(e.target.value) }} />{product?.unit}</label>
-    <HandlingOperationPanel write={write} />
-    <Button disabled={!editable() || !product || !warehouseId || !handlingQty(Number(quantity))} onClick={() => void save()}>保存处理意图</Button>
-    {write.result && <Button onClick={newIntent}>另存新意图</Button>}
-    <Button variant="outline" onClick={() => { if (current()) onClose() }}>关闭并保留输入</Button>
+    <div className="fc-form-dialog-body space-y-4">
+      <Button disabled={!editable() || !mayHandle(P.PRODUCT_VIEW)} onClick={() => { if (editable()) { setFinderVisited(true); setFinder(true) } }}>{product ? `${product.code} ${product.name}` : '选择意图商品'}</Button>
+      <label>处理仓库<select aria-label="处理仓库" value={warehouseId} disabled={!editable()} onChange={e => { if (editable()) setWarehouseId(e.target.value) }}><option value="">请选择</option>{warehouses.data?.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
+      <label>处理方式<select aria-label="处理方式" value={type} disabled={!editable()} onChange={e => { if (editable()) setType(Number(e.target.value) as 1 | 2 | 3) }}><option value={1}>正常销售</option><option value={2}>采购退货</option><option value={3}>重新报废</option></select></label>
+      <label>意图基本量<Input quantity aria-label="意图基本量" value={quantity} disabled={!editable()} onChange={e => { if (editable()) setQuantity(e.target.value) }} />{product?.unit}</label>
+      <HandlingOperationPanel write={write} />
+    </div>
+    <DialogFooter>
+      <Button variant="outline" onClick={() => { if (current()) onClose() }}>关闭并保留输入</Button>
+      {write.result && <Button variant="outline" onClick={newIntent}>另存新意图</Button>}
+      <Button disabled={!editable() || !product || !warehouseId || !handlingQty(Number(quantity))} onClick={() => void save()}>保存处理意图</Button>
+    </DialogFooter>
   </DialogContent></Dialog>
     {finderVisited && <ProductFinder open={finder} readOwner={owner} readGuard={() => editable() && mayHandle(P.PRODUCT_VIEW)} onConfirm={p => { if (editable()) { setProduct(p); setFinder(false) } }} onClose={() => { if (editable()) setFinder(false) }} />}
   </>

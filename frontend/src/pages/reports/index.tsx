@@ -147,16 +147,14 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        <div className="flex gap-1 border-b">
+        <div className="fc-segmented-control w-fit" role="group" aria-label="统计维度">
           {summaryTabs.map(item => (
             <button
               key={item.key}
+              type="button"
+              aria-pressed={tab === item.key}
               onClick={() => setTab(item.key)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
-                tab === item.key
-                  ? 'border-b-2 border-primary text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className="fc-segmented-option"
             >
               {item.label}
             </button>

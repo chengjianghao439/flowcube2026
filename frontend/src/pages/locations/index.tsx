@@ -163,7 +163,7 @@ export default function LocationsPage() {
         canSubmit={() => !!form.warehouseId && !!form.code}
         headerActions={
           <>
-            <Button variant="outline" onClick={() => downloadExport('/export/locations').catch(e => toast.error((e as Error).message))}>导出</Button>
+            <Button variant="outline" onClick={() => downloadExport('/export/locations').catch(e => toast.error((e as Error).message))}>导出 Excel</Button>
             <Button variant="outline" onClick={() => setQueryOpen(true)}>查询</Button>
           </>
         }
@@ -188,7 +188,7 @@ export default function LocationsPage() {
           chips.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2">
               {chips.map(c => (
-                <span key={c.key} className="inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                <span key={c.key} className="fc-query-chip">
                   {c.label}
                   <button type="button" onClick={c.onRemove} className="text-muted-foreground/70 hover:text-foreground" aria-label={`移除「${c.label}」`}>
                     <X className="h-3 w-3" />

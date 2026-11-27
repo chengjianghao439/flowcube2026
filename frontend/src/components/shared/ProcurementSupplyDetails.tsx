@@ -1,3 +1,4 @@
+import TableActionsMenu, { type TableActionItem } from './TableActionsMenu'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { qty } from '@/lib/format'
 import { qtyStep } from '@/lib/qtyStep'
@@ -17,9 +18,24 @@ import { toast } from '@/lib/toast'
 import { getPurchasePolicyApi, savePurchasePolicyApi, prepareProcurementTransfer, type ProcurementSupply, type PurchasePolicy } from '@/api/procurement-supply'
 
 
-export default function ProcurementSupplyDetails({ supply, supplierId, snapshot, mode = 'plan' }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId?: number | null; mode?: 'plan' | 'replenishment' }) {
+export default function ProcurementSupplyDetails({ supply, supplierId, snapshot, mode = 'plan', menuItems }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId?: number | null; mode?: 'plan' | 'replenishment'; menuItems?: TableActionItem[] }) {
   const [open, setOpen] = useState(false)
-  return <><Button size="sm" variant="outline" onClick={() => setOpen(true)}>需求与覆盖</Button><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl"><DialogHeader description={<>{<>按本次读取的数据核对需求、已有供给与交期，查看包装规则。</>}</>}><DialogTitle>{supply.productName} · {supply.warehouseName}</DialogTitle></DialogHeader>{open && <SupplyBody snapshot={snapshot} supply={supply} supplierId={supplierId ?? supply.supplierId} mode={mode} onNavigate={() => setOpen(false)} />}</DialogContent></Dialog></>
+  return <>
+    {menuItems
+      ? <TableActionsMenu primaryVariant="outline" primaryLabel="需求与覆盖" items={menuItems} onPrimaryClick={() => setOpen(true)} />
+      : <Button size="sm" variant="outline" onClick={() => setOpen(true)}>需求与覆盖</Button>}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogContent className="fc-form-dialog max-h-[85vh] sm:max-w-3xl">
+        <DialogHeader description="按本次读取的数据核对需求、已有供给与交期，查看包装规则。">
+          <DialogTitle>{supply.productName} · {supply.warehouseName}</DialogTitle>
+        </DialogHeader>
+        <div className="fc-form-dialog-body space-y-4">
+          {open && <SupplyBody snapshot={snapshot} supply={supply} supplierId={supplierId ?? supply.supplierId}
+            mode={mode} onNavigate={() => setOpen(false)} />}
+        </div>
+      </DialogContent>
+    </Dialog>
+  </>
 }
 function SupplyBody({ supply: r, supplierId, snapshot, mode, onNavigate }: { supply: ProcurementSupply; snapshot?: ProcurementSupply | null; supplierId: number | null; mode: 'plan' | 'replenishment'; onNavigate: () => void }) {
   const navigate = useNavigate()

@@ -38,7 +38,7 @@ async function mount(run: (host: HTMLElement) => Promise<void>, path = '/kits?ke
     qc.clear(); host.remove()
   }
 }
-const click = async (name: string) => { const button = Array.from(document.querySelectorAll('button')).find(b => b.textContent === name); expect(button, `应有按钮 ${name}`).toBeTruthy(); await act(async () => { button!.click(); await new Promise(r => setTimeout(r, 15)) }); await act(async () => { await new Promise(r => setTimeout(r, 10)) }) }
+const click = async (name: string) => { const button = Array.from(document.querySelectorAll<HTMLElement>('button,[role="menuitem"]')).find(b => b.textContent === name || b.getAttribute('aria-label') === name); expect(button, `应有按钮 ${name}`).toBeTruthy(); await act(async () => { button!.click(); await new Promise(r => setTimeout(r, 15)) }); await act(async () => { await new Promise(r => setTimeout(r, 10)) }) }
 const change = async (label: string, value: string) => { const input = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!; expect(input).toBeTruthy(); await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value); input.dispatchEvent(new Event('input', { bubbles: true })) }) }
 const profile = { categoryId: 2, supplierId: 3, unit: '套', spec: 'H-10', color: '银色', articleNumber: 'SUP-H10', costPrice: 80, remark: '原资料' }
 test('资料列表沿自己的Tab查询有界取齐；只读账号查看但不出现写入口', async () => {
@@ -47,7 +47,11 @@ test('资料列表沿自己的Tab查询有界取齐；只读账号查看但不�
     expect(host.textContent).toContain('成套配件'); expect(host.textContent).toContain('铰链套')
     for (const title of ['分类', '供应商', '单位', '型号', '颜色', '进价', '价格A', '价格B', '价格C', '价格D']) expect(host.textContent).toContain(title)
     for (const value of ['五金配件', '配件供应商', 'H-10', '银色']) expect(host.textContent).toContain(value)
-    expect(host.querySelector('input[name="keyword"]')?.getAttribute('placeholder')).toBe('按编码、名称、型号、颜色或供应商型号搜索')
+    await click('查询')
+    const input = document.querySelector<HTMLInputElement>('[role="dialog"] input[name="keyword"]')!
+    expect(input.placeholder).toBe('按编码、名称、型号、颜色或供应商型号搜索')
+    expect(input.value).toBe('套')
+    await click('取消')
     expect(fixtures.list.mock.calls[0][0]).toEqual({ page: 1, pageSize: 100, keyword: '套' })
     expect(host.textContent).not.toContain('新增配件'); expect(host.textContent).not.toContain('删除')
     await click('查看'); expect(document.body.textContent).toContain('采样时间未单独保存')
@@ -105,7 +109,7 @@ test('新增通过真实商品选择回填基本单位，显式模式必须全�
 test('删除提交原修订，超时同键重试，关闭按钮不丢原提交', async () => {
   fixtures.remove.mockRejectedValueOnce(new Error('超时')).mockResolvedValueOnce({ ...savedKit, deletedAt: '2026-10-02 09:00:00', revision: 4 })
   await mount(async () => {
-    await click('删除'); await click('确认删除')
+    await click('更多操作'); await click('删除'); await click('确认删除')
     expect(fixtures.remove.mock.calls[0][1]).toEqual({ revision: 3 })
     expect(Array.from(document.querySelectorAll('button')).find(b => b.textContent === '取消')?.disabled).toBe(true)
     await click('按原请求重试')
@@ -124,7 +128,7 @@ test('删除409复制后显式读取新修订，再次请求失败应展示本�
   fixtures.remove.mockRejectedValueOnce({ status: 409, message: '原修订过期' }).mockRejectedValueOnce(new Error('超时'))
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } })
   await mount(async () => {
-    await click('删除'); await click('确认删除'); await click('复制原资料')
+    await click('更多操作'); await click('删除'); await click('确认删除'); await click('复制原资料')
     fixtures.detail.mockResolvedValue({ ...savedKit, revision: 4 })
     await click('重读待删资料'); await click('确认删除')
     expect(fixtures.remove.mock.calls[1][1]).toEqual({ revision: 4 })
@@ -155,7 +159,7 @@ test('删除409切B不重读同号资料，迟到重读不能跨登录代次替�
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } })
   try {
     await mount(async () => {
-      await click('删除'); await click('确认删除'); await click('复制原资料')
+      await click('更多操作'); await click('删除'); await click('确认删除'); await click('复制原资料')
       const calls = fixtures.detail.mock.calls.length
       fixtures.defaults.baseURL = '/server-b'; await click('重读待删资料')
       expect(fixtures.detail).toHaveBeenCalledTimes(calls)
@@ -258,7 +262,7 @@ test('删除复制在途会话已变化，不能承认原复制解锁重载', as
   let finish!: () => void
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve })) } })
   await mount(async () => {
-    await click('删除'); await click('确认删除'); await click('复制原资料')
+    await click('更多操作'); await click('删除'); await click('确认删除'); await click('复制原资料')
     await act(async () => { useAuthStore.setState({ sessionGeneration: 11 }); finish(); await new Promise(r => setTimeout(r, 10)) })
     expect(Array.from(document.querySelectorAll('button')).find(b => b.textContent === '重读待删资料')!.matches(':disabled')).toBe(true)
   })

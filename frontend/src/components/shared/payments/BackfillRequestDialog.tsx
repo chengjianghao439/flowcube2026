@@ -38,14 +38,14 @@ export function BackfillRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v && !pending) onClose() }}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="fc-form-dialog sm:max-w-xl">
         <DialogHeader description={<>
             {message && <span role="alert">{message} </span>}
             这个会计期间已经结账，凭证已经封存，所以这笔业务<strong>不能当场记账</strong>。
             可以把它提交为一张跨期补录申请：<strong>申请不记账</strong>，由<strong>另一个人</strong>批准后
             才会真正记账，凭证落在补录当期（批准那天所在的期间）。
           </>}><DialogTitle>这笔业务落在已结账的期间</DialogTitle></DialogHeader>
-        <div className="space-y-3 py-1 text-sm">
+        <div className="fc-form-dialog-body space-y-3  text-sm">
 
           {summary && <div className="text-xs text-muted-foreground">{summary}</div>}
           <div className="space-y-1.5">

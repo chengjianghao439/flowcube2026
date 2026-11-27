@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { openCreditActions } from './rowMenu.test-utils'
 import Page from './index'
 import KeepAliveSection from '@/components/shared/KeepAliveSection'
 import api, { getApiClientBaseURL, setApiClientBaseURL } from '@/api/client'
@@ -58,10 +59,10 @@ test.each([
   grants.add(permission); approvalRow = true; backendCanApprove = qualified
   await draw()
   await vi.waitFor(async () => { await flush(); expect(query().state.status).toBe('success') })
-  const buttons = () => [...host.querySelectorAll('button')].map(node => node.textContent?.trim())
-  expect(buttons().includes('发起申请')).toBe(apply)
-  expect(buttons().includes('批准')).toBe(approve)
-  expect(buttons().includes('驳回')).toBe(approve)
+  expect([...host.querySelectorAll('button')].some(node => node.textContent?.trim() === '发起申请')).toBe(apply)
+  const actions = (await openCreditActions()).map(node => node.textContent?.trim())
+  expect(actions.includes('批准')).toBe(approve)
+  expect(actions.includes('驳回')).toBe(approve)
 })
 const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')!
 const keyword = () => dialog().querySelector<HTMLInputElement>('[placeholder="请输入关键字…"]')!
@@ -200,4 +201,19 @@ test('查询应用当前草稿并重读，重开沿最新应用值及本页原UR
   } else expect(currentSearch).toBe(search)
   await click('查询')
   assertDraft()
+})
+
+test('倒置日期拒绝查询及回车，清除一端可保留关键字查询', async () => {
+  await seedApplied()
+  await click('查询')
+  const before = listRequests().length
+  await date(0, '2026-10-16')
+  expect(dialog().querySelector('[role="alert"]')?.textContent).toContain('起始日期不能晚于结束日期')
+  await click('查询', dialog())
+  await act(async () => keyword().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+  expect(listRequests()).toHaveLength(before)
+  await date(1, '')
+  await click('查询', dialog())
+  expect(lastParams()).toMatchObject({ keyword: 'APPLIED', startDate: '2026-10-16' })
+  expect(lastParams()).not.toHaveProperty('endDate')
 })

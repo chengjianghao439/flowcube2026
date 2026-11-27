@@ -1,10 +1,12 @@
+import { TRANSFER_STATUS_OPTIONS } from './constants'
 import { QueryFormLayout } from '@/components/shared/QueryFormLayout'
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { QueryDialog } from '@/components/shared/QueryDialog'
 import OperatorSelectField from '@/components/shared/OperatorSelectField'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProductFinder } from '@/components/finder'
+import { isReversedDateRange } from '@/lib/dateRange'
 import { DatePicker } from '@/components/shared/DatePicker'
 import { PickerField } from '@/components/shared/PickerField'
 import { WarehouseSelect } from '@/components/shared/WarehouseSelect'
@@ -44,10 +46,13 @@ interface Props {
 
 export default function TransferQueryDialog({ open, initial, resetValues, onClose, onApply }: Props) {
   const [draft, setDraft] = useState<TransferQueryValues>(EMPTY)
+  const dateErrorId = useId()
+  const effectiveStart = draft.startDate || (draft.endDate ? resetValues?.startDate : '')
+  const effectiveEnd = draft.endDate || (draft.startDate ? resetValues?.endDate : '')
+  const dateInvalid = isReversedDateRange(effectiveStart, effectiveEnd)
+  const apply = () => { if (!dateInvalid) onApply(draft) }
   const resetDraft = () => ({ ...EMPTY, ...resetValues })
   const [productOpen, setProductOpen] = useState(false)
-
-
 
   useEffect(() => { if (open) setDraft(initial) }, [open, initial])
 
@@ -64,7 +69,8 @@ export default function TransferQueryDialog({ open, initial, resetValues, onClos
         width={520}
         onClose={onClose}
         onReset={() => setDraft(resetDraft())}
-        onApply={() => onApply(draft)}
+        applyDisabled={dateInvalid}
+        onApply={apply}
       >
         <QueryFormLayout>
           <label className="flex flex-col gap-1">
@@ -73,7 +79,7 @@ export default function TransferQueryDialog({ open, initial, resetValues, onClos
               placeholder="调拨单号 / 仓库名称…"
               value={draft.keyword}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('keyword', e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
               className="h-9"
             />
           </label>
@@ -84,11 +90,7 @@ export default function TransferQueryDialog({ open, initial, resetValues, onClos
               <SelectTrigger className="h-9"><SelectValue placeholder="全部状态" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">全部状态</SelectItem>
-                <SelectItem value="1">草稿</SelectItem>
-                <SelectItem value="2">待出库</SelectItem>
-                <SelectItem value="3">在途</SelectItem>
-                <SelectItem value="4">已完成</SelectItem>
-                <SelectItem value="5">已取消</SelectItem>
+                {TRANSFER_STATUS_OPTIONS.map(option => <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </label>
@@ -130,13 +132,20 @@ export default function TransferQueryDialog({ open, initial, resetValues, onClos
           <label className="fc-query-date-start flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（起）</span>
             <DatePicker aria-label="创建日期（起）" value={draft.startDate} max={draft.endDate || undefined}
+              aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined}
               onChange={v => set('startDate', v)} className="h-9" />
           </label>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">创建日期（止）</span>
             <DatePicker aria-label="创建日期（止）" value={draft.endDate} min={draft.startDate || undefined}
+              aria-invalid={dateInvalid} aria-describedby={dateInvalid ? dateErrorId : undefined}
               onChange={v => set('endDate', v)} className="h-9" />
           </label>
+          {dateInvalid && <p id={dateErrorId} role="alert" className="col-span-full text-xs text-destructive-ink">
+            创建日期的起始日期不能晚于结束日期。
+            {!draft.startDate && `未填起始日期时使用 ${effectiveStart}。`}
+            {!draft.endDate && `未填结束日期时使用 ${effectiveEnd}。`}
+          </p>}
 
           <label className="flex flex-col gap-1 col-span-2">
             <span className="text-xs font-medium text-muted-foreground">备注</span>
@@ -144,7 +153,7 @@ export default function TransferQueryDialog({ open, initial, resetValues, onClos
               placeholder="按调拨单备注内容查询…"
               value={draft.remark}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => set('remark', e.target.value)}
-              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') onApply(draft) }}
+              onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter') apply() }}
               className="h-9"
             />
           </label>

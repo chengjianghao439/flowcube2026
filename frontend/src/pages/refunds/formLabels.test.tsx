@@ -14,7 +14,7 @@ vi.mock('@/api/finance', async original => ({ ...await original<typeof import('@
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ can: (permission: string) => permission !== PERMISSIONS.FINANCE_ACCOUNT_CREATE || access.createAccount }) }))
 
 test.each([
-  { Component: RefundsPage, action: '+ 新建退款单', labels: ['销售单号 *', '退款金额 *', '退款账户', '退款日期', '备注'] },
+  { Component: RefundsPage, action: '新建退款单', labels: ['销售单号 *', '退款金额 *', '退款账户', '退款日期', '备注'] },
   { Component: FinanceAccountsPage, action: '新建账户', labels: ['账户名称 *', '类型 *', '账号', '开户行', '户名', '期初余额', '备注'] },
   { Component: FinanceAccountsPage, action: '查询', labels: ['关键字', '账户类型', '状态'] },
 ])('$action 每个可见字段标签都关联实际输入控件', async ({ Component, action, labels }) => {

@@ -55,25 +55,33 @@ const cases=[
  {page:'/inventory',api:'inventory',op:'getInventoryOverviewApi',url:'?keyword=KEEP',open:'查看条码',close:'关闭',result:'SYN42'},
  {page:'/kits',api:'kits',op:'getKitsApi',url:'?keyword=KEEP',open:'维护',close:'关闭',result:'铰链套'},
  {page:'/credit-overrides',api:'credit',op:'listCreditOverridesApi',url:'?keyword=KEEP&status=1',open:'详情 / 记录',close:'关闭',result:'SYN42'},
- {page:'/price-change',api:'http',op:'/price-change',input:'搜索单号/商品…',submit:'搜索',open:'详情 / 记录',close:'关闭',result:'SYN42'},
- {page:'/stockcheck',api:'stockcheck',op:'getCheckListApi',input:'搜索单号/仓库…',submit:'搜索',open:'查看/填写',close:'关闭',result:'SYN42'},
- {page:'/disposals',api:'disposal',op:'getDisposalListApi',dialogQuery:true,open:'查看/处理',close:'关闭',result:'SYN42'},
- {page:'/plastic-boxes',api:'boxes',op:'getPlasticBoxesApi',input:'搜索条码 / 商品…',submit:'搜索',open:'详情',close:'关闭',result:'SYN42'},
- {page:'/customers',api:'customers',op:'getCustomersApi',input:'搜索客户编码或名称',submit:'搜索',open:'编辑',close:'取消',result:'SYN42'},
- {page:'/refunds',api:'refund',op:'getRefundListApi',dialogQuery:true,open:'查看/处理',close:'关闭',result:'SYN42'},
- {page:'/departments',api:'departments',op:'listDepartmentsApi',input:'搜索部门名称',submit:'搜索',open:'编辑',close:'取消',result:'SYN42',localFilter:true},
- {page:'/users',api:'users',op:'getUsersApi',input:'搜索账号或姓名',submit:'搜索',open:'编辑',close:'取消',result:'SYN42'},
- {page:'/settings/pda-devices',api:'devices',op:'listPdaDevicesApi',input:'搜索设备名称或设备码',submit:'',open:'编辑',close:'取消',result:'SYN42'},
+ {page:'/price-change',api:'http',op:'/price-change',input:'搜索单号/商品…',open:'详情 / 记录',close:'关闭',result:'SYN42'},
+ {page:'/stockcheck',api:'stockcheck',op:'getCheckListApi',input:'搜索单号/仓库…',open:'查看/填写',close:'关闭',result:'SYN42'},
+ {page:'/disposals',api:'disposal',op:'getDisposalListApi',input:'请输入关键字…',open:'查看/处理',close:'关闭',result:'SYN42'},
+ {page:'/plastic-boxes',api:'boxes',op:'getPlasticBoxesApi',input:'搜索条码 / 商品…',open:'详情',close:'关闭',result:'SYN42'},
+ {page:'/customers',api:'customers',op:'getCustomersApi',input:'搜索客户编码或名称',open:'编辑',close:'取消',result:'SYN42'},
+ {page:'/refunds',api:'refund',op:'getRefundListApi',input:'请输入关键字…',open:'查看/处理',close:'关闭',result:'SYN42'},
+ {page:'/departments',api:'departments',op:'listDepartmentsApi',input:'搜索部门名称',open:'编辑',close:'取消',result:'SYN42',localFilter:true},
+ {page:'/users',api:'users',op:'getUsersApi',input:'搜索账号或姓名',open:'编辑',close:'取消',result:'SYN42'},
+ {page:'/settings/pda-devices',api:'devices',op:'listPdaDevicesApi',input:'搜索设备名称或设备码',open:'编辑',close:'取消',result:'SYN42'},
 ]
 for(const c of cases)test('实际'+c.page+'筛选→真实详情/抽屉/编辑→关闭/切页返回',async()=>{
  await h.render(c.page+(c.url||''))
- if(c.dialogQuery){await h.click('查询');const input=document.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder="请输入关键字…"]')!;await h.input(input,'KEEP');await h.enter(input)}
- else if(c.input){const input=h.host.querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!;await h.input(input,'KEEP');if(c.submit)await h.click(c.submit)}
+ const keywordField = () => document.querySelector<HTMLInputElement>(`[role="dialog"] input[placeholder="${c.input}"]`)!
+ if (c.input) {
+   await h.click('查询')
+   await h.input(keywordField(), 'KEEP')
+   await h.enter(keywordField())
+ }
  const request=()=>c.api==='http'?h.httpCalls.filter(x=>x.url===c.op).at(-1)?.params:lastRead(c.api,c.op)?.args[0]
  if(!c.localFilter)expect(request()).toMatchObject({keyword:'KEEP'});const applied=request();expect(h.activeText()).toContain(c.result)
  if(!h.buttons().some(b=>b.textContent?.trim()===c.open))await h.click('更多操作')
  await h.click(c.open);expect(document.querySelector('[role="dialog"]')).not.toBeNull();expect(document.querySelector('[role="dialog"]')!.textContent).not.toMatch(/加载失败|读取失败|不存在或已删除/)
  await h.click(c.close);expect(document.querySelector('[role="dialog"]')).toBeNull();await h.go('/dashboard');await h.go(c.page+(c.url||''));expect(request()).toEqual(applied);expect(h.activeText()).toContain(c.result)
- if(c.input)expect(h.host.querySelector<HTMLInputElement>(`input[placeholder="${c.input}"]`)!.value).toBe('KEEP')
+ if (c.input) {
+   await h.click('查询')
+   expect(keywordField().value).toBe('KEEP')
+   await h.click('取消')
+ }
  if(c.localFilter)expect(h.activeText()).not.toContain('OTHER')
 })
