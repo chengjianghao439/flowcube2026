@@ -30,15 +30,24 @@ MIN_BYTES="${MIN_BYTES:-1048576}"   # 1M 以下不轮转（避免空文件频繁
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
+if [[ ! "$SLOWLOG" =~ ^/[A-Za-z0-9._/-]+$ || "$SLOWLOG" == *".."* ]]; then
+  echo "[$(ts)] [ERROR] SLOWLOG 路径格式不合法：$SLOWLOG" >&2
+  exit 1
+fi
+if [[ ! "$MIN_BYTES" =~ ^[0-9]+$ ]]; then
+  echo "[$(ts)] [ERROR] MIN_BYTES 必须为非负整数：$MIN_BYTES" >&2
+  exit 1
+fi
+
 cd "$PROJECT_DIR" 2>/dev/null || true
-CONTAINER="${CONTAINER:-$(resolve_container mysql flowcube-mysql)}"
+CONTAINER="${MYSQL_CONTAINER:-${CONTAINER:-$(resolve_container mysql flowcube-mysql)}}"
 
 if ! docker inspect -f '{{.State.Status}}' "$CONTAINER" >/dev/null 2>&1; then
   echo "[$(ts)] [ERROR] MySQL 容器 $CONTAINER 不可用，跳过轮转" >&2
   exit 1
 fi
 
-size=$(docker exec "$CONTAINER" sh -c "wc -c < $SLOWLOG 2>/dev/null || echo 0" 2>/dev/null | tr -d ' ')
+size=$(docker exec "$CONTAINER" sh -c 'wc -c < "$1" 2>/dev/null || echo 0' _ "$SLOWLOG" 2>/dev/null | tr -d ' ')
 size=${size:-0}
 
 if [ "${size:-0}" -lt "$MIN_BYTES" ]; then
@@ -47,6 +56,6 @@ if [ "${size:-0}" -lt "$MIN_BYTES" ]; then
 fi
 
 # 保留最近一份历史（覆盖旧的 .prev）
-docker exec "$CONTAINER" sh -c "cp $SLOWLOG $SLOWLOG.prev 2>/dev/null && : > $SLOWLOG" \
+docker exec "$CONTAINER" sh -c 'cp "$1" "$1.prev" 2>/dev/null && : > "$1"' _ "$SLOWLOG" \
   && echo "[$(ts)] [OK] slow.log 已轮转：${size} 字节 → $SLOWLOG.prev（保留一份）" \
   || { echo "[$(ts)] [ERROR] slow.log 轮转失败" >&2; exit 1; }

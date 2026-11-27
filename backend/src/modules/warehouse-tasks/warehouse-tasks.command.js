@@ -225,7 +225,7 @@ async function cancelTask(id, options, saleCancellation) {
     const taskRow = await lockStatusRow(conn, {
       table: 'warehouse_tasks',
       id,
-      columns: 'id, task_no, task_type, status, return_id, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at, warehouse_id',
+      columns: 'id, task_no, task_type, status, return_id, sale_order_id, sorting_bin_id, sorting_bin_code, cancel_requested_at, adjustment_requested_at, warehouse_id',
       entityName: '仓库任务',
     })
     // 单据级数据权限（2026-08-21 审计高危）：限仓用户不能取消他人仓库的任务
@@ -260,6 +260,9 @@ async function cancelTask(id, options, saleCancellation) {
     }
     if (taskRow.cancel_requested_at) {
       throw new AppError('任务已在拣货退回中，请等待逆向归还完成', 409)
+    }
+    if (taskRow.adjustment_requested_at) {
+      throw new AppError('该任务有改单正在等待仓库确认，请先完成改单处理后再取消', 409, 'WAREHOUSE_TASK_ADJUSTMENT_PENDING')
     }
     const rule = assertWarehouseTaskAction('cancel', taskRow.status)
     if (!isValidTransition(taskRow.status, rule.toStatus)) {

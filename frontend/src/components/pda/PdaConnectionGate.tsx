@@ -15,11 +15,14 @@ function initialGatePhase(): 'checking' | 'ok' | 'fail' {
 
 export default function PdaConnectionGate({ children }: { children: React.ReactNode }) {
   const location = useLocation()
+  const onLoginConfig = location.pathname.startsWith('/pda/login')
   const [phase, setPhase] = useState<'checking' | 'ok' | 'fail'>(initialGatePhase)
+  const [probeSeq, setProbeSeq] = useState(0)
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || isPdaViteLiveHost()) return
     let cancelled = false
+    setPhase('checking')
     ;(async () => {
       const ok = await checkPdaApiHealth()
       if (cancelled) return
@@ -28,9 +31,9 @@ export default function PdaConnectionGate({ children }: { children: React.ReactN
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [onLoginConfig, probeSeq])
 
-  if (phase === 'checking') {
+  if (phase === 'checking' && !onLoginConfig) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-3 bg-background px-6 text-center">
         <svg className="h-8 w-8 motion-safe:animate-spin text-muted-foreground" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -42,8 +45,6 @@ export default function PdaConnectionGate({ children }: { children: React.ReactN
     )
   }
 
-  const onLoginConfig = location.pathname.startsWith('/pda/login')
-
   if (phase === 'fail' && !onLoginConfig) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4 bg-background px-6 text-center">
@@ -51,7 +52,7 @@ export default function PdaConnectionGate({ children }: { children: React.ReactN
         <p className="text-xs text-muted-foreground max-w-sm">
           请确认 PDA 与服务器网络互通、服务器已启动。应用会优先使用上次保存的服务器地址，未保存时使用安装包内置的默认地址。
         </p>
-        <Button className="px-3" size="lg" type="button" onClick={() => window.location.reload()}>
+        <Button className="px-3" size="lg" type="button" onClick={() => setProbeSeq(seq => seq + 1)}>
           重试连接
         </Button>
       </div>

@@ -84,14 +84,35 @@ async function createCompany({ code, name, taxNo, parentId, isGroup, startPeriod
 }
 
 async function updateCompany(id, { name, taxNo, parentId, isGroup, isActive, startPeriod, remark }) {
-  const [[row]] = await pool.query('SELECT id FROM acct_companies WHERE id = ?', [Number(id)])
-  if (!row) throw new AppError('账套不存在', 404)
-  if (Number(id) === 1 && isActive === false) throw new AppError('主账套不能停用', 400)
-  await pool.query(
-    `UPDATE acct_companies SET name=?, tax_no=?, parent_id=?, is_group=?, is_active=?, start_period=?, remark=? WHERE id=?`,
-    [name != null ? String(name) : row.name, taxNo || null, parentId ? Number(parentId) : null, isGroup ? 1 : 0, isActive ? 1 : 0, startPeriod || null, remark || null, Number(id)],
-  )
-  return { id: Number(id) }
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [[row]] = await conn.query(
+      'SELECT id, name, tax_no, parent_id, is_group, is_active, start_period, remark FROM acct_companies WHERE id = ? FOR UPDATE',
+      [Number(id)],
+    )
+    if (!row) throw new AppError('账套不存在', 404)
+    const nextName = name !== undefined ? String(name).trim() : row.name
+    if (!nextName) throw new AppError('账套名称不能为空', 400)
+    const nextTaxNo = taxNo !== undefined ? (taxNo || null) : row.tax_no
+    const nextParentId = parentId !== undefined ? (parentId ? Number(parentId) : null) : row.parent_id
+    const nextIsGroup = isGroup !== undefined ? (isGroup ? 1 : 0) : Number(row.is_group)
+    const nextIsActive = isActive !== undefined ? (isActive ? 1 : 0) : Number(row.is_active)
+    const nextStartPeriod = startPeriod !== undefined ? (startPeriod || null) : row.start_period
+    const nextRemark = remark !== undefined ? (remark || null) : row.remark
+    if (Number(id) === 1 && !nextIsActive) throw new AppError('主账套不能停用', 400)
+    await conn.query(
+      'UPDATE acct_companies SET name=?, tax_no=?, parent_id=?, is_group=?, is_active=?, start_period=?, remark=? WHERE id=?',
+      [nextName, nextTaxNo, nextParentId, nextIsGroup, nextIsActive, nextStartPeriod, nextRemark, Number(id)],
+    )
+    await conn.commit()
+    return { id: Number(id) }
+  } catch (e) {
+    await conn.rollback()
+    throw e
+  } finally {
+    conn.release()
+  }
 }
 
 module.exports = { listCompanies, createCompany, updateCompany }

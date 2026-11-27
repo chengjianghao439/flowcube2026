@@ -10,6 +10,7 @@ import { commercialReadConfig } from '@/api/sale-commercial'
 import { useAuthStore } from '@/store/authStore'
 import { assertKitReadOwner } from './useKits'
 import { kitQuerySession } from '@/lib/kitRecoveryIdentity'
+import { createRequestKey } from '@/lib/requestKey'
 interface FactRecord {
   version: 1
   id: number
@@ -22,7 +23,7 @@ interface FactRecord {
 /** These endpoints have no operation receipt. Keep current-fact verification
  * distinct from a claim about who executed the original request. */
 export function useSourceReturnFacts(id: number, owner: KitReadOwner) {
-  const key = `flowcube-source-return-facts-v1:${id}`
+  const key = `flowcube-source-return-facts-v1:${owner.baseURL}:${owner.userId ?? 'anon'}:${id}`
   function read(): FactRecord | null {
     const raw = sessionStorage.getItem(key)
     if (!raw) return null
@@ -124,7 +125,7 @@ export function useSourceReturnFacts(id: number, owner: KitReadOwner) {
         baseURL: owner.baseURL,
         userId: owner.userId!,
         sessionId: kitQuerySession(),
-        nonce: crypto.randomUUID()
+        nonce: createRequestKey()
       }
       if (read()) throw new Error('该单据已有原操作待核对')
       sessionStorage.setItem(key, JSON.stringify(r))
@@ -145,17 +146,22 @@ export function useSourceReturnFacts(id: number, owner: KitReadOwner) {
     } catch (caught) {
       const e = caught as {
         status?: number
-        response?: { status?: number }
+        code?: string
+        response?: { status?: number; data?: { code?: string } }
         message?: string
       }
       const status = e.status ?? e.response?.status
+      const code = e.code ?? e.response?.data?.code
       if (
         r &&
         recordRef.current === r &&
         same(r, owner.sessionGeneration) &&
         status != null &&
+        status >= 400 &&
+        status < 500 &&
         status !== 408 &&
-        status < 500
+        status !== 429 &&
+        !(status === 409 && code === 'REQUEST_IN_PROGRESS')
       )
         clear(r)
       if (mounted.current)

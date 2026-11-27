@@ -37,6 +37,7 @@ const printLabel = async (req,res,next) => {
     const job = await svc.enqueueLabel(+req.params.id, {
       createdBy: req.user?.userId ?? req.user?.id ?? null,
       preferClientId,
+      scopeWarehouseIds: req.user?.warehouseIds ?? null,
     })
     return successResponse(
       res,

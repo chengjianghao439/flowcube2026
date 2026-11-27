@@ -175,14 +175,18 @@ async function assertInvoiceQuota(d, excludeId = null, conn = pool) {
   if (!(base > 0)) return { base: 0, issued: 0, sourceId: order.id, sourceNo: order.order_no, quotaChecked: false }
 
   // 3. 已开票合计（销项剔除红冲 status=2；编辑时排除自身；进项剔除删除）。
-  //    同时按 source_id 与 source_no 匹配：旧数据可能只有 source_no 没 source_id。
+  //    同时按 source_id 与权威 order.order_no 匹配（禁止把空字符串 input sourceNo 拼进 OR 条件）。
   const excludeSql = excludeId ? 'AND id <> ?' : ''
-  const params = excludeId ? [type, order.id, sourceNo, excludeId] : [type, order.id, sourceNo]
+  const matchedNo = String(order.order_no || '').trim()
+  const matchClause = matchedNo ? 'AND (source_id = ? OR source_no = ?)' : 'AND source_id = ?'
+  const params = matchedNo
+    ? (excludeId ? [type, order.id, matchedNo, excludeId] : [type, order.id, matchedNo])
+    : (excludeId ? [type, order.id, excludeId] : [type, order.id])
   const [[{ issuedSum }]] = await conn.query(
     `SELECT COALESCE(SUM(amount_with_tax), 0) AS issuedSum
        FROM fin_invoices
       WHERE invoice_type = ? AND deleted_at IS NULL
-        AND (source_id = ? OR source_no = ?)
+        ${matchClause}
         AND (invoice_type = 1 OR status <> 2)
         ${excludeSql}`,
     params,

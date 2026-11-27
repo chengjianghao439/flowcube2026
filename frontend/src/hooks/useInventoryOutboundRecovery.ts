@@ -141,7 +141,8 @@ export function useInventoryOutboundRecovery(onConfirmed: () => void, display?: 
     } catch (e) {
       if (!inboundEditOwnerCurrent(owner)) throw e
       const status = object(e) ? e.status : null
-      if (first && typeof status === 'number' && status >= 400 && status < 500) { await finish(r, 'failed'); throw e }
+      const code = object(e) && typeof e.code === 'string' ? e.code : null
+      if (first && typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 429 && !(status === 409 && code === 'REQUEST_IN_PROGRESS')) { await finish(r, 'failed'); throw e }
       setMessage('出库结果待确认，请查询上次结果；暂勿另发出库')
       throw e
     }

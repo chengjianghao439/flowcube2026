@@ -111,8 +111,22 @@ async function create({ code, name, category, balanceDir, parentId, auxType, sor
 
     let level = 1
     if (parentId) {
-      const parent = await getById(parentId, conn, companyId)
+      const [[parent]] = await conn.query(
+        'SELECT id, code, name, level, is_leaf FROM acct_accounts WHERE company_id = ? AND id = ? FOR UPDATE',
+        [companyId, parentId],
+      )
+      if (!parent) throw new AppError('父科目不存在', 404)
       if (parent.level >= MAX_LEVEL) throw new AppError(`已达最大层级（${MAX_LEVEL}级），无法在此科目下新建下级`, 400)
+      const [[usedEntry]] = await conn.query(
+        `SELECT e.id FROM acct_voucher_entries e
+           JOIN acct_vouchers v ON v.id = e.voucher_id
+          WHERE e.account_id = ? AND v.company_id = ?
+          LIMIT 1`,
+        [parentId, companyId],
+      )
+      if (usedEntry) {
+        throw new AppError(`科目「${parent.code} ${parent.name}」已有记账凭证，不能转为汇总科目，请另建同级科目`, 409, 'ACCT_PARENT_HAS_ENTRIES')
+      }
       level = parent.level + 1
       // 父科目变为汇总科目（不可直接记账）
       await conn.query('UPDATE acct_accounts SET is_leaf = 0 WHERE id = ? AND company_id = ?', [parentId, companyId])

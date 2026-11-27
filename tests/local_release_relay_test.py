@@ -52,11 +52,52 @@ class RelayTests(unittest.TestCase):
             self.assertEqual(instance.deliver('image',run,artifact),'relay')
             self.assertEqual(calls[1],'scp-original')
             self.assertIn('.relay.partial',calls[2]); self.assertTrue(calls[2].endswith('.relay'))
-            self.assertFalse(any('rm -f' in cmd for cmd in calls))
+            self.assertFalse(any('rm -rf' in cmd for cmd in calls))
         finally: instance.close()
-        cleanup=[cmd for cmd in calls if 'rm -f' in cmd][0]
+        cleanup=[cmd for cmd in calls if 'rm -rf' in cmd][0]
         self.assertNotIn('flowcube-images-123-1.tar.gz ',cleanup)
+        self.assertIn('.relay.parts', cleanup)
         self.assertFalse(instance.root.exists())
+
+    def test_upload_timeout_scales_with_size_and_parallel_upload_retries_single_chunk(self):
+        from unittest.mock import patch
+        self.assertEqual(relay.upload_timeout(1024), 300)
+        self.assertGreater(relay.upload_timeout(120 * 1024 * 1024), 1000)
+        self.assertEqual(relay.upload_timeout(500 * 1024 * 1024), 1800)
+        instance = relay.Relay(dict(GITHUB_REPOSITORY='fixture/repo', GITHUB_SHA=SHA, RELEASE_TAG='v1.2.3', FLOWCUBE_RELAY_SSH_TARGET='fixture'))
+        payload = bytes(range(256)) * 128  # 32 KiB
+        digest = hashlib.sha256(payload).hexdigest()
+        ssh_cmds = []
+        uploaded = {}
+        attempts = {}
+        instance.ssh = lambda cmd: ssh_cmds.append(cmd) or b''
+        def command(args, **kwargs):
+            if args[0] == 'scp':
+                part_file = pathlib.Path(args[-2])
+                remote_part = args[-1].split(':', 1)[1]
+                attempts[remote_part] = attempts.get(remote_part, 0) + 1
+                if remote_part.endswith('part-001') and attempts[remote_part] == 1:
+                    raise RuntimeError('transient chunk stall')
+                uploaded[remote_part] = part_file.read_bytes()
+            return b''
+        instance.command = command
+        try:
+            with tempfile.TemporaryDirectory() as work, \
+                    patch.object(relay, 'PARALLEL_UPLOAD_THRESHOLD', 4096), \
+                    patch.object(relay.time, 'sleep', lambda _s: None):
+                work_dir = pathlib.Path(work)
+                src = work_dir / 'big.tar.gz'
+                src.write_bytes(payload)
+                instance.upload_file(src, '/tmp/flowcube-images-123-1.tar.gz', work_dir, digest)
+                self.assertEqual(len(uploaded), 2)
+                assembled = b''.join(uploaded[k] for k in sorted(uploaded))
+                self.assertEqual(assembled, payload)
+                self.assertEqual(attempts['/tmp/flowcube-images-123-1.tar.gz.relay.parts/part-001'], 2)
+                self.assertEqual(attempts['/tmp/flowcube-images-123-1.tar.gz.relay.parts/part-000'], 1)
+                self.assertTrue(any('sha256sum' in cmd and digest in cmd for cmd in ssh_cmds))
+                self.assertEqual(list(work_dir.glob('upload-part-*')), [])
+        finally:
+            instance.close()
 
     def test_api_transient_retry(self):
         from unittest.mock import patch

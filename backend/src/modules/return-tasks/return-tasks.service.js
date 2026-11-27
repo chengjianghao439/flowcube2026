@@ -577,12 +577,22 @@ async function cancel(id, operator, options = {}) {
     if (manageConn) await conn.beginTransaction()
     const taskRow = await lockStatusRow(conn, {
       table: 'return_tasks', id,
-      columns: 'id, task_no, status, warehouse_id',
+      columns: 'id, task_no, status, warehouse_id, return_type',
       entityName: '退货任务',
     })
     // 数据范围：ERP 直连取消要校验任务所属仓库；cancelSR 联动取消传 {conn} 不带 scope，
     // 因其在 returns 侧已 assertInScope，此处放行（scopeWarehouseIds 为 null 即不校验）。
     assertInScope(options.scopeWarehouseIds ?? null, taskRow.warehouse_id, '退货任务')
+    // 独立入口禁止绕过销售退货单直接取消退货任务或取消「返货中(REVERSING)」任务，
+    // 否则上游退货单状态与已生成的返货出库单会脱节（仅 returns.service.cancelSR 同事务联动放行）。
+    if (manageConn) {
+      if (Number(taskRow.status) === RT_STATUS.REVERSING) {
+        throw new AppError('返货中的退货任务不可直接取消，请在销售退货单中取消', 409, 'RETURN_TASK_REVERSING_CANCEL_FORBIDDEN')
+      }
+      if (taskRow.return_type === 'sale') {
+        throw new AppError('销售退货任务需通过销售退货单联动取消，不可单独取消', 409, 'SALE_RETURN_CANCEL_REQUIRED')
+      }
+    }
     if (!isValidTransition(Number(taskRow.status), RT_STATUS.CANCELLED)) {
       throw new AppError('当前状态不允许取消', 400)
     }

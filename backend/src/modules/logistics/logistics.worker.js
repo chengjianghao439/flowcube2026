@@ -107,13 +107,14 @@ async function fetchOne(row) {
 
     const printType = res.printData?.type || null
     const printDataRef = printType === 'zpl' ? 'zpl_inline' : printType
-    // ③ 回写成功
-    await pool.query(
+    // ③ 回写成功（CAS 校验仍处于本轮 FETCHING 状态，防延迟回写覆盖已作废或重试单）
+    const [upd] = await pool.query(
       `UPDATE logistics_waybills
        SET status = ?, tracking_no = ?, est_freight = ?, print_data_ref = ?, error_message = NULL
-       WHERE id = ?`,
-      [WB_STATUS.FETCHED, res.trackingNo, res.freight != null ? res.freight : null, printDataRef, row.id],
+       WHERE id = ? AND status = ?`,
+      [WB_STATUS.FETCHED, res.trackingNo, res.freight != null ? res.freight : null, printDataRef, row.id, WB_STATUS.FETCHING],
     )
+    if (upd.affectedRows !== 1) return
     // ④ ZPL 面单入队（事务外；失败不影响取号成功——面单可补打）
     if (printType === 'zpl' && res.printData?.content) {
       try {
@@ -132,8 +133,8 @@ async function fetchOne(row) {
     }
   } catch (e) {
     await pool.query(
-      `UPDATE logistics_waybills SET status = ?, error_message = ?, retry_count = retry_count + 1 WHERE id = ?`,
-      [WB_STATUS.FAILED, String(e.message || '取号失败').slice(0, 500), row.id],
+      `UPDATE logistics_waybills SET status = ?, error_message = ?, retry_count = retry_count + 1 WHERE id = ? AND status = ?`,
+      [WB_STATUS.FAILED, String(e.message || '取号失败').slice(0, 500), row.id, WB_STATUS.FETCHING],
     )
   }
 }

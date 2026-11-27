@@ -338,7 +338,7 @@ test('postinstall, pinned get/undici and minimum Node contract are configured', 
   assert.equal(pkg.overrides['@electron/get'], '5.1.0');
   assert.equal(pkg.engines.node, require('../package.json').engines.node);
   assert.equal(pkg.devDependencies.undici, '7.30.1');
-  assert.equal(pkg.devDependencies.electron, '44.9.3');
+  assert.equal(pkg.devDependencies.electron, '44.11.5');
   assert.equal(pkg.devDependencies['electron-builder'], '26.15.3');
   assert.equal(pkg.build.win.signExecutable, false);
 });

@@ -220,6 +220,9 @@ async function approve(id, operator, { remark = null, expected = null } = {}, co
     const row = await lockApplicable(conn, id, operator, companyId, { actionLabel: '批准' })
     if (expected) assertFollowupSnapshot(row, expected, 'approve')
     const status = Number(row.status)
+    if (status === STATUS.VOIDED) {
+      throw new AppError('该补录申请已作废，不能批准或执行。如需补录请重新提交申请。', 409, 'FINANCE_BACKFILL_VOIDED')
+    }
     if (status === STATUS.REJECTED) {
       throw new AppError('该补录申请已被驳回，不能再次批准。如需补录请重新提交申请。', 409, 'FINANCE_BACKFILL_REJECTED')
     }
@@ -261,6 +264,9 @@ async function reject(id, operator, { remark = null } = {}, companyId = 1) {
     await conn.beginTransaction()
     const row = await lockApplicable(conn, id, operator, companyId, { actionLabel: '驳回' })
     const status = Number(row.status)
+    if (status === STATUS.VOIDED) {
+      throw new AppError('该补录申请已作废，无需再驳回。', 409, 'FINANCE_BACKFILL_VOIDED')
+    }
     if (status === STATUS.APPROVED && row.executed_at) {
       throw new AppError('该补录已批准并已记账，不能驳回。如需冲回请按会计调整流程处理。', 409, 'FINANCE_BACKFILL_ALREADY_EXECUTED')
     }
@@ -273,12 +279,13 @@ async function reject(id, operator, { remark = null } = {}, companyId = 1) {
     }
     const reason = String(remark || '').trim()
     if (reason.length < 2) throw new AppError('驳回必须填写原因，申请人需要知道为什么被驳回', 400, 'FINANCE_BACKFILL_REJECT_REASON')
-    await conn.query(
+    const [r] = await conn.query(
       `UPDATE finance_period_backfills
           SET status = ?, approver_id = ?, approver_name = ?, approved_at = NOW(), approve_remark = ?
         WHERE id = ? AND status = ?`,
       [STATUS.REJECTED, operator.operatorId ?? null, operator.operatorName ?? null, reason, Number(id), STATUS.PENDING],
     )
+    if (r.affectedRows === 0) throw new AppError('该申请状态已变化，请刷新后重试', 409, 'FINANCE_BACKFILL_RACE')
     await conn.commit()
   } catch (e) {
     await conn.rollback()

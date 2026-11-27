@@ -74,7 +74,19 @@ const updateItems = async (listId, items, { operator = null, changeReason = null
     await bindChangeRequest(conn, requestState, requestFingerprint)
     if (requestState.replay) { if (operator) operator.changeAuditHandled = true; await conn.rollback(); return requestState.responseData }
     const [before] = await conn.query('SELECT * FROM price_list_items WHERE list_id=? ORDER BY id FOR UPDATE', [listId])
-    const validItems = items.filter(item => item.productId && item.salePrice)
+    if (!Array.isArray(items)) throw new AppError('价格表明细格式无效', 400)
+    const validItems = []
+    for (const item of items) {
+      if (!item || typeof item !== 'object') throw new AppError('价格表明细项格式无效', 400)
+      const productId = Number(item.productId)
+      if (!Number.isInteger(productId) || productId <= 0) continue
+      if (item.salePrice === '' || item.salePrice == null) continue
+      const salePrice = Number(item.salePrice)
+      if (!Number.isFinite(salePrice) || salePrice < 0) {
+        throw new AppError('价格表售价必须为大于等于 0 的有效数字', 400)
+      }
+      validItems.push({ ...item, productId, salePrice })
+    }
     await conn.query('DELETE FROM price_list_items WHERE list_id=?', [listId])
     if (validItems.length) await conn.query(
       'INSERT INTO price_list_items (list_id,product_id,product_code,product_name,unit,sale_price) VALUES ?',

@@ -98,8 +98,9 @@ export function useCriticalOperationRecovery(options: Options) {
     } catch (error) {
       if (!captured.current()) return
       const status = object(error) && typeof error.status === 'number' ? error.status : null
-      // 只有首发明确 4xx 才能证明未做成；恢复重试的 4xx 不能推翻原未知结果。
-      if (first && status != null && status >= 400 && status < 500) return finish(record, 'failed')
+      const code = object(error) && typeof error.code === 'string' ? error.code : null
+      // 只有首发明确 4xx（排除 408/429 及处理中冲突 409）才能证明未做成；恢复重试的 4xx 不能推翻原未知结果。
+      if (first && status != null && status >= 400 && status < 500 && status !== 408 && status !== 429 && !(status === 409 && code === 'REQUEST_IN_PROGRESS')) return finish(record, 'failed')
       noticeRecovery(record, { busy: false, message: '还原整件结果未确认，请查询原提交；按原内容重试使用同一笔身份' })
     } finally { flights.delete(captured.flight) }
   }
