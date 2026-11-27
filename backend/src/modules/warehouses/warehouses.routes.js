@@ -3,8 +3,10 @@ const { z } = require('zod')
 const warehousesController = require('./warehouses.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validatePositiveIntParam } = require('../../utils/route')
 
 const router = Router()
+const checkId = validatePositiveIntParam('id', '仓库编号')
 
 function validateBody(schema) {
   return (req, res, next) => {
@@ -35,9 +37,9 @@ router.use(authMiddleware)
 
 router.get('/active',  requirePermission(PERMISSIONS.WAREHOUSE_VIEW), warehousesController.listActive)
 router.get('/',        requirePermission(PERMISSIONS.WAREHOUSE_VIEW), warehousesController.list)
-router.get('/:id',     requirePermission(PERMISSIONS.WAREHOUSE_VIEW), warehousesController.detail)
+router.get('/:id',     requirePermission(PERMISSIONS.WAREHOUSE_VIEW), checkId, warehousesController.detail)
 router.post('/',       requirePermission(PERMISSIONS.WAREHOUSE_CREATE), validateBody(createSchema), warehousesController.create)
-router.put('/:id',     requirePermission(PERMISSIONS.WAREHOUSE_UPDATE), validateBody(updateSchema), warehousesController.update)
-router.delete('/:id',  requirePermission(PERMISSIONS.WAREHOUSE_DELETE), warehousesController.remove)
+router.put('/:id',     requirePermission(PERMISSIONS.WAREHOUSE_UPDATE), checkId, validateBody(updateSchema), warehousesController.update)
+router.delete('/:id',  requirePermission(PERMISSIONS.WAREHOUSE_DELETE), checkId, warehousesController.remove)
 
 module.exports = router
