@@ -13,6 +13,7 @@ import { Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { parsePositiveQuantity, parsePrice, type DraftItem } from '../validate'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { useCustomerPriceHistory } from '../useCustomerPriceHistory'
 import { qtyStep } from '@/lib/qtyStep'
 
 function canExplainBaseQty(item: DraftItem): boolean {
@@ -23,7 +24,7 @@ function canExplainBaseQty(item: DraftItem): boolean {
 }
 
 export function SaleOrderItemsTable({
-  compact = false, issues = [], lockedIdentity = false, readEnabled = true, quantityRead, items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
+  compact = false, issues = [], lockedIdentity = false, readEnabled = true, quantityRead, customerId = 0, items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
   setFinderItemKey, setFinderOpen, updateItem, removeItem, onQuantityError,
 }: {
   /** 仅销售样板启用；默认保留其他录入入口的现有布局。 */
@@ -32,6 +33,7 @@ export function SaleOrderItemsTable({
   lockedIdentity?: boolean
   readEnabled?: boolean
   quantityRead?: Parameters<typeof useProductQtyPolicies>[1]
+  customerId?: number | string
   items: DraftItem[]
   invalidItemKeys: Set<number>
   quantityRefs: React.MutableRefObject<Map<number, HTMLInputElement>>
@@ -47,6 +49,8 @@ export function SaleOrderItemsTable({
   const fieldId = useId()
   // 「只能整数」的商品把数量框的 step 切成 1（迁移 254）；真正的拦截在服务端
   const allowDecimalOf = useProductQtyPolicies(readEnabled ? items.map(item => item.productId) : [], quantityRead)
+  const numericCustomerId = Number(customerId) || 0
+  const historyByProduct = useCustomerPriceHistory(numericCustomerId, items.map(item => item.productId), readEnabled && numericCustomerId > 0)
   return (
     <div className={cn('overflow-x-auto', !compact && 'rounded-lg border border-border')}>
       <TableShell compact={compact}>
@@ -107,6 +111,26 @@ export function SaleOrderItemsTable({
                   className="h-9 text-right text-sm tabular-nums"
                 />
                 {priceLoading[item._key] && <p role="status" className="mt-1 text-right text-[11px] text-muted-foreground">正在获取价格…</p>}
+                {(() => {
+                  const history = historyByProduct.get(item.productId)
+                  if (!history?.length) return null
+                  return (
+                    <div className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px] leading-4 text-muted-foreground">
+                      <span>历史</span>
+                      {history.map((h) => (
+                        <button
+                          key={`${h.orderId}-${h.unitPrice}`}
+                          type="button"
+                          title={`${h.orderNo} · ${h.orderDate} · ${h.quantity}${h.unit}（点击填入）`}
+                          onClick={() => updateItem(item._key, 'unitPrice', h.unitPrice)}
+                          className="rounded px-1 text-primary hover:bg-primary/10 hover:underline tabular-nums"
+                        >
+                          ¥{h.unitPrice}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })()}
                 {(priceError || showPriceIssue) && <div id={priceErrorId} className="mt-1 text-xs leading-5 text-destructive-ink">
                   <OrderFieldError>{showPriceIssue && priceIssue.message}</OrderFieldError>
                   <OrderFieldError>{priceError}</OrderFieldError>

@@ -288,6 +288,7 @@ function CreateView({ closeTab, tabPath, reorder, handling }: { closeTab: () => 
       <SaleOrderItemsSection allowAdd={!handling} hasItems={items.length > 0} addError={fieldError('add')} onAdd={addItem}>
           <SaleOrderItemsTable
             lockedIdentity={!!handling}
+            customerId={!handling && customerId ? Number(customerId) : 0}
             quantityRead={handling ? { owner: handling.source.owner, isCurrent: () => handling.source.isCurrent() && !handling.write.blocked && mayHandle(PERMISSIONS.PRODUCT_VIEW) } : undefined}
             readEnabled={!handling || (handling.source.current && handling.source.active && !handling.write.blocked)}
             items={items} issues={issues} invalidItemKeys={new Set(issues.flatMap(i => i.itemKey === undefined ? [] : [i.itemKey]))} quantityRefs={quantityRefs} priceLoading={priceLoading} priceErrors={priceErrors}

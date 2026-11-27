@@ -52,53 +52,32 @@ async function render(path: string) {
   await act(async () => { await vi.dynamicImportSettled() })
 }
 function view(path: string) { return host.querySelector(`[data-view="${path}"]`)! }
-async function click(label: string) {
-  const link = Array.from(host.querySelectorAll('a,button')).find(node => node.textContent === label) as HTMLElement
-  expect(link, label).toBeTruthy()
-  await act(async () => link.click())
-  await act(async () => { await vi.dynamicImportSettled() })
-}
 
-test('标题下切换合并视图，保留筛选且隐藏视图不再活动', async () => {
+test('原合并路由直接挂载各自独立页面，不渲染合并标签栏', async () => {
   await render('/reports')
-  expect(host.querySelector('h1')?.textContent).toBe('业务统计')
-  expect(host.querySelector('[data-page-group]')?.textContent).toBe('报表中心')
+  expect(host.querySelector('h1')?.textContent).toBe('原页标题')
+  expect(host.querySelector('[data-page-group]')).toBeNull()
   expect(host.querySelectorAll('[data-view]')).toHaveLength(1)
-  await click('查询')
-  await click('经营概览')
-  expect(view('/reports').textContent).toContain('已筛选')
-  expect(view('/reports').getAttribute('data-active')).toBe('false')
-  expect(view('/reports/kpi').getAttribute('data-active')).toBe('true')
-  expect(view('/reports/kpi').querySelector('h1')?.textContent).toBe('经营概览')
-  expect(view('/reports/kpi').querySelector('a[aria-current="page"]')?.textContent).toBe('经营概览')
-  await act(async () => navigate(-1))
   expect(view('/reports').getAttribute('data-active')).toBe('true')
-  expect(view('/reports').textContent).toContain('已筛选')
+
+  await act(async () => navigate('/reports/kpi'))
+  await act(async () => { await vi.dynamicImportSettled() })
+  expect(view('/reports/kpi').getAttribute('data-active')).toBe('true')
 })
 
-test('只有报表权限时采购建议不挂载采购计划，直达无权地址也不能渲染业务', async () => {
+test('只有报表权限时补货建议独立挂载，不挂载采购计划', async () => {
   useAuthStore.setState({ user: { roleId: 5, permissions: [PERMISSIONS.REPORT_VIEW] } as never })
   await render('/reports/replenishment')
-  expect(host.textContent).toContain('采购建议')
-  expect(host.querySelector('h1')?.textContent).toBe('补货建议')
-  expect(host.textContent).not.toContain('采购计划')
-  expect(host.querySelectorAll('[data-view]')).toHaveLength(1)
-  await act(async () => navigate('/procurement'))
-  expect(host.textContent).toContain('无访问权限')
-  expect(host.querySelectorAll('[data-view][data-active="true"]')).toHaveLength(0)
+  expect(host.querySelector('[data-view="/reports/replenishment"]')).toBeTruthy()
+  expect(host.querySelector('[data-page-group]')).toBeNull()
   expect(host.querySelector('[data-view="/procurement"]')).toBeNull()
 })
 
-test('财务组从持久child上下文打开，首次访问才挂载，切回保留同实例筛选', async () => {
-  useWorkspaceStore.getState().addTab({ key: '/payments/receivable', path: '/payments/receivable?keyword=old', title: '旧页' })
-  useWorkspaceStore.getState().syncFromLocation('/reports/reconciliation/receivable?partyId=7')
+test('现结账款与月结对账各自独立挂载，不互相包裹', async () => {
   await render('/reports/reconciliation/receivable?partyId=7')
-  expect(host.querySelector('h1')?.textContent).toBe('客户往来')
-  expect(host.querySelectorAll('[data-view]')).toHaveLength(1)
-  expect(host.querySelector('a[href="/payments/receivable?keyword=old"]')).toBeTruthy()
-  await click('现结账款'); await click('查询')
-  const original = view('/payments/receivable?keyword=old')
-  await click('月结对账'); await click('现结账款')
-  expect(view('/payments/receivable?keyword=old')).toBe(original)
-  expect(original.textContent).toContain('已筛选')
+  expect(host.querySelector('[data-page-group]')).toBeNull()
+  expect(view('/reports/reconciliation/receivable?partyId=7').getAttribute('data-active')).toBe('true')
+  await act(async () => navigate('/payments/receivable?keyword=old'))
+  await act(async () => { await vi.dynamicImportSettled() })
+  expect(view('/payments/receivable?keyword=old').getAttribute('data-active')).toBe('true')
 })

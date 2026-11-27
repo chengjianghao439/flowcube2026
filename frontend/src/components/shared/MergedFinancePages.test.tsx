@@ -60,7 +60,7 @@ test('真实资金表单切子页保持输入和未决提交；隐藏页不重�
   expect(getActiveAccountsApi).not.toHaveBeenCalled()
   await click('新建账户')
   await change(document.querySelector<HTMLInputElement>('input[placeholder="如：工商银行基本户"]')!, '未保存账户')
-  const accountPage = [...host.querySelectorAll('h1')].find(el => el.textContent === '资金工作区')!.parentElement!
+  const accountPage = [...host.querySelectorAll('h1')].find(el => el.textContent === '账户管理')!.parentElement!
   await act(async () => navigate('/finance/transactions?keyword=other')); await settle()
   expect(document.querySelector('[role="dialog"]')).toBeNull()
   await act(async () => { await qc.invalidateQueries({ queryKey: ['finance-accounts'] }) }); await settle()
