@@ -13,6 +13,7 @@ import { useCommercialPreview, useCommercialWrite, readCommercialSaleOwned } fro
 import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { usePermission } from '@/hooks/usePermission'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { useCustomerPriceHistory } from '../form/useCustomerPriceHistory'
 import { captureHandlingOwner } from '@/lib/disposalHandlingRecovery'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { CustomerFinder } from '@/components/finder'
@@ -216,6 +217,15 @@ export default function CommercialEditor({
   if (!h.warehouseId || !h.warehouseName) entryIssues.push({ target: 'warehouse', message: '请选择仓库' })
   if (!rows.length) entryIssues.push({ target: 'add', message: '请添加至少一条商品明细' })
   const preview = useCommercialPreview(readable ? bodyResult.body : null, owner, order?.id, readCurrent)
+  const ordinaryProductIds = useMemo(
+    () => rows.flatMap(r => r.input.kind === 'ordinary' ? [r.input.productId] : []),
+    [rows],
+  )
+  const historyByProduct = useCustomerPriceHistory(
+    Number(h.customerId) || 0,
+    ordinaryProductIds,
+    readable && can(PERMISSIONS.SALE_ORDER_VIEW) && Number(h.customerId) > 0,
+  )
   const heldPreview = useRef<{ signature: string; data: typeof preview.data } | null>(null)
   const bodySignature = JSON.stringify(bodyResult.body)
   if (preview.data) heldPreview.current = { signature: bodySignature, data: preview.data }
@@ -453,6 +463,30 @@ export default function CommercialEditor({
             }
             className="h-9 w-full text-right tabular-nums"
           />
+          {row.input.kind === 'ordinary' && (() => {
+            const history = historyByProduct.get(row.input.productId)
+            if (!history?.length) return null
+            return (
+              <div className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px] leading-4 text-muted-foreground">
+                <span>历史</span>
+                {history.map((item) => (
+                  <button
+                    key={`${item.orderId}-${item.unitPrice}`}
+                    type="button"
+                    disabled={locked || row.unit !== row.baseUnit}
+                    title={`${item.orderNo} · ${item.orderDate} · ${item.quantity}${item.unit}（点击填入）`}
+                    onClick={() => update(row.input.lineKey, {
+                      price: String(item.unitPrice),
+                      input: { ...row.input, priceSource: 'manual' },
+                    })}
+                    className="rounded px-1 text-primary hover:bg-primary/10 hover:underline tabular-nums disabled:opacity-50"
+                  >
+                    ¥{item.unitPrice}
+                  </button>
+                ))}
+              </div>
+            )
+          })()}
           <OrderFieldError className="mt-1" id={priceErrorId}>{priceError}</OrderFieldError>
         </td>
         <td className="p-2 text-right tabular-nums">{resolved ? money(resolved.amount) : '待预览'}</td>
