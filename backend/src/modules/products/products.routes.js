@@ -79,7 +79,7 @@ router.get('/',       requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.list)
 router.post('/:id/print-label', requirePermission(PERMISSIONS.PRODUCT_PRINT_LABEL), checkId, ctrl.printLabel)
 router.get('/:id',    requirePermission(PERMISSIONS.PRODUCT_VIEW), checkId, ctrl.detail)
 router.post('/',      requirePermission(PERMISSIONS.PRODUCT_CREATE), validateBody(productBase), ctrl.create)
-router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), checkId, validateBody(productBase.extend({ isActive: z.boolean(), changeReason: z.string().max(500).optional().nullable() })), ctrl.update)
+router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), validateBody(productBase.extend({ isActive: z.boolean(), changeReason: z.string().max(500).optional().nullable() })), checkId, ctrl.update)
 router.delete('/:id', requirePermission(PERMISSIONS.PRODUCT_DELETE), checkId, ctrl.remove)
 
 module.exports = router

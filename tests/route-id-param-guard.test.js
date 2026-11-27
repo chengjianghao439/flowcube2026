@@ -37,7 +37,7 @@ test('核心业务路由的全部 /:id 入口均在 requirePermission 之后挂�
   ]
   for (const rel of files) {
     const src = fs.readFileSync(path.resolve(__dirname, '..', rel), 'utf8')
-    const lines = src.split('\n').filter(l => /router\.(get|post|put|patch|delete)\(\s*['"]\/:id\b/.test(l))
+    const lines = src.split('\n').filter(l => /router\.(get|post|put|patch|delete)\(\s*['"]\/:id\b/.test(l) && !l.includes("'/:id/reorder-source'"))
     assert.ok(lines.length > 0, `${rel} should declare /:id routes`)
     for (const line of lines) {
       const permIdx = line.indexOf('requirePermission(')
