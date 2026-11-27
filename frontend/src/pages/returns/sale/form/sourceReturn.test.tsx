@@ -166,7 +166,7 @@ const factConfirmed = {
   status: 2,
   task: { id: 100, taskNo: 'RT100', status: 1 }
 }
-const factsKey = 'flowcube-source-return-facts-v1:90'
+const factsKey = 'flowcube-source-return-facts-v1:/a:5:90'
 async function startFactCheck(host: HTMLElement, action: 'confirm' | 'cancel') {
   await click(host, action === 'confirm' ? '确认（派发到 PDA）' : '取消')
   await click(document.body, action === 'confirm' ? '确认' : '确认取消')

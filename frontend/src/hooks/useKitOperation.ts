@@ -157,15 +157,20 @@ export function useKitOperation<P, R>(
       if (!mounted.current || queryRef.current !== query) return null
       const e = caught as {
         status?: number
-        response?: { status?: number }
+        code?: string
+        response?: { status?: number; data?: { code?: string } }
         message?: string
       }
       const status = e.status ?? e.response?.status
+      const code = e.code ?? e.response?.data?.code
       if (
         !owns(query, generation) ||
         body.uncertain ||
         status == null ||
+        status < 400 ||
         status === 408 ||
+        status === 429 ||
+        (status === 409 && code === 'REQUEST_IN_PROGRESS') ||
         status >= 500
       ) {
         markUnknown(

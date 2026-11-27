@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { FlowClient } from '../src/flow.js';
 import { TaskStore } from '../src/tasks.js';
 import { handleMessage, confirmTask } from '../src/agent.js';
-import { validateQty, diffPreview } from '../src/guards.js';
+import { validateQty, diffPreview, amountCents } from '../src/guards.js';
 const FULL_ACTOR = { username: 'tester', realName: '测试员', roleId: 2, roleName: '测试全权', permissions: ['dashboard.view','inventory.view','report.view','product.view','customer.view','price.list.view','sale.order.view','sale.order.create','sale.order.reserve','purchase.order.create','payment.view','payment.execute','finance.account.view','warehouse.view','warehouse.task.view','print.job.view','approval.task.view'], warehouseIds: null, unrestrictedWarehouseScope: true, isSuper: false };
 
 
@@ -90,19 +90,27 @@ async function setup() {
   return { server, state, client: new FlowClient(base, 'test-token'), store: new TaskStore(null) };
 }
 
-test('守卫：数量精度（整数/两位小数/尾零）', () => {
+test('守卫：数量精度（整数/两位小数/尾零/非法格式）与金额防放大', () => {
   assert.equal(validateQty(0.5, { allowDecimal: false })?.code, 'QTY_INTEGER_REQUIRED');
   assert.equal(validateQty(1.234)?.code, 'QTY_DECIMALS_EXCEEDED');
+  assert.equal(validateQty('1e2')?.code, 'QTY_INVALID');
+  assert.equal(validateQty('1.000000001')?.code, 'QTY_DECIMALS_EXCEEDED');
   assert.equal(validateQty(1.23), null);
   assert.equal(validateQty('1.230'), null);
   assert.equal(validateQty(0)?.code, 'QTY_INVALID');
+  assert.equal(amountCents('12.34', 1), 1234);
+  assert.throws(() => amountCents('1e10000000', 1), /金额/);
+  assert.throws(() => amountCents('1e-1000', 1), /金额/);
 });
 
-test('守卫：预览差异检测（价格/可用量）', () => {
-  const before = { lines: [{ productId: 1, unitPriceCents: 890, available: 60 }] };
-  const after = { lines: [{ productId: 1, unitPriceCents: 990, available: 60 }] };
+test('守卫：预览差异检测（价格/可用量/删行/数量/总额）', () => {
+  const before = { totalCents: 8900, lines: [{ productId: 1, qty: 10, unit: '件', unitPriceCents: 890, available: 60 }, { productId: 2, qty: 1, unit: '条', unitPriceCents: 3600, available: 10 }] };
+  const after = { totalCents: 9900, lines: [{ productId: 1, qty: 10, unit: '箱', unitPriceCents: 990, available: 60 }] };
   const d = diffPreview(before, after);
-  assert.equal(d.length, 1); assert.equal(d[0].field, 'unitPriceCents');
+  assert.ok(d.some(item => item.field === 'unitPriceCents'));
+  assert.ok(d.some(item => item.field === 'unit'));
+  assert.ok(d.some(item => item.field === 'line' && item.after === null && item.productId === 2));
+  assert.ok(d.some(item => item.field === 'totalCents'));
 });
 
 test('G1 查库存：数字来自工具且核验对平', async () => {
