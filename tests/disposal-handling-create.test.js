@@ -196,8 +196,8 @@ test('actual POST schema retains strict source; edit routes refuse source before
   const parsed = schema.parse(body)
   assert.equal(rules.stableJson(parsed.disposalSource), rules.stableJson(reference))
   assert.equal(schema.safeParse({ ...body, disposalSource: null }).success, false)
-  const routes = [], router = { use() {}, get() {}, post() {}, delete() {}, put: (url, ...handlers) => routes.push({ url, handlers }) }
-  load('modules/sale/sale.routes.js', { express: { Router: () => router }, './sale.controller': {}, '../../middleware/auth': { authMiddleware() {}, requirePermission: () => (_r, _s, next) => next() }, '../../constants/permissions': { PERMISSIONS: {} }, '../../utils/route': load('utils/route.js', {}), './sale.contracts': f.saleContracts, '../disposal/disposal.handling.contracts': contracts })
+  const routes = [], router = { use() {}, param() {}, get() {}, post() {}, delete() {}, put: (url, ...handlers) => routes.push({ url, handlers }) }
+  load('modules/sale/sale.routes.js', { express: { Router: () => router }, './sale.controller': {}, '../../middleware/auth': { authMiddleware() {}, requirePermission: () => (_r, _s, next) => next() }, '../../constants/permissions': { PERMISSIONS: {} }, '../../utils/route': load('utils/route.js', { './AppError': AppError }), './sale.contracts': f.saleContracts, '../disposal/disposal.handling.contracts': contracts })
   for (const route of routes) for (const value of [reference, null]) {
     const req = { body: { ...body, disposalSource: value } }; let error
     for (const handler of route.handlers.filter(Boolean)) { handler(req, {}, e => { error = e }); if (error) break }
