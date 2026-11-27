@@ -4,7 +4,7 @@ import { useWorkspaceStore } from '@/store/workspaceStore'
 import { resolveRouteTitle } from '@/router/routeRegistry'
 import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMeta'
 
-export const ASSISTANT_GUIDE_LINKS = [
+const ASSISTANT_GUIDE_LINKS = [
   { label: '新建销售单', path: '/sale/new-kit' },
   { label: '销售订单', path: '/sale' },
   { label: '采购订单', path: '/purchase' },
@@ -19,7 +19,7 @@ const GUIDE_PATHS = new Set<string>([
   '/refunds', '/accounting/backfills',
 ])
 
-export function useOpenWorkspacePath() {
+function useOpenWorkspacePath() {
   const navigate = useNavigate()
   const addTab = useWorkspaceStore(s => s.addTab)
   return (path: string) => {

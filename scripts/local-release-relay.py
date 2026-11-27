@@ -26,6 +26,14 @@ WORKFLOWS = {'image': 'deploy-browser.yml', 'pda': 'build-pda-apk.yml', 'desktop
 MAX_ZIP = 2 * 1024**3
 MAX_FILE = 1024**3
 MAX_METADATA = 1024 * 1024
+PARALLEL_UPLOAD_THRESHOLD = 16 * 1024 * 1024
+PARALLEL_UPLOAD_STREAMS = 4
+
+
+def upload_timeout(size_bytes):
+    # Scale upload timeout to file size (assuming >=90 KiB/s floor + 120s margin),
+    # bounded to [300s, 1800s] so large 100-200 MiB packages do not abort prematurely.
+    return max(300, min(1800, int(size_bytes // (90 * 1024)) + 120))
 
 
 def source_event(kind):
@@ -254,7 +262,10 @@ class Relay:
         self.temp = tempfile.TemporaryDirectory(prefix='flowcube-relay-', dir='/tmp')
         self.root = pathlib.Path(self.temp.name)
         self.options = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-o', 'ControlMaster=auto',
-                        '-o', 'ControlPath=' + str(self.root / 'ssh-%C'), '-o', 'ControlPersist=60']
+                        '-o', 'ControlPath=' + str(self.root / 'ssh-%C'), '-o', 'ControlPersist=60',
+                        '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4']
+        self.stream_options = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', '-o', 'ControlMaster=no',
+                               '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4']
         self.owned = set()
 
     def command(self, args, timeout=60, **kwargs):
@@ -311,6 +322,59 @@ class Relay:
             raise RuntimeError('Source workflow ended unsuccessfully')
         return current
 
+    def upload_file(self, original, remote, directory, expected_sha):
+        size = original.stat().st_size
+        if size <= PARALLEL_UPLOAD_THRESHOLD:
+            self.command(['scp', '-q'] + self.options + [str(original), self.target + ':' + remote + '.relay.partial'],
+                         timeout=upload_timeout(size))
+            return
+        streams = min(PARALLEL_UPLOAD_STREAMS, max(2, (size + (8 * 1024 * 1024) - 1) // (8 * 1024 * 1024)))
+        part_size = (size + streams - 1) // streams
+        parts_dir = remote + '.relay.parts'
+        quoted_parts = shlex.quote(parts_dir)
+        quoted_partial = shlex.quote(remote + '.relay.partial')
+        self.ssh('rm -rf -- ' + quoted_parts + ' && mkdir -p -m 700 -- ' + quoted_parts)
+        local_parts = []
+        with original.open('rb') as src:
+            for idx in range(streams):
+                part_path = directory / ('upload-part-' + str(idx).zfill(3))
+                remaining = min(part_size, size - idx * part_size)
+                if remaining <= 0:
+                    break
+                with part_path.open('wb') as dst:
+                    while remaining > 0:
+                        buf = src.read(min(1024 * 1024, remaining))
+                        if not buf:
+                            break
+                        dst.write(buf)
+                        remaining -= len(buf)
+                local_parts.append((idx, part_path, part_path.stat().st_size))
+        def send_part(entry):
+            idx, part_path, part_bytes = entry
+            remote_part = parts_dir + '/part-' + str(idx).zfill(3)
+            part_timeout = upload_timeout(part_bytes)
+            for attempt in range(3):
+                try:
+                    self.command(['scp', '-q'] + self.stream_options + [str(part_path), self.target + ':' + remote_part],
+                                 timeout=part_timeout)
+                    return idx
+                except (RuntimeError, OSError, subprocess.SubprocessError):
+                    if attempt == 2:
+                        raise
+                    time.sleep(2 ** attempt)
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(local_parts)) as pool:
+                futures = [pool.submit(send_part, entry) for entry in local_parts]
+                for future in concurrent.futures.as_completed(futures):
+                    future.result()
+            cat_args = ' '.join(shlex.quote(parts_dir + '/part-' + str(idx).zfill(3)) for idx, _, _ in local_parts)
+            self.ssh('cat -- ' + cat_args + ' > ' + quoted_partial
+                     + ' && test "$(sha256sum -- ' + quoted_partial + ' | awk \'{print $1}\')" = ' + shlex.quote(expected_sha)
+                     + ' && rm -rf -- ' + quoted_parts)
+        finally:
+            for _, part_path, _ in local_parts:
+                part_path.unlink(missing_ok=True)
+
     def deliver(self, kind, run, artifact):
         validate_artifact(artifact, run)
         _, entry, remote = artifact_spec(kind, run, self.version)
@@ -338,12 +402,13 @@ class Relay:
             downloaded = time.monotonic()
             if self.current_run(run, kind) is None:
                 return 'direct'
-            self.command(['scp', '-q'] + self.options + [str(original), self.target + ':' + remote + '.relay.partial'], timeout=180)
+            digest = file_sha(original)
+            self.upload_file(original, remote, directory, digest)
             if self.current_run(run, kind) is None:
                 return 'direct'
             self.ssh('mv -- ' + quoted + '.relay.partial ' + quoted + '.relay')
             print('relay: ready ' + kind + ' ' + json.dumps(dict(run=run['id'], attempt=run['run_attempt'], artifact=artifact['id'],
-                  bytes=original.stat().st_size, sha256=file_sha(original), download_seconds=round(downloaded-started, 1),
+                  bytes=original.stat().st_size, sha256=digest, download_seconds=round(downloaded-started, 1),
                   upload_seconds=round(time.monotonic()-downloaded, 1), total_seconds=round(time.monotonic()-started, 1))), flush=True)
         return 'relay'
 
@@ -409,7 +474,7 @@ class Relay:
         # Own exact staging paths only; published originals are never removed.
         for remote in self.owned:
             try:
-                self.ssh('rm -f -- ' + ' '.join(shlex.quote(remote + suffix) for suffix in ['.relay.pending', '.relay.partial', '.relay']))
+                self.ssh('rm -rf -- ' + ' '.join(shlex.quote(remote + suffix) for suffix in ['.relay.pending', '.relay.partial', '.relay', '.relay.parts']))
             except (RuntimeError, OSError, subprocess.SubprocessError):
                 print('relay: staging cleanup incomplete for ' + remote, flush=True)
         try:
