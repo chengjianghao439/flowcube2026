@@ -264,8 +264,10 @@ class Relay:
         self.options = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-o', 'ControlMaster=auto',
                         '-o', 'ControlPath=' + str(self.root / 'ssh-%C'), '-o', 'ControlPersist=60',
                         '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4']
-        self.stream_options = ['-o', 'BatchMode=yes', '-o', 'ConnectTimeout=15', '-o', 'ControlMaster=no',
-                               '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=4']
+        # All scp/ssh operations MUST share the single ControlMaster tunnel above:
+        # flowcube-prod connects through a userspace WireGuard proxyCommand whose
+        # single peer key cannot hold concurrent independent handshakes, and sshd
+        # rate-limits bursts of unmultiplexed connections.
         self.owned = set()
 
     def command(self, args, timeout=60, **kwargs):
@@ -355,7 +357,7 @@ class Relay:
             part_timeout = upload_timeout(part_bytes)
             for attempt in range(3):
                 try:
-                    self.command(['scp', '-q'] + self.stream_options + [str(part_path), self.target + ':' + remote_part],
+                    self.command(['scp', '-q'] + self.options + [str(part_path), self.target + ':' + remote_part],
                                  timeout=part_timeout)
                     return idx
                 except (RuntimeError, OSError, subprocess.SubprocessError):
@@ -371,6 +373,14 @@ class Relay:
             self.ssh('cat -- ' + cat_args + ' > ' + quoted_partial
                      + ' && test "$(sha256sum -- ' + quoted_partial + ' | awk \'{print $1}\')" = ' + shlex.quote(expected_sha)
                      + ' && rm -rf -- ' + quoted_parts)
+        except (RuntimeError, OSError, subprocess.SubprocessError):
+            try:
+                self.ssh('rm -rf -- ' + quoted_parts)
+            except (RuntimeError, OSError, subprocess.SubprocessError):
+                pass
+            print('relay: chunked upload failed; falling back to single multiplexed scp', flush=True)
+            self.command(['scp', '-q'] + self.options + [str(original), self.target + ':' + remote + '.relay.partial'],
+                         timeout=upload_timeout(size))
         finally:
             for _, part_path, _ in local_parts:
                 part_path.unlink(missing_ok=True)

@@ -70,9 +70,11 @@ class RelayTests(unittest.TestCase):
         ssh_cmds = []
         uploaded = {}
         attempts = {}
+        scp_args_seen = []
         instance.ssh = lambda cmd: ssh_cmds.append(cmd) or b''
         def command(args, **kwargs):
             if args[0] == 'scp':
+                scp_args_seen.append(list(args))
                 part_file = pathlib.Path(args[-2])
                 remote_part = args[-1].split(':', 1)[1]
                 attempts[remote_part] = attempts.get(remote_part, 0) + 1
@@ -95,6 +97,42 @@ class RelayTests(unittest.TestCase):
                 self.assertEqual(attempts['/tmp/flowcube-images-123-1.tar.gz.relay.parts/part-001'], 2)
                 self.assertEqual(attempts['/tmp/flowcube-images-123-1.tar.gz.relay.parts/part-000'], 1)
                 self.assertTrue(any('sha256sum' in cmd and digest in cmd for cmd in ssh_cmds))
+                self.assertEqual(list(work_dir.glob('upload-part-*')), [])
+                for args in scp_args_seen:
+                    self.assertIn('ControlMaster=auto', args)
+                    self.assertNotIn('ControlMaster=no', args)
+        finally:
+            instance.close()
+
+    def test_chunked_upload_falls_back_to_single_multiplexed_scp_and_cleans_parts(self):
+        from unittest.mock import patch
+        instance = relay.Relay(dict(GITHUB_REPOSITORY='fixture/repo', GITHUB_SHA=SHA, RELEASE_TAG='v1.2.3', FLOWCUBE_RELAY_SSH_TARGET='fixture'))
+        payload = bytes(range(256)) * 128
+        digest = hashlib.sha256(payload).hexdigest()
+        ssh_cmds = []
+        fallback_uploads = []
+        instance.ssh = lambda cmd: ssh_cmds.append(cmd) or b''
+        def command(args, **kwargs):
+            if args[0] == 'scp':
+                self.assertIn('ControlMaster=auto', args)
+                self.assertNotIn('ControlMaster=no', args)
+                if '.relay.parts/' in args[-1]:
+                    raise RuntimeError('chunk channel rejected')
+                fallback_uploads.append((args[-1], pathlib.Path(args[-2]).read_bytes()))
+            return b''
+        instance.command = command
+        try:
+            with tempfile.TemporaryDirectory() as work, \
+                    patch.object(relay, 'PARALLEL_UPLOAD_THRESHOLD', 4096), \
+                    patch.object(relay.time, 'sleep', lambda _s: None):
+                work_dir = pathlib.Path(work)
+                src = work_dir / 'FlowCubePDA-0.14.9.apk'
+                src.write_bytes(payload)
+                instance.upload_file(src, '/tmp/flowcube-pda-123-1.apk', work_dir, digest)
+                self.assertEqual(len(fallback_uploads), 1)
+                self.assertEqual(fallback_uploads[0][0], 'fixture:/tmp/flowcube-pda-123-1.apk.relay.partial')
+                self.assertEqual(fallback_uploads[0][1], payload)
+                self.assertTrue(any('rm -rf -- /tmp/flowcube-pda-123-1.apk.relay.parts' in cmd for cmd in ssh_cmds))
                 self.assertEqual(list(work_dir.glob('upload-part-*')), [])
         finally:
             instance.close()
