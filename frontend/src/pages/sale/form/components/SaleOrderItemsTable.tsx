@@ -13,6 +13,8 @@ import { Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { parsePositiveQuantity, parsePrice, type DraftItem } from '../validate'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
+import { useCustomerPriceHistory } from '../useCustomerPriceHistory'
+import { CustomerPriceHistoryHint } from './CustomerPriceHistoryHint'
 import { qtyStep } from '@/lib/qtyStep'
 
 function canExplainBaseQty(item: DraftItem): boolean {
@@ -23,7 +25,7 @@ function canExplainBaseQty(item: DraftItem): boolean {
 }
 
 export function SaleOrderItemsTable({
-  compact = false, issues = [], lockedIdentity = false, readEnabled = true, quantityRead, items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
+  compact = false, issues = [], lockedIdentity = false, readEnabled = true, quantityRead, customerId = 0, items, invalidItemKeys, quantityRefs, priceLoading, priceErrors = {},
   setFinderItemKey, setFinderOpen, updateItem, removeItem, onQuantityError,
 }: {
   /** 仅销售样板启用；默认保留其他录入入口的现有布局。 */
@@ -32,6 +34,7 @@ export function SaleOrderItemsTable({
   lockedIdentity?: boolean
   readEnabled?: boolean
   quantityRead?: Parameters<typeof useProductQtyPolicies>[1]
+  customerId?: number | string
   items: DraftItem[]
   invalidItemKeys: Set<number>
   quantityRefs: React.MutableRefObject<Map<number, HTMLInputElement>>
@@ -47,6 +50,8 @@ export function SaleOrderItemsTable({
   const fieldId = useId()
   // 「只能整数」的商品把数量框的 step 切成 1（迁移 254）；真正的拦截在服务端
   const allowDecimalOf = useProductQtyPolicies(readEnabled ? items.map(item => item.productId) : [], quantityRead)
+  const numericCustomerId = Number(customerId) || 0
+  const historyByProduct = useCustomerPriceHistory(numericCustomerId, items.map(item => item.productId), readEnabled && numericCustomerId > 0)
   return (
     <div className={cn('overflow-x-auto', !compact && 'rounded-lg border border-border')}>
       <TableShell compact={compact}>
@@ -95,6 +100,12 @@ export function SaleOrderItemsTable({
             return <tr key={item._key} className="border-b border-border/40 transition-colors hover:bg-muted/20">
               {compact ? <td className="align-top">{productButton}</td> : <ProductIdentityCells compact product={item} nameContent={productButton} />}
               {compact ? <>{quantityCell}{unitCell}</> : <>{unitCell}{quantityCell}</>}
+              <td className={cn('px-3 py-3 text-right', compact ? 'align-middle' : 'align-top')}>
+                <CustomerPriceHistoryHint
+                  history={historyByProduct.get(item.productId)}
+                  onSelect={(unitPrice) => updateItem(item._key, 'unitPrice', unitPrice)}
+                />
+              </td>
               <td className="px-3 py-3 align-top">
                 <Input
                   data-entry-input data-entry-field={`item-${item._key}-price`} aria-invalid={!!priceIssue || !!priceErrors[item._key] || (invalidItemKeys.has(item._key) && (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0))}
@@ -135,7 +146,7 @@ export function SaleOrderItemsTable({
 
 function TableShell({ compact, children }: { compact: boolean; children: React.ReactNode }) {
   if (compact) return <SaleEntryTable>{children}</SaleEntryTable>
-  return <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 112, align: 'right' }, { key: 'unitPrice', title: '单价 (¥)', width: 128, align: 'right' }, { key: 'amount', title: '金额', width: 128, align: 'right' }, { key: 'remark', title: '备注', width: 176 }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="sale-ordinary-entry-items" minWidth={1000}>
+  return <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 112, align: 'right' }, { key: 'historyPrice', title: '历史价', width: 96, align: 'right' }, { key: 'unitPrice', title: '单价 (¥)', width: 128, align: 'right' }, { key: 'amount', title: '金额', width: 128, align: 'right' }, { key: 'remark', title: '备注', width: 176 }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="sale-ordinary-entry-items" minWidth={1080}>
     {children}
   </ResizableTable>
 }

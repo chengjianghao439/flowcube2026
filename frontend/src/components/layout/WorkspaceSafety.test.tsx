@@ -261,15 +261,15 @@ test('setActive and repeated visits update eviction recency without rearranging 
   expect(useWorkspaceStore.getState().tabs.some(tab => tab.key === '/sale/3')).toBe(false)
 })
 
-test('dirty merged child path protects the group after navigating to its other child', () => {
+test('dirty independent finance tab stays protected when capacity evicts clean tabs', () => {
   useWorkspaceStore.getState().syncFromLocation('/payments/receivable?keyword=old')
   useDirtyGuardStore.getState().setDirty('/payments/receivable?keyword=old', true)
   useWorkspaceStore.getState().syncFromLocation('/reports/reconciliation/receivable?partyId=7')
   for (let id = 1; id <= MAX_WORKSPACE_TABS - 2; id++) useWorkspaceStore.getState().syncFromLocation(`/sale/${id}`)
   useWorkspaceStore.getState().syncFromLocation('/sale/30')
-  const financial = useWorkspaceStore.getState().tabs.find(tab => tab.path.startsWith('/reports/reconciliation/receivable'))!
-  expect(financial).toBeDefined()
-  expect(financial.viewPaths).toMatchObject({ '/payments/receivable': '/payments/receivable?keyword=old', '/reports/reconciliation/receivable': '/reports/reconciliation/receivable?partyId=7' })
+  const dirtyReceivable = useWorkspaceStore.getState().tabs.find(tab => tab.key === '/payments/receivable')
+  expect(dirtyReceivable).toBeDefined()
+  expect(dirtyReceivable?.path).toBe('/payments/receivable?keyword=old')
   expect(useWorkspaceStore.getState().tabs).toHaveLength(MAX_WORKSPACE_TABS)
 })
 

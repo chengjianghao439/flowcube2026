@@ -4,8 +4,18 @@ import type { PaginatedData } from '@/types'
 import type { SaleOrder, CreateSaleParams, UpdateSaleParams, AdjustSaleResult, ReservePreview, ReserveItemOverride, ShipItemRequest } from '@/types/sale'
 import type { SaleReorderSource } from '@/types/sale-reorder'
 import type { CommercialBody } from '@/types/sale-commercial'
+export interface CustomerSalePriceHistoryItem {
+  orderId: number
+  orderNo: string
+  orderDate: string
+  unitPrice: number
+  quantity: number
+  unit: string
+}
 export const getSaleListApi    = (params: object, summary = false, signal?: AbortSignal) => client.get<PaginatedData<SaleOrder> & { statusCounts?: Record<string, number> }>('/sale', { params, signal, ...(summary ? { listMode: 'summary' as const } : {}) })
 export const getSaleDetailApi  = (id: number) => client.get<SaleOrder>(`/sale/${id}`)
+export const getCustomerPriceHistoryApi = (customerId: number, productId: number, limit = 3, signal?: AbortSignal) =>
+  client.get<CustomerSalePriceHistoryItem[]>('/sale/customer-price-history', { params: { customerId, productId, limit }, signal, skipGlobalError: true })
 export const getSaleReorderSourceApi = (id: number, config?: Parameters<typeof client.get>[1]) => client.get<SaleReorderSource>(`/sale/${id}/reorder-source`, config)
 export const getSaleReservePreviewApi = (id: number) => client.get<ReservePreview>(`/sale/${id}/reserve-preview`)
 export const createSaleApi     = (data: CreateSaleParams | CommercialBody, requestKey?: string, config?: Parameters<typeof client.post>[2]) =>

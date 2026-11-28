@@ -36,7 +36,7 @@ function login(code, expected) {
   const title = {
     '/dashboard': '仪表盘',
     '/reports/role-workbench': '待办中心',
-    '/payments/payable': '供应商往来',
+    '/payments/payable': '现结供应商账款',
     '/no-access': '当前账号没有可用页面，请联系管理员分配权限',
   }[expected]
   assert.ok(title, '登录期望地址必须有对应页面标题')
@@ -89,7 +89,7 @@ async function main() {
         assert.equal(inspect().calls.some(call => call.url?.startsWith('/dashboard/')), false)
         capture('payment-only-dashboard-denied', true)
         cli('find', 'role', 'button', 'click', '--name', '返回可用页面', '--exact')
-        cli('wait', '--url', '**#/payments/payable'); cli('wait', '--text', '供应商往来')
+        cli('wait', '--url', '**#/payments/payable'); cli('wait', '--text', '现结供应商账款')
         assert.equal(inspect().calls.some(call => call.url?.startsWith('/dashboard/')), false)
         capture('payment-only-safe-return', true)
       }
@@ -104,7 +104,7 @@ async function main() {
     open('supplier', '/payments/payable')
     cli('wait', '--text', 'PO-MONTHLY-NO-STATEMENT'); cli('wait', '--text', 'PO-CASH')
     const state = inspect()
-    assert.equal(state.title, '供应商往来')
+    assert.equal(state.title, '现结供应商账款')
     assert.match(state.monthly, /月结未结清金额.*33\.13/)
     assert.match(state.monthly, /含未生成对账单/)
     assert.match(state.cash, /70\.00/); assert.doesNotMatch(state.cash, /33\.13/)

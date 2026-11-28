@@ -23,6 +23,7 @@ const itemSchema = z.object({
 const createSchema = z.object({ supplierId:z.number().int().positive('请选择供应商'), supplierName:z.string(), warehouseId:z.number().int().positive('请选择仓库'), warehouseName:z.string(), expectedDate:z.string().optional(), remark:z.string().optional(), items:z.array(itemSchema).min(1,'至少添加一条明细') })
 router.use(authMiddleware)
 router.get('/',             requirePermission(PERMISSIONS.PURCHASE_ORDER_VIEW), ctrl.list)
+router.get('/supplier-price-history', requirePermission(PERMISSIONS.PURCHASE_ORDER_VIEW), ctrl.supplierPriceHistory)
 router.get('/:id',          requirePermission(PERMISSIONS.PURCHASE_ORDER_VIEW), checkId, ctrl.detail)
 router.post('/',            requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), validateBody(createSchema), ctrl.create)
 router.put('/:id',          requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), checkId, validateBody(createSchema), ctrl.update)

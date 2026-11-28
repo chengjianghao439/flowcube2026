@@ -157,7 +157,7 @@ test('通过顶栏以外的入口换页时收起菜单并保留外部焦点', as
 test('仅能进入补货建议时使用该页面名称作为顶栏链接', async () => {
   permissions.granted = [PERMISSIONS.REPORT_VIEW]
   await act(async () => navigate('/reports/replenishment'))
-  const link = within(host).getByRole('link', { name: '采购建议' })
+  const link = within(host).getByRole('link', { name: '补货建议' })
   expect(link.getAttribute('href')).toBe('/reports/replenishment')
   expect(within(host).queryByRole('link', { name: '采购' })).toBeNull()
 })

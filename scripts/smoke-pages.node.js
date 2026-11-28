@@ -160,28 +160,22 @@ async function assertForbidden(path, expected = '无访问权限') {
   )
 }
 
-// 核对可见主标题、父级标识和当前链接，避免只匹配导航中的同名文字。
-function assertMergedPage(path, title, viewLabel, content = '', childHeading = false) {
+// 核对可见主标题与关键业务文案，避免只匹配导航中的同名文字。
+function assertStandalonePage(title, content = '') {
   const expr = `(() => {
     const visible = el => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
-    const title = ${jsQuote(title)}, viewLabel = ${jsQuote(viewLabel)}, path = ${jsQuote(path)}, content = ${jsQuote(content)};
-    const childHeading = ${childHeading};
-    const heading = [...document.querySelectorAll('h1')].some(el => visible(el) && el.textContent.trim() === (childHeading ? viewLabel : title));
-    const group = !childHeading || [...document.querySelectorAll('[data-page-group]')].some(el => visible(el) && el.textContent.trim() === title);
-    const current = [...document.querySelectorAll('nav')]
-      .filter(nav => visible(nav) && nav.getAttribute('aria-label') === title + '视图')
-      .some(nav => [...nav.querySelectorAll('a[aria-current="page"]')].some(link =>
-        visible(link) && link.textContent.trim() === viewLabel && new URL(link.href).hash.split('?')[0] === '#' + path.split('?')[0]));
+    const title = ${jsQuote(title)}, content = ${jsQuote(content)};
+    const heading = [...document.querySelectorAll('h1')].some(el => visible(el) && el.textContent.trim() === title);
     const text = document.body.innerText || '';
-    return heading && group && current && (!content || text.includes(content)) && ![${ERROR_MARKERS}].some(marker => text.includes(marker));
+    return heading && (!content || text.includes(content)) && ![${ERROR_MARKERS}].some(marker => text.includes(marker));
   })()`
-  return waitFor(expr, { label: `${title} 当前视图 ${viewLabel}` })
+  return waitFor(expr, { label: content ? `${title}（含 ${content}）` : title })
 }
 
-async function openAndCheck(path, expected = '', forbidden = '', mergedView = '', mergedContent = '', childHeading = false) {
+async function openAndCheck(path, expected = '', forbidden = '', pageContent = '') {
   console.log(`==> 页面烟雾：${path}`)
   await setHashAndConfirm(path)
-  if (mergedView) return assertMergedPage(path, expected, mergedView, mergedContent, childHeading)
+  if (pageContent) return assertStandalonePage(expected, pageContent)
   // 路由切换后轮询等待目标文本；无期望文本时退化为「无渲染错误」
   return expected ? assertText(expected, forbidden) : assertNoErrorText()
 }
@@ -243,13 +237,13 @@ async function openPdaAndCheck(path, expected) {
 async function main() {
   await login()
   await openAndCheck('/reports/role-workbench', '待办中心')
-  await openAndCheck('/reports/reconciliation/payable', '供应商往来', '', '月结对账', '月结供应商的应付账单')
-  await openAndCheck('/reports/reconciliation/receivable', '客户往来', '', '月结对账', '月结客户的应收账单')
-  await openAndCheck('/reports/profit-analysis', '报表中心', '', '利润与库存', '', true)
-  await openAndCheck('/procurement', '采购建议', '', '采购计划', '', true)
-  await openAndCheck('/reports/wave-performance', '仓库运营', '', '批次效率', '', true)
-  await openAndCheck('/reports/warehouse-ops', '仓库运营', '', '作业概况', '', true)
-  await openAndCheck('/reports/pda-anomaly', '仓库运营', '', 'PDA 异常', '', true)
+  await openAndCheck('/reports/reconciliation/payable', '月结供应商对账', '', '月结供应商的应付账单')
+  await openAndCheck('/reports/reconciliation/receivable', '月结客户对账', '', '月结客户的应收账单')
+  await openAndCheck('/reports/profit-analysis', '利润 / 库存分析')
+  await openAndCheck('/procurement', '采购计划')
+  await openAndCheck('/reports/wave-performance', '批次效率')
+  await openAndCheck('/reports/warehouse-ops', '仓库运营看板')
+  await openAndCheck('/reports/pda-anomaly', 'PDA 异常分析')
   await openAndCheck('/reports/inventory-aging', '存放时长与滞销')
   await openAndCheck('/warehouses', '仓库管理')
   await openAndCheck('/picking-waves?waveId=1&focus=print-closure', '批次拣货')
@@ -259,8 +253,8 @@ async function main() {
   await openAndCheck('/sale/1')
   await openAndCheck('/customers')
   await openAndCheck('/suppliers')
-  await openAndCheck('/payments/payable', '供应商往来', '', '账款概览', '现结与月结欠款分别展示')
-  await openAndCheck('/payments/receivable', '客户往来', '', '现结账款', '现结客户：出库即结')
+  await openAndCheck('/payments/payable', '现结供应商账款', '', '现结与月结欠款分别展示')
+  await openAndCheck('/payments/receivable', '现结客户账款', '', '现结客户：出库即结')
   await openAndCheck('/carriers')
   await openAndCheck('/locations')
   await openAndCheck('/racks')

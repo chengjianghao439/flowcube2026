@@ -305,8 +305,8 @@ test('成套录入直接显示全部配件，输入套数即时更新子量，�
     await change('A数量', '3')
     expect(children().map(row => row.cells[1].textContent)).toEqual(['3', '12'])
     for (const child of children()) {
-      expect(child.cells).toHaveLength(7)
-      expect(child.cells[3].textContent).toBe('—'); expect(child.cells[4].textContent).toBe('—')
+      expect(child.cells).toHaveLength(8)
+      expect(child.cells[3].textContent).toBe('—'); expect(child.cells[4].textContent).toBe('—'); expect(child.cells[5].textContent).toBe('—')
       expect(child.querySelectorAll('input,button,select')).toHaveLength(0)
     }
     await change('A数量', '')

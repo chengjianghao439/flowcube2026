@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AxiosError, type InternalAxiosRequestConfig } from 'axios'
-import MergedPage from '@/components/shared/MergedPage'
+import { resolveRouteComponent } from '@/router/routeRegistry'
 import { TabPathContext } from '@/components/layout/TabPathContext'
 import { SectionVisibilityContext } from '@/components/layout/SectionVisibilityContext'
 import { useAuthStore } from '@/store/authStore'
@@ -55,9 +55,10 @@ afterEach(async () => {
 })
 async function render(type: 1 | 2 = 1, active = true) {
   const path = `/payments/${type === 1 ? 'payable' : 'receivable'}`
+  const Page = resolveRouteComponent(path)!
   await act(async () => root.render(<QueryClientProvider client={cache}><MemoryRouter initialEntries={[path]}>
     <SectionVisibilityContext.Provider value={active}><TabPathContext.Provider value={path}>
-      <Suspense fallback="加载"><MergedPage /></Suspense>
+      <Suspense fallback="加载"><Page /></Suspense>
     </TabPathContext.Provider></SectionVisibilityContext.Provider>
   </MemoryRouter></QueryClientProvider>))
   await act(async () => { await vi.dynamicImportSettled() })
@@ -75,7 +76,7 @@ const monthlyCalls = () => calls.filter(call => call.url === '/payments' && call
 test('默认供应商往来显示未出对账单的月结采购欠款，和现结分区分数', async () => {
   await render()
   await vi.waitFor(() => expect(section('月结欠款')?.textContent).toContain('PO-MONTHLY-NO-STATEMENT'))
-  expect(host.querySelector('h1')?.textContent).toBe('供应商往来')
+  expect(host.querySelector('h1')?.textContent).toBe('现结供应商账款')
   expect(section('月结欠款')?.textContent).toContain('月结未结清金额')
   expect(section('月结欠款')?.textContent).toContain('33.13')
   expect(section('月结欠款')?.textContent).toContain('含未生成对账单')

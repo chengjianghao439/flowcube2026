@@ -4,12 +4,13 @@ import { useTableColumns } from '@/components/shared/useTableColumns'
 import { TableColumnHeader } from '@/components/shared/TableColumnHeader'
 
 const columns: TableColumn<Record<string, unknown>>[] = [
-  { key: 'product', title: '商品', width: 36, minWidth: 220 },
-  { key: 'quantity', title: '数量', width: 12, minWidth: 80, align: 'right' },
-  { key: 'unit', title: '单位', width: 10, minWidth: 80 },
-  { key: 'unitPrice', title: '单价 (¥)', width: 16, minWidth: 96, align: 'right' },
-  { key: 'amount', title: '金额', width: 18, minWidth: 108, align: 'right' },
-  { key: 'actions', title: '操作', width: 12, minWidth: 80, align: 'center' },
+  { key: 'product', title: '商品', width: 30, minWidth: 220 },
+  { key: 'quantity', title: '数量', width: 11, minWidth: 88, align: 'right' },
+  { key: 'unit', title: '单位', width: 10, minWidth: 84 },
+  { key: 'historyPrice', title: '历史价', width: 11, minWidth: 92, align: 'right' },
+  { key: 'unitPrice', title: '单价 (¥)', width: 14, minWidth: 104, align: 'right' },
+  { key: 'amount', title: '金额', width: 14, minWidth: 108, align: 'right' },
+  { key: 'actions', title: '操作', width: 10, minWidth: 84, align: 'center' },
 ]
 
 /** 只复用销售样板的列宽与表头能力；采购明细及数量、价格仍归采购表单。 */

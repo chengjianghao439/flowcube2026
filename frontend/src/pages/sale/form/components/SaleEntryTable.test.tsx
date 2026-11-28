@@ -6,7 +6,7 @@ import { SaleEntryTable } from './SaleEntryTable'
 
 let host: HTMLDivElement, root: Root
 const storageKey = 'flowcube:table-columns:sale-entry-items'
-const widths = [540, 112, 96, 144, 128, 176, 80]
+const widths = [460, 112, 88, 96, 132, 120, 160, 80]
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
   localStorage.removeItem(storageKey)
@@ -19,7 +19,7 @@ beforeEach(() => {
 afterEach(() => { act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); localStorage.removeItem(storageKey) })
 function render() {
   act(() => root.render(<SaleEntryTable rowCount={2}><tbody><tr>
-    <td>完整商品身份</td><td><input defaultValue="2" /></td><td>箱</td><td><input defaultValue="120" /></td><td>240.00</td><td><input defaultValue="原行备注" /></td><td>操作</td>
+    <td>完整商品身份</td><td><input defaultValue="2" /></td><td>箱</td><td>¥118</td><td><input defaultValue="120" /></td><td>240.00</td><td><input defaultValue="原行备注" /></td><td>操作</td>
   </tr></tbody></SaleEntryTable>))
 }
 function resize(end: 'mouseup' | 'Escape') {
@@ -30,7 +30,7 @@ function resize(end: 'mouseup' | 'Escape') {
 }
 test('复用共享拖动，只保存列宽；取消不覆盖原布局，重挂载恢复宽度且行输入保持', () => {
   render()
-  expect(host.querySelectorAll('[aria-label^="调整"][aria-label$="列宽"]')).toHaveLength(7)
+  expect(host.querySelectorAll('[aria-label^="调整"][aria-label$="列宽"]')).toHaveLength(8)
   resize('Escape')
   expect(localStorage.getItem(storageKey)).toBeNull()
   expect(document.body.style.cursor).toBe('')
@@ -42,5 +42,5 @@ test('复用共享拖动，只保存列宽；取消不覆盖原布局，重挂�
   expect((host.querySelectorAll('col')[1] as HTMLElement).style.width).toBe('192px')
   act(() => root.render(<></>)); render()
   expect((host.querySelectorAll('col')[1] as HTMLElement).style.width).toBe('192px')
-  expect([...host.querySelectorAll('th')].map(th => th.textContent)).toEqual(['商品', '数量', '单位', '单价 (¥)', '金额', '备注', '操作'])
+  expect([...host.querySelectorAll('th')].map(th => th.textContent)).toEqual(['商品', '数量', '单位', '历史价', '单价 (¥)', '金额', '备注', '操作'])
 })

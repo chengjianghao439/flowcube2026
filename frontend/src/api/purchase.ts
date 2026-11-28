@@ -15,3 +15,22 @@ export const cancelPurchaseApi  = (id: number) => client.post<null>(`/purchase/$
 export interface ClosePurchaseResult { purchaseOrderId: number; status: 3; closedReason: 'short_close' }
 export const closePurchaseApi = (id: number, requestKey: string, config?: Parameters<typeof client.post>[2]) =>
   client.post<ClosePurchaseResult>(`/purchase/${id}/close`, {}, { ...config, headers: { ...config?.headers, ...withRequestKeyHeaders(requestKey) } })
+
+export interface SupplierPurchasePriceHistoryItem {
+  orderId: number
+  orderNo: string
+  orderDate: string
+  unitPrice: number
+  quantity: number
+  unit: string
+}
+
+export const getSupplierPriceHistoryApi = (
+  supplierId: number,
+  productId: number,
+  limit = 1,
+  signal?: AbortSignal,
+) => client.get<SupplierPurchasePriceHistoryItem[]>('/purchase/supplier-price-history', {
+  params: { supplierId, productId, limit },
+  signal,
+})

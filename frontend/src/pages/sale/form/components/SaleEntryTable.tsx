@@ -3,15 +3,16 @@ import type { TableColumn } from '@/types'
 import { useTableColumns } from '@/components/shared/useTableColumns'
 import { TableColumnHeader } from '@/components/shared/TableColumnHeader'
 
-type EntryColumn = 'product' | 'quantity' | 'unit' | 'unitPrice' | 'amount' | 'remark' | 'actions'
+type EntryColumn = 'product' | 'quantity' | 'unit' | 'historyPrice' | 'unitPrice' | 'amount' | 'remark' | 'actions'
 const columns: TableColumn<Record<EntryColumn, unknown>>[] = [
-  { key: 'product', title: '商品', width: 48, minWidth: 240 },
-  { key: 'quantity', title: '数量', width: 9, minWidth: 100, align: 'right' },
-  { key: 'unit', title: '单位', width: 7, minWidth: 80 },
-  { key: 'unitPrice', title: '单价 (¥)', width: 11, minWidth: 120, align: 'right' },
-  { key: 'amount', title: '金额', width: 10, minWidth: 110, align: 'right' },
-  { key: 'remark', title: '备注', width: 13, minWidth: 160 },
-  { key: 'actions', title: '操作', width: 6, minWidth: 80, align: 'center' },
+  { key: 'product', title: '商品', width: 36, minWidth: 220 },
+  { key: 'quantity', title: '数量', width: 9, minWidth: 96, align: 'right' },
+  { key: 'unit', title: '单位', width: 8, minWidth: 84 },
+  { key: 'historyPrice', title: '历史价', width: 9, minWidth: 96, align: 'right' },
+  { key: 'unitPrice', title: '单价 (¥)', width: 11, minWidth: 116, align: 'right' },
+  { key: 'amount', title: '金额', width: 10, minWidth: 108, align: 'right' },
+  { key: 'remark', title: '备注', width: 11, minWidth: 140 },
+  { key: 'actions', title: '操作', width: 8, minWidth: 84, align: 'center' },
 ]
 
 /** 录入行继续归原表单管理，只复用共享表格的列宽与交互。 */
