@@ -5,12 +5,13 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { SETTLEMENT_TYPE, MONTHLY_TERMS_OPTIONS } = require('../../constants/settlementType')
 const { pool } = require('../../config/db')
-const { validateBody } = require('../../utils/route')
+const { validateBody, validatePositiveIntParam } = require('../../utils/route')
 const { partyProfileSchema } = require('../../utils/partyProfile')
 
 const VALID_SETTLEMENT_TYPES = Object.values(SETTLEMENT_TYPE)
 
 const router = Router()
+const checkId = validatePositiveIntParam('id', '供应商编号')
 
 const base = partyProfileSchema('供应商').extend({
   code:    z.string().min(1,'编码不能为空').max(30),
@@ -36,9 +37,9 @@ router.get('/next-code', async (req, res, next) => {
 })
 router.get('/active', requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.listActive)
 router.get('/',       requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.list)
-router.get('/:id',    requirePermission(PERMISSIONS.SUPPLIER_VIEW), ctrl.detail)
+router.get('/:id',    requirePermission(PERMISSIONS.SUPPLIER_VIEW), checkId, ctrl.detail)
 router.post('/',      requirePermission(PERMISSIONS.SUPPLIER_CREATE), validateBody(base.omit({ code: true })), ctrl.create)
-router.put('/:id',    requirePermission(PERMISSIONS.SUPPLIER_UPDATE), validateBody(base.extend({ code: base.shape.code.optional(), isActive: z.boolean() })), ctrl.update)
-router.delete('/:id', requirePermission(PERMISSIONS.SUPPLIER_DELETE), ctrl.remove)
+router.put('/:id',    requirePermission(PERMISSIONS.SUPPLIER_UPDATE), validateBody(base.extend({ code: base.shape.code.optional(), isActive: z.boolean() })), checkId, ctrl.update)
+router.delete('/:id', requirePermission(PERMISSIONS.SUPPLIER_DELETE), checkId, ctrl.remove)
 
 module.exports = router

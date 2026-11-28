@@ -55,7 +55,7 @@ test('待处理/回放领域拒绝/提交开始后/回滚失败均不能声称�
 test('来源GET保留SALE_VIEW原路由门；控制器只委派原scope与严格rawId', async () => {
   const registrations = [], permission = code => Object.assign(() => {}, { code }), ctrl = { reorderSource: () => {} }
   const router = { use() {}, get: (p, ...handlers) => registrations.push({ p, handlers }), post() {}, put() {}, delete() {} }
-  load('modules/sale/sale.routes.js', { express: { Router: () => router }, './sale.controller': ctrl, '../../middleware/auth': { authMiddleware() {}, requirePermission: permission }, '../../constants/permissions': { PERMISSIONS: { SALE_ORDER_VIEW: 'sale.order.view' } }, '../../utils/route': { validateBody: () => () => {} } })
+  load('modules/sale/sale.routes.js', { express: { Router: () => router }, './sale.controller': ctrl, '../../middleware/auth': { authMiddleware() {}, requirePermission: permission }, '../../constants/permissions': { PERMISSIONS: { SALE_ORDER_VIEW: 'sale.order.view' } }, '../../utils/route': { validateBody: () => () => {}, validatePositiveIntParam: () => () => {} } })
   const route = registrations.find(r => r.p === '/:id/reorder-source')
   assert.equal(route.handlers[0].code, 'sale.order.view'); assert.equal(route.handlers[1], ctrl.reorderSource)
   let args, sent

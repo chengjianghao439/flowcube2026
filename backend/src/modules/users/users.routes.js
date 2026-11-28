@@ -3,8 +3,10 @@ const { z } = require('zod')
 const usersController = require('./users.controller')
 const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { PERMISSIONS } = require('../../constants/permissions')
+const { validatePositiveIntParam } = require('../../utils/route')
 
 const router = Router()
+const checkId = validatePositiveIntParam('id', '用户编号')
 
 function validateBody(schema) {
   return (req, res, next) => {
@@ -52,13 +54,13 @@ router.get('/options',       usersController.options)
 // 登录者查看自己的信息与仓库授权，不要求其拥有管理其他用户的 user.view。
 router.get('/me',            usersController.myDetail)
 router.get('/me/warehouse-scope', usersController.myWarehouseScope)
-router.get('/:id',           requirePermission(PERMISSIONS.USER_VIEW), usersController.detail)
+router.get('/:id',           requirePermission(PERMISSIONS.USER_VIEW), checkId, usersController.detail)
 router.post('/',             requirePermission(PERMISSIONS.USER_CREATE), validateBody(createSchema),        usersController.create)
-router.put('/:id',           requirePermission(PERMISSIONS.USER_UPDATE), validateBody(updateSchema),        usersController.update)
-router.put('/:id/password',  requirePermission(PERMISSIONS.USER_RESET_PASSWORD), validateBody(resetPasswordSchema), usersController.resetPassword)
+router.put('/:id',           requirePermission(PERMISSIONS.USER_UPDATE), checkId, validateBody(updateSchema),        usersController.update)
+router.put('/:id/password',  requirePermission(PERMISSIONS.USER_RESET_PASSWORD), checkId, validateBody(resetPasswordSchema), usersController.resetPassword)
 // 仓库数据权限：空数组=不限仓。管理入口与用户编辑同权限。
-router.get('/:id/warehouse-scope', requirePermission(PERMISSIONS.USER_VIEW), usersController.warehouseScope)
-router.put('/:id/warehouse-scope', requirePermission(PERMISSIONS.USER_UPDATE), validateBody(z.object({ warehouseIds: z.array(z.number().int().positive()).max(100) })), usersController.setWarehouseScope)
-router.delete('/:id',        requirePermission(PERMISSIONS.USER_DELETE), usersController.remove)
+router.get('/:id/warehouse-scope', requirePermission(PERMISSIONS.USER_VIEW), checkId, usersController.warehouseScope)
+router.put('/:id/warehouse-scope', requirePermission(PERMISSIONS.USER_UPDATE), checkId, validateBody(z.object({ warehouseIds: z.array(z.number().int().positive()).max(100) })), usersController.setWarehouseScope)
+router.delete('/:id',        requirePermission(PERMISSIONS.USER_DELETE), checkId, usersController.remove)
 
 module.exports = router

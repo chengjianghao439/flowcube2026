@@ -1,8 +1,17 @@
 const svc = require('./logistics.service')
 const freight = require('./logistics.freight')
 const { successResponse } = require('../../utils/response')
+const AppError = require('../../utils/AppError')
 
 const scope = req => req.user?.warehouseIds ?? null
+
+function parseWaybillId(raw) {
+  const s = String(raw ?? '').trim()
+  if (!/^[1-9]\d*$/.test(s)) throw new AppError('运单ID无效', 400, 'INVALID_ID')
+  const n = Number(s)
+  if (!Number.isSafeInteger(n)) throw new AppError('运单ID无效', 400, 'INVALID_ID')
+  return n
+}
 
 // ─── 运单 ─────────────────────────────────────────────────────────────────────
 const list = async (req, res, next) => {
@@ -20,22 +29,22 @@ const list = async (req, res, next) => {
   } catch (e) { next(e) }
 }
 const detail = async (req, res, next) => {
-  try { return successResponse(res, await svc.getWaybillById(+req.params.id, { warehouseIds: scope(req) })) } catch (e) { next(e) }
+  try { return successResponse(res, await svc.getWaybillById(parseWaybillId(req.params.id), { warehouseIds: scope(req) })) } catch (e) { next(e) }
 }
 const track = async (req, res, next) => {
-  try { return successResponse(res, await svc.getTrackEvents(+req.params.id, { warehouseIds: scope(req) })) } catch (e) { next(e) }
+  try { return successResponse(res, await svc.getTrackEvents(parseWaybillId(req.params.id), { warehouseIds: scope(req) })) } catch (e) { next(e) }
 }
 const updateShipment = async (req, res, next) => {
-  try { return successResponse(res, await require('./logistics.shipment').updateShipment(+req.params.id, req.body, { warehouseIds: scope(req) }), '寄件资料已保存，等待自动下单') } catch (e) { next(e) }
+  try { return successResponse(res, await require('./logistics.shipment').updateShipment(parseWaybillId(req.params.id), req.body, { warehouseIds: scope(req) }), '寄件资料已保存，等待自动下单') } catch (e) { next(e) }
 }
 const setTracking = async (req, res, next) => {
-  try { return successResponse(res, await svc.manualSetTracking(+req.params.id, req.body, { warehouseIds: scope(req) }), '已录入快递单号') } catch (e) { next(e) }
+  try { return successResponse(res, await svc.manualSetTracking(parseWaybillId(req.params.id), req.body, { warehouseIds: scope(req) }), '已录入快递单号') } catch (e) { next(e) }
 }
 const retry = async (req, res, next) => {
-  try { return successResponse(res, await svc.retryFetch(+req.params.id, { warehouseIds: scope(req) }), '已提交处理；已发送的平台订单仅查询原单') } catch (e) { next(e) }
+  try { return successResponse(res, await svc.retryFetch(parseWaybillId(req.params.id), { warehouseIds: scope(req) }), '已提交处理；已发送的平台订单仅查询原单') } catch (e) { next(e) }
 }
 const voidOne = async (req, res, next) => {
-  try { return successResponse(res, await svc.voidWaybill(+req.params.id, { reason: req.body?.reason || null }, { warehouseIds: scope(req) }), '运单已作废') } catch (e) { next(e) }
+  try { return successResponse(res, await svc.voidWaybill(parseWaybillId(req.params.id), { reason: req.body?.reason || null }, { warehouseIds: scope(req) }), '运单已作废') } catch (e) { next(e) }
 }
 
 // ─── 运费对账 ─────────────────────────────────────────────────────────────────

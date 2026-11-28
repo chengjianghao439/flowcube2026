@@ -1,3 +1,5 @@
+const AppError = require('./AppError')
+
 function asyncRoute(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
 }
@@ -24,6 +26,16 @@ function validateParams(schema) {
   }
 }
 
+function validatePositiveIntParam(paramName = 'id', label = '编号') {
+  return (req, _res, next) => {
+    const raw = String(req.params?.[paramName] ?? '').trim()
+    if (!/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+      return next(new AppError(`${label}无效`, 400, 'INVALID_ID'))
+    }
+    next()
+  }
+}
+
 function validateQuery(schema) {
   return (req, res, next) => {
     try {
@@ -39,5 +51,6 @@ module.exports = {
   asyncRoute,
   validateBody,
   validateParams,
+  validatePositiveIntParam,
   validateQuery,
 }

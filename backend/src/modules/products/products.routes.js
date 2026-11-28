@@ -5,10 +5,11 @@ const { authMiddleware, requirePermission } = require('../../middleware/auth')
 const { loadRolePermissions } = require('../../middleware/loadRolePermissions')
 const { PERMISSIONS } = require('../../constants/permissions')
 const { pool } = require('../../config/db')
-const { validateBody } = require('../../utils/route')
+const { validateBody, validatePositiveIntParam } = require('../../utils/route')
 const { hasTooManyDecimals } = require('../../utils/qtyPrecision')
 
 const router = Router()
+const checkId = validatePositiveIntParam('id', '商品编号')
 
 // 作业页面只需 id/allowDecimal，不应为此要求开放含价格的商品主档。
 // 仍复用现有权限读取、拒绝审计与超管规则，未匹配时按 PRODUCT_VIEW 拒绝。
@@ -75,10 +76,10 @@ router.get('/active', requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.listActi
 // 数量小数策略：必须在 '/:id' 之前注册，否则会被当成 id 匹配
 router.get('/qty-policies', requireQtyPolicyPermission, ctrl.qtyPolicies)
 router.get('/',       requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.list)
-router.post('/:id/print-label', requirePermission(PERMISSIONS.PRODUCT_PRINT_LABEL), ctrl.printLabel)
-router.get('/:id',    requirePermission(PERMISSIONS.PRODUCT_VIEW), ctrl.detail)
+router.post('/:id/print-label', requirePermission(PERMISSIONS.PRODUCT_PRINT_LABEL), checkId, ctrl.printLabel)
+router.get('/:id',    requirePermission(PERMISSIONS.PRODUCT_VIEW), checkId, ctrl.detail)
 router.post('/',      requirePermission(PERMISSIONS.PRODUCT_CREATE), validateBody(productBase), ctrl.create)
-router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), validateBody(productBase.extend({ isActive: z.boolean(), changeReason: z.string().max(500).optional().nullable() })), ctrl.update)
-router.delete('/:id', requirePermission(PERMISSIONS.PRODUCT_DELETE), ctrl.remove)
+router.put('/:id',    requirePermission(PERMISSIONS.PRODUCT_UPDATE), validateBody(productBase.extend({ isActive: z.boolean(), changeReason: z.string().max(500).optional().nullable() })), checkId, ctrl.update)
+router.delete('/:id', requirePermission(PERMISSIONS.PRODUCT_DELETE), checkId, ctrl.remove)
 
 module.exports = router
