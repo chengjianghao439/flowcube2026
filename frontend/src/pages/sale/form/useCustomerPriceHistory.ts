@@ -24,8 +24,8 @@ export function useCustomerPriceHistory(customerId: number, productIds: number[]
     Promise.all(
       ids.map(async (productId) => {
         try {
-          const rows = await getCustomerPriceHistoryApi(customerId, productId, 3, controller.signal)
-          return [productId, Array.isArray(rows) ? rows : []] as const
+          const rows = await getCustomerPriceHistoryApi(customerId, productId, 1, controller.signal)
+          return [productId, Array.isArray(rows) ? rows.slice(0, 1) : []] as const
         } catch {
           return [productId, [] as CustomerSalePriceHistoryItem[]] as const
         }

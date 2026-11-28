@@ -84,13 +84,13 @@ describe('SaleOrderItemsTable 历史成交价', () => {
     })
 
     const buttons = Array.from(host.querySelectorAll('button'))
-    const btn118 = buttons.find(b => b.textContent?.trim() === '¥118.5')
-    const btn120 = buttons.find(b => b.textContent?.trim() === '¥120')
-    expect(btn118).toBeTruthy()
-    expect(btn120).toBeTruthy()
+    const btnLatest = buttons.find(b => b.textContent?.includes('上次') && b.textContent?.includes('¥118.5'))
+    const btnOlder = buttons.find(b => b.textContent?.includes('¥120'))
+    expect(btnLatest).toBeTruthy()
+    expect(btnOlder).toBeUndefined()
     expect(host.textContent).not.toMatch(/毛利|低于进价/)
 
-    act(() => { btn118!.click() })
+    act(() => { btnLatest!.click() })
     expect(updateItem).toHaveBeenCalledWith(1, 'unitPrice', 118.5)
   })
 })

@@ -14,6 +14,7 @@ import { useDirtyGuard } from '@/hooks/useDirtyGuard'
 import { usePermission } from '@/hooks/usePermission'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { useCustomerPriceHistory } from '../form/useCustomerPriceHistory'
+import { CustomerPriceHistoryHint } from '../form/components/CustomerPriceHistoryHint'
 import { captureHandlingOwner } from '@/lib/disposalHandlingRecovery'
 import { PERMISSIONS } from '@/lib/permission-codes'
 import { CustomerFinder } from '@/components/finder'
@@ -463,30 +464,16 @@ export default function CommercialEditor({
             }
             className="h-9 w-full text-right tabular-nums"
           />
-          {row.input.kind === 'ordinary' && (() => {
-            const history = historyByProduct.get(row.input.productId)
-            if (!history?.length) return null
-            return (
-              <div className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px] leading-4 text-muted-foreground">
-                <span>历史</span>
-                {history.map((item) => (
-                  <button
-                    key={`${item.orderId}-${item.unitPrice}`}
-                    type="button"
-                    disabled={locked || row.unit !== row.baseUnit}
-                    title={`${item.orderNo} · ${item.orderDate} · ${item.quantity}${item.unit}（点击填入）`}
-                    onClick={() => update(row.input.lineKey, {
-                      price: String(item.unitPrice),
-                      input: { ...row.input, priceSource: 'manual' },
-                    })}
-                    className="rounded px-1 text-primary hover:bg-primary/10 hover:underline tabular-nums disabled:opacity-50"
-                  >
-                    ¥{item.unitPrice}
-                  </button>
-                ))}
-              </div>
-            )
-          })()}
+          {row.input.kind === 'ordinary' && (
+            <CustomerPriceHistoryHint
+              history={historyByProduct.get(row.input.productId)}
+              disabled={locked || row.unit !== row.baseUnit}
+              onSelect={(unitPrice) => update(row.input.lineKey, {
+                price: String(unitPrice),
+                input: { ...row.input, priceSource: 'manual' },
+              })}
+            />
+          )}
           <OrderFieldError className="mt-1" id={priceErrorId}>{priceError}</OrderFieldError>
         </td>
         <td className="p-2 text-right tabular-nums">{resolved ? money(resolved.amount) : '待预览'}</td>

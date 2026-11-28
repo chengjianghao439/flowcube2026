@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { parsePositiveQuantity, parsePrice, type DraftItem } from '../validate'
 import { useProductQtyPolicies } from '@/hooks/useProductQtyPolicies'
 import { useCustomerPriceHistory } from '../useCustomerPriceHistory'
+import { CustomerPriceHistoryHint } from './CustomerPriceHistoryHint'
 import { qtyStep } from '@/lib/qtyStep'
 
 function canExplainBaseQty(item: DraftItem): boolean {
@@ -111,26 +112,10 @@ export function SaleOrderItemsTable({
                   className="h-9 text-right text-sm tabular-nums"
                 />
                 {priceLoading[item._key] && <p role="status" className="mt-1 text-right text-[11px] text-muted-foreground">正在获取价格…</p>}
-                {(() => {
-                  const history = historyByProduct.get(item.productId)
-                  if (!history?.length) return null
-                  return (
-                    <div className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px] leading-4 text-muted-foreground">
-                      <span>历史</span>
-                      {history.map((h) => (
-                        <button
-                          key={`${h.orderId}-${h.unitPrice}`}
-                          type="button"
-                          title={`${h.orderNo} · ${h.orderDate} · ${h.quantity}${h.unit}（点击填入）`}
-                          onClick={() => updateItem(item._key, 'unitPrice', h.unitPrice)}
-                          className="rounded px-1 text-primary hover:bg-primary/10 hover:underline tabular-nums"
-                        >
-                          ¥{h.unitPrice}
-                        </button>
-                      ))}
-                    </div>
-                  )
-                })()}
+                <CustomerPriceHistoryHint
+                  history={historyByProduct.get(item.productId)}
+                  onSelect={(unitPrice) => updateItem(item._key, 'unitPrice', unitPrice)}
+                />
                 {(priceError || showPriceIssue) && <div id={priceErrorId} className="mt-1 text-xs leading-5 text-destructive-ink">
                   <OrderFieldError>{showPriceIssue && priceIssue.message}</OrderFieldError>
                   <OrderFieldError>{priceError}</OrderFieldError>
