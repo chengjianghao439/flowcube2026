@@ -9,6 +9,8 @@ import { focusOrderEntryField } from '@/lib/orderEntryNavigation'
 import { OrderDetailSections } from '@/components/shared/OrderDetailSections'
 import { PurchaseProductIdentity } from './PurchaseProductIdentity'
 import { PurchaseEntryTable } from './PurchaseEntryTable'
+import { useSupplierPriceHistory } from './useSupplierPriceHistory'
+import { CustomerPriceHistoryHint } from '@/pages/sale/form/components/CustomerPriceHistoryHint'
 import { PurchaseQuantitySummary } from './PurchaseQuantitySummary'
 import { PurchaseOrderOverview } from './PurchaseOrderOverview'
 import { OrderFact, OrderFacts } from '@/components/shared/OrderFacts'
@@ -27,7 +29,7 @@ import { buildWorkspaceTabRegistrationFromPath } from '@/router/workspaceRouteMe
  * 确保 keep-alive 多标签场景下路径隔离正确。
  */
 
-import { useCallback, useContext, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Loader2, Plus, Save } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -132,6 +134,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   paused?: boolean
 }) {
   const navigate = useNavigate()
+  const { can } = usePermission()
   const createMutate = useCreatePurchase()
   const updateMutate = useUpdatePurchase()
   const isEdit = !!editOrder
@@ -330,6 +333,12 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
   }
 
   const summary = summarizePurchaseDraft(parsedItems)
+  const productIds = useMemo(() => items.map(i => i.productId), [items])
+  const historyByProduct = useSupplierPriceHistory(
+    Number(supplierId) || 0,
+    productIds,
+    !paused && can(PERMISSIONS.PURCHASE_ORDER_VIEW) && Number(supplierId) > 0,
+  )
 
   function renderItem(item: ParsedDraftItem) {
     const currentRate = item.units?.find(u => u.unitName === item.entryUnit)?.conversionRate
@@ -362,6 +371,13 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
           units={item.units || []}
           onChange={value => updateItem(item._key, 'entryUnit', value)}
         /> : <span className="text-muted-body">{item.entryUnit || item.unit}</span>}</td>
+      <td className="text-right">
+        <CustomerPriceHistoryHint
+          history={historyByProduct.get(item.productId)}
+          disabled={paused}
+          onSelect={(price) => updateItem(item._key, 'unitPrice', price)}
+        />
+      </td>
       <td><Input type="number" min="0" step="0.0001" data-entry-input data-entry-field={`item-${item._key}-price`}
         aria-label={`${item.productName}单价`} aria-invalid={!!priceError} aria-describedby={priceError ? priceErrorId : undefined}
         value={Number.isFinite(item.unitPrice) ? item.unitPrice : ''} onChange={e => updateItem(item._key, 'unitPrice', e.target.value === '' ? Number.NaN : +e.target.value)} className={cn(EDIT_CELL_CLASS, 'text-right tabular-nums', priceError && 'border-destructive/60 bg-destructive/5')} />
@@ -477,7 +493,7 @@ function FormView({ closeTab, tabPath, editOrder, onSaved, paused = false }: {
           <div className="overflow-x-auto" data-table-scroll>
             <PurchaseEntryTable rowCount={items.length + 1} stickyHeader={items.length >= VIRTUAL_TABLE_THRESHOLD}>
               {items.length >= VIRTUAL_TABLE_THRESHOLD
-                ? <VirtualTableBody data={parsedItems} columns={6} getRowKey={rowKey} renderRow={renderItem} onScrollToIndexReady={registerScroll} />
+                ? <VirtualTableBody data={parsedItems} columns={7} getRowKey={rowKey} renderRow={renderItem} onScrollToIndexReady={registerScroll} />
                 : <tbody>{parsedItems.map(renderItem)}</tbody>}
             </PurchaseEntryTable>
           </div>

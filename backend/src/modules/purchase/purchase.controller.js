@@ -1,4 +1,5 @@
 const svc = require('./purchase.service')
+const { findSupplierPriceHistory } = require('./purchase.price-history')
 const { successResponse } = require('../../utils/response')
 const { getOperatorFromRequest } = require('../../utils/operator')
 const { extractRequestKey } = require('../../utils/requestKey')
@@ -13,4 +14,5 @@ const approve = async(req,res,next)=>{ try{const r=await svc.approve(+req.params
 const reject = async(req,res,next)=>{ try{const r=await svc.reject(+req.params.id,req.body||{},getOperatorFromRequest(req),req.user?.warehouseIds??null);return successResponse(res,r,'已驳回，采购单退回草稿')}catch(e){next(e)} }
 const cancel = async(req,res,next)=>{ try{await svc.cancel(+req.params.id, getOperatorFromRequest(req),req.user?.warehouseIds??null);return successResponse(res,null,'已取消')}catch(e){next(e)} }
 const close  = async(req,res,next)=>{ try{const data=await svc.closeRemaining(+req.params.id, getOperatorFromRequest(req),req.user?.warehouseIds??null,{requestKey:req.get('X-Request-Key')});return successResponse(res,data,'已明确结束剩余采购，未收部分不再收货')}catch(e){next(e)} }
-module.exports = { list, detail, create, update, confirm, withdrawConfirm, approve, reject, cancel, close }
+const supplierPriceHistory = async(req,res,next)=>{ try{return successResponse(res,await findSupplierPriceHistory({supplierId:req.query.supplierId,productId:req.query.productId,limit:req.query.limit,scopeWarehouseIds:req.user?.warehouseIds??null}),'查询成功')}catch(e){next(e)} }
+module.exports = { list, detail, create, update, confirm, withdrawConfirm, approve, reject, cancel, close, supplierPriceHistory }
