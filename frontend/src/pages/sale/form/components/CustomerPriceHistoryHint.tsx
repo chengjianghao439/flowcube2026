@@ -18,7 +18,7 @@ export function CustomerPriceHistoryHint({ history, disabled = false, onSelect }
       disabled={disabled}
       title={`${latest.orderNo} · ${latest.orderDate} · ${latest.quantity}${latest.unit}（点击填入单价）`}
       onClick={() => onSelect(latest.unitPrice)}
-      className="inline-flex items-center justify-end rounded-md border border-border/70 bg-muted/40 px-2 py-1 text-xs font-medium text-foreground tabular-nums transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+      className="text-sm text-muted-foreground tabular-nums transition-colors hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
     >
       ¥{latest.unitPrice}
     </button>
