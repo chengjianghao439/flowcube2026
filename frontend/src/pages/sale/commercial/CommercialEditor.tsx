@@ -225,7 +225,7 @@ export default function CommercialEditor({
   const historyByProduct = useCustomerPriceHistory(
     Number(h.customerId) || 0,
     ordinaryProductIds,
-    readable && can(PERMISSIONS.SALE_ORDER_VIEW) && Number(h.customerId) > 0,
+    !reorder && readable && can(PERMISSIONS.SALE_ORDER_VIEW) && Number(h.customerId) > 0,
   )
   const heldPreview = useRef<{ signature: string; data: typeof preview.data } | null>(null)
   const bodySignature = JSON.stringify(bodyResult.body)
@@ -389,7 +389,7 @@ export default function CommercialEditor({
     if (component) return <tr key={item.key} className="border-t">
       <td><CommercialItemIdentity code={component.productCode} name={component.productName} {...component} kitLine="component" groupKey={row.input.lineKey} /></td>
       <td className="text-right tabular-nums">{componentDisplayQuantity(component.baseQty, row.quantity) ?? '—'}</td>
-      <td>{component.unit}</td><td className="text-right">—</td><td className="text-right">—</td><td>—</td><td />
+      <td>{component.unit}</td><td className="text-right">—</td><td className="text-right">—</td><td className="text-right">—</td><td>—</td><td />
     </tr>
     const quantityError = rejectedQuantity[row.input.lineKey] ?? (showFieldErrors ? rowIssues.find(issue => issue.lineKey === row.input.lineKey && issue.target === 'quantity')?.message : undefined)
     const quantityErrorId = `${errorPrefix}-${row.input.lineKey}-quantity-error`
@@ -434,6 +434,20 @@ export default function CommercialEditor({
         <td className="p-2">
           {row.input.kind === 'kit' && resolved ? commercialUnit(resolved) : row.unit}
         </td>
+        <td className="p-2 text-right">
+          {row.input.kind === 'ordinary' ? (
+            <CustomerPriceHistoryHint
+              history={historyByProduct.get(row.input.productId)}
+              disabled={locked || row.unit !== row.baseUnit}
+              onSelect={(unitPrice) => update(row.input.lineKey, {
+                price: String(unitPrice),
+                input: { ...row.input, priceSource: 'manual' },
+              })}
+            />
+          ) : (
+            <span className="text-muted-foreground/50">—</span>
+          )}
+        </td>
         <td data-entry-field={`item-${row.input.lineKey}-price`} className="p-2">
           <Input
             data-entry-input
@@ -464,16 +478,6 @@ export default function CommercialEditor({
             }
             className="h-9 w-full text-right tabular-nums"
           />
-          {row.input.kind === 'ordinary' && (
-            <CustomerPriceHistoryHint
-              history={historyByProduct.get(row.input.productId)}
-              disabled={locked || row.unit !== row.baseUnit}
-              onSelect={(unitPrice) => update(row.input.lineKey, {
-                price: String(unitPrice),
-                input: { ...row.input, priceSource: 'manual' },
-              })}
-            />
-          )}
           <OrderFieldError className="mt-1" id={priceErrorId}>{priceError}</OrderFieldError>
         </td>
         <td className="p-2 text-right tabular-nums">{resolved ? money(resolved.amount) : '待预览'}</td>
@@ -621,7 +625,7 @@ export default function CommercialEditor({
 
             <SaleEntryTable stickyHeader rowCount={displayRows.length + 1}>
               {displayRows.length >= VIRTUAL_TABLE_THRESHOLD
-                ? <VirtualTableBody data={displayRows} columns={7} getRowKey={item => item.key} renderRow={renderEntryRow} onScrollToIndexReady={registerEntryScroll} />
+                ? <VirtualTableBody data={displayRows} columns={8} getRowKey={item => item.key} renderRow={renderEntryRow} onScrollToIndexReady={registerEntryScroll} />
                 : <tbody>{displayRows.map(renderEntryRow)}</tbody>}
             </SaleEntryTable>
           </div>}

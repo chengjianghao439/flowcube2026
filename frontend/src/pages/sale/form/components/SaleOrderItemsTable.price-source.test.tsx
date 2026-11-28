@@ -70,7 +70,7 @@ test.each([false, true])('历史单位compact=%s仅按原换算快照回显，�
 test('紧凑明细保留商品身份、单价金额、包装换算与独立行备注', () => {
   const row = { ...item, productName: '超长名称铰链用于检查完整商品身份呈现与换行', productCode: 'P10-完整编码', articleNumber: 'H10-完整供应商型号', spec: '直臂-完整型号', color: '银色-完整颜色', remark: '按箱分装', priceExplanation: { kind: 'saved' } } as DraftItem
   render(row, true)
-  expect([...host.querySelectorAll('th')].map(header => header.textContent)).toEqual(['商品', '数量', '单位', '单价 (¥)', '金额', '备注', '操作'])
+  expect([...host.querySelectorAll('th')].map(header => header.textContent)).toEqual(['商品', '数量', '单位', '历史价', '单价 (¥)', '金额', '备注', '操作'])
   const identity = host.querySelector('tbody tr td')!
   for (const value of [row.productName, row.productCode, row.articleNumber, row.spec, row.color]) expect(identity.textContent).toContain(value)
   expect(host.textContent).not.toContain('原订单价（历史来源未留存）')

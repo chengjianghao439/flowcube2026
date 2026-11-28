@@ -100,6 +100,12 @@ export function SaleOrderItemsTable({
             return <tr key={item._key} className="border-b border-border/40 transition-colors hover:bg-muted/20">
               {compact ? <td className="align-top">{productButton}</td> : <ProductIdentityCells compact product={item} nameContent={productButton} />}
               {compact ? <>{quantityCell}{unitCell}</> : <>{unitCell}{quantityCell}</>}
+              <td className={cn('px-3 py-3 text-right', compact ? 'align-middle' : 'align-top')}>
+                <CustomerPriceHistoryHint
+                  history={historyByProduct.get(item.productId)}
+                  onSelect={(unitPrice) => updateItem(item._key, 'unitPrice', unitPrice)}
+                />
+              </td>
               <td className="px-3 py-3 align-top">
                 <Input
                   data-entry-input data-entry-field={`item-${item._key}-price`} aria-invalid={!!priceIssue || !!priceErrors[item._key] || (invalidItemKeys.has(item._key) && (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0))}
@@ -112,10 +118,6 @@ export function SaleOrderItemsTable({
                   className="h-9 text-right text-sm tabular-nums"
                 />
                 {priceLoading[item._key] && <p role="status" className="mt-1 text-right text-[11px] text-muted-foreground">正在获取价格…</p>}
-                <CustomerPriceHistoryHint
-                  history={historyByProduct.get(item.productId)}
-                  onSelect={(unitPrice) => updateItem(item._key, 'unitPrice', unitPrice)}
-                />
                 {(priceError || showPriceIssue) && <div id={priceErrorId} className="mt-1 text-xs leading-5 text-destructive-ink">
                   <OrderFieldError>{showPriceIssue && priceIssue.message}</OrderFieldError>
                   <OrderFieldError>{priceError}</OrderFieldError>
@@ -144,7 +146,7 @@ export function SaleOrderItemsTable({
 
 function TableShell({ compact, children }: { compact: boolean; children: React.ReactNode }) {
   if (compact) return <SaleEntryTable>{children}</SaleEntryTable>
-  return <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 112, align: 'right' }, { key: 'unitPrice', title: '单价 (¥)', width: 128, align: 'right' }, { key: 'amount', title: '金额', width: 128, align: 'right' }, { key: 'remark', title: '备注', width: 176 }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="sale-ordinary-entry-items" minWidth={1000}>
+  return <ResizableTable columns={[...productIdentityColumns({ compact: true }), { key: 'unit', title: '单位', width: 64, align: 'center' }, { key: 'quantity', title: '数量', width: 112, align: 'right' }, { key: 'historyPrice', title: '历史价', width: 96, align: 'right' }, { key: 'unitPrice', title: '单价 (¥)', width: 128, align: 'right' }, { key: 'amount', title: '金额', width: 128, align: 'right' }, { key: 'remark', title: '备注', width: 176 }, { key: 'actions', title: '操作', width: 80 }]} columnStorageKey="sale-ordinary-entry-items" minWidth={1080}>
     {children}
   </ResizableTable>
 }

@@ -83,8 +83,12 @@ describe('SaleOrderItemsTable 历史成交价', () => {
       await Promise.resolve()
     })
 
+    const headers = Array.from(host.querySelectorAll('th')).map(th => th.textContent?.trim())
+    expect(headers.indexOf('历史价')).toBeGreaterThan(-1)
+    expect(headers.indexOf('历史价')).toBe(headers.indexOf('单价 (¥)') - 1)
+
     const buttons = Array.from(host.querySelectorAll('button'))
-    const btnLatest = buttons.find(b => b.textContent?.includes('上次') && b.textContent?.includes('¥118.5'))
+    const btnLatest = buttons.find(b => b.textContent?.trim() === '¥118.5')
     const btnOlder = buttons.find(b => b.textContent?.includes('¥120'))
     expect(btnLatest).toBeTruthy()
     expect(btnOlder).toBeUndefined()
