@@ -55,7 +55,7 @@ function noWrite(f) {
 }
 test('controller 传实际用户范围覆盖正文伪造范围，保留原键和操作人', async () => {
   let actual
-  const controller = load('modules/purchase/purchase.controller.js', { './purchase.service': { async create(input) { actual = input; return { id: 81 } } }, '../../utils/response': { successResponse() {} }, '../../utils/operator': { getOperatorFromRequest: () => body.operator }, '../../utils/requestKey': { extractRequestKey: () => 'actual-key' } })
+  const controller = load('modules/purchase/purchase.controller.js', { './purchase.service': { async create(input) { actual = input; return { id: 81 } } }, './purchase.price-history': { async findSupplierPriceHistory() { return [] } }, '../../utils/response': { successResponse() {} }, '../../utils/operator': { getOperatorFromRequest: () => body.operator }, '../../utils/requestKey': { extractRequestKey: () => 'actual-key' } })
   for (const warehouseIds of [[8], [], null]) {
     await controller.create({ body: { ...body, scopeWarehouseIds: null }, user: { warehouseIds } }, {}, e => { throw e })
     assert.deepEqual(actual.scopeWarehouseIds, warehouseIds)
